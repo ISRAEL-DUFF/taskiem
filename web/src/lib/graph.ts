@@ -141,6 +141,13 @@ export function newStep(type: Step["type"], id: string): Step {
       return { id, type, config: { timeout: "24h" } };
     case "subflow":
       return { id, type, config: { workflow: "" }, input: {} };
+    case "ai":
+      return {
+        id,
+        type,
+        config: { prompt: "Summarise the message in one sentence.", output_schema: { type: "object", properties: { summary: { type: "string" } }, required: ["summary"] } },
+        input: { message: "=trigger.body.message" },
+      };
     case "respond":
       return { id, type, config: { status: 200, body: { ok: true } } };
     case "http":

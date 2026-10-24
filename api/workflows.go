@@ -43,7 +43,8 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}
 	out := append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
-	return append(out, s.subflowProblems(ctx, tenant, doc)...)
+	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
 }
 
 // callables finds a template step's template for a definition not saved
@@ -86,7 +87,9 @@ func (s *Server) checkVersion(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UU
 	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.CheckWith(doc, reg, find) }); err != nil {
 		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
 	}
-	return append(out, s.keptProblems(ctx, tenant, doc)...)
+	out = append(out, s.keptProblems(ctx, tenant, doc)...)
+	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
 }
 
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code
@@ -688,6 +691,9 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 	}
 	d, err := wd.Load(def)
 	if err != nil {
+		return nil, "", false, err
+	}
+	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, d, by); err != nil {
 		return nil, "", false, err
 	}
 	targets, err := deployTargets(ctx, tx, gitEnv)

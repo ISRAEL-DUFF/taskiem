@@ -138,6 +138,7 @@ type Step struct {
 	Callback  *CallbackConfig  `json:"-"`
 	Respond   *RespondConfig   `json:"-"`
 	Subflow   *SubflowConfig   `json:"-"`
+	AI        *AIConfig        `json:"-"`
 }
 
 // CallbackConfig is a callback step's wait: how long another system has
@@ -146,6 +147,16 @@ type Step struct {
 type CallbackConfig struct {
 	Timeout   string `json:"timeout,omitempty"`
 	OnTimeout string `json:"on_timeout,omitempty"` // fail (default) | continue
+}
+
+// AIConfig is an ai step's question (decision 0050): the prompt (text or
+// an expression), the answer's schema, an optional model, and the input
+// fields whose personal data may reach the model as it is.
+type AIConfig struct {
+	Prompt       string          `json:"prompt"`
+	OutputSchema json.RawMessage `json:"output_schema"`
+	Model        string          `json:"model,omitempty"`
+	PersonalData []string        `json:"personal_data,omitempty"`
 }
 
 // SubflowConfig is a subflow step's child run: which workflow of the
@@ -406,6 +417,9 @@ func (s *Step) parse() error {
 	case "subflow":
 		s.Subflow = &SubflowConfig{}
 		target = s.Subflow
+	case "ai":
+		s.AI = &AIConfig{}
+		target = s.AI
 	case "respond":
 		v, err := expr.DecodeJSON(s.RawConfig)
 		if err != nil {

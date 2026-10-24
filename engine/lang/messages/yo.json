@@ -2104,6 +2104,14 @@
       "text": "A kò tíì so nọ́mbà yìí mọ́ àkọọ́lẹ̀ Taskiem kankan. Láti lo Taskiem níbí, ẹ wọlé, ẹ ṣí {where}, ẹ fi nọ́mbà yìí kún un lábẹ́ WhatsApp, lẹ́yìn náà ẹ tẹ kóòdù tí a fi ránṣẹ́ sí yín tàbí kí ẹ dá a padà.",
       "reviewed": false
     },
+    "wd.ai": {
+      "text": "Béèrè lọ́wọ́ AI, pẹ̀lú ìfipamọ́ àlàyé ìkọ̀kọ̀ kúrò lọ́dọ̀ rẹ̀",
+      "reviewed": false
+    },
+    "wd.ai.through": {
+      "text": "Béèrè lọ́wọ́ AI, tí yóò rí {fields} bí wọ́n ṣe wà; a fi àlàyé ìkọ̀kọ̀ yòókù pamọ́ fún un",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "Lẹ́gbẹ̀ẹ́ rẹ̀: {name}",
       "reviewed": false

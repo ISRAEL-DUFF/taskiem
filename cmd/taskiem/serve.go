@@ -317,7 +317,7 @@ func loadConfig() (config, error) {
 		SecureCookies: envBool("TASKIEM_SECURE_COOKIES", true),
 		TrustProxy:    envBool("TASKIEM_TRUST_PROXY", false),
 		Signup:        envBool("TASKIEM_ALLOW_SIGNUP", false),
-		Queues:        strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox"), ","),
+		Queues:        strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
 		Connectors: builtin.Options{
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
@@ -721,7 +721,7 @@ func aiSettings(c ai.Config) (*api.AISettings, error) {
 	if err != nil || prov == nil {
 		return nil, err
 	}
-	out := &api.AISettings{Provider: prov, Effort: c.Effort, MaxTokens: c.MaxTokens}
+	out := &api.AISettings{Provider: prov, Effort: c.Effort, MaxTokens: c.MaxTokens, Config: c}
 	if c.ModerationModel != "" && c.ModerationModel != c.Model {
 		m := c
 		m.Model = c.ModerationModel
@@ -1071,6 +1071,18 @@ func serve(ctx context.Context, args []string) error {
 					return fmt.Errorf("serve: container queue: %w", err)
 				}
 				tasks = append(tasks, more...)
+			}
+			if w.Queue == "ai" && cfg.AI.Provider != "" {
+				// AI steps (decision 0050): the deployment's model, the
+				// models steps may name, and a plan's AI overage.
+				w.AI = &runtime.AISteps{Config: cfg.AI}
+				if cfg.Billing.On {
+					bill, err := e.billingService(ctx, nil)
+					if err != nil {
+						return fmt.Errorf("serve: ai queue: %w", err)
+					}
+					w.AI.Overage = bill.AIOverage
+				}
 			}
 			tasks = append(tasks, w.Run)
 		}

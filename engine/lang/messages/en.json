@@ -2629,6 +2629,16 @@
       "reviewed": true,
       "context": "A number linked to no one wrote"
     },
+    "wd.ai": {
+      "text": "Ask the AI model, with personal data hidden from it",
+      "reviewed": true,
+      "context": "Read-back: an ai step; personal data is replaced by placeholders before the model sees it"
+    },
+    "wd.ai.through": {
+      "text": "Ask the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": true,
+      "context": "Read-back: an ai step that lets some input fields reach the model unmasked; {fields} is a comma-separated list of field names"
+    },
     "wd.alongside": {
       "text": "Alongside: {name}",
       "reviewed": true,

@@ -146,6 +146,16 @@ describe("round trip edge cases", () => {
     expect(evaluate(code)).toEqual(def);
   });
 
+  it("writes ai steps, and back", () => {
+    const def = base([
+      { id: "sort", type: "ai", input: { text: "=trigger.body.text", phone: "=trigger.body.phone" },
+        config: { prompt: "=\"Sort this: \" + trigger.body.subject", output_schema: { type: "object", properties: { urgent: { type: "boolean" } } }, personal_data: ["phone"] } },
+    ]);
+    const code = sdk.generate(def, opts);
+    expect(code).toContain("ai(");
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("writes subflow steps, and back", () => {
     const def = base([
       { id: "sub", type: "subflow", config: { workflow: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12" }, input: { amount_kobo: "=trigger.body.amount_kobo" } },

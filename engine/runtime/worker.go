@@ -145,6 +145,9 @@ type Worker struct {
 	// CancelPoll is how often a running container step checks whether
 	// it was cancelled; default 2s.
 	CancelPoll time.Duration
+	// AI runs ai steps (the "ai" queue, decision 0050); nil: they fail as
+	// not set up.
+	AI *AISteps
 }
 
 func (w *Worker) defaults() {
@@ -742,6 +745,9 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 		// Code has no external effects of its own; host.fetch goes through
 		// the egress guard. It is treated as a read for retries.
 		p.class = effects.Read
+	case p.stepType == "ai":
+		// Asking a model changes nothing: a read, retried freely.
+		p.class = effects.Read
 	case p.stepType == "container":
 		// A container step is an unsafe_write unless it declares a class:
 		// what an arbitrary program did cannot be assumed undone.
@@ -1042,6 +1048,10 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		// The runner enforces the step's own time limit, however long; the
 		// heartbeat keeps the lease meanwhile.
 		return w.containerEvent(ctx, p, in)
+	}
+	if p.stepType == "ai" {
+		// Its own timeout per call; the heartbeat keeps the lease.
+		return w.aiEvent(ctx, p, in)
 	}
 	deadline := time.Now().Add(w.CallTimeout)
 	if p.class.IsWrite() {
