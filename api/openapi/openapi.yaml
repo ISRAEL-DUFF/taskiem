@@ -1332,6 +1332,65 @@ paths:
                 $ref: '#/components/schemas/CustomerInvoice'
         default:
           $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/amendments:
+    post:
+      operationId: amendInvoice
+      tags:
+      - Invoices
+      summary: Amend a sent invoice
+      description: 'A recorded change with a reason, added as a line of its own: a line added (add, with description and amount_kobo, optionally pass_through_for), an earlier item taken out (remove, with line, its position from 0) or a discount (discount, with amount_kobo; never of money collected for others). The total and status follow from the lines and the payments counted: the total never goes below what was paid (409), and a paid invoice whose total rises is part-paid again. A draft is changed instead (409). Where the Schools area is on, a discount at or above the school''s discount threshold answers 409 with code needs_approval. Audited.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The invoice's id or number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, reason]
+              properties:
+                kind:
+                  type: string
+                  enum: [add, remove, discount]
+                description:
+                  type: string
+                  maxLength: 200
+                amount_kobo:
+                  type: integer
+                pass_through_for:
+                  type: string
+                  maxLength: 60
+                line:
+                  type: integer
+                  minimum: 0
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: The invoice and the amendment
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoice, amendment]
+                properties:
+                  invoice:
+                    $ref: '#/components/schemas/CustomerInvoice'
+                  amendment:
+                    $ref: '#/components/schemas/InvoiceAmendment'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoices/{id}/payments/{payment}/undo:
     post:
       operationId: undoInvoicePayment
@@ -2946,6 +3005,442 @@ paths:
               schema:
                 $ref: '#/components/schemas/SchoolFamily'
         default: *id001
+  /v1/schools/terms/{id}/fees:
+    get:
+      operationId: listSchoolFees
+      tags:
+      - Schools
+      summary: A term's fee structures
+      description: Every class's fee items for the term, in the classes' order (a class with none has an empty list), and the term before it, to copy from.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [classes]
+                properties:
+                  classes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClassFees'
+                  previous_term:
+                    description: The term before this one, null for the first
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/SchoolTerm'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/fees/{class}:
+    put:
+      operationId: setSchoolFees
+      tags:
+      - Schools
+      summary: Set a class's fees for a term
+      description: 'The whole structure: items matched by name (an item kept keeps the students who chose it), an item left out removed. Changes reach the term''s draft invoices for the class, rebuilt; sent invoices change only by amendment. A past term''s fees are read-only (409). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: class
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 40
+                  items:
+                    $ref: '#/components/schemas/SchoolFeeItemIn'
+      responses:
+        '200':
+          description: The structure, and how many drafts were rebuilt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFeesSet'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/fees/{class}/copy:
+    post:
+      operationId: copySchoolFees
+      tags:
+      - Schools
+      summary: Copy a class's fees from another term or class
+      description: Sets the structure to that of from_class (default the same class) in from_term (default the term before). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: class
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_term:
+                  type: string
+                  format: uuid
+                from_class:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: The structure, and how many drafts were rebuilt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolFeesSet'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/invoice:
+    post:
+      operationId: invoiceSchoolTerm
+      tags:
+      - Schools
+      summary: Invoice the term
+      description: 'Without confirm, the plan: how many students, the total, who is invoiced already and who is left out and why (no guardian to send to, no fees for their class, nothing to pay, a discount needing approval), with its hash. With confirm (the plan''s hash; 409 when the plan has changed) it makes one invoice per enrolled student exactly once (key term:<term>:student:<student>), the family''s, customer key student:<id>, due on the term''s fees_due_on, as drafts, and with send sends the term''s drafts (counting each family''s credit first). Running it again invoices only students added since. The current term only. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm:
+                  type: string
+                  description: The plan's hash
+                send:
+                  type: boolean
+                  description: Send the invoices now (else they are drafts)
+      responses:
+        '200':
+          description: The plan ({plan}), or what was done (the plan's fields with created, send, sent and failed)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - type: object
+                  required: [plan]
+                  properties:
+                    plan:
+                      $ref: '#/components/schemas/SchoolTermPlan'
+                - $ref: '#/components/schemas/SchoolTermInvoiced'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/terms/{id}/invoices:
+    get:
+      operationId: listSchoolTermInvoices
+      tags:
+      - Schools
+      summary: A term's invoices
+      description: Each student's invoice for the term, by class and admission number, optionally of one class and status. Names are masked unless the caller holds pii.reveal and asks with ?reveal=true (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [draft, sent, part_paid, paid, overdue, void]
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices, revealed]
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolTermInvoice'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/fees:
+    get:
+      operationId: getSchoolStudentFees
+      tags:
+      - Schools
+      summary: A student's fees for a term
+      description: Their class's items for the term (?term=, default the current one), the optional ones they take, their standing discounts, the invoice these make now, and the term's invoice when they have one.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentFees'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/options:
+    put:
+      operationId: setSchoolStudentOptions
+      tags:
+      - Schools
+      summary: Set the optional items a student takes in a term
+      description: All of them (an item left out is no longer taken); each one of the optional items of the student's class for the term. Their draft invoice for the term is rebuilt. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [term, items]
+              properties:
+                term:
+                  type: string
+                  format: uuid
+                items:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: The student's fees
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentFees'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/discounts:
+    get:
+      operationId: listSchoolDiscounts
+      tags:
+      - Schools
+      summary: A student's standing discounts
+      description: The discounts given, the ended ones too, and the school's discount threshold.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discounts, discount_threshold_kobo]
+                properties:
+                  discounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolDiscount'
+                  discount_threshold_kobo:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSchoolDiscount
+      tags:
+      - Schools
+      summary: Give a student a standing discount
+      description: 'A percent of the school''s own fees (never of money collected for others) or an amount, with a reason, taken off each term invoice made while it stands; their drafts are rebuilt. One at or above the school''s discount threshold needs a second person: until approvals arrive it is refused, 409 with code needs_approval (a percent is weighed against the current term''s fees). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, reason]
+              properties:
+                kind:
+                  type: string
+                  enum: [sibling, staff_child, scholarship, hardship, other]
+                percent:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                amount_kobo:
+                  type: integer
+                  minimum: 100
+                reason:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: The discount
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discount, drafts_updated]
+                properties:
+                  discount:
+                    $ref: '#/components/schemas/SchoolDiscount'
+                  drafts_updated:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/discounts/{discount}:
+    delete:
+      operationId: endSchoolDiscount
+      tags:
+      - Schools
+      summary: End a standing discount
+      description: Invoices already sent keep it; drafts are rebuilt without it. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: discount
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The discount, ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [discount, drafts_updated]
+                properties:
+                  discount:
+                    $ref: '#/components/schemas/SchoolDiscount'
+                  drafts_updated:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -12243,6 +12738,10 @@ paths:
                 enabled: &id001
                   type: boolean
                 bursar_role: *id001
+                discount_threshold_naira:
+                  type: integer
+                  minimum: 0
+                  description: The owner's discount threshold in whole naira (0 for none); set while the area is on. Audited.
       responses:
         '200':
           description: OK
@@ -16537,6 +17036,279 @@ components:
         enabled: &id001
           type: boolean
         bursar_role: *id001
+        discount_threshold_naira:
+          type: integer
+          description: Discounts at or above it need a second person (refused until approvals arrive); 0 for none
+    SchoolFeeItemIn:
+      type: object
+      required: [name, amount_kobo]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        amount_kobo:
+          type: integer
+          minimum: 100
+        kind:
+          type: string
+          enum: [required, optional]
+          description: required by default
+        pass_through_for:
+          type: string
+          maxLength: 60
+          description: Who the item is collected for (WAEC, NECO), for money that is not the school's income
+    SchoolFeeItem:
+      type: object
+      required: [id, term_id, class_id, name, amount_kobo, kind, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        amount_kobo:
+          type: integer
+        kind:
+          type: string
+          enum: [required, optional]
+        pass_through_for:
+          type: string
+        position:
+          type: integer
+    SchoolClassFees:
+      type: object
+      required: [class_id, class, items, required_kobo, pass_through_kobo]
+      properties:
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolFeeItem'
+        required_kobo:
+          type: integer
+          description: What every student of the class pays before optional items and discounts
+        pass_through_kobo:
+          type: integer
+    SchoolFeesSet:
+      type: object
+      required: [fees, drafts_updated]
+      properties:
+        fees:
+          $ref: '#/components/schemas/SchoolClassFees'
+        drafts_updated:
+          type: integer
+    SchoolDiscount:
+      type: object
+      required: [id, student_id, kind, reason, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [sibling, staff_child, scholarship, hardship, other]
+        percent:
+          type: integer
+        amount_kobo:
+          type: integer
+        reason:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+    SchoolPlanStudent:
+      type: object
+      required: [id, admission_number, name, class]
+      properties:
+        id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: Masked
+        class:
+          type: string
+        total_kobo:
+          type: integer
+    SchoolTermPlan:
+      type: object
+      required: [term, enrolled, to_invoice, total_kobo, pass_through_kobo, classes, already_invoiced, no_contact, no_fees, nothing_to_pay, needs_approval, hash]
+      properties:
+        term:
+          $ref: '#/components/schemas/SchoolTerm'
+        enrolled:
+          type: integer
+        to_invoice:
+          type: integer
+        total_kobo:
+          type: integer
+        pass_through_kobo:
+          type: integer
+        classes:
+          type: array
+          items:
+            type: object
+            required: [class_id, class, students, total_kobo]
+            properties:
+              class_id:
+                type: string
+                format: uuid
+              class:
+                type: string
+              students:
+                type: integer
+              total_kobo:
+                type: integer
+        already_invoiced:
+          type: integer
+        no_contact:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        no_fees:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        nothing_to_pay:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        needs_approval:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolPlanStudent'
+        hash:
+          type: string
+    SchoolTermInvoiced:
+      allOf:
+      - $ref: '#/components/schemas/SchoolTermPlan'
+      - type: object
+        required: [created, send, sent, failed]
+        properties:
+          created:
+            type: integer
+          send:
+            type: boolean
+          sent:
+            type: integer
+          failed:
+            type: integer
+    SchoolTermInvoice:
+      type: object
+      required: [invoice_id, number, status, term_id, term, student_id, admission_number, name, class_id, class, total_kobo, paid_kobo, due_kobo]
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, part_paid, paid, overdue, void]
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        total_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        sent_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+    SchoolStudentFees:
+      type: object
+      required: [student_id, term_id, class_id, items, chosen, discounts, lines, total_kobo]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+        class_id:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolFeeItem'
+        chosen:
+          type: array
+          items:
+            type: string
+            format: uuid
+        discounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolDiscount'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+        total_kobo:
+          type: integer
+        invoice:
+          $ref: '#/components/schemas/SchoolTermInvoice'
+    InvoiceAmendment:
+      type: object
+      required: [id, kind, line, amount_kobo, reason, by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [add, remove, discount]
+        line:
+          $ref: '#/components/schemas/InvoiceLine'
+        amount_kobo:
+          type: integer
+          description: What it changed the total by
+        removes:
+          type: integer
+          description: The line a removal took out
+        reason:
+          type: string
+        by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
     SchoolClass:
       type: object
       required:
@@ -18629,7 +19401,21 @@ components:
           minimum: 1
         unit_kobo:
           type: integer
-          minimum: 1
+          description: At least 1, but negative for a discount (quantity 1) and for an amendment taking a line out
+        pass_through_for:
+          type: string
+          maxLength: 60
+          description: Who the line is collected for (WAEC); money that is not the business's income
+        kind:
+          type: string
+          enum: [discount, removal]
+          description: Absent for an item
+        reason:
+          type: string
+          maxLength: 300
+        amendment:
+          type: string
+          description: The amendment that added the line to a sent invoice
     InvoiceDraft:
       type: object
       required: [customer]
@@ -18750,6 +19536,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InvoicePayment'
+        amendments:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceAmendment'
     InvoiceSent:
       type: object
       required: [invoice, queued]
@@ -19176,6 +19966,22 @@ components:
           type: integer
         recovered_kobo:
           type: integer
+        collected_for_others_kobo:
+          type: integer
+          description: The share of the settled money in that counts towards pass-through lines (collected on others' behalf; the business's own lines are paid first)
+        collected_for:
+          type: array
+          items:
+            type: object
+            required: [body, kobo]
+            properties:
+              body:
+                type: string
+              kobo:
+                type: integer
+        own_in_settled_kobo:
+          type: integer
+          description: The settled money in less what was collected for others
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]

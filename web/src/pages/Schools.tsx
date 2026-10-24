@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate, useParams, useSearchParams } from "react-ro
 import { ApiError, get, patch, post, put } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { StudentFeesPanel } from "./SchoolFees";
 import {
   PROMOTION_ACTIONS,
   STATUS_FILTERS,
@@ -553,6 +554,7 @@ export function SchoolStudentPage() {
             <h2 id="student-family">Family</h2>
             {s.family ? <FamilyCard family={s.family} /> : <p className="hint">No family yet: add one on the Families page.</p>}
           </section>
+          <StudentFeesPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
             <h2 id="student-history">Class history</h2>
             {s.enrollments.length === 0 ? (
@@ -814,6 +816,7 @@ function SessionBlock({ session, manage, onChange, onStarted }: { session: Schoo
               <th scope="col">Fees due</th>
               <th scope="col">State</th>
               <th scope="col">Enrolled</th>
+              <th scope="col">Fees</th>
               {manage && <th scope="col">Start</th>}
             </tr>
           </thead>
@@ -829,6 +832,18 @@ function SessionBlock({ session, manage, onChange, onStarted }: { session: Schoo
                 <td data-label="Fees due">{dateLabel(t.fees_due_on)}</td>
                 <td data-label="State">{termStateWords(t.state)}</td>
                 <td data-label="Enrolled">{t.enrolled}</td>
+                <td data-label="Fees">
+                  <span className="row" style={{ flexWrap: "wrap" }}>
+                    <Link to={`/schools/terms/${t.id}/fees`} aria-label={`Fees for ${t.name} ${session.label}`}>
+                      Fees
+                    </Link>
+                    {t.state !== "planned" && (
+                      <Link to={`/schools/terms/${t.id}/invoices`} aria-label={`Invoices for ${t.name} ${session.label}`}>
+                        Invoices
+                      </Link>
+                    )}
+                  </span>
+                </td>
                 {manage && (
                   <td data-label="Start">
                     {t.state === "planned" &&
@@ -1108,7 +1123,55 @@ export function SchoolSettingsPage() {
       <PageHeader title="Schools settings" description="Turn the Schools area on or off for the business." />
       {me?.schools && <SchoolTabs />}
       <SchoolsSwitch />
+      {me?.schools && me.roles.includes("owner") && <DiscountThreshold />}
     </>
+  );
+}
+
+/** The owner's discount threshold, in naira: discounts at or above it need a second person (refused until approvals arrive). */
+function DiscountThreshold() {
+  const settings = useLoad(() => get<SchoolSettings>("/v1/settings/schools"), []);
+  const [value, setValue] = useState<string>();
+  const act = useAction();
+  const shown = value ?? String(settings.data?.discount_threshold_naira ?? "");
+  const n = Number(shown.replace(/[,₦\s]/g, "") || "0");
+  const bad = !Number.isInteger(n) || n < 0;
+  return (
+    <section className="card" aria-labelledby="discount-threshold">
+      <h2 id="discount-threshold" style={{ marginTop: 0 }}>
+        Discount threshold
+      </h2>
+      <p className="hint">
+        A discount at or above this amount needs a second person to approve it before it reaches a child's fees. Approvals are coming: until then such a discount is refused. 0 or empty: no
+        threshold.
+      </p>
+      <ErrorBox error={settings.error} />
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (bad || !settings.data) return;
+          void act.run(async () => {
+            await put("/v1/settings/schools", { enabled: settings.data?.enabled ?? true, discount_threshold_naira: n });
+            setValue(undefined);
+            settings.reload();
+          }, "Discount threshold saved");
+        }}
+      >
+        <Field label="Threshold (₦)">
+          <input inputMode="numeric" value={shown} onChange={(e) => setValue(e.target.value)} placeholder="50,000" />
+        </Field>
+        <button type="submit" disabled={act.busy || bad || !settings.data}>
+          Save the threshold
+        </button>
+      </form>
+      {bad && (
+        <div className="error" role="alert">
+          The threshold is a whole number of naira.
+        </div>
+      )}
+      <ErrorBox error={act.error} />
+    </section>
   );
 }
 

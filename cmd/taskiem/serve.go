@@ -647,7 +647,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 
 // schools is the Schools area's record (decision 0046).
 func (e *engine) schools() *schools.Schools {
-	return &schools.Schools{Pool: e.pool, Vault: e.vault}
+	return &schools.Schools{Pool: e.pool, Vault: e.vault, Invoices: e.invoices}
 }
 
 // moneyLog is the money log's writer (decision 0045).

@@ -32,6 +32,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -60,7 +61,7 @@ func refused(format string, a ...any) error {
 // Plain is an error's message without the package's prefixes, for people.
 func Plain(err error) string {
 	msg := err.Error()
-	for _, p := range []string{"schools: invalid: ", "schools: not allowed: ", "schools: "} {
+	for _, p := range []string{"schools: invalid: ", "schools: not allowed: ", "schools: needs approval: ", "schools: "} {
 		msg = strings.ReplaceAll(msg, p, "")
 	}
 	return msg
@@ -70,7 +71,10 @@ func Plain(err error) string {
 type Schools struct {
 	Pool  *pgxpool.Pool
 	Vault *secrets.Vault
-	Now   func() time.Time
+	// Invoices makes and sends term invoices (invoiceterm.go); nil: the
+	// school's fees can be set but no term invoiced.
+	Invoices *invoicing.Invoices
+	Now      func() time.Time
 }
 
 func (s *Schools) now() time.Time {

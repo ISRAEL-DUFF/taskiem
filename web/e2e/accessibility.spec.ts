@@ -54,6 +54,25 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
+/** A planned term of a session of its own (made once, whichever theme runs first): its id. */
+async function plannedTerm(page: Page): Promise<string> {
+  const h = { headers: { "X-Taskiem-Request": "1" } };
+  type Sessions = { sessions: { id: string; label: string; terms: { id: string }[] }[] };
+  const find = async () => ((await (await page.request.get("/v1/schools/sessions")).json()) as Sessions).sessions.find((s) => s.label === "2031/2032");
+  let s = await find();
+  if (!s) {
+    await page.request.post("/v1/schools/sessions", { ...h, data: { label: "2031/2032" } });
+    s = await find();
+  }
+  if (s && s.terms.length === 0) {
+    await page.request.post(`/v1/schools/sessions/${s.id}/terms`, { ...h, data: { name: "First term", starts_on: "2031-09-15", ends_on: "2031-12-12", fees_due_on: "2031-09-08" } });
+    s = await find();
+  }
+  const id = s?.terms[0]?.id;
+  expect(id, "the accessibility term").toBeTruthy();
+  return id ?? "";
+}
+
 /** Opens a page and waits until it has drawn its data. */
 async function open(page: Page, path: string) {
   await page.goto(path);
@@ -77,6 +96,13 @@ for (const scheme of ["light", "dark"] as const) {
     for (const path of PAGES) {
       await open(page, path);
       await check(path);
+    }
+    // A term's fees and invoices: a term of its own, not started, so the
+    // school's current term (schools.spec.ts) is left alone.
+    const term = await plannedTerm(page);
+    for (const path of [`/schools/terms/${term}/fees`, `/schools/terms/${term}/invoices`]) {
+      await open(page, path);
+      await check(path.replace(term, ":id"));
     }
     // A dialog, and the workflow editor.
     await open(page, "/workflows");

@@ -40,6 +40,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/invoices/{id}", s.updateInvoice)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/send", s.sendInvoice)
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/void", s.voidInvoice)
+	r.With(manage, s.tenantWide).Post("/invoices/{id}/amendments", s.amendInvoice) // schools_fees.go
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/payments/{payment}/undo", s.undoInvoicePayment)
 	r.With(read).Get("/invoice-settings", s.getInvoiceSettings)
 	r.With(manage, s.tenantWide).Put("/invoice-settings", s.putInvoiceSettings)

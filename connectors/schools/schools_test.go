@@ -45,6 +45,72 @@ func (o *ops) Current(context.Context, uuid.UUID) (schools.Term, bool, error) {
 	return schools.Term{}, false, schools.ErrOff
 }
 
+var first = schools.Term{ID: uuid.New(), Name: "First term", Session: "2026/2027"}
+
+func (o *ops) ResolveTerm(_ context.Context, _ uuid.UUID, id string) (schools.Term, error) {
+	if id == "" || id == first.ID.String() {
+		return first, nil
+	}
+	return schools.Term{}, schools.ErrNotFound
+}
+func (o *ops) ListFees(_ context.Context, _ uuid.UUID, _ uuid.UUID, class *uuid.UUID) ([]schools.ClassFees, error) {
+	o.class = class
+	return []schools.ClassFees{{ClassID: jss1.ID, Class: "JSS 1 A", RequiredKobo: 100, Items: []schools.FeeItem{{ID: uuid.New(), Name: "WAEC", AmountKobo: 100, Kind: "required", PassThroughFor: "WAEC"}}}}, nil
+}
+func (o *ops) ListTermInvoices(_ context.Context, _ uuid.UUID, _ uuid.UUID, _ *uuid.UUID, status string) ([]schools.TermInvoice, error) {
+	o.status = status
+	return []schools.TermInvoice{{Number: "INV-0001", Status: "sent", AdmissionNumber: "GCA/001", Name: "Ebube Eze", TotalKobo: 100, DueKobo: 100}}, nil
+}
+
+type invoiced struct {
+	key  string
+	send bool
+}
+
+var lastInvoiced invoiced
+
+func (o *ops) InvoiceTermOnce(_ context.Context, _ uuid.UUID, _ uuid.UUID, key string, send bool, _ string) (schools.TermInvoiced, error) {
+	lastInvoiced = invoiced{key, send}
+	return schools.TermInvoiced{TermPlan: schools.TermPlan{Enrolled: 3, ToInvoice: 2, NoContact: []schools.PlanStudent{{}}}, Created: 2, Sent: 2}, nil
+}
+
+// The fee and term invoice actions: the current term by default, no
+// names in a term's invoices, invoice_term under the step's key.
+func TestFeeActions(t *testing.T) {
+	o := &ops{}
+	c := conn.New(o)
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "s"})
+	r, err := c.Actions["list_fee_items"].Execute(ctx, connector.Request{Input: map[string]any{"class": "JSS 1 A"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cls := r.Output.(map[string]any)["classes"].([]any)
+	if len(cls) != 1 || o.class == nil || cls[0].(map[string]any)["items"].([]any)[0].(map[string]any)["pass_through_for"] != "WAEC" {
+		t.Fatalf("fees %v", r.Output)
+	}
+	if _, err := c.Actions["list_fee_items"].Execute(ctx, connector.Request{Input: map[string]any{"term": "nope"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("an unknown term: %v", err)
+	}
+	r, err = c.Actions["term_invoices"].Execute(ctx, connector.Request{Input: map[string]any{"status": "sent"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv := r.Output.(map[string]any)["invoices"].([]any)[0].(map[string]any)
+	if _, named := inv["name"]; named || inv["number"] != "INV-0001" || o.status != "sent" {
+		t.Fatalf("term invoices %v", inv)
+	}
+	if _, err := c.Actions["invoice_term"].Execute(ctx, connector.Request{Input: map[string]any{}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("no key: %v", err)
+	}
+	r, err = c.Actions["invoice_term"].Execute(ctx, connector.Request{Input: map[string]any{"send": true}, IdempotencyKey: "tsk_step"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := r.Output.(map[string]any); out["created"] != 2 || out["no_contact"] != 1 || lastInvoiced != (invoiced{"tsk_step", true}) {
+		t.Fatalf("invoiced %v %+v", out, lastInvoiced)
+	}
+}
+
 func TestActions(t *testing.T) {
 	reg := connector.NewRegistry()
 	if err := reg.Register(conn.New(nil)); err != nil {

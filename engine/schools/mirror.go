@@ -32,6 +32,9 @@ import (
 const (
 	StudentsTable = "school_students"
 	ClassesTable  = "school_classes"
+	// TermFeesTable is each student's invoice for a term, following it as
+	// it is sent and paid.
+	TermFeesTable = "school_term_fees"
 	// KeptBy is the feature keeping them.
 	KeptBy = "schools"
 )
@@ -55,6 +58,23 @@ var ClassColumns = []datatables.Column{
 	{Name: "arm", Title: "Arm", Type: "text"},
 	{Name: "label", Title: "Label", Type: "text", Required: true},
 	{Name: "class_order", Title: "Order", Type: "integer", Required: true},
+	{Name: "changed_at", Title: "Changed", Type: "datetime", Required: true},
+}
+
+// TermFeeColumns are school_term_fees' columns: amounts in kobo.
+var TermFeeColumns = []datatables.Column{
+	{Name: "invoice_id", Title: "Invoice id", Type: "text", Required: true},
+	{Name: "invoice_number", Title: "Invoice", Type: "text", Required: true},
+	{Name: "student_id", Title: "Student", Type: "text", Required: true},
+	{Name: "admission_number", Title: "Admission number", Type: "text", Required: true},
+	{Name: "name", Title: "Name", Type: "text", Personal: true},
+	{Name: "class_id", Title: "Class id", Type: "text", Required: true},
+	{Name: "class", Title: "Class", Type: "text", Required: true},
+	{Name: "term_id", Title: "Term id", Type: "text", Required: true},
+	{Name: "term", Title: "Term", Type: "text", Required: true},
+	{Name: "total_kobo", Title: "Total (kobo)", Type: "integer", Required: true},
+	{Name: "paid_kobo", Title: "Paid (kobo)", Type: "integer", Required: true},
+	{Name: "status", Title: "Status", Type: "text", Required: true},
 	{Name: "changed_at", Title: "Changed", Type: "datetime", Required: true},
 }
 
@@ -128,6 +148,9 @@ func (m *Mirror) ensure(ctx context.Context, tenant uuid.UUID) error {
 	if _, err := m.Tables.EnsureKept(ctx, tenant, StudentsTable, KeptBy, StudentColumns); err != nil {
 		return fmt.Errorf("the %s table: %w", StudentsTable, err)
 	}
+	if _, err := m.Tables.EnsureKept(ctx, tenant, TermFeesTable, KeptBy, TermFeeColumns); err != nil {
+		return fmt.Errorf("the %s table: %w", TermFeesTable, err)
+	}
 	m.mu.Lock()
 	if m.kept == nil {
 		m.kept = map[uuid.UUID]bool{}
@@ -149,7 +172,7 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	if err := m.ensure(ctx, tenant); err != nil {
 		return err
 	}
-	var cls, sts []copyRow
+	var cls, sts, fees []copyRow
 	err := m.Schools.In(ctx, tenant, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id, name, arm, class_order, updated_at, deleted_at IS NOT NULL FROM school_classes
 			WHERE tenant_id = $1 AND mirrored_at IS DISTINCT FROM updated_at ORDER BY updated_at, id LIMIT 500`, tenant)
@@ -185,6 +208,16 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 			}
 			sts = append(sts, copyRow{id: st.ID, changed: st.UpdatedAt, row: r})
 		}
+		tis, err := m.Schools.termInvoicesBy(ctx, tx, tenant, `ti.mirrored_at IS DISTINCT FROM i.updated_at`, ` ORDER BY i.updated_at, i.id LIMIT 500`)
+		if err != nil {
+			return err
+		}
+		for _, x := range tis {
+			fees = append(fees, copyRow{id: x.InvoiceID, changed: x.UpdatedAt, row: map[string]any{"invoice_id": x.InvoiceID.String(), "invoice_number": x.Number,
+				"student_id": x.StudentID.String(), "admission_number": x.AdmissionNumber, "name": x.Name, "class_id": x.ClassID.String(), "class": x.Class,
+				"term_id": x.TermID.String(), "term": x.Term, "total_kobo": x.TotalKobo, "paid_kobo": x.PaidKobo, "status": x.Status,
+				"changed_at": x.UpdatedAt.UTC().Format(time.RFC3339Nano)}})
+		}
 		return nil
 	})
 	if err != nil {
@@ -203,6 +236,15 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 			return err
 		}
 		if err := m.mark(ctx, tenant, `UPDATE school_students SET mirrored_at = $3 WHERE tenant_id = $1 AND id = $2 AND updated_at = $3`, x); err != nil {
+			return err
+		}
+	}
+	for _, x := range fees {
+		if err := m.copy(ctx, tenant, TermFeesTable, "invoice_id", x); err != nil {
+			return err
+		}
+		if err := m.mark(ctx, tenant, `UPDATE school_term_invoices ti SET mirrored_at = $3 FROM customer_invoices i
+			WHERE ti.tenant_id = $1 AND ti.invoice_id = $2 AND i.id = ti.invoice_id AND i.updated_at = $3`, x); err != nil {
 			return err
 		}
 	}

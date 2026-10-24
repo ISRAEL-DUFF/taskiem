@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
@@ -7,6 +8,14 @@ import { axe, describe } from "./a11y";
 // a term, which enrols each student once. serve.sh turns the area on for
 // the E2E business.
 test.use({ bypassCSP: true }); // axe is injected into the page
+// The fees test invoices the term the first test starts.
+test.describe.configure({ mode: "serial" });
+
+function sql(text: string): string {
+  const base = process.env.TASKIEM_TEST_DATABASE_URL;
+  if (!base) throw new Error("set TASKIEM_TEST_DATABASE_URL");
+  return execFileSync("psql", [base.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"), "-v", "ON_ERROR_STOP=1", "-tAqc", text], { encoding: "utf8" }).trim();
+}
 
 async function signIn(page: Page) {
   await page.goto("/login");
@@ -146,4 +155,89 @@ test("students are imported whole or not at all, never twice, and a term enrols 
   await expect(page.getByTestId("family")).toContainText("E2E/002");
   await expect(page.getByRole("cell", { name: "First term 2026/2027 (current)" })).toBeVisible();
   await axeBoth(page, "/schools/students/:id");
+});
+
+// Fees and term invoices (B3): set a class's fees, check the plan, invoice
+// the term, run it again (nobody twice), amend a sent invoice, and a
+// discount over the owner's threshold refused.
+test("a term is invoiced from its fees once per student, and a sent invoice is amended", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  await page.goto("/schools/classes");
+  await page.getByRole("link", { name: "Fees for First term 2026/2027" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Fees: First term 2026/2027" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "JSS 1 A" })).toBeVisible();
+  await page.getByLabel("Item 1 name").fill("Tuition");
+  await page.getByLabel("Item 1 amount in naira").fill("100,000");
+  await page.getByRole("button", { name: "Add an item" }).click();
+  await page.getByLabel("Item 2 name").fill("WAEC fee");
+  await page.getByLabel("Item 2 amount in naira").fill("18000");
+  await page.getByLabel("Item 2 collected on behalf of").fill("WAEC");
+  await page.getByRole("button", { name: "Add an item" }).click();
+  await page.getByLabel("Item 3 name").fill("Transport");
+  await page.getByLabel("Item 3 amount in naira").fill("20000");
+  await page.getByLabel("Item 3 kind").selectOption("optional");
+  await page.getByRole("button", { name: "Save JSS 1 A's fees" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toHaveText("Saved JSS 1 A's fees: ₦118,000 for every student.");
+  await axeBoth(page, "/schools/terms/:id/fees");
+
+  // The plan, then the invoices as drafts.
+  await page.getByRole("navigation", { name: "First term 2026/2027" }).getByRole("link", { name: "Invoices" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Invoices: First term 2026/2027" })).toBeVisible();
+  await page.getByRole("button", { name: "Check what invoicing the term will do" }).click();
+  const plan = page.getByTestId("term-plan");
+  await expect(plan).toContainText("2 students to invoice, ₦236,000 in all.");
+  await expect(plan).toContainText("₦36,000 of it is collected for others");
+  await expect(plan).toContainText("1 left out: their class has no fees for the term.");
+  await axeBoth(page, "/schools/terms/:id/invoices (the plan)");
+  await plan.getByRole("button", { name: "Invoice 2 as drafts" }).click();
+  await expect(page.getByTestId("invoiced")).toHaveText("2 invoices made as drafts: check them, then send them from here.");
+  await expect(page.getByTestId("term-invoice")).toHaveCount(2);
+
+  // Again: nobody twice. The drafts can be sent from here.
+  await page.getByRole("button", { name: "Check what invoicing the term will do" }).click();
+  await expect(plan).toContainText("Every student who can be invoiced has their invoice for the term.");
+  await expect(plan).toContainText("2 already invoiced for the term: they are not invoiced again.");
+  await expect(plan.getByRole("button", { name: "Send the 2 drafts" })).toBeVisible();
+  await plan.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByTestId("term-invoice")).toHaveCount(2);
+  const sessions = (await (await page.request.get("/v1/schools/sessions")).json()) as { sessions: { label: string; terms: { id: string; name: string }[] }[] };
+  const first = sessions.sessions.find((s) => s.label === "2026/2027")?.terms.find((t) => t.name === "First term");
+  const listed = (await (await page.request.get(`/v1/schools/terms/${first?.id}/invoices`)).json()) as { invoices: { invoice_id: string; admission_number: string; number: string }[] };
+  expect(listed.invoices.map((x) => x.admission_number).sort()).toEqual(["E2E/001", "E2E/003"]);
+  await axeBoth(page, "/schools/terms/:id/invoices");
+
+  // The e2e server sends no messages to customers (as matching.spec.ts):
+  // Ebube's invoice is marked sent in the database.
+  const ebube = listed.invoices.find((x) => x.admission_number === "E2E/001");
+  sql(`UPDATE customer_invoices SET sent_at = now(), updated_at = now() WHERE id = '${ebube?.invoice_id}'`);
+
+  // The owner's discount threshold.
+  await page.goto("/settings/schools");
+  await page.getByLabel("Threshold (₦)").fill("10000");
+  await page.getByRole("button", { name: "Save the threshold" }).click();
+  await expect(page.getByLabel("Threshold (₦)")).toHaveValue("10000");
+
+  // An amendment on a sent invoice: a line of its own, with its reason.
+  const number = ebube?.number ?? "";
+  await page.goto(`/invoices/${encodeURIComponent(number)}`);
+  await expect(page.getByRole("cell", { name: /WAEC fee.*Collected on behalf of WAEC/ })).toBeVisible();
+  await page.getByRole("button", { name: "Amend…" }).click();
+  const amend = page.getByRole("form", { name: "Amend the invoice" });
+  await amend.getByLabel("What it is for").fill("Lost textbook");
+  await amend.getByLabel("Amount (₦)").fill("5000");
+  await amend.getByLabel("Reason").fill("Replacement copy");
+  await amend.getByRole("button", { name: "Amend the invoice" }).click();
+  await expect(page.getByRole("cell", { name: /Lost textbook.*Added after the invoice was sent\. Replacement copy/ })).toBeVisible();
+  await expect(page.getByTestId("amendments")).toContainText("Lost textbook");
+  await axeBoth(page, "/invoices/:id (amended)");
+
+  // A discount at or above the threshold waits for a second person: refused.
+  await page.getByRole("button", { name: "Amend…" }).click();
+  await amend.getByLabel("Change").selectOption("discount");
+  await amend.getByLabel("Amount (₦)").fill("20000");
+  await amend.getByLabel("Reason").fill("Hardship");
+  await amend.getByRole("button", { name: "Amend the invoice" }).click();
+  await expect(amend.getByRole("alert")).toContainText("second person");
+  await expect(page.getByTestId("amendments").getByRole("listitem")).toHaveCount(1);
 });

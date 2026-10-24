@@ -16,7 +16,9 @@ It is saved as a **draft** with the business's next number (`INV-0001` upwards).
 
 A customer who asked the business for updates on WhatsApp or Telegram also gets it there, with buttons to pay ([below](#on-whatsapp-and-telegram)).
 
-Once sent, what the customer was sent cannot change: to correct an invoice, **void** it with the reason and send a new one.
+Once sent, what the customer was sent is never edited: it is **amended** ([below](#amending-a-sent-invoice)), or **voided** with the reason and a new one sent.
+
+Over the API a line can also say who it is collected for (`pass_through_for`, such as `WAEC`): money the business collects on someone else's behalf, which its page shows as "collected on behalf of WAEC" and the [money reports](money-reports.md#pass-through) keep out of the business's own income. A line of `kind: "discount"` (quantity 1, a negative price, never pass-through) takes money off the business's own items, and says why in `reason`.
 
 ## Statuses
 
@@ -30,6 +32,27 @@ Once sent, what the customer was sent cannot change: to correct an invoice, **vo
 | Void | Cancelled, with the reason; it takes no new payment |
 
 Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time).
+
+## Amending a sent invoice
+
+A sent invoice (sent, part-paid, overdue or paid) changes only by an **amendment**: a recorded change with a reason, which becomes a line of its own at the end of the invoice, on its page too. On the invoice's page, **Amend…** offers three:
+
+| Amendment | Line it adds |
+| --- | --- |
+| **Add a line** (what it is for, an amount, optionally who it is collected for) | The line, marked "Added after the invoice was sent" |
+| **Give a discount** (an amount, optionally a description) | A negative line, "Discount" or what you called it. A discount comes off the business's own items, never off money collected for someone else |
+| **Take a line out** (one of the invoice's items) | A negative line, "Taken out: …", for that item's amount. A line is taken out once |
+
+The total is then the sum of the lines, and the status follows from it and the payments counted, as always: nothing marks an invoice paid but its payments.
+
+- The total can never go below what has been paid: such an amendment is refused (409). Refund the customer instead.
+- A paid invoice whose total rises is **part-paid** again, for what the amendment added; a discount that brings the total down to what was paid makes it **paid**, and starts the workflows that start on an invoice being paid, once, as a payment would.
+- The total stays at least ₦1: to cancel what is left, void the invoice.
+- A draft is not amended: change it instead.
+- Every amendment is in the audit log (`invoice.amended`, with who, the amount and the reason) and in the [invoices export](money-reports.md#invoices) (`amended`).
+- Where the [Schools](schools.md) area is on, a discount at or above the school's discount threshold needs a second person ([discounts](schools.md#discounts)).
+
+The database keeps the rule whoever writes: a sent invoice's lines can only grow, each new line naming a recorded amendment of that invoice (once), its total is recomputed from its lines, and never below what was paid.
 
 ## The invoice's page
 
@@ -169,4 +192,4 @@ The customer's name, phone and email, and the link, are personal data: they are 
 
 ## API
 
-`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/payments/{payment}/undo`, `GET` and `PUT /v1/invoice-settings`, and for matching `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` (with `{"invoice": "<id or number>"}`, or `{"parts": [...]}` to split), `GET /v1/invoices/{id}/customer` (the customer's credit, accounts and remembered payers), `POST /v1/customer-accounts` (a customer's permanent account) and `DELETE /v1/money/payers/{id}`; `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).
+`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/amendments` (`{kind: "add" | "remove" | "discount", description, amount_kobo, pass_through_for, line, reason}`), `POST /v1/invoices/{id}/payments/{payment}/undo`, `GET` and `PUT /v1/invoice-settings`, and for matching `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` (with `{"invoice": "<id or number>"}`, or `{"parts": [...]}` to split), `GET /v1/invoices/{id}/customer` (the customer's credit, accounts and remembered payers), `POST /v1/customer-accounts` (a customer's permanent account) and `DELETE /v1/money/payers/{id}`; `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).

@@ -19,6 +19,7 @@ import {
   STATEMENTS_PATH,
   addedLine,
   bpToPercent,
+  collectedForLine,
   channelProblem,
   closeProblem,
   closeRequest,
@@ -217,6 +218,15 @@ export function MoneyOverview() {
               <span className="stat-value">{naira(s.invoices_paid_kobo)}</span>
               <span className="stat-hint">{counted(s.invoices_paid, "invoice")}</span>
             </div>
+            {!!s.collected_for_others_kobo && (
+              <div className="stat" data-testid="collected-for-others">
+                <span className="stat-label">Collected for others</span>
+                <span className="stat-value">{naira(s.collected_for_others_kobo)}</span>
+                <span className="stat-hint">
+                  {collectedForLine(s)}: not the business's own. Its own money in: {naira(s.own_in_settled_kobo ?? 0)}.
+                </span>
+              </div>
+            )}
           </section>
           <section className="card" aria-labelledby="leaks-h" data-testid="overview-leaks">
             <h2 id="leaks-h">Leaks</h2>
