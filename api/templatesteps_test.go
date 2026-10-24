@@ -27,6 +27,18 @@ func TestTemplateSteps(t *testing.T) {
 			map[string]any{"id": "rec", "type": "template", "template": "payrolla-record-payroll", "params": map[string]any{"payrolla_connection": "payrolla"},
 				"input": map[string]any{"id": "=trigger.body.id", "data": "=trigger.body.data"}},
 		}}
+	// The library lists the templates a step can use, with their
+	// interface.
+	callable := map[string]map[string]any{}
+	for _, x := range owner.must(200, "GET", "/v1/templates?callable=true", nil)["templates"].([]any) {
+		m := x.(map[string]any)
+		callable[m["id"].(string)] = m["callable"].(map[string]any)
+	}
+	if len(callable) < 5 || callable["run-payroll"]["effect"].(map[string]any)["class"] != "moves_money" ||
+		strings.Contains(toJSON(callable["run-payroll"]["params"]), "pay_day") || !strings.Contains(toJSON(callable["send-invoice"]["inputs"]), "amount_naira") {
+		t.Fatalf("callable templates: %v", callable)
+	}
+
 	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "After payroll", "definition": def})["id"].(string)
 
 	// Both templates are pinned with version 1.

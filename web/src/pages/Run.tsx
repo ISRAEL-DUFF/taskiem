@@ -5,7 +5,7 @@ import { useAdvanced, useAuth } from "../auth";
 import { startedByWords } from "../lib/home";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
-import { duration, timeline, type StepRow } from "../lib/timeline";
+import { duration, templateGroups, timeline, type StepRow } from "../lib/timeline";
 import { respondentText } from "./Forms";
 import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
@@ -200,9 +200,22 @@ export function RunPage() {
       {view === "canvas" && <RunCanvas workflow={r.workflow_id} version={r.version} rows={rows} ended={TERMINAL.has(shownStatus)} onSelect={(step) => (setView("timeline"), setTimeout(() => document.querySelector(`[data-testid="step-${CSS.escape(step)}"]`)?.scrollIntoView({ block: "center" }), 0))} />}
       <div className="timeline" hidden={view !== "timeline"}>
         {rows.length === 0 && <div className="empty">No steps yet.</div>}
-        {rows.map((s) => (
-          <StepCard key={s.id} row={s} plainError={data.plain_errors?.[s.id]} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
-        ))}
+        {templateGroups(rows).map((g) => {
+          const cards = g.rows.map((s) => (
+            <StepCard key={s.id} row={s} plainError={data.plain_errors?.[s.id]} reads={readsByStep.get(s.id) ?? []} canResolve={can("run.resolve") && s.status === "parked"} onResolve={() => setResolving(s.id)} />
+          ));
+          if (g.template === null) return cards;
+          // A template step's own steps, under it (decision 0047).
+          const own = g.rows.find((r) => r.id === g.template);
+          return (
+            <details key={`template-${g.template}`} className="template-group" open={g.rows.some((r) => !["completed", "skipped"].includes(r.status))} data-testid={`template-${g.template}`}>
+              <summary>
+                Template step <strong>{g.template}</strong>: {g.rows.length} steps{own ? ` · ${own.status}` : ""}
+              </summary>
+              {cards}
+            </details>
+          );
+        })}
       </div>
       {ended && ended.type === "RunFailed" && (
         <>

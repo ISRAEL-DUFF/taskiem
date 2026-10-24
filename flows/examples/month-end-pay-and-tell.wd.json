@@ -1,0 +1,57 @@
+{
+  "schema": "wd/v1",
+  "id": "wf_monthEndPay",
+  "version": 1,
+  "name": "Month end: payroll, then suppliers",
+  "description": "Runs payroll with the Run payroll template, then pays the month's suppliers with the Pay a list template, then tells the owner how both went in one message.",
+  "trigger": {
+    "type": "schedule",
+    "config": {
+      "cron": "0 8 25 * *",
+      "timezone": "Africa/Lagos"
+    }
+  },
+  "steps": [
+    {
+      "id": "payroll",
+      "name": "Run payroll",
+      "type": "template",
+      "template": "run-payroll",
+      "params": {
+        "business_name": "Ada Foods",
+        "approver_role": "owner"
+      }
+    },
+    {
+      "id": "suppliers",
+      "name": "Pay the month's suppliers",
+      "type": "template",
+      "needs": [
+        "payroll"
+      ],
+      "template": "pay-a-list",
+      "params": {
+        "list_table": "suppliers",
+        "approver_role": "owner"
+      },
+      "input": {
+        "batch": "='suppliers-' + steps.payroll.output.period"
+      }
+    },
+    {
+      "id": "tell_owner",
+      "name": "Tell the owner how the month went",
+      "type": "connector",
+      "needs": [
+        "suppliers"
+      ],
+      "connector": "notify@1",
+      "action": "tell",
+      "input": {
+        "to": "owner",
+        "title": "='Month end ' + steps.payroll.output.period",
+        "message": "='Payroll: ' + string(steps.payroll.output.paid) + ' staff paid (NGN ' + string(steps.payroll.output.paid_naira) + '). Suppliers: ' + string(steps.suppliers.output.paid) + ' paid (NGN ' + string(steps.suppliers.output.paid_naira) + ').'"
+      }
+    }
+  ]
+}

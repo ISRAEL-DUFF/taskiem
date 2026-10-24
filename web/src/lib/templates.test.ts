@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byCategory, initialValues, inputKind, lineLabel, toParams, type Template, type TemplateParam } from "./templates";
+import { byCategory, effectWords, initialValues, inputKind, lineLabel, toParams, type Template, type TemplateParam } from "./templates";
 
 const params: TemplateParam[] = [
   { name: "business_name", type: "string", title: "Business name", description: "d", required: true, example: "Ada" },
@@ -37,5 +37,14 @@ describe("gallery", () => {
   it("labels plain steps", () => {
     expect(lineLabel({ number: "3a", depth: 1, text: "Text the customer" })).toBe("3a. Text the customer");
     expect(lineLabel({ number: "", depth: 1, text: "If that step fails:" })).toBe("If that step fails:");
+  });
+});
+
+describe("effectWords", () => {
+  it("says what a callable template does", () => {
+    expect(effectWords({ class: "moves_money", waits_for_person: true, waits_for_event: true })).toBe(
+      "Moves money · waits for a person to approve or answer · waits for something to happen (a payment, a reply)",
+    );
+    expect(effectWords({ class: "read", waits_for_person: false, waits_for_event: false })).toBe("Only reads");
   });
 });

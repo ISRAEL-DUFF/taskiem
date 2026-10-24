@@ -165,6 +165,10 @@ class Gen {
         this.use("capability");
         return call("capability", uses, optional(s.input), extraArg);
       }
+      case "template":
+        take("template", "params", "input");
+        this.use("template");
+        return call("template", s.template, optional(s.params), optional(s.input));
       case "http":
         take("config", "effect");
         this.use("http");

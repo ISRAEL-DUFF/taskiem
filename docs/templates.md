@@ -117,7 +117,7 @@ The library refuses to load a callable template that breaks these rules. Its ste
 
 | Route | Permission | What it does |
 | --- | --- | --- |
-| `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters |
+| `GET /v1/templates` | any member | Every template: summary, parameters, variables, its steps in plain words (filled with the examples), and `available` (every connector it uses is available to the tenant). `?q=` ranks by keyword match, `?category=` filters, `?callable=true` keeps the [callable](#callable-templates) ones. A callable template also has `callable`: its `inputs` (a JSON Schema), the `params` a template step fills (those only its trigger uses are left out), its `outputs` and its computed `effect` |
 | `GET /v1/templates/{id}` | any member | One template, with its definition (markers included) |
 | `POST /v1/templates/{id}/instantiate` | `workflow.edit` | `{"params": {...}, "name"?}`: a new workflow with a `draft` version 1, `created_by` the person, the template recorded on the version (`workflow_versions.template_id`), `workflow.create` audited with the template; answers the draft's `problems`, its `variables`, and `tables`: what became of each data table the template declares (above) (publishing checks) and the variables to set. Plan limits apply (`max_workflows`). Never publishes |
 | `GET /v1/embed/{app}/templates` | end user | The app's `allowed_templates`, `available` only when the app also allows every connector they use |
@@ -128,3 +128,7 @@ Registering or updating an embed app refuses an `allowed_templates` id that is n
 ## Web
 
 **Templates** in the navigation (every member): templates by category, a search box, and for each its description, steps in plain words, the variables to set, and a form for its parameters that creates the draft and opens it in the editor. "Set it up step by step" opens the guided first workflow instead: details, connection and variables, publish, and a test run on one page ([onboarding](onboarding.md#getting-started)). The AI panel says when a draft started from a template, and which details the goal did not give.
+
+In the editor, **Use a ready workflow** adds a template step: choose a callable template, fill its settings (as on the Start page) and what it starts with (values, or what earlier steps gave), and the panel shows what it gives back, what it does ("Moves money · waits for a person to approve or answer") and its steps. The canvas shows it as one step; the steps after it can use what it gives back. When the library has changed a template the workflow uses, the editor says so with what changed; saving the workflow again takes it. A run's timeline shows each template step's own steps together under it, and the run canvas colours the template step by them.
+
+In flow code, `template(id, params, input)` is a template step (`template("pay-a-list", { approver_role: "finance" }, { batch: ({ steps }) => steps.names.output.batch })`), kept unexpanded both ways; `flows/examples/month-end-pay-and-tell.flow.ts` runs payroll and then pays suppliers with two templates.
