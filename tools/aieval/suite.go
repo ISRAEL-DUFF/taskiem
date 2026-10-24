@@ -9,6 +9,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Expect is what a good answer to a request must have. Every field is a
@@ -24,6 +26,9 @@ type Expect struct {
 	Trigger string `json:"trigger,omitempty"`
 	// Properties are named rules the workflow must satisfy (rules.go).
 	Properties []string `json:"properties,omitempty"`
+	// Templates are callable templates the workflow must use as template
+	// steps (decision 0047).
+	Templates []string `json:"templates,omitempty"`
 }
 
 // Case is one line of a builder suite.
@@ -40,7 +45,7 @@ type Case struct {
 
 var difficulties = []string{"easy", "medium", "hard"}
 
-var stepTypes = []string{"connector", "capability", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval", "form"}
+var stepTypes = []string{"connector", "capability", "template", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval", "form"}
 
 var triggerTypes = []string{"webhook", "schedule", "connector_event", "capability_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form", "invoice"}
 
@@ -73,8 +78,13 @@ func (c *Case) check() error {
 			return fmt.Errorf("%s: connector %q must be a ref like paystack@1, or capability:pay_bank for any rail that can", c.ID, r)
 		}
 	}
-	if len(c.Expect.Connectors)+len(c.Expect.Steps) == 0 {
-		return fmt.Errorf("%s: expect at least one connector or step type", c.ID)
+	for _, id := range c.Expect.Templates {
+		if t, ok := templates.Default().Get(id); !ok || !t.Callable {
+			return fmt.Errorf("%s: %q is not a callable template", c.ID, id)
+		}
+	}
+	if len(c.Expect.Connectors)+len(c.Expect.Steps)+len(c.Expect.Templates) == 0 {
+		return fmt.Errorf("%s: expect at least one connector, step type or template", c.ID)
 	}
 	return nil
 }

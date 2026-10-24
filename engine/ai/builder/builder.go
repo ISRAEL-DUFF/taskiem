@@ -635,8 +635,18 @@ func TemplateContext(t *templates.Template) map[string]any {
 	for _, v := range t.Variables {
 		vars = append(vars, v.Name)
 	}
-	return map[string]any{"id": t.ID, "title": t.Title, "description": t.Description, "connectors": t.Connectors,
+	out := map[string]any{"id": t.ID, "title": t.Title, "description": t.Description, "connectors": t.Connectors,
 		"variables": vars, "params": params, "definition": t.Definition}
+	if t.Callable {
+		// It can also be a template step (rule 18): what that step gives
+		// back.
+		outs := make([]map[string]any, 0, len(t.Outputs))
+		for _, o := range t.Outputs {
+			outs = append(outs, map[string]any{"name": o.Name, "type": o.Type, "description": o.Description})
+		}
+		out["callable"] = map[string]any{"outputs": outs}
+	}
+	return out
 }
 
 func nonNil[T any](s []T) []T {

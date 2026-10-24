@@ -10,6 +10,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Context is what a tenant contributes to a prompt. The API fills it from
@@ -261,7 +262,68 @@ func Catalogue(reg connector.Lookup) string {
 		b.WriteString(".\n")
 	}
 	b.WriteString(capabilities(reg))
+	b.WriteString(callableTemplates(reg))
 	return b.String()
+}
+
+// callableTemplates lists the library's callable templates (decision
+// 0047), which a "template" step uses inside a workflow (rule 18): the
+// parameters a step fills, its run inputs, its outputs and its effect.
+func callableTemplates(reg connector.Lookup) string {
+	var b strings.Builder
+	b.WriteString("\n# Callable templates\n\nReady, tested workflows a \"template\" step uses inside a workflow (rule 18). `id` (title): params (fill as values); input (* required; expressions over this workflow); output fields, read as steps.<step id>.output.<field>; what it does.\n\n")
+	for _, t := range templates.Default().Offered() {
+		if !t.Callable {
+			continue
+		}
+		doc, err := t.Instantiate(t.Examples(), "")
+		if err != nil {
+			continue
+		}
+		def, err := wd.Load(doc)
+		if err != nil || def.RawInputs == nil {
+			continue
+		}
+		var params []string
+		for _, p := range t.StepParams() {
+			n := p.Name + ":" + p.Type
+			if p.Required && p.Default == nil {
+				n += "*"
+			}
+			params = append(params, n)
+		}
+		var inputs []string
+		for _, f := range capability.Fields(def.RawInputs.Schema) {
+			if len(f.Path) == 1 {
+				n := f.Name()
+				if f.Required {
+					n += "*"
+				}
+				inputs = append(inputs, n)
+			}
+		}
+		var outs []string
+		for _, o := range t.Outputs {
+			outs = append(outs, o.Name+":"+o.Type)
+		}
+		e := templates.EffectOf(def, reg)
+		does := map[string]string{templates.EffectRead: "only reads", templates.EffectWrite: "writes", templates.EffectMovesMoney: "moves money"}[e.Class]
+		if e.WaitsForPerson {
+			does += ", waits for a person (its own approval)"
+		}
+		if e.WaitsForEvent {
+			does += ", waits for an event"
+		}
+		fmt.Fprintf(&b, "- %s (%s): params %s; input %s; output %s; %s.\n", t.ID, t.Title, orNone(params), orNone(inputs), strings.Join(outs, ", "), does)
+	}
+	return b.String()
+}
+
+func orNone(list []string) string {
+	if len(list) == 0 {
+		return "none"
+	}
+	return strings.Join(list, ", ")
 }
 
 // capabilities lists what rails can do in Taskiem's words (capability

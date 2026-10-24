@@ -11,6 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/templates"
@@ -181,7 +182,21 @@ func grade(r *Result, c Case, p *builder.Proposal, reg connector.Lookup) {
 		r.Missing = append(r.Missing, "a loadable definition")
 		return
 	}
-	usedC, usedS := map[string]bool{}, map[string]bool{}
+	// Templates are used as written; what they do is graded on the
+	// expanded definition, as publishing checks it (decision 0047).
+	usedC, usedS, usedT := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	walk(def.Steps, func(st *wd.Step) {
+		if st.Type == "template" {
+			usedS[st.Type] = true
+			usedT[st.Template] = true
+		}
+	})
+	if def.HasTemplates() {
+		if def, err = expansion.ExpandDefinition(def, expansion.Library(templates.Default())); err != nil {
+			r.Missing = append(r.Missing, "template steps that expand")
+			return
+		}
+	}
 	walk(def.Steps, func(st *wd.Step) {
 		usedS[st.Type] = true
 		if st.Connector != "" {
@@ -219,11 +234,15 @@ func grade(r *Result, c Case, p *builder.Proposal, reg connector.Lookup) {
 			}
 		}
 	}
-	var missC, missS []string
+	var missC, missS, missT []string
 	r.ConnectorRecall, missC = coverage(c.Expect.Connectors, usedC)
 	r.StepRecall, missS = coverage(c.Expect.Steps, usedS)
+	_, missT = coverage(c.Expect.Templates, usedT)
 	r.Missing = append(r.Missing, missC...)
 	r.Missing = append(r.Missing, missS...)
+	for _, t := range missT {
+		r.Missing = append(r.Missing, "template "+t)
+	}
 	r.TriggerOK = c.Expect.Trigger == "" || def.Trigger.Type == c.Expect.Trigger ||
 		c.Expect.Trigger == "connector_event" && def.Trigger.Type == "capability_event" // the rail's event, whichever rail
 	if !r.TriggerOK {
@@ -236,7 +255,7 @@ func grade(r *Result, c Case, p *builder.Proposal, reg connector.Lookup) {
 	for _, ok := range props {
 		propsOK = propsOK && ok
 	}
-	r.Requirements = r.Valid && len(missC) == 0 && len(missS) == 0 && r.TriggerOK && propsOK
+	r.Requirements = r.Valid && len(missC) == 0 && len(missS) == 0 && len(missT) == 0 && r.TriggerOK && propsOK
 	r.Strict = r.Gate && r.Requirements && r.PolicyViolations == 0
 }
 
