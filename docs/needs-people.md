@@ -35,6 +35,21 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 | R0-3 | [x] (23 October, [embedding](integrations/payrolla-reference/api/embedding.md)) Payrolla's embeddable screens: URLs, sign-in inside a frame, `frame-ancestors`, postMessage events (P3) | Payrolla | — | R6, app views |
 | R0-4 | [x] (per company, made with each company's key) Whether Payrolla's webhooks are set per company or once for all its companies | Payrolla with Taskiem | Partner routing built (decision 0031) | R5 |
 
+## Business connectors (K0)
+
+The [business connectors plan](spec/business-connectors.md) and [decision 0049](decisions/0049-platform-apps.md). Start the Meta and Intuit items first: their reviews are the longest waits.
+
+| # | Item | Who | Code status | Unblocks |
+| --- | --- | --- | --- | --- |
+| K0-1 | Meta Business Verification of Taskiem's business | Founders | — | K5, Instagram and Facebook messages |
+| K0-2 | Meta App Review for Advanced Access to `pages_messaging`, `pages_manage_metadata`, `instagram_basic`, `instagram_manage_messages` as a Tech Provider, with a screencast of each use; and the choice of Facebook Login or Instagram Login | Founders, with engineering | Plan written | K5 going to businesses |
+| K0-3 | Slack app with public distribution turned on; Slack test workspace | Engineering | Plan written | K2, Slack |
+| K0-4 | Intuit developer app; sandbox companies; production keys after Intuit's app assessment (security questionnaire, privacy policy and terms URLs) | Founders, with engineering | Plan written | K3, QuickBooks going to businesses |
+| K0-5 | Zoho server-based client with multi-data-centre support; Zoho Books test organisations in the Nigeria and global editions | Engineering | Plan written | K4, K6 |
+| K0-6 | Mailchimp app registration; Resend and Brevo test accounts with verified test domains | Engineering | Plan written | K7, K8 |
+| K0-7 | Privacy policy and terms that name each provider's data use, before the reviews | Founders, legal | — | K0-2, K0-4 |
+| K0-8 | The facts the plan marks "K0 confirms", answered in each integration page | Engineering | — | K1 to K8 |
+
 ## Production infrastructure and security (gates G1 and G2)
 
 | # | Item | Who | Code status | Unblocks |
