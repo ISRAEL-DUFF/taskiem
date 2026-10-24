@@ -1,6 +1,6 @@
 # Matching payments to invoices and orders
 
-Matching decides which invoice or [storefront order](storefronts.md#payments-and-matching) a payment is for. Taskiem looks at every payment the [money log](money-log.md) records as money in and settled, once, and either matches it, suggests where it may belong, or leaves it for a person. It follows [decision 0045](decisions/0045-tally-in-taskiem.md) and the [build plan](spec/invoices-and-money-log.md) (§8, T5).
+Matching decides which invoice or [storefront order](storefronts.md#payments-and-matching) a payment is for. Taskiem looks at every payment the [money log](money-log.md) records as money in and settled, once, and either matches it, suggests where it may belong, or leaves it for a person. It follows [decision 0045](decisions/0045-tally-in-taskiem.md) and the [build plan](spec/invoices-and-money-log.md) (§8, T5); customers' own account numbers, split payments, payer memory and counting what the payer sent follow [decision 0046](decisions/0046-balans-in-taskiem.md) (points 5 to 7) and the [schools plan](spec/schools.md) (§7, B1), and work for every business.
 
 A match is a payment counted towards an invoice or an order, listed on it with how it was matched and why. **Nothing else marks an invoice paid**, and an order is marked paid along the same path whether its own payment check or matching hears of the money first.
 
@@ -9,6 +9,36 @@ A match is a payment counted towards an invoice or an order, listed on it with h
 A payment into an account number or payment link Taskiem gave for an invoice ([paying an invoice](invoices.md#paying-from-the-page)) is matched to that invoice at once, with no one asked. Taskiem matches it when the payment service tells it about the payment, or when its own check every 30 seconds finds it, whichever comes first.
 
 A payment through a storefront order's Paystack checkout page (its reference is the one Taskiem gave the page) is matched to that order the same way: when the Paystack event reaches the money log, or when the order's own payment check finds it, whichever comes first. Both write the same money log entry, its match, and the order's move to paid together, under the money's lock and the order's, so the order is matched and marked paid once, and its workflow is started or told once. An order cancelled or expired before its money came, or already paid by other money, is left for a person.
+
+## Customers' own account numbers
+
+A customer can have a permanent account number of their own: a `virtual_account` issued for them on one of the business's connections (for a school, a student's account). Registering it links the connection, the account number and the account's reference to the customer (`POST /v1/customer-accounts`, `invoice.manage`; `invoicing.Invoices.RegisterAccount` in the engine, which issuing students' accounts will call). The same account for the same customer again is the same registration; an account already another customer's, or registered with another number or reference, is refused.
+
+**Who a customer is.** Invoices carry the customer inline, so matching knows a customer by the business's own key for them when the invoice gives one (`customer.key`, such as `student:42`), else by their phone number, else their email, as the pseudonym of their personal data (never the number itself). Invoices with the same key, or without a key and the same phone, are one customer's. Siblings invoiced under their parent's phone are one customer unless each has a key.
+
+Money paid into a registered account is matched **exactly**, with no one asked, when its connection, its account number and its reference all agree with the registration: to the customer's oldest open invoice (sent, part-paid or overdue, by due date, then when sent), as much as is due, then the next, until the money runs out. Each invoice's part says "paid into the customer's own account number" and "the customer's oldest open invoice" (or "what was left after the customer's older open invoices"); reasons never name anyone.
+
+What is left is the customer's **credit**. It is shown on each of their invoices (**The customer's money**, and `GET /v1/invoices/{id}/customer`), and counted towards the next invoice sent to them: when an invoice is sent, the customer's credit pays it first, oldest money first, each part a match of the money it came from ("the customer's credit from an earlier payment"); the message sent says what is left to pay, or that nothing is. Undoing a part of a customer's money makes it their credit again, rather than money to match.
+
+A credit naming a registered account by its reference but paid into another account number, paid into a registered account number with another account's reference, or naming the account by its reference without saying which account number it was paid into, is **held** for a person: it waits under **No invoice suggested** in To match with the reason, and nothing is counted. A credit into an account Taskiem does not know is suggested as any other money. Another business's accounts are never looked at.
+
+## Split payments
+
+One payment can count towards several invoices and storefront orders (two children's fees, two terms), each part a match of its own, listed on its invoice and undone on its own; undoing one part leaves the others. The parts never add up to more than the payment counts for: the database refuses a part that would, under the lock every writer takes on the payment, so two people splitting it at once cannot count it twice.
+
+When a suggestion's payment is more than is due on its invoice, To match offers **Split across the customer's invoices…**: the same customer's open invoices oldest first, each as much as is due, the amounts editable. What the parts leave over is kept as the customer's credit (the default), or waits in To match to be matched by hand (left_kobo says how much). In chat the question says so ("It is more than that, so it would be split across the customer's open invoices, oldest first: INV-0101 ₦20,000, INV-0104 ₦30,000, ₦10,000 left as the customer's credit") and **Yes, match** matches each part.
+
+Over the API, `POST /v1/money/suggestions/{id}/confirm` and `POST /v1/money/entries/{id}/match` take `{"parts": [{"invoice": "INV-0101", "amount_kobo": 2000000}, {"order": "AK-7QX4KD", "amount_kobo": 300000}], "credit_rest": true}` (credit_rest only when every part is one customer's invoices), and confirm takes `{"split": true}` to split as offered; each suggestion lists its offered `split`. Without parts, what is left of the payment counts towards the one invoice or order, as before. A second part of one payment towards the same invoice is not added: undo the part and split again.
+
+## Payer memory
+
+When a person confirms a suggestion or matches money by hand to a customer's invoice, Taskiem remembers the payer for that customer: their name as the rail sent it and, where the rail gives it, the paying account. Payers are personal data: what the rail sent is kept sealed, and the payer is found again by a pseudonym derived from their name (its words, in any order and case) or account (its digits) with the business's own key. Each business's payers are its own.
+
+The next payment from a remembered payer suggests that customer's open invoices with "this payer paid for this customer before" (or "this paying account paid for this customer before"), a strong reason: with the business's **automatic matching** on, a remembered payer's payment made within 3 days of the invoice being sent is matched on its own when it is the clear best. **Forget this payer** on an invoice's customer (`DELETE /v1/money/payers/{id}`, `invoice.manage`) forgets them; their next payment is suggested as anyone's. Remembered payers are listed masked unless someone with `pii.reveal` shows them, which is audited.
+
+## What the payer sent
+
+Money counts towards invoices for what the payer sent. Credits are recorded with what the payer sent as their amount (the rails' mappings add the fee back where a rail settles net); an entry recorded as what landed with the fee already taken (`net`) counts for its amount plus its fee (`moneylog.CountableKobo`, and the database's `taskiem_money_entry_countable`). The fee is a cost to the business: the journal posts what landed to the bank, the fee to fees, and the whole amount to what the payment counts towards.
 
 ## Suggestions
 
@@ -21,11 +51,13 @@ Any other money in gets up to three suggestions among the business's open invoic
 | The payment's reference names the invoice or order ("INV-0104", "inv0104", "AK-7QX4KD") | 40 |
 | The payer's name matches the customer's (every word of it, in any order) | 35 |
 | The payer shares a name with the customer | 20 |
+| The paying account paid for this customer before ([payer memory](#payer-memory)) | 75 |
+| The payer (by name) paid for this customer before | 70 |
 | Paid within 3 days of the invoice being sent, or the order placed | 15 |
 | Within 14 days | 10 |
 | Within 60 days | 5 |
 
-The score is the sum of the reasons, at most 100. Invoices and orders scoring under 40 are not suggested. A payment made before an invoice was sent, or an order placed, is never suggested for it. Only the business's own invoices and orders are ever suggested.
+The score is the sum of the reasons, at most 100. A remembered payer alone with a payment within 3 days scores 85 (70 + 15), enough to be matched automatically when it is clear; with the same amount it scores 100. A remembered paying account within 14 days scores 85. Invoices and orders scoring under 40 are not suggested. A payment made before an invoice was sent, or an order placed, is never suggested for it. Only the business's own invoices and orders are ever suggested.
 
 Reasons say what matched, never anyone's name: "the payer's name matches the customer's".
 
@@ -55,7 +87,7 @@ Under **Invoices > Settings**, **Match strong suggestions automatically** is off
 
 **Undo the match** on a storefront order's page (Storefront > Orders, under **Money matched**; `POST /v1/money/order-payments/{id}/undo`, `invoice.manage`) does the same for an order, and the order goes back to unpaid (`received`, or `accepted`). It is refused, with the reason, once the order went on with the payment: when the payment completed the order's checkout (its workflow was started or told it was paid), or when the order has been decided since (accepted, completed, declined, refund due). Cancel or [refund](storefronts.md#refunds) the order instead.
 
-One payment counts towards one invoice or order at a time: to move it elsewhere, undo the match first.
+A payment's parts are undone one by one; to move money elsewhere, undo its part first.
 
 ## The money_matches table
 
@@ -66,7 +98,7 @@ Every match, and every undoing of one, is copied to a [kept table](data-tables.m
 | `match_id` | The match's id |
 | `entry_id` | The money log entry it counts |
 | `target` | What it counts towards, such as `invoice:INV-0104` or `order:AK-7QX4KD` |
-| `amount_kobo` | The amount |
+| `amount_kobo` | The amount: for a split, this part's |
 | `how` | `exact`, `suggested`, `suggested_auto` or `manual` |
 | `by` | Who matched it (a person, or the system for exact and automatic matches) |
 | `reasons` | Why, joined with "; " |
@@ -80,5 +112,7 @@ An invoice's paid amount is the sum of its matches that are not undone; an order
 - An order paid after acceptance is not suggested until its payment link is made: its workflow sends the link and waits for that payment.
 - Money matched to an order by bank transfer has no Paystack payment to refund: an order declined after it is refunded by the business itself.
 - Seeing and confirming orders' suggestions uses the invoice permissions (`invoice.read`, `invoice.manage`), not `storefront.manage`.
-- Customers' permanent account numbers (`virtual_account`) are not linked to invoices yet, so a payment into one is suggested rather than matched exactly.
+- Siblings' invoices are not offered what is left of a customer's money (a school setting, off by default, in the Schools plan); it is held as the customer's credit.
+- A customer's credit can be used only by the next invoice sent to them, or matched by hand; it cannot yet be refunded from Taskiem.
+- Payers are remembered only for invoices' customers, not storefront orders'.
 - Leaks, statements, cash and expenses come in the next milestone (T6).

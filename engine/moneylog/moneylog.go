@@ -225,6 +225,9 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 	case "virtual_account.credited":
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "account_credit", "settled", str(fields, "reference")
 		e.PayerName = str(fields, "payer_name")
+		// The account it was paid into: the permanent-account rule needs it
+		// to agree with the reference (engine/matching).
+		e.AccountNumber = str(fields, "account_number")
 	case "payout.settled":
 		e.Direction, e.Kind, e.Status, e.Reference = "out", "payout", "settled", str(fields, "payout_id")
 		e.OccurredAt = when(fields, "settled_at")

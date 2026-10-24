@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ApiError, get, postOnce, put, post } from "../api";
+import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import {
@@ -62,6 +62,19 @@ import {
   type MoneySuggestion,
   type SettingsForm,
   type WaitingPayment,
+  creditWords,
+  invoiceCustomerPath,
+  leftWords,
+  payerPath,
+  payerWords,
+  splitLine,
+  splitProblem,
+  splitRequest,
+  splitRows,
+  splitTotal,
+  type InvoiceCustomerView,
+  type MoneySplit,
+  type SplitRow,
 } from "../lib/invoices";
 import { isMasked, telLink } from "../lib/orders";
 
@@ -196,6 +209,16 @@ function WaitingCard({
         <dt>Reference</dt>
         <dd id={`${title}-ref`}>{p.reference || <span className="hint">None</span>}</dd>
       </dl>
+      {p.held_reason && (
+        <div className="notice" data-testid="held-reason">
+          Held for you: {p.held_reason}. Nothing was counted towards an invoice.
+        </div>
+      )}
+      {leftWords(p) && (
+        <p className="hint" data-testid="left-to-match">
+          {leftWords(p)}
+        </p>
+      )}
       {p.candidates.length > 0 && <h3>May be for</h3>}
       <ul className="match-candidates">
         {p.candidates.map((c) => {
@@ -230,6 +253,9 @@ function WaitingCard({
                     Not this one
                   </button>
                 </div>
+              )}
+              {manage && c.split && (c.split.parts ?? []).length > 0 && (
+                <SplitForm suggestion={c} leftKobo={c.left_kobo ?? p.amount_kobo ?? 0} onDone={onDone} />
               )}
             </li>
           );
@@ -279,6 +305,140 @@ function WaitingCard({
         </details>
       )}
       <ErrorBox error={act.error} />
+    </section>
+  );
+}
+
+/** Split a payment across the customer's open invoices, oldest first as offered, amounts editable. */
+function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySuggestion; leftKobo: number; onDone: (line: string) => void }) {
+  const act = useAction();
+  const [rows, setRows] = useState<SplitRow[]>(() => splitRows(c.split));
+  const [creditRest, setCreditRest] = useState(true);
+  const [tried, setTried] = useState(false);
+  const problem = splitProblem(rows, leftKobo);
+  const total = splitTotal(rows);
+  const rest = Number.isNaN(total) ? 0 : Math.max(leftKobo - total, 0);
+  const id = `split-${c.id}`;
+  return (
+    <details className="match-split" data-testid="split">
+      <summary>Split across the customer's invoices…</summary>
+      <p className="hint">
+        The payment is more than is due on {c.number}. Offered oldest first across the same customer's open invoices; change the amounts if you know better. Each part is a
+        match of its own, and can be undone on its own.
+      </p>
+      <form
+        noValidate
+        aria-labelledby={id}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setTried(true);
+          if (problem) return;
+          void act.run(async () => {
+            const r = await plainly(post<MoneySplit>(suggestionPath(c.id, "confirm"), splitRequest(rows, creditRest && rest > 0)));
+            onDone(splitLine(r));
+          }, false);
+        }}
+      >
+        <h4 id={id} className="sr-only">
+          Split for {c.number}
+        </h4>
+        {rows.map((r, i) => (
+          <Field key={r.invoice} label={`${r.invoice} (${naira(r.due_kobo)} due)`}>
+            <input
+              inputMode="decimal"
+              value={r.amount}
+              onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
+              aria-describedby={`${id}-rest`}
+            />
+          </Field>
+        ))}
+        <p className="hint" id={`${id}-rest`} data-testid="split-rest">
+          {rest > 0 ? `${naira(rest)} not counted towards these invoices.` : "All of the payment counts towards these invoices."}
+        </p>
+        {rest > 0 && (
+          <label className="row">
+            <input type="checkbox" checked={creditRest} onChange={(e) => setCreditRest(e.target.checked)} />
+            <span>Keep the rest as the customer's credit, for their next invoice
+            (otherwise it waits here to be matched)</span>
+          </label>
+        )}
+        {tried && problem && (
+          <div className="error" role="alert">
+            {problem}
+          </div>
+        )}
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy}>
+            Match in parts
+          </button>
+        </div>
+      </form>
+      <ErrorBox error={act.error} />
+    </details>
+  );
+}
+
+/** The invoice's customer in matching: their credit, permanent account numbers and remembered payers (GET /v1/invoices/{id}/customer). */
+function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manage: boolean }) {
+  const view = useLoad(() => get<InvoiceCustomerView>(invoiceCustomerPath(invoice.id)), [invoice.id, invoice.paid_kobo]);
+  const forget = useAction();
+  const v = view.data;
+  return (
+    <section className="card" aria-labelledby="inv-customer-money" data-testid="customer-money">
+      <h2 id="inv-customer-money">The customer's money</h2>
+      <ErrorBox error={view.error} />
+      {!v && !view.error && <Skeleton rows={2} label="Loading the customer's credit…" />}
+      {v && (
+        <>
+          <dl className="kv">
+            <dt>Credit</dt>
+            <dd data-testid="customer-credit">{creditWords(v.credit_kobo)}</dd>
+            <dt>Account numbers</dt>
+            <dd>
+              {(v.accounts ?? []).length === 0 ? (
+                <span className="hint">None. Money into an account number of the customer's own is matched to their oldest open invoice first.</span>
+              ) : (
+                <ul className="plain-list">
+                  {(v.accounts ?? []).map((a) => (
+                    <li key={a.id}>
+                      {a.account_number}
+                      {a.bank_name ? ` · ${a.bank_name}` : ""} <span className="hint">({a.channel})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
+          </dl>
+          <h3>Payers remembered</h3>
+          {(v.payers ?? []).length === 0 ? (
+            <p className="hint">None yet. When someone pays for this customer and you match it, Taskiem remembers the payer and suggests this customer first next time.</p>
+          ) : (
+            <ul className="plain-list" aria-label="Payers remembered for this customer">
+              {(v.payers ?? []).map((p) => (
+                <li key={p.id} data-testid="payer">
+                  {payerWords(p)}{" "}
+                  {manage && (
+                    <button
+                      type="button"
+                      disabled={forget.busy}
+                      aria-label={`Forget this payer: ${p.payer}`}
+                      onClick={() =>
+                        void forget.run(async () => {
+                          await plainly(del(payerPath(p.id)));
+                          view.reload();
+                        }, "Payer forgotten")
+                      }
+                    >
+                      Forget this payer
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <ErrorBox error={forget.error} />
+        </>
+      )}
     </section>
   );
 }
@@ -837,6 +997,8 @@ export function InvoicePage() {
             )}
             {!revealed && !may.reveal && <p className="hint">The customer's details are hidden. Someone who may see personal data can show them.</p>}
           </section>
+
+          {x.status !== "draft" && <CustomerMatching invoice={x} manage={invoiceAccess(can).manage} />}
 
           <section className="card" aria-labelledby="inv-payments">
             <h2 id="inv-payments">Payments</h2>
