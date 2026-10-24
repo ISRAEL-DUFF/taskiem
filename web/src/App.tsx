@@ -36,6 +36,8 @@ import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
 import { MoneyEntries, MoneyFees, MoneyLeaks, MoneyOverview, MoneyStatements } from "./pages/Money";
+import { GateHome, SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
+import { showSchools } from "./lib/schools";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
 import { get } from "./api";
@@ -119,6 +121,8 @@ function Shell() {
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
+  // The gate role: one screen, the server refuses every other route (B8 adds the screen).
+  if (me.gate_only) return alone(<GateHome />);
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/home")} replace />;
   // A field agent's home is the agent app, not the workspace's workflows (N6).
   if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/home" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
@@ -198,6 +202,7 @@ function SignedIn() {
     ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
     ["/invoices", "Invoices", "invoices", invoiceAccess(can).see],
     ["/money", "Money", "money", invoiceAccess(can).see],
+    ["/schools", "Schools", "schools", showSchools(me.schools, can)],
     ["/storefront", "Storefront", "storefront", can("storefront.manage")],
     ["/forms", "Forms", "forms", can("workflow.read")],
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
@@ -316,6 +321,14 @@ function SignedIn() {
           <Route path="/money/statements" element={<MoneyStatements />} />
           <Route path="/money/entries" element={<MoneyEntries />} />
           <Route path="/money/fees" element={<MoneyFees />} />
+          <Route path="/schools" element={<Schools />} />
+          <Route path="/schools/import" element={<SchoolImport />} />
+          <Route path="/schools/students/new" element={<SchoolStudentNew />} />
+          <Route path="/schools/students/:id" element={<SchoolStudentPage />} />
+          <Route path="/schools/families" element={<SchoolFamilies />} />
+          <Route path="/schools/classes" element={<SchoolClasses />} />
+          <Route path="/schools/sessions/:id/promotion" element={<SchoolPromotionPage />} />
+          <Route path="/settings/schools" element={<SchoolSettingsPage />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/forms/requests" element={<FormRequests />} />
           <Route path="/forms/requests/:id" element={<FormRequestPage />} />

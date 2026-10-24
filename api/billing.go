@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/billing"
 )
 
@@ -23,13 +24,7 @@ import (
 
 // PermBillingManage lets a member see invoices, pay, change plans and
 // cancel. Owners hold it.
-const PermBillingManage = "billing.manage"
-
-func init() {
-	allPermissions = append(allPermissions, PermBillingManage)
-	rolePermissions["owner"] = allPermissions
-	permissionInfo[PermBillingManage] = "Manage the subscription: plans, payments, invoices and cancellation"
-}
+const PermBillingManage = access.BillingManage
 
 // billingRoutes mounts /v1/billing inside the authenticated group.
 func (s *Server) billingRoutes(r chi.Router) {

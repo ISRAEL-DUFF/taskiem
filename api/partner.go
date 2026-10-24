@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
@@ -31,16 +32,9 @@ import (
 // Partner permissions. Only owners hold them among the built-in roles; a
 // partner's server gets them through an API key.
 const (
-	PermPartnerRead   = "partner.read"
-	PermPartnerManage = "partner.manage"
+	PermPartnerRead   = access.PartnerRead
+	PermPartnerManage = access.PartnerManage
 )
-
-func init() {
-	allPermissions = append(allPermissions, PermPartnerRead, PermPartnerManage)
-	rolePermissions["owner"] = allPermissions
-	permissionInfo[PermPartnerRead] = "Partner API: see sub-tenants, their workflows, runs and usage, embed apps and webhook deliveries (audited in both tenants)"
-	permissionInfo[PermPartnerManage] = "Partner API: create and suspend sub-tenants, invite their people, install workflow packages, manage embed apps, mint and revoke end-user tokens"
-}
 
 // partnerRoutes mounts /v1/partner, inside the authenticated group.
 func (s *Server) partnerRoutes(r chi.Router) {

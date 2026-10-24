@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/leaks"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -23,24 +24,11 @@ import (
 
 const (
 	// PermInvoiceRead lists and reads the business's invoices.
-	PermInvoiceRead = "invoice.read"
+	PermInvoiceRead = access.InvoiceRead
 	// PermInvoiceManage creates, sends and voids them, changes their
 	// settings and undoes a wrong payment.
-	PermInvoiceManage = "invoice.manage"
+	PermInvoiceManage = access.InvoiceManage
 )
-
-func init() {
-	allPermissions = append(allPermissions, PermInvoiceRead, PermInvoiceManage)
-	rolePermissions["owner"] = allPermissions
-	for _, role := range []string{"admin", "operator"} {
-		rolePermissions[role] = append(rolePermissions[role], PermInvoiceRead, PermInvoiceManage)
-	}
-	for _, role := range []string{"auditor", "viewer"} {
-		rolePermissions[role] = append(rolePermissions[role], PermInvoiceRead)
-	}
-	permissionInfo[PermInvoiceRead] = "See the invoices sent to customers"
-	permissionInfo[PermInvoiceManage] = "Create, send and void invoices to customers, and change their settings"
-}
 
 // invoiceRoutes mounts /v1/invoices and /v1/invoice-settings inside the
 // authenticated group.

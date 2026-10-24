@@ -30,6 +30,7 @@ import (
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -58,6 +59,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/status"
@@ -547,8 +549,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
+	schoolOps := &schconn.Late{}
 	copts := cfg.Connectors
 	copts.Invoices = invoiceOps
+	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Forms = formOps
 	copts.Email = emailOps
@@ -636,7 +640,14 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// payments connection, its prod credentials.
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
+	// The Schools area's record (decision 0046), read by schools@1.
+	schoolOps.Set(schools.Service{Schools: e.schools()})
 	return e, nil
+}
+
+// schools is the Schools area's record (decision 0046).
+func (e *engine) schools() *schools.Schools {
+	return &schools.Schools{Pool: e.pool, Vault: e.vault}
 }
 
 // moneyLog is the money log's writer (decision 0045).
@@ -987,6 +998,9 @@ func serve(ctx context.Context, args []string) error {
 		// The money log, copied to each business's kept money_log table.
 		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
+		// The schools' students and classes, copied to their kept tables.
+		schoolCopies := &schools.Mirror{Schools: e.schools(), Tables: e.tables(), Logger: log.With("component", "schools"),
+			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
 		// Money summaries: yesterday's to owners on chat each morning,
 		// last month's by email on the 1st (docs/money-reports.md).
 		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Logger: log.With("component", "moneydigest")}
@@ -997,7 +1011,7 @@ func serve(ctx context.Context, args []string) error {
 			money.Channels = append(money.Channels, "telegram")
 		}
 		log.Info("money summaries", "daily_chat", len(money.Channels) > 0, "monthly_email", money.Mailer != nil && money.From != "")
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, money.Run)
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

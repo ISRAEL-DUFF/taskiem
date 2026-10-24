@@ -1937,6 +1937,36 @@ export const s3 = {
   put_object: (input: S3PutObjectInput, extra?: ConnectorExtra): StepSpec => connector("s3@1", "put_object", input, extra),
 };
 
+// Schools (schools@1)
+export interface SchoolsCurrentTermInput {
+  [key: string]: Value;
+}
+export interface SchoolsGetStudentInput {
+  /** The student's id or admission number */
+  student: Val<string>;
+}
+export interface SchoolsListClassesInput {
+  [key: string]: Value;
+}
+export interface SchoolsListStudentsInput {
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** At most this many (default 200) */
+  limit?: Val<number>;
+  /** active by default; any for every status */
+  status?: Val<"active" | "withdrawn" | "graduated" | "any">;
+}
+export const schools = {
+  /** The current term (read) */
+  current_term: (input?: SchoolsCurrentTermInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "current_term", input, extra),
+  /** Read a student (read) */
+  get_student: (input: SchoolsGetStudentInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "get_student", input, extra),
+  /** List classes (read) */
+  list_classes: (input?: SchoolsListClassesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_classes", input, extra),
+  /** List students (read) */
+  list_students: (input?: SchoolsListStudentsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_students", input, extra),
+};
+
 // SFTP (sftp@1)
 export interface SftpDeleteInput {
   /** Set by the engine; only logged */
@@ -2615,6 +2645,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "prembly@1": "prembly",
   "remita@1": "remita",
   "s3@1": "s3",
+  "schools@1": "schools",
   "sftp@1": "sftp",
   "slack@1": "slack",
   "storefront@1": "storefront",
@@ -2655,6 +2686,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
+  "schools@1": ["current_term", "get_student", "list_classes", "list_students"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],

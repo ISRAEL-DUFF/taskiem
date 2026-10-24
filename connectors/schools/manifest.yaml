@@ -1,0 +1,120 @@
+# The schools platform connector (docs/schools.md, decision 0046): what
+# workflows read of the business's school record (students, classes, the
+# current term). It acts on Taskiem's own records, for the run's tenant
+# only, and needs no connection. It changes nothing: the record changes
+# through the Schools pages and the API, and workflows that change it
+# (invoicing a term, issuing account numbers) arrive with their actions.
+manifest: connector/v1
+id: schools
+version: 1.0.0
+name: Schools
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  list_students:
+    title: List students
+    description: The school's students by admission number, optionally of one class (its id, or as written, such as JSS 1 A) and status (active by default).
+    class: read
+    input:
+      type: object
+      properties:
+        class:  { type: string, description: "A class's id or label, such as JSS 1 A" }
+        status: { type: string, enum: [active, withdrawn, graduated, any], description: "active by default; any for every status" }
+        limit:  { type: integer, minimum: 1, maximum: 1000, description: At most this many (default 200) }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        total: { type: integer, description: How many match in all }
+        students:
+          type: array
+          items:
+            type: object
+            properties:
+              id:               { type: string }
+              admission_number: { type: string }
+              name:             { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              status:           { type: string, enum: [active, withdrawn, graduated] }
+              family_id:        { type: string }
+    pii:
+      - { field: output.students.*.name, category: name }
+  get_student:
+    title: Read a student
+    description: One student by id or admission number, with their class, status and family's guardians (name, phone, email, relationship).
+    class: read
+    input:
+      type: object
+      required: [student]
+      properties:
+        student: { type: string, description: "The student's id or admission number" }
+    output:
+      type: object
+      properties:
+        id:               { type: string }
+        admission_number: { type: string }
+        name:             { type: string }
+        date_of_birth:    { type: string }
+        class:            { type: string }
+        class_id:         { type: string }
+        status:           { type: string, enum: [active, withdrawn, graduated] }
+        family_id:        { type: string }
+        guardians:
+          type: array
+          items:
+            type: object
+            properties:
+              name:         { type: string }
+              phone:        { type: string }
+              email:        { type: string }
+              relationship: { type: string }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.date_of_birth, category: other }
+      - { field: output.guardians.*.name, category: name }
+      - { field: output.guardians.*.phone, category: phone }
+      - { field: output.guardians.*.email, category: email }
+      - { field: output.guardians.*.relationship, category: other }
+  list_classes:
+    title: List classes
+    description: The school's classes in their order, with how many active students each has.
+    class: read
+    input:
+      type: object
+      properties: {}
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        classes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:       { type: string }
+              name:     { type: string }
+              arm:      { type: string }
+              label:    { type: string }
+              order:    { type: integer }
+              students: { type: integer }
+  current_term:
+    title: The current term
+    description: The term the school is in now (found false when none runs), with its session and dates.
+    class: read
+    input:
+      type: object
+      properties: {}
+    output:
+      type: object
+      properties:
+        found:       { type: boolean }
+        id:          { type: string }
+        name:        { type: string }
+        session:     { type: string }
+        starts_on:   { type: string }
+        ends_on:     { type: string }
+        fees_due_on: { type: string }
+        enrolled:    { type: integer }

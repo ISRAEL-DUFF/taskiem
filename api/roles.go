@@ -13,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/access"
 )
 
 // Custom roles (spec 13.3): a tenant names a set of permissions, and
@@ -21,29 +23,7 @@ import (
 // escalate privilege.
 
 // permissionInfo describes each permission for the role editor.
-var permissionInfo = map[string]string{
-	PermWorkflowRead:     "See workflows and their versions",
-	PermWorkflowEdit:     "Create and edit workflow drafts",
-	PermWorkflowPublish:  "Publish workflow versions",
-	PermRunRead:          "See runs and their history",
-	PermRunStart:         "Start runs",
-	PermRunCancel:        "Cancel runs",
-	PermRunResolve:       "Resolve steps that need reconciliation",
-	PermApprovalDecide:   "Decide approvals for roles held",
-	PermPIIReveal:        "Reveal sealed personal data (audited)",
-	PermPIIErase:         "Erase a person's data",
-	PermSecretManage:     "Manage secrets, variables and egress",
-	PermConnectionManage: "Manage connections and acknowledge contract drift",
-	PermMemberManage:     "Manage members and API keys",
-	PermAuditRead:        "Read the audit log and reports",
-	PermGitManage:        "Connect environments to Git",
-	PermPolicyManage:     "Manage approval policies",
-	PermConnectorManage:  "Upload the tenant's own connectors",
-	PermRoleManage:       "Manage custom roles",
-	PermAlertManage:      "Manage alert channels and rules",
-	PermStorefrontManage: "Manage the storefront, hosted forms and the websites allowed to embed them",
-	PermSCIM:             "Provision members over SCIM (for an identity provider's key)",
-}
+var permissionInfo = access.Descriptions
 
 var roleNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,47}$`)
 
