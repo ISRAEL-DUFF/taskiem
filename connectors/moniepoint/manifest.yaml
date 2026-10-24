@@ -152,9 +152,9 @@ actions:
     compensate: null
     input:
       type: object
-      required: [account_name, customer_email]
+      required: [customer_email]
       properties:
-        account_name:      { type: string, description: Shown when payers resolve the number }
+        account_name:      { type: string, description: "Shown when payers resolve the number; customer_name when left out" }
         customer_email:    { type: string }
         customer_name:     { type: string }
         bvn:               { type: string, description: BVN or NIN is required by Monnify depending on the account tier }
@@ -343,7 +343,7 @@ capabilities:
       redirect_url: "=input.?return_url"
     output: { payment_url: "=output.checkout_url", payment_id: "=output.payment_reference" }
     requires: [customer.email]
-    ignores: [customer.phone, customer.bvn]
+    ignores: [customer.phone, customer.bvn, customer.nin]
     fixed: { currency: NGN }
   get_payment:
     action: get_transaction
@@ -356,17 +356,22 @@ capabilities:
   virtual_account:
     action: create_reserved_account
     input:
-      account_name: "=input.customer.name"
+      # Monnify's accountName is "displayed during name inquiry"
+      # (Reserve Account docs); no length limit or merchant prefix is
+      # documented (docs/spec/schools-rail-facts.md).
+      account_name: "=input.?account_name"
       customer_name: "=input.customer.name"
       customer_email: "=input.customer.email"
       bvn: "=input.customer.?bvn"
+      nin: "=input.customer.?nin"
     output:
       account_number: "=output.accounts[0].account_number"
       bank_name: "=output.accounts[0].bank_name"
       account_name: "=output.accounts[0].account_name"
       reference: "=output.account_reference"
     requires: [customer.email]
-    ignores: [customer.phone]
+    # One contract per connection: the number pays into the contract's wallet.
+    ignores: [customer.phone, account]
 events:
   payout.settled:
     trigger: event
@@ -393,4 +398,7 @@ events:
     when: "=body.eventType == 'SUCCESSFUL_TRANSACTION' && has(body.eventData.product) && body.eventData.product.type == 'RESERVED_ACCOUNT'"
     fields:
       reference: "=body.eventData.product.reference"
+      # Monnify's own reference for this payment: each credit to the
+      # account has its own.
+      credit_id: "=body.eventData.transactionReference"
       amount_kobo: "=int(math.round(double(body.eventData.amountPaid) * 100.0))"

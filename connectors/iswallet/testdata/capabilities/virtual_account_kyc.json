@@ -1,0 +1,42 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze"
+    },
+    "account": "6f1e"
+  },
+  "keys": {
+    "issue_virtual_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    {
+      "name": "issue_refused",
+      "request": {
+        "method": "POST",
+        "path": "/v1/wallets/6f1e/virtual-accounts/batch"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "wallet_id": "6f1e",
+          "created": 0,
+          "existing": 0,
+          "failed": 1,
+          "accounts": [
+            {
+              "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+              "status": "failed",
+              "error_code": "KYC_REQUIRED",
+              "error_message": "a business wallet needs its director's BVN"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "error": "fatal"
+}

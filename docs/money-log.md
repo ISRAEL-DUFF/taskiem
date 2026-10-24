@@ -10,7 +10,7 @@ Every event a connected payment service sends Taskiem in its prod connections, w
 | --- | --- |
 | `payment.received` | Money in, a payment, settled |
 | `payment.returned` | Money in that the service sent back to the payer (paid late, or not the amount asked), reversed |
-| `virtual_account.credited` | Money in to one of the business's accounts, settled, with the payer's name |
+| `virtual_account.credited` | Money in to a customer's account number (a student's, for a school), settled: what the payer sent, the service's fee where it reports one, and the payer's name and account where given. The entry's reference is the account's; each payment into it is its own entry (known by the service's id for the credit) |
 | `payout.settled`, `payout.failed`, `payout.reversed` | Money out, a payout, with its outcome |
 | `refund.pending`, `refund.processed`, `refund.failed` | Money out, a refund of a payment to the customer: pending, settled (it went out) or failed (the money stayed). The entry's reference is the payment refunded; its note names it, with the service's own refund reference when the event gives one. Paystack sends these |
 | `pos.sale` | A sale on a POS terminal (Moniepoint, OPay Business): approved, pending, declined or reversed, with its fee where the service gives one |
@@ -23,7 +23,7 @@ Sandbox and staging connections are not recorded: the log is the business's real
 
 ## How each movement is recorded once
 
-A movement is known by where it happened (the connection, such as `paystack/main`), what was heard (the event) and the service's reference. The same event sent twice, sent and also found by polling, or found by asking, is one entry. A later status is a new entry that names the first in `corrects`: a payout that settled and was then reversed has two entries.
+A movement is known by where it happened (the connection, such as `paystack/main`), what was heard (the event) and the service's reference. A credit to a customer's account number is known by the account's reference and the service's id for that credit, since one account takes many payments. The same event sent twice, sent and also found by polling, or found by asking, is one entry. A later status is a new entry that names the first in `corrects`: a payout that settled and was then reversed has two entries.
 
 If Taskiem cannot record an event, it answers the payment service with an error, so the service sends it again.
 

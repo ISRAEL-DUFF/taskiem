@@ -1,0 +1,30 @@
+{
+  "trigger": "charge_event",
+  "body": {
+    "event": "charge.success",
+    "data": {
+      "reference": "T685312322670592",
+      "amount": 20000,
+      "currency": "NGN",
+      "status": "success",
+      "channel": "card",
+      "paid_at": "2026-10-23T10:00:00.000Z",
+      "authorization": {
+        "authorization_code": "AUTH_8dfhjjdt",
+        "channel": "card",
+        "card_type": "visa",
+        "reusable": true
+      },
+      "customer": {
+        "id": 1,
+        "email": "ada@example.com",
+        "customer_code": "CUS_xnxdt6s1zg1f4nx"
+      }
+    }
+  },
+  "event": "payment.received",
+  "expect": {
+    "payment_id": "T685312322670592",
+    "amount_kobo": 20000
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "trigger": "event",
+  "body": {
+    "event": "charge.completed",
+    "data": {
+      "id": 2028146660,
+      "tx_ref": "tva_ab12cd34ef56gh78ij90kl12mn34op56",
+      "flw_ref": "100004261023091402123456",
+      "device_fingerprint": "N/A",
+      "amount": 50000,
+      "currency": "NGN",
+      "charged_amount": 50000,
+      "app_fee": 700,
+      "merchant_fee": 0,
+      "processor_response": "success",
+      "auth_model": "AUTH",
+      "ip": "::ffff:54.154.184.168",
+      "narration": "SCHOOL FEES EBUBE",
+      "status": "successful",
+      "payment_type": "bank_transfer",
+      "created_at": "2026-10-23T09:14:02.000Z",
+      "account_id": 96753,
+      "customer": {
+        "id": 1334422040,
+        "name": "Ebube Eze",
+        "phone_number": "08100000000",
+        "email": "ebube.eze@greenfield.example",
+        "created_at": "2026-10-23T09:00:13.000Z"
+      }
+    },
+    "meta_data": {
+      "originatorname": "ADA EZE",
+      "bankname": "OPAY",
+      "bankcode": "100004",
+      "originatoramount": "N/A",
+      "originatoraccountnumber": "813*******00"
+    },
+    "event.type": "BANK_TRANSFER_TRANSACTION"
+  },
+  "event": "virtual_account.credited",
+  "expect": {
+    "reference": "tva_ab12cd34ef56gh78ij90kl12mn34op56",
+    "credit_id": "2028146660",
+    "amount_kobo": 5000000,
+    "currency": "NGN",
+    "payer_name": "ADA EZE",
+    "payer_account": "813*******00",
+    "payer_bank": "OPAY",
+    "narration": "SCHOOL FEES EBUBE",
+    "occurred_at": "2026-10-23T09:14:02.000Z"
+  }
+}

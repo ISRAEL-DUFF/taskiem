@@ -1,0 +1,66 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "secret_key": "FLWSECK_TEST-xyz"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze",
+      "email": "ebube.eze@greenfield.example",
+      "bvn": "22222222222",
+      "phone": "08100000000"
+    },
+    "account_name": "GREENFIELD / EBUBE EZE"
+  },
+  "keys": {
+    "create_static_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    {
+      "name": "create_static_account",
+      "request": {
+        "method": "POST",
+        "path": "/virtual-account-numbers",
+        "headers": {
+          "Authorization": "Bearer FLWSECK_TEST-xyz"
+        },
+        "body": {
+          "email": "ebube.eze@greenfield.example",
+          "is_permanent": true,
+          "tx_ref": "tva_ab12cd34ef56gh78ij90kl12mn34op56",
+          "currency": "NGN",
+          "bvn": "22222222222",
+          "firstname": "Ebube",
+          "lastname": "Eze",
+          "phonenumber": "08100000000",
+          "narration": "GREENFIELD / EBUBE EZE"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": "success",
+          "message": "Virtual account created",
+          "data": {
+            "response_code": "02",
+            "response_message": "Transaction in progress",
+            "flw_ref": "NDKZ8600178111021323728832",
+            "order_ref": "URF_1781110210729_7253035",
+            "account_number": "9587478607",
+            "frequency": "N/A",
+            "bank_name": "Flutterwave MFB",
+            "created_at": "2026-10-23 09:00:13",
+            "expiry_date": "N/A",
+            "note": "Please make a bank transfer to GREENFIELD / EBUBE EZE",
+            "amount": "0.00"
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "account_number": "9587478607",
+    "bank_name": "Flutterwave MFB",
+    "reference": "tva_ab12cd34ef56gh78ij90kl12mn34op56"
+  }
+}

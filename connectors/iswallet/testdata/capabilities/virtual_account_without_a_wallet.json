@@ -1,0 +1,12 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze"
+    }
+  },
+  "error": "fatal"
+}

@@ -138,9 +138,9 @@ func TestRefusals(t *testing.T) {
 }
 
 func TestCannot(t *testing.T) {
-	resolve := expansion.ResolverFor([]expansion.Connection{{Name: "rail", Connector: "paystack"}}, registry(t))
+	resolve := expansion.ResolverFor([]expansion.Connection{{Name: "rail", Connector: "anchor"}}, registry(t))
 	_, err := resolve("rail", "virtual_account")
-	if err == nil || !strings.Contains(err.Error(), "your Paystack connection cannot open a bank account number for a customer to pay into. Connect Moniepoint") {
+	if err == nil || !strings.Contains(err.Error(), "your Anchor connection cannot open a bank account number for a customer to pay into. Connect ") {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -50,6 +50,9 @@ func New(o Options) *connector.Connector {
 		"pay_with_transfer":      connector.ActionFunc(c.payWithTransfer),
 		"refund_transaction":     connector.ActionFunc(c.refund),
 		"refund_status":          connector.ActionFunc(c.refundStatus),
+
+		"create_dedicated_account": connector.ActionFunc(c.createDedicatedAccount),
+		"list_payments":            connector.ActionFunc(c.listPayments),
 	}}
 }
 
@@ -379,6 +382,166 @@ func (c *client) listBanks(ctx context.Context, req connector.Request) (connecto
 		banks = append(banks, map[string]any{"name": b.Name, "code": b.Code})
 	}
 	return connector.Response{Output: map[string]any{"banks": banks}}, nil
+}
+
+// createDedicatedAccount gives a customer a dedicated virtual account
+// (docs-v2.paystack.com/docs/payments/dedicated-virtual-accounts/, the
+// multi-step flow). Paystack knows a customer by email and documents no
+// reference of ours on either call, so it first fetches the customer by
+// email (GET /customer/:email_or_code): an account already there is
+// answered, and only a customer Paystack does not know is created
+// (POST /customer). Then POST /dedicated_account with the customer's
+// code and the bank. What Paystack does with a second create for the same
+// customer is not documented, so an unknown outcome parks (unsafe).
+func (c *client) createDedicatedAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	email, _ := in["email"].(string)
+	if strings.TrimSpace(email) == "" {
+		return connector.Response{}, fmt.Errorf("paystack: a dedicated account needs the customer's email: %w", effects.ErrFatal)
+	}
+	var cust envelope
+	err := c.do(ctx, req, http.MethodGet, "/customer/"+url.PathEscape(email), nil, &cust)
+	switch {
+	case isNotFound(err):
+		body := map[string]any{"email": email}
+		for _, k := range []string{"first_name", "last_name", "phone"} {
+			if v, ok := in[k].(string); ok && v != "" {
+				body[k] = v
+			}
+		}
+		if err := c.do(ctx, req, http.MethodPost, "/customer", body, &cust); err != nil {
+			return connector.Response{}, err
+		}
+	case err != nil:
+		return connector.Response{}, err
+	default:
+		if out, ok := dedicatedOutput(cust.Data["dedicated_account"], cust.Data); ok {
+			return connector.Response{Output: out}, nil
+		}
+	}
+	code, _ := cust.Data["customer_code"].(string)
+	if code == "" {
+		return connector.Response{}, fmt.Errorf("paystack: the customer %s has no customer code: %w", email, effects.ErrIndeterminate)
+	}
+	bank, err := c.dedicatedBank(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	body := map[string]any{"customer": code, "preferred_bank": bank}
+	for _, k := range []string{"first_name", "last_name", "phone"} {
+		if v, ok := in[k].(string); ok && v != "" {
+			body[k] = v
+		}
+	}
+	var env envelope
+	if err := c.do(ctx, req, http.MethodPost, "/dedicated_account", body, &env); err != nil {
+		if st := connector.StatusOf(err); st >= 400 && st < 500 {
+			return connector.Response{}, fmt.Errorf("paystack: %s (dedicated accounts are for registered Nigerian businesses that have gone live; some kinds of business must validate the customer first): %w", paystackMessage(err), err)
+		}
+		return connector.Response{}, err
+	}
+	out, ok := dedicatedOutput(env.Data, map[string]any{"customer_code": code})
+	if !ok {
+		return connector.Response{}, fmt.Errorf("paystack: the dedicated account for %s has no number yet: %w", code, effects.ErrIndeterminate)
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// dedicatedOutput reads a dedicated account (as Create Dedicated Virtual
+// Account answers it, or as Fetch Customer carries it) with its customer.
+func dedicatedOutput(v any, customer map[string]any) (map[string]any, bool) {
+	d, _ := v.(map[string]any)
+	number, _ := d["account_number"].(string)
+	if number == "" {
+		return nil, false
+	}
+	if c, ok := d["customer"].(map[string]any); ok {
+		customer = c
+	}
+	out := map[string]any{"account_number": number, "customer_code": customer["customer_code"]}
+	if n, ok := d["account_name"].(string); ok && n != "" {
+		out["account_name"] = n
+	}
+	if b, ok := d["bank"].(map[string]any); ok {
+		out["bank_name"] = b["name"]
+	} else if p, ok := d["provider"].(map[string]any); ok {
+		out["bank_name"] = p["bank_name"]
+	}
+	if id, ok := d["id"]; ok {
+		out["id"] = fmt.Sprint(id)
+	}
+	return out, true
+}
+
+// dedicatedBank is the bank a new dedicated account is opened at: the
+// connection's choice, Paystack's test bank with a test key, or else the
+// first provider Paystack lists (GET /dedicated_account/available_providers).
+func (c *client) dedicatedBank(ctx context.Context, req connector.Request) (string, error) {
+	if b := strings.TrimSpace(req.Credentials["dedicated_account_bank"]); b != "" {
+		return b, nil
+	}
+	if strings.HasPrefix(req.Credentials["secret_key"], "sk_test_") {
+		return "test-bank", nil
+	}
+	var env struct {
+		Data []struct {
+			Slug string `json:"provider_slug"`
+		} `json:"data"`
+	}
+	if err := c.do(ctx, req, http.MethodGet, "/dedicated_account/available_providers", nil, &env); err != nil {
+		return "", err
+	}
+	if len(env.Data) == 0 || env.Data[0].Slug == "" {
+		return "", fmt.Errorf("paystack lists no bank for dedicated accounts on this business; Paystack's support turns them on: %w", effects.ErrFatal)
+	}
+	return env.Data[0].Slug, nil
+}
+
+// maxPaymentPages bounds one listing of payments: 2,000 at 100 a page.
+const maxPaymentPages = 20
+
+// listPayments lists successful payments in a window, every page
+// (GET /transaction with from, to, status=success, 100 a page).
+func (c *client) listPayments(ctx context.Context, req connector.Request) (connector.Response, error) {
+	q := url.Values{"status": {"success"}, "perPage": {"100"}}
+	for _, k := range []string{"from", "to"} {
+		v, _ := req.Input[k].(string)
+		if v == "" {
+			continue
+		}
+		if _, err := time.Parse(time.RFC3339, v); err != nil {
+			return connector.Response{}, fmt.Errorf("paystack: %s must be a time (RFC 3339): %w", k, effects.ErrFatal)
+		}
+		q.Set(k, v)
+	}
+	if q.Get("from") == "" {
+		return connector.Response{}, fmt.Errorf("paystack: list_payments needs from: %w", effects.ErrFatal)
+	}
+	data := []any{}
+	truncated := false
+	for page := 1; ; page++ {
+		if page > maxPaymentPages {
+			truncated = true
+			break
+		}
+		q.Set("page", fmt.Sprint(page))
+		var env struct {
+			Data []map[string]any `json:"data"`
+			Meta struct {
+				PageCount int `json:"pageCount"`
+			} `json:"meta"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, "/transaction?"+q.Encode(), nil, &env); err != nil {
+			return connector.Response{}, err
+		}
+		for _, d := range env.Data {
+			data = append(data, d)
+		}
+		if len(env.Data) == 0 || page >= env.Meta.PageCount {
+			break
+		}
+	}
+	return connector.Response{Output: map[string]any{"data": data, "truncated": truncated}}, nil
 }
 
 var accountNumber = regexp.MustCompile(`^\d{10}$`)

@@ -12,6 +12,8 @@ iswallet is iSpend's wallet platform and a payment provider for the group's prod
 | `get_payout` | `GET /v1/outflows/{id}` | read | The authoritative state of a payout, with the wallet it was debited from |
 | `name_enquiry` | `POST /v1/name-enquiry` | read | Run before paying a new account |
 | `list_banks` | `GET /v1/banks` | read | Also the connection test |
+| `issue_virtual_account` | `POST /v1/wallets/{id}/virtual-accounts/batch` (one account) | idempotent write | A customer's permanent account number on a wallet, its `reference` our key; iswallet answers the same account for the same reference (`existing`). A business wallet needs its director's BVN first. The `virtual_account` capability |
+| `list_transactions` | `GET /v1/wallets/{id}/transactions` | read | A wallet's transactions in a window, every page (up to 2,000). The `list_credits` capability keeps credits into customers' numbers |
 
 The idempotency key travels in the `Idempotency-Key` header (`tsk_` + 32 characters). Account numbers and names are sealed as personal data.
 
@@ -43,6 +45,10 @@ iswallet keys are client-scoped: a key reaches every wallet of its client (§A2)
 - `wallet.transfer.completed` fires once per side with each side's `wallet_id`, so a transfer between two companies reaches both, each its own side. The two share a `txn_id`, so the dedup key includes the wallet (Xenibase item 22).
 
 Wallet-scoped keys and per-wallet subscriptions at iswallet would add a second layer; they have been asked for (P4-W1 in [needs people](../needs-people.md#phase-4)) and the guard does not depend on them.
+
+## Customers' account numbers
+
+Through `virtual_account` a business gives each customer (each student, for a school) a permanent account number on one of its wallets (`account`), and through `list_credits` reads back what was paid into them: each credit's `provider_reference` is its `credit_id`, `amount_credited` what landed, `fee_charged` the provider's fee when disclosed, and their sum what the payer sent. Deposits arrive net of the provider's fee (1.4%, capped at ₦2,000). iswallet's partner names the accounts; the name asked for is sent but may not be shown. The credit webhook (`wallet.credit.posted`) is **not** mapped to `virtual_account.credited` yet: which of its fields name the account is not documented, so until iswallet says, credits reach the money log only by reading them back. The facts and open questions are in [schools rail facts](../spec/schools-rail-facts.md#iswallet).
 
 ## Webhook triggers
 

@@ -57,6 +57,11 @@ type Entry struct {
 	Category    string     `json:"category,omitempty"`
 	EnteredBy   string     `json:"entered_by,omitempty"`
 	Corrects    *uuid.UUID `json:"corrects,omitempty"`
+	// Credit is the rail's id for one credit to a customer's permanent
+	// account (virtual_account.credited's credit_id): Reference names the
+	// account, which takes many credits, so the credit is part of the key.
+	// It is kept only in the key.
+	Credit string `json:"-"`
 }
 
 // Key is what makes an entry one movement (and status): where, what and
@@ -78,6 +83,9 @@ func (e Entry) Key() string {
 	what := e.Event
 	if what == "" {
 		what = e.Kind + "." + e.Status
+	}
+	if e.Credit != "" {
+		return e.Channel + "|" + what + "|" + e.Reference + "|" + e.Credit
 	}
 	return e.Channel + "|" + what + "|" + e.Reference
 }
@@ -154,7 +162,7 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return uuid.Nil, false, err
 		}
 	}
-	if e.Corrects == nil && e.Event != "" && (e.Source == "event" || e.Source == "lookup" || e.Source == "step") {
+	if e.Corrects == nil && e.Credit == "" && e.Event != "" && (e.Source == "event" || e.Source == "lookup" || e.Source == "step") {
 		// A later status of a movement names the first entry for it.
 		var first uuid.UUID
 		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = $4
@@ -199,8 +207,15 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "payment", "reversed", str(fields, "payment_id")
 		e.Note = returned[str(fields, "reason")]
 	case "virtual_account.credited":
+		// Reference is the account's, which takes many credits: each is
+		// its own movement (credit_id). amount_kobo is what the payer
+		// sent, fee_kobo the rail's fee where it reports one.
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "account_credit", "settled", str(fields, "reference")
+		e.Credit = clip(str(fields, "credit_id"), 200)
+		e.OccurredAt = when(fields, "occurred_at")
+		e.FeeKobo = kobo(fields, "fee_kobo")
 		e.PayerName = str(fields, "payer_name")
+		e.PayerAccount = str(fields, "payer_account")
 	case "payout.settled":
 		e.Direction, e.Kind, e.Status, e.Reference = "out", "payout", "settled", str(fields, "payout_id")
 		e.OccurredAt = when(fields, "settled_at")

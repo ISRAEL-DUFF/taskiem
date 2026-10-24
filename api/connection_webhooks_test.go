@@ -59,7 +59,7 @@ func TestConnectionMoneyLogWebhooks(t *testing.T) {
 	if charge["trigger"] != "charge_event" || transfer["trigger"] != "transfer_event" {
 		t.Fatalf("paystack triggers: %s", toJSON(ps))
 	}
-	if got := toJSON(charge["events"]); got != `["payment.received","payment.returned","refund.failed","refund.pending","refund.processed"]` {
+	if got := toJSON(charge["events"]); got != `["payment.received","payment.returned","refund.failed","refund.pending","refund.processed","virtual_account.credited"]` {
 		t.Fatalf("charge events: %s", got)
 	}
 	if got := toJSON(transfer["events"]); got != `["payout.failed","payout.reversed","payout.settled"]` {

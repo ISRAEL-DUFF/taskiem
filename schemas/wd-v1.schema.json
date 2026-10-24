@@ -2124,6 +2124,7 @@
             "collect_push",
             "get_payment",
             "virtual_account",
+            "list_credits",
             "refund",
             "await_settlement",
             "await_reversal",
