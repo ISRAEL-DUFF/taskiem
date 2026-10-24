@@ -119,6 +119,9 @@ type Posting struct {
 	// Yours: the caller asked for it, so they cannot decide it (set by the
 	// API for the inbox).
 	Yours bool `json:"yours,omitempty"`
+	// Created is true when PostPayment made this posting in the call that
+	// returned it, false for the same key answered again.
+	Created bool `json:"-"`
 }
 
 // ApprovalNeeded is what a request at or above a threshold answers: the
@@ -256,8 +259,11 @@ func (s *Schools) PostPayment(ctx context.Context, tenant uuid.UUID, in PostingI
 				return err
 			}
 		}
-		out, err = s.Posting(ctx, tx, tenant, id)
-		return err
+		if out, err = s.Posting(ctx, tx, tenant, id); err != nil {
+			return err
+		}
+		out.Created = true
+		return nil
 	})
 	if err != nil {
 		return Posting{}, nil, err

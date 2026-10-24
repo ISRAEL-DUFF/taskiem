@@ -208,8 +208,8 @@ func TestCashPostingsAndReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	again, _, err := w.s.PostPayment(ctx, tn, in, "user:ada")
-	if err != nil || again.ID != first.ID {
-		t.Fatalf("retried: %v %v %v", err, first.ID, again.ID)
+	if err != nil || again.ID != first.ID || !first.Created || again.Created {
+		t.Fatalf("retried: %v %v %v (created %v, %v)", err, first.ID, again.ID, first.Created, again.Created)
 	}
 	if n := w.count(`SELECT count(*) FROM school_receipts`); n != 4 {
 		t.Fatalf("%d receipts", n)

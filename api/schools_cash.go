@@ -89,16 +89,18 @@ func (s *Server) postSchoolPayment(w http.ResponseWriter, r *http.Request) {
 	if err := s.schoolsSvc().PostedAfter(r.Context(), p.TenantID, parts); err != nil {
 		s.Logger.Warn("schools: paid signal after a posting", "posting", posting.ID, "err", err)
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		return auditTx(r, tx, "school.payment.post", posting.ID.String(), map[string]any{"amount_kobo": posting.AmountKobo, "student": posting.StudentID, "how": in.How, "parts": len(parts)})
-	}); err != nil {
-		s.fail(w, r, err)
-		return
+	if posting.Created {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			return auditTx(r, tx, "school.payment.post", posting.ID.String(), map[string]any{"amount_kobo": posting.AmountKobo, "student": posting.StudentID, "how": in.How, "parts": len(parts)})
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	maskPosting(&posting)
 	status := http.StatusCreated
-	if len(parts) == 0 && posting.Result != nil && posting.Result.EntryID != nil && posting.Status == schools.StatePosted && in.Key != "" {
-		status = http.StatusOK // a retry, or nothing open to count towards
+	if !posting.Created {
+		status = http.StatusOK // the same key again: the posting as it was
 	}
 	writeJSON(w, status, map[string]any{"posting": posting})
 }
