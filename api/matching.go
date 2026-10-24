@@ -50,7 +50,9 @@ func (s *Server) matcher() *matching.Matcher {
 	if m.Suggested == nil {
 		m.Suggested = s.MatchSuggested
 	}
-	return &m
+	// Money that went back voids the receipts of the parts it undoes
+	// (schools_cash.go).
+	return s.schoolMatcher(&m)
 }
 
 // revealing reads ?reveal=true: customers' names are masked unless the

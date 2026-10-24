@@ -1734,6 +1734,66 @@
       "reviewed": true,
       "context": "run: several workflows match"
     },
+    "wa.school.cash_posting": {
+      "text": "{amount} paid {how} for {student} ({class}), posted by {by}.",
+      "reviewed": true,
+      "context": "A cash posting waiting for a second person; {how} is one of wa.school.how.*, {student} an admission number"
+    },
+    "wa.school.discount": {
+      "text": "A {kind} discount of {amount} for {student} ({class}): {reason}. Asked by {by}.",
+      "reviewed": true,
+      "context": "A standing discount waiting for a second person"
+    },
+    "wa.school.discount_amendment": {
+      "text": "A discount of {amount} on invoice {number}: {reason}. Asked by {by}.",
+      "reviewed": true,
+      "context": "A discount amendment on a sent invoice waiting for a second person"
+    },
+    "wa.school.how.cash": {
+      "text": "in cash",
+      "reviewed": true,
+      "context": "How money was paid at the desk"
+    },
+    "wa.school.how.other": {
+      "text": "another way",
+      "reviewed": true,
+      "context": "How money was paid at the desk"
+    },
+    "wa.school.how.pos": {
+      "text": "by POS",
+      "reviewed": true,
+      "context": "How money was paid at the desk"
+    },
+    "wa.school.how.transfer": {
+      "text": "by transfer to the school's account",
+      "reviewed": true,
+      "context": "How money was paid at the desk"
+    },
+    "wa.school.kind.cash_posting": {
+      "text": "a cash posting",
+      "reviewed": true,
+      "context": "The kind of a school approval request: money posted at the desk"
+    },
+    "wa.school.kind.discount": {
+      "text": "a discount",
+      "reviewed": true,
+      "context": "The kind of a school approval request: a standing discount for a student"
+    },
+    "wa.school.kind.discount_amendment": {
+      "text": "a discount on an invoice",
+      "reviewed": true,
+      "context": "The kind of a school approval request: a discount amendment on a sent invoice"
+    },
+    "wa.school.kind.term_invoice": {
+      "text": "a term invoice with a discount",
+      "reviewed": true,
+      "context": "The kind of a school approval request: a student's term invoice held for its discount"
+    },
+    "wa.school.term_invoice": {
+      "text": "The term invoice of {student} ({class}), {amount}, carries a discount at or above the school's threshold. Asked by {by}.",
+      "reviewed": true,
+      "context": "A term invoice held for its discount, waiting for a second person"
+    },
     "wa.shop.add_failed": {
       "text": "That could not be saved ({reason}). Reply *yes* to try again, or *cancel*.",
       "reviewed": true,
@@ -2873,6 +2933,11 @@
       "text": "When one of your invoices is paid in full",
       "reviewed": true,
       "context": "Read-back: started when one of the business's invoices to its customers is paid in full"
+    },
+    "wd.trigger.invoice_payment": {
+      "text": "When a payment is counted towards one of your invoices",
+      "reviewed": true,
+      "context": "Read-back: started by every payment counted towards one of the business's invoices, paid in full or not"
     },
     "wd.trigger.manual": {
       "text": "When someone starts it",

@@ -78,6 +78,9 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 		if err := s.waNotifyApprovals(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: approvals: %w", t, err))
 		}
+		if err := s.waNotifySchoolApprovals(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: school approvals: %w", t, err))
+		}
 		if err := s.waNotifyRuns(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: runs: %w", t, err))
 		}
@@ -227,6 +230,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 		switch it.Kind {
 		case whatsapp.OutboxApproval:
 			sendErr = s.waSendApprovalItem(ctx, it)
+		case outboxSchoolApproval:
+			sendErr = s.sendSchoolApprovalItem(ctx, it)
 		case whatsapp.OutboxRunOutcome:
 			sendErr = s.waSendRunOutcome(ctx, it)
 		case whatsapp.OutboxAlert:
@@ -579,6 +584,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	var level int
 	var status string
 	var role *string
+	school := false
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		row, err = s.loadToken(ctx, tx, tok, whatsapp.PurposeDecide)
@@ -596,8 +602,11 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 			refusal = "used"
 			return nil
 		}
-		if err := tx.QueryRow(ctx, `SELECT status, level, role FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level, &role); err != nil {
-			return err
+		// A school's request (whatsapp_school_approvals.go) has no run.
+		if school = row.claims.Step == schoolStep; !school {
+			if err := tx.QueryRow(ctx, `SELECT status, level, role FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level, &role); err != nil {
+				return err
+			}
 		}
 		// Single use: spending one button spends its pair.
 		_, err = tx.Exec(ctx, `UPDATE whatsapp_tokens SET used_at = now() WHERE notice = $1 AND used_at IS NULL`, row.notice)
@@ -605,6 +614,9 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	})
 	if err != nil {
 		return err
+	}
+	if school && refusal == "" {
+		return s.waSchoolDecide(ctx, c, tenant, p, row.claims)
 	}
 	if refusal != "" {
 		if refusal != "invalid" {

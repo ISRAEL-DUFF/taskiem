@@ -1388,6 +1388,54 @@
       "text": "Kedu nke?\n{list}\nZiga *run* na aha ya zuru oke.",
       "reviewed": false
     },
+    "wa.school.cash_posting": {
+      "text": "{amount} a kwụrụ {how} maka {student} ({class}), {by} tinyere ya.",
+      "reviewed": false
+    },
+    "wa.school.discount": {
+      "text": "Mbelata {kind} nke {amount} maka {student} ({class}): {reason}. {by} rịọrọ ya.",
+      "reviewed": false
+    },
+    "wa.school.discount_amendment": {
+      "text": "Mbelata nke {amount} na invoice {number}: {reason}. {by} rịọrọ ya.",
+      "reviewed": false
+    },
+    "wa.school.how.cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "wa.school.how.other": {
+      "text": "n'ụzọ ọzọ",
+      "reviewed": false
+    },
+    "wa.school.how.pos": {
+      "text": "site na POS",
+      "reviewed": false
+    },
+    "wa.school.how.transfer": {
+      "text": "site na nyefe n'akaụntụ ụlọ akwụkwọ",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_posting": {
+      "text": "ego e tinyere n'oche",
+      "reviewed": false
+    },
+    "wa.school.kind.discount": {
+      "text": "mbelata ụgwọ",
+      "reviewed": false
+    },
+    "wa.school.kind.discount_amendment": {
+      "text": "mbelata ụgwọ na invoice",
+      "reviewed": false
+    },
+    "wa.school.kind.term_invoice": {
+      "text": "invoice nke oge ụlọ akwụkwọ nwere mbelata",
+      "reviewed": false
+    },
+    "wa.school.term_invoice": {
+      "text": "Invoice oge nke {student} ({class}), {amount}, nwere mbelata ruru oke ụlọ akwụkwọ. {by} rịọrọ ya.",
+      "reviewed": false
+    },
     "wa.shop.add_failed": {
       "text": "Enweghị ike ichekwa nke a ({reason}). Zaa *yes* iji nwaa ọzọ, ma ọ bụ *cancel*.",
       "reviewed": false
@@ -2298,6 +2346,10 @@
     },
     "wd.trigger.invoice_paid": {
       "text": "Mgbe akwụchara otu n'ime invoice gị",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_payment": {
+      "text": "Mgbe a gụrụ ụgwọ a kwụrụ n'otu n'ime invoice gị",
       "reviewed": false
     },
     "wd.trigger.manual": {

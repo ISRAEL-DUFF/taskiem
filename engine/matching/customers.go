@@ -63,85 +63,114 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 	case e.AmountKobo <= 0:
 		return true, m.hold(ctx, tenant, e.ID, "unmatched", HeldNoAmount)
 	}
-	var done []counted
+	var done []CountedPart
 	err = db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		done = done[:0]
 		if err := moneylog.LockEntry(ctx, tx, e.ID); err != nil {
 			return err
 		}
 		if err := invoicing.MarkCustomers(ctx, tx, tenant, e.ID, acct.CustomerID(), &acct.ID, "account", "system:"+e.Channel); err != nil {
 			return err
 		}
-		list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, acct.CustomerID())
-		if err != nil {
-			return err
-		}
-		reason := ReasonOldest
-		for _, x := range list {
-			left, ok, err := moneylog.EntryLeft(ctx, tx, e.ID)
-			if err != nil {
-				return err
-			}
-			if !ok || left <= 0 {
-				break
-			}
-			part := min(left, x.DueKobo)
-			if part <= 0 {
-				continue
-			}
-			id := e.ID
-			k, err := m.countPart(ctx, tx, tenant, Part{Invoice: x.ID.String()}, invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
-				Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount, reason}})
-			if err != nil {
-				return err
-			}
-			done = append(done, k)
-			reason = ReasonNext
-		}
-		// Where the school shares family credit, what is left counts
-		// towards the siblings' open invoices, each sibling's oldest first.
-		shared, err := invoicing.SharedWith(ctx, tx, tenant, acct.CustomerID())
-		if err != nil {
-			return err
-		}
-		for _, sib := range shared {
-			left, ok, err := moneylog.EntryLeft(ctx, tx, e.ID)
-			if err != nil {
-				return err
-			}
-			if !ok || left <= 0 {
-				break
-			}
-			list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, sib)
-			if err != nil {
-				return err
-			}
-			for _, x := range list {
-				left, ok, err := moneylog.EntryLeft(ctx, tx, e.ID)
-				if err != nil {
-					return err
-				}
-				if !ok || left <= 0 {
-					break
-				}
-				part := min(left, x.DueKobo)
-				if part <= 0 {
-					continue
-				}
-				id := e.ID
-				k, err := m.countPart(ctx, tx, tenant, Part{Invoice: x.ID.String()}, invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
-					Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount, ReasonSibling}})
-				if err != nil {
-					return err
-				}
-				done = append(done, k)
-			}
-		}
-		// Matched: what is left is the customer's credit.
-		return matched(ctx, tx, tenant, e.ID, m.now())
+		var err error
+		done, err = m.CountCustomer(ctx, tx, tenant, e.ID, acct.CustomerID(), CustomerCounting{Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount}})
+		return err
 	})
 	if err != nil {
 		return true, err
 	}
-	return true, m.paid(ctx, tenant, done)
+	return true, m.TellPaid(ctx, tenant, done)
+}
+
+// CustomerCounting is how a customer's money is counted towards their
+// invoices (CountCustomer): the connection or channel it came on, how
+// (exact for money paid into their own account, manual for cash a person
+// posted for them), who, and the reasons every part gives before its own.
+type CustomerCounting struct {
+	Connection string
+	How        string
+	By         string
+	Reasons    []string
+}
+
+// CountedPart is one part CountCustomer counted: the invoice as it is
+// after it, the part's row and amount, and whether the part paid the
+// invoice in full (TellPaid tells a run waiting on it, after commit).
+type CountedPart struct {
+	Invoice    invoicing.Invoice
+	PartID     uuid.UUID
+	AmountKobo int64
+	Became     bool
+}
+
+// CountCustomer counts an entry that is a customer's money (marked so
+// with invoicing.MarkCustomers, under the entry's lock) towards the
+// customer's open invoices, oldest first, then, where the school shares
+// family credit, their siblings' (invoicing.SharedWith), each one's oldest
+// first, until the money runs out; what is left is the customer's credit.
+// It is the one path a student's own account and cash posted at the desk
+// share (docs/spec/schools.md 7.1, 8). The entry's suggestions, if any,
+// close. Call TellPaid with what it returns once the transaction commits.
+func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID uuid.UUID, customer string, c CustomerCounting) ([]CountedPart, error) {
+	var done []CountedPart
+	count := func(x invoicing.Invoice, reason string) error {
+		left, ok, err := moneylog.EntryLeft(ctx, tx, entryID)
+		if err != nil || !ok || left <= 0 {
+			return err
+		}
+		part := min(left, x.DueKobo)
+		if part <= 0 {
+			return nil
+		}
+		id := entryID
+		k, err := m.countPart(ctx, tx, tenant, Part{Invoice: x.ID.String()}, invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
+			Connection: c.Connection, How: c.How, By: c.By, Reasons: append(append([]string{}, c.Reasons...), reason)})
+		if err != nil {
+			return err
+		}
+		done = append(done, CountedPart{Invoice: *k.Invoice, PartID: k.paymentID, AmountKobo: part, Became: k.became})
+		return nil
+	}
+	list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, customer)
+	if err != nil {
+		return nil, err
+	}
+	reason := ReasonOldest
+	for _, x := range list {
+		if err := count(x, reason); err != nil {
+			return nil, err
+		}
+		reason = ReasonNext
+	}
+	// Where the school shares family credit, what is left counts towards
+	// the siblings' open invoices, each sibling's oldest first.
+	shared, err := invoicing.SharedWith(ctx, tx, tenant, customer)
+	if err != nil {
+		return nil, err
+	}
+	for _, sib := range shared {
+		list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, sib)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range list {
+			if err := count(x, ReasonSibling); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Matched: what is left is the customer's credit.
+	return done, matched(ctx, tx, tenant, entryID, m.now())
+}
+
+// TellPaid tells the runs waiting on the invoices that CountCustomer's
+// parts paid in full, after the transaction that counted them commits.
+func (m *Matcher) TellPaid(ctx context.Context, tenant uuid.UUID, parts []CountedPart) error {
+	for _, p := range parts {
+		if p.Became {
+			if err := m.Invoices.Paid(ctx, tenant, p.Invoice); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
