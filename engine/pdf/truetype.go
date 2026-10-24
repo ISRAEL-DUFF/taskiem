@@ -59,14 +59,14 @@ func ParseFont(data []byte) (*Font, error) {
 		f.UnitsPerEm = 1000
 	}
 	for i := range 4 {
-		f.BBox[i] = int(int16(binary.BigEndian.Uint16(head[36+2*i:])))
+		f.BBox[i] = int(int16(binary.BigEndian.Uint16(head[36+2*i:]))) // #nosec G115 -- the field is signed
 	}
 	hhea, ok := tables["hhea"]
 	if !ok || len(hhea) < 36 {
 		return nil, errors.New("pdf: font has no hhea table")
 	}
-	f.Ascent = int(int16(binary.BigEndian.Uint16(hhea[4:])))
-	f.Descent = int(int16(binary.BigEndian.Uint16(hhea[6:])))
+	f.Ascent = int(int16(binary.BigEndian.Uint16(hhea[4:])))  // #nosec G115 -- the field is signed
+	f.Descent = int(int16(binary.BigEndian.Uint16(hhea[6:]))) // #nosec G115 -- the field is signed
 	metrics := int(binary.BigEndian.Uint16(hhea[34:]))
 	maxp, ok := tables["maxp"]
 	if !ok || len(maxp) < 6 {
@@ -83,7 +83,7 @@ func ParseFont(data []byte) (*Font, error) {
 	}
 	f.CapHeight = f.Ascent
 	if os2, ok := tables["OS/2"]; ok && len(os2) >= 90 && binary.BigEndian.Uint16(os2) >= 2 {
-		f.CapHeight = int(int16(binary.BigEndian.Uint16(os2[88:])))
+		f.CapHeight = int(int16(binary.BigEndian.Uint16(os2[88:]))) // #nosec G115 -- the field is signed
 	}
 	cmap, ok := tables["cmap"]
 	if !ok {
@@ -162,7 +162,7 @@ func (f *Font) readFormat4(t []byte) error {
 		for c := start; c <= end && c != 0xFFFF; c++ {
 			var g uint16
 			if ro == 0 {
-				g = uint16(c) + delta
+				g = uint16(c) + delta // #nosec G115 -- c is at most 0xFFFF
 			} else {
 				idx := ranges + 2*i + ro + 2*int(c-start)
 				if idx+2 > len(t) {
@@ -197,7 +197,7 @@ func (f *Font) readFormat12(t []byte) error {
 		}
 		for c := start; c <= end; c++ {
 			if gid := g + (c - start); gid != 0 && gid < 0x10000 {
-				f.cmap[rune(c)] = uint16(gid)
+				f.cmap[rune(c)] = uint16(gid) // #nosec G115 -- gid is under 0x10000, c a code point
 			}
 		}
 	}

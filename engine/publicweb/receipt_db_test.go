@@ -100,7 +100,7 @@ func TestReceiptVerificationPage(t *testing.T) {
 		t.Helper()
 		res := get(newSrv(), "GET", formHost, path)
 		body := res.Body.String()
-		if res.Code != code && !(code == 0 && res.Code != 200) {
+		if res.Code != code && (code != 0 || res.Code == 200) {
 			t.Fatalf("%s: status %d, want %d: %s", path, res.Code, code, body)
 		}
 		for _, want := range wants {

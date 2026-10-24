@@ -258,7 +258,7 @@ func (d *Doc) writeFont(w *writer, id int, f *Font, used map[uint16]bool, isBold
 	sort.Ints(gids)
 	var ws []string
 	for _, g := range gids {
-		ws = append(ws, fmt.Sprintf("%d [%d]", g, f.Advance(uint16(g))*1000/f.UnitsPerEm))
+		ws = append(ws, fmt.Sprintf("%d [%d]", g, f.Advance(uint16(g))*1000/f.UnitsPerEm)) // #nosec G115 -- a glyph id, under 65536
 	}
 	w.set(cid, fmt.Sprintf("<< /Type /Font /Subtype /CIDFontType2 /BaseFont /%s /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor %d 0 R /DW %d /W [%s] /CIDToGIDMap /Identity >>",
 		name, desc, f.Advance(0)*1000/f.UnitsPerEm, strings.Join(ws, " ")))
@@ -285,7 +285,7 @@ func (d *Doc) writeFont(w *writer, id int, f *Font, used map[uint16]bool, isBold
 		end := min(i+100, len(gids))
 		fmt.Fprintf(&cm, "%d beginbfchar\n", end-i)
 		for _, g := range gids[i:end] {
-			r, ok := byGlyph[uint16(g)]
+			r, ok := byGlyph[uint16(g)] // #nosec G115 -- a glyph id, under 65536
 			if !ok {
 				r = 0xFFFD
 			}

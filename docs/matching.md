@@ -100,7 +100,7 @@ Money can go back to the payer after it counted: the rail returns or reverses a 
 - **its matches are undone**, newest first, each invoice back to sent, part-paid or overdue, with the payment and its undoing kept in the invoice's history ("system:reversal");
 - the payment now counts for what it was **less what went back**, in the database too, so nothing can count it again, and it is never anyone's credit: refunded all, it leaves To match ("the money went back to the payer"); refunded in part, what is left is matched again by the permanent-account rule when it was paid into a customer's account (oldest open invoice first), otherwise it waits in To match with the reason "part of this payment went back to the payer; match what is left";
 - **the owners are told** (in their notifications, on their linked chat, and on the business's alert channels), and so are the people who match money (those with `invoice.manage`, such as the Bursar), naming the invoices now open again, never anyone's name; once per movement;
-- receipts for the undone matches no longer stand: voiding them comes with receipts (the matcher's `Reversed` hook);
+- a school's [receipts](schools.md#receipts) for the undone parts are voided, never deleted (the matcher's `Reversed` hook);
 - a payment heard to have gone back before it was ever looked at is never offered for matching.
 
 Parts of the payment counted towards storefront orders are left: an order has its own [refunds](storefronts.md#refunds).

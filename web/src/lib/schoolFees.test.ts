@@ -63,7 +63,9 @@ describe("discounts", () => {
   });
   it("words a refusal that needs a second person", () => {
     expect(needsApproval(409, { code: "needs_approval" })).toMatch(/second person/);
+    expect(needsApproval(202, { code: "needs_approval", request: {} })).toMatch(/recorded/);
     expect(needsApproval(409, { code: "other" })).toBeNull();
+    expect(needsApproval(201, { discount: {} })).toBeNull();
   });
 });
 

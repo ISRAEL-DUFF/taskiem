@@ -484,7 +484,7 @@ func truncateErr(err error) string {
 // waResendApprovals answers "approvals": what is waiting for the person,
 // sent again with fresh buttons (at most three).
 func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
-	if !c.p.mayDecideAny() {
+	if !c.p.mayDecideAny() && !c.p.Can(PermSchoolApprove) {
 		return c.say(ctx, s, c.t("wa.approvals.denied", "org", c.tenant.Name))
 	}
 	var targets []approvalTarget
@@ -508,11 +508,22 @@ func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 	if err != nil {
 		return err
 	}
-	if len(targets) == 0 {
+	// A school's requests waiting for this person (whatsapp_school_approvals.go).
+	school, err := s.pendingSchoolRequestsFor(ctx, c)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 && len(school) == 0 {
 		return c.say(ctx, s, c.t("wa.approvals.none"))
 	}
 	for _, t := range targets {
 		if err := s.waSendApproval(ctx, c.tenant, t, true); err != nil {
+			return err
+		}
+	}
+	for _, id := range school {
+		req := id
+		if err := s.sendSchoolApprovalItem(ctx, whatsapp.OutboxItem{Tenant: c.tenant.ID, Channel: c.ch.Name(), Kind: outboxSchoolApproval, User: c.p.UserID, Run: &req}); err != nil && !errors.Is(err, whatsapp.ErrNothingToSend) {
 			return err
 		}
 	}

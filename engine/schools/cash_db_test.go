@@ -18,10 +18,9 @@ import (
 // wired to the invoices, as the server wires them.
 type cashWorld struct {
 	*termWorld
-	a, b  schools.StudentDetail
-	invA  invoicing.Invoice
-	invB  invoicing.Invoice
-	bySeq int
+	a, b schools.StudentDetail
+	invA invoicing.Invoice
+	invB invoicing.Invoice
 }
 
 func newCashWorld(t *testing.T) *cashWorld {

@@ -109,6 +109,30 @@ func (s *Server) notifySchoolApprovalsOn(ctx context.Context, tenant uuid.UUID, 
 	return errors.Join(errs...)
 }
 
+// pendingSchoolRequestsFor are up to three of the school's pending
+// requests the person in the chat may decide (not their own), oldest
+// first, for the "approvals" command.
+func (s *Server) pendingSchoolRequestsFor(ctx context.Context, c *chat) ([]uuid.UUID, error) {
+	if !c.p.Can(PermSchoolApprove) {
+		return nil, nil
+	}
+	var ids []uuid.UUID
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+		on, err := schools.Enabled(ctx, tx, c.tenant.ID)
+		if err != nil || !on {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT id FROM school_pending_postings WHERE tenant_id = $1 AND status = 'pending' AND (requested_user IS NULL OR requested_user <> $2)
+			ORDER BY requested_at LIMIT 3`, c.tenant.ID, c.p.UserID)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	})
+	return ids, err
+}
+
 // sendSchoolApprovalItem sends a queued request with fresh decision
 // tokens, if it is still pending and the person may still decide it.
 func (s *Server) sendSchoolApprovalItem(ctx context.Context, it whatsapp.OutboxItem) error {
