@@ -326,5 +326,8 @@ func (s *Server) schoolMatcher(m *matching.Matcher) *matching.Matcher {
 	if m.Reversed == nil {
 		m.Reversed = s.schoolsSvc().ReceiptsReversed
 	}
+	if m.Claims == nil {
+		m.Claims = s.schoolClaims()
+	}
 	return m
 }

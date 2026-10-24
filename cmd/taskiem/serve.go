@@ -490,6 +490,9 @@ type engine struct {
 	orders *storefront.Orders
 	// forms are hosted forms' api side (S7); nil without the public key.
 	forms *forms.Service
+	// schoolInboxKey opens what school families send from their pages
+	// (B6); nil without the public key.
+	schoolInboxKey []byte
 	// email is inbound email's api side (N10); nil without the public key.
 	email *inmail.Service
 	// invoices are the business's invoices to its customers (decision
@@ -643,6 +646,11 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and
 	// one undone has it voided (B5).
+	if len(cfg.Public.Key) > 0 {
+		if e.schoolInboxKey, err = storefront.InboxKey(cfg.Public.Key); err != nil {
+			return nil, err
+		}
+	}
 	schoolOps.Set(schools.Service{Schools: e.schools()})
 	schools.WireReceipts(e.invoices, e.schools())
 	return e, nil
@@ -650,7 +658,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 
 // schools is the Schools area's record (decision 0046).
 func (e *engine) schools() *schools.Schools {
-	s := &schools.Schools{Pool: e.pool, Vault: e.vault, Invoices: e.invoices, Logger: e.log.With("component", "schools")}
+	s := &schools.Schools{Pool: e.pool, Vault: e.vault, Invoices: e.invoices, InboxKey: e.schoolInboxKey, Logger: e.log.With("component", "schools")}
 	if e.invoices != nil {
 		// Students' account numbers are issued on the same rails as
 		// invoices' payments (the vault's credentials, the egress guard).
@@ -907,6 +915,9 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.Email = e.email
 		srv.Invoices = e.invoices
+		// What school families send from their pages is taken from the
+		// inbox with the public host's key (docs/schools.md#the-family-page).
+		srv.SchoolInboxKey = e.schoolInboxKey
 		// Account numbers asked for with an invoice's chat buttons are
 		// answered in the chat.
 		e.invoices.Answered = srv.InvoiceAnswered

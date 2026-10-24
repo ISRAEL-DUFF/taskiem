@@ -121,6 +121,29 @@ func (s Service) IssueAccount(ctx context.Context, tenant uuid.UUID, student str
 	return s.IssueOne(ctx, tenant, student, in, by)
 }
 
+// FamilyLinkFor mints a family page link for a family (by id) or a
+// student's family (by id or admission number): the URL and when it
+// expires (docs/schools.md#the-family-page).
+func (s Service) FamilyLinkFor(ctx context.Context, tenant uuid.UUID, family, student string) (FamilyLinkMinted, error) {
+	var out FamilyLinkMinted
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		fid, err := uuid.Parse(family)
+		if family == "" || err != nil {
+			st, err := s.Student(ctx, tx, tenant, student)
+			if err != nil {
+				return err
+			}
+			if st.FamilyID == nil {
+				return refused("the student %s is in no family yet", st.AdmissionNumber)
+			}
+			fid = *st.FamilyID
+		}
+		out, err = s.MintFamilyLink(ctx, tx, tenant, fid, "workflow", "workflow:family_link")
+		return err
+	})
+	return out, err
+}
+
 // Current is the current term; ok false when none runs.
 func (s Service) Current(ctx context.Context, tenant uuid.UUID) (Term, bool, error) {
 	var out Term
