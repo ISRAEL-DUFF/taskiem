@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Store is the engine's view of Postgres. Every method runs in a tenant-scoped
@@ -54,6 +55,9 @@ type Store struct {
 	// settled at once in the money log, with the step's outcome (prod
 	// only; docs/money-log.md); nil records nothing.
 	MoneyLog *moneylog.Log
+	// Templates is the template library template steps are expanded from
+	// (decision 0047); nil is the embedded library.
+	Templates *templates.Library
 
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache

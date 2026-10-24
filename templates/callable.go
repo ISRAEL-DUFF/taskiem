@@ -89,6 +89,26 @@ func (t *Template) checkCallable() error {
 	if err := triggerReadsOnlyBody(doc); err != nil {
 		return fmt.Errorf("callable: %w", err)
 	}
+	if len(def.RawTypes) > 0 {
+		return errors.New("callable: a callable template declares no types: its steps go into another workflow, which has its own")
+	}
+	var badID error
+	def.Walk(func(st *wd.Step) {
+		switch {
+		case badID != nil:
+		case len(st.ID) > wd.MaxCalledStepID:
+			badID = fmt.Errorf("callable: step %q: a callable template's step ids are at most %d characters, so two templates' prefixes fit", st.ID, wd.MaxCalledStepID)
+		case st.Type == "capability" && len(st.ID) > wd.MaxCalledCapabilityID:
+			badID = fmt.Errorf("callable: step %q: a callable template's capability step ids are at most %d characters, so two templates' prefixes and the rail's own steps fit", st.ID, wd.MaxCalledCapabilityID)
+		case strings.Contains(st.ID, "__"):
+			badID = fmt.Errorf("callable: step %q: a callable template's step ids may not contain __ (expansion uses it)", st.ID)
+		case st.ID == "input" || st.ID == "body":
+			badID = fmt.Errorf("callable: step %q: input and body are the ids expansion gives its own steps", st.ID)
+		}
+	})
+	if badID != nil {
+		return badID
+	}
 	top := map[string]bool{}
 	for _, st := range def.Steps {
 		top[st.ID] = true

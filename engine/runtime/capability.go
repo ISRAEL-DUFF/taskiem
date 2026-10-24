@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // projected reports whether a completed step stands for a capability whose
@@ -106,10 +107,11 @@ type CapabilityError struct{ Err error }
 func (e *CapabilityError) Error() string { return e.Err.Error() }
 func (e *CapabilityError) Unwrap() error { return e.Err }
 
-// Expand expands a version's capability steps on an environment's
-// connections (engine/expansion), and keeps the result: deploys check with
-// it, and a run pins what it returns. Nil, nil for a version without
-// capability steps.
+// Expand expands a version's template steps (with the templates pinned
+// when the version was saved) and its capability steps on an
+// environment's connections (engine/expansion), and keeps the result:
+// deploys check with it, and a run pins what it returns. Nil, nil for a
+// version with neither.
 func (s *Store) Expand(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUID, version int, env string) ([]byte, *wd.Definition, []expansion.Choice, error) {
 	var raw []byte
 	if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, workflow, version).Scan(&raw); err != nil {
@@ -119,28 +121,47 @@ func (s *Store) Expand(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUI
 	if err != nil || !expansion.Has(d) {
 		return nil, nil, nil, err
 	}
-	if s.Registry == nil {
-		return nil, nil, nil, &CapabilityError{Err: errors.New("capability steps need the platform's connectors")}
-	}
-	reg, err := s.Registry.For(ctx, tenant.String())
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	rows, err := tx.Query(ctx, `SELECT name, connector FROM connections WHERE environment = $1 AND status = 'active' ORDER BY name`, env)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	conns, err := pgx.CollectRows(rows, pgx.RowToStructByPos[expansion.Connection])
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	out, choices, err := expansion.Expand(raw, expansion.ResolverFor(conns, reg))
-	if err != nil {
+	refused := func(err error) error {
 		var ref *expansion.Refusal
 		if errors.As(err, &ref) {
-			return nil, nil, nil, &CapabilityError{Err: err}
+			return &CapabilityError{Err: err}
 		}
-		return nil, nil, nil, err
+		return err
+	}
+	// Template steps first: a template's capability steps are expanded
+	// with the workflow's own.
+	if d.HasTemplates() {
+		find, err := s.templates(ctx, tx, workflow, version)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if raw, _, err = expansion.ExpandTemplates(raw, find); err != nil {
+			return nil, nil, nil, refused(err)
+		}
+		if d, err = wd.Load(raw); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	out, choices := raw, []expansion.Choice(nil)
+	if expansion.HasCapabilities(d) {
+		if s.Registry == nil {
+			return nil, nil, nil, &CapabilityError{Err: errors.New("capability steps need the platform's connectors")}
+		}
+		reg, err := s.Registry.For(ctx, tenant.String())
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		rows, err := tx.Query(ctx, `SELECT name, connector FROM connections WHERE environment = $1 AND status = 'active' ORDER BY name`, env)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		conns, err := pgx.CollectRows(rows, pgx.RowToStructByPos[expansion.Connection])
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if out, choices, err = expansion.Expand(raw, expansion.ResolverFor(conns, reg)); err != nil {
+			return nil, nil, nil, refused(err)
+		}
 	}
 	sum := sha256.Sum256(out)
 	if _, err := tx.Exec(ctx, `INSERT INTO workflow_expansions (tenant_id, workflow_id, version, digest, definition, choices) VALUES ($1, $2, $3, $4, $5, $6)
@@ -204,4 +225,13 @@ func (s *Store) RunDefinition(ctx context.Context, tenant, run uuid.UUID) (*wd.D
 		return err
 	})
 	return d, err
+}
+
+// templates finds the templates a version's template steps use.
+func (s *Store) templates(_ context.Context, _ pgx.Tx, _ uuid.UUID, _ int) (expansion.Templates, error) {
+	lib := s.Templates
+	if lib == nil {
+		lib = templates.Default()
+	}
+	return expansion.Library(lib), nil
 }

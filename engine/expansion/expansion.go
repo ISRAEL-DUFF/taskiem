@@ -60,21 +60,30 @@ func (r *Refusal) Error() string { return "step " + r.Step + ": " + r.Message }
 
 func (r *Refusal) Unwrap() error { return r.Err }
 
-// Has reports whether a definition has capability steps.
+// Has reports whether a definition has capability or template steps: steps
+// a run expands before it starts.
 func Has(d *wd.Definition) bool {
+	found := false
+	d.Walk(func(s *wd.Step) { found = found || s.Type == "capability" || s.Type == "template" })
+	return found
+}
+
+// HasCapabilities reports whether a definition has capability steps.
+func HasCapabilities(d *wd.Definition) bool {
 	found := false
 	d.Walk(func(s *wd.Step) { found = found || s.Type == "capability" })
 	return found
 }
 
-// Expand expands every capability step of doc. It returns doc unchanged,
-// and no choices, when there is none.
+// Expand expands every capability step of doc (after its template steps:
+// ExpandTemplates). It returns doc unchanged, and no choices, when there
+// is none.
 func Expand(doc []byte, resolve Resolver) ([]byte, []Choice, error) {
 	d, err := wd.Load(doc)
 	if err != nil {
 		return nil, nil, err
 	}
-	if !Has(d) {
+	if !HasCapabilities(d) {
 		return doc, nil, nil
 	}
 	root, err := expr.DecodeJSON(doc)
@@ -129,9 +138,30 @@ func (x *expander) steps(list []any) ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
+		keepOrigin(st, exp)
 		out = append(out, exp...)
 	}
 	return out, nil
+}
+
+// keepOrigin marks the steps a capability step expanded from a template
+// became with its origin: the one that keeps its id keeps its id inside
+// the template too (its output's name in its scope's results), and the
+// others name only the template and template step.
+func keepOrigin(st map[string]any, exp []any) {
+	o, ok := st["origin"].(map[string]any)
+	if !ok {
+		return
+	}
+	for _, e := range exp {
+		em := e.(map[string]any)
+		switch {
+		case em["id"] == st["id"]:
+			em["origin"] = o
+		case em["origin"] == nil:
+			em["origin"] = map[string]any{"template": o["template"], "step": o["step"]}
+		}
+	}
 }
 
 func (x *expander) nested(st map[string]any) error {

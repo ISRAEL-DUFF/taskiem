@@ -205,7 +205,8 @@
             "transform",
             "ai",
             "form",
-            "capability"
+            "capability",
+            "template"
           ]
         },
         "name": {
@@ -234,6 +235,27 @@
         },
         "on_error": {
           "$ref": "#/$defs/subflow"
+        },
+        "origin": {
+          "description": "Set when a template step is expanded (docs/contracts/wd-v1.md, template steps): the template a step came from, the template step it came from, and its id inside the template, under which its output is kept in its scope's results. Never written by hand.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "template",
+            "step"
+          ],
+          "properties": {
+            "template": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            },
+            "step": {
+              "$ref": "#/$defs/stepId"
+            },
+            "id": {
+              "$ref": "#/$defs/stepId"
+            }
+          }
         }
       }
     },
@@ -466,6 +488,21 @@
           },
           "then": {
             "$ref": "#/$defs/capabilityStep"
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "const": "template"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/templateStep"
           }
         }
       ]
@@ -2140,6 +2177,38 @@
         },
         "effect": {
           "$ref": "#/$defs/effect"
+        }
+      },
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "templateStep": {
+      "description": "A callable template (templates/, decision 0047) used as a step: expanded into the template's steps when the workflow is deployed, its ids prefixed with this step's id and two underscores; the step's output is the template's outputs (docs/contracts/wd-v1.md, template steps).",
+      "type": "object",
+      "required": [
+        "type",
+        "template"
+      ],
+      "properties": {
+        "type": {
+          "const": "template"
+        },
+        "template": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "description": "The callable template's id."
+        },
+        "params": {
+          "type": "object",
+          "description": "The template's parameters, as the Start page takes them: values, never expressions."
+        },
+        "input": {
+          "$ref": "#/$defs/values",
+          "description": "The template's run inputs, as literals or expressions over this workflow."
         }
       },
       "unevaluatedProperties": false,
