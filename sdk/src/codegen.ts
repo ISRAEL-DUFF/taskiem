@@ -30,11 +30,11 @@ export function generate(def: WorkflowDefinition, opts: CodegenOptions = {}): st
   header.name = def.name;
   if (def.description !== undefined) header.description = def.description;
   header.trigger = new Raw(g.trigger(def.trigger, "  "));
-  for (const k of ["inputs", "types", "settings"] as const) {
+  for (const k of ["inputs", "types", "settings", "outputs"] as const) {
     if (def[k] !== undefined) header[k] = def[k];
   }
   for (const k of Object.keys(def)) {
-    if (!["schema", "id", "version", "name", "description", "trigger", "inputs", "steps", "types", "settings"].includes(k)) {
+    if (!["schema", "id", "version", "name", "description", "trigger", "inputs", "steps", "types", "settings", "outputs"].includes(k)) {
       throw new Error(`codegen: unknown top-level field "${k}"`);
     }
   }
@@ -166,7 +166,11 @@ class Gen {
         return call("capability", uses, optional(s.input), extraArg);
       }
       case "template":
-        take("template", "params", "input");
+        take("template", "workflow", "params", "input");
+        if (s.workflow !== undefined && s.template === undefined) {
+          this.use("callWorkflow");
+          return call("callWorkflow", s.workflow, optional(s.input));
+        }
         this.use("template");
         return call("template", s.template, optional(s.params), optional(s.input));
       case "http":

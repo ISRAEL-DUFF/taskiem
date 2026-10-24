@@ -50,7 +50,7 @@ func Validate(doc []byte) []Problem {
 	if err != nil {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
-	return append(append(append(append(append(checkExpressions(d), checkUSSD(d)...), checkForms(d)...), checkCapabilities(d)...), checkTemplates(d)...), checkCallbacks(d)...)
+	return append(append(append(append(append(append(checkExpressions(d), checkUSSD(d)...), checkForms(d)...), checkCapabilities(d)...), checkTemplates(d)...), checkCallbacks(d)...), checkOutputs(d)...)
 }
 
 type validator struct {
@@ -226,7 +226,7 @@ func (v *validator) walkSecrets(path, rel string, val any) {
 func (v *validator) forbidSecrets(path string, val any) { v.walkSecrets(path, "/forbidden", val) }
 
 func (v *validator) secretsOutsideSteps(root map[string]any) {
-	for _, k := range []string{"trigger", "settings", "inputs"} {
+	for _, k := range []string{"trigger", "settings", "inputs", "outputs"} {
 		if val, ok := root[k]; ok {
 			v.forbidSecrets("/"+k, val)
 		}

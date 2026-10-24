@@ -41,7 +41,7 @@ export function summary(s: Step): string {
     case "capability":
       return `${words(s.uses)} · ${s.connection ? `via ${s.connection}` : "whichever rail is connected"}`;
     case "template":
-      return `${words(s.template.replaceAll("-", " "))} · its steps run here`;
+      return s.template !== undefined ? `${words(s.template.replaceAll("-", " "))} · its steps run here` : "One of your workflows · its steps run here";
     case "callback":
       return s.config?.timeout ? `wait up to ${s.config.timeout} to be called back` : "wait to be called back";
     case "respond":

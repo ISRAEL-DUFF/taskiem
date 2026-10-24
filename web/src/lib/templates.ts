@@ -70,6 +70,16 @@ export interface CallableInterface {
   effect: TemplateEffect;
 }
 
+/** One of the business's own workflows another may use as a step (decision 0048): its published version's interface, as GET /v1/workflows/callable lists it. */
+export interface CallableWorkflow {
+  id: string;
+  name: string;
+  version: number;
+  inputs: Record<string, unknown>;
+  outputs: CallableInterface["outputs"];
+  effect: TemplateEffect;
+}
+
 /** What a template does at most, computed from its steps. */
 export interface TemplateEffect {
   class: "read" | "write" | "moves_money";

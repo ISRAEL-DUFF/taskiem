@@ -16,7 +16,7 @@ import { isExpression } from "../lib/schema";
 import type { Source } from "../lib/plaincanvas";
 import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
 import { ParamField } from "../pages/Templates";
-import { effectWords, toParams, type Template } from "../lib/templates";
+import { effectWords, toParams, type CallableWorkflow, type Template } from "../lib/templates";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -455,23 +455,45 @@ function CapabilityConfig({ step, connectors, set, advanced, sources }: { step: 
  */
 function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, { type: "template" }>; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
   const list = useLoad(() => get<{ templates: Template[] }>("/v1/templates?callable=true"), []);
-  const tpl = list.data?.templates.find((t) => t.id === step.template);
+  const own = useLoad(() => get<{ workflows: CallableWorkflow[] }>("/v1/workflows/callable"), []);
+  // The step uses a library template, or one of the business's own
+  // workflows (decision 0048), which has no settings.
+  const wf = step.workflow !== undefined ? own.data?.workflows.find((w) => w.id === step.workflow) : undefined;
+  const tpl = step.template !== undefined ? list.data?.templates.find((t) => t.id === step.template) : undefined;
+  const iface = tpl?.callable ?? wf;
   const params = (tpl?.params ?? []).filter((p) => tpl?.callable?.params.includes(p.name));
   const given = (step.params ?? {}) as Record<string, unknown>;
   const values = Object.fromEntries(params.map((p) => [p.name, given[p.name] === undefined ? "" : String(given[p.name])]));
+  const chosen = step.workflow !== undefined ? `workflow:${step.workflow}` : `template:${step.template ?? ""}`;
+  const choose = (v: string) => {
+    if (v.startsWith("workflow:")) set({ workflow: v.slice("workflow:".length), template: undefined, params: undefined, input: {} });
+    else set({ template: v.slice("template:".length), workflow: undefined, params: undefined, input: {} });
+  };
   return (
     <>
-      <Field label="Template" hint="A ready workflow from the library, used as one step: its approvals, payments and waits run in this workflow's run.">
-        <select value={step.template} onChange={(e) => set({ template: e.target.value, params: undefined, input: {} })}>
-          {!tpl && <option value={step.template}>{step.template}</option>}
-          {(list.data?.templates ?? []).map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.title}
-            </option>
-          ))}
+      <Field label="Template" hint="A ready workflow from the library, or one of your own workflows that gives something back, used as one step: its approvals, payments and waits run in this workflow's run.">
+        <select value={chosen} onChange={(e) => choose(e.target.value)}>
+          {!tpl && !wf && <option value={chosen}>{step.workflow ?? step.template}</option>}
+          <optgroup label="From the library">
+            {(list.data?.templates ?? []).map((t) => (
+              <option key={t.id} value={`template:${t.id}`}>
+                {t.title}
+              </option>
+            ))}
+          </optgroup>
+          {(own.data?.workflows ?? []).length > 0 && (
+            <optgroup label="Your workflows">
+              {(own.data?.workflows ?? []).map((w) => (
+                <option key={w.id} value={`workflow:${w.id}`}>
+                  {w.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </Field>
-      {tpl?.callable && <p className="hint">{effectWords(tpl.callable.effect)}</p>}
+      {iface && <p className="hint">{effectWords(iface.effect)}</p>}
+      {wf && <p className="hint">Version {wf.version}, the published one. Publishing a new version of it changes this step when this workflow is next saved.</p>}
       {params.length > 0 && <h3>Settings</h3>}
       {params.map((p) => (
         <ParamField
@@ -485,12 +507,12 @@ function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, 
         />
       ))}
       <h3>What it starts with</h3>
-      <SchemaForm schema={tpl?.callable?.inputs as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
-      {tpl?.callable && tpl.callable.outputs.length > 0 && (
+      <SchemaForm schema={iface?.inputs as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {iface && iface.outputs.length > 0 && (
         <>
           <h3>What it gives back</h3>
           <ul className="plain-list">
-            {tpl.callable.outputs.map((o) => (
+            {iface.outputs.map((o) => (
               <li key={o.name}>
                 <strong>{o.title}</strong>: {o.description} {advanced && <code>steps.{step.id}.output.{o.name}</code>}
               </li>

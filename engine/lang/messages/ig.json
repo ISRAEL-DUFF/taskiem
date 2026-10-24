@@ -2200,6 +2200,30 @@
       "text": "Wenezdee",
       "reviewed": false
     },
+    "wd.effect.and": {
+      "text": "na",
+      "reviewed": false
+    },
+    "wd.effect.event": {
+      "text": "na-echere ka ihe mee",
+      "reviewed": false
+    },
+    "wd.effect.moves_money": {
+      "text": "na-ebugharị ego",
+      "reviewed": false
+    },
+    "wd.effect.person": {
+      "text": "na-echere mmadụ ka ọ kwado ma ọ bụ zaa",
+      "reviewed": false
+    },
+    "wd.effect.read": {
+      "text": "na-agụ naanị",
+      "reviewed": false
+    },
+    "wd.effect.write": {
+      "text": "na-agbanwe ihe na ọrụ gị",
+      "reviewed": false
+    },
     "wd.foreach": {
       "text": "Maka ihe ọ bụla n'ime ndepụta:",
       "reviewed": false
@@ -2324,6 +2348,10 @@
       "text": "Jiri ụdị: {template}",
       "reviewed": false
     },
+    "wd.template.does": {
+      "text": "Jiri ụdị: {template}, nke {does}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Kwadebe data maka nzọụkwụ ndị ọzọ",
       "reviewed": false
@@ -2446,6 +2474,14 @@
     },
     "wd.wait_until": {
       "text": "Chere ruo oge e debere",
+      "reviewed": false
+    },
+    "wd.workflow": {
+      "text": "Jiri ọrụ gị: {template}",
+      "reviewed": false
+    },
+    "wd.workflow.does": {
+      "text": "Jiri ọrụ gị: {template}, nke {does}",
       "reviewed": false
     }
   }

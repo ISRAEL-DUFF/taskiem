@@ -61,9 +61,20 @@ export interface CapabilityStep extends StepBase {
  */
 export interface TemplateStep extends StepBase {
   type: "template";
-  template: string;
+  /** A library template's id, or (workflow) one of the business's callable workflows; exactly one of the two. */
+  template?: string;
+  workflow?: string;
   params?: Record<string, unknown>;
   input?: Values;
+}
+
+/** What a callable workflow gives back to a template step that uses it (docs/contracts/wd-v1.md, callable workflows). */
+export interface Output {
+  name: string;
+  type: "string" | "integer" | "number" | "boolean" | "list" | "object";
+  title: string;
+  description: string;
+  value: Expression;
 }
 
 export interface CodeStep extends StepBase {
@@ -297,4 +308,5 @@ export interface WorkflowDefinition {
   steps: Step[];
   types?: Record<string, object | boolean>;
   settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration };
+  outputs?: Output[];
 }

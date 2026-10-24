@@ -2200,6 +2200,30 @@
       "text": "Laraba",
       "reviewed": false
     },
+    "wd.effect.and": {
+      "text": "kuma",
+      "reviewed": false
+    },
+    "wd.effect.event": {
+      "text": "yana jiran wani abu ya faru",
+      "reviewed": false
+    },
+    "wd.effect.moves_money": {
+      "text": "yana tura kuɗi",
+      "reviewed": false
+    },
+    "wd.effect.person": {
+      "text": "yana jiran mutum ya amince ko ya amsa",
+      "reviewed": false
+    },
+    "wd.effect.read": {
+      "text": "karantawa kawai yake",
+      "reviewed": false
+    },
+    "wd.effect.write": {
+      "text": "yana canza abubuwa a cikin ayyukanka",
+      "reviewed": false
+    },
     "wd.foreach": {
       "text": "Ga kowane abu a cikin jerin:",
       "reviewed": false
@@ -2324,6 +2348,10 @@
       "text": "Yi amfani da samfuri: {template}",
       "reviewed": false
     },
+    "wd.template.does": {
+      "text": "Yi amfani da samfuri: {template}, wanda {does}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Shirya bayanai don matakai na gaba",
       "reviewed": false
@@ -2446,6 +2474,14 @@
     },
     "wd.wait_until": {
       "text": "Jira har lokacin da aka sa",
+      "reviewed": false
+    },
+    "wd.workflow": {
+      "text": "Yi amfani da aikinka: {template}",
+      "reviewed": false
+    },
+    "wd.workflow.does": {
+      "text": "Yi amfani da aikinka: {template}, wanda {does}",
       "reviewed": false
     }
   }

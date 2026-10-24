@@ -30,6 +30,19 @@ type Context struct {
 	// each (never who); Members is how many active members it has.
 	Roles   []Role `json:"roles,omitempty"`
 	Members int    `json:"members,omitempty"`
+	// CallableWorkflows are the business's own workflows a template step
+	// may use (decision 0048): their id, name, inputs, outputs and effect.
+	CallableWorkflows []CallableWorkflow `json:"callable_workflows,omitempty"`
+}
+
+// CallableWorkflow is one of the business's workflows another may use as
+// a step, as the prompt lists it.
+type CallableWorkflow struct {
+	ID      string          `json:"id"`
+	Name    string          `json:"name"`
+	Inputs  json.RawMessage `json:"inputs"`
+	Outputs []wd.Output     `json:"outputs"`
+	Effect  string          `json:"effect"`
 }
 
 // Role is a membership role and how many active members hold it.
@@ -306,15 +319,7 @@ func callableTemplates(reg connector.Lookup) string {
 		for _, o := range t.Outputs {
 			outs = append(outs, o.Name+":"+o.Type)
 		}
-		e := templates.EffectOf(def, reg)
-		does := map[string]string{templates.EffectRead: "only reads", templates.EffectWrite: "writes", templates.EffectMovesMoney: "moves money"}[e.Class]
-		if e.WaitsForPerson {
-			does += ", waits for a person (its own approval)"
-		}
-		if e.WaitsForEvent {
-			does += ", waits for an event"
-		}
-		fmt.Fprintf(&b, "- %s (%s): params %s; input %s; output %s; %s.\n", t.ID, t.Title, orNone(params), orNone(inputs), strings.Join(outs, ", "), does)
+		fmt.Fprintf(&b, "- %s (%s): params %s; input %s; output %s; %s.\n", t.ID, t.Title, orNone(params), orNone(inputs), strings.Join(outs, ", "), templates.EffectOf(def, reg).Words())
 	}
 	return b.String()
 }

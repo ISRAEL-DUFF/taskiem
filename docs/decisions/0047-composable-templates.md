@@ -72,14 +72,14 @@ Taskiem already plans half of this. The `subflow` step type exists in wd/v1 (`co
 - Flow code (the SDK) gains `template(id, params, input)`, and the round trip keeps the step unexpanded.
 - The builder's catalogue, prompt and evals gain callable templates (point 6).
 - `subflow` (point 5) is unchanged here and stays in Phase 3.
-- **Not decided here:** a business's own workflows as callable components (a private library), and templates in the connector catalogue ([0020](0020-connector-catalogue.md)) for other publishers. Both would use the same contract.
+- **Not decided here:** a business's own workflows as callable components (a private library), and templates in the connector catalogue ([0020](0020-connector-catalogue.md)) for other publishers. Both would use the same contract. The first is now [0048](0048-callable-workflows.md).
 
 ## Open questions, as answered
 
 1. **Which templates first.** Pay a list, Run payroll, Send an invoice, and the Payrolla payroll summary and records, each with `outputs` checked against its own workflow tests.
 2. **Failure inside a template step.** The template's own `on_error` paths run as written. A failure that escapes them fails the template's body, and the `template` step's `on_error`, when it has one, runs for the step as a whole. A template step takes no `retry` of its own: each of the template's steps keeps its own retries, so nothing finished runs again.
 3. **Params set by the caller at run time.** Params stay values filled when the calling workflow is built. Run payroll's month was the one value a caller needs per run, so it became a run input (`period`). A parameter only a template's trigger uses (Run payroll's pay day) is not a template step's to give.
-4. **Showing the effect to people.** The editor's template step says what the template does ("Moves money · waits for a person to approve or answer"), what it gives back and its steps, and the read-back names the template. The Start page and the Guide do not yet describe a composed workflow differently from any other.
+4. **Showing the effect to people.** The editor's template step says what the template does ("Moves money · waits for a person to approve or answer"), what it gives back and its steps. The read-back, which the Start page, the Guide and chat show, names the template and what it does ("Use the template: Run payroll from any payments account, which moves money, waits for a person to approve or answer and waits for something to happen"), in each language.
 
 ## As built
 

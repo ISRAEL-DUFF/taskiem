@@ -131,6 +131,21 @@ describe("round trip edge cases", () => {
     expect(evaluate(code)).toEqual(def);
   });
 
+  it("writes a workflow's outputs and callWorkflow steps, and back", () => {
+    const def = {
+      ...base([
+        { id: "total", type: "transform", config: { output: { kobo: "=trigger.body.amount_kobo * 2" } } },
+        { id: "sub", type: "template", workflow: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12", needs: ["total"], input: { amount_kobo: "=steps.total.output.kobo" } },
+      ]),
+      inputs: { schema: { type: "object", properties: { amount_kobo: { type: "integer" } }, required: ["amount_kobo"] } },
+      outputs: [{ name: "kobo", type: "integer", title: "Total", description: "Twice the amount", value: "=steps.total.output.kobo" }],
+    } as WorkflowDefinition;
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`callWorkflow("2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12", {`);
+    expect(code).toContain("outputs:");
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("writes callback and respond steps, and back", () => {
     const def = base([
       { id: "send", type: "transform", config: { output: { url: "=run.callbacks.verified" } } },

@@ -113,6 +113,12 @@ A workflow keeps each template it uses as the library had it when the version wa
 
 The library refuses to load a callable template that breaks these rules. Its step ids are at most 31 characters, its capability steps' at most 8, none contains `__`, and none is `input` or `body` (the ids expansion gives its own steps), so two templates' prefixes always fit. Each callable template's [workflow tests](#the-library) (`templates/tests/<id>.test.json`) also run with the template used as a step, and its outputs are checked against their types.
 
+### Your own workflows as steps
+
+A business's own workflow can be a step of its other workflows the same way ([decision 0048](decisions/0048-callable-workflows.md)): give it `outputs` (the editor's "What it gives back", under the inputs schema; the same shape as a template's outputs, over its own top-level steps) and publish it. It then appears under "Your workflows" in a template step's picker, in `GET /v1/workflows/callable` with its inputs, outputs and effect, and in the AI builder's context, and it keeps the same rules as a callable template (an inputs schema, no types, short step ids, no respond step). The published version is what a step uses: it is pinned with the calling version, and publishing a new version is offered to each workflow that uses it as a library update is, so a change to the called workflow never reaches its users until they save. A workflow may not use itself, a chain that comes back to itself is refused, and an embedded app's end user cannot name a workflow of the partner's customer.
+
+The read-back (the Start page, the Guide and chat) says what a template step uses and does: "Use the template: Run payroll from any payments account, which moves money, waits for a person to approve or answer and waits for something to happen", or "Use your workflow: Double it, which only reads", in each of the five languages.
+
 ## API
 
 | Route | Permission | What it does |

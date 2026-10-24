@@ -207,3 +207,47 @@ func equalJSON(a, b any) bool {
 	y, _ := json.Marshal(b)
 	return string(x) == string(y)
 }
+
+// A template step may name a workflow of the business (decision 0048):
+// the resolver gives it as a template keyed by the workflow's id, and it
+// expands and runs as a library template does.
+func TestWorkflowBackedTemplate(t *testing.T) {
+	const id = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	own := templates.Template{ID: id, Title: "Double it", Summary: "S", Description: "D", Category: "workflow", Tags: []string{}, Connectors: []string{}, Params: []templates.Param{},
+		Callable: true, Outputs: []templates.Output{{Name: "kobo", Type: "integer", Title: "Total", Description: "Twice", Value: "=steps.total.output.kobo"}},
+		Definition: json.RawMessage(`{"schema":"wd/v1","id":"wf_d","version":1,"name":"Double it","trigger":{"type":"manual"},
+		  "inputs":{"schema":{"type":"object","required":["amount_kobo"],"properties":{"amount_kobo":{"type":"integer"}}}},
+		  "steps":[{"id":"total","type":"transform","config":{"output":{"kobo":"=trigger.body.amount_kobo * 2"}}}]}`)}
+	lib := library(t)
+	find := func(want string) (*templates.Template, error) {
+		if want == id {
+			return &own, nil
+		}
+		return lib(want)
+	}
+	doc := caller(`[{"id":"sub","type":"template","workflow":"` + id + `","input":{"amount_kobo":21}},
+	  {"id":"after","type":"transform","needs":["sub"],"config":{"output":{"kobo":"=steps.sub.output.kobo"}}}]`)
+	out, used, err := expansion.ExpandTemplates(doc, find)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(used, ",") != id {
+		t.Errorf("used %v", used)
+	}
+	def, err := wd.Load(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := def.Step("sub__total"); st == nil || st.Origin.Template != id {
+		t.Fatalf("the workflow's step: %+v", st)
+	}
+	r := wdtest.RunCase(def, registry(t), nil, wdtest.Case{Name: "runs",
+		Expect: wdtest.Expect{Status: "completed", Outputs: map[string]any{"after": map[string]any{"kobo": 42}}}})
+	if !r.Passed() {
+		t.Errorf("%v\n%s", r.Failures, strings.Join(r.Trace, "\n"))
+	}
+	// A workflow the resolver does not know is refused by name.
+	if _, _, err := expansion.ExpandTemplates(caller(`[{"id":"sub","type":"template","workflow":"00000000-0000-4000-8000-000000000000","input":{}}]`), find); err == nil {
+		t.Error("an unknown workflow expanded")
+	}
+}
