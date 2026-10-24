@@ -157,6 +157,10 @@ type Template struct {
 	// meets send-invoice although invoices are named in several
 	// templates' titles.
 	Requires []string `json:"requires,omitempty"`
+	// Callable marks a template another workflow may use as a step
+	// (decision 0047), with its run inputs and Outputs as its interface.
+	Callable bool     `json:"callable,omitempty"`
+	Outputs  []Output `json:"outputs,omitempty"`
 }
 
 // CapabilityPrefix marks a capability among a template's connectors:
@@ -348,7 +352,7 @@ func (t *Template) check() error {
 			cols[c.Name] = true
 		}
 	}
-	return nil
+	return t.checkCallable()
 }
 
 // TablesFor returns the template's tables with their names resolved from

@@ -25,3 +25,21 @@ func TestPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestStepReads(t *testing.T) {
+	e := MustNew()
+	got, err := e.StepReads(`=steps.?summary.output.paid.orValue(0) + size(steps.lines.output.rows) + (has(steps.paid) ? 1 : 0) + steps["check"].error.size() + (steps.?x.hasValue() ? 1 : 0)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []StepRead{
+		{Step: "summary", Field: "output", Optional: true},
+		{Step: "lines", Field: "output"},
+		{Step: "paid", Test: true},
+		{Step: "check", Field: "error"},
+		{Step: "x", Optional: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v\nwant %+v", got, want)
+	}
+}

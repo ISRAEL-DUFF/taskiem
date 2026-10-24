@@ -283,10 +283,10 @@ func sample(s any, types map[string]any, m *connector.Manifest, depth int) any {
 		}
 		// A pattern the plain sample misses: try the shapes patterns most
 		// often ask for (digits of common lengths: phone numbers, BVNs,
-		// account numbers).
+		// account numbers, a month).
 		if p, ok := sm["pattern"].(string); ok {
 			if re, err := regexp.Compile(p); err == nil && !re.MatchString(s) {
-				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "sample_1", "Sample1"} {
+				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "2026-01", "sample_1", "Sample1"} {
 					if re.MatchString(c) {
 						return c
 					}
