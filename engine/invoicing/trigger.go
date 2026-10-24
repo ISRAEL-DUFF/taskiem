@@ -17,8 +17,10 @@ import (
 // (docs/contracts/wd-v1.md, docs/invoices.md).
 const TriggerType = "invoice"
 
-// TriggerEvents are the events an invoice trigger starts on.
-var TriggerEvents = []string{"paid"}
+// TriggerEvents are the events an invoice trigger starts on: paid (in
+// full, once per invoice) and payment (a part counted, once per part;
+// trigger_payment.go).
+var TriggerEvents = []string{"paid", "payment"}
 
 // noLongerPaid is the note on a start not made because the payment was
 // undone before the run could start; paying the invoice again reopens it.

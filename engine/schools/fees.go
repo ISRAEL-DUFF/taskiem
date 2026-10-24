@@ -505,14 +505,16 @@ func (s *Schools) Discounts(ctx context.Context, tx pgx.Tx, tenant, student uuid
 }
 
 // AddDiscount gives a student a standing discount, and rebuilds their
-// draft invoices. One at or above the school's discount threshold needs
-// a second person (ErrNeedsApproval): a percent is weighed against the
-// student's fees in the current term.
+// draft invoices. One at or above the school's discount threshold is
+// recorded as a request for a second person instead (ApprovalNeeded,
+// cash.go): a percent is weighed against the student's fees in the
+// current term.
 func (s *Schools) AddDiscount(ctx context.Context, tx pgx.Tx, tenant, student uuid.UUID, in DiscountIn, by string) (Discount, int, error) {
 	if err := need(ctx, tx, tenant); err != nil {
 		return Discount{}, 0, err
 	}
-	if _, err := s.student(ctx, tx, tenant, student.String()); err != nil {
+	st, err := s.student(ctx, tx, tenant, student.String())
+	if err != nil {
 		return Discount{}, 0, err
 	}
 	in.Reason = strings.Join(strings.Fields(in.Reason), " ")
@@ -550,9 +552,17 @@ func (s *Schools) AddDiscount(ctx context.Context, tx pgx.Tx, tenant, student uu
 			worth = d.Of(own)
 		}
 	}
-	if err := s.CheckDiscount(ctx, tx, tenant, worth); err != nil {
+	if err := s.CheckDiscount(ctx, tx, tenant, worth); errors.Is(err, ErrNeedsApproval) {
+		return Discount{}, 0, s.requestDiscount(ctx, tx, tenant, st, in, worth, by)
+	} else if err != nil {
 		return Discount{}, 0, err
 	}
+	return s.giveDiscount(ctx, tx, tenant, student, in, by)
+}
+
+// giveDiscount records a standing discount (checked already) and
+// rebuilds the student's drafts.
+func (s *Schools) giveDiscount(ctx context.Context, tx pgx.Tx, tenant, student uuid.UUID, in DiscountIn, by string) (Discount, int, error) {
 	id := newID()
 	if _, err := tx.Exec(ctx, `INSERT INTO school_discounts (id, tenant_id, student_id, kind, percent, amount_kobo, reason, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id, tenant, student, in.Kind, in.Percent, in.AmountKobo, in.Reason, by); err != nil {
@@ -630,8 +640,9 @@ func buildLines(items []FeeItem, chosen []uuid.UUID, ds []Discount) []invoicing.
 // --- the discount threshold ---
 
 // ErrNeedsApproval is a discount at or above the school's discount
-// threshold: it needs a second person (docs/spec/schools.md 8). Until the
-// approvals of B5 it is refused.
+// threshold, or a cash posting at or above its cash threshold: it needs a
+// second person (docs/spec/schools.md 8). The request is recorded and
+// returned as an ApprovalNeeded (cash.go), which unwraps to this.
 var ErrNeedsApproval = errors.New("schools: needs approval")
 
 // DiscountThreshold is the school's discount threshold in kobo; 0 when
@@ -666,16 +677,16 @@ func SetDiscountThreshold(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kobo
 	return was, err
 }
 
-// CheckDiscount refuses a discount worth kobo at or above the school's
-// threshold (ErrNeedsApproval). B5 replaces the refusal with a request for
-// a second person's approval.
+// CheckDiscount says whether a discount worth kobo is at or above the
+// school's threshold (ErrNeedsApproval): callers then record it as a
+// request for a second person rather than give it.
 func (s *Schools) CheckDiscount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kobo int64) error {
 	limit, err := DiscountThreshold(ctx, tx, tenant)
 	if err != nil {
 		return err
 	}
 	if limit > 0 && kobo >= limit {
-		return fmt.Errorf("%w: a discount of %s is at or above the school's discount threshold of %s and needs a second person's approval, which is coming; give a smaller discount or ask the owner to raise the threshold",
+		return fmt.Errorf("%w: a discount of %s is at or above the school's discount threshold of %s and needs a second person's approval",
 			ErrNeedsApproval, invoicing.Naira(kobo), invoicing.Naira(limit))
 	}
 	return nil

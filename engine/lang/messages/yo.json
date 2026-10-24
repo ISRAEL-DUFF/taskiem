@@ -1388,6 +1388,54 @@
       "text": "Èwo?\n{list}\nẸ fi *run* àti orúkọ rẹ̀ ní kíkún ránṣẹ́.",
       "reviewed": false
     },
+    "wa.school.cash_posting": {
+      "text": "{amount} tí a san {how} fún {student} ({class}), {by} ló gbà á sílẹ̀.",
+      "reviewed": false
+    },
+    "wa.school.discount": {
+      "text": "Ẹ̀dínwó {kind} ti {amount} fún {student} ({class}): {reason}. {by} ló béèrè.",
+      "reviewed": false
+    },
+    "wa.school.discount_amendment": {
+      "text": "Ẹ̀dínwó {amount} lórí invoice {number}: {reason}. {by} ló béèrè.",
+      "reviewed": false
+    },
+    "wa.school.how.cash": {
+      "text": "ní owó gan-an",
+      "reviewed": false
+    },
+    "wa.school.how.other": {
+      "text": "ní ọ̀nà mìíràn",
+      "reviewed": false
+    },
+    "wa.school.how.pos": {
+      "text": "nípa POS",
+      "reviewed": false
+    },
+    "wa.school.how.transfer": {
+      "text": "nípa gbígbé owó sí àkáǹtì ilé ẹ̀kọ́",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_posting": {
+      "text": "owó tí a gbà ní tábìlì",
+      "reviewed": false
+    },
+    "wa.school.kind.discount": {
+      "text": "ẹ̀dínwó",
+      "reviewed": false
+    },
+    "wa.school.kind.discount_amendment": {
+      "text": "ẹ̀dínwó lórí invoice",
+      "reviewed": false
+    },
+    "wa.school.kind.term_invoice": {
+      "text": "invoice sáà pẹ̀lú ẹ̀dínwó",
+      "reviewed": false
+    },
+    "wa.school.term_invoice": {
+      "text": "Invoice sáà ti {student} ({class}), {amount}, ní ẹ̀dínwó tó tó ààlà ilé ẹ̀kọ́. {by} ló béèrè.",
+      "reviewed": false
+    },
     "wa.shop.add_failed": {
       "text": "A kò lè fi èyí pamọ́ ({reason}). Fèsì *yes* láti tún gbìyànjú, tàbí *cancel*.",
       "reviewed": false
@@ -2298,6 +2346,10 @@
     },
     "wd.trigger.invoice_paid": {
       "text": "Nígbà tí wọ́n bá san ọ̀kan nínú àwọn invoice yín tán",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_payment": {
+      "text": "Nígbà tí wọ́n bá ka owó sísan sí ọ̀kan nínú àwọn invoice yín",
       "reviewed": false
     },
     "wd.trigger.manual": {

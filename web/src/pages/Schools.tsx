@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { StudentFeesPanel } from "./SchoolFees";
 import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
+import { StudentReceiptsPanel } from "./SchoolReceipts";
 import {
   PROMOTION_ACTIONS,
   STATUS_FILTERS,
@@ -81,6 +82,8 @@ export function SchoolTabs() {
       <NavLink to="/schools/families">Families</NavLink>
       <NavLink to="/schools/classes">Classes and terms</NavLink>
       <NavLink to="/schools/accounts">Account numbers</NavLink>
+      <NavLink to="/schools/payments">Payments</NavLink>
+      <NavLink to="/schools/receipts">Receipts</NavLink>
       {me?.roles.includes("owner") && <NavLink to="/settings/schools">Settings</NavLink>}
     </nav>
   );
@@ -558,6 +561,7 @@ export function SchoolStudentPage() {
           </section>
           <StudentAccountPanel studentID={s.id} />
           <StudentFeesPanel studentID={s.id} />
+          <StudentReceiptsPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
             <h2 id="student-history">Class history</h2>
             {s.enrollments.length === 0 ? (
@@ -1128,7 +1132,69 @@ export function SchoolSettingsPage() {
       <SchoolsSwitch />
       {me?.schools && me.roles.includes("owner") && <IssuingSettings />}
       {me?.schools && me.roles.includes("owner") && <DiscountThreshold />}
+      {me?.schools && me.roles.includes("owner") && <CashThreshold />}
     </>
+  );
+}
+
+/** The owner's cash threshold, in naira: postings at or above it wait for a second person; 0 makes every posting wait; none leaves postings to the bursar. */
+function CashThreshold() {
+  const settings = useLoad(() => get<SchoolSettings>("/v1/settings/schools"), []);
+  const [mode, setMode] = useState<"none" | "amount">();
+  const [value, setValue] = useState<string>();
+  const act = useAction();
+  const current = settings.data?.cash_threshold_naira;
+  const shownMode = mode ?? (current === null || current === undefined ? "none" : "amount");
+  const shown = value ?? String(current ?? "");
+  const n = Number(shown.replace(/[,₦\s]/g, "") || "0");
+  const bad = shownMode === "amount" && (!Number.isInteger(n) || n < 0 || shown.trim() === "");
+  return (
+    <section className="card" aria-labelledby="cash-threshold">
+      <h2 id="cash-threshold" style={{ marginTop: 0 }}>
+        Cash threshold
+      </h2>
+      <p className="hint">
+        A cash or transfer posting at or above this amount waits for a second person (someone who may approve for the school, never the person who posted it) before it reaches a child's
+        fees. 0 makes every posting wait.
+      </p>
+      <ErrorBox error={settings.error} />
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (bad || !settings.data) return;
+          void act.run(async () => {
+            await put("/v1/settings/schools", { enabled: settings.data?.enabled ?? true, cash_threshold_naira: shownMode === "none" ? null : n });
+            setMode(undefined);
+            setValue(undefined);
+            settings.reload();
+          }, "Cash threshold saved");
+        }}
+      >
+        <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="sr-only">When a posting needs a second person</legend>
+          <label className="row">
+            <input type="radio" name="cash-threshold-mode" checked={shownMode === "none"} onChange={() => setMode("none")} /> No second person needed for cash postings
+          </label>
+          <label className="row">
+            <input type="radio" name="cash-threshold-mode" checked={shownMode === "amount"} onChange={() => setMode("amount")} /> A second person at or above an amount
+          </label>
+        </fieldset>
+        {shownMode === "amount" && (
+          <Field label="Cash threshold (₦)" hint="0: every posting waits">
+            <input inputMode="numeric" value={shown} onChange={(e) => setValue(e.target.value)} placeholder="50,000" />
+          </Field>
+        )}
+        {bad && (
+          <div className="error" role="alert">
+            The threshold is a whole number of naira.
+          </div>
+        )}
+        <button type="submit" disabled={act.busy || bad || !settings.data}>
+          Save the cash threshold
+        </button>
+      </form>
+      <ErrorBox error={act.error} />
+    </section>
   );
 }
 
@@ -1146,7 +1212,7 @@ function DiscountThreshold() {
         Discount threshold
       </h2>
       <p className="hint">
-        A discount at or above this amount needs a second person to approve it before it reaches a child's fees. Approvals are coming: until then such a discount is refused. 0 or empty: no
+        A discount at or above this amount waits for a second person (someone who may approve for the school, never the person who asked) before it reaches a child's fees. 0 or empty: no
         threshold.
       </p>
       <ErrorBox error={settings.error} />

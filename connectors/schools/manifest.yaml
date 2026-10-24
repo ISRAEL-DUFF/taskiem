@@ -213,6 +213,7 @@ actions:
         no_fees:           { type: integer, description: Students left out whose class has no fees for the term }
         nothing_to_pay:    { type: integer }
         needs_approval:    { type: integer, description: Students left out whose standing discount waits for a second person }
+        requested:         { type: integer, description: Of them, how many this step sent to a second person (their invoice is made on approval) }
         sent:              { type: integer }
         failed:            { type: integer }
   issue_account:
