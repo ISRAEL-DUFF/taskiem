@@ -178,6 +178,9 @@ type Server struct {
 	// InvoicePay offers ways to pay on invoice pages (T4); nil: the pages
 	// only show the invoice.
 	InvoicePay InvoicePay
+	// Receipts reads a school receipt for its verification page (receipt.go);
+	// nil: /r/<token> is a form link only.
+	Receipts Receipts
 
 	hosts         *lru.Cache[string, hostEntry]
 	formCache     *lru.Cache[string, formEntry]

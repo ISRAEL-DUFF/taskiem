@@ -202,6 +202,11 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 		s.serveInvoice(w, r, key, sub)
 		return
 	}
+	// A school receipt's verification page (receipt.go) shares /r/ with
+	// form links and needs no keys either: a receipt's token answers first.
+	if !embed && head == "r" && sub == "" && s.serveReceipt(w, r, key) {
+		return
+	}
 	if !s.formsReady() && head != "" {
 		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: "en"},
 			Business: "Taskiem", Message: "Forms are not open yet. Please try again later."})

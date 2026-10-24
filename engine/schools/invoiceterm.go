@@ -88,6 +88,9 @@ type TermInvoiced struct {
 	TermPlan
 	// Created is how many invoices this call made (as drafts).
 	Created int `json:"created"`
+	// Requested is how many held students this call sent to a second
+	// person (their invoice is made on approval).
+	Requested int `json:"requested"`
 	// Send: the term's drafts are to be sent now (SendTerm).
 	Send bool `json:"send"`
 	// Sent is how many were sent, and Failed how many could not be, when
@@ -358,6 +361,11 @@ func (s *Schools) InvoiceTerm(ctx context.Context, tx pgx.Tx, tenant, termID uui
 		}
 	}
 	out.AlreadyInvoiced += out.Created
+	// Students held for a discount at or above the threshold wait for a
+	// second person (cash.go): approved, the invoice is made then.
+	if out.Requested, err = s.requestTermInvoices(ctx, tx, tenant, p, send, by); err != nil {
+		return TermInvoiced{}, err
+	}
 	return out, nil
 }
 

@@ -227,8 +227,8 @@ export function discountWords(d: Pick<Discount, "kind" | "percent" | "amount_kob
 
 /** A refusal that waits for a second person (409 needs_approval): its words, else null. */
 export function needsApproval(status: number, body: Record<string, unknown> | undefined): string | null {
-  if (status !== 409 || body?.code !== "needs_approval") return null;
-  return "This discount is at or above the school's discount threshold, so it needs a second person to approve it. Approvals are coming; until then give a smaller discount, or ask the owner to change the threshold.";
+  if ((status !== 409 && status !== 202) || body?.code !== "needs_approval") return null;
+  return "This discount is at or above the school's discount threshold, so it waits for a second person to approve it: it is recorded, and given once someone who may approve for the school does. They are told in the app and on the chat app they linked.";
 }
 
 // --- invoicing the term ---

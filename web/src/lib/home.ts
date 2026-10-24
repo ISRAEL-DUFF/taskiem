@@ -45,7 +45,7 @@ export function triggerWords(t: Trigger | null | undefined): string {
     case "form":
       return "Someone fills in a form";
     case "invoice":
-      return "An invoice is paid";
+      return c.event === "payment" ? "A payment is counted towards an invoice" : "An invoice is paid";
     case "whatsapp":
       return "A WhatsApp message comes in";
     case "ussd":

@@ -34,6 +34,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -77,9 +78,13 @@ type Schools struct {
 	Invoices *invoicing.Invoices
 	// Rails issues students' account numbers on the school's issuing
 	// connection (accounts.go); nil: none can be issued.
-	Rails  invoicing.CapabilityRails
-	Logger *slog.Logger
-	Now    func() time.Time
+	Rails invoicing.CapabilityRails
+	// Matcher counts cash posted at the desk towards the student's
+	// invoices along the one path every payment takes (cash.go); nil:
+	// one is made from Invoices.
+	Matcher *matching.Matcher
+	Logger  *slog.Logger
+	Now     func() time.Time
 }
 
 func (s *Schools) now() time.Time {

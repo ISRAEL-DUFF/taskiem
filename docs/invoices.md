@@ -50,7 +50,7 @@ The total is then the sum of the lines, and the status follows from it and the p
 - The total stays at least ₦1: to cancel what is left, void the invoice.
 - A draft is not amended: change it instead.
 - Every amendment is in the audit log (`invoice.amended`, with who, the amount and the reason) and in the [invoices export](money-reports.md#invoices) (`amended`).
-- Where the [Schools](schools.md) area is on, a discount at or above the school's discount threshold needs a second person ([discounts](schools.md#discounts)).
+- Where the [Schools](schools.md) area is on, a discount at or above the school's discount threshold is recorded as a request for a second person instead of made (202, `code: needs_approval`), and made when they approve it ([discounts](schools.md#discounts)).
 
 The database keeps the rule whoever writes: a sent invoice's lines can only grow, each new line naming a recorded amendment of that invoice (once), its total is recomputed from its lines, and never below what was paid.
 
@@ -189,6 +189,14 @@ The run's `trigger.body` is the invoice:
 | `status`, `event` | `paid` |
 
 The customer's name, phone and email, and the link, are personal data: they are sealed in the run's history like a form's marked fields and shown masked. To message the customer, use `notify_customer` with `"number": "=trigger.body.number"`, which finds their phone and email itself.
+
+### Every payment, not only paid in full
+
+A workflow whose trigger is `{"type": "invoice", "config": {"event": "payment"}}` starts for **every payment counted** towards one of the business's invoices, paid in full or not: each part of a split, each cash posting, each credit to a student's account number. It is how a school sends a receipt the moment any money comes in ([receipts](schools.md#receipts)). In the editor's read-back it says "When a payment is counted towards one of your invoices".
+
+- **Once per payment part.** Each workflow starts once for each part counted, however often the payment is reported again. A part undone before its run could start starts none; a payment counted again after an undo is a new part and starts again. It is otherwise kept as the `paid` event is: prod only, written in the payment's transaction, started within a second.
+- `trigger.body` is the invoice as above (`status` and `paid_kobo` as they are after this payment; `event` is `payment`), with `due_kobo`, what is still due; `payment`: `{id, amount_kobo, amount, how, paid_at}`, the part counted and how it was matched (`exact`, `suggested`, `suggested_auto` or `manual`); and, when the invoice is a school's term invoice, `receipt`: `{id, number, link}`, the receipt issued for this payment and its public verification page. The receipt link is sealed like the invoice link.
+- A `notify@1` `message` step sends the family the receipt with `"message": "='Receipt ' + trigger.body.receipt.number + ' for ' + trigger.body.payment.amount + ': ' + trigger.body.receipt.link"` (to the number in `trigger.body.customer.phone`), or `invoices@1` `notify_customer` reaches the invoice's customer by its number.
 
 ## API
 
