@@ -82,18 +82,22 @@ func startServer(t *testing.T) server {
 	})
 	base := "http://" + apiAddr
 	deadline := time.Now().Add(15 * time.Second)
-	for {
-		resp, err := http.Get(base + "/readyz")
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == 200 {
-				break
+	// Both listeners: the API's, and the metrics one, which serve starts as
+	// a task of its own and may bind a moment later.
+	for _, url := range []string{base + "/readyz", "http://" + metricsAddr + "/healthz"} {
+		for {
+			resp, err := http.Get(url)
+			if err == nil {
+				_ = resp.Body.Close()
+				if resp.StatusCode == 200 {
+					break
+				}
 			}
+			if time.Now().After(deadline) {
+				t.Fatalf("not ready: %s", url)
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("not ready")
-		}
-		time.Sleep(50 * time.Millisecond)
 	}
 	return server{base: base, metrics: metricsAddr, stop: cancel, wait: wait}
 }
