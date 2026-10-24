@@ -24,7 +24,8 @@ One JSON object per line; lines starting with `//` are comments (every file star
 | `expect.steps` | Step types it must use somewhere |
 | `expect.trigger` | The trigger type it must start with, when the request says |
 | `expect.properties` | Rules it must satisfy (`tools/aieval/rules.go`): `approval_before_payment`, `idempotency`, `webhook_auth`, `dedup`, `bounded_concurrency`, `approval_timeout`, `error_handling`, `reads_before_paying`, `inputs_declared`, `no_hardcoded_contacts`, `reach_by_phone` (`no_inline_secrets` is checked on every case) |
-| `tags` | The first is the case's group (payouts, collections, reconciliation, kyc, notifications, approvals, reporting, messaging, multistep, sme); the rest are chips for the per-tag breakdown |
+| `expect.templates` | Callable templates it must use as template steps ([decision 0047](../../docs/decisions/0047-composable-templates.md)); its connectors, step types and properties are then graded on the definition with the templates expanded |
+| `tags` | The first is the case's group (payouts, collections, reconciliation, kyc, notifications, approvals, reporting, messaging, multistep, sme; composition for `composition.jsonl`, goals that two or three callable templates answer together); the rest are chips for the per-tag breakdown |
 | `difficulty` | easy (one step), medium (a few steps, an approval), hard (branches, loops, parallel work, several providers) |
 | `source` | synthetic, dogfood or partner |
 

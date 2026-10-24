@@ -13308,6 +13308,11 @@ paths:
         in: query
         schema:
           type: string
+      - name: callable
+        in: query
+        schema:
+          type: boolean
+        description: Only templates another workflow can use as a step (decision 0047).
   /v1/templates/{id}:
     get:
       operationId: getTemplate
@@ -16699,6 +16704,26 @@ components:
             title:
               type: string
           additionalProperties: false
+        template_updates:
+          type: array
+          description: The callable templates the latest version's template steps use (decision 0047) that the library has changed since that version was saved. Saving a new version takes them; until then every version runs the template as it pinned it.
+          items:
+            type: object
+            required:
+            - template
+            - title
+            - changes
+            properties:
+              template:
+                type: string
+              title:
+                type: string
+              changes:
+                type: array
+                description: What changed, as the version history lists it (`+ step id`, `- step id`, `~ step id`, `~ output name`, `+ parameter name`).
+                items:
+                  type: string
+            additionalProperties: false
     VersionRequest:
       type: object
       required:
@@ -22698,6 +22723,77 @@ components:
         product:
           type: string
           description: The product the template works around (payrolla); the Start page offers it to organisations that connected the product, and retrieval only for goals that name it.
+        callable:
+          type: object
+          description: For a template another workflow can use as a step (decision 0047), its interface.
+          required:
+          - inputs
+          - params
+          - outputs
+          - effect
+          properties:
+            inputs:
+              type: object
+              description: The run inputs a template step gives, as a JSON Schema.
+            params:
+              type: array
+              description: The parameters a template step fills (those only the template's trigger uses are left out).
+              items:
+                type: string
+            outputs:
+              type: array
+              description: What the step's output holds, by name.
+              items:
+                type: object
+                required:
+                - name
+                - type
+                - title
+                - description
+                - value
+                properties:
+                  name:
+                    type: string
+                  type:
+                    type: string
+                    enum:
+                    - string
+                    - integer
+                    - number
+                    - boolean
+                    - list
+                    - object
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  value:
+                    type: string
+                    description: The expression over the template's own steps that fills it.
+                additionalProperties: false
+            effect:
+              type: object
+              description: What the template does at most, computed from its steps.
+              required:
+              - class
+              - waits_for_person
+              - waits_for_event
+              properties:
+                class:
+                  type: string
+                  enum:
+                  - read
+                  - write
+                  - moves_money
+                waits_for_person:
+                  type: boolean
+                waits_for_event:
+                  type: boolean
+                timeout:
+                  type: string
+                  description: The template's run timeout.
+              additionalProperties: false
+          additionalProperties: false
         definition:
           description: The template's definition, with placeholders (one template only).
       additionalProperties: false

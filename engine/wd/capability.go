@@ -53,7 +53,9 @@ func checkCapabilities(d *Definition) []Problem {
 		if len(s.ID) > MaxCapabilityStepID {
 			add(s, "a capability step's id is at most %d characters", MaxCapabilityStepID)
 		}
-		if strings.Contains(s.ID, "__") {
+		// A step expanded from a template carries its template step's
+		// prefix (<step>__<id>); its own id is checked in the template.
+		if s.Origin == nil && strings.Contains(s.ID, "__") {
 			add(s, "a capability step's id may not contain __ (expansion uses it)")
 		}
 		if IsWait(s.Uses) {

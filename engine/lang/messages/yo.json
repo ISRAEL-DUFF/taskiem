@@ -2260,6 +2260,10 @@
       "text": "Dúró de {event}",
       "reviewed": false
     },
+    "wd.template": {
+      "text": "Lo àwòṣe: {template}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Ṣètò dátà fún àwọn ìgbésẹ̀ tó kàn",
       "reviewed": false

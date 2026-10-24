@@ -54,6 +54,18 @@ export interface CapabilityStep extends StepBase {
   effect?: { idempotency_seed?: Expression };
 }
 
+/**
+ * A callable template used as a step (docs/contracts/wd-v1.md, template
+ * steps): expanded into the template's steps when the workflow is
+ * deployed; its output is the template's outputs.
+ */
+export interface TemplateStep extends StepBase {
+  type: "template";
+  template: string;
+  params?: Record<string, unknown>;
+  input?: Values;
+}
+
 export interface CodeStep extends StepBase {
   type: "code";
   input?: Values;
@@ -179,7 +191,7 @@ export interface AiStep extends StepBase {
 }
 
 export type Step =
-  | ConnectorStep | CapabilityStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
+  | ConnectorStep | CapabilityStep | TemplateStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
   | WaitStep | SignalStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];

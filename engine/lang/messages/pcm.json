@@ -2260,6 +2260,10 @@
       "text": "Wait for {event}",
       "reviewed": false
     },
+    "wd.template": {
+      "text": "Use the template: {template}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Arrange the data for the next steps",
       "reviewed": false

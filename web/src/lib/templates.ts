@@ -56,6 +56,34 @@ export interface Template {
   superseded_by?: string;
   /** The product it works around (payrolla): offered to businesses that connected it. */
   product?: string;
+  /** For a template another workflow can use as a step (decision 0047): its interface. */
+  callable?: CallableInterface;
+}
+
+/** What a template step gives a callable template, and gets back. */
+export interface CallableInterface {
+  /** The run inputs, a JSON Schema. */
+  inputs: Record<string, unknown>;
+  /** The parameters a template step fills. */
+  params: string[];
+  outputs: { name: string; type: string; title: string; description: string; value: string }[];
+  effect: TemplateEffect;
+}
+
+/** What a template does at most, computed from its steps. */
+export interface TemplateEffect {
+  class: "read" | "write" | "moves_money";
+  waits_for_person: boolean;
+  waits_for_event: boolean;
+  timeout?: string;
+}
+
+/** A template's effect in plain words: "Moves money · waits for a person to approve". */
+export function effectWords(e: TemplateEffect): string {
+  const parts = [e.class === "moves_money" ? "Moves money" : e.class === "write" ? "Changes things in your services" : "Only reads"];
+  if (e.waits_for_person) parts.push("waits for a person to approve or answer");
+  if (e.waits_for_event) parts.push("waits for something to happen (a payment, a reply)");
+  return parts.join(" · ");
 }
 
 export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];

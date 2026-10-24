@@ -40,6 +40,8 @@ export function summary(s: Step): string {
       return `${words(s.connector.split("@")[0] ?? "")} · ${words(s.action)}`;
     case "capability":
       return `${words(s.uses)} · ${s.connection ? `via ${s.connection}` : "whichever rail is connected"}`;
+    case "template":
+      return `${words(s.template.replaceAll("-", " "))} · its steps run here`;
     case "http":
       return `${s.config.method} ${s.config.url}`;
     case "code":
@@ -74,6 +76,7 @@ const words = (id: string) => (id.charAt(0).toUpperCase() + id.slice(1)).replace
 const KINDS: Record<string, [string, string]> = {
   connector: ["Service", "connections"],
   capability: ["Money", "billing"],
+  template: ["Template", "templates"],
   approval: ["Approval", "approvals"],
   form: ["Form", "forms"],
   wait: ["Wait", "runs"],

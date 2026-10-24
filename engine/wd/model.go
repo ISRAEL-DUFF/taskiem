@@ -108,6 +108,13 @@ type Step struct {
 	// Input is then the capability's input, and Capability the rail's
 	// mapping between it and the action (engine/expansion).
 	Capability *Expanded `json:"capability,omitempty"`
+	// Template and Params are a template step's callable template and its
+	// parameters (decision 0047); its RawInput is the template's run
+	// inputs.
+	Template string         `json:"template,omitempty"`
+	Params   map[string]any `json:"params,omitempty"`
+	// Origin marks a step expanded from a template step (engine/expansion).
+	Origin *Origin `json:"origin,omitempty"`
 
 	Input     map[string]any   `json:"-"`
 	HTTP      *HTTPConfig      `json:"-"`
@@ -379,6 +386,27 @@ func (s *Step) parse() error {
 		s.Form.Prefill, _ = m["prefill"].(map[string]any)
 	}
 	return nil
+}
+
+// Origin is where an expanded step came from: the template, the template
+// step it replaced (its id in the expanded definition), and its own id
+// inside the template. ID is empty for a step the expansion added.
+type Origin struct {
+	Template string `json:"template"`
+	Step     string `json:"step"`
+	ID       string `json:"id,omitempty"`
+}
+
+// Key is the name a step's output has in its scope's results (a foreach
+// iteration, a branch's or parallel branch's steps, a handled step's
+// on_error outputs): its id, or for a step expanded from a template its id
+// inside the template, so the template's own expressions read it as they
+// were written.
+func (s *Step) Key() string {
+	if s.Origin != nil && s.Origin.ID != "" {
+		return s.Origin.ID
+	}
+	return s.ID
 }
 
 // Children returns the nested scopes of a step, in definition order.

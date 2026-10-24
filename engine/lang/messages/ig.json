@@ -2260,6 +2260,10 @@
       "text": "Chere {event}",
       "reviewed": false
     },
+    "wd.template": {
+      "text": "Jiri ụdị: {template}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Kwadebe data maka nzọụkwụ ndị ọzọ",
       "reviewed": false

@@ -110,7 +110,8 @@ const PRIORITY: StepStatus[] = ["failed", "parked", "running", "retrying", "wait
 export function topLevelStatus(rows: StepRow[], ids: string[]): Record<string, StepStatus> {
   const out: Record<string, StepStatus> = {};
   for (const id of ids) {
-    const mine = rows.filter((r) => r.id === id || r.id.startsWith(id + "[") || r.id.startsWith(id + "."));
+    // A template or capability step's expanded steps are <id>__<name>.
+    const mine = rows.filter((r) => r.id === id || r.id.startsWith(id + "[") || r.id.startsWith(id + ".") || r.id.startsWith(id + "__"));
     if (mine.length === 0) continue;
     const own = mine.find((r) => r.id === id);
     // A finished container step is what it says; while it runs, its
@@ -120,6 +121,41 @@ export function topLevelStatus(rows: StepRow[], ids: string[]): Record<string, S
       continue;
     }
     out[id] = PRIORITY.find((p) => mine.some((r) => r.status === p)) ?? (mine[0] as StepRow).status;
+  }
+  return out;
+}
+
+/** A run's rows, with each top-level template step's rows together under it. */
+export interface RowGroup {
+  /** The template step's id, or null for a row of the workflow's own. */
+  template: string | null;
+  rows: StepRow[];
+}
+
+/**
+ * Groups a run's rows by template step (decision 0047): a template step T
+ * runs as T__body, T__input, T__<its steps> and T itself (its outputs), so
+ * a row whose step is T or starts with T__ is T's, where T__body is a row.
+ * Groups keep the order of their first row.
+ */
+export function templateGroups(rows: StepRow[]): RowGroup[] {
+  const templates = new Set(rows.map((r) => /^([a-z][a-z0-9_]*?)__body$/.exec(r.id)?.[1]).filter((t): t is string => t !== undefined && !t.includes("__")));
+  const out: RowGroup[] = [];
+  const byTemplate = new Map<string, RowGroup>();
+  for (const r of rows) {
+    const head = r.id.split(".")[0]?.replace(/\[\d+\]$/, "") ?? r.id;
+    const t = [...templates].find((x) => head === x || head.startsWith(x + "__"));
+    if (t === undefined) {
+      out.push({ template: null, rows: [r] });
+      continue;
+    }
+    let g = byTemplate.get(t);
+    if (!g) {
+      g = { template: t, rows: [] };
+      byTemplate.set(t, g);
+      out.push(g);
+    }
+    g.rows.push(r);
   }
   return out;
 }

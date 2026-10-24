@@ -2260,6 +2260,10 @@
       "text": "Jira {event}",
       "reviewed": false
     },
+    "wd.template": {
+      "text": "Yi amfani da samfuri: {template}",
+      "reviewed": false
+    },
     "wd.transform": {
       "text": "Shirya bayanai don matakai na gaba",
       "reviewed": false

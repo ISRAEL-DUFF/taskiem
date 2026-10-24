@@ -2824,6 +2824,11 @@
       "reviewed": true,
       "context": "Read-back: waits for a named event; {event} is the tenant's"
     },
+    "wd.template": {
+      "text": "Use the template: {template}",
+      "reviewed": true,
+      "context": "Read-back: a template step (a callable template used inside the workflow); {template} is the template's title, e.g. Run payroll"
+    },
     "wd.transform": {
       "text": "Prepare the data for the next steps",
       "reviewed": true,

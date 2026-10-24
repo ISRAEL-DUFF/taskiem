@@ -29,6 +29,16 @@
       "example": "main"
     }
   ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "lines",
+      "type": "integer",
+      "title": "Payments recorded",
+      "description": "How many people's payments were read from Payrolla to record.",
+      "value": "=size(steps.lines.output.lines)"
+    }
+  ],
   "tables": [
     {
       "name": "payrolla_payrolls",

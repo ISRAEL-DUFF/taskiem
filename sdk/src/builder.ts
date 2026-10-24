@@ -145,6 +145,19 @@ export function capability(uses: string, input?: object, extra?: CapabilityExtra
   return { type: "capability", uses, ...(input === undefined ? {} : { input }), ...extra };
 }
 
+/**
+ * A template step: the callable template id, its parameters (values, as
+ * the Start page takes them) and its run inputs (expressions over this
+ * workflow). Its output is the template's outputs.
+ */
+export function template(id: string, params?: Record<string, unknown>, input?: object): StepSpec {
+  return {
+    type: "template", template: id,
+    ...(params === undefined ? {} : { params }),
+    ...(input === undefined ? {} : { input }),
+  };
+}
+
 export interface HttpConfig {
   method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
   url: Val<string>;
@@ -333,7 +346,7 @@ export function workflow(options: WorkflowOptions): Workflow {
 
 // Key order of a built step, so the JSON committed next to the code is
 // stable and reads in the order an author thinks.
-const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
+const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "template", "params", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
 
 function buildStep(id: string, spec: StepSpec, opts: StepOptions, path: string): Step {
   const raw: Record<string, unknown> = { id, ...spec };

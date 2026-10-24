@@ -349,6 +349,13 @@ func TestHeadlessFlow(t *testing.T) {
 		u.call(403, "POST", "/validate", map[string]any{"definition": json.RawMessage(doc)})
 	}
 	u.call(403, "POST", "/workflows", map[string]any{"name": "x", "template": "other", "definition": json.RawMessage(transformFlow)})
+	// A template step uses its template's connectors, and its template
+	// must be one the app lists (decision 0047).
+	tplStep := `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trigger":{"type":"manual"},"steps":[{"id":"inv","type":"template","template":"send-invoice","input":{"name":"A","amount_naira":1,"for":"x"}}]}`
+	out := u.call(403, "POST", "/workflows", map[string]any{"name": "x", "definition": json.RawMessage(tplStep)})
+	if got := toJSON(out["not_allowed"]); !strings.Contains(got, "invoices") || !strings.Contains(got, "template:send-invoice") {
+		t.Errorf("template step refusal: %v", out)
+	}
 
 	// Create (from an allowed template), validate, save, lay out, publish.
 	created := u.call(201, "POST", "/workflows", map[string]any{"name": "hello", "template": "payroll-reminder", "definition": json.RawMessage(transformFlow)})

@@ -1047,7 +1047,7 @@ func (d *decider) outputs(sc scope) map[string]any {
 			continue
 		}
 		if f.completed {
-			out[s.ID] = f.output
+			out[s.Key()] = f.output
 		} else if f.finalFailure != nil && s.OnError != nil {
 			for k, v := range d.outputs(scope{prefix: sc.prefix, steps: s.OnError.Steps}) {
 				out[k] = v
