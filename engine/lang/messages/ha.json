@@ -2344,6 +2344,14 @@
       "text": "Jira {event}",
       "reviewed": false
     },
+    "wd.subflow": {
+      "text": "Gudanar da aikinka: {workflow}, ka jira ya ƙare",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Fara aikinka: {workflow}, ka ci gaba",
+      "reviewed": false
+    },
     "wd.template": {
       "text": "Yi amfani da samfuri: {template}",
       "reviewed": false

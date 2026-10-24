@@ -288,6 +288,8 @@ func (d describer) what(st *wd.Step) string {
 		return d.t("wd.callback")
 	case "respond":
 		return d.t("wd.respond")
+	case "subflow":
+		return d.subflow(st)
 	case "template":
 		return d.template(st)
 	case "approval":
@@ -539,4 +541,21 @@ func (d describer) template(st *wd.Step) string {
 		text = strings.Join(does[:len(does)-1], ", ") + " " + d.t("wd.effect.and") + " " + does[len(does)-1]
 	}
 	return d.t(key+".does", "template", title, "does", text)
+}
+
+// subflow reads a subflow step as the workflow it runs, by name when the
+// resolver knows it, and whether the step waits for it.
+func (d describer) subflow(st *wd.Step) string {
+	c := st.Subflow
+	if c == nil {
+		return d.t("wd.subflow", "workflow", "?")
+	}
+	name := c.Workflow
+	if t, err := d.find(c.Workflow); err == nil && t != nil {
+		name = t.Title
+	}
+	if !c.Waits() {
+		return d.t("wd.subflow.nowait", "workflow", name)
+	}
+	return d.t("wd.subflow", "workflow", name)
 }

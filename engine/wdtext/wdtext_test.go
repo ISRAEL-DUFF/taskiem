@@ -150,3 +150,29 @@ func TestDescribeTemplateStep(t *testing.T) {
 		t.Errorf("read back in Hausa: %+v", lines)
 	}
 }
+
+// A subflow step (decision 0049) reads as the workflow it runs, by name
+// through the resolver, and whether it waits.
+func TestDescribeSubflowStep(t *testing.T) {
+	const id = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	own := templates.Template{ID: id, Title: "Double it", Summary: "S", Description: "D", Category: "workflow"}
+	def, err := wd.Load([]byte(`{"schema":"wd/v1","id":"wf_y","version":1,"name":"y","trigger":{"type":"manual"},
+	 "steps":[{"id":"sub","type":"subflow","config":{"workflow":"` + id + `"},"input":{"amount_kobo":21}},
+	          {"id":"bg","type":"subflow","needs":["sub"],"config":{"workflow":"` + id + `","wait":false}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	find := func(want string) (*templates.Template, error) {
+		if want == id {
+			return &own, nil
+		}
+		return nil, errors.New("unknown")
+	}
+	lines := wdtext.DescribeWith(def, connector.NewRegistry(), lang.EN, find)
+	if len(lines) != 3 || lines[1].Text != "Run your workflow: Double it, and wait for it to finish" || lines[2].Text != "Start your workflow: Double it, and carry on" {
+		t.Errorf("read back: %+v", lines)
+	}
+	if lines := wdtext.DescribeWith(def, connector.NewRegistry(), lang.EN, func(string) (*templates.Template, error) { return nil, errors.New("gone") }); lines[1].Text != "Run your workflow: "+id+", and wait for it to finish" {
+		t.Errorf("an unknown workflow reads by id: %+v", lines[1])
+	}
+}

@@ -33,6 +33,17 @@ type Context struct {
 	// CallableWorkflows are the business's own workflows a template step
 	// may use (decision 0048): their id, name, inputs, outputs and effect.
 	CallableWorkflows []CallableWorkflow `json:"callable_workflows,omitempty"`
+	// Startable are the business's published workflows a subflow step
+	// may run as a child run (decision 0049): their id, name and inputs.
+	Startable []StartableWorkflow `json:"startable_workflows,omitempty"`
+}
+
+// StartableWorkflow is one of the business's workflows a subflow step may
+// run, as the prompt lists it.
+type StartableWorkflow struct {
+	ID     string          `json:"id"`
+	Name   string          `json:"name"`
+	Inputs json.RawMessage `json:"inputs,omitempty"`
 }
 
 // CallableWorkflow is one of the business's workflows another may use as

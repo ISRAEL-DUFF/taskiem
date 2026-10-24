@@ -311,25 +311,37 @@ func forkKeyGroup(ctx context.Context, tx pgx.Tx, run uuid.UUID, step string) (i
 	return g, err
 }
 
-// ForkInfo describes a run's fork link.
+// ForkInfo describes a run's links to other runs: the failed run it
+// resumed (a fork) or the subflow step that started it (ParentStep set),
+// the runs that resumed it, and the child runs its subflow steps started.
 type ForkInfo struct {
 	Parent      *uuid.UUID  `json:"parent_run_id"`
 	ResumedStep *string     `json:"resumed_step"`
+	ParentStep  *string     `json:"parent_step"`
 	Children    []uuid.UUID `json:"resumed_by"`
+	Subflows    []uuid.UUID `json:"subflows"`
 }
 
-// Forks reports what a run continues and what continues it.
+// Forks reports what a run continues and what continues it, and the
+// child runs it started.
 func (s *Store) Forks(ctx context.Context, ref RunRef) (ForkInfo, error) {
 	var out ForkInfo
 	err := dbTx(ctx, s, ref.TenantID, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT parent_run_id, resumed_step FROM runs WHERE id = $1`, ref.ID).Scan(&out.Parent, &out.ResumedStep); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT parent_run_id, resumed_step, parent_step FROM runs WHERE id = $1`, ref.ID).Scan(&out.Parent, &out.ResumedStep, &out.ParentStep); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 ORDER BY started_at`, ref.ID)
+		rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 AND parent_step IS NULL ORDER BY started_at`, ref.ID)
 		if err != nil {
 			return err
 		}
-		out.Children, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if out.Children, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID]); err != nil {
+			return err
+		}
+		rows, err = tx.Query(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 AND parent_step IS NOT NULL ORDER BY started_at`, ref.ID)
+		if err != nil {
+			return err
+		}
+		out.Subflows, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 		return err
 	})
 	return out, err

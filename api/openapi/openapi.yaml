@@ -17408,27 +17408,41 @@ components:
             type: string
         forks:
           type: object
+          description: 'The run''s links to other runs: the failed run it resumed, or the run whose subflow step started it (parent_step set); the runs that resumed it; and the child runs its subflow steps started.'
           required:
           - parent_run_id
           - resumed_step
+          - parent_step
           - resumed_by
+          - subflows
           properties:
             parent_run_id:
               type:
               - string
               - 'null'
               format: uuid
-              description: The failed run this run resumed.
+              description: The failed run this run resumed, or the run whose subflow step started it.
             resumed_step:
               type:
               - string
               - 'null'
+            parent_step:
+              type:
+              - string
+              - 'null'
+              description: The subflow step (instance) of the parent run that started this run; null for a fork.
             resumed_by:
               type: array
               items:
                 type: string
                 format: uuid
               description: Runs that resumed this one.
+            subflows:
+              type: array
+              items:
+                type: string
+                format: uuid
+              description: Child runs started by this run's subflow steps, oldest first.
     RunStatus:
       type: object
       required:

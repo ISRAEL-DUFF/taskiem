@@ -2344,6 +2344,14 @@
       "text": "Wait for {event}",
       "reviewed": false
     },
+    "wd.subflow": {
+      "text": "Run your own workflow: {workflow}, and wait make e finish",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Start your own workflow: {workflow}, and continue",
+      "reviewed": false
+    },
     "wd.template": {
       "text": "Use the template: {template}",
       "reviewed": false

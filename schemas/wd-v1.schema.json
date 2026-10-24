@@ -1301,6 +1301,7 @@
       ]
     },
     "subflowStep": {
+      "description": "Runs another workflow of the business as its own run, a child of this one (docs/contracts/wd-v1.md, subflow steps): input is the child's run inputs; with wait (the default) the step waits for the child to end and its output is {run_id, status, outputs}; without, it completes once the child has started.",
       "type": "object",
       "required": [
         "type",
@@ -1317,17 +1318,19 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "workflow",
-            "version"
+            "workflow"
           ],
           "properties": {
             "workflow": {
               "type": "string",
-              "pattern": "^wf_[0-9A-Za-z]{1,40}$"
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "The workflow's id (the business's own; it must have a published version and a manual or subflow trigger)."
             },
             "version": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "A version to run; without it, the version published when the step starts."
             },
             "wait": {
               "type": "boolean",

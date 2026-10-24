@@ -278,10 +278,60 @@ func TestExpressionErrorFailsStep(t *testing.T) {
 	}
 }
 
-func TestUnsupportedStepType(t *testing.T) {
-	s := newSim(t, wdDoc(`{"id":"p","type":"subflow","config":{"workflow":"wf_other","version":1}}`, ""), map[string]any{})
-	if k := s.payload(history.StepFailed, "p")["error"].(map[string]any)["kind"]; k != "unsupported" {
-		t.Errorf("subflow should be unsupported until Phase 3: %v", k)
+// A subflow step (decision 0049) schedules its child run with the
+// child's inputs and waits as a signal step does; the child's report is
+// its output, and a child that failed fails it.
+func TestSubflowStep(t *testing.T) {
+	const wf = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	doc := wdDoc(`{"id":"sub","type":"subflow","config":{"workflow":"`+wf+`"},"input":{"amount_kobo":"=trigger.amount * 2"}},
+	  {"id":"after","type":"transform","needs":["sub"],"config":{"output":"=steps.sub.output.outputs.kobo"}}`, "")
+	s := newSim(t, doc, map[string]any{"amount": int64(21)})
+	sched := s.payload(history.StepScheduled, "sub")
+	if sched["kind"] != history.KindSubflow || sched["event"] != history.SubflowEvent || sched["input"].(map[string]any)["amount_kobo"] != int64(42) {
+		t.Fatalf("scheduled: %v", sched)
+	}
+	if sub := sched["subflow"].(map[string]any); sub["workflow"] != wf || sub["wait"] != true {
+		t.Fatalf("subflow: %v", sub)
+	}
+	s.external(history.SignalReceived, "sub", 0, map[string]any{"event": history.SubflowEvent,
+		"payload": map[string]any{"run_id": "r2", "status": "completed", "outputs": map[string]any{"kobo": int64(84)}}}, history.OriginSignal)
+	if out := s.payload(history.StepCompleted, "after")["output"]; out != int64(84) {
+		t.Errorf("after: %v", out)
+	}
+	if len(s.payload(history.RunCompleted, "")) != 0 {
+		t.Errorf("a run without outputs reports none")
+	}
+
+	// A child that failed fails the step, with its message.
+	f := newSim(t, doc, map[string]any{"amount": int64(1)})
+	f.external(history.SignalReceived, "sub", 0, map[string]any{"event": history.SubflowEvent,
+		"payload": map[string]any{"run_id": "r3", "status": "failed", "error": map[string]any{"kind": "fatal", "message": "no money"}}}, history.OriginSignal)
+	e := f.payload(history.StepFailed, "sub")["error"].(map[string]any)
+	if e["kind"] != "subflow" || e["message"] != "the workflow it ran failed: no money" {
+		t.Errorf("failure: %v", e)
+	}
+
+	// A step that does not wait completes on the start report.
+	n := newSim(t, wdDoc(`{"id":"sub","type":"subflow","config":{"workflow":"`+wf+`","wait":false}}`, ""), map[string]any{})
+	if n.payload(history.StepScheduled, "sub")["subflow"].(map[string]any)["wait"] != false {
+		t.Fatal("wait")
+	}
+	n.external(history.SignalReceived, "sub", 0, map[string]any{"event": history.SubflowEvent, "payload": map[string]any{"run_id": "r4", "status": "started"}}, history.OriginSignal)
+	if out := n.payload(history.StepCompleted, "sub")["output"].(map[string]any); out["status"] != "started" {
+		t.Errorf("no wait: %v", out)
+	}
+}
+
+// A workflow with outputs (callable, decision 0048) evaluates them when
+// the run completes, for the subflow step that started it.
+func TestRunOutputs(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_d","version":1,"name":"d","trigger":{"type":"subflow"},
+	  "inputs":{"schema":{"type":"object","properties":{"amount_kobo":{"type":"integer"}}}},
+	  "steps":[{"id":"total","type":"transform","config":{"output":{"kobo":"=trigger.body.amount_kobo * 2"}}}],
+	  "outputs":[{"name":"kobo","type":"integer","title":"T","description":"D","value":"=steps.total.output.kobo"}]}`
+	s := newSim(t, doc, map[string]any{"body": map[string]any{"amount_kobo": int64(21)}})
+	if outs := s.payload(history.RunCompleted, "")["outputs"].(map[string]any); outs["kobo"] != int64(42) {
+		t.Errorf("outputs: %v", outs)
 	}
 }
 

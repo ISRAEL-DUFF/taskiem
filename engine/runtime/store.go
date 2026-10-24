@@ -102,6 +102,17 @@ type StartRequest struct {
 	// Fork makes the run continue a failed one (fork.go): its trigger and
 	// variables are the parent's, and what the parent completed is replayed.
 	Fork *Fork
+	// Parent makes the run a child of a subflow step (subflows.go): it is
+	// started in the parent's transaction with the parent's seed.
+	Parent *ParentRun
+}
+
+// ParentRun is the subflow step a child run was started by.
+type ParentRun struct {
+	Run   uuid.UUID
+	Step  string // the step instance
+	Waits bool   // the step waits for the child to end
+	Seed  string // the child's idempotency seed: the parent's and the step
 }
 
 // ErrNotFound is returned when a run, step, or workflow is not visible.
@@ -141,9 +152,27 @@ func (s *Store) StartRun(ctx context.Context, req StartRequest) (RunRef, bool, e
 // nothing; a duplicate is recognised before any limit applies.
 func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 	ref := RunRef{ID: uuid.Must(uuid.NewV7()), TenantID: req.TenantID}
-	out := Started{Created: true}
+	var out Started
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{req.TenantID}, func(tx pgx.Tx) error {
-		out = Started{Created: true}
+		var err error
+		out, err = s.startIn(ctx, tx, req, &ref)
+		return err
+	})
+	out.Ref = ref
+	if le, ok := IsLimit(err); ok {
+		s.LimitHit(ctx, req.TenantID, le.Limit)
+	} else if err == nil && out.HeldBy != "" && out.HeldBy != "backlog" {
+		s.LimitHit(ctx, req.TenantID, out.HeldBy)
+	}
+	return out, err
+}
+
+// startIn is Start inside a transaction: a subflow step starts its child
+// run in the transaction that records the step (subflows.go). ref is the
+// run's id, replaced by an earlier run's when the start is a duplicate.
+func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *RunRef) (Started, error) {
+	out := Started{Created: true}
+	err := func() error {
 		if ok, err := tenantActive(ctx, tx, req.TenantID); err != nil {
 			return err
 		} else if !ok {
@@ -216,6 +245,12 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 			ref.ID, req.TenantID, req.WorkflowID, req.Version, req.Environment, req.StartedBy, digest).Scan(&startedAt); err != nil {
 			return err
 		}
+		if p := req.Parent; p != nil {
+			if _, err := tx.Exec(ctx, `UPDATE runs SET parent_run_id = $2, parent_step = $3, parent_waits = $4, idempotency_seed = $5 WHERE id = $1`,
+				ref.ID, p.Run, p.Step, p.Waits, p.Seed); err != nil {
+				return err
+			}
+		}
 		if fork != nil {
 			if err := recordFork(ctx, tx, req.TenantID, ref.ID, fork); err != nil {
 				return err
@@ -274,24 +309,18 @@ func (s *Store) Start(ctx context.Context, req StartRequest) (Started, error) {
 			}
 			return countStart(ctx, tx, req.TenantID)
 		}
-		admitted, err := s.admit(ctx, tx, ref, req.WorkflowID, def, payload, lim)
+		admitted, err := s.admit(ctx, tx, *ref, req.WorkflowID, def, payload, lim)
 		if err != nil {
 			return err
 		}
 		if admitted {
-			if err := s.start(ctx, tx, ref, def, startedAt); err != nil {
+			if err := s.start(ctx, tx, *ref, def, startedAt); err != nil {
 				return err
 			}
 		}
 		out.Queued = !admitted
 		return countStart(ctx, tx, req.TenantID)
-	})
-	out.Ref = ref
-	if le, ok := IsLimit(err); ok {
-		s.LimitHit(ctx, req.TenantID, le.Limit)
-	} else if err == nil && out.HeldBy != "" && out.HeldBy != "backlog" {
-		s.LimitHit(ctx, req.TenantID, out.HeldBy)
-	}
+	}()
 	return out, err
 }
 
@@ -392,7 +421,7 @@ type runRow struct {
 
 func lockRun(ctx context.Context, tx pgx.Tx, id uuid.UUID) (runRow, error) {
 	r := runRow{ref: RunRef{ID: id}}
-	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, parent_run_id IS NOT NULL, expansion FROM runs WHERE id = $1 FOR UPDATE`, id).
+	err := tx.QueryRow(ctx, `SELECT tenant_id, workflow_id, version, status, environment, forked_from_seq IS NOT NULL, expansion FROM runs WHERE id = $1 FOR UPDATE`, id).
 		Scan(&r.ref.TenantID, &r.workflowID, &r.version, &r.status, &r.env, &r.forked, &r.expansion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, fmt.Errorf("run %s: %w", id, ErrNotFound)
@@ -449,6 +478,7 @@ func appendEvent(ctx context.Context, tx pgx.Tx, run uuid.UUID, typ, step string
 // decideInline runs decide() over the run's history and applies the result,
 // repeating while applying effects appends further events.
 func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
+	ctx = withDeciding(ctx, ref.ID)
 	run, err := lockRun(ctx, tx, ref.ID)
 	if err != nil {
 		return err
@@ -628,6 +658,13 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 				}
 			}
 			return s.registerWait(ctx, tx, run.ref, run.env, ev.StepID, p.Event, p.Correlation)
+		case history.KindSubflow:
+			if run.forked {
+				if then, ok, err := s.replaySignal(ctx, tx, run, ev); err != nil || ok {
+					return then, err
+				}
+			}
+			return s.startSubflow(ctx, tx, run, ev, p)
 		}
 	case history.ApprovalRequested:
 		p := ev.Payload.(history.ApprovalRequestedPayload)
@@ -825,6 +862,14 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND status = 'pending'`, run); err != nil {
 		return err
 	}
+	// Subflows (subflows.go): the step that started this run hears how it
+	// ended, and the children this run was waiting for are cancelled.
+	if err := s.cancelChildren(ctx, tx, r); err != nil {
+		return err
+	}
+	if err := s.notifyParent(ctx, tx, r, status); err != nil {
+		return err
+	}
 	return s.promote(ctx, tx, r.ref.TenantID, r.workflowID)
 }
 
@@ -944,49 +989,66 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 				return nil
 			}
 		}
-		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND environment = $2 AND event = $3 AND correlation = $4 RETURNING run_id, step_id`,
-			tenant, env, event, correlation)
-		if err != nil {
-			return err
-		}
-		type wait struct {
-			run  uuid.UUID
-			step string
-		}
-		var waits []wait
-		for rows.Next() {
-			var w wait
-			if err := rows.Scan(&w.run, &w.step); err != nil {
-				return err
-			}
-			waits = append(waits, w)
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if len(waits) == 0 {
-			_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
-				uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
-			return err
-		}
-		for _, w := range waits {
-			if _, err := lockRun(ctx, tx, w.run); err != nil {
-				return err
-			}
-			if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
-				return err
-			}
-			if err := s.decideInline(ctx, tx, RunRef{ID: w.run, TenantID: tenant}); err != nil {
-				return err
-			}
-			woke = append(woke, w.run)
-		}
-		return nil
+		var err error
+		woke, err = s.deliverSignalTx(ctx, tx, tenant, env, event, correlation, raw, true)
+		return err
 	})
 	return woke, fresh, err
+}
+
+// deliverSignalTx hands a signal to the runs waiting for it in tx, and
+// buffers it when none is (buffer), or drops it (a subflow's report to a
+// parent that no longer waits). A run being decided in this very call
+// (a child that ended inside its parent's decision) is not decided
+// again here: the decision under way reads the event in its next round.
+func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, correlation string, raw []byte, buffer bool) ([]uuid.UUID, error) {
+	if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND environment = $2 AND event = $3 AND correlation = $4 RETURNING run_id, step_id`,
+		tenant, env, event, correlation)
+	if err != nil {
+		return nil, err
+	}
+	type wait struct {
+		run  uuid.UUID
+		step string
+	}
+	var waits []wait
+	for rows.Next() {
+		var w wait
+		if err := rows.Scan(&w.run, &w.step); err != nil {
+			return nil, err
+		}
+		waits = append(waits, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(waits) == 0 {
+		if !buffer {
+			return nil, nil
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
+		return nil, err
+	}
+	var woke []uuid.UUID
+	for _, w := range waits {
+		if _, err := lockRun(ctx, tx, w.run); err != nil {
+			return nil, err
+		}
+		if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
+			return nil, err
+		}
+		if !deciding(ctx, w.run) {
+			if err := s.decideInline(ctx, tx, RunRef{ID: w.run, TenantID: tenant}); err != nil {
+				return nil, err
+			}
+		}
+		woke = append(woke, w.run)
+	}
+	return woke, nil
 }
 
 // DecideApproval records a decision on an open approval step. Policy checks

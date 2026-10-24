@@ -179,3 +179,34 @@ func TestCapabilityStepsAreMocked(t *testing.T) {
 		t.Errorf("%v\n%v", r.Failures, r.Trace)
 	}
 }
+
+// A subflow step (decision 0049) is answered by the case's subflows: how
+// the child run ended; a step that does not wait needs no entry.
+func TestSubflowMocks(t *testing.T) {
+	const wf = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	doc := `{"schema":"wd/v1","id":"wf_p","version":1,"name":"p","trigger":{"type":"manual"},"steps":[
+	  {"id":"sub","type":"subflow","config":{"workflow":"` + wf + `"},"input":{"amount_kobo":"=trigger.body.amount"}},
+	  {"id":"bg","type":"subflow","config":{"workflow":"` + wf + `","wait":false}},
+	  {"id":"after","type":"transform","needs":["sub","bg"],"config":{"output":{"kobo":"=steps.sub.output.outputs.kobo","bg":"=steps.bg.output.status"}}}]}`
+	def, err := wd.Load([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := connector.NewRegistry()
+	r := wdtest.RunCase(def, reg, nil, wdtest.Case{Name: "ok", Trigger: map[string]any{"body": map[string]any{"amount": 21}},
+		Subflows: map[string]wdtest.SubflowMock{"sub": {Outputs: map[string]any{"kobo": 42}}},
+		Expect:   wdtest.Expect{Status: "completed", Outputs: map[string]any{"after": map[string]any{"kobo": 42, "bg": "started"}}}})
+	if !r.Passed() {
+		t.Errorf("%v\n%s", r.Failures, strings.Join(r.Trace, "\n"))
+	}
+	r = wdtest.RunCase(def, reg, nil, wdtest.Case{Name: "failed", Trigger: map[string]any{"body": map[string]any{"amount": 1}},
+		Subflows: map[string]wdtest.SubflowMock{"sub": {Status: "failed", Error: "no money"}},
+		Expect:   wdtest.Expect{Status: "failed"}})
+	if !r.Passed() {
+		t.Errorf("%v\n%s", r.Failures, strings.Join(r.Trace, "\n"))
+	}
+	r = wdtest.RunCase(def, reg, nil, wdtest.Case{Name: "unanswered", Trigger: map[string]any{"body": map[string]any{"amount": 1}}, Expect: wdtest.Expect{Status: "completed"}})
+	if r.Passed() || !strings.Contains(strings.Join(r.Failures, " "), "subflow sub has no entry in subflows") {
+		t.Errorf("an unanswered subflow: %v", r.Failures)
+	}
+}

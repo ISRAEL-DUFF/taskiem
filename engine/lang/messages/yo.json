@@ -2344,6 +2344,14 @@
       "text": "Dúró de {event}",
       "reviewed": false
     },
+    "wd.subflow": {
+      "text": "Ṣe iṣẹ́ rẹ: {workflow}, kí o sì dúró kí ó parí",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Bẹ̀rẹ̀ iṣẹ́ rẹ: {workflow}, kí o sì tẹ̀síwájú",
+      "reviewed": false
+    },
     "wd.template": {
       "text": "Lo àwòṣe: {template}",
       "reviewed": false

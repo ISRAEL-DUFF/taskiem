@@ -88,6 +88,18 @@ describe("template step sources", () => {
     expect(got).toEqual([{ label: "From “pay”: People paid", expr: "=steps.pay.output.paid", number: true }]);
   });
 
+  it("offers a subflow step's child outputs and run id", () => {
+    const steps = [
+      { id: "sub", type: "subflow", config: { workflow: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12" } },
+      { id: "tell", type: "transform", needs: ["sub"], config: { output: {} } },
+    ];
+    const got = sourcesFor({ steps }, "tell", [], [{ id: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12", outputs: [{ name: "total", type: "number", title: "Total" }] }]);
+    expect(got).toEqual([
+      { label: "From “sub”: Total", expr: "=steps.sub.output.outputs.total", number: true },
+      { label: "From “sub”: run id", expr: "=steps.sub.output.run_id" },
+    ]);
+  });
+
   it("offers a workflow-backed template step's outputs too", () => {
     const steps = [
       { id: "sub", type: "template", workflow: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12" },

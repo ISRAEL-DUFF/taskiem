@@ -44,6 +44,8 @@ export function summary(s: Step): string {
       return s.template !== undefined ? `${words(s.template.replaceAll("-", " "))} · its steps run here` : "One of your workflows · its steps run here";
     case "callback":
       return s.config?.timeout ? `wait up to ${s.config.timeout} to be called back` : "wait to be called back";
+    case "subflow":
+      return s.config.wait === false ? "start one of your workflows · carry on" : "run one of your workflows · wait for it";
     case "respond":
       return `answer ${s.config.status ?? 200}`;
     case "http":

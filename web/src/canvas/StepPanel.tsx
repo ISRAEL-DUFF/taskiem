@@ -1,8 +1,8 @@
 // Edits one top-level step. Nested steps (branch paths, foreach bodies,
 // on_error) are edited as JSON inside their parent.
 import { useState } from "react";
-import type { Step } from "@sdk/wd";
-import { get, type CapabilityInfo, type ConnectorInfo, type Problem } from "../api";
+import type { Step, WorkflowDefinition } from "@sdk/wd";
+import { get, type CapabilityInfo, type ConnectorInfo, type Problem, type WorkflowSummary } from "../api";
 import { FormStepEditor } from "./FormEditor";
 import { RolePicker } from "../forms/RolePicker";
 import { ConnectionPicker, type ConnectionName } from "../forms/ConnectionPicker";
@@ -126,6 +126,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
+      {step.type === "subflow" && <SubflowConfig step={step} set={set} advanced={advanced} sources={sources} />}
       {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel", "callback", "respond"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
@@ -532,6 +533,66 @@ function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, 
           </ol>
         </details>
       )}
+    </>
+  );
+}
+
+function SubflowConfig({ step, set, advanced, sources }: { step: Extract<Step, { type: "subflow" }>; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
+  const list = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
+  // The business's published workflows that start on demand (decision 0049).
+  const startable = (list.data?.workflows ?? []).filter((w) => w.active_version !== null && (w.trigger?.type === "manual" || w.trigger?.type === "subflow"));
+  const chosen = startable.find((w) => w.id === step.config.workflow);
+  const version = step.config.version ?? chosen?.active_version ?? null;
+  const target = useLoad(
+    () => (chosen && version ? get<{ definition: WorkflowDefinition }>(`/v1/workflows/${chosen.id}/versions/${version}`) : Promise.resolve(null)),
+    [chosen?.id, version],
+  );
+  const inputs = target.data?.definition.inputs?.schema;
+  const outputs = target.data?.definition.outputs ?? [];
+  const waits = step.config.wait !== false;
+  return (
+    <>
+      <Field label="Workflow" hint="One of your published workflows, run as its own run with its own history. Pick a workflow that starts by hand or when another workflow calls it.">
+        <select value={step.config.workflow} onChange={(e) => set({ config: { ...step.config, workflow: e.target.value, version: undefined }, input: {} })}>
+          {!chosen && <option value={step.config.workflow}>{step.config.workflow || "Choose a workflow"}</option>}
+          {startable.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Then" hint={waits ? "This workflow waits for that run to end; the step's output is what it gave back." : "This workflow carries on as soon as that run has started."}>
+        <select value={waits ? "wait" : "continue"} onChange={(e) => set({ config: { ...step.config, wait: e.target.value === "wait" ? undefined : false } })}>
+          <option value="wait">Wait for it to finish</option>
+          <option value="continue">Carry on without waiting</option>
+        </select>
+      </Field>
+      {advanced && (
+        <Field label="Version" hint="Leave blank to run the version published when the step starts.">
+          <input
+            type="number"
+            min={1}
+            value={step.config.version ?? ""}
+            onChange={(e) => set({ config: { ...step.config, version: e.target.value === "" ? undefined : Number(e.target.value) } })}
+          />
+        </Field>
+      )}
+      <h3>What it starts with</h3>
+      <SchemaForm schema={inputs as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {waits && outputs.length > 0 && (
+        <>
+          <h3>What it gives back</h3>
+          <ul className="plain-list">
+            {outputs.map((o) => (
+              <li key={o.name}>
+                <strong>{o.title}</strong>: {o.description} {advanced && <code>steps.{step.id}.output.outputs.{o.name}</code>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {waits && outputs.length === 0 && chosen && <p className="hint">It gives nothing back: add outputs to it to use its results here. The step's output has the run's id and status.</p>}
     </>
   );
 }
