@@ -557,7 +557,7 @@ function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>
   return (
     <>
       {st && !st.enabled && <p className="notice">This deployment has no AI model, so this step cannot run.</p>}
-      {st && st.enabled && !st.steps_allowed && <p className="notice">Your business has turned AI steps off (Settings, Governance).</p>}
+      {st && st.enabled && !st.steps_allowed && <p className="notice">Your business has turned AI steps off (Secrets & settings, AI steps).</p>}
       {st && st.enabled && !st.steps_plan && <p className="notice">Your plan does not include AI.</p>}
       <Field label="What to ask" hint="Say what you want in plain words: sort the message, pull out the address, write a short reply.">
         <textarea rows={5} value={cfg.prompt} onChange={(e) => setCfg({ prompt: e.target.value })} />

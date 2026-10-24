@@ -52,7 +52,7 @@ func (s *Server) aiStepProblems(ctx context.Context, tenant uuid.UUID, doc []byt
 		return append(out, problem{Path: "/", Message: "the business's AI settings could not be read: " + err.Error()})
 	}
 	if !allowed {
-		out = append(out, problem{Path: "/steps", Message: "the business has turned AI steps off (Settings, Governance)"})
+		out = append(out, problem{Path: "/steps", Message: "the business has turned AI steps off (Secrets & settings, AI steps)"})
 	}
 	return out
 }

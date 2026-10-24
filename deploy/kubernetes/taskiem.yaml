@@ -666,7 +666,7 @@ spec:
             - name: TASKIEM_WORKER_DRAIN
               value: "30s"
             - name: TASKIEM_WORKER_QUEUES
-              value: "connector,sandbox"
+              value: "connector,sandbox,ai"
           ports:
             - name: metrics
               containerPort: 9090
