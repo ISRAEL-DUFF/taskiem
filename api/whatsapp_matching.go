@@ -48,6 +48,9 @@ const matchButtonPrefix = "mt1."
 const (
 	matchYes byte = 'y'
 	matchNo  byte = 'n'
+	// matchSplit is Yes on a payment split across the customer's open
+	// invoices, oldest first (matching.Matcher.ConfirmSplit).
+	matchSplit byte = 's'
 )
 
 // matchButton is what a match button's payload says.
@@ -96,7 +99,7 @@ func parseMatchButton(key []byte, payload string) (matchButton, error) {
 	if err1 != nil || err2 != nil || len(body) != 49 || len(mac) != 16 || !hmac.Equal(mac, matchButtonMAC(key, body)) {
 		return b, errBadMatchButton
 	}
-	if body[0] != matchYes && body[0] != matchNo {
+	if body[0] != matchYes && body[0] != matchNo && body[0] != matchSplit {
 		return b, errBadMatchButton
 	}
 	b.Action = body[0]
@@ -220,6 +223,7 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 		due            int64
 		found          bool
 		reasons        []string
+		split          matching.Proposal
 	)
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `SELECT s.id, s.invoice_id, s.order_id, s.reasons, e.amount_kobo, COALESCE(e.occurred_at, e.recorded_at), e.channel, e.kind,
@@ -247,6 +251,14 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 				return err
 			}
 			number, due = x.Number, x.DueKobo
+			// More than is due: offered split across the customer's open
+			// invoices, oldest first.
+			if split, err = s.matcher().Propose(ctx, tx, tenant, id); err != nil {
+				return err
+			}
+			if len(split.Parts) > 0 {
+				ask = "wa.match.ask_split"
+			}
 		}
 		found = true
 		return nil
@@ -260,7 +272,7 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 		got = *amount
 	}
 	text := tr(l, ask, "amount", invoicing.Naira(got), "when", when.In(lagos()).Format("2 Jan 15:04"), "channel", matchChannelWords(l, channel, kind),
-		"number", number, "due", invoicing.Naira(due), "reasons", whatsapp.SafeText(sentence(reasons)))
+		"number", number, "due", invoicing.Naira(due), "reasons", whatsapp.SafeText(sentence(reasons)), "parts", proposedParts(l, split))
 	if open > 1 {
 		text += "\n" + tr(l, "wa.match.more")
 	}
@@ -268,8 +280,37 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 	yes := matchButton{Action: matchYes, Tenant: tenant, Suggestion: id, User: user}
 	no := yes
 	no.Action = matchNo
+	if len(split.Parts) > 0 {
+		yes.Action = matchSplit
+	}
 	buttons := []whatsapp.Button{{ID: signMatchButton(key, yes), Title: tr(l, "button.match_yes")}, {ID: signMatchButton(key, no), Title: tr(l, "button.match_no")}}
 	return text, buttons, true, nil
+}
+
+// proposedParts says a split: "INV-0101 ₦20,000, INV-0104 ₦30,000", and
+// what would be left as the customer's credit.
+func proposedParts(l lang.Tag, p matching.Proposal) string {
+	list := make([]string, 0, len(p.Parts)+1)
+	for _, x := range p.Parts {
+		list = append(list, x.Number+" "+invoicing.Naira(x.AmountKobo))
+	}
+	if p.CreditKobo > 0 {
+		list = append(list, tr(l, "wa.match.split_credit", "credit", invoicing.Naira(p.CreditKobo)))
+	}
+	return whatsapp.SafeText(strings.Join(list, ", "))
+}
+
+// splitParts says a split as matched.
+func splitParts(l lang.Tag, sp matching.Split) string {
+	p := matching.Proposal{CreditKobo: sp.CreditKobo}
+	for i, x := range sp.Parts {
+		number := x.Target()
+		if x.Invoice != nil {
+			number = x.Invoice.Number
+		}
+		p.Parts = append(p.Parts, matching.ProposedPart{Part: matching.Part{AmountKobo: sp.PartKobo[i]}, Number: number})
+	}
+	return proposedParts(l, p)
 }
 
 // sentence joins reasons into one, its first letter a capital.
@@ -382,6 +423,24 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 		return decided()
 	}
 	m := s.matcher()
+	if b.Action == matchSplit {
+		sp, err := m.ConfirmSplit(ctx, tenant.ID, b.Suggestion, p.Actor())
+		switch {
+		case errors.Is(err, invoicing.ErrNotFound):
+			return say(c.t("wa.button_invalid"))
+		case errors.Is(err, invoicing.ErrState), errors.Is(err, invoicing.ErrInvalid):
+			if rerr := read(); rerr != nil {
+				return rerr
+			}
+			if status != "open" {
+				return decided()
+			}
+			return say(c.t("wa.match.refused", "reason", whatsapp.SafeText(plainInvoiceError(err))))
+		case err != nil:
+			return err
+		}
+		return say(c.t("wa.match.matched_split", "parts", splitParts(c.lang.Tag, sp)))
+	}
 	if b.Action == matchYes {
 		x, err := m.Confirm(ctx, tenant.ID, b.Suggestion, p.Actor(), false)
 		switch {

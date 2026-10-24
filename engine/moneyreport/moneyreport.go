@@ -209,6 +209,15 @@ const (
 			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)), '')`
 	matchedOrders = `COALESCE((SELECT string_agg(o.reference, ' ' ORDER BY o.reference) FROM storefront_order_payments p JOIN storefront_orders o ON o.id = p.order_id
 			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)), '')`
+	// What of a movement counts towards invoices, and towards orders: the
+	// sums of its parts (a split counts towards several).
+	invoicedKobo = `COALESCE((SELECT sum(p.amount_kobo) FROM customer_invoice_payments p
+			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)), 0)::bigint`
+	orderedKobo = `COALESCE((SELECT sum(p.amount_kobo) FROM storefront_order_payments p
+			          WHERE p.entry_id = m.movement AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)), 0)::bigint`
+	// Whether a movement is a customer's money (paid into their account,
+	// or left as their credit): what no invoice counts is their credit.
+	customersMoney = `EXISTS (SELECT 1 FROM money_entry_customers c WHERE c.entry_id = m.movement)`
 )
 
 // ExportLog writes the period's money log as CSV: one line per movement,
@@ -305,6 +314,9 @@ const (
 	AccountPayouts    = "Payouts"
 	AccountRefunds    = "Refunds"
 	AccountOwner      = "Owner's cash movements"
+	// AccountCredit is what customers paid that no invoice counts yet:
+	// owed back to them, or counted towards their next invoice.
+	AccountCredit = "Customer credit"
 )
 
 // Bank is a channel as a journal account: "Bank: paystack/main", "Cash".
@@ -325,13 +337,16 @@ func Expense(category string) string {
 
 // ExportJournal writes the period's settled movements as a double-entry
 // journal: every movement two lines (or four with a fee) whose debits and
-// credits balance. Money in matched to an invoice settles receivables,
-// POS sales and money for storefront orders are sales, other money in waits to be identified; payouts and
-// expenses leave the bank they went through.
+// credits balance. Money in matched to invoices settles receivables, each
+// part of a split for what it counts; POS sales and money for storefront
+// orders are sales; what is left of a customer's money is their credit;
+// other money in waits to be identified. Money a rail settled net of its
+// fee counts for what the payer sent: the bank gets what landed and the
+// fee is a cost. Payouts and expenses leave the bank they went through.
 func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Time, w io.Writer) error {
 	rows, err := tx.Query(ctx, `SELECT m.movement, COALESCE(m.occurred_at, m.recorded_at), m.direction, m.kind, m.amount, COALESCE(m.fee_kobo, 0),
 			m.channel, m.reference, COALESCE(m.description, m.note, ''), COALESCE(m.category, ''),
-			`+matchedInvoices+`, `+matchedOrders+`
+			`+matchedInvoices+`, `+matchedOrders+`, `+invoicedKobo+`, `+orderedKobo+`, m.net, `+customersMoney+`
 		FROM (`+latest+`) m WHERE m.status = 'settled' AND m.amount > 0
 		ORDER BY COALESCE(m.occurred_at, m.recorded_at), m.movement`, tenant, from, to)
 	if err != nil {
@@ -341,6 +356,9 @@ func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to ti
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{"date", "journal_id", "account", "debit", "credit", "description", "reference"})
 	line := func(at time.Time, id uuid.UUID, account string, debit, credit int64, desc, ref string) {
+		if debit <= 0 && credit <= 0 {
+			return // a part of nothing (a split with no rest)
+		}
 		d, c := "", ""
 		if debit > 0 {
 			d = Naira(debit)
@@ -354,8 +372,9 @@ func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to ti
 		var id uuid.UUID
 		var at time.Time
 		var dir, kind, channel, ref, desc, category, invoice, order string
-		var amount, fee int64
-		if err := rows.Scan(&id, &at, &dir, &kind, &amount, &fee, &channel, &ref, &desc, &category, &invoice, &order); err != nil {
+		var amount, fee, invoiced, ordered int64
+		var net, customers bool
+		if err := rows.Scan(&id, &at, &dir, &kind, &amount, &fee, &channel, &ref, &desc, &category, &invoice, &order, &invoiced, &ordered, &net, &customers); err != nil {
 			return err
 		}
 		bank := Bank(channel)
@@ -369,32 +388,56 @@ func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to ti
 			desc = "Order " + order
 		}
 		if dir == "in" {
-			other := AccountUnmatched
-			switch {
-			case invoice != "":
-				other = AccountReceivable
-			case kind == "pos_sale", order != "":
-				other = AccountSales
-			case kind == "cash":
-				other = AccountOwner
+			gross := amount
+			if net {
+				gross += fee
 			}
 			line(at, id, bank, amount, 0, desc, ref)
-			line(at, id, other, 0, amount, desc, ref)
-		} else {
-			other := AccountPayouts
-			switch kind {
-			case "expense":
-				other = Expense(category)
-			case "refund":
-				other = AccountRefunds
-			case "cash":
-				other = AccountOwner
-			case "statement":
-				other = AccountUnmatched
+			if net && fee > 0 {
+				line(at, id, AccountFees, fee, 0, "Fee: "+desc, ref)
 			}
-			line(at, id, other, amount, 0, desc, ref)
-			line(at, id, bank, 0, amount, desc, ref)
+			if invoiced+ordered == 0 {
+				other := AccountUnmatched
+				switch {
+				case customers:
+					other = AccountCredit
+				case kind == "pos_sale":
+					other = AccountSales
+				case kind == "cash":
+					other = AccountOwner
+				}
+				line(at, id, other, 0, gross, desc, ref)
+			} else {
+				// Each kind of part for what it counts; the rest is the
+				// customer's credit, or waits to be identified.
+				rest := gross - min(invoiced+ordered, gross)
+				line(at, id, AccountReceivable, 0, min(invoiced, gross), desc, ref)
+				line(at, id, AccountSales, 0, min(ordered, gross-min(invoiced, gross)), desc, ref)
+				if customers {
+					line(at, id, AccountCredit, 0, rest, desc, ref)
+				} else {
+					line(at, id, AccountUnmatched, 0, rest, desc, ref)
+				}
+			}
+			if !net && fee > 0 {
+				line(at, id, AccountFees, fee, 0, "Fee: "+desc, ref)
+				line(at, id, bank, 0, fee, "Fee: "+desc, ref)
+			}
+			continue
 		}
+		other := AccountPayouts
+		switch kind {
+		case "expense":
+			other = Expense(category)
+		case "refund":
+			other = AccountRefunds
+		case "cash":
+			other = AccountOwner
+		case "statement":
+			other = AccountUnmatched
+		}
+		line(at, id, other, amount, 0, desc, ref)
+		line(at, id, bank, 0, amount, desc, ref)
 		if fee > 0 {
 			line(at, id, AccountFees, fee, 0, "Fee: "+desc, ref)
 			line(at, id, bank, 0, fee, "Fee: "+desc, ref)

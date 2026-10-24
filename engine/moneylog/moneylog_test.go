@@ -27,6 +27,17 @@ func TestFromEvent(t *testing.T) {
 	if e, _ := FromEvent("x/main", "virtual_account.credited", map[string]any{"reference": "VA", "amount_kobo": 700.0, "payer_name": "A"}); e.AmountKobo == nil || *e.AmountKobo != 700 || e.PayerName != "A" {
 		t.Errorf("credit: %+v", e)
 	}
+	// Each credit to a permanent account is its own movement, with the
+	// rail's fee and the payer's account.
+	one, _ := FromEvent("x/main", "virtual_account.credited", map[string]any{"reference": "VA", "credit_id": "C1", "amount_kobo": int64(5000000),
+		"fee_kobo": int64(30000), "payer_account": "XXXXXX0011", "occurred_at": "2026-10-23T09:00:00Z"})
+	two, _ := FromEvent("x/main", "virtual_account.credited", map[string]any{"reference": "VA", "credit_id": "C2", "amount_kobo": int64(5000000)})
+	if one.Key() != "x/main|virtual_account.credited|VA|C1" || two.Key() == one.Key() || one.Reference != "VA" {
+		t.Errorf("credit keys: %s, %s", one.Key(), two.Key())
+	}
+	if one.FeeKobo == nil || *one.FeeKobo != 30000 || one.PayerAccount != "XXXXXX0011" || one.OccurredAt == nil || two.FeeKobo != nil {
+		t.Errorf("credit fields: %+v", one)
+	}
 	for _, bad := range []struct {
 		event  string
 		fields map[string]any

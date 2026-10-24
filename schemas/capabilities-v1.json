@@ -294,25 +294,51 @@
     },
     "virtual_account": {
       "title": "Open a bank account number for a customer to pay into",
-      "description": "An unsafe_write action may stand for it only when the mapping says unsafe: true: an unknown outcome then parks for a person to check.",
+      "description": "A permanent account number for one customer (a student, a tenant, a shop): every transfer into it arrives as virtual_account.credited with the account's reference, and list_credits reads credits back. The rail's reference is derived from the step's key, so issuing again for the same customer answers the same account. What each rail needs and lets the business set is in docs/spec/schools-rail-facts.md. An unsafe_write action may stand for it only when the mapping says unsafe: true: an unknown outcome then parks for a person to check.",
       "classes": ["idempotent_write", "reconcilable_write", "unsafe_write"],
       "input": {
         "type": "object",
         "additionalProperties": false,
         "required": ["customer"],
         "properties": {
-          "customer": { "$ref": "#/$defs/customer" }
+          "customer": { "$ref": "#/$defs/customer" },
+          "account_name": { "type": "string", "maxLength": 100, "description": "The name payers should see when they check the number; used where the rail lets the business set it, and shortened by the caller to the rail's limit. Elsewhere the rail names the account itself (from the customer's name on most)", "x-pii": "name" },
+          "account": { "type": "string", "description": "The wallet or account the number pays into, on rails that hold several" }
         }
       },
       "output": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["account_number", "bank_name", "account_name", "reference"],
+        "required": ["account_number", "bank_name", "reference"],
         "properties": {
           "account_number": { "type": "string", "x-pii": "account_number" },
           "bank_name": { "type": "string" },
-          "account_name": { "type": "string", "x-pii": "name" },
-          "reference": { "type": "string", "description": "The account's reference, which virtual_account.credited carries" }
+          "account_name": { "type": "string", "description": "As the rail named it; absent where the rail does not say (Flutterwave)", "x-pii": "name" },
+          "reference": { "type": "string", "description": "The account's reference, which virtual_account.credited and list_credits carry" }
+        }
+      }
+    },
+    "list_credits": {
+      "title": "List money paid into customers' account numbers",
+      "description": "Credits to the account numbers virtual_account opened, over a window of time, each with the fields of virtual_account.credited and the same credit_id, so a credit whose event never arrived is found by reading back an overlapping window and recorded once. truncated is true when the rail had more than was read: read a shorter window.",
+      "classes": ["read"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["since"],
+        "properties": {
+          "since": { "type": "string", "description": "From when, RFC 3339" },
+          "until": { "type": "string", "description": "Until when, RFC 3339; now when left out" },
+          "account": { "type": "string", "description": "The wallet or account the numbers pay into, on rails that hold several" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["credits"],
+        "properties": {
+          "credits": { "type": "array", "items": { "$ref": "#/$defs/credit" } },
+          "truncated": { "type": "boolean", "description": "The rail had more credits in the window than were read" }
         }
       }
     },
@@ -460,16 +486,7 @@
     "virtual_account.credited": {
       "title": "Money arrived in a customer's account number",
       "correlation": "reference",
-      "fields": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["reference", "amount_kobo"],
-        "properties": {
-          "reference": { "type": "string" },
-          "amount_kobo": { "type": "integer" },
-          "payer_name": { "type": "string", "x-pii": "name" }
-        }
-      }
+      "fields": { "$ref": "#/$defs/credit" }
     },
     "pos.sale": {
       "title": "A POS terminal took a payment",
@@ -512,7 +529,28 @@
         "name": { "type": "string", "x-pii": "name" },
         "email": { "type": "string", "x-pii": "email" },
         "phone": { "type": "string", "x-pii": "phone" },
-        "bvn": { "type": "string", "x-pii": "bvn" }
+        "bvn": { "type": "string", "x-pii": "bvn" },
+        "nin": { "type": "string", "x-pii": "nin", "description": "National Identification Number, which some rails take instead of a BVN" }
+      }
+    },
+    "credit": {
+      "description": "One transfer into a customer's account number (virtual_account). amount_kobo is what the payer sent; where the rail settles net of its fee, settled_kobo is what landed and fee_kobo the fee. A rail that reports only what landed, with no fee, gives that as amount_kobo and leaves fee_kobo out (docs/spec/schools-rail-facts.md says which rail does what).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "credit_id", "amount_kobo"],
+      "properties": {
+        "reference": { "type": "string", "description": "The account's reference, as virtual_account answered it" },
+        "credit_id": { "type": "string", "description": "The rail's own id for this one credit, the same in its event and in list_credits: two credits to one account have different ones" },
+        "amount_kobo": { "type": "integer", "description": "What the payer sent" },
+        "fee_kobo": { "type": "integer", "description": "The rail's fee on this credit, when it reports one" },
+        "settled_kobo": { "type": "integer", "description": "What reached the business, when the rail reports it" },
+        "currency": { "type": "string" },
+        "account_number": { "type": "string", "description": "The account number paid into", "x-pii": "account_number" },
+        "payer_name": { "type": "string", "x-pii": "name" },
+        "payer_account": { "type": "string", "description": "The payer's account number, often masked by the rail", "x-pii": "account_number" },
+        "payer_bank": { "type": "string" },
+        "narration": { "type": "string", "description": "What the payer wrote, as the rail passed it on; often carries names", "x-pii": "other" },
+        "occurred_at": { "type": "string", "description": "RFC 3339" }
       }
     }
   }

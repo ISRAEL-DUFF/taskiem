@@ -275,3 +275,73 @@ test("money is matched to storefront orders from To match, and undone on the ord
   await page.goto("/invoices/match");
   await expect(cards.filter({ hasText: `TRF ${suggested}` })).toHaveCount(1);
 });
+
+test("a payment is split across a customer's invoices, held money says why, and a remembered payer is forgotten", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  const tenant = sql("SELECT id FROM tenants WHERE name = 'E2E'");
+  // Two invoices of one customer (the same email), ₦25,000 each, oldest first.
+  const a = await sentInvoice(page, "Gozie Nwosu");
+  sql(`UPDATE customer_invoices SET sent_at = now() - interval '2 days' WHERE id = '${a.id}'`);
+  const b = await sentInvoice(page, "Gozie Nwosu");
+  // ₦60,000 in, suggested for the newer one; and a credit held for a person.
+  const entry = randomUUID();
+  sql(
+    `INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, direction, kind, amount_kobo, status, channel, reference, source, mirrored_at)
+       VALUES ('${entry}', '${tenant}', 'paystack/main|e2e|E2E-SPLIT-1', now(), 'in', 'account_credit', 6000000, 'settled', 'paystack/main', 'E2E-SPLIT-1', 'event', now());
+     INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ('${entry}', '${tenant}', 'suggested');
+     INSERT INTO money_suggestions (id, tenant_id, entry_id, invoice_id, score, reasons) VALUES (gen_random_uuid(), '${tenant}', '${entry}', '${b.id}', 60, '["the payer shares a name with the customer"]'::jsonb);
+     INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, direction, kind, amount_kobo, status, channel, reference, source, mirrored_at, account_number)
+       VALUES (gen_random_uuid(), '${tenant}', 'paystack/main|e2e|E2E-HELD-1', now(), 'in', 'account_credit', 1000000, 'settled', 'paystack/main', 'E2E-HELD-1', 'event', now(), '9900000999');
+     INSERT INTO money_match_state (entry_id, tenant_id, state, held_reason)
+       SELECT id, '${tenant}', 'unmatched', 'the reference names a customer''s account, but the money was paid into another account number' FROM money_entries WHERE reference = 'E2E-HELD-1';`,
+  );
+
+  await page.goto("/invoices/match");
+  const cards = page.getByTestId("waiting-payment");
+  const held = cards.filter({ hasText: "E2E-HELD-1" });
+  await expect(held.getByTestId("held-reason")).toContainText("paid into another account number");
+  const card = cards.filter({ hasText: "E2E-SPLIT-1" });
+  await card.getByText("Split across the customer's invoices…").click();
+  const split = card.getByTestId("split");
+  await expect(split.getByLabel(`${a.number} (₦25,000 due)`)).toHaveValue("25000");
+  await expect(split.getByLabel(`${b.number} (₦25,000 due)`)).toHaveValue("25000");
+  await expect(split.getByTestId("split-rest")).toHaveText("₦10,000 not counted towards these invoices.");
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    const vs = await axe(page);
+    expect(vs, describe(`/invoices/match with a split (${scheme})`, vs)).toEqual([]);
+  }
+  // Too much is refused before it is sent; the amounts can be changed.
+  await split.getByLabel(`${a.number} (₦25,000 due)`).fill("45000");
+  await split.getByRole("button", { name: "Match in parts" }).click();
+  await expect(split.getByRole("alert")).toHaveText("The parts add up to ₦70,000, more than the ₦60,000 received.");
+  await split.getByLabel(`${a.number} (₦25,000 due)`).fill("25000");
+  await split.getByLabel(`${b.number} (₦25,000 due)`).fill("20000");
+  await expect(split.getByLabel(/Keep the rest as the customer's credit/)).toBeChecked();
+  await split.getByRole("button", { name: "Match in parts" }).click();
+  await expect(page.getByTestId("match-status")).toContainText(
+    `Matched in parts: ${a.number} ₦25,000, ${b.number} ₦20,000. ₦15,000 is the customer's credit, counted towards their next invoice.`,
+  );
+  await expect(card).toHaveCount(0);
+
+  // The invoice shows the customer's credit, and a payer remembered for them can be forgotten.
+  const customer = sql(`SELECT customer_id FROM customer_invoices WHERE id = '${a.id}'`);
+  sql(
+    `INSERT INTO money_payers (id, tenant_id, kind, payer_key, payer, customer_id, first_by)
+       VALUES (gen_random_uuid(), '${tenant}', 'name', 'payer_name:e2e', '{"subject": "e2e-none", "ct": "AAAA"}', '${customer}', 'user:e2e')`,
+  );
+  await page.goto(`/invoices/${a.number}`);
+  const money = page.getByTestId("customer-money");
+  await expect(money.getByTestId("customer-credit")).toContainText("₦15,000: paid and not yet counted towards an invoice.");
+  await expect(money.getByTestId("payer")).toHaveCount(1);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    const vs = await axe(page);
+    expect(vs, describe(`/invoices/${a.number} with the customer's money (${scheme})`, vs)).toEqual([]);
+  }
+  await money.getByRole("button", { name: /^Forget this payer/ }).click();
+  await expect(page.locator(".toast").filter({ hasText: "Payer forgotten" })).toBeVisible();
+  await expect(money.getByTestId("payer")).toHaveCount(0);
+  expect(sql(`SELECT count(*) FROM money_payers WHERE customer_id = '${customer}'`)).toBe("0");
+});

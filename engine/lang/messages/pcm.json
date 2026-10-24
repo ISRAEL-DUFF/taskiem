@@ -1096,6 +1096,10 @@
       "text": "{amount} enter for {when} through {channel}.\n\nNa for shop order {number} be dis, {due} to pay? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_split": {
+      "text": "{amount} enter for {when} through {channel}.\n\nNa from the customer wey get {number} be dis, {due} wey dem owe? E pass am, so e go share am for the customer open invoice dem, the old one first: {parts}. {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "cash",
       "reviewed": false
@@ -1120,6 +1124,10 @@
       "text": "E don match {number}. Dem don pay part ({due} still remain).",
       "reviewed": false
     },
+    "wa.match.matched_split": {
+      "text": "E don match am in parts: {parts}.",
+      "reviewed": false
+    },
     "wa.match.more": {
       "text": "If no be am, No go show the next invoice wey fit be.",
       "reviewed": false
@@ -1142,6 +1150,10 @@
     },
     "wa.match.rejected_next": {
       "text": "Okay, no be am. We no go suggest am again.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} go remain as the customer credit",
       "reviewed": false
     },
     "wa.money.confirm_cash_in": {

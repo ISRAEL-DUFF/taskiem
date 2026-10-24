@@ -1096,6 +1096,10 @@
       "text": "{amount} wọlé ní {when} nípasẹ̀ {channel}.\n\nṢé fún àṣẹ ọjà {number} ni, {due} láti san? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_split": {
+      "text": "{amount} wọlé ní {when} nípasẹ̀ {channel}.\n\nṢé láti ọ̀dọ̀ oníbàárà {number} ni, {due} tí wọ́n jẹ? Ó ju bẹ́ẹ̀ lọ, nítorí náà a ó pín in sí àwọn ìwé owó oníbàárà tí kò tíì san, èyí tó pẹ́ jù lọ ṣáájú: {parts}. {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "owó ní ọwọ́",
       "reviewed": false
@@ -1120,6 +1124,10 @@
       "text": "Mo ti so ó pọ̀ mọ́ {number}. Wọ́n ti san apá kan ({due} ṣì kù).",
       "reviewed": false
     },
+    "wa.match.matched_split": {
+      "text": "Mo ti so ó pọ̀ ní apá: {parts}.",
+      "reviewed": false
+    },
     "wa.match.more": {
       "text": "Tí kì í bá ṣe é, Rárá yóò fi ìwé owó tó kàn hàn.",
       "reviewed": false
@@ -1142,6 +1150,10 @@
     },
     "wa.match.rejected_next": {
       "text": "Ó dáa, kì í ṣe é. A kò ní dá a lábàá mọ́.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} yóò kù gẹ́gẹ́ bí owó oníbàárà lọ́wọ́ wa",
       "reviewed": false
     },
     "wa.money.confirm_cash_in": {

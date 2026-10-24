@@ -214,7 +214,7 @@ const transferCapability = `  collect_transfer:
     input: { amount: "=input.amount_kobo", email: "=input.customer.email", minutes: "=input.?expires_minutes" }
     output: { payment_id: "=output.reference", account_number: "=output.number", bank_name: "=output.bank", amount_kobo: "=output.amount", expires_at: "=output.until" }
     requires: [customer.email]
-    ignores: [customer.name, customer.phone, customer.bvn, description]
+    ignores: [customer.name, customer.phone, customer.bvn, customer.nin, description]
     fixed: { currency: NGN }
     transfer: { on_late: returned, on_wrong_amount: returned, min_minutes: 15, max_minutes: 480, default_minutes: 30 }
 `

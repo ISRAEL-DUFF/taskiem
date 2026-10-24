@@ -558,7 +558,11 @@ func (c *client) createReservedAccount(ctx context.Context, req connector.Reques
 			return connector.Response{}, fmt.Errorf("monnify: checking for an earlier attempt before resending: %w", err)
 		}
 	}
-	body := map[string]any{"accountReference": ref, "accountName": str(in, "account_name"), "currencyCode": "NGN",
+	name := str(in, "account_name")
+	if name == "" {
+		name = str(in, "customer_name")
+	}
+	body := map[string]any{"accountReference": ref, "accountName": name, "currencyCode": "NGN",
 		"contractCode": contract, "customerEmail": str(in, "customer_email"), "getAllAvailableBanks": true}
 	for field, key := range map[string]string{"customer_name": "customerName", "bvn": "bvn", "nin": "nin"} {
 		if v := str(in, field); v != "" {

@@ -1,0 +1,12 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze"
+    }
+  },
+  "error": "fatal"
+}

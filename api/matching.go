@@ -31,6 +31,9 @@ func (s *Server) matchingRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/money/suggestions/{id}/reject", s.rejectSuggestion)
 	r.With(manage, s.tenantWide).Post("/money/entries/{id}/match", s.matchEntry)
 	r.With(manage, s.tenantWide).Post("/money/order-payments/{id}/undo", s.undoOrderPayment)
+	r.With(manage, s.tenantWide).Delete("/money/payers/{id}", s.forgetPayer)
+	r.With(read).Get("/invoices/{id}/customer", s.getInvoiceCustomer)
+	r.With(manage, s.tenantWide).Post("/customer-accounts", s.registerCustomerAccount)
 }
 
 // matcher is Server.Matcher, or one made from Invoices and Orders, asking
@@ -84,7 +87,10 @@ func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {
 		if list, err = matching.Open(r.Context(), tx, tenant, 100); err != nil {
 			return err
 		}
-		// Who each is from: the invoice's or order's customer.
+		// Who each is from: the invoice's or order's customer; and, for an
+		// invoice, how the payment could be split across its customer's
+		// open invoices when it is more than is due.
+		m := s.matcher()
 		for i := range list {
 			switch {
 			case list[i].InvoiceID != nil:
@@ -93,6 +99,13 @@ func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 				list[i].Customer = x.Customer.Name
+				p, err := m.Propose(r.Context(), tx, tenant, list[i].ID)
+				if err != nil {
+					return err
+				}
+				if len(p.Parts) > 0 {
+					list[i].Split = &p
+				}
 			case list[i].OrderID != nil && s.Orders != nil:
 				o, err := s.Orders.GetOrder(r.Context(), tx, tenant, list[i].Number)
 				if err != nil && !errors.Is(err, storefront.ErrNoOrder) {
@@ -117,11 +130,73 @@ func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"suggestions": list, "revealed": reveal})
 }
 
+// matchBody is the optional body of confirm and match: the payment split
+// in parts (each an invoice or an order and its amount), what the parts do
+// not count left as the customer's credit (credit_rest), or split as
+// offered (split: the customer's open invoices oldest first).
+type matchBody struct {
+	Invoice    string          `json:"invoice"`
+	Order      string          `json:"order"`
+	Parts      []matching.Part `json:"parts"`
+	CreditRest bool            `json:"credit_rest"`
+	Split      bool            `json:"split"`
+}
+
 func (s *Server) confirmSuggestion(w http.ResponseWriter, r *http.Request) {
+	var req matchBody
+	if err := decodeOptional(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if req.Invoice != "" || req.Order != "" {
+		s.fail(w, r, fmt.Errorf("%w: a suggestion names its invoice or order; give parts to split it", errBadRequest))
+		return
+	}
+	if len(req.Parts) > 0 || req.Split {
+		if !s.invoicesOn(w, r) {
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(r, "id"))
+		if err != nil {
+			s.fail(w, r, pgx.ErrNoRows)
+			return
+		}
+		p := principalFrom(r.Context())
+		var sp matching.Split
+		if len(req.Parts) > 0 {
+			sp, err = s.matcher().ConfirmParts(r.Context(), p.TenantID, id, req.Parts, req.CreditRest, p.Actor())
+		} else {
+			sp, err = s.matcher().ConfirmSplit(r.Context(), p.TenantID, id, p.Actor())
+		}
+		if err != nil {
+			s.fail(w, r, invoiceErr(err))
+			return
+		}
+		s.writeSplit(w, r, sp)
+		return
+	}
 	s.decideSuggestion(w, r, func(ctx context.Context, tenant, id uuid.UUID, by string) (*matching.Result, error) {
 		x, err := s.matcher().Confirm(ctx, tenant, id, by, false)
 		return &x, err
 	})
+}
+
+// writeSplit answers a match in parts: each part's invoice (masked) or
+// order, what is left to match and what was left as the customer's
+// credit.
+func (s *Server) writeSplit(w http.ResponseWriter, r *http.Request, sp matching.Split) {
+	parts := make([]map[string]any, 0, len(sp.Parts))
+	for i, x := range sp.Parts {
+		switch {
+		case x.Invoice != nil:
+			maskInvoice(x.Invoice)
+			parts = append(parts, map[string]any{"target": x.Target(), "amount_kobo": sp.PartKobo[i], "invoice": x.Invoice})
+		case x.Order != nil:
+			parts = append(parts, map[string]any{"target": x.Target(), "amount_kobo": sp.PartKobo[i], "order": map[string]any{"reference": x.Order.Reference, "status": x.Order.Status,
+				"paid_at": x.Order.PaidAt, "due_kobo": x.Order.Payable(), "total_kobo": x.Order.TotalKobo, "customer": maskName(x.Order.Customer.Name)}})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"parts": parts, "left_kobo": sp.LeftKobo, "credit_kobo": sp.CreditKobo})
 }
 
 func (s *Server) rejectSuggestion(w http.ResponseWriter, r *http.Request) {
@@ -190,23 +265,33 @@ func (s *Server) matchEntry(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, pgx.ErrNoRows)
 		return
 	}
-	var req struct {
-		Invoice string `json:"invoice"`
-		Order   string `json:"order"`
-	}
+	var req matchBody
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	p := principalFrom(r.Context())
+	if len(req.Parts) > 0 {
+		if req.Invoice != "" || req.Order != "" || req.Split {
+			s.fail(w, r, fmt.Errorf("%w: give parts, or one invoice or order", errBadRequest))
+			return
+		}
+		sp, err := s.matcher().MatchParts(r.Context(), p.TenantID, id, req.Parts, req.CreditRest, p.Actor())
+		if err != nil {
+			s.fail(w, r, invoiceErr(err))
+			return
+		}
+		s.writeSplit(w, r, sp)
+		return
+	}
 	target := req.Invoice
 	switch {
-	case (req.Invoice == "") == (req.Order == ""):
-		s.fail(w, r, fmt.Errorf("%w: give invoice (the invoice's id or number) or order (the order's reference)", errBadRequest))
+	case (req.Invoice == "") == (req.Order == "") || req.Split || req.CreditRest:
+		s.fail(w, r, fmt.Errorf("%w: give invoice (the invoice's id or number) or order (the order's reference), or parts", errBadRequest))
 		return
 	case req.Order != "":
 		target = matching.OrderTarget(req.Order)
 	}
-	p := principalFrom(r.Context())
 	x, err := s.matcher().Match(r.Context(), p.TenantID, id, target, p.Actor())
 	if err != nil {
 		s.fail(w, r, invoiceErr(err))

@@ -2,7 +2,7 @@
   "id": "virtual-account-per-customer",
   "title": "Give each customer their own account number",
   "summary": "Open a bank account number for a customer to pay into, record it, and send it to them, so every transfer is known to be theirs.",
-  "description": "Start it with a customer's name and email. It opens an account number for them with your payments account, records it in a table, and sends it to them. Money they send to it arrives in your account with their name on it; the template \"Tell me when money comes in\" records each credit. A customer gets one account number, however often it is started. Works with Moniepoint.",
+  "description": "Start it with a customer's name and email. It opens an account number for them with your payments account, records it in a table, and sends it to them. Money they send to it arrives in your account with their name on it; the template \"Tell me when money comes in\" records each credit. A customer gets one account number, however often it is started. Works with Moniepoint, Paystack, Flutterwave and iswallet.",
   "category": "payments",
   "tags": [
     "payments",
@@ -41,6 +41,15 @@
       ],
       "title": "Open with",
       "description": "The payments account that opens customers' account numbers.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet the accounts belong to",
+      "description": "Only for iswallet, which holds several wallets: the wallet whose account numbers these are. Leave it blank otherwise.",
       "required": false,
       "default": "",
       "example": ""
@@ -143,7 +152,8 @@
           "customer": {
             "name": "=trigger.body.name",
             "email": "=trigger.body.email"
-          }
+          },
+          "account": "{{funding_account}}"
         },
         "effect": {
           "idempotency_seed": "='customer-account:' + trigger.body.email"
