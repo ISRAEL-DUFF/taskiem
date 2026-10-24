@@ -1,6 +1,6 @@
 # 0047 — Templates compose: a template can be a step of another workflow
 
-Date: 2026-10-23 · Status: **Proposed**
+Date: 2026-10-23 · Status: **Accepted** (built 2026-10-24; see [As built](#as-built))
 
 ## Context
 
@@ -74,12 +74,25 @@ Taskiem already plans half of this. The `subflow` step type exists in wd/v1 (`co
 - `subflow` (point 5) is unchanged here and stays in Phase 3.
 - **Not decided here:** a business's own workflows as callable components (a private library), and templates in the connector catalogue ([0020](0020-connector-catalogue.md)) for other publishers. Both would use the same contract.
 
-## Open questions
+## Open questions, as answered
 
-1. **Which templates first.** Proposed: Pay a list, Run payroll, the Payrolla summary and records, Send an invoice. Each needs `outputs` written and tested.
-2. **Failure inside a template step.** Proposed: the template's own `on_error` paths run as written. A failure that escapes the template fails the `template` step, so the caller's `on_error` and retry apply to the step as a whole. A retry restarts the template's unfinished steps, never its finished ones.
-3. **Params set by the caller at run time.** Params are filled when the calling workflow is built, as on the Start page, and never from run data, because they can change which connections and capabilities the template needs. Is any template's param something a caller would need per run? If so, it should be a run input instead.
-4. **Showing the effect to people.** Should the Start page and the Guide say "this uses Run payroll, which pays your staff after approval" for a composed workflow? Proposed: yes, as the plain steps already name each step.
+1. **Which templates first.** Pay a list, Run payroll, Send an invoice, and the Payrolla payroll summary and records, each with `outputs` checked against its own workflow tests.
+2. **Failure inside a template step.** The template's own `on_error` paths run as written. A failure that escapes them fails the template's body, and the `template` step's `on_error`, when it has one, runs for the step as a whole. A template step takes no `retry` of its own: each of the template's steps keeps its own retries, so nothing finished runs again.
+3. **Params set by the caller at run time.** Params stay values filled when the calling workflow is built. Run payroll's month was the one value a caller needs per run, so it became a run input (`period`). A parameter only a template's trigger uses (Run payroll's pay day) is not a template step's to give.
+4. **Showing the effect to people.** The editor's template step says what the template does ("Moves money · waits for a person to approve or answer"), what it gives back and its steps, and the read-back names the template. The Start page and the Guide do not yet describe a composed workflow differently from any other.
+
+## As built
+
+The decision holds as written, with these choices made while building it:
+
+- **The expansion's shape.** A template step `<id>` becomes `<id>__body`, a `branch` with one path that always runs and holds `<id>__input` (a transform giving the step's input) and the template's steps, then `<id>`, a transform giving its outputs. A flat expansion cannot work: a step whose need was skipped is skipped too (wd-v1, rule 4), so outputs that needed the template's last steps would be skipped whenever the template branches on an approval. A branch completes once its steps have run or been skipped. The template's steps are therefore counted in the body's own scope, not in the template step's.
+- **Keys inside a template.** A template's expressions read a foreach iteration's or a handled step's outputs by step id (`o.pay.status`, `has(o.pay_failed)`). Each expanded step carries `origin` (the template, the template step, and its id inside the template), and decide keys its output by that id, so every template expression works unchanged after its ids are prefixed. Capability expansion keeps `origin` on the step that keeps its id.
+- **The id budget.** A template step's id is at most 14 characters; a callable template's step ids at most 31, and its capability steps' at most 8. With two prefixes, every expanded id stays a valid step id, and every capability step's stays within the 40 characters its rail's composite needs. A test expands each callable template two deep, under the longest ids allowed, on every rail that can run it.
+- **Pinned on save.** Versions are immutable and every save is a new version, so templates are pinned when a version is saved (`workflow_template_pins`), not at publish: publishing publishes a saved version as it was saved. The workflow's page offers an update with its differences, and the next version saved takes it.
+- **Outputs.** Each output is typed (`string`, `integer`, `number`, `boolean`, `list`, `object`). A step that may not run is read with an optional chain, and the library refuses to load a template that breaks this. A whole-number `number` reads back as an integer after the run's history, as every step output does.
+- **The product rule is enforced.** A workflow around a product (a Payrolla trigger or step) that uses a template that moves money is refused by the publishing checks, not only flagged by the builder's evaluation.
+- **Embed apps.** A template step's template must be in the app's `allowed_templates`, and the connectors its steps use count as the workflow's.
+- **The builder's evaluation.** `evals/builder/composition.jsonl` holds two- and three-template goals graded on the templates used, and on the expanded draft for connectors, steps and rules. The offline heuristic composes only when the goal sequences two strongly matched callable templates; the real measure is the model's.
 
 ## Provenance
 
