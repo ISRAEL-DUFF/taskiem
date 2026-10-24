@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B6 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B7 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -393,6 +393,15 @@ The family page with every child, fees, payments, receipts, account numbers; lin
 ### B7: chasing (S)
 
 Debtors with aging; the three rungs with the school's wording; at most 50 per send; promises; plans decided and followed; `school-fee-reminders`, `school-plan-decided`.
+
+**Built** (B7): migration 00217 (`school_reminder_sends`, `school_reminders`, `school_promises`, `school_plan_arrears`, the reminder wording and plan grace settings); `engine/schools` debtors with aging, the ladder, promises and plan standing; `GET /v1/schools/debtors` (and CSV), `POST /v1/schools/reminders`, promises on a student, `POST /v1/schools/chasing/check`; `schools@1` `send_reminders`, `plan_decisions`, `tell_plan_decision`; the templates `school-fee-reminders` and `school-plan-decided`; the Debtors page ([schools](../schools.md), [templates](../templates.md)). Differences from §11:
+
+- **One message per guardian names every selected child of the family** with their balances summed; a family is sent a rung at most once a day. Plans in arrears are reminded at the rung of their earliest missed instalment.
+- **A send is one request**: at most 50 students, with an `Idempotency-Key`; a retry replays the stored result and sends nothing.
+- **Promises and plans are checked hourly**, not nightly, each decision exactly once; a promise made on its due date is decided the day after.
+- **A plan's standing** counts payments since the plan was approved against the instalments due so far, with a grace in days (default 0); `PlanStanding` is exposed for B8's clearance rule and clearance itself is unchanged.
+- **`school-plan-decided` runs every 15 minutes** over decisions not yet told, a safety net behind the immediate message B6 sends, sharing its once-only key; no new trigger type was added.
+- **Template keywords** avoid "debtors", "overdue" and "chase" so the existing templates keep their place; `school-fee-reminders` needs "school" or "fees" in the goal.
 
 ### B8: clearance and the gate (S)
 
