@@ -36,6 +36,10 @@ type Context struct {
 	// Startable are the business's published workflows a subflow step
 	// may run as a child run (decision 0049): their id, name and inputs.
 	Startable []StartableWorkflow `json:"startable_workflows,omitempty"`
+	// AISteps says the business may use ai steps (decision 0050): the
+	// deployment has a model, the plan includes AI, and the business has
+	// not turned them off.
+	AISteps bool `json:"ai_steps,omitempty"`
 }
 
 // StartableWorkflow is one of the business's workflows a subflow step may

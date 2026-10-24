@@ -208,10 +208,11 @@ export interface TransformStep extends StepBase {
   config: { output: unknown };
 }
 
+/** Asks the deployment's AI model at run time (docs/contracts/wd-v1.md, AI steps): personal data in the prompt and input is hidden behind placeholders, except the input fields listed in personal_data; the output is the answer, matching output_schema. */
 export interface AiStep extends StepBase {
   type: "ai";
   input?: Values;
-  config: { prompt: string; output_schema: object | boolean; model?: string };
+  config: { prompt: string; output_schema: object | boolean; model?: string; personal_data?: string[] };
 }
 
 export type Step =

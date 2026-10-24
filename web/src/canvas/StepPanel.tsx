@@ -127,6 +127,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
       {step.type === "subflow" && <SubflowConfig step={step} set={set} advanced={advanced} sources={sources} />}
+      {step.type === "ai" && <AIConfig step={step} set={set} advanced={advanced} />}
       {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel", "callback", "respond"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
@@ -535,6 +536,87 @@ function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, 
       )}
     </>
   );
+}
+
+interface AIStatus {
+  enabled: boolean;
+  model?: string;
+  step_models?: string[];
+  retention?: string;
+  steps_allowed: boolean;
+  steps_plan: boolean;
+}
+
+function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>; set: (p: Any) => void; advanced: boolean }) {
+  const status = useLoad(() => get<AIStatus>("/v1/ai/status"), []);
+  const cfg = step.config;
+  const input = (step.input ?? {}) as Record<string, unknown>;
+  const through = cfg.personal_data ?? [];
+  const setCfg = (patch: Partial<typeof cfg>) => set({ config: { ...cfg, ...patch } });
+  const st = status.data;
+  return (
+    <>
+      {st && !st.enabled && <p className="notice">This deployment has no AI model, so this step cannot run.</p>}
+      {st && st.enabled && !st.steps_allowed && <p className="notice">Your business has turned AI steps off (Settings, Governance).</p>}
+      {st && st.enabled && !st.steps_plan && <p className="notice">Your plan does not include AI.</p>}
+      <Field label="What to ask" hint="Say what you want in plain words: sort the message, pull out the address, write a short reply.">
+        <textarea rows={5} value={cfg.prompt} onChange={(e) => setCfg({ prompt: e.target.value })} />
+      </Field>
+      {!advanced && (
+        <>
+          <p className="hint">It reads: {Object.keys(input).join(", ") || "nothing yet"}.</p>
+          <p className="hint">It answers with: {answerFields(cfg.output_schema).join(", ") || "nothing yet"}.</p>
+        </>
+      )}
+      {advanced && (
+        <div data-technical>
+          <Field label="What it reads (JSON)" hint="The data the model reads, by name; values may be expressions such as =trigger.body.message.">
+            <JsonInput value={input} onChange={(v) => set({ input: (v as object | undefined) ?? {} })} rows={6} />
+          </Field>
+          <Field label="The answer's shape (JSON Schema)" hint={'An object schema, e.g. {"type": "object", "properties": {"urgent": {"type": "boolean"}}, "required": ["urgent"]}. The step\'s output is the answer.'}>
+            <JsonInput value={cfg.output_schema} onChange={(v) => v !== undefined && setCfg({ output_schema: v as object })} rows={8} />
+          </Field>
+        </div>
+      )}
+      <h3>Personal data</h3>
+      <p className="hint">
+        Names, phone numbers, emails, BVNs and other personal data reach the model as placeholders such as [[name_1]], and are put back in its answer. Tick a field only when the model must read it as it
+        is; publishing such a step is recorded in the audit log.
+      </p>
+      {Object.keys(input).length === 0 && <p className="hint">The step reads no fields yet.</p>}
+      {Object.keys(input).map((k) => (
+        <label key={k} style={{ display: "block" }}>
+          <input
+            type="checkbox"
+            checked={through.includes(k)}
+            onChange={(e) => {
+              const next = e.target.checked ? [...through, k] : through.filter((x) => x !== k);
+              setCfg({ personal_data: next.length > 0 ? next : undefined });
+            }}
+          />{" "}
+          Let the model see <code>{k}</code> as it is
+        </label>
+      ))}
+      {advanced && st?.enabled && (
+        <Field label="Model" hint={st.retention ? `What the provider keeps: ${st.retention}` : "The deployment's default unless you pick another it offers."}>
+          <select value={cfg.model ?? ""} onChange={(e) => setCfg({ model: e.target.value || undefined })}>
+            <option value="">Default ({st.model})</option>
+            {(st.step_models ?? []).filter((m) => m !== st.model).map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+    </>
+  );
+}
+
+/** The names of the fields an answer's shape gives. */
+function answerFields(shape: unknown): string[] {
+  const props = (shape as { properties?: Record<string, unknown> } | undefined)?.properties;
+  return props ? Object.keys(props) : [];
 }
 
 function SubflowConfig({ step, set, advanced, sources }: { step: Extract<Step, { type: "subflow" }>; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {

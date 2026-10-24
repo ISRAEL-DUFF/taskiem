@@ -1262,6 +1262,18 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 			cfg["idempotency_header"] = c.IdempotencyHeader
 		}
 		p.Input, err = engine.Resolve(cfg, act, true)
+	case "ai":
+		// The question as it leaves: the prompt (an expression is
+		// evaluated) and the input. The worker masks personal data in both
+		// and reads the rest of the step from the definition.
+		var prompt, in any
+		if s.AI != nil {
+			prompt, err = engine.Resolve(s.AI.Prompt, act, true)
+		}
+		if err == nil {
+			in, err = engine.Resolve(orEmpty(s.Input), act, true)
+		}
+		p.Input = map[string]any{"prompt": prompt, "input": in}
 	default:
 		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
 	}

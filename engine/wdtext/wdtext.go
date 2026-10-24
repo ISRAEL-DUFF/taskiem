@@ -290,6 +290,11 @@ func (d describer) what(st *wd.Step) string {
 		return d.t("wd.respond")
 	case "subflow":
 		return d.subflow(st)
+	case "ai":
+		if st.AI != nil && len(st.AI.PersonalData) > 0 {
+			return d.t("wd.ai.through", "fields", strings.Join(st.AI.PersonalData, ", "))
+		}
+		return d.t("wd.ai")
 	case "template":
 		return d.template(st)
 	case "approval":

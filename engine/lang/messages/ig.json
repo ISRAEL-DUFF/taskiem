@@ -2104,6 +2104,14 @@
       "text": "Ejikọghị nọmba a na akaụntụ Taskiem ọ bụla. Iji Taskiem ebe a, banye, mepee {where}, tinye nọmba a n'okpuru WhatsApp, wee pịnye ma ọ bụ zighachi koodu anyị zitere gị.",
       "reviewed": false
     },
+    "wd.ai": {
+      "text": "Jụọ ụdị AI ajụjụ, ezoro ya ozi nzuzo",
+      "reviewed": false
+    },
+    "wd.ai.through": {
+      "text": "Jụọ ụdị AI ajụjụ, nke ga-ahụ {fields} otú ha dị; ezoro ya ozi nzuzo ndị ọzọ",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "N'otu oge: {name}",
       "reviewed": false

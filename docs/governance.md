@@ -153,6 +153,10 @@ The second person is a person, not an API key, and not the one behind the key th
 
 Git-led environments publish from merged commits: the repository's branch protection and review are the second pair of eyes there. Because of that, with either setting on (or for a gated environment), **connecting a repository in Git-led mode, switching to it, or pointing a Git-led connection at another provider, host, repository, branch or path needs a second person too** (see [Git](git.md)).
 
+## AI steps
+
+Owners decide whether the business's workflows may ask the AI model at run time ([AI steps](ai.md#ai-steps), decision 0050), under **Secrets & settings → Governance** (`ai_steps` in `PUT /v1/governance`; on unless turned off; a request that leaves it out keeps it). Turned off, saving a workflow with an ai step is refused and a published one fails when the step starts. The same section shows the model and what the provider keeps of what it is sent. Publishing a version whose ai steps let personal data through (`personal_data`) writes `ai.personal_data.allow` to the audit log. Every change of the switch is audited with its before and after.
+
 ## School requests
 
 Where the [Schools](schools.md) area is on, a cash or transfer posting at or above the school's cash threshold, and a discount at or above its discount threshold, are a third kind of thing waiting under **Approvals**, beside runs' approval steps and publish requests ([the second person](schools.md#the-second-person)). They are decided by people holding `school.approve` (owners, and custom roles given it), in the web app or by the Approve and Decline buttons on their linked WhatsApp or Telegram, through `POST /v1/schools/approvals/{id}`. They are not approval steps: no policy, level or step-up applies, and **the one-person-business exception does not either**: the person who asked never decides their own, whoever else there is. API keys never decide them. Each request and decision is audited (`school.approval.request`, `school.approval.decide`).

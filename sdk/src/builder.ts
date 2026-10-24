@@ -292,7 +292,12 @@ export function subflow(config: { workflow: string; version?: number; wait?: boo
   return { type: "subflow", ...(input === undefined ? {} : { input }), config };
 }
 
-export function ai(config: { prompt: string; output_schema: object | boolean; model?: string }, input?: Values): StepSpec {
+/**
+ * Asks the deployment's AI model at run time. Personal data in the prompt
+ * and input reaches the model as placeholders, put back in the answer;
+ * personal_data lists the input fields it may read as they are.
+ */
+export function ai(config: { prompt: Expr<string> | string; output_schema: object | boolean; model?: string; personal_data?: string[] }, input?: Values): StepSpec {
   return { type: "ai", ...(input === undefined ? {} : { input }), config };
 }
 

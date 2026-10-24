@@ -2104,6 +2104,14 @@
       "text": "Ba a haɗa wannan lamba da wani asusun Taskiem ba. Don amfani da Taskiem a nan, ka shiga, ka buɗe {where}, ka ƙara wannan lamba a ƙarƙashin WhatsApp, sannan ka rubuta ko ka mayar da lambar sirrin da muka aiko maka.",
       "reviewed": false
     },
+    "wd.ai": {
+      "text": "Tambayi samfurin AI, an ɓoye masa bayanan sirri",
+      "reviewed": false
+    },
+    "wd.ai.through": {
+      "text": "Tambayi samfurin AI, wanda zai ga {fields} yadda suke; an ɓoye masa sauran bayanan sirri",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "A lokaci guda: {name}",
       "reviewed": false

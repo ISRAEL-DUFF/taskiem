@@ -84,7 +84,7 @@ func (s *SelfHosted) post(ctx context.Context, raw []byte) ([]byte, error) {
 		if resp.StatusCode/100 == 2 {
 			return data, nil
 		}
-		fail := fmt.Errorf("selfhosted: status %d%s", resp.StatusCode, providerMessage(data))
+		fail := &StatusError{Status: resp.StatusCode, Err: fmt.Errorf("selfhosted: status %d%s", resp.StatusCode, providerMessage(data))}
 		if !retryable[resp.StatusCode] || attempt >= s.o.Retries {
 			return nil, fail
 		}

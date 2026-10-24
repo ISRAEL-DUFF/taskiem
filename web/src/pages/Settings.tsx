@@ -542,12 +542,13 @@ function Git({ env }: { env: string }) {
 /** Four-eyes on change (spec 9.1); owners change it, everyone can see it. */
 function Governance() {
   const { me } = useAuth();
-  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean; default_retention: string }>("/v1/governance"), []);
+  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean; default_retention: string; ai_steps?: boolean }>("/v1/governance"), []);
+  const ai = useLoad(() => get<{ enabled: boolean; provider?: string; model?: string; step_models?: string[]; retention?: string; steps_plan: boolean }>("/v1/ai/status"), []);
   const [retention, setRetention] = useState<string>();
   const act = useAction();
   const owner = me?.roles.includes("owner") ?? false;
   if (!data) return error ? <ErrorBox error={error} /> : null;
-  const set = (k: "four_eyes_publish" | "four_eyes_policies" | "default_retention", v: boolean | string) =>
+  const set = (k: "four_eyes_publish" | "four_eyes_policies" | "default_retention" | "ai_steps", v: boolean | string) =>
     act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()), "Saved");
   return (
     <section className="card">
@@ -563,6 +564,24 @@ function Governance() {
         <input type="checkbox" checked={data.four_eyes_policies} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_policies", e.target.checked)} /> A new
         approval policy version needs a second person
       </label>
+      <h2>AI steps</h2>
+      <p className="hint">
+        Workflows can ask the AI model at run time: to sort a message, pull details out of text, or draft a reply. Personal data is hidden from the model behind placeholders unless a step lets a field
+        through, and every such step is recorded in the audit log when it is published.
+      </p>
+      <label>
+        <input type="checkbox" checked={data.ai_steps !== false} disabled={!owner || act.busy} onChange={(e) => void set("ai_steps", e.target.checked)} /> Let workflows ask the AI model
+      </label>
+      {ai.data && (
+        <p className="hint" data-testid="ai-provider">
+          {ai.data.enabled
+            ? `Model: ${ai.data.model} (${ai.data.provider})${(ai.data.step_models?.length ?? 0) > 1 ? `; steps may also use ${ai.data.step_models?.slice(1).join(", ")}` : ""}. ${
+                ai.data.retention ? `What the provider keeps: ${ai.data.retention}.` : "This deployment has not stated what the provider keeps; ask its operator."
+              }`
+            : "This deployment has no AI model, so AI steps cannot run."}
+          {ai.data.enabled && !ai.data.steps_plan && " Your plan does not include AI."}
+        </p>
+      )}
       <h2>Retention</h2>
       <p className="hint">How long run data is kept after a run ends, when its workflow sets no retention (default 90d). The audit log is kept regardless.</p>
       <div className="row">

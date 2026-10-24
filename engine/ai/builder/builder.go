@@ -623,6 +623,9 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	if len(req.Context.Startable) > 0 {
 		doc["startable_workflows"] = req.Context.Startable
 	}
+	if req.Context.AISteps {
+		doc["ai_steps"] = true
+	}
 	return doc, refs, offered
 }
 

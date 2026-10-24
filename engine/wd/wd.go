@@ -51,7 +51,7 @@ func Validate(doc []byte) []Problem {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
 	var out []Problem
-	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkSubflows(d), checkOutputs(d)} {
+	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkSubflows(d), checkAI(d), checkOutputs(d)} {
 		out = append(out, probs...)
 	}
 	return out

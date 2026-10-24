@@ -176,3 +176,19 @@ func TestDescribeSubflowStep(t *testing.T) {
 		t.Errorf("an unknown workflow reads by id: %+v", lines[1])
 	}
 }
+
+// An ai step (decision 0050) reads as asking the model, with the fields it
+// lets through named.
+func TestDescribeAIStep(t *testing.T) {
+	def, err := wd.Load([]byte(`{"schema":"wd/v1","id":"wf_a","version":1,"name":"a","trigger":{"type":"manual"},"steps":[
+	  {"id":"a","type":"ai","config":{"prompt":"x","output_schema":{"type":"object"}}},
+	  {"id":"b","type":"ai","needs":["a"],"config":{"prompt":"x","output_schema":{"type":"object"},"personal_data":["phone","address"]},"input":{"phone":"p","address":"q"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := wdtext.Describe(def, connector.NewRegistry())
+	if len(lines) != 3 || lines[1].Text != "Ask the AI model, with personal data hidden from it" ||
+		lines[2].Text != "Ask the AI model, which sees phone, address as they are; other personal data is hidden from it" {
+		t.Errorf("read back: %+v", lines)
+	}
+}
