@@ -648,6 +648,7 @@ export function StudentFeesPanel({ studentID }: { studentID: string }) {
 function AddDiscount({ studentID, threshold, onAdded }: { studentID: string; threshold: number; onAdded: () => void }) {
   const [f, setF] = useState<DiscountForm>(emptyDiscount);
   const [tried, setTried] = useState(false);
+  const [waiting, setWaiting] = useState("");
   const act = useAction();
   const problem = discountProblem(f);
   return (
@@ -658,7 +659,10 @@ function AddDiscount({ studentID, threshold, onAdded }: { studentID: string; thr
         setTried(true);
         if (problem) return;
         void act.run(async () => {
-          await plainly(post(`/v1/schools/students/${studentID}/discounts`, discountRequest(f)));
+          const out = await plainly(post<Record<string, unknown>>(`/v1/schools/students/${studentID}/discounts`, discountRequest(f)));
+          // At or above the threshold the discount is recorded for a
+          // second person (202), not given yet.
+          setWaiting(needsApproval(202, out) ?? "");
           setF(emptyDiscount());
           setTried(false);
           onAdded();
@@ -695,6 +699,11 @@ function AddDiscount({ studentID, threshold, onAdded }: { studentID: string; thr
         </div>
       )}
       <ErrorBox error={act.error} />
+      {waiting && (
+        <div className="notice" role="status" data-testid="discount-waiting">
+          {waiting}
+        </div>
+      )}
       <button type="submit" disabled={act.busy}>
         Give the discount
       </button>

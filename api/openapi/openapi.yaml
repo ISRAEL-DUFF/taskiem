@@ -1338,7 +1338,7 @@ paths:
       tags:
       - Invoices
       summary: Amend a sent invoice
-      description: 'A recorded change with a reason, added as a line of its own: a line added (add, with description and amount_kobo, optionally pass_through_for), an earlier item taken out (remove, with line, its position from 0) or a discount (discount, with amount_kobo; never of money collected for others). The total and status follow from the lines and the payments counted: the total never goes below what was paid (409), and a paid invoice whose total rises is part-paid again. A draft is changed instead (409). Where the Schools area is on, a discount at or above the school''s discount threshold answers 409 with code needs_approval. Audited.'
+      description: 'A recorded change with a reason, added as a line of its own: a line added (add, with description and amount_kobo, optionally pass_through_for), an earlier item taken out (remove, with line, its position from 0) or a discount (discount, with amount_kobo; never of money collected for others). The total and status follow from the lines and the payments counted: the total never goes below what was paid (409), and a paid invoice whose total rises is part-paid again. A draft is changed instead (409). Where the Schools area is on, a discount at or above the school''s discount threshold waits for a second person instead: 202 with code needs_approval and the request recorded; the invoice is amended when someone with school.approve approves it. Audited.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1389,6 +1389,8 @@ paths:
                     $ref: '#/components/schemas/CustomerInvoice'
                   amendment:
                     $ref: '#/components/schemas/InvoiceAmendment'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
         default:
           $ref: '#/components/responses/Error'
   /v1/invoices/{id}/payments/{payment}/undo:
@@ -3451,6 +3453,323 @@ paths:
                 $ref: '#/components/schemas/SchoolAccountJob'
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/payments:
+    post:
+      operationId: postSchoolPayment
+      tags:
+      - Schools
+      summary: Post money a family paid at the desk
+      description: 'Cash, a transfer to the school''s own account, a POS payment or another way, for a student (by id or admission number): a money log entry that is the student''s money, counted towards their open term invoices oldest first (then their siblings'' where the school shares family credit), with a receipt per part; what is left is the family''s credit. At or above the school''s cash threshold the posting is recorded as pending instead (202, code needs_approval, with the request): nothing reaches the fees until someone with school.approve who is not the requester approves it. An Idempotency-Key header makes a retry the same posting. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 200
+        description: 'Makes the request safe to retry: the same key answers the same posting'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student, amount_kobo, how]
+              properties:
+                student:
+                  type: string
+                  description: The student's id or admission number
+                amount_kobo:
+                  type: integer
+                  minimum: 100
+                how:
+                  type: string
+                  enum: [cash, transfer, pos, other]
+                date:
+                  type: string
+                  format: date
+                  description: When it was paid; today when left out
+                note:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: Posted, with its parts and receipts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [posting]
+                properties:
+                  posting:
+                    $ref: '#/components/schemas/SchoolPosting'
+        '200':
+          description: The same key again, the posting as it was
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [posting]
+                properties:
+                  posting:
+                    $ref: '#/components/schemas/SchoolPosting'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listSchoolPayments
+      tags:
+      - Schools
+      summary: List cash postings and the other requests
+      description: Newest first, at most limit (default 100); filtered by status (pending, posted, declined), kind (cash_posting, discount, discount_amendment, term_invoice) and student (id). Names masked unless ?reveal=true with pii.reveal (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending, posted, declined]
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [cash_posting, discount, discount_amendment, term_invoice]
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [postings, revealed]
+                properties:
+                  postings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPosting'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/approvals:
+    get:
+      operationId: listSchoolApprovals
+      tags:
+      - Schools
+      summary: The school's requests waiting for a second person
+      description: Cash postings at or above the cash threshold, discounts and discount amendments at or above the discount threshold, and term invoices held for such a discount; each says whether the caller asked for it (yours), in which case they cannot decide it. Names masked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.approve
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPosting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/approvals/{id}:
+    post:
+      operationId: decideSchoolApproval
+      tags:
+      - Schools
+      summary: Approve or decline a request
+      description: 'By a person (not an API key) with school.approve who did not ask for it: the requester never decides their own (409). Approving posts the cash (the entry, its parts and receipts), gives the discount, amends the invoice or makes the held term invoice, exactly once; declining needs a reason and changes nothing. The requester is told either way. A request is decided once (409 after). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, declined]
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The request as decided
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '#/components/schemas/SchoolPosting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/receipts:
+    get:
+      operationId: listSchoolReceipts
+      tags:
+      - Schools
+      summary: List receipts
+      description: Newest first, at most limit (default 100); filtered by student, term or invoice (ids) or found by number. Each carries its verification link. Names masked unless ?reveal=true with pii.reveal (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: invoice
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: number
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipts, revealed]
+                properties:
+                  receipts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolReceipt'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/receipts/{id}:
+    get:
+      operationId: getSchoolReceipt
+      tags:
+      - Schools
+      summary: A receipt, by id or number
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receipt, revealed]
+                properties:
+                  receipt:
+                    $ref: '#/components/schemas/SchoolReceipt'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/receipts/{id}/pdf:
+    get:
+      operationId: getSchoolReceiptPDF
+      tags:
+      - Schools
+      summary: A receipt's PDF
+      description: 'A5, with an embedded font: the school, the student and class, the amount and date, what it paid (the invoice and its lines), the invoice''s balance after it, the receipt number and a QR code of the verification link. Made on demand; nothing is kept. It carries the student''s name, so each rendering is in the audit log.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/students/{id}/options:
     put:
       operationId: setSchoolStudentOptions
@@ -3536,7 +3855,7 @@ paths:
       tags:
       - Schools
       summary: Give a student a standing discount
-      description: 'A percent of the school''s own fees (never of money collected for others) or an amount, with a reason, taken off each term invoice made while it stands; their drafts are rebuilt. One at or above the school''s discount threshold needs a second person: until approvals arrive it is refused, 409 with code needs_approval (a percent is weighed against the current term''s fees). Audited.'
+      description: 'A percent of the school''s own fees (never of money collected for others) or an amount, with a reason, taken off each term invoice made while it stands; their drafts are rebuilt. One at or above the school''s discount threshold waits for a second person instead: 202 with code needs_approval and the request recorded (a percent is weighed against the current term''s fees); the discount is given when someone with school.approve approves it. Audited.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -3584,6 +3903,8 @@ paths:
                     $ref: '#/components/schemas/SchoolDiscount'
                   drafts_updated:
                     type: integer
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
         default:
           $ref: '#/components/responses/Error'
   /v1/schools/students/{id}/discounts/{discount}:
@@ -12927,6 +13248,10 @@ paths:
                   type: integer
                   minimum: 0
                   description: The owner's discount threshold in whole naira (0 for none); set while the area is on. Audited.
+                cash_threshold_naira:
+                  type: [integer, 'null']
+                  minimum: 0
+                  description: The owner's cash threshold in whole naira (0 for every posting, null for none); set while the area is on. Audited.
                 issuing:
                   $ref: '#/components/schemas/SchoolIssuing'
       responses:
@@ -16097,6 +16422,21 @@ components:
             $ref: '#/components/schemas/Error'
     NoContent:
       description: Done; no body.
+    SchoolApprovalNeeded:
+      description: 'Recorded for a second person (docs/schools.md): at or above the school''s threshold, the posting or discount waits as a request, which people with school.approve decide; nothing reaches the fees meanwhile.'
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, code, request]
+            properties:
+              error:
+                type: string
+              code:
+                type: string
+                enum: [needs_approval]
+              request:
+                $ref: '#/components/schemas/SchoolPosting'
   schemas:
     Agent:
       type: object
@@ -17225,7 +17565,10 @@ components:
         bursar_role: *id001
         discount_threshold_naira:
           type: integer
-          description: Discounts at or above it need a second person (refused until approvals arrive); 0 for none
+          description: Discounts at or above it wait for a second person; 0 for none
+        cash_threshold_naira:
+          type: [integer, 'null']
+          description: Cash postings at or above it wait for a second person; 0 for every posting, null for none
         issuing:
           $ref: '#/components/schemas/SchoolIssuing'
         issuers:
@@ -17233,6 +17576,170 @@ components:
           description: The business's prod connections that can issue students' account numbers, and what each needs
           items:
             $ref: '#/components/schemas/SchoolIssuer'
+    SchoolPosting:
+      type: object
+      description: 'A request of the school (docs/schools.md#cash-and-transfers): a cash posting (pending, posted at once or after approval, or declined), or a discount, a discount amendment or a held term invoice waiting for a second person.'
+      required: [id, kind, status, amount_kobo, details, requested_by, requested_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [cash_posting, discount, discount_amendment, term_invoice]
+        status:
+          type: string
+          enum: [pending, posted, declined]
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        term_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        details:
+          type: object
+          description: 'What was asked: how, date and note for a posting; kind, percent or amount_kobo and reason for a discount; the amendment; send for a held invoice'
+          additionalProperties: true
+        requested_by:
+          type: string
+        requested_user:
+          type: string
+          format: uuid
+        requested_email:
+          type: string
+          description: The requester's sign-in email, when a person asked
+        requested_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+        decided_email:
+          type: string
+        decided_at:
+          type: string
+          format: date-time
+        decision_reason:
+          type: string
+        result:
+          $ref: '#/components/schemas/SchoolPostingResult'
+        yours:
+          type: boolean
+          description: The caller asked for it, so they cannot decide it
+    SchoolPostingResult:
+      type: object
+      description: What a posting did, or an approved request made.
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        parts:
+          type: array
+          items:
+            type: object
+            required: [invoice_id, number, amount_kobo]
+            properties:
+              invoice_id:
+                type: string
+                format: uuid
+              number:
+                type: string
+              amount_kobo:
+                type: integer
+              receipt_id:
+                type: string
+                format: uuid
+              receipt_number:
+                type: string
+        credit_kobo:
+          type: integer
+          description: What was left as the family's credit
+        discount_id:
+          type: string
+          format: uuid
+        amendment_id:
+          type: string
+          format: uuid
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+    SchoolReceipt:
+      type: object
+      description: 'A receipt for one payment part counted towards a term invoice (docs/schools.md#receipts), numbered per business and term; voided, never deleted, when the part is undone.'
+      required: [id, number, term_id, term, student_id, admission_number, name, class_id, class, invoice_id, invoice_number, part_id, amount_kobo, balance_after_kobo, how, paid_at, issued_by, issued_at, voided]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          description: RCT-2026T1-0079
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        part_id:
+          type: string
+          format: uuid
+        amount_kobo:
+          type: integer
+        balance_after_kobo:
+          type: integer
+        how:
+          type: string
+          enum: [exact, suggested, suggested_auto, manual]
+        paid_at:
+          type: string
+          format: date-time
+        issued_by:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+        voided:
+          type: boolean
+        voided_at:
+          type: string
+          format: date-time
+        void_reason:
+          type: string
+        link:
+          type: string
+          description: The public verification page, /r/<token> on the form host
     SchoolIssuing:
       type: object
       description: The connection that issues students' account numbers (and its wallet, on rails that hold several), and whether siblings share family credit.
@@ -17576,6 +18083,9 @@ components:
       - type: object
         required: [created, send, sent, failed]
         properties:
+          requested:
+            type: integer
+            description: Students held for a discount and sent to a second person; their invoice is made on approval
           created:
             type: integer
           send:

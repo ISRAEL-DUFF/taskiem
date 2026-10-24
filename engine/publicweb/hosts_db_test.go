@@ -166,7 +166,9 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// Invoices (decision 0045, T3): an invoice's page, by its token, with nothing personal.
 		"taskiem_public_customer_invoice(bytea)": true,
 		// Paying an invoice (T4): asking for an account number or a payment link, and what the page shows of them.
-		"taskiem_public_invoice_request(bytea,text,bigint)": true, "taskiem_public_invoice_payment(bytea)": true}
+		"taskiem_public_invoice_request(bytea,text,bigint)": true, "taskiem_public_invoice_payment(bytea)": true,
+		// A school receipt's verification page (B5): Valid or Voided, the school, the amount and the date, by the receipt's token.
+		"taskiem_public_school_receipt(bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

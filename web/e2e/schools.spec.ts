@@ -232,12 +232,13 @@ test("a term is invoiced from its fees once per student, and a sent invoice is a
   await expect(page.getByTestId("amendments")).toContainText("Lost textbook");
   await axeBoth(page, "/invoices/:id (amended)");
 
-  // A discount at or above the threshold waits for a second person: refused.
+  // A discount at or above the threshold waits for a second person: recorded
+  // as a request (cash.spec.ts decides such requests), not made.
   await page.getByRole("button", { name: "Amend…" }).click();
   await amend.getByLabel("Change").selectOption("discount");
   await amend.getByLabel("Amount (₦)").fill("20000");
   await amend.getByLabel("Reason").fill("Hardship");
   await amend.getByRole("button", { name: "Amend the invoice" }).click();
-  await expect(amend.getByRole("alert")).toContainText("second person");
+  await expect(page.getByTestId("amendment-status")).toContainText("waits for a second person");
   await expect(page.getByTestId("amendments").getByRole("listitem")).toHaveCount(1);
 });

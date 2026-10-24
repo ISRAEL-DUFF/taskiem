@@ -1388,6 +1388,54 @@
       "text": "Wanne?\n{list}\nAika *run* da cikakken suna.",
       "reviewed": false
     },
+    "wa.school.cash_posting": {
+      "text": "An biya {amount} {how} don {student} ({class}), {by} ya shigar.",
+      "reviewed": false
+    },
+    "wa.school.discount": {
+      "text": "Rangwamen {kind} na {amount} don {student} ({class}): {reason}. {by} ya nema.",
+      "reviewed": false
+    },
+    "wa.school.discount_amendment": {
+      "text": "Rangwame na {amount} a kan invoice {number}: {reason}. {by} ya nema.",
+      "reviewed": false
+    },
+    "wa.school.how.cash": {
+      "text": "da kuɗi a hannu",
+      "reviewed": false
+    },
+    "wa.school.how.other": {
+      "text": "ta wata hanya",
+      "reviewed": false
+    },
+    "wa.school.how.pos": {
+      "text": "ta POS",
+      "reviewed": false
+    },
+    "wa.school.how.transfer": {
+      "text": "ta hanyar tura kuɗi zuwa asusun makarantar",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_posting": {
+      "text": "shigar da kuɗi a teburi",
+      "reviewed": false
+    },
+    "wa.school.kind.discount": {
+      "text": "rangwame",
+      "reviewed": false
+    },
+    "wa.school.kind.discount_amendment": {
+      "text": "rangwame a kan invoice",
+      "reviewed": false
+    },
+    "wa.school.kind.term_invoice": {
+      "text": "invoice na zangon karatu mai rangwame",
+      "reviewed": false
+    },
+    "wa.school.term_invoice": {
+      "text": "Invoice na zangon karatu na {student} ({class}), {amount}, yana da rangwame da ya kai iyakar makarantar. {by} ya nema.",
+      "reviewed": false
+    },
     "wa.shop.add_failed": {
       "text": "Ba a iya ajiye wannan ba ({reason}). Amsa *yes* don sake gwadawa, ko *cancel*.",
       "reviewed": false
@@ -2298,6 +2346,10 @@
     },
     "wd.trigger.invoice_paid": {
       "text": "Lokacin da aka biya ɗaya daga cikin invoice ɗinku gaba ɗaya",
+      "reviewed": false
+    },
+    "wd.trigger.invoice_payment": {
+      "text": "Lokacin da aka ƙidaya biyan kuɗi zuwa ɗaya daga cikin invoice ɗinku",
       "reviewed": false
     },
     "wd.trigger.manual": {

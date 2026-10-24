@@ -83,6 +83,7 @@ import {
   type SplitRow,
 } from "../lib/invoices";
 import { isMasked, telLink } from "../lib/orders";
+import { receiptPDF, type Receipt } from "../lib/schoolPayments";
 
 /** Runs a request and words the server's refusal as a sentence. */
 async function plainly<T>(p: Promise<T>): Promise<T> {
@@ -782,7 +783,7 @@ function ItemsEditor({
 /** One invoice (GET /v1/invoices/{id}): its lines and totals, payments, and what can be done with it. */
 export function InvoicePage() {
   const { id = "" } = useParams();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const location = useLocation();
   const [sent, setSent] = useState<InvoiceSent | undefined>(() => (location.state as { sent?: InvoiceSent } | null)?.sent);
   const [sendKey, setSendKey] = useState(newRequestKey);
@@ -798,6 +799,13 @@ export function InvoicePage() {
   const { data, error, reload } = useLoad(() => get<{ invoice: CustomerInvoice; revealed: boolean }>(invoicePath(id)), [id]);
   useLiveRefresh(reload);
   const x = data?.invoice;
+  // A school's receipts for the payments counted (docs/schools.md#receipts).
+  const receipts = useLoad(
+    () => (me?.schools && x && x.status !== "draft" ? get<{ receipts: Receipt[] }>(`/v1/schools/receipts?invoice=${encodeURIComponent(x.id)}`) : Promise.resolve(undefined)),
+    [id, me?.schools, x?.status, x?.paid_kobo, x?.payments?.length],
+  );
+  const receiptOf: Record<string, Receipt> = {};
+  for (const r of receipts.data?.receipts ?? []) receiptOf[r.part_id] = r;
   const may = invoiceActions(x?.status ?? "", can);
   const reasonProblem = voidProblem(reason);
 
@@ -1015,6 +1023,7 @@ export function InvoicePage() {
             <h2 id="inv-payments">Payments</h2>
             <Payments
               invoice={x}
+              receipts={receiptOf}
               canUndo={may.undo}
               undoing={undoing}
               setUndoing={(p) => {
@@ -1043,6 +1052,7 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
   const [open, setOpen] = useState(false);
   const [f, setF] = useState<AmendmentForm>(emptyAmendment);
   const [tried, setTried] = useState(false);
+  const [waiting, setWaiting] = useState<string>();
   const act = useAction();
   const problem = amendmentProblem(f);
   const removable = removableLines(x);
@@ -1050,6 +1060,13 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
   return (
     <section className="card" aria-labelledby="inv-amend">
       <h2 id="inv-amend">Amendments</h2>
+      <div role="status" aria-live="polite">
+        {waiting !== undefined && (
+          <div className="notice" data-testid="amendment-status">
+            {waiting || "Invoice amended."}
+          </div>
+        )}
+      </div>
       <p className="hint">
         A sent invoice is not edited: it is amended, with a reason, and each amendment shows as its own line to the customer. The total never goes below what was paid; a paid invoice whose total rises
         is part-paid again.
@@ -1075,12 +1092,15 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
             setTried(true);
             if (problem) return;
             void act.run(async () => {
-              await plainly(post(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
+              const out = await plainly(post<Record<string, unknown>>(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
+              // A school's discount at or above its threshold is recorded
+              // for a second person (202), not made yet.
+              setWaiting(out.code === "needs_approval" ? "This discount is at or above the school's threshold: it is recorded and waits for a second person to approve it before it changes the invoice." : "");
               setF(emptyAmendment());
               setTried(false);
               setOpen(false);
               onDone();
-            }, "Invoice amended");
+            }, false);
           }}
         >
           <Field label="Change">
@@ -1150,6 +1170,7 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
 
 function Payments({
   invoice,
+  receipts = {},
   canUndo,
   undoing,
   setUndoing,
@@ -1157,6 +1178,8 @@ function Payments({
   onUndo,
 }: {
   invoice: CustomerInvoice;
+  /** A school's receipts, by the payment part they stand for. */
+  receipts?: Record<string, Receipt>;
   canUndo: boolean;
   undoing: string | undefined;
   setUndoing: (id: string | undefined) => void;
@@ -1183,12 +1206,22 @@ function Payments({
       <tbody>
         {rows.map(({ payment: p, undoneBy }) => {
           const struck = undoneBy ? { textDecoration: "line-through" } : undefined;
+          const rc = receipts[p.id];
           return (
             <Fragment key={p.id}>
               <tr data-testid="payment">
                 <td className="primary sf-price" data-label="Amount">
                   <span style={struck}>{naira(p.amount_kobo)}</span>
                   {undoneBy && <span className="hint"> Undone</span>}
+                  {rc && (
+                    <div className="hint" data-testid="payment-receipt">
+                      Receipt {rc.number}
+                      {rc.voided ? " (voided)" : ""}{" "}
+                      <a href={receiptPDF(rc)} target="_blank" rel="noopener" aria-label={`Open PDF of receipt ${rc.number}`}>
+                        PDF
+                      </a>
+                    </div>
+                  )}
                 </td>
                 <td data-label="Reference">
                   <span style={struck}>{p.payment_id}</span>

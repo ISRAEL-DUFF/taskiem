@@ -78,6 +78,9 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 		if err := s.waNotifyApprovals(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: approvals: %w", t, err))
 		}
+		if err := s.waNotifySchoolApprovals(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: school approvals: %w", t, err))
+		}
 		if err := s.waNotifyRuns(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: runs: %w", t, err))
 		}
@@ -227,6 +230,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 		switch it.Kind {
 		case whatsapp.OutboxApproval:
 			sendErr = s.waSendApprovalItem(ctx, it)
+		case outboxSchoolApproval:
+			sendErr = s.sendSchoolApprovalItem(ctx, it)
 		case whatsapp.OutboxRunOutcome:
 			sendErr = s.waSendRunOutcome(ctx, it)
 		case whatsapp.OutboxAlert:
@@ -479,7 +484,7 @@ func truncateErr(err error) string {
 // waResendApprovals answers "approvals": what is waiting for the person,
 // sent again with fresh buttons (at most three).
 func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
-	if !c.p.mayDecideAny() {
+	if !c.p.mayDecideAny() && !c.p.Can(PermSchoolApprove) {
 		return c.say(ctx, s, c.t("wa.approvals.denied", "org", c.tenant.Name))
 	}
 	var targets []approvalTarget
@@ -503,11 +508,22 @@ func (s *Server) waResendApprovals(ctx context.Context, c *chat) error {
 	if err != nil {
 		return err
 	}
-	if len(targets) == 0 {
+	// A school's requests waiting for this person (whatsapp_school_approvals.go).
+	school, err := s.pendingSchoolRequestsFor(ctx, c)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 && len(school) == 0 {
 		return c.say(ctx, s, c.t("wa.approvals.none"))
 	}
 	for _, t := range targets {
 		if err := s.waSendApproval(ctx, c.tenant, t, true); err != nil {
+			return err
+		}
+	}
+	for _, id := range school {
+		req := id
+		if err := s.sendSchoolApprovalItem(ctx, whatsapp.OutboxItem{Tenant: c.tenant.ID, Channel: c.ch.Name(), Kind: outboxSchoolApproval, User: c.p.UserID, Run: &req}); err != nil && !errors.Is(err, whatsapp.ErrNothingToSend) {
 			return err
 		}
 	}
@@ -579,6 +595,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	var level int
 	var status string
 	var role *string
+	school := false
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		row, err = s.loadToken(ctx, tx, tok, whatsapp.PurposeDecide)
@@ -596,8 +613,11 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 			refusal = "used"
 			return nil
 		}
-		if err := tx.QueryRow(ctx, `SELECT status, level, role FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level, &role); err != nil {
-			return err
+		// A school's request (whatsapp_school_approvals.go) has no run.
+		if school = row.claims.Step == schoolStep; !school {
+			if err := tx.QueryRow(ctx, `SELECT status, level, role FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level, &role); err != nil {
+				return err
+			}
 		}
 		// Single use: spending one button spends its pair.
 		_, err = tx.Exec(ctx, `UPDATE whatsapp_tokens SET used_at = now() WHERE notice = $1 AND used_at IS NULL`, row.notice)
@@ -605,6 +625,9 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	})
 	if err != nil {
 		return err
+	}
+	if school && refusal == "" {
+		return s.waSchoolDecide(ctx, c, tenant, p, row.claims)
 	}
 	if refusal != "" {
 		if refusal != "invalid" {

@@ -167,7 +167,7 @@ func (a *actions) invoiceTerm(ctx context.Context, req connector.Request) (conne
 	}
 	return connector.Response{Output: map[string]any{"term_id": t.ID.String(), "term": t.Name + " " + t.Session, "enrolled": r.Enrolled, "to_invoice": r.ToInvoice,
 		"created": r.Created, "already_invoiced": r.AlreadyInvoiced, "total_kobo": r.TotalKobo, "pass_through_kobo": r.PassThroughKobo,
-		"no_contact": len(r.NoContact), "no_fees": len(r.NoFees), "nothing_to_pay": len(r.NothingToPay), "needs_approval": len(r.NeedsApproval),
+		"no_contact": len(r.NoContact), "no_fees": len(r.NoFees), "nothing_to_pay": len(r.NothingToPay), "needs_approval": len(r.NeedsApproval), "requested": r.Requested,
 		"sent": r.Sent, "failed": r.Failed}}, nil
 }
 
