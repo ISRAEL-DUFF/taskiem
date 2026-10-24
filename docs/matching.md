@@ -81,6 +81,8 @@ In chat, an order is asked about as one: "Is this for storefront order AK-7QX4KD
 
 Over the API: `GET /v1/money/suggestions` (each with `target_kind`, `target` such as `order:AK-7QX4KD`, `number`, `due_kobo` and `customer`), `GET /v1/money/unmatched` (the payments left for a person, and the `orders` they can be matched to), `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` with `{"invoice": "INV-0104"}` or `{"order": "AK-7QX4KD"}`; `?reveal=true` with `pii.reveal` on the two lists. Confirming or matching to an order answers with the order and its payments.
 
+A school's families can also say on [their page](schools.md#the-family-page) that they paid some other way: **To match** lists those claims ("Families say they paid", `claims` in `GET /v1/money/unmatched`) beside the money, so the bursar can find the payment they describe and match or post it. A claim never counts as a payment; one the school cannot find is dismissed with a reason.
+
 ## Automatic matching
 
 Under **Invoices > Settings**, **Match strong suggestions automatically** is off by default. When on, a suggestion scoring 85 or more is matched without asking, provided the next suggestion for the same payment scores at least 15 less, whether it is for an invoice or an order. Two invoices or orders of the same amount with nothing else to tell them apart are left for a person. An automatic match is listed as matched automatically, with its reasons, and can be undone like any other.

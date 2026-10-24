@@ -80,11 +80,12 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	s.schoolFeeRoutes(r)     // fees and term invoices (schools_fees.go)
 	s.schoolAccountRoutes(r) // students' account numbers (schools_accounts.go)
 	s.schoolCashRoutes(r)    // cash at the desk, approvals, receipts (schools_cash.go)
+	s.schoolFamilyRoutes(r)  // the family page's claims, plans and links (schools_family.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }
 
 func (s *Server) schoolsSvc() *schools.Schools {
-	return &schools.Schools{Pool: s.Store.Pool, Vault: s.Vault, Invoices: s.Invoices, Rails: s.accountRails(), Logger: s.Logger}
+	return &schools.Schools{Pool: s.Store.Pool, Vault: s.Vault, Invoices: s.Invoices, Rails: s.accountRails(), InboxKey: s.SchoolInboxKey, Logger: s.Logger}
 }
 
 // accountRails are AccountRails, else the invoices' rails when they can
@@ -134,10 +135,14 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	var on, bursar bool
 	var threshold int64
 	var cash *int64
+	var linkDays int
 	var issuing schools.Issuing
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if on, err = schools.Enabled(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if linkDays, err = schools.FamilyLinkDays(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
@@ -160,7 +165,7 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100, "cash_threshold_naira": nairaOrNil(cash),
-		"issuing": issuing, "issuers": issuers})
+		"family_link_days": linkDays, "issuing": issuing, "issuers": issuers})
 }
 
 // nairaOrNil is a nullable threshold in whole naira.
@@ -195,6 +200,9 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		// account numbers (and its wallet), and whether siblings share
 		// family credit.
 		Issuing *schools.Issuing `json:"issuing"`
+		// FamilyLinkDays, when given, is how long a family page link works
+		// (1 to 30 days; 3 by default, B6).
+		FamilyLinkDays *int `json:"family_link_days"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -214,6 +222,7 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	bursar, threshold := false, int64(0)
 	var cash *int64
+	var linkDays int
 	var issuing schools.Issuing
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		changed, err := schools.SetEnabled(r.Context(), tx, p.TenantID, req.Enabled, p.Actor())
@@ -274,6 +283,17 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if req.FamilyLinkDays != nil && req.Enabled {
+			was, err := schools.SetFamilyLinkDays(r.Context(), tx, p.TenantID, *req.FamilyLinkDays, p.Actor())
+			if err != nil {
+				return schoolErr(err)
+			}
+			if was != *req.FamilyLinkDays {
+				if err := auditTx(r, tx, "settings.schools.family_link_days", p.TenantID.String(), map[string]any{"from": was, "to": *req.FamilyLinkDays}); err != nil {
+					return err
+				}
+			}
+		}
 		if req.Issuing != nil && req.Enabled {
 			was, err := schools.SetIssuing(r.Context(), tx, p.TenantID, *req.Issuing, p.Actor())
 			if err != nil {
@@ -291,6 +311,9 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		if cash, err = schools.CashThreshold(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
+		if linkDays, err = schools.FamilyLinkDays(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
 		if issuing, err = schools.GetIssuing(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
@@ -305,7 +328,7 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100, "cash_threshold_naira": nairaOrNil(cash),
-		"issuing": issuing, "issuers": issuers})
+		"family_link_days": linkDays, "issuing": issuing, "issuers": issuers})
 }
 
 // --- masking ---

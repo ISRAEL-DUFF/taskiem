@@ -207,6 +207,11 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 	if !embed && head == "r" && sub == "" && s.serveReceipt(w, r, key) {
 		return
 	}
+	// A school family's page (family.go) shares /s/ with status links and
+	// needs the inbox key only for its forms: a family link answers first.
+	if !embed && head == "s" && s.serveFamily(w, r, key, sub) {
+		return
+	}
 	if !s.formsReady() && head != "" {
 		s.renderPrivate(w, r, http.StatusServiceUnavailable, "formclosed.html", closedData{pageData: pageData{Title: "Not open yet", Lang: "en"},
 			Business: "Taskiem", Message: "Forms are not open yet. Please try again later."})

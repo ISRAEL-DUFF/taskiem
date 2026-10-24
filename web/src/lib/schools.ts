@@ -122,6 +122,8 @@ export interface SchoolSettings {
   discount_threshold_naira?: number;
   /** Cash postings at or above it, in naira, need a second person; 0 for every posting, null for none. */
   cash_threshold_naira?: number | null;
+  /** How many days a link to a family's page works (1 to 30; 3 by default). */
+  family_link_days?: number;
 }
 
 // --- what a person may do ---

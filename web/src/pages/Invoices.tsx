@@ -83,6 +83,8 @@ import {
   type SplitRow,
 } from "../lib/invoices";
 import { isMasked, telLink } from "../lib/orders";
+import type { Claim } from "../lib/schoolFamily";
+import { ClaimsToMatch } from "./SchoolFamily";
 import { receiptPDF, type Receipt } from "../lib/schoolPayments";
 
 /** Runs a request and words the server's refusal as a sentence. */
@@ -131,7 +133,7 @@ export function InvoiceMatch() {
   const { can } = useAuth();
   const manage = invoiceAccess(can).manage;
   const list = useLoad(() => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH), []);
-  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null; orders?: MoneyOpenOrder[] | null }>(UNMATCHED_PATH), []);
+  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null; orders?: MoneyOpenOrder[] | null; claims?: Claim[] | null }>(UNMATCHED_PATH), []);
   useLiveRefresh(list.reload);
   useLiveRefresh(left.reload);
   // The invoices a payment can be matched to by hand.
@@ -157,7 +159,7 @@ export function InvoiceMatch() {
       </div>
       <ErrorBox error={list.error} />
       {waiting === undefined && !list.error && <Skeleton rows={3} label="Loading payments to match…" />}
-      {waiting && waiting.length === 0 && unmatched.length === 0 && (
+      {waiting && waiting.length === 0 && unmatched.length === 0 && (left.data?.claims ?? []).length === 0 && (
         <EmptyState icon="invoices">Nothing to match. Payments into the accounts Taskiem gave are matched to their invoice as they come in.</EmptyState>
       )}
       {waiting?.map((p) => (
@@ -173,6 +175,7 @@ export function InvoiceMatch() {
           ))}
         </>
       )}
+      <ClaimsToMatch claims={left.data?.claims} manage={can("school.manage")} onChange={() => left.reload()} />
       {!manage && waiting && waiting.length > 0 && <p className="hint">You can see these. Someone who manages invoices can match them.</p>}
     </>
   );

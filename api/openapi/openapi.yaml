@@ -1496,6 +1496,11 @@ paths:
                     description: Storefront orders not yet paid, cancelled, expired or decided against, newest first
                     items:
                       $ref: '#/components/schemas/MoneyOpenOrder'
+                  claims:
+                    type: array
+                    description: A school's open "I have paid" claims, oldest first (docs/schools.md#the-family-page)
+                    items:
+                      $ref: '#/components/schemas/MoneyClaim'
                   revealed:
                     type: boolean
         default:
@@ -3768,6 +3773,257 @@ paths:
               schema:
                 type: string
                 format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/claims:
+    get:
+      operationId: listSchoolClaims
+      tags:
+      - Schools
+      summary: List families' "I have paid" claims
+      description: 'What families said on their page they paid some other way (docs/schools.md#the-family-page): open ones by default (status=any for all, or matched or dismissed), by student or family, newest first. A claim is never a payment; it is resolved when a payment for the student is counted, or dismissed with a reason. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: family
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, matched, dismissed, any]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The claims
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claims, revealed]
+                properties:
+                  claims:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClaim'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/claims/{id}/resolve:
+    post:
+      operationId: resolveSchoolClaim
+      tags:
+      - Schools
+      summary: Dismiss a claim
+      description: 'The bursar looked and found no such payment (or found it another way): the open claim is dismissed with a reason, once (409 after). A claim a payment answered is matched by itself when the payment is counted. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The claim as resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claim]
+                properties:
+                  claim:
+                    $ref: '#/components/schemas/SchoolClaim'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/plans:
+    get:
+      operationId: listSchoolPlans
+      tags:
+      - Schools
+      summary: List payment plan requests
+      description: 'Families'' requests for a payment plan from their page (docs/schools.md#the-family-page): undecided ones by default (status=any for all, or approved or declined), by student or family, with the parent''s instalments and words and, once decided, the decision. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: family
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [requested, approved, declined, any]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The plan requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plans, revealed]
+                properties:
+                  plans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPlanRequest'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/plans/{id}:
+    post:
+      operationId: decideSchoolPlan
+      tags:
+      - Schools
+      summary: Approve or decline a payment plan request
+      description: 'By a person (not an API key) with school.approve. Approving takes the instalments as decided (the parent''s when none are given: 1 to 6, each an amount by a date from today on, in order); declining needs a note. The family is told either way, with a fresh link to its page. A request is decided once (409 after). Its effects on reminders and clearance come with chasing. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [approved, declined]
+                instalments:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SchoolInstalment'
+                note:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The request as decided, and how the family was told
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plan]
+                properties:
+                  plan:
+                    $ref: '#/components/schemas/SchoolPlanRequest'
+                  sent:
+                    $ref: '#/components/schemas/SchoolFamilySent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/families/{id}/link:
+    post:
+      operationId: sendSchoolFamilyLink
+      tags:
+      - Schools
+      summary: Send a family a link to its page
+      description: 'Mints a fresh link to the family''s fees page (valid for the school''s family_link_days) and sends it to each guardian on WhatsApp or Telegram where they get the business''s updates there, otherwise by SMS, with an optional message before it. The link is answered too, for the bursar to pass on by hand. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The link and where it went
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/SchoolFamilySent'
+                - type: object
+                  required: [link]
+                  properties:
+                    link:
+                      type: string
+                      format: uri
         default:
           $ref: '#/components/responses/Error'
   /v1/schools/students/{id}/options:
@@ -13252,6 +13508,11 @@ paths:
                   type: [integer, 'null']
                   minimum: 0
                   description: The owner's cash threshold in whole naira (0 for every posting, null for none); set while the area is on. Audited.
+                family_link_days:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+                  description: How many days a link to a family's page works (3 by default); set while the area is on. Audited.
                 issuing:
                   $ref: '#/components/schemas/SchoolIssuing'
       responses:
@@ -17701,6 +17962,9 @@ components:
         cash_threshold_naira:
           type: [integer, 'null']
           description: Cash postings at or above it wait for a second person; 0 for every posting, null for none
+        family_link_days:
+          type: integer
+          description: How many days a link to a family's page works (1 to 30; 3 by default)
         issuing:
           $ref: '#/components/schemas/SchoolIssuing'
         issuers:
@@ -17708,6 +17972,127 @@ components:
           description: The business's prod connections that can issue students' account numbers, and what each needs
           items:
             $ref: '#/components/schemas/SchoolIssuer'
+    SchoolInstalment:
+      type: object
+      required: [amount_kobo, due_on]
+      properties:
+        amount_kobo:
+          type: integer
+        due_on:
+          type: string
+          format: date
+    SchoolClaim:
+      type: object
+      description: 'An "I have paid" claim a family made on its page (docs/schools.md#the-family-page): what a parent says they paid some other way. Never a payment.'
+      required: [id, family_id, student_id, admission_number, amount_kobo, paid_on, how, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        amount_kobo:
+          type: integer
+        paid_on:
+          type: string
+          format: date
+        how:
+          type: string
+          enum: [transfer, cash, pos, other]
+        reference:
+          type: string
+        note:
+          type: string
+        status:
+          type: string
+          enum: [open, matched, dismissed]
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+        resolution_reason:
+          type: string
+    SchoolPlanRequest:
+      type: object
+      description: 'A family''s request for a payment plan from its page, and the decision (docs/schools.md#the-family-page).'
+      required: [id, family_id, student_id, admission_number, instalments, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        instalments:
+          type: array
+          description: The parent's instalments
+          items:
+            $ref: '#/components/schemas/SchoolInstalment'
+        message:
+          type: string
+          description: The parent's words
+        status:
+          type: string
+          enum: [requested, approved, declined]
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+        decided_user:
+          type: string
+          format: uuid
+        decision_note:
+          type: string
+        decided_instalments:
+          type: array
+          description: The instalments as approved
+          items:
+            $ref: '#/components/schemas/SchoolInstalment'
+    SchoolFamilySent:
+      type: object
+      description: How a family was reached with a fresh link to its page
+      required: [channels, expires_at]
+      properties:
+        channels:
+          type: object
+          description: How many guardians were reached on each channel (whatsapp, telegram, sms)
+          additionalProperties:
+            type: integer
+        expires_at:
+          type: string
+          format: date-time
+        nobody:
+          type: boolean
+          description: No guardian could be reached (no phone, over the limits)
     SchoolPosting:
       type: object
       description: 'A request of the school (docs/schools.md#cash-and-transfers): a cash posting (pending, posted at once or after approval, or declined), or a discount, a discount amendment or a held term invoice waiting for a second person.'
@@ -20742,6 +21127,43 @@ components:
           format: date-time
         kind:
           type: string
+    MoneyClaim:
+      type: object
+      description: 'An "I have paid" claim a school family made on its page, beside the unmatched money: what the parent says they paid, never a payment itself.'
+      required: [id, family_id, student_id, student, amount_kobo, paid_on, how, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        student:
+          type: string
+          description: The admission number
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        class:
+          type: string
+        amount_kobo:
+          type: integer
+        paid_on:
+          type: string
+          format: date
+        how:
+          type: string
+          enum: [transfer, cash, pos, other]
+        reference:
+          type: string
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
     MoneyOpenOrder:
       type: object
       required: [target_kind, target, number, due_kobo, customer, placed_at]

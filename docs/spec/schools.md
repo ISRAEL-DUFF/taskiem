@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B5 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B6 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -381,6 +381,14 @@ Cash postings, thresholds and approvals for cash and discounts; receipts as reco
 ### B6: the family page (M)
 
 The family page with every child, fees, payments, receipts, account numbers; links minted per message with the school's expiry; I have paid claims into To match; payment plan requests.
+
+**Built** (B6): migration 00216 (`school_family_links`, `school_family_inbox`, `school_payment_claims`, `school_plan_requests`, `school_family_messages`, the link lifetime setting); the family page at `/s/<token>` on the form host in the three themes, without script; links minted per message, an expired link offering **Send me a new link**; I have paid claims shown in To match and resolved when a payment is counted or by the bursar; plan requests recorded and decided (their effect on reminders and clearance is B7 and B8); `schools.SendFamily`, `schools@1` `family_link`; the staff pages ([schools](../schools.md), [public host](../public-host.md)). Differences from §10 and §11.3:
+
+- **What the page shows is sealed under the link itself**: the family's names, account names and receipt links are encrypted with a key derived from the token, so the public role and the database alone show nothing personal; only the link's holder reads them. Receipts issued after a link was minted show without their check link until the next message.
+- **The page's forms go through an inbox** the api role drains every 2 seconds, rate-limited per family in the database (claims 5 an hour, plans 3 an hour and one undecided per student, new links 3 an hour); the public host never writes the record.
+- **A claim is matched to a counted payment of the same amount, else the oldest open claim**; there is no hand matching of claims to entries.
+- **School invoices sent by SMS and email now carry the family page link** instead of the invoice's own; the WhatsApp and Telegram invoice message keeps its Pay buttons and the invoice link.
+- **Unknown and expired links read the same** ("ask the school for a new link"); only a real expired link offers to send one.
 
 ### B7: chasing (S)
 

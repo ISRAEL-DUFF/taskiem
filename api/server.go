@@ -108,6 +108,10 @@ type Server struct {
 	// AccountRails issue students' account numbers and read customers'
 	// credits back (B4); nil: Invoices.Rails, when it can.
 	AccountRails invoicing.CapabilityRails
+	// SchoolInboxKey opens what school families send from their pages
+	// (the public host's inbox key, storefront.InboxKey of
+	// TASKIEM_PUBLIC_KEY); nil: the family inbox is not drained here.
+	SchoolInboxKey []byte
 	// Forms are hosted forms' api side (S7); nil: forms cannot be deployed.
 	Forms *forms.Service
 	// Email is inbound email's api side (N10); MailDomain is where

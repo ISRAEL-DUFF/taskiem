@@ -46,6 +46,9 @@ var invoicePaths = []pii.Path{
 	// The payment event's receipt link opens the receipt's verification
 	// page to whoever holds it (docs/schools.md#receipts).
 	{Segments: []string{"trigger", "body", "receipt", "link"}, Category: "other"},
+	// The payment event's family page link opens the family's fees to
+	// whoever holds it (docs/schools.md#the-family-page).
+	{Segments: []string{"trigger", "body", "family_link"}, Category: "other"},
 }
 
 // emailPaths are an email trigger's personal parts (decision 0038): who
