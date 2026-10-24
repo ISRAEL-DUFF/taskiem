@@ -60,6 +60,10 @@ type Matcher struct {
 	// first: chat asks the business's people (api). It is not told of
 	// exact or automatic matches.
 	Suggested func(ctx context.Context, tenant, entryID uuid.UUID, top []Suggestion)
+	// Reversed, when set, is told in a reversal's transaction of the
+	// invoice parts (customer_invoice_payments) undone because their money
+	// went back to the payer (reversals.go): receipts (B5) are voided here.
+	Reversed func(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, parts []uuid.UUID) error
 }
 
 // OutboxMatch is the chat outbox kind of a payment a member is asked to
@@ -109,7 +113,8 @@ func (m *Matcher) Tick(ctx context.Context) error {
 			m.log().Warn("matching", "tenant", t, "err", err)
 		}
 	}
-	return nil
+	// Money that went back to the payer: its matches undone (reversals.go).
+	return m.Reversals(ctx)
 }
 
 // entry is a money-in entry as matching sees it. AmountKobo is what it
@@ -123,6 +128,9 @@ type entry struct {
 	AccountNumber string
 	Payer         string
 	PayerAccount  string
+	// Reversed is what of it went back to the payer already (a reversal
+	// heard before the money was looked at); AmountKobo is net of it.
+	Reversed int64
 }
 
 // Tenant looks at up to 100 of a tenant's new money-in entries.
@@ -130,7 +138,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []entry
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), e.amount_kobo, e.fee_kobo, e.net, e.channel, e.reference,
-				COALESCE(e.account_number, ''), e.payer
+				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id)
 			FROM money_entries e WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled'
 			  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'statement', 'cash')
 			  AND NOT EXISTS (SELECT 1 FROM money_match_state s WHERE s.entry_id = e.id)
@@ -145,8 +153,8 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 		rs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
 			var m moneylog.Entry
-			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer)
-			x.e.AmountKobo = moneylog.CountableKobo(m)
+			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed)
+			x.e.AmountKobo = moneylog.CountableKobo(m) - x.e.Reversed
 			return x, err
 		})
 		if err != nil {
@@ -180,6 +188,10 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 
 // consider matches one entry exactly, or suggests, and remembers it did.
 func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error {
+	if e.Reversed > 0 && e.AmountKobo <= 0 {
+		// All of it went back to the payer before it was looked at.
+		return m.hold(ctx, tenant, e.ID, "matched", HeldReversed)
+	}
 	// Exact: the reference is one Taskiem gave for an invoice.
 	var account, invoice uuid.UUID
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {

@@ -4,7 +4,8 @@
 # Taskiem's own records, for the run's tenant only, and needs no
 # connection. The record itself changes through the Schools pages and the
 # API; invoice_term makes each enrolled student's term invoice, exactly
-# once, and issuing account numbers arrives with its action (B4).
+# once, and issue_account issues a student their own account number,
+# once per student and connection (B4).
 manifest: connector/v1
 id: schools
 version: 1.0.0
@@ -214,3 +215,35 @@ actions:
         needs_approval:    { type: integer, description: Students left out whose standing discount waits for a second person }
         sent:              { type: integer }
         failed:            { type: integer }
+  issue_account:
+    title: Issue a student's account number
+    description: Issues a student's own bank account number on the school's issuing connection (Schools > Settings), named for the school and the child where the rail lets the school name it, exactly once per student and connection, so running the step again, or for a student who has one already, answers the same account. Payments into it are matched to the student's own invoices, oldest first. Flutterwave needs a parent's bvn or nin for each account (sent to Flutterwave, never kept). A rail's refusal (a missing guardian email, the business not set up with the rail) fails the step with the rail's reason.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [student]
+      properties:
+        student: { type: string, description: The student's id or admission number }
+        bvn:     { type: string, description: "A parent's BVN (11 digits), for rails that need one per account (Flutterwave)" }
+        nin:     { type: string, description: "Or a parent's NIN (11 digits)" }
+    output:
+      type: object
+      properties:
+        student_id:     { type: string }
+        connection:     { type: string, description: "The connection the account is on, such as iswallet/main" }
+        status:         { type: string, description: issued }
+        account_number: { type: string }
+        bank_name:      { type: string }
+        account_name:   { type: string, description: "The name the rail answered, else the one asked for" }
+        named_by_rail:  { type: boolean, description: "The rail names the account itself: payers may see another name" }
+        reference:      { type: string, description: The account's reference, which its payments carry }
+    pii:
+      - { field: bvn, category: bvn }
+      - { field: nin, category: nin }
+      - { field: output.account_name, category: name }

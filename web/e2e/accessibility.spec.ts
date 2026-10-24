@@ -43,6 +43,7 @@ const PAGES = [
   "/schools/classes",
   "/schools/import",
   "/schools/students/new",
+  "/schools/accounts",
   "/settings/schools",
 ];
 

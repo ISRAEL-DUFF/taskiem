@@ -74,6 +74,44 @@ func (o *ops) InvoiceTermOnce(_ context.Context, _ uuid.UUID, _ uuid.UUID, key s
 	return schools.TermInvoiced{TermPlan: schools.TermPlan{Enrolled: 3, ToInvoice: 2, NoContact: []schools.PlanStudent{{}}}, Created: 2, Sent: 2}, nil
 }
 
+var issued []string
+
+func (o *ops) IssueAccount(_ context.Context, _ uuid.UUID, student string, in schools.IssueIn, _ string) (schools.StudentAccount, error) {
+	issued = append(issued, student+":"+in.BVN)
+	switch student {
+	case "GCA/002":
+		return schools.StudentAccount{}, errors.Join(schools.ErrNotFound)
+	case "GCA/003":
+		return schools.StudentAccount{}, schools.IssueRefusal("iswallet KYC_REQUIRED: the director's BVN is missing")
+	}
+	return schools.StudentAccount{StudentID: uuid.New(), Connection: "iswallet/main", Status: "issued", AccountNumber: "9912345678", BankName: "Wema Bank",
+		AccountName: "GREENFIELD / EBUBE EZE", NamedByRail: true, Reference: "tsk_abc"}, nil
+}
+
+// issue_account: under the step's key; the account answered; the rail's
+// refusal fails the step with its reason, never retried.
+func TestIssueAccount(t *testing.T) {
+	c := conn.New(&ops{})
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "s"})
+	if _, err := c.Actions["issue_account"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/001"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("no key: %v", err)
+	}
+	r, err := c.Actions["issue_account"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/001", "bvn": "12345678901"}, IdempotencyKey: "tsk_step"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := r.Output.(map[string]any); out["account_number"] != "9912345678" || out["connection"] != "iswallet/main" || out["named_by_rail"] != true || issued[0] != "GCA/001:12345678901" {
+		t.Fatalf("issued %v %v", out, issued)
+	}
+	_, err = c.Actions["issue_account"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/003"}, IdempotencyKey: "tsk_step2"})
+	if !errors.Is(err, effects.ErrFatal) || err.Error() != "iswallet KYC_REQUIRED: the director's BVN is missing: fatal" {
+		t.Errorf("refused: %v", err)
+	}
+	if _, err := c.Actions["issue_account"].Execute(ctx, connector.Request{Input: map[string]any{"student": "GCA/002"}, IdempotencyKey: "tsk_step3"}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("an unknown student: %v", err)
+	}
+}
+
 // The fee and term invoice actions: the current term by default, no
 // names in a term's invoices, invoice_term under the step's key.
 func TestFeeActions(t *testing.T) {

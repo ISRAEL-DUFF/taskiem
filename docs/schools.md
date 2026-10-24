@@ -1,6 +1,6 @@
 # Schools
 
-Schools is an area any Taskiem business can turn on: the school's students, their families, its classes, sessions and terms, beside Invoices and Money. It is the record the rest of the Schools work hangs on ([decision 0046](decisions/0046-balans-in-taskiem.md), [the plan](spec/schools.md)): each student's own account number, receipts, a page for each family, chasing, clearance and the gate come in later steps. This page covers what is there now: turning it on, who can do what, the record, getting students in, promotion, and [fees and term invoices](#fees).
+Schools is an area any Taskiem business can turn on: the school's students, their families, its classes, sessions and terms, beside Invoices and Money. It is the record the rest of the Schools work hangs on ([decision 0046](decisions/0046-balans-in-taskiem.md), [the plan](spec/schools.md)): receipts, a page for each family, chasing, clearance and the gate come in later steps. This page covers what is there now: turning it on, who can do what, the record, getting students in, promotion, [fees and term invoices](#fees), and [each student's own account number](#account-numbers).
 
 ## Turning it on
 
@@ -13,7 +13,7 @@ When an owner turns it on, Taskiem can also add a **Bursar** role (below) for wh
 | Permission | Lets a person | Built-in roles |
 | --- | --- | --- |
 | `school.read` | See students, families, classes and terms (and, as they arrive, fees, payments, debtors and clearance) | Owner, admin, operator, auditor, viewer |
-| `school.manage` | Add and change students, families, classes, sessions and terms; import students; start a term; promote a session; set fees, students' optional items and discounts; invoice a term | Owner, admin, operator |
+| `school.manage` | Add and change students, families, classes, sessions and terms; import students; start a term; promote a session; set fees, students' optional items and discounts; invoice a term; issue account numbers | Owner, admin, operator |
 | `school.approve` | Approve cash and discounts above the school's thresholds, decide payment plans, override clearance (as those arrive) | Owner, and custom roles given it |
 | `school.gate` | The gate screen only | Gate |
 
@@ -133,6 +133,60 @@ The invoice records its student, their class for the term and the term, so **Inv
 
 An item collected for someone else (WAEC's fee) is a **pass-through** line: the invoice's page says "Collected on behalf of WAEC", and the [money reports](money-reports.md#pass-through) keep it out of the school's own income: the Overview shows it as **Collected for others**, the invoices export has pass-through columns, and the journal posts it to `Collected for WAEC`, not sales. What a family pays counts towards the school's own fees first and the pass-through items last.
 
+## Account numbers
+
+Each student can have **their own bank account number**: a permanent number a rail issues for them, which parents pay into by ordinary transfer. A payment into it lands on that child by itself: it is matched to the student's own term invoices, oldest term first, with no one asked ([customers' own account numbers](matching.md#customers-own-account-numbers)). The number is the school's own collection account, meant to be given to parents; the family page shows it with a copy button when it arrives.
+
+### The issuing connection
+
+An owner chooses, under **Schools > Settings > Students' account numbers**, the connection that issues them: an active connection in prod whose rail can issue account numbers. The page lists the business's connections that can, with what each rail needs, in plain words (from what each rail documents, [rail facts](spec/schools-rail-facts.md)):
+
+| Rail | What it needs | Who names the account |
+| --- | --- | --- |
+| iswallet | The wallet the numbers pay into, chosen here; iswallet issues numbers only once it holds the wallet's business director's BVN | iswallet's partner bank, whatever Taskiem asks |
+| Paystack | An email for each account, **one account per email**: each student needs a guardian email no brother or sister shares; a registered Nigerian business that has gone live (at most 1,000 accounts unless Paystack raises it) | Paystack: "your business name / the child's name" |
+| Flutterwave | A parent's **BVN or NIN** for each account, typed in on the student's page and sent to Flutterwave, never kept; and a guardian email | Not documented |
+| Moniepoint | An email for each account (the guardian's) | Taskiem: the school's and the child's names |
+
+No rail documents a fee per account issued; each charges for payments into the accounts (iswallet's partner 1.4%, at most ₦2,000; Paystack 1%, at most ₦300; Flutterwave 2% plus VAT), which the plan repeats. The rail's own checks of the business (its BVN, director and registration) are done with the rail when the business connects it. Changing the setting is in the audit log.
+
+### Issuing
+
+**Schools > Account numbers > Check who gets one** shows the plan first, and nothing is issued until you confirm it:
+
+- how many active students already have an account on the issuing connection;
+- how many this batch issues (**at most 500**; the plan says how many more the next batch can);
+- who **cannot** be issued yet, and why: no guardian email where the rail needs one, a guardian email a sibling's Paystack account has, Flutterwave's BVN or NIN (issue those on each student's page), a student whose details were erased;
+- who is **waiting**: an account being issued now, or a lost answer to check (below).
+
+**Issue** confirms exactly that plan (if it changed since, the confirmation is refused: check again) and starts the batch, which works in the background; the page follows it (how many issued, how many not) and lists each student not issued with **the rail's reason**, such as `iswallet KYC_REQUIRED: the director's BVN is missing`. Fix what the rail says and check again: the next batch tries them again. Only one batch runs at a time, and the same plan confirmed twice is one batch.
+
+A student's page has **Account number**: the number (grouped as banks print it, with a copy button), its bank, the account's name, and the connection. Someone with `school.manage` can **Issue the account number** there for one student, with a parent's BVN or NIN on Flutterwave.
+
+**Exactly once.** A student is issued one account per connection, ever: the rail's key is `student:<id>:acct:<connection>`, and the issue is claimed on the student's record before the rail is asked. Issuing again (a second batch, a retried request, the workflow step run twice) answers the account already issued without asking the rail. A batch cut short (the server stopped) is picked up where it stopped: on iswallet and Moniepoint, which answer the same account for the same key, the student is simply asked for again; on Paystack and Flutterwave, where asking again could open a second account, the student is left as **Check with the rail**: look on the rail's dashboard for an account under the student's name, then **I checked: issue it again** on their page. A failure that may pass on its own (the rail did not answer, on a rail where asking again is safe) is tried up to three times by the batch.
+
+The account is registered as the student's [customer account](matching.md#customers-own-account-numbers) (`key:student:<id>`), with the account number and the reference the rail answered, so the permanent-account rule matches what is paid into it.
+
+### Naming
+
+Where the rail lets the school name the account (Moniepoint; and iswallet and Flutterwave are asked), the name parents see when they check the number is **the school's name and the child's**, in capitals: `GREENFIELD COURT ACADEMY / EBUBE EZE`. Where the rail limits its length (no rail documents its limit, so 31 characters is assumed) **the school's name shortens and the child's never does**: word by word from its end (`GREENFIELD COURT / EBUBE EZE`, then `GREENFIELD / EBUBE EZE`), then its one word is cut. Only when the child's name alone does not fit is it cut, from its end, and the account is flagged on the student's page so the school checks what parents see. Paystack names the account itself and is sent no name. The student's page says when the rail names the account itself, as parents may then see another name.
+
+The account's name has the child's name, so it is personal data: sealed where it is kept and masked (`G•••`) unless someone with `pii.reveal` shows it, which is audited.
+
+### The reference
+
+Each account's reference is derived from the business, the student and the connection, in the rail's own characters (`tsk_` and 32 letters and digits on iswallet and Moniepoint, `tva_` and the same on Flutterwave), so it is the same however often the account is asked for. Paystack knows its accounts by its own customer code (`CUS_…`), which it answers. Taskiem registers the reference the rail answered, the one each payment into the account carries; a payment is matched only when its reference and, where the rail says it, its account number agree with what was registered (a payment that disagrees is held in To match with the reason).
+
+### Brothers and sisters
+
+**When a student's account takes more than their own fees** (Schools > Settings, off by default): turned on, what a payment into a student's account leaves after the student's own open invoices counts towards their brothers' and sisters' open invoices (the other students of their family, by admission number), each one's oldest first, each part saying "for a sibling (the school shares family credit)". What is still left is the student's own credit; a sibling's invoice sent later takes it too, after their own. Off, what is left stays the child's own credit, counted towards their next invoice.
+
+### The look-back
+
+Some payments never arrive as a webhook: iswallet's credit notice is not mapped yet (which of its fields names the account is not documented), and any rail's webhook may not be set up. So for each connection that issued students' accounts and can list its payments (iswallet, Paystack, Flutterwave), Taskiem **reads back the last 48 hours every 15 minutes**. Each payment it finds is recorded in the [money log](money-log.md) as the rail's notice of it would be, with the same key (the account's reference and the rail's own id for the payment), so a payment seen by both is one entry, and matched like any other. A window with more payments than one read holds is read again in quarters.
+
+When the look-back finds a payment the webhook should have brought (on a rail whose webhook is mapped, a payment more than half an hour old the log did not have), the owners are told once a day per connection that its webhook may not be set up, with where to set it. When the look-back of a connection fails three times in a row, an alert says so (once a day while it fails): payments its webhook does not bring wait until it works again.
+
 ## In a workflow
 
 The **Schools** platform connector (`schools@1`, no connection needed) works on the business's own record only, and only while the area is on:
@@ -145,10 +199,11 @@ The **Schools** platform connector (`schools@1`, no connection needed) works on 
 | `current_term` | The current term (`found: false` when none runs), its session and dates |
 | `list_fee_items` | A `term`'s fee structures (the current term by default), optionally of one `class`: each item's id, name, `amount_kobo`, kind and who it is collected for |
 | `term_invoices` | A `term`'s invoices (the current term by default), optionally of one `class` and `status`, at most `limit`: number, status, student id, admission number, class, `total_kobo`, `paid_kobo`, `due_kobo`. No names |
+| `issue_account` | [Issues a `student`'s account number](#issuing) (by id or admission number) on the issuing connection, exactly once per student and connection: running the step again, or for a student who has one, answers the same account (`account_number`, `bank_name`, `account_name`, `reference`, `connection`). `bvn` or `nin` is a parent's, for Flutterwave. The rail's refusal fails the step with its reason |
 | `invoice_term` | [Invoices the term](#invoicing-a-term) (the current term by default): the plan and its confirmation in one, exactly once for the step (its retry answers what the first call did), and with `send` sends the term's drafts. Answers the counts: enrolled, to invoice, created, already invoiced, the total and pass-through, those left out and why, sent and failed |
 
-Names, phones and emails are declared personal data, so they are sealed in the run's history like any personal data. The template that invoices a term at its start and sends each family its invoice comes with the proprietor's templates; issuing account numbers comes with students' accounts.
+Names, phones and emails are declared personal data, so they are sealed in the run's history like any personal data. The templates that invoice a term at its start and send each family its invoice, and that issue each new student their account number and send it to the family, come with the proprietor's templates.
 
 ## API
 
-Under `/v1/schools/`: `classes`, `sessions` (with `sessions/{id}/terms` and `sessions/{id}/promotion`), `terms/{id}` (with `start`, `enrollments`, `fees`, `fees/{class}` and `fees/{class}/copy`, `invoice` and `invoices`), `students` (with `students/import` and `students/{id}`, by id or admission number, and `students/{id}/fees`, `students/{id}/options` and `students/{id}/discounts`) and `families` (with `families/{id}/guardians`). Invoicing a term takes `{}` for the plan and `{confirm: <the plan's hash>, send}` to invoice it. Amendments are `POST /v1/invoices/{id}/amendments` ([invoices](invoices.md#amending-a-sent-invoice)). The switch is `GET` and `PUT /v1/settings/schools` (with `discount_threshold_naira`, the owner's), and `GET /v1/me` says whether the area is on (`schools`). Lists mask personal data unless the caller holds `pii.reveal` and asks with `?reveal=true`. The import takes `{csv}` for the plan and `{csv, confirm: <the plan's hash>}` to save it; a file with lines that cannot be taken answers 422 with `code: import_unreadable`, `problems` (each line and why) and `total`. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Schools).
+Under `/v1/schools/`: `classes`, `sessions` (with `sessions/{id}/terms` and `sessions/{id}/promotion`), `terms/{id}` (with `start`, `enrollments`, `fees`, `fees/{class}` and `fees/{class}/copy`, `invoice` and `invoices`), `students` (with `students/import` and `students/{id}`, by id or admission number, and `students/{id}/fees`, `students/{id}/options` and `students/{id}/discounts`) and `families` (with `families/{id}/guardians`). Account numbers: `students/{id}/accounts` (a student's, `?reveal=true` for the account's name) and `students/{id}/account` (issue one: `{bvn, nin, retry}`; 422 `rail_refused` with the rail's reason), `accounts/issue` (`{}` for the plan, `{confirm: <the plan's hash>}` to start the batch, 202) and `accounts/jobs` (with `accounts/jobs/{id}`, a batch's progress and who was not issued and why). Invoicing a term takes `{}` for the plan and `{confirm: <the plan's hash>, send}` to invoice it. Amendments are `POST /v1/invoices/{id}/amendments` ([invoices](invoices.md#amending-a-sent-invoice)). The switch is `GET` and `PUT /v1/settings/schools` (with `discount_threshold_naira` and `issuing`: `{connection, account, siblings_share_credit}`, the owner's; `GET` also lists the `issuers`), and `GET /v1/me` says whether the area is on (`schools`). Lists mask personal data unless the caller holds `pii.reveal` and asks with `?reveal=true`. The import takes `{csv}` for the plan and `{csv, confirm: <the plan's hash>}` to save it; a file with lines that cannot be taken answers 422 with `code: import_unreadable`, `problems` (each line and why) and `total`. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Schools).

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -61,7 +62,7 @@ func refused(format string, a ...any) error {
 // Plain is an error's message without the package's prefixes, for people.
 func Plain(err error) string {
 	msg := err.Error()
-	for _, p := range []string{"schools: invalid: ", "schools: not allowed: ", "schools: needs approval: ", "schools: "} {
+	for _, p := range []string{"schools: invalid: ", "schools: not allowed: ", "schools: needs approval: ", "schools: refused by the rail: ", "schools: "} {
 		msg = strings.ReplaceAll(msg, p, "")
 	}
 	return msg
@@ -74,7 +75,11 @@ type Schools struct {
 	// Invoices makes and sends term invoices (invoiceterm.go); nil: the
 	// school's fees can be set but no term invoiced.
 	Invoices *invoicing.Invoices
-	Now      func() time.Time
+	// Rails issues students' account numbers on the school's issuing
+	// connection (accounts.go); nil: none can be issued.
+	Rails  invoicing.CapabilityRails
+	Logger *slog.Logger
+	Now    func() time.Time
 }
 
 func (s *Schools) now() time.Time {
@@ -82,6 +87,13 @@ func (s *Schools) now() time.Time {
 		return s.Now()
 	}
 	return time.Now()
+}
+
+func (s *Schools) log() *slog.Logger {
+	if s.Logger != nil {
+		return s.Logger
+	}
+	return slog.Default()
 }
 
 // In runs fn in a transaction scoped to tenant.

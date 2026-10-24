@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B3 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B4 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -354,6 +354,16 @@ Fee structures with required, optional and pass-through items; invoicing a term 
 ### B4: students' account numbers (M)
 
 The school's issuing connection; issuing one and in batches, resumable, with a dry run; naming; references; exact matching of credits to students through B1's rule; held credits with reasons; the overlapping look-back and its alert; `school-issue-accounts`.
+
+**Built** (B4): migration 00213 (the school's issuing connection and wallet; `school_student_accounts` tracking each student's issuing; batch jobs; `money_lookbacks`; `money_reversals`; money entries' `credit_id`); a student's account is a customer account (B1) for `key:student:<id>`; issuing one (`POST /v1/schools/students/{id}/account`, `schools@1` `issue_account`) and in batches (`POST /v1/schools/accounts/issue`, a plan confirmed by its hash, jobs worked every 2 seconds); naming; `engine/lookback`; siblings sharing credit; reversals for every business; the Account numbers page and each student's number ([schools](../schools.md), [matching](../matching.md)). Differences from §6 and §7:
+
+- **Issuing is one capability call per student**, at most 500 per batch, exactly once by the key `student:<id>:acct:<connection>`. A call cut short is asked again on rails safe to repeat (iswallet, Moniepoint) and marked **unknown** for a person on the others (Paystack, Flutterwave).
+- **Some students cannot be issued in a batch**: no guardian email on a rail that needs one; on Paystack a sibling already using the same email (one account per email); Flutterwave students, whose parent's BVN or NIN is entered on the student's page and never stored.
+- **Names are capped at 31 characters on every rail**, since no rail documents its limit; Paystack names accounts itself and gets none.
+- **References**: `tsk_` plus the key on iswallet and Moniepoint, `tva_` plus the key on Flutterwave (its tx_ref), the customer code on Paystack.
+- **The look-back** reads 48 hours every 15 minutes per issuing connection that maps `list_credits`, re-reads a truncated window in quarters, tells the owners once a day when it finds a credit over 30 minutes old that the webhook should have brought, and alerts after three failures in a row.
+- **Reversals** (decided 2026-10-23): money returned, reversed or refunded undoes its invoice matches and reopens the invoices; what is left of a partial reversal is matched again; owners get an alert and people with `invoice.manage` a notification. Receipts are voided through a hook B5 fills; money matched to storefront orders is left to the order's own refund.
+- **Not yet**: the `school-issue-accounts` template (B9); two partial refunds of one payment are still one entry (the money log keys a refund by the payment it refunds).
 
 ### B5: cash, approvals and receipts (M)
 

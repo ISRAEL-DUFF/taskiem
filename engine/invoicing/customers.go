@@ -264,27 +264,62 @@ func MarkCustomers(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, cust
 // CreditReason is the reason a payment from a customer's credit gives.
 const CreditReason = "the customer's credit from an earlier payment"
 
+// FamilyShareReason is the reason a payment from a sibling's credit
+// gives, where the school shares family credit (SharedWith).
+const FamilyShareReason = "a sibling's credit from an earlier payment (the school shares family credit)"
+
+// SharedWith lists the customers whose open invoices a customer's credit
+// may also count towards, after the customer's own: for a student of a
+// school (key:student:<id>, docs/schools.md) whose school shares family
+// credit (Schools > Settings, off by default), the other students of
+// their family, by admission number. None for anyone else.
+func SharedWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customer string) ([]string, error) {
+	rest, ok := strings.CutPrefix(customer, "key:student:")
+	if !ok {
+		return nil, nil
+	}
+	student, perr := uuid.Parse(rest)
+	if perr != nil {
+		return nil, nil //nolint:nilerr // a key naming no student shares with no one
+	}
+	rows, err := tx.Query(ctx, `SELECT 'key:student:' || o.id::text FROM school_students s
+		JOIN school_settings st ON st.tenant_id = s.tenant_id AND st.enabled AND st.siblings_share_credit
+		JOIN school_students o ON o.tenant_id = s.tenant_id AND o.family_id = s.family_id AND o.id <> s.id
+		WHERE s.tenant_id = $1 AND s.id = $2 ORDER BY upper(o.admission_number), o.id`, tenant, student)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
 // applyCredit counts a customer's credit towards an invoice of theirs just
 // sent, oldest money first, until it is paid or the credit runs out: each
-// a part of the entry it came from (how exact). became is true when this
-// paid it.
+// a part of the entry it came from (how exact). Where the school shares
+// family credit, a sibling's credit counts after the customer's own
+// (SharedWith). became is true when this paid it.
 func (s *Invoices) applyCredit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Invoice) (Invoice, int64, bool, error) {
 	if x.customerID == "" || x.DueKobo <= 0 {
 		return x, 0, false, nil
 	}
-	rows, err := tx.Query(ctx, `SELECT c.entry_id, e.channel FROM money_entry_customers c JOIN money_entries e ON e.id = c.entry_id
-		WHERE c.tenant_id = $1 AND c.customer_id = $2 AND COALESCE(taskiem_money_entry_left(c.entry_id), 0) > 0
-		ORDER BY COALESCE(e.occurred_at, e.recorded_at), e.id`, tenant, x.customerID)
+	whose, err := SharedWith(ctx, tx, tenant, x.customerID)
+	if err != nil {
+		return x, 0, false, err
+	}
+	whose = append([]string{x.customerID}, whose...)
+	rows, err := tx.Query(ctx, `SELECT c.entry_id, e.channel, c.customer_id = $3 FROM money_entry_customers c JOIN money_entries e ON e.id = c.entry_id
+		WHERE c.tenant_id = $1 AND c.customer_id = ANY ($2) AND COALESCE(taskiem_money_entry_left(c.entry_id), 0) > 0
+		ORDER BY c.customer_id = $3 DESC, COALESCE(e.occurred_at, e.recorded_at), e.id`, tenant, whose, x.customerID)
 	if err != nil {
 		return x, 0, false, err
 	}
 	type credit struct {
 		entry   uuid.UUID
 		channel string
+		own     bool
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (credit, error) {
 		var c credit
-		return c, r.Scan(&c.entry, &c.channel)
+		return c, r.Scan(&c.entry, &c.channel, &c.own)
 	})
 	if err != nil {
 		return x, 0, false, err
@@ -304,8 +339,12 @@ func (s *Invoices) applyCredit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		}
 		part := min(left, x.DueKobo)
 		entry := c.entry
+		reason := CreditReason
+		if !c.own {
+			reason = FamilyShareReason
+		}
 		y, b, err := s.RecordPayment(ctx, tx, tenant, x.ID.String(), PaymentIn{AmountKobo: part, PaymentID: entry.String(), EntryID: &entry,
-			Connection: c.channel, How: "exact", By: "system:credit", Reasons: []string{CreditReason}})
+			Connection: c.channel, How: "exact", By: "system:credit", Reasons: []string{reason}})
 		if err != nil {
 			return x, applied, became, err
 		}

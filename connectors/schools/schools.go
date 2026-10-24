@@ -12,6 +12,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -35,6 +36,7 @@ type Ops interface {
 	ListFees(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID) ([]schools.ClassFees, error)
 	ListTermInvoices(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID, status string) ([]schools.TermInvoice, error)
 	InvoiceTermOnce(ctx context.Context, tenant, term uuid.UUID, key string, send bool, by string) (schools.TermInvoiced, error)
+	IssueAccount(ctx context.Context, tenant uuid.UUID, student string, in schools.IssueIn, by string) (schools.StudentAccount, error)
 }
 
 var _ Ops = schools.Service{}
@@ -51,6 +53,7 @@ func New(ops Ops) *connector.Connector {
 		"list_fee_items": connector.ActionFunc(a.listFeeItems),
 		"term_invoices":  connector.ActionFunc(a.termInvoices),
 		"invoice_term":   connector.ActionFunc(a.invoiceTerm),
+		"issue_account":  connector.ActionFunc(a.issueAccount),
 	}}
 }
 
@@ -166,6 +169,41 @@ func (a *actions) invoiceTerm(ctx context.Context, req connector.Request) (conne
 		"created": r.Created, "already_invoiced": r.AlreadyInvoiced, "total_kobo": r.TotalKobo, "pass_through_kobo": r.PassThroughKobo,
 		"no_contact": len(r.NoContact), "no_fees": len(r.NoFees), "nothing_to_pay": len(r.NothingToPay), "needs_approval": len(r.NeedsApproval),
 		"sent": r.Sent, "failed": r.Failed}}, nil
+}
+
+// issueAccount issues a student's account number on the school's issuing
+// connection: exactly once per student and connection, so a retry of the
+// step (or a student who has one) answers the same account.
+func (a *actions) issueAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if req.IdempotencyKey == "" {
+		return connector.Response{}, fmt.Errorf("issue_account runs as a workflow step, with its key: %w", effects.ErrFatal)
+	}
+	student, _ := req.Input["student"].(string)
+	if student == "" {
+		return connector.Response{}, fmt.Errorf("a student's id or admission number is required: %w", effects.ErrFatal)
+	}
+	in := schools.IssueIn{}
+	in.BVN, _ = req.Input["bvn"].(string)
+	in.NIN, _ = req.Input["nin"].(string)
+	x, err := a.ops.IssueAccount(ctx, c.Tenant, student, in, "workflow:"+c.Run.String())
+	switch {
+	case schools.ErrIssue(err):
+		return connector.Response{}, fmt.Errorf("%s: %w", schools.Plain(err), effects.ErrFatal)
+	case errors.Is(err, schools.ErrState) && strings.Contains(err.Error(), "being issued now"):
+		return connector.Response{}, fmt.Errorf("%s: %w", schools.Plain(err), effects.ErrRetryable)
+	case err != nil:
+		return connector.Response{}, classify(err)
+	}
+	out := map[string]any{"student_id": x.StudentID.String(), "connection": x.Connection, "status": x.Status, "account_number": x.AccountNumber,
+		"bank_name": x.BankName, "named_by_rail": x.NamedByRail, "reference": x.Reference}
+	if x.AccountName != "" {
+		out["account_name"] = x.AccountName
+	}
+	return connector.Response{Output: out}, nil
 }
 
 type actions struct{ ops Ops }
@@ -340,6 +378,15 @@ func (l *Late) get() (Ops, error) {
 		return nil, fmt.Errorf("schools are not available on this deployment: %w", effects.ErrFatal)
 	}
 	return l.ops, nil
+}
+
+// IssueAccount implements Ops.
+func (l *Late) IssueAccount(ctx context.Context, t uuid.UUID, student string, in schools.IssueIn, by string) (schools.StudentAccount, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.StudentAccount{}, err
+	}
+	return o.IssueAccount(ctx, t, student, in, by)
 }
 
 // FindClass implements Ops.

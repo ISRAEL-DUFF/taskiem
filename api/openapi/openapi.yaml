@@ -3266,6 +3266,191 @@ paths:
                 $ref: '#/components/schemas/SchoolStudentFees'
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/accounts:
+    get:
+      operationId: listSchoolStudentAccounts
+      tags:
+      - Schools
+      summary: A student's account numbers
+      description: The student's own account numbers (one per issuing connection), and issues that failed or must be checked, with the rail's reason. The account number is the school's collection account, meant for parents; the account's name has the child's name, so it is masked unless the caller holds pii.reveal and asks with ?reveal=true (audited).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: The student's id or admission number (escaped when it holds a slash)
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accounts, issuing_connection, revealed]
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolStudentAccount'
+                  issuing_connection:
+                    type: string
+                    description: The school's issuing connection; empty when none is chosen
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/account:
+    post:
+      operationId: issueSchoolStudentAccount
+      tags:
+      - Schools
+      summary: Issue a student's account number
+      description: 'Issues the student''s own account number on the school''s issuing connection, exactly once per student and connection (the rail''s key is student:<id>:acct:<connection>): a student who has one is answered it, and the rail is not asked again. Named "SCHOOL / CHILD" where the rail lets the school name it, the school''s name shortened to fit. bvn or nin (11 digits) is a parent''s, for rails that need one per account (Flutterwave): sent to the rail, never kept. retry asks again after a lost answer on a rail where asking again could open a second account, once a person checked with the rail. 422 with code rail_refused when the rail refused (its reason, also recorded on the student); 409 when no issuing connection is chosen, or the account is being issued now. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bvn:
+                  type: string
+                  pattern: '^[0-9]{11}$'
+                nin:
+                  type: string
+                  pattern: '^[0-9]{11}$'
+                retry:
+                  type: boolean
+      responses:
+        '200':
+          description: The student's account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolStudentAccount'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/accounts/issue:
+    post:
+      operationId: issueSchoolAccounts
+      tags:
+      - Schools
+      summary: Issue account numbers to every student without one
+      description: 'Without confirm, the plan: the issuing connection and what it needs, how many active students have an account already, how many this batch issues (at most 500; later says how many more a next batch can), who cannot be issued and why (no guardian email where the rail needs one, an email a sibling''s Paystack account has, Flutterwave''s BVN or NIN), and who waits on an issue being made or a lost answer to check, with its hash. With confirm (the plan''s hash; 409 when it changed, or while another batch runs) it starts the batch (202), which issues each student once in the background; a batch interrupted is picked up where it stopped and never issues twice. The same plan confirmed twice is one batch. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm:
+                  type: string
+                  description: The plan's hash
+      responses:
+        '200':
+          description: The plan
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plan]
+                properties:
+                  plan:
+                    $ref: '#/components/schemas/SchoolAccountPlan'
+        '202':
+          description: The batch, started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolAccountJob'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/accounts/jobs:
+    get:
+      operationId: listSchoolAccountJobs
+      tags:
+      - Schools
+      summary: The latest batches of account numbers
+      description: The school's 10 latest batches, newest first, each with its progress and the students it did not issue, with the rail's reason.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolAccountJob'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/accounts/jobs/{id}:
+    get:
+      operationId: getSchoolAccountJob
+      tags:
+      - Schools
+      summary: A batch of account numbers
+      description: Its progress (issued, failed, unknown, pending) and the students it did not issue, with the rail's reason.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolAccountJob'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/students/{id}/options:
     put:
       operationId: setSchoolStudentOptions
@@ -12699,7 +12884,7 @@ paths:
       tags:
       - Schools
       summary: Whether the Schools area is on
-      description: Any member. bursar_role says whether the business has a custom role named bursar.
+      description: Any member. bursar_role says whether the business has a custom role named bursar; issuing is the connection that issues students' account numbers, and issuers the connections that can, with what each rail needs.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -12717,9 +12902,9 @@ paths:
       operationId: putSchoolSettings
       tags:
       - Schools
-      summary: Turn the Schools area on or off
+      summary: Turn the Schools area on or off, and set its settings
       description: Owners only (403 otherwise). Off hides it; nothing is deleted. Turning it on with bursar_role also adds the Bursar custom role (school.read, school.manage, invoice.read, invoice.manage)
-        when the plan has custom roles and no role is named bursar. Audited.
+        when the plan has custom roles and no role is named bursar. issuing, while the area is on, sets the connection that issues students' account numbers (an active prod connection whose rail can; with its wallet where the rail needs one; 400 otherwise) and whether siblings share family credit. Audited.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -12742,6 +12927,8 @@ paths:
                   type: integer
                   minimum: 0
                   description: The owner's discount threshold in whole naira (0 for none); set while the area is on. Audited.
+                issuing:
+                  $ref: '#/components/schemas/SchoolIssuing'
       responses:
         '200':
           description: OK
@@ -17064,6 +17251,190 @@ components:
         discount_threshold_naira:
           type: integer
           description: Discounts at or above it need a second person (refused until approvals arrive); 0 for none
+        issuing:
+          $ref: '#/components/schemas/SchoolIssuing'
+        issuers:
+          type: array
+          description: The business's prod connections that can issue students' account numbers, and what each needs
+          items:
+            $ref: '#/components/schemas/SchoolIssuer'
+    SchoolIssuing:
+      type: object
+      description: The connection that issues students' account numbers (and its wallet, on rails that hold several), and whether siblings share family credit.
+      required: [connection]
+      properties:
+        connection:
+          type: string
+          description: connector/name, such as iswallet/main; empty for none
+        account:
+          type: string
+          description: The wallet the numbers pay into (iswallet)
+        siblings_share_credit:
+          type: boolean
+          description: What a student's account takes beyond their own invoices counts towards their brothers' and sisters' open invoices, oldest first (off by default, and when left out)
+    SchoolIssuer:
+      type: object
+      description: A prod connection that can issue students' account numbers, and what its rail needs, in plain words.
+      required: [connection, rail, requirement, names_itself, needs_account, look_back, webhook]
+      properties:
+        connection:
+          type: string
+        rail:
+          type: string
+        requirement:
+          type: string
+        fee:
+          type: string
+        names_itself:
+          type: boolean
+          description: The rail names the account itself
+        name_limit:
+          type: integer
+        one_account_per_email:
+          type: boolean
+        needs_bvn:
+          type: boolean
+        needs_account:
+          type: boolean
+          description: The wallet the numbers pay into must be chosen
+        look_back:
+          type: boolean
+          description: Its credits are read back every 15 minutes
+        webhook:
+          type: boolean
+          description: Its credits also arrive as events when its webhook is set up
+    SchoolStudentAccount:
+      type: object
+      required: [student_id, connection, status, named_by_rail, attempts, updated_at]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        connection:
+          type: string
+        status:
+          type: string
+          enum: [issuing, issued, failed, unknown]
+          description: unknown is a lost answer on a rail where asking again could open a second account; check with the rail, then issue with retry
+        account_number:
+          type: string
+        bank_name:
+          type: string
+        account_name:
+          type: string
+          description: The name the rail answered, else the one asked for (masked unless revealed)
+        named_by_rail:
+          type: boolean
+        reference:
+          type: string
+        shortened:
+          type: boolean
+          description: The school's name was shortened to fit the rail's limit
+        flagged:
+          type: boolean
+          description: The child's name alone did not fit, and was cut
+        error:
+          type: string
+          description: Why it failed or is unknown, in the rail's words
+        attempts:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+    SchoolAccountPlan:
+      type: object
+      required: [issuer, active, already_issued, to_issue, later, waiting, cannot, hash]
+      properties:
+        issuer:
+          $ref: '#/components/schemas/SchoolIssuer'
+        active:
+          type: integer
+        already_issued:
+          type: integer
+        to_issue:
+          type: integer
+        later:
+          type: integer
+          description: More students a next batch can issue (each batch is at most 500)
+        waiting:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, status]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              status:
+                type: string
+              reason:
+                type: string
+        cannot:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, reason]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              reason:
+                type: string
+        running:
+          type: string
+          format: uuid
+          description: The batch still running, when one is
+        hash:
+          type: string
+    SchoolAccountJob:
+      type: object
+      required: [id, connection, status, total, issued, failed, unknown, pending, created_by, created_at, problems]
+      properties:
+        id:
+          type: string
+          format: uuid
+        connection:
+          type: string
+        status:
+          type: string
+          enum: [running, done]
+        total:
+          type: integer
+        issued:
+          type: integer
+        failed:
+          type: integer
+        unknown:
+          type: integer
+        pending:
+          type: integer
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        problems:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, status, reason]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              status:
+                type: string
+              reason:
+                type: string
     SchoolFeeItemIn:
       type: object
       required: [name, amount_kobo]

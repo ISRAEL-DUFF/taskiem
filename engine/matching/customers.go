@@ -30,6 +30,9 @@ const (
 	ReasonOwnAccount = "paid into the customer's own account number"
 	ReasonOldest     = "the customer's oldest open invoice"
 	ReasonNext       = "what was left after the customer's older open invoices"
+	// ReasonSibling: what was left after the student's own invoices, where
+	// the school shares family credit (invoicing.SharedWith).
+	ReasonSibling = "what was left after the customer's own open invoices, for a sibling (the school shares family credit)"
 )
 
 // Why a credit to a registered account is held.
@@ -94,6 +97,45 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 			}
 			done = append(done, k)
 			reason = ReasonNext
+		}
+		// Where the school shares family credit, what is left counts
+		// towards the siblings' open invoices, each sibling's oldest first.
+		shared, err := invoicing.SharedWith(ctx, tx, tenant, acct.CustomerID())
+		if err != nil {
+			return err
+		}
+		for _, sib := range shared {
+			left, ok, err := moneylog.EntryLeft(ctx, tx, e.ID)
+			if err != nil {
+				return err
+			}
+			if !ok || left <= 0 {
+				break
+			}
+			list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, sib)
+			if err != nil {
+				return err
+			}
+			for _, x := range list {
+				left, ok, err := moneylog.EntryLeft(ctx, tx, e.ID)
+				if err != nil {
+					return err
+				}
+				if !ok || left <= 0 {
+					break
+				}
+				part := min(left, x.DueKobo)
+				if part <= 0 {
+					continue
+				}
+				id := e.ID
+				k, err := m.countPart(ctx, tx, tenant, Part{Invoice: x.ID.String()}, invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
+					Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount, ReasonSibling}})
+				if err != nil {
+					return err
+				}
+				done = append(done, k)
+			}
 		}
 		// Matched: what is left is the customer's credit.
 		return matched(ctx, tx, tenant, e.ID, m.now())
