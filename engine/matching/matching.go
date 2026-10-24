@@ -64,6 +64,9 @@ type Matcher struct {
 	// invoice parts (customer_invoice_payments) undone because their money
 	// went back to the payer (reversals.go): receipts (B5) are voided here.
 	Reversed func(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, parts []uuid.UUID) error
+	// Claims lists a school's "I have paid" claims beside the unmatched
+	// money (unmatched.go); nil: none.
+	Claims ClaimSource
 }
 
 // OutboxMatch is the chat outbox kind of a payment a member is asked to

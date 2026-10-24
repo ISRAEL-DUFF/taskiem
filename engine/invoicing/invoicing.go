@@ -210,7 +210,14 @@ type Invoices struct {
 	// went back: the receipt is voided. Nil: nothing.
 	Counted func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, k Counted, p PaymentIn) error
 	Undone  func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Invoice, part uuid.UUID, by string) error
-	Logger  *slog.Logger
+	// FamilyLink, when set, mints a school family's page link for an
+	// invoice (docs/schools.md#the-family-page), "" for an invoice that is
+	// not a school's: a school's invoice is sent with that link in place
+	// of its own page's, and the payment event's body carries it as
+	// family_link. purpose says what the link goes out with (invoice,
+	// receipt). Nil: invoices carry their own page link only.
+	FamilyLink func(ctx context.Context, tx pgx.Tx, tenant, invoice uuid.UUID, purpose string) (string, error)
+	Logger     *slog.Logger
 	Now     func() time.Time
 }
 
@@ -667,7 +674,10 @@ func (s *Invoices) Void(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNu
 type Sent struct {
 	Invoice Invoice  `json:"invoice"`
 	Link    string   `json:"link,omitempty"`
-	Queued  []string `json:"queued"`
+	// FamilyLink is the school family page's link a school's invoice went
+	// out with instead of its own page's (FamilyLink hook).
+	FamilyLink string   `json:"family_link,omitempty"`
+	Queued     []string `json:"queued"`
 	// SMSOverAllowance: the SMS was not sent, the plan's allowance being used.
 	SMSOverAllowance bool `json:"sms_over_allowance,omitempty"`
 	// CreditKobo is how much of the customer's credit this send counted
@@ -720,7 +730,23 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
 			return err
 		}
-		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, sendText(business, cur, out.Link), "Invoice "+cur.Number+" from "+business, "invoice:"+key)
+		// A school's invoice goes out with the family page's link, which
+		// shows every child's fees and links each open invoice's page.
+		link, family := out.Link, false
+		if s.FamilyLink != nil {
+			fl, err := s.FamilyLink(ctx, tx, tenant, cur.ID, "invoice")
+			if err != nil {
+				return err
+			}
+			if fl != "" {
+				link, family, out.FamilyLink = fl, true, fl
+			}
+		}
+		text := sendText(business, cur, link)
+		if family {
+			text = familySendText(business, cur, link)
+		}
+		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, "invoice:"+key)
 		if err != nil {
 			return err
 		}
@@ -794,6 +820,30 @@ func Naira(kobo int64) string {
 		return fmt.Sprintf("₦%s.%02d", s, k)
 	}
 	return "₦" + s
+}
+
+// familySendText is a school's term invoice's message: the balance and the
+// family page, where the fees, what was paid and how to pay are.
+func familySendText(business string, x Invoice, link string) string {
+	var b strings.Builder
+	if x.PaidKobo >= x.TotalKobo {
+		fmt.Fprintf(&b, "Fees invoice %s from %s: %s, paid from money you paid before. Nothing is due.", x.Number, business, Naira(x.TotalKobo))
+	} else {
+		fmt.Fprintf(&b, "Fees invoice %s from %s: %s", x.Number, business, Naira(x.TotalKobo-x.PaidKobo))
+		if x.PaidKobo > 0 {
+			b.WriteString(" still to pay")
+		}
+		if x.DueOn != "" {
+			if d, err := time.Parse(time.DateOnly, x.DueOn); err == nil {
+				fmt.Fprintf(&b, ", due %s", d.Format("2 Jan 2006"))
+			}
+		}
+		b.WriteString(".")
+	}
+	if link != "" {
+		b.WriteString(" See the fees, what was paid and how to pay: " + link)
+	}
+	return b.String()
 }
 
 func sendText(business string, x Invoice, link string) string {

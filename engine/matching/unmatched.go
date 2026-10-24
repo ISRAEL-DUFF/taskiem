@@ -57,6 +57,44 @@ func Unmatched(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]P
 	return out, err
 }
 
+// Claim is an "I have paid" claim a family made on its page (decision
+// 0046 point 8; docs/schools.md#the-family-page): what a parent says they
+// paid some other way. It is shown beside the unmatched money so the
+// bursar can find the payment it describes and match it; it never counts
+// as a payment itself. Name is masked by the API unless revealed.
+type Claim struct {
+	ID         uuid.UUID `json:"id"`
+	FamilyID   uuid.UUID `json:"family_id"`
+	StudentID  uuid.UUID `json:"student_id"`
+	Student    string    `json:"student"` // the admission number
+	Name       string    `json:"name"`
+	Class      string    `json:"class"`
+	AmountKobo int64     `json:"amount_kobo"`
+	PaidOn     string    `json:"paid_on"`
+	How        string    `json:"how"`
+	Reference  string    `json:"reference,omitempty"`
+	Note       string    `json:"note,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ClaimSource lists a business's open claims (engine/schools).
+type ClaimSource interface {
+	OpenClaims(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Claim, error)
+}
+
+// OpenClaims lists the claims beside the unmatched money, oldest first;
+// none without a source.
+func (m *Matcher) OpenClaims(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Claim, error) {
+	if m.Claims == nil {
+		return []Claim{}, nil
+	}
+	list, err := m.Claims.OpenClaims(ctx, tx, tenant, limit)
+	if list == nil {
+		list = []Claim{}
+	}
+	return list, err
+}
+
 // OpenOrder is a storefront order money can still be matched to by hand.
 type OpenOrder struct {
 	TargetKind string `json:"target_kind"`

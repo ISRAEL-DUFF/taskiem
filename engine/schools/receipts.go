@@ -67,6 +67,9 @@ type Receipt struct {
 func WireReceipts(inv *invoicing.Invoices, s *Schools) {
 	inv.Counted = s.IssueReceipt
 	inv.Undone = s.VoidReceipt
+	// A school's invoices carry the family page's link (B6): in the
+	// message an invoice is sent with, and in the payment event's body.
+	inv.FamilyLink = s.FamilyLinkForInvoice
 }
 
 // IssueReceipt is the Invoices.Counted hook: for a part counted towards
@@ -131,10 +134,14 @@ func (s *Schools) IssueReceipt(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		return err
 	}
 	balance := max(k.Invoice.TotalKobo-k.Invoice.PaidKobo, 0)
-	_, err = tx.Exec(ctx, `INSERT INTO school_receipts (id, tenant_id, number, term_id, student_id, class_id, invoice_id, part_id, amount_kobo, balance_after_kobo, how, paid_at, token_hash, token, issued_by)
+	if _, err := tx.Exec(ctx, `INSERT INTO school_receipts (id, tenant_id, number, term_id, student_id, class_id, invoice_id, part_id, amount_kobo, balance_after_kobo, how, paid_at, token_hash, token, issued_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) ON CONFLICT (part_id) DO NOTHING`,
-		newID(), tenant, number, term, student, class, k.Invoice.ID, k.PaymentID, p.AmountKobo, balance, p.How, paidAt, invoicing.ReceiptTokenHash(token), sealed, p.By)
-	return err
+		newID(), tenant, number, term, student, class, k.Invoice.ID, k.PaymentID, p.AmountKobo, balance, p.How, paidAt, invoicing.ReceiptTokenHash(token), sealed, p.By); err != nil {
+		return err
+	}
+	// A payment counted for the student answers an "I have paid" claim of
+	// theirs (claims.go).
+	return s.claimsCounted(ctx, tx, tenant, student, k.PaymentID, p.AmountKobo, p.By)
 }
 
 // VoidReceipt is the Invoices.Undone hook: the part's receipt, if any,

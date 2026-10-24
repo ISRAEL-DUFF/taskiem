@@ -83,8 +83,12 @@ type Schools struct {
 	// invoices along the one path every payment takes (cash.go); nil:
 	// one is made from Invoices.
 	Matcher *matching.Matcher
-	Logger  *slog.Logger
-	Now     func() time.Time
+	// InboxKey opens what families send from their page (inbox.go): the
+	// public host's inbox key (storefront.InboxKey of TASKIEM_PUBLIC_KEY);
+	// nil: the inbox is not drained here.
+	InboxKey []byte
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 func (s *Schools) now() time.Time {
