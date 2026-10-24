@@ -29,6 +29,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -111,21 +112,25 @@ func (m *Matcher) Tick(ctx context.Context) error {
 	return nil
 }
 
-// entry is a money-in entry as matching sees it.
+// entry is a money-in entry as matching sees it. AmountKobo is what it
+// counts for (moneylog.CountableKobo): what the payer sent.
 type entry struct {
-	ID         uuid.UUID
-	When       time.Time
-	AmountKobo int64
-	Channel    string
-	Reference  string
-	Payer      string
+	ID            uuid.UUID
+	When          time.Time
+	AmountKobo    int64
+	Channel       string
+	Reference     string
+	AccountNumber string
+	Payer         string
+	PayerAccount  string
 }
 
 // Tenant looks at up to 100 of a tenant's new money-in entries.
 func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []entry
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), COALESCE(e.amount_kobo, 0), e.channel, e.reference, e.payer
+		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), e.amount_kobo, e.fee_kobo, e.net, e.channel, e.reference,
+				COALESCE(e.account_number, ''), e.payer
 			FROM money_entries e WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled'
 			  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'statement', 'cash')
 			  AND NOT EXISTS (SELECT 1 FROM money_match_state s WHERE s.entry_id = e.id)
@@ -139,7 +144,10 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 		}
 		rs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
-			return x, r.Scan(&x.e.ID, &x.e.When, &x.e.AmountKobo, &x.e.Channel, &x.e.Reference, &x.payer)
+			var m moneylog.Entry
+			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer)
+			x.e.AmountKobo = moneylog.CountableKobo(m)
+			return x, err
 		})
 		if err != nil {
 			return err
@@ -152,6 +160,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 				}
 				if p, ok := v.(map[string]any); ok {
 					x.e.Payer, _ = p["name"].(string)
+					x.e.PayerAccount, _ = p["account"].(string)
 				}
 			}
 			list = append(list, x.e)
@@ -196,6 +205,11 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}
+	// Exact: paid into a customer's permanent account (or held for a person
+	// when the account and reference disagree).
+	if done, err := m.permanent(ctx, tenant, e); done || err != nil {
+		return err
+	}
 	// Exact: the reference is a storefront order's checkout page.
 	if m.Orders != nil {
 		var order string
@@ -224,6 +238,11 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 			return err
 		}
 		auto = st.AutoMatch
+		// Payers remembered: who this payer paid for before.
+		remembered, err := m.remembered(ctx, tx, tenant, e.Payer, e.PayerAccount)
+		if err != nil {
+			return err
+		}
 		rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND status IN ('sent', 'part_paid', 'overdue')
 			ORDER BY sent_at DESC LIMIT 500`, tenant)
 		if err != nil {
@@ -238,7 +257,7 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 			if err != nil {
 				return err
 			}
-			if s, ok := Score(e.AmountKobo, e.Payer, e.Reference, e.When, x); ok {
+			if s, ok := ScoreRemembered(e.AmountKobo, e.Payer, e.Reference, e.When, x, remembered[x.CustomerID()]); ok {
 				found = append(found, s)
 			}
 		}
@@ -311,9 +330,14 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 }
 
 func (m *Matcher) mark(ctx context.Context, tenant, entryID uuid.UUID, state string) error {
+	return m.hold(ctx, tenant, entryID, state, "")
+}
+
+// hold marks an entry, with why it waits for a person when it does.
+func (m *Matcher) hold(ctx context.Context, tenant, entryID uuid.UUID, state, reason string) error {
 	return db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, $3, $4)
-			ON CONFLICT (entry_id) DO UPDATE SET state = $3, considered_at = $4`, entryID, tenant, state, m.now())
+		_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at, held_reason) VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+			ON CONFLICT (entry_id) DO UPDATE SET state = $3, considered_at = $4, held_reason = NULLIF($5, '')`, entryID, tenant, state, m.now(), reason)
 		return err
 	})
 }
@@ -350,15 +374,30 @@ type candidate struct {
 	customer       string
 	since          *time.Time // when it was sent (invoice) or placed (order)
 	verb           string     // sent or placed
+	remembered     string     // the payer paid for this customer before: by "account" or "name"
 }
+
+// Weights of a remembered payer (docs/matching.md#payer-memory): the
+// paying account is surer than the name.
+const (
+	RememberedAccount = 75
+	RememberedName    = 70
+)
 
 // Score rates an open invoice for a payment of amount from payer with
 // reference, received at when; ok is false below Suggest, for a payment
 // before the invoice was sent, or for an invoice with nothing due.
 func Score(amount int64, payer, reference string, when time.Time, x invoicing.Invoice) (Suggestion, bool) {
+	return ScoreRemembered(amount, payer, reference, when, x, "")
+}
+
+// ScoreRemembered is Score for a payer remembered as having paid for the
+// invoice's customer before: by their paying "account" or their "name"
+// (or "" for not remembered).
+func ScoreRemembered(amount int64, payer, reference string, when time.Time, x invoicing.Invoice, remembered string) (Suggestion, bool) {
 	id := x.ID
 	return score(amount, payer, reference, when, candidate{invoice: &id, number: x.Number, due: x.DueKobo, part: x.AllowPartPayments,
-		customer: x.Customer.Name, since: x.SentAt, verb: "sent"})
+		customer: x.Customer.Name, since: x.SentAt, verb: "sent", remembered: remembered})
 }
 
 // ScoreOrder rates an open storefront order as Score does an invoice:
@@ -398,6 +437,14 @@ func score(amount int64, payer, reference string, when time.Time, x candidate) (
 	case 1:
 		s.Score += 20
 		s.Reasons = append(s.Reasons, "the payer shares a name with the customer")
+	}
+	switch x.remembered {
+	case "account":
+		s.Score += RememberedAccount
+		s.Reasons = append(s.Reasons, "this paying account paid for this customer before")
+	case "name":
+		s.Score += RememberedName
+		s.Reasons = append(s.Reasons, "this payer paid for this customer before")
 	}
 	if s.Score == 0 {
 		return s, false

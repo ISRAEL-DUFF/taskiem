@@ -1096,6 +1096,10 @@
       "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin na odar shago {number} ne, {due} da za a biya? {reasons}.",
       "reviewed": false
     },
+    "wa.match.ask_split": {
+      "text": "{amount} ya shigo a {when} ta {channel}.\n\nShin daga abokin ciniki na {number} ne, {due} da ake bi? Ya fi haka, don haka za a raba shi a kan takardun kuɗin abokin ciniki da ba a biya ba, na farko da farko: {parts}. {reasons}.",
+      "reviewed": false
+    },
     "wa.match.channel.cash": {
       "text": "kuɗi a hannu",
       "reviewed": false
@@ -1120,6 +1124,10 @@
       "text": "An haɗa da {number}. An biya wani sashi ({due} ya rage).",
       "reviewed": false
     },
+    "wa.match.matched_split": {
+      "text": "An haɗa shi a sassa: {parts}.",
+      "reviewed": false
+    },
     "wa.match.more": {
       "text": "Idan ba haka ba, A'a zai nuna takardar kuɗi ta gaba.",
       "reviewed": false
@@ -1142,6 +1150,10 @@
     },
     "wa.match.rejected_next": {
       "text": "To, ba shi ba ne. Ba za a sake ba da shawararsa ba.",
+      "reviewed": false
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} zai rage a matsayin kuɗin abokin ciniki a hannunmu",
       "reviewed": false
     },
     "wa.money.confirm_cash_in": {

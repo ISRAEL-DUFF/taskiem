@@ -144,7 +144,7 @@ func TestMirrorCopiesEachEntryOnce(t *testing.T) {
 		`INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, total_kobo, payment, paid_at)
 			SELECT gen_random_uuid(), $1, s.id, 'order', 'AK-MIRROR1', '\x00', 'received', '{}', 'x', 250000, 'none', now() FROM storefronts s WHERE s.tenant_id = $1`,
 		`INSERT INTO storefront_order_payments (id, tenant_id, order_id, entry_id, amount_kobo, how, by)
-			SELECT gen_random_uuid(), $1, o.id, (SELECT id FROM money_entries WHERE tenant_id = $1 AND reference = 'VA-1' LIMIT 1), 250000, 'manual', 'user:ada'
+			SELECT gen_random_uuid(), $1, o.id, (SELECT id FROM money_entries WHERE tenant_id = $1 AND reference = 'VA-1' LIMIT 1), 90000, 'manual', 'user:ada'
 			FROM storefront_orders o WHERE o.reference = 'AK-MIRROR1'`,
 	} {
 		if _, err := e.DB.Admin.Exec(ctx, q, e.Tenant); err != nil {

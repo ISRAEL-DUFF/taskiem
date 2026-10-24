@@ -1369,6 +1369,11 @@
       "reviewed": true,
       "context": "A payment a member is asked to match to a storefront order (WhatsApp or Telegram), with the best suggestion. {number} is the order's reference like AK-7QX4KD; {due} is what the customer pays online; {when}, {channel} and {reasons} as in wa.match.ask"
     },
+    "wa.match.ask_split": {
+      "text": "{amount} came in on {when} through {channel}.\n\nIs this from the customer of {number}, {due} due? It is more than that, so it would be split across the customer's open invoices, oldest first: {parts}. {reasons}.",
+      "reviewed": true,
+      "context": "A payment a member is asked to match, when it is more than is due on the suggested invoice: Yes splits it across the same customer's open invoices oldest first. {parts} is like 'INV-0101 ₦20,000, INV-0104 ₦30,000' and may end with what would be left as credit (wa.match.split_credit); {number}, {due}, {when}, {channel} and {reasons} as in wa.match.ask"
+    },
     "wa.match.channel.cash": {
       "text": "cash",
       "reviewed": true,
@@ -1399,6 +1404,11 @@
       "reviewed": true,
       "context": "Yes, match was pressed and some of the invoice is still due"
     },
+    "wa.match.matched_split": {
+      "text": "Matched in parts: {parts}.",
+      "reviewed": true,
+      "context": "Yes, match was pressed on a split (wa.match.ask_split): each invoice with what of the payment counts towards it, like 'INV-0101 ₦20,000, INV-0104 ₦30,000', maybe ending with wa.match.split_credit"
+    },
     "wa.match.more": {
       "text": "If not, No shows the next possible invoice.",
       "reviewed": true,
@@ -1428,6 +1438,11 @@
       "text": "Turned down. It will not be suggested again.",
       "reviewed": true,
       "context": "No was pressed; the next possible invoice follows in the same message"
+    },
+    "wa.match.split_credit": {
+      "text": "{credit} left as the customer's credit",
+      "reviewed": true,
+      "context": "The end of the parts in wa.match.ask_split and wa.match.matched_split: what of the payment no open invoice takes, kept to count towards the customer's next invoice"
     },
     "wa.money.confirm_cash_in": {
       "text": "Record {amount} cash in: {what}?",

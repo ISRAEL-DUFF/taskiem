@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
 // Payments counted towards orders (spec invoices-and-money-log 8.1 to 8.3;
@@ -65,28 +67,18 @@ type OrderPayment struct {
 }
 
 // EntryLock is the lock one money log entry is counted under, shared with
-// invoicing.RecordPayment: one entry counts towards one invoice or order at
-// a time.
+// invoicing.RecordPayment and the database's check of an entry's parts
+// (moneylog.EntryLockSQL).
 func EntryLock(ctx context.Context, tx pgx.Tx, entry uuid.UUID) error {
-	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem money entry ' || $1::text, 0))`, entry)
+	_, err := tx.Exec(ctx, moneylog.EntryLockSQL, entry)
 	return err
 }
 
 // CountedTowards names what a money log entry counts towards now
-// ("invoice INV-0104", "order AK-7QX4KD"), or "" for nothing. Call it under
-// EntryLock.
+// ("invoice INV-0104", "invoice INV-0104 and order AK-7QX4KD" for a split),
+// or "" for nothing. Call it under EntryLock.
 func CountedTowards(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID) (string, error) {
-	var what string
-	err := tx.QueryRow(ctx, `SELECT 'invoice ' || i.number FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
-			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
-		UNION ALL
-		SELECT 'order ' || o.reference FROM storefront_order_payments p JOIN storefront_orders o ON o.id = p.order_id
-			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)
-		LIMIT 1`, tenant, entry).Scan(&what)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	return what, err
+	return moneylog.CountedTowards(ctx, tx, tenant, entry)
 }
 
 // Matchable is whether an order waits for money: an order or booking with
@@ -131,14 +123,23 @@ func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	}
 	c := Counted{Order: ord}
 	if p.EntryID != nil {
-		other, err := CountedTowards(ctx, tx, tenant, *p.EntryID)
-		switch {
-		case err != nil:
+		var here bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
+			AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id))`, ord.ID, *p.EntryID).Scan(&here); err != nil {
 			return c, err
-		case other == "order "+ord.Reference:
+		}
+		if here {
 			return c, o.open(ctx, tx, tenant, &c.Order)
-		case other != "":
-			return c, fmt.Errorf("%w: this payment is already counted towards %s; undo that first", ErrDecision, other)
+		}
+		// One entry may count towards several invoices and orders (a
+		// split), its parts never more than it counts for (the database
+		// checks it too).
+		why, err := moneylog.EntryHas(ctx, tx, tenant, *p.EntryID, p.AmountKobo)
+		if err != nil {
+			return c, err
+		}
+		if why != "" {
+			return c, fmt.Errorf("%w: %s", ErrDecision, why)
 		}
 		var paidBy bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = $1 AND p.undoes IS NULL

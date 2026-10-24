@@ -8,7 +8,7 @@ Invoices follow [decision 0045](decisions/0045-tally-in-taskiem.md): **an invoic
 
 Under **Invoices**, **New invoice** asks for:
 
-- **The customer**: a name, and a phone number or an email (or both) to send it to.
+- **The customer**: a name, and a phone number or an email (or both) to send it to. Over the API, `customer.key` is the business's own key for them (`student:42`, up to 100 letters, digits and `:._/-`): invoices with the same key are one customer's in [matching](matching.md#customers-own-account-numbers), else invoices to the same phone (else email) are.
 - **What it is for**: an amount with a short description, or a list of items, each with a quantity and a price.
 - **When it is due** (optional), and a note for the customer (optional).
 
@@ -91,6 +91,10 @@ Money that comes in without the reference Taskiem gave gets up to three suggesti
 
 A match from here can be undone on the invoice like any payment. People with `invoice.read` see the list; matching and turning down need `invoice.manage`. When the server refuses (the payment was matched meanwhile, or the invoice is paid or void), its reason is shown on the card.
 
+A payment that is more than is due on the invoice suggested can be **split** across the same customer's open invoices, oldest first, with the amounts editable; each part is a match of its own, and what is left over is the customer's credit or waits to be matched ([split payments](matching.md#split-payments)). A credit held for a person (paid into a customer's account number with a reference that disagrees) says why on its card.
+
+Each sent invoice shows **The customer's money**: the customer's credit (paid and not yet counted towards an invoice), their own account numbers, and the payers remembered for them, each with **Forget this payer** for people with `invoice.manage` ([payer memory](matching.md#payer-memory)). A customer's credit counts towards the next invoice sent to them: Send says how much of it did, and the message to the customer says what is left to pay.
+
 **Match strong suggestions automatically**, under Settings, is off by default. When on, a payment whose best suggestion is strong, and clearly ahead of the next one, is matched without asking; the invoice shows it as "Matched automatically", with its reasons, and it can be undone.
 
 ## Settings
@@ -165,4 +169,4 @@ The customer's name, phone and email, and the link, are personal data: they are 
 
 ## API
 
-`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/payments/{payment}/undo`, `GET` and `PUT /v1/invoice-settings`, and for matching `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` (with `{"invoice": "<id or number>"}`); `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).
+`GET` and `POST /v1/invoices`, `GET` and `PUT /v1/invoices/{id}` (a draft), `POST /v1/invoices/{id}/send`, `POST /v1/invoices/{id}/void`, `POST /v1/invoices/{id}/payments/{payment}/undo`, `GET` and `PUT /v1/invoice-settings`, and for matching `GET /v1/money/suggestions`, `POST /v1/money/suggestions/{id}/confirm` and `/reject`, and `POST /v1/money/entries/{id}/match` (with `{"invoice": "<id or number>"}`, or `{"parts": [...]}` to split), `GET /v1/invoices/{id}/customer` (the customer's credit, accounts and remembered payers), `POST /v1/customer-accounts` (a customer's permanent account) and `DELETE /v1/money/payers/{id}`; `{id}` is the invoice's id or number. Creating and sending take an `Idempotency-Key` header. The full description is in the API reference (`api/openapi/openapi.yaml`, tag Invoices).

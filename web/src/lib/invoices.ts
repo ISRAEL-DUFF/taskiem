@@ -17,6 +17,8 @@ export interface InvoiceCustomer {
   name: string;
   phone?: string;
   email?: string;
+  /** The business's own key for the customer ("student:42"): invoices with the same key are one customer's. */
+  key?: string;
 }
 
 export interface InvoiceLine {
@@ -84,6 +86,8 @@ export interface InvoiceSent {
   link?: string;
   queued: ("sms" | "email")[] | null;
   sms_over_allowance?: boolean;
+  /** How much of the customer's credit this send counted towards the invoice. */
+  credit_kobo?: number;
 }
 
 export interface InvoiceSettings {
@@ -212,12 +216,13 @@ export function voidProblem(reason: string): string | null {
 // --- sending ---
 
 /** What Send did, in words: the channels it queued, and SMS held back by the plan. */
-export function sentLines(s: Pick<InvoiceSent, "queued" | "sms_over_allowance">): string[] {
+export function sentLines(s: Pick<InvoiceSent, "queued" | "sms_over_allowance" | "credit_kobo">): string[] {
   const q = s.queued ?? [];
   const out: string[] = [];
   const by = [q.includes("sms") ? "SMS" : "", q.includes("email") ? "email" : ""].filter(Boolean);
   out.push(by.length ? `Sent by ${by.join(" and ")}.` : "Nothing was sent: the customer has no phone number or email we can use.");
   if (s.sms_over_allowance) out.push("SMS not sent: plan allowance used.");
+  if (s.credit_kobo) out.push(`${naira(s.credit_kobo)} of the customer's credit counts towards it.`);
   return out;
 }
 
@@ -475,10 +480,78 @@ export interface MoneySuggestion {
   reasons: string[] | null;
   status: string;
   amount_kobo: number | null;
+  /** What is left of the payment to match. */
+  left_kobo?: number | null;
+  /** How the payment could be split across the customer's open invoices, oldest first, when it is more than is due. */
+  split?: SplitProposal;
   channel: string;
   reference: string;
   received_at: string;
   kind: string;
+}
+
+/** A split the server offers (MoneySplitProposal): each invoice with what of the payment would count towards it, and what would be left as the customer's credit. */
+export interface SplitProposal {
+  parts: { invoice?: string; amount_kobo: number; number: string; due_kobo: number }[] | null;
+  credit_kobo: number;
+}
+
+/** One editable row of a split: an invoice, what is due on it and the amount typed. */
+export interface SplitRow {
+  invoice: string;
+  due_kobo: number;
+  amount: string;
+}
+
+/** A proposal as editable rows. */
+export function splitRows(p: SplitProposal | undefined): SplitRow[] {
+  return (p?.parts ?? []).map((x) => ({ invoice: x.number, due_kobo: x.due_kobo, amount: koboInput(x.amount_kobo) }));
+}
+
+/** What the rows add up to, in kobo; NaN when one is not an amount. */
+export function splitTotal(rows: SplitRow[]): number {
+  let sum = 0;
+  for (const r of rows) {
+    const k = toKobo(r.amount);
+    if (k === undefined) continue;
+    if (Number.isNaN(k)) return NaN;
+    sum += k;
+  }
+  return sum;
+}
+
+/** Why rows cannot be matched, or "": every amount a number, at least one part, the parts no more than is left. */
+export function splitProblem(rows: SplitRow[], leftKobo: number): string {
+  const total = splitTotal(rows);
+  if (Number.isNaN(total)) return "Type each amount as naira, like 20,000.";
+  if (rows.some((r) => (toKobo(r.amount) ?? 0) < 0)) return "An amount cannot be less than nothing.";
+  if (total <= 0) return "Give at least one invoice an amount.";
+  if (total > leftKobo) return `The parts add up to ${naira(total)}, more than the ${naira(leftKobo)} received.`;
+  return "";
+}
+
+/** The POST body confirming a suggestion in parts: rows with an amount, and whether the rest is the customer's credit. */
+export function splitRequest(rows: SplitRow[], creditRest: boolean): { parts: { invoice: string; amount_kobo: number }[]; credit_rest: boolean } {
+  return {
+    parts: rows.map((r) => ({ invoice: r.invoice, amount_kobo: toKobo(r.amount) ?? 0 })).filter((x) => x.amount_kobo > 0),
+    credit_rest: creditRest,
+  };
+}
+
+/** What a payment split answers (MoneySplit). */
+export interface MoneySplit {
+  parts: { target: string; amount_kobo: number }[] | null;
+  left_kobo: number;
+  credit_kobo: number;
+}
+
+/** What the To match view says after a split. */
+export function splitLine(s: MoneySplit): string {
+  const parts = (s.parts ?? []).map((x) => `${x.target.replace(/^invoice:/, "").replace(/^order:/, "order ")} ${naira(x.amount_kobo)}`);
+  let line = `Matched in parts: ${parts.join(", ")}.`;
+  if (s.credit_kobo > 0) line += ` ${naira(s.credit_kobo)} is the customer's credit, counted towards their next invoice.`;
+  if (s.left_kobo > 0) line += ` ${naira(s.left_kobo)} is left to match.`;
+  return line;
 }
 
 export const SUGGESTIONS_PATH = "/v1/money/suggestions";
@@ -522,6 +595,10 @@ export function channelWords(channel: string): string {
 export interface WaitingPayment {
   entry_id: string;
   amount_kobo: number | null;
+  /** What is left of it to match, when part of it counts already. */
+  left_kobo?: number | null;
+  /** Why matching held it for a person. */
+  held_reason?: string;
   channel: string;
   reference: string;
   received_at: string;
@@ -536,7 +613,7 @@ export function groupSuggestions(list: MoneySuggestion[] | null | undefined): Wa
   for (const s of list ?? []) {
     let g = by.get(s.entry_id);
     if (!g) {
-      g = { entry_id: s.entry_id, amount_kobo: s.amount_kobo, channel: s.channel, reference: s.reference, received_at: s.received_at, kind: s.kind, candidates: [] };
+      g = { entry_id: s.entry_id, amount_kobo: s.amount_kobo, left_kobo: s.left_kobo, channel: s.channel, reference: s.reference, received_at: s.received_at, kind: s.kind, candidates: [] };
       by.set(s.entry_id, g);
       out.push(g);
     }
@@ -552,6 +629,8 @@ export const UNMATCHED_PATH = "/v1/money/unmatched";
 export interface UnmatchedMoney {
   entry_id: string;
   amount_kobo: number | null;
+  left_kobo?: number | null;
+  held_reason?: string;
   channel: string;
   reference: string;
   received_at: string;
@@ -562,6 +641,53 @@ export interface UnmatchedMoney {
 export function unmatchedPayments(list: UnmatchedMoney[] | null | undefined): WaitingPayment[] {
   return (list ?? []).map((u) => ({ ...u, candidates: [] }));
 }
+
+/** What is left of a payment to match, in words, when part of it counts already; "" when all of it is left. */
+export function leftWords(p: Pick<WaitingPayment, "amount_kobo" | "left_kobo">): string {
+  if (p.left_kobo === null || p.left_kobo === undefined || p.amount_kobo === null || p.left_kobo >= p.amount_kobo) return "";
+  return `${naira(p.left_kobo)} of it is left to match; the rest counts towards other invoices or orders.`;
+}
+
+// --- the invoice's customer in matching ---
+
+/** A customer's permanent account number (CustomerAccount). */
+export interface CustomerAccount {
+  id: string;
+  channel: string;
+  account_number: string;
+  bank_name?: string;
+  reference: string;
+}
+
+/** A payer remembered for a customer (MoneyPayer). */
+export interface RememberedPayer {
+  id: string;
+  kind: "name" | "account";
+  payer: string;
+  times: number;
+  last_at: string;
+}
+
+/** GET /v1/invoices/{id}/customer. */
+export interface InvoiceCustomerView {
+  credit_kobo: number;
+  accounts: CustomerAccount[] | null;
+  payers: RememberedPayer[] | null;
+  revealed: boolean;
+}
+
+export const invoiceCustomerPath = (id: string) => `/v1/invoices/${encodeURIComponent(id)}/customer`;
+export const payerPath = (id: string) => `/v1/money/payers/${encodeURIComponent(id)}`;
+
+/** A remembered payer in words: "A••• (name), paid 2 times". */
+export function payerWords(p: RememberedPayer): string {
+  const what = p.kind === "account" ? "paying account" : "name";
+  return `${p.payer} (${what}), paid ${p.times === 1 ? "once" : `${p.times} times`}`;
+}
+
+/** A customer's credit in words. */
+export const creditWords = (kobo: number) =>
+  kobo > 0 ? `${naira(kobo)}: paid and not yet counted towards an invoice. It counts towards the next invoice sent to this customer.` : "None";
 
 /** An amount that may be missing, in words. */
 export const amountWords = (kobo: number | null | undefined) => (kobo === null || kobo === undefined ? "Amount not known" : naira(kobo));

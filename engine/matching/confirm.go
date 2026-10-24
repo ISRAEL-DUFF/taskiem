@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -61,23 +62,6 @@ func (m *Matcher) orders() (*storefront.Orders, error) {
 	return m.Orders, nil
 }
 
-// notOnOrder refuses an entry already counted towards an order before it
-// is counted towards an invoice (invoicing checks invoices under the same
-// lock).
-func notOnOrder(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID) error {
-	if err := storefront.EntryLock(ctx, tx, entry); err != nil {
-		return err
-	}
-	other, err := storefront.CountedTowards(ctx, tx, tenant, entry)
-	if err != nil {
-		return err
-	}
-	if strings.HasPrefix(other, TargetOrder+" ") {
-		return fmt.Errorf("%w: this payment is already counted towards %s; undo that first", invoicing.ErrState, other)
-	}
-	return nil
-}
-
 // exactOrder counts a payment through an order's checkout page towards
 // the order, along the path its own payment check takes, once.
 func (m *Matcher) exactOrder(ctx context.Context, tenant uuid.UUID, e entry, order string) error {
@@ -106,108 +90,426 @@ func (m *Matcher) exactOrder(ctx context.Context, tenant uuid.UUID, e entry, ord
 	return m.Orders.Paid(ctx, tenant, c)
 }
 
+// matched marks an entry decided: its open suggestions close.
 func matched(ctx context.Context, tx pgx.Tx, tenant, entryID uuid.UUID, now time.Time) error {
 	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'closed', decided_at = $3 WHERE tenant_id = $1 AND entry_id = $2 AND status = 'open'`,
 		tenant, entryID, now); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, 'matched', $3)
-		ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = $3`, entryID, tenant, now)
+		ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = $3, held_reason = NULL`, entryID, tenant, now)
 	return err
 }
 
-// Confirm makes a suggestion a match: the payment counts towards its
-// invoice or order, the entry's other suggestions close, and a run waiting
-// on the invoice is told when it becomes paid (an order's paid flow runs).
-// auto records it as matched without asking.
-func (m *Matcher) Confirm(ctx context.Context, tenant, suggestion uuid.UUID, by string, auto bool) (Result, error) {
-	var res Result
-	var became bool
-	var counted storefront.Counted
+// Part is one part of a payment (a split, docs/spec/schools.md 7.2): an
+// amount counted towards an invoice (its id or number) or a storefront
+// order (its reference). Each part is a match of its own, undone on its
+// own.
+type Part struct {
+	Invoice    string `json:"invoice,omitempty"`
+	Order      string `json:"order,omitempty"`
+	AmountKobo int64  `json:"amount_kobo"`
+}
+
+// MaxParts is the most parts one payment is split into.
+const MaxParts = 20
+
+// Split is what matching a payment in parts did: each part's invoice or
+// order, what is left of the payment to match, and what of it was left as
+// the customer's credit.
+type Split struct {
+	Parts []Result
+	// PartKobo is what each part counts, in the order of Parts.
+	PartKobo   []int64
+	LeftKobo   int64
+	CreditKobo int64
+}
+
+// SplitReason is the reason a part of a split gives, beside the
+// suggestion's own for the invoice suggested.
+const SplitReason = "part of one payment split across the customer's open invoices"
+
+// counting is a match a person or matching asks for.
+type counting struct {
+	entry      uuid.UUID
+	suggestion *uuid.UUID
+	// parts: a single part of 0 is the rest of the payment.
+	parts      []Part
+	how, by    string
+	reasons    []string
+	creditRest bool
+}
+
+// count counts an entry in parts, in one transaction: each part towards
+// its invoice or order, the suggestion confirmed, the rest left as the
+// customer's credit or for a person, the payer remembered when a person
+// decided. A run waiting on an invoice it paid is told after it commits,
+// and an order's paid flow runs.
+func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Split, error) {
+	var out Split
+	var paid []invoicing.Invoice
+	var counted []storefront.Counted
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var invoice, order *uuid.UUID
-		var entryID uuid.UUID
-		var status, channel, reference string
-		var amount *int64
-		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT s.invoice_id, s.order_id, s.entry_id, s.status, s.reasons, e.amount_kobo, e.channel, e.reference
-			FROM money_suggestions s JOIN money_entries e ON e.id = s.entry_id WHERE s.tenant_id = $1 AND s.id = $2 FOR UPDATE OF s`, tenant, suggestion).
-			Scan(&invoice, &order, &entryID, &status, &raw, &amount, &channel, &reference)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return invoicing.ErrNotFound
-		}
-		if err != nil {
-			return err
-		}
-		if status != "open" {
-			return fmt.Errorf("%w: this suggestion was %s", invoicing.ErrState, status)
-		}
-		var reasons []string
-		_ = json.Unmarshal(raw, &reasons)
-		how := "suggested"
-		if auto {
-			how = "suggested_auto"
-		}
-		if amount == nil || *amount <= 0 {
-			return fmt.Errorf("%w: the payment has no amount", invoicing.ErrState)
-		}
-		now := m.now()
-		if order != nil {
-			orders, err := m.orders()
+		out, paid, counted = Split{}, nil, nil
+		parts, reasons := c.parts, c.reasons
+		var sugInvoice, sugOrder *uuid.UUID
+		if c.suggestion != nil {
+			var status string
+			var raw []byte
+			err := tx.QueryRow(ctx, `SELECT s.invoice_id, s.order_id, s.entry_id, s.status, s.reasons, COALESCE(o.reference, '')
+				FROM money_suggestions s LEFT JOIN storefront_orders o ON o.id = s.order_id WHERE s.tenant_id = $1 AND s.id = $2 FOR UPDATE OF s`, tenant, *c.suggestion).
+				Scan(&sugInvoice, &sugOrder, &c.entry, &status, &raw, new(string))
+			if errors.Is(err, pgx.ErrNoRows) {
+				return invoicing.ErrNotFound
+			}
 			if err != nil {
 				return err
 			}
-			var ref string
-			if err := tx.QueryRow(ctx, `SELECT reference FROM storefront_orders WHERE tenant_id = $1 AND id = $2`, tenant, *order).Scan(&ref); err != nil {
-				return err
+			if status != "open" {
+				return fmt.Errorf("%w: this suggestion was %s", invoicing.ErrState, status)
 			}
-			if counted, err = orders.CountPayment(ctx, tx, tenant, ref, storefront.PaymentIn{EntryID: &entryID, AmountKobo: *amount, How: how, By: by, Reasons: reasons}); err != nil {
-				return orderErr(err)
+			_ = json.Unmarshal(raw, &reasons)
+			if len(parts) == 0 {
+				p := Part{}
+				if sugInvoice != nil {
+					p.Invoice = sugInvoice.String()
+				} else {
+					if err := tx.QueryRow(ctx, `SELECT reference FROM storefront_orders WHERE tenant_id = $1 AND id = $2`, tenant, *sugOrder).Scan(&p.Order); err != nil {
+						return err
+					}
+				}
+				parts = []Part{p}
 			}
-			res.Order = &counted.Order
-			if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'confirmed', decided_by = $3, decided_at = $4,
-				order_payment_id = (SELECT p.id FROM storefront_order_payments p WHERE p.entry_id = $5 AND p.order_id = $6 AND p.undoes IS NULL ORDER BY p.created_at DESC LIMIT 1)
-				WHERE tenant_id = $1 AND id = $2`, tenant, suggestion, by, now, entryID, *order); err != nil {
-				return err
-			}
-			return matched(ctx, tx, tenant, entryID, now)
 		}
-		if err := notOnOrder(ctx, tx, tenant, entryID); err != nil {
-			return err
+		var direction, status, channel, reference string
+		var amount *int64
+		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
+			Scan(&direction, &status, &amount, &channel, &reference)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%w: no such payment", invoicing.ErrNotFound)
 		}
-		var x invoicing.Invoice
-		x, became, err = m.Invoices.RecordPayment(ctx, tx, tenant, invoice.String(), invoicing.PaymentIn{AmountKobo: *amount, PaymentID: reference,
-			EntryID: &entryID, Connection: channel, How: how, By: by, Reasons: reasons})
 		if err != nil {
 			return err
 		}
-		res.Invoice = &x
-		var pay uuid.UUID
-		if err := tx.QueryRow(ctx, `SELECT id FROM customer_invoice_payments WHERE tenant_id = $1 AND entry_id = $2 AND invoice_id = $3 AND undoes IS NULL
-			ORDER BY created_at DESC LIMIT 1`, tenant, entryID, *invoice).Scan(&pay); err != nil {
+		if direction != "in" || status != "settled" || amount == nil || *amount <= 0 {
+			return fmt.Errorf("%w: only money received and settled, with its amount, can be matched to an invoice or order", invoicing.ErrState)
+		}
+		if _, err := tx.Exec(ctx, moneylog.EntryLockSQL, c.entry); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'confirmed', decided_by = $3, decided_at = $4, payment_id = $5 WHERE tenant_id = $1 AND id = $2`,
-			tenant, suggestion, by, now, pay); err != nil {
+		left, _, err := moneylog.EntryLeft(ctx, tx, c.entry)
+		if err != nil {
 			return err
 		}
-		return matched(ctx, tx, tenant, entryID, now)
+		if err := checkParts(parts, left); err != nil {
+			return err
+		}
+		if len(parts) == 1 && parts[0].AmountKobo == 0 {
+			// The rest. With nothing left, counting it again towards the
+			// same invoice or order is a no-op, and towards another is
+			// refused with what it counts towards.
+			parts = []Part{{Invoice: parts[0].Invoice, Order: parts[0].Order, AmountKobo: max(left, 1)}}
+		}
+		var customers []string
+		var sugPayment, sugOrderPayment *uuid.UUID
+		for _, p := range parts {
+			why := reasons
+			if len(parts) > 1 && c.suggestion != nil && !p.isSuggested(ctx, tx, tenant, sugInvoice, sugOrder) {
+				why = []string{SplitReason}
+			}
+			if p.Order != "" {
+				orders, err := m.orders()
+				if err != nil {
+					return err
+				}
+				k, err := orders.CountPayment(ctx, tx, tenant, p.Order, storefront.PaymentIn{EntryID: &c.entry, AmountKobo: p.AmountKobo, How: c.how, By: c.by, Reasons: why})
+				if err != nil {
+					return orderErr(err)
+				}
+				counted = append(counted, k)
+				o := k.Order
+				out.Parts, out.PartKobo = append(out.Parts, Result{Order: &o}), append(out.PartKobo, p.AmountKobo)
+				if sugOrder != nil && *sugOrder == o.ID && k.PaymentID != uuid.Nil {
+					id := k.PaymentID
+					sugOrderPayment = &id
+				}
+				continue
+			}
+			x, became, err := m.Invoices.RecordPayment(ctx, tx, tenant, p.Invoice, invoicing.PaymentIn{AmountKobo: p.AmountKobo, PaymentID: reference,
+				EntryID: &c.entry, Connection: channel, How: c.how, By: c.by, Reasons: why})
+			if err != nil {
+				return err
+			}
+			if became {
+				paid = append(paid, x)
+			}
+			out.Parts, out.PartKobo = append(out.Parts, Result{Invoice: &x}), append(out.PartKobo, p.AmountKobo)
+			customers = append(customers, x.CustomerID())
+			if sugInvoice != nil && *sugInvoice == x.ID {
+				var pay uuid.UUID
+				if err := tx.QueryRow(ctx, `SELECT id FROM customer_invoice_payments WHERE tenant_id = $1 AND entry_id = $2 AND invoice_id = $3 AND undoes IS NULL
+					ORDER BY created_at DESC LIMIT 1`, tenant, c.entry, x.ID).Scan(&pay); err != nil {
+					return err
+				}
+				sugPayment = &pay
+			}
+		}
+		now := m.now()
+		if c.suggestion != nil {
+			if sugPayment == nil && sugOrderPayment == nil && sugInvoice != nil {
+				// The suggested invoice took no part: the suggestion led
+				// to the first part.
+				if err := tx.QueryRow(ctx, `SELECT id FROM customer_invoice_payments WHERE tenant_id = $1 AND entry_id = $2 AND undoes IS NULL
+					ORDER BY created_at DESC LIMIT 1`, tenant, c.entry).Scan(&sugPayment); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+			}
+			if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'confirmed', decided_by = $3, decided_at = $4, payment_id = $5, order_payment_id = $6
+				WHERE tenant_id = $1 AND id = $2`, tenant, *c.suggestion, c.by, now, sugPayment, sugOrderPayment); err != nil {
+				return err
+			}
+		}
+		rest, _, err := moneylog.EntryLeft(ctx, tx, c.entry)
+		if err != nil {
+			return err
+		}
+		if rest > 0 && c.creditRest {
+			one := map[string]bool{}
+			for _, x := range customers {
+				one[x] = true
+			}
+			if len(one) != 1 || customers[0] == "" {
+				return fmt.Errorf("%w: the rest can be left as credit only when every part is for one customer's invoices", invoicing.ErrInvalid)
+			}
+			if err := invoicing.MarkCustomers(ctx, tx, tenant, c.entry, customers[0], nil, "person", c.by); err != nil {
+				return err
+			}
+			out.CreditKobo = rest
+		} else {
+			out.LeftKobo = max(rest, 0)
+		}
+		if c.how == "suggested" || c.how == "manual" {
+			if err := m.remember(ctx, tx, tenant, c.entry, customers, c.by); err != nil {
+				return err
+			}
+		}
+		if out.LeftKobo == 0 {
+			return matched(ctx, tx, tenant, c.entry, now)
+		}
+		// The rest waits for a person.
+		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'closed', decided_at = $3 WHERE tenant_id = $1 AND entry_id = $2 AND status = 'open'`,
+			tenant, c.entry, now); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, 'unmatched', $3)
+			ON CONFLICT (entry_id) DO UPDATE SET state = 'unmatched', considered_at = $3, held_reason = NULL`, c.entry, tenant, now)
+		return err
 	})
 	if err != nil {
-		return res, err
+		return out, err
 	}
-	return res, m.paid(ctx, tenant, res, became, counted)
+	for _, x := range paid {
+		if err := m.Invoices.Paid(ctx, tenant, x); err != nil {
+			return out, err
+		}
+	}
+	for _, k := range counted {
+		if err := m.Orders.Paid(ctx, tenant, k); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
 }
 
-// paid runs what follows a match once it is committed.
-func (m *Matcher) paid(ctx context.Context, tenant uuid.UUID, res Result, became bool, c storefront.Counted) error {
+// isSuggested reports whether a part is for the suggestion's own invoice
+// or order.
+func (p Part) isSuggested(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, invoice, order *uuid.UUID) bool {
+	var id uuid.UUID
+	var err error
 	switch {
-	case res.Order != nil:
-		return m.Orders.Paid(ctx, tenant, c)
-	case res.Invoice != nil && became:
-		return m.Invoices.Paid(ctx, tenant, *res.Invoice)
+	case p.Order != "" && order != nil:
+		err = tx.QueryRow(ctx, `SELECT id FROM storefront_orders WHERE tenant_id = $1 AND reference = $2`, tenant, p.Order).Scan(&id)
+		return err == nil && id == *order
+	case p.Invoice != "" && invoice != nil:
+		if u, perr := uuid.Parse(p.Invoice); perr == nil {
+			return u == *invoice
+		}
+		err = tx.QueryRow(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND number = $2`, tenant, p.Invoice).Scan(&id)
+		return err == nil && id == *invoice
+	}
+	return false
+}
+
+// checkParts refuses parts that cannot be counted: none or too many, a
+// part naming no invoice or order or both, an amount below 1 kobo (but a
+// single part of 0, the rest), one target twice, or more than is left.
+func checkParts(parts []Part, left int64) error {
+	if len(parts) == 0 || len(parts) > MaxParts {
+		return fmt.Errorf("%w: a payment is matched in 1 to %d parts", invoicing.ErrInvalid, MaxParts)
+	}
+	seen := map[string]bool{}
+	var sum int64
+	for i, p := range parts {
+		if (p.Invoice == "") == (p.Order == "") {
+			return fmt.Errorf("%w: part %d names an invoice or an order", invoicing.ErrInvalid, i+1)
+		}
+		if p.AmountKobo < 0 || p.AmountKobo == 0 && len(parts) > 1 {
+			return fmt.Errorf("%w: part %d needs an amount", invoicing.ErrInvalid, i+1)
+		}
+		key := "invoice:" + p.Invoice
+		if p.Order != "" {
+			key = "order:" + p.Order
+		}
+		if seen[key] {
+			return fmt.Errorf("%w: part %d names the same invoice or order as another", invoicing.ErrInvalid, i+1)
+		}
+		seen[key] = true
+		sum += p.AmountKobo
+	}
+	if len(parts) > 1 && sum > left {
+		return fmt.Errorf("%w: the parts add up to %s, more than the %s left of this payment", invoicing.ErrInvalid, invoicing.Naira(sum), invoicing.Naira(max(left, 0)))
 	}
 	return nil
+}
+
+func first(s Split) Result {
+	if len(s.Parts) == 0 {
+		return Result{}
+	}
+	return s.Parts[0]
+}
+
+// Confirm makes a suggestion a match: the rest of the payment (all of it,
+// unless part was matched elsewhere) counts towards its invoice or order,
+// the entry's other suggestions close, and a run waiting on the invoice is
+// told when it becomes paid (an order's paid flow runs). auto records it
+// as matched without asking; a person's confirmation remembers the payer.
+func (m *Matcher) Confirm(ctx context.Context, tenant, suggestion uuid.UUID, by string, auto bool) (Result, error) {
+	how := "suggested"
+	if auto {
+		how = "suggested_auto"
+	}
+	s, err := m.count(ctx, tenant, counting{suggestion: &suggestion, how: how, by: by})
+	return first(s), err
+}
+
+// ConfirmParts confirms a suggestion with the payment split in parts
+// across invoices and orders (the suggested one among them, or not);
+// creditRest leaves what the parts do not count as the customer's credit
+// (every part must then be for one customer's invoices), else it waits for
+// a person.
+func (m *Matcher) ConfirmParts(ctx context.Context, tenant, suggestion uuid.UUID, parts []Part, creditRest bool, by string) (Split, error) {
+	if len(parts) == 0 {
+		return Split{}, fmt.Errorf("%w: give the parts", invoicing.ErrInvalid)
+	}
+	return m.count(ctx, tenant, counting{suggestion: &suggestion, parts: parts, how: "suggested", by: by, creditRest: creditRest})
+}
+
+// ConfirmSplit confirms a suggestion split as Propose offers it: across
+// the customer's open invoices oldest first, the rest left as their
+// credit.
+func (m *Matcher) ConfirmSplit(ctx context.Context, tenant, suggestion uuid.UUID, by string) (Split, error) {
+	var p Proposal
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		p, err = m.Propose(ctx, tx, tenant, suggestion)
+		return err
+	})
+	if err != nil {
+		return Split{}, err
+	}
+	if len(p.Parts) == 0 {
+		s, err := m.count(ctx, tenant, counting{suggestion: &suggestion, how: "suggested", by: by})
+		return s, err
+	}
+	parts := make([]Part, len(p.Parts))
+	for i, x := range p.Parts {
+		parts[i] = x.Part
+	}
+	return m.count(ctx, tenant, counting{suggestion: &suggestion, parts: parts, how: "suggested", by: by, creditRest: p.CreditKobo > 0})
+}
+
+// Match counts a money-in entry, or what is left of it, towards an
+// invoice (its id or number) or an order ("order:<reference>") a person
+// chose (how manual), closing the entry's open suggestions and remembering
+// the payer.
+func (m *Matcher) Match(ctx context.Context, tenant, entryID uuid.UUID, target, by string) (Result, error) {
+	p := Part{Invoice: target}
+	if order, ok := strings.CutPrefix(target, TargetOrder+":"); ok {
+		p = Part{Order: order}
+	}
+	s, err := m.count(ctx, tenant, counting{entry: entryID, parts: []Part{p}, how: "manual", by: by, reasons: []string{"matched by hand"}})
+	return first(s), err
+}
+
+// MatchParts counts a money-in entry in parts a person chose, as
+// ConfirmParts does a suggestion.
+func (m *Matcher) MatchParts(ctx context.Context, tenant, entryID uuid.UUID, parts []Part, creditRest bool, by string) (Split, error) {
+	if len(parts) == 0 {
+		return Split{}, fmt.Errorf("%w: give the parts", invoicing.ErrInvalid)
+	}
+	return m.count(ctx, tenant, counting{entry: entryID, parts: parts, how: "manual", by: by, reasons: []string{"matched by hand"}, creditRest: creditRest})
+}
+
+// ProposedPart is a part Propose offers, with its invoice's number and
+// what is due on it.
+type ProposedPart struct {
+	Part
+	Number  string `json:"number"`
+	DueKobo int64  `json:"due_kobo"`
+}
+
+// Proposal is how a payment could be split across a customer's open
+// invoices: oldest first, each as much as is due, until the money runs
+// out; what is left over would be the customer's credit.
+type Proposal struct {
+	Parts      []ProposedPart `json:"parts"`
+	CreditKobo int64          `json:"credit_kobo"`
+}
+
+// Propose offers a split for a suggestion of an invoice when the payment
+// is more than is due on it: across its customer's open invoices oldest
+// first. No parts when there is nothing to split (an order, or a payment
+// no more than is due).
+func (m *Matcher) Propose(ctx context.Context, tx pgx.Tx, tenant, suggestion uuid.UUID) (Proposal, error) {
+	var p Proposal
+	var invoice *uuid.UUID
+	var entry uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT invoice_id, entry_id FROM money_suggestions WHERE tenant_id = $1 AND id = $2`, tenant, suggestion).Scan(&invoice, &entry)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, invoicing.ErrNotFound
+	}
+	if err != nil || invoice == nil {
+		return p, err
+	}
+	left, ok, err := moneylog.EntryLeft(ctx, tx, entry)
+	if err != nil || !ok || left <= 0 {
+		return p, err
+	}
+	x, err := m.Invoices.Get(ctx, tx, tenant, invoice.String())
+	if err != nil {
+		return p, err
+	}
+	if left <= x.DueKobo || x.CustomerID() == "" {
+		return p, nil
+	}
+	list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, x.CustomerID())
+	if err != nil {
+		return p, err
+	}
+	for _, y := range list {
+		if left <= 0 {
+			break
+		}
+		part := min(left, y.DueKobo)
+		if part <= 0 {
+			continue
+		}
+		p.Parts = append(p.Parts, ProposedPart{Part: Part{Invoice: y.Number, AmountKobo: part}, Number: y.Number, DueKobo: y.DueKobo})
+		left -= part
+	}
+	p.CreditKobo = max(left, 0)
+	return p, nil
 }
 
 // Reject turns a suggestion down: it is not offered again.
@@ -245,7 +547,7 @@ func Open(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Waitin
 	}
 	rows, err := tx.Query(ctx, `SELECT s.id, s.entry_id, s.invoice_id, s.order_id, COALESCE(i.number, o.reference),
 			CASE WHEN i.id IS NOT NULL THEN i.total_kobo - i.paid_kobo ELSE COALESCE(o.deposit_kobo, o.total_kobo) END,
-			s.score, s.reasons, e.amount_kobo, e.channel, e.reference, COALESCE(e.occurred_at, e.recorded_at), e.kind
+			s.score, s.reasons, e.amount_kobo, taskiem_money_entry_left(e.id), e.channel, e.reference, COALESCE(e.occurred_at, e.recorded_at), e.kind
 		FROM money_suggestions s JOIN money_entries e ON e.id = s.entry_id
 			LEFT JOIN customer_invoices i ON i.id = s.invoice_id LEFT JOIN storefront_orders o ON o.id = s.order_id
 		WHERE s.tenant_id = $1 AND s.status = 'open' ORDER BY e.recorded_at DESC, s.score DESC LIMIT $2`, tenant, limit)
@@ -255,7 +557,7 @@ func Open(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Waitin
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Waiting, error) {
 		var w Waiting
 		var raw []byte
-		err := r.Scan(&w.ID, &w.EntryID, &w.InvoiceID, &w.OrderID, &w.Number, &w.DueKobo, &w.Score, &raw, &w.AmountKobo, &w.Channel, &w.Reference, &w.When, &w.Kind)
+		err := r.Scan(&w.ID, &w.EntryID, &w.InvoiceID, &w.OrderID, &w.Number, &w.DueKobo, &w.Score, &raw, &w.AmountKobo, &w.LeftKobo, &w.Channel, &w.Reference, &w.When, &w.Kind)
 		_ = json.Unmarshal(raw, &w.Reasons)
 		w.Status, w.TargetKind = "open", TargetInvoice
 		if w.OrderID != nil {
@@ -277,73 +579,29 @@ type Waiting struct {
 	DueKobo int64 `json:"due_kobo"`
 	// Customer is the invoice's or order's customer's name (masked by the
 	// API unless revealed).
-	Customer   string    `json:"customer,omitempty"`
-	AmountKobo *int64    `json:"amount_kobo"`
-	Channel    string    `json:"channel"`
-	Reference  string    `json:"reference"`
-	When       time.Time `json:"received_at"`
-	Kind       string    `json:"kind"`
+	Customer   string `json:"customer,omitempty"`
+	AmountKobo *int64 `json:"amount_kobo"`
+	// LeftKobo is what is left of the payment to match.
+	LeftKobo  *int64    `json:"left_kobo"`
+	Channel   string    `json:"channel"`
+	Reference string    `json:"reference"`
+	When      time.Time `json:"received_at"`
+	Kind      string    `json:"kind"`
+	// Split is how the payment could be split across the customer's open
+	// invoices, oldest first, when it is more than is due on the suggested
+	// one (filled by the caller: Matcher.Propose).
+	Split *Proposal `json:"split,omitempty"`
 }
 
 // OrderTarget is how Match names an order: "order:AK-7QX4KD".
 func OrderTarget(reference string) string { return TargetOrder + ":" + reference }
 
-// Match counts a money-in entry towards an invoice (its id or number) or
-// an order ("order:<reference>") a person chose (how manual), closing the
-// entry's open suggestions.
-func (m *Matcher) Match(ctx context.Context, tenant, entryID uuid.UUID, target, by string) (Result, error) {
-	var res Result
-	var became bool
-	var counted storefront.Counted
-	order, isOrder := strings.CutPrefix(target, TargetOrder+":")
-	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var direction, status, channel, reference string
-		var amount *int64
-		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, entryID).
-			Scan(&direction, &status, &amount, &channel, &reference)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("%w: no such payment", invoicing.ErrNotFound)
-		}
-		if err != nil {
-			return err
-		}
-		if direction != "in" || status != "settled" || amount == nil || *amount <= 0 {
-			return fmt.Errorf("%w: only money received and settled can be matched to an invoice or order", invoicing.ErrState)
-		}
-		reasons := []string{"matched by hand"}
-		if isOrder {
-			orders, err := m.orders()
-			if err != nil {
-				return err
-			}
-			if counted, err = orders.CountPayment(ctx, tx, tenant, order, storefront.PaymentIn{EntryID: &entryID, AmountKobo: *amount, How: "manual", By: by, Reasons: reasons}); err != nil {
-				return orderErr(err)
-			}
-			res.Order = &counted.Order
-		} else {
-			if err := notOnOrder(ctx, tx, tenant, entryID); err != nil {
-				return err
-			}
-			var x invoicing.Invoice
-			if x, became, err = m.Invoices.RecordPayment(ctx, tx, tenant, target, invoicing.PaymentIn{AmountKobo: *amount, PaymentID: reference, EntryID: &entryID,
-				Connection: channel, How: "manual", By: by, Reasons: reasons}); err != nil {
-				return err
-			}
-			res.Invoice = &x
-		}
-		return matched(ctx, tx, tenant, entryID, m.now())
-	})
-	if err != nil {
-		return res, err
-	}
-	return res, m.paid(ctx, tenant, res, became, counted)
-}
-
 // UndoOrderPayment undoes a payment counted towards an order (a wrong
 // match): the order goes back to unpaid when that payment paid it, and is
 // refused when the order went on to be fulfilled (storefront.UndoPayment).
-// The money goes back to be matched: the suggestion that led to the match
-// is not offered again, the payment's other suggestions are.
+// The money goes back to be matched (invoicing.ReopenEntry): the
+// suggestion that led to the match is not offered again, the payment's
+// other suggestions are; the other parts of a split stay.
 func (m *Matcher) UndoOrderPayment(ctx context.Context, tenant, payment uuid.UUID, by string) (storefront.Order, error) {
 	var ord storefront.Order
 	orders, err := m.orders()
@@ -359,19 +617,7 @@ func (m *Matcher) UndoOrderPayment(ctx context.Context, tenant, payment uuid.UUI
 		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND order_payment_id = $2`, tenant, payment); err != nil {
 			return err
 		}
-		// Back to be matched, unless the entry counts towards something
-		// again (an undo of an undone payment changes nothing).
-		other, err := storefront.CountedTowards(ctx, tx, tenant, entry)
-		if err != nil || other != "" {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'open', decided_at = NULL WHERE tenant_id = $1 AND entry_id = $2 AND status = 'closed'`, tenant, entry); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2,
-			CASE WHEN EXISTS (SELECT 1 FROM money_suggestions WHERE entry_id = $1 AND status = 'open') THEN 'suggested' ELSE 'unmatched' END)
-			ON CONFLICT (entry_id) DO UPDATE SET state = EXCLUDED.state, considered_at = now()`, entry, tenant)
-		return err
+		return invoicing.ReopenEntry(ctx, tx, tenant, entry)
 	})
 	return ord, err
 }

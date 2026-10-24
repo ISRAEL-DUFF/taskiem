@@ -64,6 +64,10 @@ type Customer struct {
 	Name  string `json:"name"`
 	Phone string `json:"phone,omitempty"`
 	Email string `json:"email,omitempty"`
+	// Key is the business's own key for the customer ("student:42"), when
+	// it has one: invoices with the same key are one customer's. Without
+	// it, a customer is their phone number (else email): CustomerID.
+	Key string `json:"key,omitempty"`
 }
 
 // Line is one item: quantity times unit price.
@@ -117,7 +121,14 @@ type Invoice struct {
 	customerEnv map[string]any
 	tokenEnv    map[string]any
 	subject     string
+	customerID  string
 }
+
+// CustomerID is who the invoice is for, as matching knows customers:
+// "key:<the business's key>" when the invoice has one, else the
+// personal-data subject of the customer's phone (else email), a
+// pseudonym. Invoices with the same CustomerID are one customer's.
+func (x Invoice) CustomerID() string { return x.customerID }
 
 // Payment is one payment counted towards an invoice, or the undoing of one.
 type Payment struct {
@@ -271,13 +282,13 @@ func nextNumber(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, Setti
 // --- reading ---
 
 const cols = `id, number, status, customer, subject_id, lines, total_kobo, paid_kobo, currency, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token`
+	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id`
 
 func scan(r pgx.Row) (Invoice, error) {
 	var x Invoice
 	var cust, lines, token []byte
 	err := r.Scan(&x.ID, &x.Number, &x.Status, &cust, &x.subject, &lines, &x.TotalKobo, &x.PaidKobo, &x.Currency, &x.DueOn,
-		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token)
+		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID)
 	if err != nil {
 		return x, err
 	}
@@ -390,6 +401,9 @@ func check(d Draft) ([]Line, int64, error) {
 			return nil, 0, invalid("%q is not an email address", d.Customer.Email)
 		}
 	}
+	if !ValidCustomerKey(d.Customer.Key) {
+		return nil, 0, invalid("the customer's key has up to 100 letters, digits and ':', '.', '_', '/' or '-'")
+	}
 	lines := d.Lines
 	if len(lines) == 0 {
 		if d.AmountKobo <= 0 {
@@ -435,6 +449,21 @@ func check(d Draft) ([]Line, int64, error) {
 		return nil, 0, invalid("fee_paid_by is business or customer")
 	}
 	return lines, total, nil
+}
+
+// ValidCustomerKey reports whether a business's key for a customer may be
+// stored: empty (none), or up to 100 letters, digits and ":._/-".
+func ValidCustomerKey(k string) bool {
+	if len(k) > 100 {
+		return false
+	}
+	for _, r := range k {
+		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune(":._/-", r)
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func nullable(s string) *string {
@@ -504,8 +533,8 @@ func (s *Invoices) CreateOnce(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	linesRaw, _ := json.Marshal(lines)
 	id := uuid.New()
 	if _, err := tx.Exec(ctx, `INSERT INTO customer_invoices (id, tenant_id, number, customer, subject_id, lines, total_kobo, due_on, note,
-		connection, fee_paid_by, allow_part_payments, created_by, created_key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14)`,
-		id, tenant, number, custRaw, subject, linesRaw, total, nullable(d.DueOn), nullable(d.Note), conn, fee, part, by, nullable(key)); err != nil {
+		connection, fee_paid_by, allow_part_payments, created_by, created_key, customer_key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::date, $9, $10, $11, $12, $13, $14, $15)`,
+		id, tenant, number, custRaw, subject, linesRaw, total, nullable(d.DueOn), nullable(d.Note), conn, fee, part, by, nullable(key), nullable(d.Customer.Key)); err != nil {
 		return Invoice{}, err
 	}
 	if err := audit(ctx, tx, tenant, by, "invoice.created", number, map[string]any{"total_kobo": total}); err != nil {
@@ -545,8 +574,8 @@ func (s *Invoices) Update(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOr
 	custRaw, _ := json.Marshal(cust)
 	linesRaw, _ := json.Marshal(lines)
 	if _, err := tx.Exec(ctx, `UPDATE customer_invoices SET customer = $3, subject_id = $4, lines = $5, total_kobo = $6, due_on = $7::date, note = $8,
-		connection = $9, fee_paid_by = $10, allow_part_payments = $11, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
-		tenant, cur.ID, custRaw, subject, linesRaw, total, nullable(d.DueOn), nullable(d.Note), conn, fee, part); err != nil {
+		connection = $9, fee_paid_by = $10, allow_part_payments = $11, customer_key = $12, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+		tenant, cur.ID, custRaw, subject, linesRaw, total, nullable(d.DueOn), nullable(d.Note), conn, fee, part, nullable(d.Customer.Key)); err != nil {
 		return Invoice{}, err
 	}
 	if err := audit(ctx, tx, tenant, by, "invoice.updated", cur.Number, map[string]any{"total_kobo": total}); err != nil {
@@ -589,6 +618,9 @@ type Sent struct {
 	Queued  []string `json:"queued"`
 	// SMSOverAllowance: the SMS was not sent, the plan's allowance being used.
 	SMSOverAllowance bool `json:"sms_over_allowance,omitempty"`
+	// CreditKobo is how much of the customer's credit this send counted
+	// towards the invoice.
+	CreditKobo int64 `json:"credit_kobo,omitempty"`
 }
 
 // Send sends an invoice to its customer by SMS and email, with its page's
@@ -597,6 +629,7 @@ type Sent struct {
 // makes each send's messages go once.
 func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, key string) (Sent, error) {
 	var out Sent
+	var became bool
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		cur, err := s.Get(ctx, tx, tenant, idOrNumber)
 		if err != nil {
@@ -616,6 +649,14 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 			if _, err := tx.Exec(ctx, `UPDATE customer_invoices SET sent_at = now(), updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, cur.ID); err != nil {
 				return err
 			}
+			if cur, err = s.Get(ctx, tx, tenant, cur.ID.String()); err != nil {
+				return err
+			}
+		}
+		// The customer's credit counts towards it first: the message says
+		// what is left to pay.
+		if cur, out.CreditKobo, became, err = s.applyCredit(ctx, tx, tenant, cur); err != nil {
+			return err
 		}
 		if key == "" {
 			key = "send:" + cur.ID.String() + ":" + s.now().UTC().Format(time.RFC3339Nano)
@@ -644,6 +685,9 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 		out.Invoice, err = s.Get(ctx, tx, tenant, cur.ID.String())
 		return err
 	})
+	if err == nil && became {
+		err = s.Paid(ctx, tenant, out.Invoice)
+	}
 	return out, err
 }
 
@@ -698,7 +742,18 @@ func Naira(kobo int64) string {
 
 func sendText(business string, x Invoice, link string) string {
 	var b strings.Builder
+	if x.PaidKobo >= x.TotalKobo {
+		// Paid from the customer's credit as it was sent.
+		fmt.Fprintf(&b, "Invoice %s from %s: %s, paid from money you paid before. Nothing is due.", x.Number, business, Naira(x.TotalKobo))
+		if link != "" {
+			b.WriteString(" See it: " + link)
+		}
+		return b.String()
+	}
 	fmt.Fprintf(&b, "Invoice %s from %s: %s", x.Number, business, Naira(x.TotalKobo-x.PaidKobo))
+	if x.PaidKobo > 0 {
+		b.WriteString(" still to pay")
+	}
 	if x.DueOn != "" {
 		if d, err := time.Parse(time.DateOnly, x.DueOn); err == nil {
 			fmt.Fprintf(&b, ", due %s", d.Format("2 Jan 2006"))
@@ -830,20 +885,27 @@ func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 		return Invoice{}, false, fmt.Errorf("%w: invoice %s has not been sent", ErrState, cur.Number)
 	}
 	if p.EntryID != nil {
+		// One entry may count towards several invoices and orders (a
+		// split), each part once, the parts never more than the entry
+		// counts for: checked under the entry's lock here, and by the
+		// database whoever writes (00210).
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem money entry ' || $1::text, 0))`, *p.EntryID); err != nil {
 			return Invoice{}, false, err
 		}
-		var other string
-		err := tx.QueryRow(ctx, `SELECT i.number FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
-			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)`,
-			tenant, *p.EntryID).Scan(&other)
-		switch {
-		case err == nil && other == cur.Number:
-			return cur, false, nil
-		case err == nil:
-			return Invoice{}, false, fmt.Errorf("%w: this payment is already counted towards %s; undo that first", ErrState, other)
-		case !errors.Is(err, pgx.ErrNoRows):
+		var here bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
+			AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, *p.EntryID).Scan(&here); err != nil {
 			return Invoice{}, false, err
+		}
+		if here {
+			return cur, false, nil
+		}
+		why, err := moneylog.EntryHas(ctx, tx, tenant, *p.EntryID, p.AmountKobo)
+		if err != nil {
+			return Invoice{}, false, err
+		}
+		if why != "" {
+			return Invoice{}, false, fmt.Errorf("%w: %s", ErrState, why)
 		}
 	}
 	// The same payment counts towards an invoice once while it is not
@@ -932,6 +994,43 @@ func reopenEntry(ctx context.Context, tx pgx.Tx, tenant, payment uuid.UUID) erro
 	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND payment_id = $2`, tenant, payment); err != nil {
 		return err
 	}
+	return ReopenEntry(ctx, tx, tenant, *entry)
+}
+
+// ReopenEntry decides what an entry is after one of its parts was undone.
+// A customer's money (paid into their account, or left as their credit by
+// a person) stays theirs while any of it counts, and what no longer counts
+// is their credit; paid into their account, it stays theirs even when none
+// does. Other money with parts still counted waits for a person for the
+// rest (To match lists what is left). Money counting towards nothing goes
+// back to be matched: its closed suggestions are offered again, and with
+// none it waits for a person. Engine/matching calls it for an order's
+// undone payment too.
+func ReopenEntry(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, entry uuid.UUID) error {
+	var how *string
+	var counted int64
+	if err := tx.QueryRow(ctx, `SELECT (SELECT how FROM money_entry_customers WHERE entry_id = $1), taskiem_money_entry_counted($1)`, entry).Scan(&how, &counted); err != nil {
+		return err
+	}
+	switch {
+	case how != nil && (*how == "account" || counted > 0):
+		return nil
+	case how != nil:
+		// A person's credit with nothing counted: back to be matched.
+		if _, err := tx.Exec(ctx, `DELETE FROM money_entry_customers WHERE tenant_id = $1 AND entry_id = $2`, tenant, entry); err != nil {
+			return err
+		}
+	case counted > 0:
+		// The rest, if any, waits for a person.
+		_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2,
+			CASE WHEN COALESCE(taskiem_money_entry_left($1), 0) > 0 THEN 'unmatched' ELSE 'matched' END)
+			ON CONFLICT (entry_id) DO UPDATE SET state = EXCLUDED.state, considered_at = now()`, entry, tenant)
+		return err
+	}
+	return reopen(ctx, tx, tenant, &entry)
+}
+
+func reopen(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, entry *uuid.UUID) error {
 	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'open', decided_at = NULL WHERE tenant_id = $1 AND entry_id = $2 AND status = 'closed'`, tenant, *entry); err != nil {
 		return err
 	}
