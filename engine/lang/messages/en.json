@@ -2669,6 +2669,16 @@
       "reviewed": true,
       "context": "Read-back: a decision between paths"
     },
+    "wd.callback": {
+      "text": "Wait for the other system to call back",
+      "reviewed": true,
+      "context": "Read-back: a callback step with the default wait"
+    },
+    "wd.callback_for": {
+      "text": "Wait up to {duration} for the other system to call back",
+      "reviewed": true,
+      "context": "Read-back: a callback step; {duration} is read aloud (wd.unit.*)"
+    },
     "wd.capability": {
       "text": "{what} with whichever payments account is connected",
       "reviewed": true,
@@ -2738,6 +2748,36 @@
       "text": "Wednesday",
       "reviewed": true,
       "context": "A day of the week"
+    },
+    "wd.effect.and": {
+      "text": "and",
+      "reviewed": true,
+      "context": "Read-back: joins the last of what a template does: \"moves money, waits for a person and waits for something to happen\""
+    },
+    "wd.effect.event": {
+      "text": "waits for something to happen",
+      "reviewed": true,
+      "context": "Read-back: the template or workflow waits for an event (a payment, a reply, a callback)"
+    },
+    "wd.effect.moves_money": {
+      "text": "moves money",
+      "reviewed": true,
+      "context": "Read-back: what a template or workflow does at most: it pays, refunds or collects"
+    },
+    "wd.effect.person": {
+      "text": "waits for a person to approve or answer",
+      "reviewed": true,
+      "context": "Read-back: the template or workflow has an approval or a form step"
+    },
+    "wd.effect.read": {
+      "text": "only reads",
+      "reviewed": true,
+      "context": "Read-back: what a template or workflow does at most: it changes nothing"
+    },
+    "wd.effect.write": {
+      "text": "changes things in your services",
+      "reviewed": true,
+      "context": "Read-back: what a template or workflow does at most: it writes somewhere"
     },
     "wd.foreach": {
       "text": "For each item in the list:",
@@ -2819,6 +2859,11 @@
       "reviewed": true,
       "context": "Read-back: branches run at the same time"
     },
+    "wd.respond": {
+      "text": "Answer the request that started this",
+      "reviewed": true,
+      "context": "Read-back: a respond step (the webhook caller gets this answer)"
+    },
     "wd.schedule.daily": {
       "text": "Every day at {time} ({tz} time)",
       "reviewed": true,
@@ -2883,6 +2928,16 @@
       "text": "Wait for {event}",
       "reviewed": true,
       "context": "Read-back: waits for a named event; {event} is the tenant's"
+    },
+    "wd.template": {
+      "text": "Use the template: {template}",
+      "reviewed": true,
+      "context": "Read-back: a template step (a callable template used inside the workflow); {template} is the template's title, e.g. Run payroll"
+    },
+    "wd.template.does": {
+      "text": "Use the template: {template}, which {does}",
+      "reviewed": true,
+      "context": "Read-back: as wd.template, with what the template does (wd.effect.*), e.g. \"moves money and waits for a person to approve or answer\""
     },
     "wd.transform": {
       "text": "Prepare the data for the next steps",
@@ -3038,6 +3093,16 @@
       "text": "Wait until the set time",
       "reviewed": true,
       "context": "Read-back: a pause until a set time"
+    },
+    "wd.workflow": {
+      "text": "Use your workflow: {template}",
+      "reviewed": true,
+      "context": "Read-back: a template step that uses one of the business's own workflows; {template} is its name"
+    },
+    "wd.workflow.does": {
+      "text": "Use your workflow: {template}, which {does}",
+      "reviewed": true,
+      "context": "Read-back: as wd.workflow, with what it does (wd.effect.*)"
     }
   }
 }

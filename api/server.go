@@ -365,6 +365,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.With(s.need(PermWorkflowRead)).Get("/workflows", s.listWorkflows)
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows", s.createWorkflow)
+			r.With(s.need(PermWorkflowRead)).Get("/workflows/callable", s.listCallableWorkflows)
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}", s.getWorkflow)
 			r.With(s.need(PermWorkflowRead), s.tenantCode).Get("/workflows/{wf}/versions/{v}", s.getVersion)
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows/{wf}/versions", s.createVersion)

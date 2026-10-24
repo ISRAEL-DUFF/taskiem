@@ -2136,6 +2136,14 @@
       "text": "Yanke abin da za a yi:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Jira sauran tsarin ya sake kira",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Jira har {duration} sauran tsarin ya sake kira",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} da asusun biyan kuɗi da aka haɗa",
       "reviewed": false
@@ -2190,6 +2198,30 @@
     },
     "wd.day.wednesday": {
       "text": "Laraba",
+      "reviewed": false
+    },
+    "wd.effect.and": {
+      "text": "kuma",
+      "reviewed": false
+    },
+    "wd.effect.event": {
+      "text": "yana jiran wani abu ya faru",
+      "reviewed": false
+    },
+    "wd.effect.moves_money": {
+      "text": "yana tura kuɗi",
+      "reviewed": false
+    },
+    "wd.effect.person": {
+      "text": "yana jiran mutum ya amince ko ya amsa",
+      "reviewed": false
+    },
+    "wd.effect.read": {
+      "text": "karantawa kawai yake",
+      "reviewed": false
+    },
+    "wd.effect.write": {
+      "text": "yana canza abubuwa a cikin ayyukanka",
       "reviewed": false
     },
     "wd.foreach": {
@@ -2256,6 +2288,10 @@
       "text": "Yi waɗannan a lokaci guda:",
       "reviewed": false
     },
+    "wd.respond": {
+      "text": "Amsa buƙatar da ta fara wannan",
+      "reviewed": false
+    },
     "wd.schedule.daily": {
       "text": "Kowace rana da ƙarfe {time} (lokacin {tz})",
       "reviewed": false
@@ -2306,6 +2342,14 @@
     },
     "wd.signal_named": {
       "text": "Jira {event}",
+      "reviewed": false
+    },
+    "wd.template": {
+      "text": "Yi amfani da samfuri: {template}",
+      "reviewed": false
+    },
+    "wd.template.does": {
+      "text": "Yi amfani da samfuri: {template}, wanda {does}",
       "reviewed": false
     },
     "wd.transform": {
@@ -2430,6 +2474,14 @@
     },
     "wd.wait_until": {
       "text": "Jira har lokacin da aka sa",
+      "reviewed": false
+    },
+    "wd.workflow": {
+      "text": "Yi amfani da aikinka: {template}",
+      "reviewed": false
+    },
+    "wd.workflow.does": {
+      "text": "Yi amfani da aikinka: {template}, wanda {does}",
       "reviewed": false
     }
   }

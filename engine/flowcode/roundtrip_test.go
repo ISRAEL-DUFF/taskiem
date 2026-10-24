@@ -341,7 +341,7 @@ func (g *gen) step(outer scope, earlier []string, depth int) obj {
 	var s obj
 	id := g.id(pick(g, "s", "step_", "pay", "x"))
 	s.set("id", id)
-	types := []string{"connector", "connector", "code", "container", "http", "wait", "signal", "approval", "subflow", "transform", "ai"}
+	types := []string{"connector", "connector", "code", "container", "http", "wait", "signal", "callback", "approval", "subflow", "transform", "ai"}
 	if len(id) <= 40 && !strings.Contains(id, "__") {
 		types = append(types, "capability")
 	}
@@ -519,6 +519,14 @@ func (g *gen) step(outer scope, earlier []string, depth int) obj {
 			s.set("config", obj{{"duration", g.duration()}})
 		} else {
 			s.set("config", obj{{"until", "=timestamp(trigger.body.due_at)"}})
+		}
+	case "callback":
+		if g.chance(0.6) {
+			c := obj{{"timeout", g.duration()}}
+			if g.chance(0.5) {
+				c.set("on_timeout", pick(g, "fail", "continue"))
+			}
+			s.set("config", c)
 		}
 	case "signal":
 		c := obj{{"event", pick(g, "payout.settled", "paystack@1:transfer_event.transfer.success")}, {"correlation", g.expr(sc)}}

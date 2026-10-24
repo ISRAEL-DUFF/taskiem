@@ -9,8 +9,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // The dry run (spec 12.1 step 6) runs a draft through engine/wdtest: the
@@ -38,6 +40,15 @@ type TestFile struct {
 
 // HappyPath generates the case where everything succeeds.
 func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
+	return HappyPathWith(def, reg, nil)
+}
+
+// HappyPathWith is HappyPath with the templates a template step may name
+// (nil: the library).
+func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Templates) wdtest.Case {
+	if find == nil {
+		find = expansion.Library(templates.Default())
+	}
 	c := wdtest.Case{
 		Name:      "happy path (generated)",
 		Mocks:     map[string]wdtest.Mocks{},
@@ -101,6 +112,13 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 		}
 	}
 	c.Trigger = trig
+	// A template step's steps are mocked as the workflow's own, by their
+	// expanded ids (decision 0047).
+	if def.HasTemplates() {
+		if exp, err := expansion.ExpandDefinition(def, find); err == nil {
+			def = exp
+		}
+	}
 	// Tenant variables the definition reads get a placeholder value: the
 	// dry run checks the workflow's shape, not the tenant's settings.
 	if raw, err := json.Marshal(def.Steps); err == nil {
@@ -153,6 +171,8 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":
 				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{}}
+			case "callback":
+				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{"body": map[string]any{}, "query": map[string]any{}, "received_at": "2026-01-01T09:00:00Z"}}
 			case "form":
 				answers := map[string]any{}
 				if st.Form != nil {
@@ -283,10 +303,10 @@ func sample(s any, types map[string]any, m *connector.Manifest, depth int) any {
 		}
 		// A pattern the plain sample misses: try the shapes patterns most
 		// often ask for (digits of common lengths: phone numbers, BVNs,
-		// account numbers).
+		// account numbers, a month).
 		if p, ok := sm["pattern"].(string); ok {
 			if re, err := regexp.Compile(p); err == nil && !re.MatchString(s) {
-				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "sample_1", "Sample1"} {
+				for _, c := range []string{"00000000000", "0000000000", "2348000000000", "000000", "0000", "2026-01", "sample_1", "Sample1"} {
 					if re.MatchString(c) {
 						return c
 					}
@@ -302,6 +322,12 @@ func sample(s any, types map[string]any, m *connector.Manifest, depth int) any {
 
 // DryRun runs the generated happy path and the proposed cases.
 func DryRun(doc []byte, reg connector.Lookup, policies map[string]json.RawMessage, proposed []wdtest.Case) (TestFile, []TestResult, error) {
+	return DryRunWith(doc, reg, policies, proposed, nil)
+}
+
+// DryRunWith is DryRun with the templates a template step may name (nil:
+// the library).
+func DryRunWith(doc []byte, reg connector.Lookup, policies map[string]json.RawMessage, proposed []wdtest.Case, find expansion.Templates) (TestFile, []TestResult, error) {
 	def, err := wd.Load(doc)
 	if err != nil {
 		return TestFile{}, nil, err
@@ -309,7 +335,7 @@ func DryRun(doc []byte, reg connector.Lookup, policies map[string]json.RawMessag
 	reg = ManifestOnly(reg)
 	used := usedPolicies(def, policies)
 	file := TestFile{Schema: wdtest.Schema, Policies: used}
-	cases := append([]wdtest.Case{HappyPath(def, reg)}, proposed...)
+	cases := append([]wdtest.Case{HappyPathWith(def, reg, find)}, proposed...)
 	var results []TestResult
 	names := map[string]bool{}
 	for i, c := range cases {
@@ -321,7 +347,7 @@ func DryRun(doc []byte, reg connector.Lookup, policies map[string]json.RawMessag
 			c.Name = fmt.Sprintf("case %d", i+1)
 		}
 		names[c.Name] = true
-		res := runCase(def, reg, used, c)
+		res := runCase(def, reg, used, find, c)
 		results = append(results, TestResult{Name: c.Name, Source: source, Passed: res.Passed(), Status: res.Status, Failures: res.Failures})
 		file.Cases = append(file.Cases, c)
 	}
@@ -330,13 +356,13 @@ func DryRun(doc []byte, reg connector.Lookup, policies map[string]json.RawMessag
 
 // runCase runs one case, turning a panic in a malformed case into a
 // failure: a proposal's tests are data from a model.
-func runCase(def *wd.Definition, reg connector.Lookup, policies map[string]json.RawMessage, c wdtest.Case) (res wdtest.Result) {
+func runCase(def *wd.Definition, reg connector.Lookup, policies map[string]json.RawMessage, find expansion.Templates, c wdtest.Case) (res wdtest.Result) {
 	defer func() {
 		if v := recover(); v != nil {
 			res = wdtest.Result{Case: c.Name, Status: "error", Failures: []string{fmt.Sprintf("the case could not run: %v", v)}}
 		}
 	}()
-	return wdtest.RunCaseWithPolicies(def, reg, nil, policies, c)
+	return wdtest.RunCaseWith(def, reg, nil, policies, find, c)
 }
 
 // usedPolicies returns the policies def's approval steps name.

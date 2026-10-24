@@ -5,7 +5,9 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Policy rules the builder applies on top of the publishing checks (spec
@@ -18,8 +20,25 @@ import (
 // that no approval step precedes.
 const RulePaymentWithoutApproval = "payment_write_without_approval"
 
-// PolicyFindings lists policy rule violations in def.
+// PolicyFindings lists policy rule violations in def: in its template
+// steps' templates too (decision 0047), whose payments are the workflow's.
 func PolicyFindings(def *wd.Definition, reg connector.Lookup) []Warning {
+	return PolicyFindingsWith(def, reg, nil)
+}
+
+// PolicyFindingsWith is PolicyFindings with the templates a template step
+// may name (nil: the library).
+func PolicyFindingsWith(def *wd.Definition, reg connector.Lookup, find expansion.Templates) []Warning {
+	if find == nil {
+		find = expansion.Library(templates.Default())
+	}
+	if def.HasTemplates() {
+		exp, err := expansion.ExpandDefinition(def, find)
+		if err != nil {
+			return nil // the publishing checks say why it does not expand
+		}
+		def = exp
+	}
 	var out []Warning
 	// before holds, for the scope being walked, the approval steps that
 	// precede the enclosing control step (inherited by nested scopes).

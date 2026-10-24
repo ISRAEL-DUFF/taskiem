@@ -308,7 +308,23 @@ func checkUses(eu *EndUser, doc []byte) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return embed.Disallowed(uses, eu.AllowedConnectors), nil
+	bad := embed.Disallowed(uses, eu.AllowedConnectors)
+	// A template step's template must be one the app allows, as for
+	// instantiating it (decision 0047).
+	var root map[string]any
+	if json.Unmarshal(doc, &root) == nil {
+		for _, id := range embed.TemplatesOf(root["steps"]) {
+			if !slices.Contains(eu.AllowedTemplates, id) {
+				bad = append(bad, "template:"+id)
+			}
+		}
+		// A business's own workflow as a step (decision 0048) is the
+		// partner's customer's, outside what an app lists: refused.
+		for _, id := range embed.WorkflowsOf(root["steps"]) {
+			bad = append(bad, "workflow:"+id)
+		}
+	}
+	return bad, nil
 }
 
 // embedGuardBody checks a request carrying a definition (create, save,

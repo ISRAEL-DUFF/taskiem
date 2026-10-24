@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -145,6 +145,28 @@ export function capability(uses: string, input?: object, extra?: CapabilityExtra
   return { type: "capability", uses, ...(input === undefined ? {} : { input }), ...extra };
 }
 
+/**
+ * A template step: the callable template id, its parameters (values, as
+ * the Start page takes them) and its run inputs (expressions over this
+ * workflow). Its output is the template's outputs.
+ */
+/**
+ * A template step that uses one of the business's own callable workflows
+ * (one with outputs and a published version), by its id, with its run
+ * inputs. Its output is the workflow's outputs.
+ */
+export function callWorkflow(id: string, input?: object): StepSpec {
+  return { type: "template", workflow: id, ...(input === undefined ? {} : { input }) };
+}
+
+export function template(id: string, params?: Record<string, unknown>, input?: object): StepSpec {
+  return {
+    type: "template", template: id,
+    ...(params === undefined ? {} : { params }),
+    ...(input === undefined ? {} : { input }),
+  };
+}
+
 export interface HttpConfig {
   method: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
   url: Val<string>;
@@ -202,6 +224,16 @@ export function wait(config: { duration: Duration } | { until: Expr<string> }): 
 
 export function signal(config: { event: string; correlation: Expr; timeout?: Duration }): StepSpec {
   return { type: "signal", config };
+}
+
+/** A callback step: the run pauses until something calls run.callbacks.<id>, for up to timeout (default 7d). */
+export function callback(config?: { timeout?: Duration; on_timeout?: "fail" | "continue" }): StepSpec {
+  return { type: "callback", ...(config === undefined ? {} : { config }) };
+}
+
+/** A respond step: the answer the webhook caller gets (the trigger must be a webhook with respond: true). */
+export function respond(config: { status?: number; headers?: Values; body: Value }): StepSpec {
+  return { type: "respond", config };
 }
 
 export interface ApprovalConfig {
@@ -299,6 +331,8 @@ export interface WorkflowOptions {
   inputs?: { schema?: object | boolean };
   types?: Record<string, object | boolean>;
   settings?: { timeout?: Duration; concurrency_key?: Expr; max_concurrency?: number; retention?: Duration };
+  /** What this workflow gives back when another of the business's workflows uses it as a step (callWorkflow); it needs inputs too. */
+  outputs?: (Omit<Output, "value"> & { value: Expr })[];
 }
 
 export class Workflow extends Steps {
@@ -319,6 +353,7 @@ export class Workflow extends Steps {
     def.steps = super.build("steps");
     if (o.types !== undefined) def.types = o.types;
     if (o.settings !== undefined) def.settings = lowerAt(o.settings, "settings");
+    if (o.outputs !== undefined) def.outputs = lowerAt(o.outputs, "outputs");
     return def as unknown as WorkflowDefinition;
   }
 
@@ -333,7 +368,7 @@ export function workflow(options: WorkflowOptions): Workflow {
 
 // Key order of a built step, so the JSON committed next to the code is
 // stable and reads in the order an author thinks.
-const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
+const STEP_KEYS = ["id", "name", "description", "type", "needs", "when", "connector", "action", "uses", "template", "workflow", "params", "connection", "input", "effect", "compensate", "config", "retry", "timeout", "on_error"];
 
 function buildStep(id: string, spec: StepSpec, opts: StepOptions, path: string): Step {
   const raw: Record<string, unknown> = { id, ...spec };

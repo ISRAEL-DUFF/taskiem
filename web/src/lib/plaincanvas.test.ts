@@ -77,3 +77,23 @@ describe("a workflow made without typing an expression", () => {
     expect(when).toBe("=steps.approve.output.decision == 'approved'");
   });
 });
+
+describe("template step sources", () => {
+  it("offers a template step's outputs to the steps after it", () => {
+    const steps = [
+      { id: "pay", type: "template", template: "pay-a-list" },
+      { id: "tell", type: "transform", needs: ["pay"], config: { output: {} } },
+    ];
+    const got = sourcesFor({ steps }, "tell", [], [{ id: "pay-a-list", callable: { outputs: [{ name: "paid", type: "integer", title: "People paid" }] } }]);
+    expect(got).toEqual([{ label: "From “pay”: People paid", expr: "=steps.pay.output.paid", number: true }]);
+  });
+
+  it("offers a workflow-backed template step's outputs too", () => {
+    const steps = [
+      { id: "sub", type: "template", workflow: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12" },
+      { id: "tell", type: "transform", needs: ["sub"], config: { output: {} } },
+    ];
+    const got = sourcesFor({ steps }, "tell", [], [{ id: "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12", outputs: [{ name: "total", type: "number", title: "Total" }] }]);
+    expect(got).toEqual([{ label: "From “sub”: Total", expr: "=steps.sub.output.total", number: true }]);
+  });
+});

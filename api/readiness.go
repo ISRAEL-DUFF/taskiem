@@ -21,7 +21,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/policy"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Readiness (no-technical-steps N3): what a workflow needs before it can
@@ -65,11 +67,41 @@ func readyEnvs(ctx context.Context, tx pgx.Tx) (envs []string, blocking map[stri
 // readiness lists what def needs in each of envs, in the business's tenant
 // scope. l is the language of the messages.
 func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def []byte, envs []string, blocking map[string]bool, l lang.Tag) ([]readyNeed, error) {
+	return s.readinessWith(ctx, tx, tenant, def, nil, envs, blocking, l)
+}
+
+// readinessWith is readiness with the templates a saved version pinned;
+// nil finds them in the library.
+func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def []byte, find expansion.Templates, envs []string, blocking map[string]bool, l lang.Tag) ([]readyNeed, error) {
 	// A definition that does not load needs nothing yet: its own problems
 	// are reported by its checks.
 	d, loadErr := wd.Load(def)
 	if loadErr != nil {
 		return []readyNeed{}, nil //nolint:nilerr // reported by the publishing checks instead
+	}
+	// A template's needs are the workflow's (decision 0047): read the
+	// expanded definition, and name each need's step as the canvas shows
+	// it, the template step it came from.
+	written := d
+	if d.HasTemplates() {
+		if find == nil {
+			find = runtime.Callables(ctx, tx, templates.Default())
+		}
+		exp, err := expansion.ExpandDefinition(d, find)
+		if err != nil {
+			return []readyNeed{}, nil //nolint:nilerr // reported by the publishing checks instead
+		}
+		d = exp
+	}
+	shown := func(st *wd.Step) *wd.Step {
+		if st == nil || st.Origin == nil {
+			return st
+		}
+		top, _, _ := strings.Cut(st.Origin.Step, "__")
+		if t := written.Step(top); t != nil {
+			return t
+		}
+		return st
 	}
 	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String()) // manifests only: nothing is compiled
 	if err != nil {
@@ -88,6 +120,7 @@ func (s *Server) readiness(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def
 			order = append(order, k)
 			got = &n
 		}
+		st = shown(st)
 		if st != nil && !slices.ContainsFunc(got.Steps, func(x readyStep) bool { return x.ID == st.ID }) {
 			got.Steps = append(got.Steps, readyStep{ID: st.ID, Name: stepTitle(st)})
 		}
@@ -465,7 +498,11 @@ func (s *Server) checkReady(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID
 	if err != nil {
 		return err
 	}
-	needs, err := s.readiness(ctx, tx, tenant, def, envs, blocking, lang.EN)
+	find, _, err := runtime.PinnedTemplates(ctx, tx, wf, v, runtime.Callables(ctx, tx, templates.Default()))
+	if err != nil {
+		return err
+	}
+	needs, err := s.readinessWith(ctx, tx, tenant, def, find, envs, blocking, lang.EN)
 	if err != nil {
 		return err
 	}
@@ -493,7 +530,11 @@ func (s *Server) versionReadiness(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		needs, err = s.readiness(r.Context(), tx, p.TenantID, def, envs, blocking, lang.EN)
+		find, _, err := runtime.PinnedTemplates(r.Context(), tx, wf, v, runtime.Callables(r.Context(), tx, templates.Default()))
+		if err != nil {
+			return err
+		}
+		needs, err = s.readinessWith(r.Context(), tx, p.TenantID, def, find, envs, blocking, lang.EN)
 		return err
 	})
 	if err != nil {

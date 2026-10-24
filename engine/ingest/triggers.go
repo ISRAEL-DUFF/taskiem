@@ -67,8 +67,6 @@ func parseWebhook(c map[string]any) (webhookConfig, error) {
 	switch {
 	case w.auth == "mtls":
 		return w, fmt.Errorf("mtls webhooks need the edge proxy, which is not available yet; use hmac or bearer")
-	case c["respond"] == true:
-		return w, fmt.Errorf("synchronous webhooks (respond) are not available yet")
 	case strings.HasPrefix(w.path, "/connectors/") || w.path == "/connectors":
 		return w, fmt.Errorf("webhook paths under /connectors are reserved for connector events")
 	}

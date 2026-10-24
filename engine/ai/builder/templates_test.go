@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -211,4 +212,45 @@ func normalise(s string) string {
 		return ' '
 	}, s)
 	return " " + strings.Join(strings.Fields(s), " ") + " "
+}
+
+// The business's own callable workflows (decision 0048) are listed in the
+// context, and a draft that uses one is dry-run with its steps through the
+// builder's resolver.
+func TestCallableWorkflowsBuild(t *testing.T) {
+	const id = "2f1a4d8e-3c0b-4e6f-9a21-5b7c8d9e0f12"
+	own := templates.Template{ID: id, Title: "Double it", Summary: "S", Description: "D", Category: "workflow", Tags: []string{}, Connectors: []string{}, Params: []templates.Param{},
+		Callable: true, Outputs: []templates.Output{{Name: "kobo", Type: "integer", Title: "Total", Description: "Twice", Value: "=steps.total.output.kobo"}},
+		Definition: json.RawMessage(`{"schema":"wd/v1","id":"wf_d","version":1,"name":"Double it","trigger":{"type":"manual"},
+		  "inputs":{"schema":{"type":"object","required":["amount_kobo"],"properties":{"amount_kobo":{"type":"integer"}}}},
+		  "steps":[{"id":"total","type":"transform","config":{"output":{"kobo":"=trigger.body.amount_kobo * 2"}}}]}`)}
+	draft := `{"schema":"wd/v1","id":"wf_use","version":1,"name":"Use it","trigger":{"type":"manual"},
+	 "inputs":{"schema":{"type":"object","required":["amount_kobo"],"properties":{"amount_kobo":{"type":"integer"}}}},
+	 "steps":[{"id":"sub","type":"template","workflow":"` + id + `","input":{"amount_kobo":"=trigger.body.amount_kobo"}},
+	          {"id":"after","type":"transform","needs":["sub"],"config":{"output":{"kobo":"=steps.sub.output.kobo"}}}]}`
+	f := &ai.Fake{Script: []ai.Response{envelope(t, draft)}}
+	b, _ := newBuilder(t, f)
+	lib := expansion.Library(templates.Default())
+	b.Find = func(want string) (*templates.Template, error) {
+		if want == id {
+			return &own, nil
+		}
+		return lib(want)
+	}
+	p, err := b.Build(context.Background(), builder.Request{Goal: "double the amount with my Double it workflow", Context: builder.Context{
+		CallableWorkflows: []builder.CallableWorkflow{{ID: id, Name: "Double it", Inputs: json.RawMessage(`{"type":"object"}`), Outputs: own.Outputs, Effect: "only reads"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Valid() || !p.TestsPassed() {
+		t.Fatalf("valid %v, tests %+v, problems %v", p.Valid(), p.Tests, p.Problems)
+	}
+	ctxDoc, _ := builder.ContextFrom(f.Requests()[0].Messages[0].Text)
+	if raw, _ := json.Marshal(ctxDoc["callable_workflows"]); !strings.Contains(string(raw), `"Double it"`) || !strings.Contains(string(raw), `"only reads"`) {
+		t.Errorf("the context lacks the callable workflows: %s", raw)
+	}
+	if !strings.Contains(f.Requests()[0].System[0].Text, "callable_workflows") {
+		t.Errorf("the prompt does not say how to use them")
+	}
 }

@@ -19,8 +19,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Line is one step of the description. Depth is 0 for top-level steps and
@@ -41,7 +43,17 @@ func Describe(def *wd.Definition, reg connector.Lookup) []Line {
 
 // DescribeIn is Describe in a language.
 func DescribeIn(def *wd.Definition, reg connector.Lookup, t lang.Tag) []Line {
-	d := describer{reg: reg, lang: t}
+	return DescribeWith(def, reg, t, nil)
+}
+
+// DescribeWith is DescribeIn with the templates a template step may name
+// (find: the library, or the business's callable workflows too; nil is
+// the library), so the step is read as what it uses and does.
+func DescribeWith(def *wd.Definition, reg connector.Lookup, t lang.Tag, find expansion.Templates) []Line {
+	if find == nil {
+		find = expansion.Library(templates.Default())
+	}
+	d := describer{reg: reg, lang: t, find: find}
 	out := []Line{{Number: "1", Text: d.trigger(def.Trigger)}}
 	d.steps(&out, def.Steps, 0, "", 2)
 	return out
@@ -69,6 +81,7 @@ func Text(lines []Line) string {
 }
 
 type describer struct {
+	find expansion.Templates
 	reg  connector.Lookup
 	lang lang.Tag
 }
@@ -268,6 +281,15 @@ func (d describer) what(st *wd.Step) string {
 			return d.t("wd.capability.via", "what", what, "connection", st.Connection)
 		}
 		return d.t("wd.capability", "what", what)
+	case "callback":
+		if c := st.Callback; c != nil && c.Timeout != "" {
+			return d.t("wd.callback_for", "duration", DurationIn(c.Timeout, d.lang))
+		}
+		return d.t("wd.callback")
+	case "respond":
+		return d.t("wd.respond")
+	case "template":
+		return d.template(st)
 	case "approval":
 		a := st.Approval
 		if a == nil {
@@ -482,4 +504,39 @@ func ordinal(n int, t lang.Tag) string {
 		}
 	}
 	return strconv.Itoa(n) + suf
+}
+
+// template reads a template step as what it uses and what that does
+// (decision 0047, open question 4): "Use the template: Run payroll, which
+// moves money and waits for a person to approve or answer".
+func (d describer) template(st *wd.Step) string {
+	id, key := st.Template, "wd.template"
+	if id == "" {
+		id, key = st.Workflow, "wd.workflow"
+	}
+	title := id
+	var does []string
+	if t, err := d.find(id); err == nil {
+		title = t.Title
+		if doc, err := t.Instantiate(t.Examples(), ""); err == nil {
+			if def, err := wd.Load(doc); err == nil {
+				e := templates.EffectOf(def, d.reg)
+				does = append(does, d.t("wd.effect."+e.Class))
+				if e.WaitsForPerson {
+					does = append(does, d.t("wd.effect.person"))
+				}
+				if e.WaitsForEvent {
+					does = append(does, d.t("wd.effect.event"))
+				}
+			}
+		}
+	}
+	if len(does) == 0 {
+		return d.t(key, "template", title)
+	}
+	text := does[0]
+	if len(does) > 1 {
+		text = strings.Join(does[:len(does)-1], ", ") + " " + d.t("wd.effect.and") + " " + does[len(does)-1]
+	}
+	return d.t(key+".does", "template", title, "does", text)
 }

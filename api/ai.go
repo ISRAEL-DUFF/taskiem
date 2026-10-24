@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
@@ -162,14 +163,18 @@ func (s *Server) aiBuild(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, channel string, after func(uuid.UUID, *builder.Proposal, error)) (uuid.UUID, error) {
 	breq := builder.Request{Goal: req.Goal, Environment: req.Environment, Language: req.language}
 	id := uuid.Must(uuid.NewV7())
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{who.tenant}, func(tx pgx.Tx) error {
+	reg, err := s.Registry.For(ctx, who.tenant.String())
+	if err != nil {
+		return uuid.Nil, err
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{who.tenant}, func(tx pgx.Tx) error {
 		if req.Workflow != nil {
 			if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, *req.Workflow).Scan(&breq.Base); err != nil {
 				return err
 			}
 		}
 		var err error
-		if breq.Context, err = aiContext(ctx, tx, req.Environment, req.Workflow); err != nil {
+		if breq.Context, err = aiContext(ctx, tx, reg, req.Environment, req.Workflow); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel)
@@ -243,6 +248,7 @@ func (s *Server) runBuild(id uuid.UUID, who aiActor, req builder.Request) (*buil
 			return out
 		},
 		Templates: templates.Default(),
+		Find:      s.callables(ctx, who.tenant),
 		Meter:     aiMeter{s: s, tenant: who.tenant},
 		Recorder:  aiRecorder{s: s, build: id, who: who, provider: s.AI.Provider.Name()},
 		Effort:    s.AI.Effort,
@@ -392,7 +398,7 @@ func (rec aiRecorder) Record(ctx context.Context, it builder.Interaction) error 
 // and workflows' latest definitions (the builder keeps only their
 // structure). It never selects secrets, credentials (secret_ref) or
 // variable values.
-func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (builder.Context, error) {
+func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string, skip *uuid.UUID) (builder.Context, error) {
 	var c builder.Context
 	rows, err := tx.Query(ctx, `SELECT environment, connector, name, status FROM connections
 		WHERE ($1 = '' OR environment = $1) ORDER BY environment, connector, name LIMIT 200`, env)
@@ -457,6 +463,18 @@ func aiContext(ctx context.Context, tx pgx.Tx, env string, skip *uuid.UUID) (bui
 	})
 	if err != nil {
 		return c, err
+	}
+	// The business's own workflows a template step may use (decision
+	// 0048), with their interface.
+	callable, err := runtime.CallableWorkflows(ctx, tx, reg)
+	if err != nil {
+		return c, err
+	}
+	for _, x := range callable {
+		if skip != nil && x.ID == *skip {
+			continue
+		}
+		c.CallableWorkflows = append(c.CallableWorkflows, builder.CallableWorkflow{ID: x.ID.String(), Name: x.Name, Inputs: x.Inputs, Outputs: x.Outputs, Effect: x.Effect.Words()})
 	}
 	rows, err = tx.Query(ctx, `SELECT name, document FROM approval_policies WHERE state = 'active' ORDER BY name LIMIT 100`)
 	if err != nil {

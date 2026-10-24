@@ -54,6 +54,29 @@ export interface CapabilityStep extends StepBase {
   effect?: { idempotency_seed?: Expression };
 }
 
+/**
+ * A callable template used as a step (docs/contracts/wd-v1.md, template
+ * steps): expanded into the template's steps when the workflow is
+ * deployed; its output is the template's outputs.
+ */
+export interface TemplateStep extends StepBase {
+  type: "template";
+  /** A library template's id, or (workflow) one of the business's callable workflows; exactly one of the two. */
+  template?: string;
+  workflow?: string;
+  params?: Record<string, unknown>;
+  input?: Values;
+}
+
+/** What a callable workflow gives back to a template step that uses it (docs/contracts/wd-v1.md, callable workflows). */
+export interface Output {
+  name: string;
+  type: "string" | "integer" | "number" | "boolean" | "list" | "object";
+  title: string;
+  description: string;
+  value: Expression;
+}
+
 export interface CodeStep extends StepBase {
   type: "code";
   input?: Values;
@@ -126,6 +149,18 @@ export interface SignalStep extends StepBase {
   config: { event: string; correlation: Expression; timeout?: Duration };
 }
 
+/** Waits for another system to call the run back at run.callbacks.<id> (docs/contracts/wd-v1.md, callback steps). */
+export interface CallbackStep extends StepBase {
+  type: "callback";
+  config?: { timeout?: Duration; on_timeout?: "fail" | "continue" };
+}
+
+/** Answers the webhook call that started the run (a webhook trigger with respond: true). */
+export interface RespondStep extends StepBase {
+  type: "respond";
+  config: { status?: number; headers?: Values; body: unknown };
+}
+
 export interface ApprovalStep extends StepBase {
   type: "approval";
   config: {
@@ -179,8 +214,8 @@ export interface AiStep extends StepBase {
 }
 
 export type Step =
-  | ConnectorStep | CapabilityStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
-  | WaitStep | SignalStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
+  | ConnectorStep | CapabilityStep | TemplateStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
+  | WaitStep | SignalStep | CallbackStep | RespondStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];
 
@@ -273,4 +308,5 @@ export interface WorkflowDefinition {
   steps: Step[];
   types?: Record<string, object | boolean>;
   settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration };
+  outputs?: Output[];
 }

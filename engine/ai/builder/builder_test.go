@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/termii"
 	"github.com/israel-duff/taskiem/engine/ai"
@@ -334,5 +335,32 @@ func TestDryRunAnswersForms(t *testing.T) {
 	}
 	if len(results) != 1 || !results[0].Passed {
 		t.Fatalf("%+v", results)
+	}
+}
+
+// A draft that composes callable templates (rule 18, decision 0047) is
+// checked, dry-run and policy-checked with the templates' steps: their own
+// approval gates their payments.
+func TestComposedTemplatesBuild(t *testing.T) {
+	composed := `{"schema":"wd/v1","id":"wf_month","version":1,"name":"Month end","trigger":{"type":"manual"},
+	 "inputs":{"schema":{"type":"object","required":["batch"],"properties":{"batch":{"type":"string"}}}},
+	 "steps":[
+	  {"id":"pay","type":"template","template":"pay-a-list","params":{"approver_role":"owner"},"input":{"batch":"=trigger.body.batch"}},
+	  {"id":"inv","type":"template","template":"send-invoice","needs":["pay"],"input":{"name":"Ada","amount_naira":"=double(steps.pay.output.paid_naira) + 1.0","for":"Fees"}}]}`
+	f := &ai.Fake{Script: []ai.Response{envelope(t, composed)}}
+	reg := connector.NewRegistry()
+	if err := builtin.Register(reg, builtin.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	b := &builder.Builder{Provider: f, Connectors: reg, Recorder: &recorder{}}
+	p, err := b.Build(context.Background(), builder.Request{Goal: "pay the suppliers on the list, then invoice Ada for the fees"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Valid() || p.PolicyViolations() != 0 || !p.TestsPassed() {
+		t.Fatalf("valid %v, policy %v, tests %+v, problems %v", p.Valid(), p.Warnings, p.Tests, p.Problems)
+	}
+	if !strings.Contains(f.Requests()[0].System[1].Text, "- pay-a-list (Pay a list of people after approval): params ") {
+		t.Errorf("the catalogue lacks the callable templates")
 	}
 }

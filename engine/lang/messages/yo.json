@@ -2136,6 +2136,14 @@
       "text": "Pinnu ohun tí a ó ṣe:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Dúró kí ètò mìíràn pè padà",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Dúró tó {duration} kí ètò mìíràn pè padà",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} pẹ̀lú àkáǹtì ìsanwó tí a so",
       "reviewed": false
@@ -2190,6 +2198,30 @@
     },
     "wd.day.wednesday": {
       "text": "Ọjọ́rú",
+      "reviewed": false
+    },
+    "wd.effect.and": {
+      "text": "àti",
+      "reviewed": false
+    },
+    "wd.effect.event": {
+      "text": "ń dúró kí nǹkan ṣẹlẹ̀",
+      "reviewed": false
+    },
+    "wd.effect.moves_money": {
+      "text": "ń gbé owó",
+      "reviewed": false
+    },
+    "wd.effect.person": {
+      "text": "ń dúró kí ẹnìkan fọwọ́ sí tàbí dáhùn",
+      "reviewed": false
+    },
+    "wd.effect.read": {
+      "text": "ń kà nìkan",
+      "reviewed": false
+    },
+    "wd.effect.write": {
+      "text": "ń yí nǹkan padà nínú àwọn iṣẹ́ rẹ",
       "reviewed": false
     },
     "wd.foreach": {
@@ -2256,6 +2288,10 @@
       "text": "Ṣe àwọn wọ̀nyí ní àkókò kan náà:",
       "reviewed": false
     },
+    "wd.respond": {
+      "text": "Dáhùn ìbéèrè tó bẹ̀rẹ̀ èyí",
+      "reviewed": false
+    },
     "wd.schedule.daily": {
       "text": "Lójoojúmọ́ ní {time} (àkókò {tz})",
       "reviewed": false
@@ -2306,6 +2342,14 @@
     },
     "wd.signal_named": {
       "text": "Dúró de {event}",
+      "reviewed": false
+    },
+    "wd.template": {
+      "text": "Lo àwòṣe: {template}",
+      "reviewed": false
+    },
+    "wd.template.does": {
+      "text": "Lo àwòṣe: {template}, tó {does}",
       "reviewed": false
     },
     "wd.transform": {
@@ -2430,6 +2474,14 @@
     },
     "wd.wait_until": {
       "text": "Dúró títí àkókò tí a yàn",
+      "reviewed": false
+    },
+    "wd.workflow": {
+      "text": "Lo iṣẹ́ rẹ: {template}",
+      "reviewed": false
+    },
+    "wd.workflow.does": {
+      "text": "Lo iṣẹ́ rẹ: {template}, tó {does}",
       "reviewed": false
     }
   }

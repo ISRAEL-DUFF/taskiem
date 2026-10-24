@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,9 +19,14 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/embed"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
+	"github.com/israel-duff/taskiem/engine/wddiff"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -39,19 +45,80 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 	return append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
 }
 
+// callables finds a template step's template for a definition not saved
+// yet: a library template, or one of the tenant's callable workflows,
+// each read in a transaction of its own.
+func (s *Server) callables(ctx context.Context, tenant uuid.UUID) expansion.Templates {
+	library := expansion.Library(templates.Default())
+	return func(id string) (*templates.Template, error) {
+		if !runtime.IsWorkflowID(id) {
+			return library(id)
+		}
+		var t *templates.Template
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			t, err = runtime.Callables(ctx, tx, templates.Default())(id)
+			return err
+		})
+		return t, err
+	}
+}
+
+// checkVersion is check for a saved version: its template steps are
+// checked with the templates it pinned when it was saved (decision 0047).
+func (s *Server) checkVersion(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte) []problem {
+	if !strings.Contains(string(doc), `"template"`) {
+		return s.check(ctx, tenant, doc)
+	}
+	if p := usesItself(wf, doc); p != nil {
+		return []problem{*p}
+	}
+	find, _, err := runtime.PinnedTemplates(ctx, tx, wf, v, runtime.Callables(ctx, tx, templates.Default()))
+	if err != nil {
+		return []problem{{Path: "/", Message: "the version's templates could not be loaded: " + err.Error()}}
+	}
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String())
+	if err != nil {
+		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
+	}
+	var out []problem
+	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.CheckWith(doc, reg, find) }); err != nil {
+		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
+	}
+	return append(out, s.keptProblems(ctx, tenant, doc)...)
+}
+
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code
 // steps compiles them, and a Python check runs the interpreter.
 func (s *Server) checkWith(ctx context.Context, tenant uuid.UUID, doc []byte, reg connector.Lookup) []problem {
 	var out []problem
-	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.Check(doc, reg) }); err != nil {
+	find := s.callables(ctx, tenant)
+	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.CheckWith(doc, reg, find) }); err != nil {
 		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
 	}
 	return out
 }
 
-// checkFor is check for the caller's tenant.
+// checkFor is check for the caller's tenant; on a request about a
+// workflow, it also refuses the workflow using itself as a step.
 func (s *Server) checkFor(r *http.Request, doc []byte) []problem {
+	if wf, err := uuid.Parse(chi.URLParam(r, "wf")); err == nil {
+		if p := usesItself(wf, doc); p != nil {
+			return []problem{*p}
+		}
+	}
 	return s.check(r.Context(), principalFrom(r.Context()).TenantID, doc)
+}
+
+// usesItself is the problem of a workflow whose template steps name the
+// workflow itself (decision 0048): its published version would be a copy
+// of what is being saved.
+func usesItself(wf uuid.UUID, doc []byte) *problem {
+	var root map[string]any
+	if json.Unmarshal(doc, &root) == nil && slices.Contains(embed.WorkflowsOf(root["steps"]), wf.String()) {
+		return &problem{Path: "/steps", Message: "a workflow may not use itself as a step"}
+	}
+	return nil
 }
 
 // canonical compacts a JSON document; its SHA-256 is the version digest.
@@ -233,9 +300,13 @@ func insertVersionTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int
 	if len(layout) > 0 {
 		lay = layout
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit)
-	return err
+	if _, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit); err != nil {
+		return err
+	}
+	// The templates its template steps use, as the library has them now:
+	// a later library update is offered, never taken (decision 0047).
+	return runtime.PinTemplates(ctx, tx, tenant, wf, v, doc, runtime.Callables(ctx, tx, templates.Default()))
 }
 
 func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +406,7 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 	var versions []versionInfo
 	var deployments []deployment
 	var from string // the template its first version was made from
+	var updates []runtime.TemplateUpdate
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		if err := tx.QueryRow(ctx, `SELECT w.id, w.name, w.active_version, COALESCE((SELECT max(version) FROM workflow_versions WHERE workflow_id = w.id), 0), w.created_at, `+latestKey+`, w.git_path, `+liveTrigger+`
@@ -362,6 +434,14 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(ctx, `SELECT template_id FROM workflow_versions WHERE workflow_id = $1 AND template_id IS NOT NULL ORDER BY version LIMIT 1`, wf).Scan(&from); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
+		// The templates the latest version's template steps pinned that
+		// the library has changed since: the next version saved takes them.
+		callables := runtime.Callables(ctx, tx, templates.Default())
+		_, pinned, err := runtime.PinnedTemplates(ctx, tx, wf, sum.LatestVersion, callables)
+		if err != nil {
+			return err
+		}
+		updates = runtime.TemplateUpdates(pinned, callables, func(a, b []byte) []string { return wddiff.Diff(a, b) })
 		return nil
 	})
 	if err != nil {
@@ -369,6 +449,9 @@ func (s *Server) getWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := map[string]any{"workflow": sum, "versions": versions, "deployments": deployments}
+	if len(updates) > 0 {
+		out["template_updates"] = updates
+	}
 	// Made from a template another now replaces: offer the new one.
 	if t, ok := templates.Default().Get(from); ok && t.SupersededBy != "" {
 		if next, ok := templates.Default().Get(t.SupersededBy); ok {
@@ -398,16 +481,21 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	var info versionInfo
 	var def, layout []byte
+	var probs []problem
 	err = s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
+		if err := tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
 			FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout)
+			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout); err != nil {
+			return err
+		}
+		probs = s.checkVersion(r.Context(), tx, principalFrom(r.Context()).TenantID, wf, v, def)
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(s.checkFor(r, def))}
+	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(probs)}
 	if layout != nil {
 		out["layout"] = json.RawMessage(layout)
 	}
@@ -571,7 +659,7 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 	if state != "draft" {
 		return nil, "", false, fmt.Errorf("%w: version %d is %s", errConflict, v, state)
 	}
-	if probs = s.check(ctx, tenant, def); len(probs) > 0 {
+	if probs = s.checkVersion(ctx, tx, tenant, wf, v, def); len(probs) > 0 {
 		return probs, "", false, errInvalid
 	}
 	if probs, err = missingPolicies(ctx, tx, def); err != nil || len(probs) > 0 {
@@ -797,4 +885,25 @@ func (s *Server) listTriggers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"triggers": nonNil(out), "remote_subscriptions": subs})
+}
+
+// listCallableWorkflows lists the business's workflows another workflow
+// may use as a template step (decision 0048): those whose published
+// version declares outputs, with their interface.
+func (s *Server) listCallableWorkflows(w http.ResponseWriter, r *http.Request) {
+	reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var out []runtime.CallableWorkflow
+	err = s.tx(r, func(tx pgx.Tx) error {
+		out, err = runtime.CallableWorkflows(r.Context(), tx, reg)
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"workflows": nonNil(out)})
 }

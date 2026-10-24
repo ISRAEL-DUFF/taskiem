@@ -40,6 +40,12 @@ export function summary(s: Step): string {
       return `${words(s.connector.split("@")[0] ?? "")} · ${words(s.action)}`;
     case "capability":
       return `${words(s.uses)} · ${s.connection ? `via ${s.connection}` : "whichever rail is connected"}`;
+    case "template":
+      return s.template !== undefined ? `${words(s.template.replaceAll("-", " "))} · its steps run here` : "One of your workflows · its steps run here";
+    case "callback":
+      return s.config?.timeout ? `wait up to ${s.config.timeout} to be called back` : "wait to be called back";
+    case "respond":
+      return `answer ${s.config.status ?? 200}`;
     case "http":
       return `${s.config.method} ${s.config.url}`;
     case "code":
@@ -74,6 +80,9 @@ const words = (id: string) => (id.charAt(0).toUpperCase() + id.slice(1)).replace
 const KINDS: Record<string, [string, string]> = {
   connector: ["Service", "connections"],
   capability: ["Money", "billing"],
+  template: ["Template", "templates"],
+  callback: ["Wait to be called back", "inbox"],
+  respond: ["Answer the caller", "catalogue"],
   approval: ["Approval", "approvals"],
   form: ["Form", "forms"],
   wait: ["Wait", "runs"],

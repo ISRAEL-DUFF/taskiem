@@ -71,7 +71,7 @@ func New(t testing.TB) *Env {
 	reg.SetTenantSource(src.Connectors)
 	guard := &egress.Guard{Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
 	vault := &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}
-	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault}, Registry: reg, Provider: prov, Tenant: tn.ID,
+	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault, HooksURL: "https://hooks.test/hooks"}, Registry: reg, Provider: prov, Tenant: tn.ID,
 		Secrets: runtime.MapSecrets{}, Vault: vault, Egress: guard, Connectors: src}
 }
 

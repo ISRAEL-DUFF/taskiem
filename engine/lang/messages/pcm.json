@@ -2136,6 +2136,14 @@
       "text": "Decide wetin to do:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Wait make the other system call back",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Wait up to {duration} make the other system call back",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} with any payments account wey dey connected",
       "reviewed": false
@@ -2190,6 +2198,30 @@
     },
     "wd.day.wednesday": {
       "text": "Wednesday",
+      "reviewed": false
+    },
+    "wd.effect.and": {
+      "text": "and",
+      "reviewed": false
+    },
+    "wd.effect.event": {
+      "text": "dey wait make something happen",
+      "reviewed": false
+    },
+    "wd.effect.moves_money": {
+      "text": "dey move money",
+      "reviewed": false
+    },
+    "wd.effect.person": {
+      "text": "dey wait make person approve or answer",
+      "reviewed": false
+    },
+    "wd.effect.read": {
+      "text": "only dey read",
+      "reviewed": false
+    },
+    "wd.effect.write": {
+      "text": "dey change things for your services",
       "reviewed": false
     },
     "wd.foreach": {
@@ -2256,6 +2288,10 @@
       "text": "Do all these same time:",
       "reviewed": false
     },
+    "wd.respond": {
+      "text": "Answer the request wey start this one",
+      "reviewed": false
+    },
     "wd.schedule.daily": {
       "text": "Every day by {time} ({tz} time)",
       "reviewed": false
@@ -2306,6 +2342,14 @@
     },
     "wd.signal_named": {
       "text": "Wait for {event}",
+      "reviewed": false
+    },
+    "wd.template": {
+      "text": "Use the template: {template}",
+      "reviewed": false
+    },
+    "wd.template.does": {
+      "text": "Use the template: {template}, wey {does}",
       "reviewed": false
     },
     "wd.transform": {
@@ -2430,6 +2474,14 @@
     },
     "wd.wait_until": {
       "text": "Wait reach the time wey dem set",
+      "reviewed": false
+    },
+    "wd.workflow": {
+      "text": "Use your own workflow: {template}",
+      "reviewed": false
+    },
+    "wd.workflow.does": {
+      "text": "Use your own workflow: {template}, wey {does}",
       "reviewed": false
     }
   }
