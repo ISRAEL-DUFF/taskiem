@@ -4,7 +4,7 @@ Date: 2026-10-23 · Status: **Proposed**
 
 ## Context
 
-Templates are Taskiem's best-tested units of work. Each one is a wd/v1 definition with named, typed parameters and run inputs, its own workflow tests (`templates/tests/`), and checks that hold it to its promises: it uses exactly the connectors it declares, its capabilities expand on every rail that can run it ([0044](0044-rails-and-products.md), R4), and a template around a product moves no money (R7). The library now holds about fifty of them: Run payroll, Pay a list, payment links, refunds, the Payrolla templates, and Send an invoice from [0045](0045-tally-in-taskiem.md).
+Templates are Taskiem's best-tested units of work. Each one is a wd/v1 definition with named, typed parameters and run inputs, its own workflow tests (`templates/tests/`), and checks that hold it to its promises: it uses exactly the connectors it declares, its capabilities expand on every rail that can run it ([0044](0044-rails-and-products.md); milestone R4 of the [rails and products spec](../spec/rails-and-products.md#r4-more-templates-on-rails-m)), and a template around a product moves no money (milestone R7 of the same spec, [Templates around Payrolla](../spec/rails-and-products.md#r7-templates-around-payrolla-sm-needs-r5)). The library now holds about fifty of them: Run payroll, Pay a list, payment links, refunds, the Payrolla templates, and Send an invoice from [0045](0045-tally-in-taskiem.md).
 
 Today a template can only be **copied**: instantiating it makes a draft workflow of its own. Nothing can **use** one. A business that wants "at month end, run payroll, then record it for the accountant, then email the owner the balance" gets three separate workflows, or one hand-built workflow that repeats the three templates' steps and loses their tests. The AI builder has the same problem: given a goal that two templates answer together, it drafts fifteen steps from scratch instead of joining the two it already trusts.
 
@@ -43,7 +43,7 @@ Taskiem already plans half of this. The `subflow` step type exists in wd/v1 (`co
    - An approval inside it stays an approval.
    - A payment inside it makes the calling workflow one that moves money, so the publishing checks and the builder's rules (`approval_before_payment`, `idempotency`, `no_payment_with_product`) see it.
    - Readiness lists the template's connections, capabilities and tables as the caller's needs.
-   - A workflow around a product (R7) may not use a template that moves money.
+   - A workflow around a product (milestone R7 of the rails and products spec) may not use a template that moves money.
 
 4. **The template version is pinned when the calling workflow is published.** A library update never changes a published workflow. The workflow's page offers the update with its differences, as `superseded_by` offers an upgrade today. Only the next publish takes it.
 
@@ -51,7 +51,7 @@ Taskiem already plans half of this. The `subflow` step type exists in wd/v1 (`co
 
 6. **The AI builder composes before it drafts.** Callable templates join its catalogue as actions with their inputs, outputs and effect. When a goal is answered by more than one template, the builder joins them with `template` steps. A new eval suite measures this: two-template and three-template goals, graded on the templates used and the rules above.
 
-7. **A template may use other templates.** Expansion is recursive, at most three levels deep, refuses a cycle, and stays within the 500-step limit after expansion. The template tests run on the expanded definition.
+7. **A template may use other templates.** Expansion is recursive, at most three levels deep counting the calling workflow (a workflow, a template it uses, a template that one uses), so a step id carries at most two prefixes. It refuses a cycle, and keeps every scope within the limit of 500 steps per scope ([wd-v1](../contracts/wd-v1.md), rule 11) after expansion: a template's steps are counted in the scope where its `template` step stands, and a nested scope inside the template counts on its own. The template tests run on the expanded definition.
 
 ## Alternatives considered
 
@@ -66,7 +66,7 @@ Taskiem already plans half of this. The `subflow` step type exists in wd/v1 (`co
 ## Consequences
 
 - The template format gains `callable` and `outputs`. `templates_test.go` checks each callable template: its outputs against its steps, its effect computed, and its tests run on the expanded form.
-- wd/v1 gains a `template` step type. `engine/expansion` gains its expansion, beside capability expansion and in the same pass (a template's capability steps are expanded after it), with step-id prefixes and the existing limit on composite ids (`MaxCapabilityStepID`) reviewed for two levels of prefix.
+- wd/v1 gains a `template` step type. `engine/expansion` gains its expansion, beside capability expansion and in the same pass (a template's capability steps are expanded after it), with step-id prefixes and the limit on composite ids reviewed for two levels of prefix. Step ids are at most 63 characters (`^[a-z][a-z0-9_]{0,62}$`), and each prefix spends the calling step's id plus `__` of that budget. The longest id in the library today is 22 characters (`record_rejected_failed`), so the 40 that `MaxCapabilityStepID` allows a capability step would not fit even one prefix (40 + 2 + 22 = 64). A `template` step therefore gets its own, smaller cap, set against the library's longest id, and the publishing checks also refuse an expanded id over 63 characters, naming the `template` step that produced it.
 - The canvas shows a `template` step folded, with its expanded steps one click away. Run history shows the expanded steps under it.
 - Readiness and the publishing checks read the expanded definition, so nothing a template needs or does can hide behind its step.
 - Flow code (the SDK) gains `template(id, params, input)`, and the round trip keeps the step unexpanded.
