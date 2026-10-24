@@ -153,3 +153,18 @@ fieldset { min-width: 0; }
 .inv-acct p { margin: .25rem 0; }
 .inv-acct-no { font-size: 1.75rem; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
 .inv-pay .btn + .btn { margin-top: .5rem; }
+/* A school family's page (family.html): children as chips, fees as an
+   invoice's lines, receipts in a table, the plan form's instalment rows. */
+.fam-children { margin-top: 1rem; }
+.chip.is-current { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.fam-list { margin: .5rem 0 0; padding-left: 1.25rem; }
+.fam-list li { margin: .25rem 0; }
+.fam-table { width: 100%; border-collapse: collapse; margin-top: .5rem; font-size: .9rem; }
+.fam-table th, .fam-table td { padding: .5rem .25rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.fam-table th { font-size: .8rem; color: var(--muted); }
+.fam-rows { border: 0; padding: 0; margin: 0; }
+.fam-rows legend { font-size: .85rem; font-weight: 600; margin-bottom: .375rem; }
+.fam-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .75rem; margin-bottom: .5rem; }
+.fam-plan + .fam-plan { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--line); }
+.fam-copy { margin-left: .5rem; vertical-align: middle; }
+.panel h3 { margin: .75rem 0 0; font-size: .95rem; }

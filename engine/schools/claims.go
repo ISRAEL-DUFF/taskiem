@@ -542,12 +542,27 @@ func (s *Schools) PlanDecidedAfter(ctx context.Context, tenant uuid.UUID, p Plan
 			return err
 		}
 		var err error
-		out, err = s.SendFamily(ctx, tx, tenant, p.FamilyID, FamilyMessage{Purpose: "decision", Key: "plan:" + p.ID.String() + ":" + p.Status, Text: func(link string) string {
-			return PlanDecisionText(business, p, link)
-		}}, p.DecidedBy)
+		out, err = s.SendFamily(ctx, tx, tenant, p.FamilyID, FamilyMessage{Purpose: "decision", Key: "plan:" + p.ID.String() + ":" + p.Status,
+			Text:  func(link string) string { return PlanDecisionText(business, p, link) },
+			Short: func(link string) string { return PlanDecisionShort(p, link) }}, p.DecidedBy)
 		return err
 	})
 	return out, err
+}
+
+// PlanDecisionShort is the SMS: the decision and the page, where the
+// instalments and the note are.
+func PlanDecisionShort(p PlanRequest, link string) string {
+	s := "Payment plan for " + p.AdmissionNumber + ": "
+	if p.Status == "approved" {
+		s += fmt.Sprintf("approved, %d instalment(s).", len(p.DecidedInstalments))
+	} else {
+		s += "not approved."
+	}
+	if link != "" {
+		s += " Details on your fees page: " + link
+	}
+	return s
 }
 
 // PlanDecisionText is the message a family gets about a decided plan.

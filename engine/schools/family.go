@@ -324,6 +324,9 @@ type FamilyMessage struct {
 	Purpose string
 	Key     string
 	Text    func(link string) string
+	// Short, when set, is the text an SMS gets (at most three parts, and
+	// ₦ makes every character count double); Text otherwise.
+	Short func(link string) string
 }
 
 // FamilySent is what SendFamily did.
@@ -352,7 +355,10 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 		return out, err
 	}
 	out.Link, out.ExpiresAt = link, link.ExpiresAt
-	text := m.Text(link.URL)
+	text, short := m.Text(link.URL), ""
+	if m.Short != nil {
+		short = m.Short(link.URL)
+	}
 	type guardian struct {
 		id    uuid.UUID
 		env   map[string]any
@@ -383,7 +389,7 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 			continue
 		}
 		subject, _ := g.env["subject"].(string)
-		channel, err := s.sendGuardian(ctx, tx, tenant, family, link.ID, g.id, subject, d.Phone, business, text, m, by)
+		channel, err := s.sendGuardian(ctx, tx, tenant, family, link.ID, g.id, subject, d.Phone, business, text, short, m, by)
 		if err != nil {
 			return out, err
 		}
@@ -396,10 +402,13 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 }
 
 // sendGuardian sends one guardian the message: the channel it went on.
-func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, link, guardian uuid.UUID, subject, phone, business, text string, m FamilyMessage, by string) (string, error) {
+func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, link, guardian uuid.UUID, subject, phone, business, text, short string, m FamilyMessage, by string) (string, error) {
 	key := "family:" + m.Key + ":" + guardian.String()
+	if short == "" {
+		short = text
+	}
 	record := func(channel string) error {
-		sealed, err := s.Vault.SealUnderTx(ctx, tx, tenant, subject, "other", text)
+		sealed, err := s.Vault.SealUnderTx(ctx, tx, tenant, subject, "other", map[string]string{"text": text, "short": short})
 		if err != nil {
 			return err
 		}
@@ -446,11 +455,12 @@ func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, l
 	case err != nil:
 		return "", err
 	}
-	_, err := s.Invoices.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.SMS, Purpose: sender.PurposeNotice, To: phone, SenderName: business, Text: text, Key: key})
+	_, err := s.Invoices.Messages.Enqueue(ctx, tx, sender.Message{Tenant: tenant, Channel: sender.SMS, Purpose: sender.PurposeNotice, To: phone, SenderName: business, Text: short, Key: key})
 	switch {
 	case errors.Is(err, sender.ErrAllowance), errors.Is(err, sender.ErrRecipientLimit), errors.Is(err, sender.ErrInvalid):
 		// Over the allowance or the person's limit: the link is minted all
 		// the same; the school sees nobody was reached.
+		s.log().Warn("schools: a family's SMS was not queued", "family", family, "purpose", m.Purpose, "why", err)
 		return "", nil
 	case err != nil:
 		return "", err
@@ -460,32 +470,38 @@ func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, l
 
 var errAlreadySent = errors.New("schools: already sent")
 
-// FamilyMessageText is a queued chat message's text, opened for the
-// outbox, with the guardian's phone for the SMS fallback; ok is false
-// when the guardian is gone or erased.
-func (s *Schools) FamilyMessageText(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) (text, phone string, ok bool, err error) {
+// FamilyMessageText is a queued chat message's text (and its short form
+// for an SMS), opened for the outbox, with the guardian's phone for the
+// SMS fallback; ok is false when the guardian is gone or erased.
+func (s *Schools) FamilyMessageText(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) (text, short, phone string, ok bool, err error) {
 	var env, details map[string]any
 	err = tx.QueryRow(ctx, `SELECT m.text, g.details FROM school_family_messages m LEFT JOIN school_guardians g ON g.id = m.guardian_id WHERE m.tenant_id = $1 AND m.id = $2`, tenant, id).Scan(&env, &details)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", false, nil
+		return "", "", "", false, nil
 	}
 	if err != nil {
-		return "", "", false, err
+		return "", "", "", false, err
 	}
 	v, err := s.Vault.OpenTx(ctx, tx, tenant, env)
 	if errors.Is(err, pii.ErrErased) {
-		return "", "", false, nil
+		return "", "", "", false, nil
 	}
 	if err != nil {
-		return "", "", false, err
+		return "", "", "", false, err
 	}
-	text, _ = v.(string)
+	if m, ok := v.(map[string]any); ok {
+		text, _ = m["text"].(string)
+		short, _ = m["short"].(string)
+	}
+	if short == "" {
+		short = text
+	}
 	if details != nil {
 		var d guardianSealed
 		if _, err := s.open(ctx, tx, tenant, details, &d); err != nil {
-			return "", "", false, err
+			return "", "", "", false, err
 		}
 		phone = d.Phone
 	}
-	return text, phone, text != "", nil
+	return text, short, phone, text != "", nil
 }

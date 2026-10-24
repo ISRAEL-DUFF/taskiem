@@ -169,6 +169,8 @@ CREATE POLICY dispatch ON customer_accounts FOR SELECT TO taskiem_dispatch USING
 GRANT SELECT (id, tenant_id, customer_id, account_number, bank_name) ON customer_accounts TO taskiem_dispatch;
 CREATE POLICY dispatch ON money_entry_customers FOR SELECT TO taskiem_dispatch USING (true);
 GRANT SELECT (tenant_id, entry_id, customer_id) ON money_entry_customers TO taskiem_dispatch;
+-- A customer's credit (taskiem_money_entry_left) takes reversals off.
+GRANT SELECT (entry_id, amount_kobo, undone) ON money_reversals TO taskiem_dispatch;
 
 -- The family a link opens, expired or not: the page says "ask the school
 -- for a new link" for an expired one, never "not found", and offers to
@@ -372,6 +374,7 @@ DROP FUNCTION taskiem_public_school_family_receipts(bytea);
 DROP FUNCTION taskiem_public_school_family_invoices(bytea);
 DROP FUNCTION taskiem_public_school_family_students(bytea);
 DROP FUNCTION taskiem_public_school_family(bytea);
+REVOKE SELECT (entry_id, amount_kobo, undone) ON money_reversals FROM taskiem_dispatch;
 REVOKE SELECT ON money_entry_customers FROM taskiem_dispatch;
 DROP POLICY dispatch ON money_entry_customers;
 REVOKE SELECT ON customer_accounts FROM taskiem_dispatch;

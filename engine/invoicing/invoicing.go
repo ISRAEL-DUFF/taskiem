@@ -218,7 +218,7 @@ type Invoices struct {
 	// receipt). Nil: invoices carry their own page link only.
 	FamilyLink func(ctx context.Context, tx pgx.Tx, tenant, invoice uuid.UUID, purpose string) (string, error)
 	Logger     *slog.Logger
-	Now     func() time.Time
+	Now        func() time.Time
 }
 
 func (s *Invoices) now() time.Time {
@@ -672,8 +672,8 @@ func (s *Invoices) Void(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNu
 
 // Sent is the outcome of sending an invoice.
 type Sent struct {
-	Invoice Invoice  `json:"invoice"`
-	Link    string   `json:"link,omitempty"`
+	Invoice Invoice `json:"invoice"`
+	Link    string  `json:"link,omitempty"`
 	// FamilyLink is the school family page's link a school's invoice went
 	// out with instead of its own page's (FamilyLink hook).
 	FamilyLink string   `json:"family_link,omitempty"`
@@ -825,24 +825,27 @@ func Naira(kobo int64) string {
 // familySendText is a school's term invoice's message: the balance and the
 // family page, where the fees, what was paid and how to pay are.
 func familySendText(business string, x Invoice, link string) string {
+	// Short: the SMS starts with the school's name, and ₦ makes every
+	// character count double.
 	var b strings.Builder
 	if x.PaidKobo >= x.TotalKobo {
-		fmt.Fprintf(&b, "Fees invoice %s from %s: %s, paid from money you paid before. Nothing is due.", x.Number, business, Naira(x.TotalKobo))
+		fmt.Fprintf(&b, "Fees invoice %s: %s, paid from money you paid before. Nothing is due.", x.Number, Naira(x.TotalKobo))
 	} else {
-		fmt.Fprintf(&b, "Fees invoice %s from %s: %s", x.Number, business, Naira(x.TotalKobo-x.PaidKobo))
+		fmt.Fprintf(&b, "Fees invoice %s: %s", x.Number, Naira(x.TotalKobo-x.PaidKobo))
 		if x.PaidKobo > 0 {
 			b.WriteString(" still to pay")
 		}
 		if x.DueOn != "" {
 			if d, err := time.Parse(time.DateOnly, x.DueOn); err == nil {
-				fmt.Fprintf(&b, ", due %s", d.Format("2 Jan 2006"))
+				fmt.Fprintf(&b, " due %s", d.Format("2 Jan 2006"))
 			}
 		}
 		b.WriteString(".")
 	}
 	if link != "" {
-		b.WriteString(" See the fees, what was paid and how to pay: " + link)
+		b.WriteString(" See the fees, payments and how to pay: " + link)
 	}
+	_ = business
 	return b.String()
 }
 
