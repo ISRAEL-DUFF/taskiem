@@ -16512,6 +16512,26 @@ components:
             title:
               type: string
           additionalProperties: false
+        template_updates:
+          type: array
+          description: The callable templates the latest version's template steps use (decision 0047) that the library has changed since that version was saved. Saving a new version takes them; until then every version runs the template as it pinned it.
+          items:
+            type: object
+            required:
+            - template
+            - title
+            - changes
+            properties:
+              template:
+                type: string
+              title:
+                type: string
+              changes:
+                type: array
+                description: What changed, as the version history lists it (`+ step id`, `- step id`, `~ step id`, `~ output name`, `+ parameter name`).
+                items:
+                  type: string
+            additionalProperties: false
     VersionRequest:
       type: object
       required:

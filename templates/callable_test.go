@@ -368,3 +368,16 @@ func TestCallableTemplatesFitTwoDeepOnEveryRail(t *testing.T) {
 		})
 	}
 }
+
+// A parameter only the trigger uses is not a template step's to give.
+func TestTriggerOnlyParams(t *testing.T) {
+	tpl, _ := templates.Default().Get("run-payroll")
+	if !tpl.TriggerOnly("pay_day") || tpl.TriggerOnly("business_name") || tpl.TriggerOnly("staff_table") {
+		t.Errorf("pay_day %v, business_name %v, staff_table %v", tpl.TriggerOnly("pay_day"), tpl.TriggerOnly("business_name"), tpl.TriggerOnly("staff_table"))
+	}
+	for _, p := range tpl.StepParams() {
+		if p.Name == "pay_day" {
+			t.Error("pay_day is a step parameter")
+		}
+	}
+}

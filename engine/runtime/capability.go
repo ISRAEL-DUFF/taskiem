@@ -19,7 +19,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
-	"github.com/israel-duff/taskiem/templates"
 )
 
 // projected reports whether a completed step stands for a capability whose
@@ -131,7 +130,7 @@ func (s *Store) Expand(ctx context.Context, tx pgx.Tx, tenant, workflow uuid.UUI
 	// Template steps first: a template's capability steps are expanded
 	// with the workflow's own.
 	if d.HasTemplates() {
-		find, err := s.templates(ctx, tx, workflow, version)
+		find, err := s.definitionTemplates(ctx, tx, workflow, version)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -225,13 +224,4 @@ func (s *Store) RunDefinition(ctx context.Context, tenant, run uuid.UUID) (*wd.D
 		return err
 	})
 	return d, err
-}
-
-// templates finds the templates a version's template steps use.
-func (s *Store) templates(_ context.Context, _ pgx.Tx, _ uuid.UUID, _ int) (expansion.Templates, error) {
-	lib := s.Templates
-	if lib == nil {
-		lib = templates.Default()
-	}
-	return expansion.Library(lib), nil
 }

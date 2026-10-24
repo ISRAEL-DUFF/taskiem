@@ -190,7 +190,18 @@ func (x *templater) template(st map[string]any, depth int, chain []string) ([]an
 	if !tpl.Callable {
 		return nil, refuse("template %s cannot be a step: it is not callable", tid)
 	}
-	params, _ := st["params"].(map[string]any)
+	params := map[string]any{}
+	given, _ := st["params"].(map[string]any)
+	for k, v := range given {
+		params[k] = v
+	}
+	// A parameter only the template's trigger uses (run-payroll's pay day)
+	// is not the caller's to give: its trigger is not expanded.
+	for _, p := range tpl.Params {
+		if _, ok := params[p.Name]; !ok && p.Required && tpl.TriggerOnly(p.Name) {
+			params[p.Name] = p.Example
+		}
+	}
 	tdoc, err := tpl.Instantiate(params, "")
 	if err != nil {
 		return nil, refuse("template %s: %v", tid, err)

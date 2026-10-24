@@ -7,6 +7,7 @@ package wdcheck
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
@@ -75,6 +76,7 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 	// A template's steps are checked as the workflow's own: what a
 	// template needs or does cannot hide behind its step (decision 0047).
 	if def.HasTemplates() {
+		written := def
 		expanded, _, err := expansion.ExpandTemplates(doc, find)
 		var ref *expansion.Refusal
 		switch {
@@ -86,6 +88,7 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 		if def, err = wd.Load(expanded); err != nil {
 			return []Problem{pr("/", err.Error())}
 		}
+		out = append(out, aroundProduct(written, def, reg)...)
 	}
 	var walk func(steps []*wd.Step)
 	walk = func(steps []*wd.Step) {
@@ -141,4 +144,46 @@ func anyRail(reg connector.Lookup, uses string) bool {
 		}
 	}
 	return false
+}
+
+// aroundProduct refuses, in a workflow around a product (decision 0044,
+// milestone R7: the product pays, Taskiem tells, records and links), a
+// template step whose template moves money (decision 0047).
+func aroundProduct(written, expanded *wd.Definition, reg connector.Lookup) []Problem {
+	product := ""
+	isProduct := func(ref string) {
+		if c, ok := reg.Get(ref); ok && c.Manifest.KindOf() == "product" && product == "" {
+			product = c.Manifest.Name
+		}
+	}
+	if written.Trigger.Type == "connector_event" {
+		ref, _ := written.Trigger.Config["connector"].(string)
+		isProduct(ref)
+	}
+	expanded.Walk(func(st *wd.Step) {
+		if st.Connector != "" {
+			isProduct(st.Connector)
+		}
+	})
+	if product == "" {
+		return nil
+	}
+	var out []Problem
+	seen := map[string]bool{}
+	expanded.Walk(func(st *wd.Step) {
+		if st.Origin == nil || templates.StepEffect(st, reg) != templates.EffectMovesMoney {
+			return
+		}
+		top, _, _ := strings.Cut(st.Origin.Step, "__")
+		if seen[top] {
+			return
+		}
+		seen[top] = true
+		tpl := st.Origin.Template
+		if t := written.Step(top); t != nil {
+			tpl = t.Template
+		}
+		out = append(out, pr("/steps/"+top, fmt.Sprintf("this workflow works around %s, which makes the payments; the template %s moves money, so it cannot be a step here", product, tpl)))
+	})
+	return out
 }

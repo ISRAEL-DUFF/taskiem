@@ -766,6 +766,10 @@ func TestProductTemplatesMoveNoMoney(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// With the templates it uses as steps (decision 0047).
+		if doc, _, err = expansion.ExpandTemplates(doc, expansion.Library(templates.Default())); err != nil {
+			t.Fatal(err)
+		}
 		def, err := wd.Load(doc)
 		if err != nil {
 			t.Fatal(err)

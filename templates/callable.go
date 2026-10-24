@@ -163,6 +163,50 @@ func (t *Template) checkCallable() error {
 	return nil
 }
 
+// TriggerOnly reports whether a parameter is used only by the template's
+// trigger (run-payroll's pay day): used as a step, the template has no
+// trigger of its own, so the caller leaves it out.
+func (t *Template) TriggerOnly(name string) bool {
+	var d map[string]json.RawMessage
+	if json.Unmarshal(t.Definition, &d) != nil {
+		return false
+	}
+	uses := func(raw []byte) bool {
+		for _, m := range marker.FindAllStringSubmatch(string(raw), -1) {
+			if m[1] == name {
+				return true
+			}
+		}
+		return false
+	}
+	if !uses(d["trigger"]) {
+		return false
+	}
+	for k, raw := range d {
+		if k != "trigger" && uses(raw) {
+			return false
+		}
+	}
+	for _, tb := range t.Tables {
+		if uses([]byte(tb.Name)) {
+			return false
+		}
+	}
+	return true
+}
+
+// StepParams are the parameters a template step gives: every one but those
+// only its trigger uses.
+func (t *Template) StepParams() []Param {
+	var out []Param
+	for _, p := range t.Params {
+		if !t.TriggerOnly(p.Name) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // triggerReadsOnlyBody refuses an expression that reads the trigger other
 // than its body (the run inputs a template step gives), unless it tests the
 // field with has(): used as a step, the template reads the calling
@@ -256,59 +300,60 @@ func MayNotRun(def *wd.Definition) map[string]bool {
 // EffectOf computes what a definition does at most, from its steps.
 func EffectOf(def *wd.Definition, reg connector.Lookup) Effect {
 	e := Effect{Class: EffectRead, Timeout: def.Settings.Timeout}
-	raise := func(c string) {
-		if effectRank[c] > effectRank[e.Class] {
+	def.Walk(func(st *wd.Step) {
+		if c := StepEffect(st, reg); effectRank[c] > effectRank[e.Class] {
 			e.Class = c
 		}
-	}
-	def.Walk(func(st *wd.Step) {
-		switch st.Type {
-		case "connector":
-			c, ok := reg.Get(st.Connector)
-			if !ok {
-				raise(EffectWrite)
-				return
-			}
-			a, ok := c.Manifest.Actions[st.Action]
-			switch {
-			case !ok:
-				raise(EffectWrite)
-			case a.Class.IsWrite() && c.Manifest.Category == "payments":
-				raise(EffectMovesMoney)
-			case a.Class.IsWrite():
-				raise(EffectWrite)
-			}
-		case "capability":
-			spec, ok := capability.Get(st.Uses)
-			switch {
-			case !ok:
-				raise(EffectWrite)
-			case spec.IsPayout() || st.Uses == "refund":
-				raise(EffectMovesMoney)
-			case slices.ContainsFunc(spec.Classes, effects.Class.IsWrite):
-				raise(EffectWrite)
-			}
-			if wd.IsWait(st.Uses) {
-				e.WaitsForEvent = true
-			}
-		case "http":
-			if st.HTTP != nil && st.HTTP.Class != "" && effects.Class(st.HTTP.Class).IsWrite() {
-				raise(EffectWrite)
-			} else if st.HTTP != nil && st.HTTP.Method != "" && st.HTTP.Method != "GET" && st.HTTP.Method != "HEAD" {
-				raise(EffectWrite)
-			}
-		case "container", "subflow":
-			if st.Type == "container" && st.Container != nil && st.Container.Class == string(effects.Read) {
-				return
-			}
-			raise(EffectWrite)
-		case "approval", "form":
+		switch {
+		case st.Type == "approval" || st.Type == "form":
 			e.WaitsForPerson = true
-		case "signal", "wait":
+		case st.Type == "signal" || st.Type == "wait" || (st.Type == "capability" && wd.IsWait(st.Uses)):
 			e.WaitsForEvent = true
 		}
 	})
 	return e
+}
+
+// StepEffect is what one step does: read, write, or moves money (a
+// payments connector's write, or a capability that pays out or refunds).
+func StepEffect(st *wd.Step, reg connector.Lookup) string {
+	switch st.Type {
+	case "connector":
+		c, ok := reg.Get(st.Connector)
+		if !ok {
+			return EffectWrite
+		}
+		a, ok := c.Manifest.Actions[st.Action]
+		switch {
+		case !ok:
+			return EffectWrite
+		case a.Class.IsWrite() && c.Manifest.Category == "payments":
+			return EffectMovesMoney
+		case a.Class.IsWrite():
+			return EffectWrite
+		}
+	case "capability":
+		spec, ok := capability.Get(st.Uses)
+		switch {
+		case !ok:
+			return EffectWrite
+		case spec.IsPayout() || st.Uses == "refund":
+			return EffectMovesMoney
+		case slices.ContainsFunc(spec.Classes, effects.Class.IsWrite):
+			return EffectWrite
+		}
+	case "http":
+		if st.HTTP != nil && (st.HTTP.Class != "" && effects.Class(st.HTTP.Class).IsWrite() || st.HTTP.Class == "" && st.HTTP.Method != "" && st.HTTP.Method != "GET" && st.HTTP.Method != "HEAD") {
+			return EffectWrite
+		}
+	case "container":
+		if st.Container == nil || st.Container.Class != string(effects.Read) {
+			return EffectWrite
+		}
+	case "subflow":
+		return EffectWrite
+	}
+	return EffectRead
 }
 
 // MovesMoney reports whether the effect moves money.

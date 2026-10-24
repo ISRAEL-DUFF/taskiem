@@ -109,6 +109,8 @@ A callable template's interface is:
 - **Outputs**: `outputs`, each with a `name`, a `type` (`string`, `integer`, `number`, `boolean`, `list` or `object`), a `title`, a `description` and a `value`, an expression over the template's own top-level steps read as `steps.<id>.output`. A step that may not run (it has a `when` or an `on_error`, or needs one that may not run) is read with an optional chain, `steps.?<id>.output…orValue(…)`, so the result never fails on a step that was skipped. The step's output in the calling workflow is these values by name.
 - **Effect**: computed from its steps, never declared: `read`, `write` or `moves_money`, whether it waits for a person (an approval or a form) or for an event, and its run timeout.
 
+A workflow keeps each template it uses as the library had it when the version was saved, so a library update never changes it; the workflow's page offers the update with its differences, and the next version saved takes it. What a template needs (its connections, capabilities, tables and variables) is the workflow's readiness, and what it does is the workflow's: a payment inside it is checked as the workflow's own, and a workflow around a product such as Payrolla cannot use a template that moves money.
+
 The library refuses to load a callable template that breaks these rules. Its step ids are at most 31 characters, its capability steps' at most 8, none contains `__`, and none is `input` or `body` (the ids expansion gives its own steps), so two templates' prefixes always fit. Each callable template's [workflow tests](#the-library) (`templates/tests/<id>.test.json`) also run with the template used as a step, and its outputs are checked against their types.
 
 ## API

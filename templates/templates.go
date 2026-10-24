@@ -29,6 +29,7 @@ package templates
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -219,13 +220,8 @@ func Load(fsys fs.FS) (*Library, error) {
 		if err != nil {
 			return nil, err
 		}
-		var t Template
-		dec := json.NewDecoder(bytes.NewReader(raw))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&t); err != nil {
-			return nil, fmt.Errorf("%s: %w", n, err)
-		}
-		if err := t.check(); err != nil {
+		t, err := Parse(raw)
+		if err != nil {
 			return nil, fmt.Errorf("%s: %w", n, err)
 		}
 		if want := strings.TrimSuffix(path.Base(n), ".json"); t.ID != want {
@@ -234,8 +230,8 @@ func Load(fsys fs.FS) (*Library, error) {
 		if lib.byID[t.ID] != nil {
 			return nil, fmt.Errorf("%s: duplicate id %q", n, t.ID)
 		}
-		lib.byID[t.ID] = &t
-		lib.list = append(lib.list, &t)
+		lib.byID[t.ID] = t
+		lib.list = append(lib.list, t)
 	}
 	for _, t := range lib.list {
 		if s := t.SupersededBy; s != "" && (lib.byID[s] == nil || lib.byID[s].SupersededBy != "") {
@@ -248,6 +244,39 @@ func Load(fsys fs.FS) (*Library, error) {
 		}
 	}
 	return lib, nil
+}
+
+// Parse reads one template, as a library file or a pinned copy holds it,
+// and checks it.
+func Parse(raw []byte) (*Template, error) {
+	var t Template
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&t); err != nil {
+		return nil, err
+	}
+	if err := t.check(); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// Pinned is a template as a version pins it (its JSON, which Parse reads
+// back, with its keys sorted) and that JSON's SHA-256, which tells a
+// pinned copy from the library's however the copy was stored.
+func (t *Template) Pinned() (raw, digest []byte, err error) {
+	if raw, err = json.Marshal(t); err != nil {
+		return nil, nil, err
+	}
+	var v any
+	if err = json.Unmarshal(raw, &v); err != nil {
+		return nil, nil, err
+	}
+	if raw, err = json.Marshal(v); err != nil {
+		return nil, nil, err
+	}
+	sum := sha256.Sum256(raw)
+	return raw, sum[:], nil
 }
 
 var marker = regexp.MustCompile(`\{\{\s*([a-z][a-z0-9_]*)(?::([a-z]+))?\s*\}\}`)
