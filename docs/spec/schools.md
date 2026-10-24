@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; not started · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 and B1 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -308,9 +308,23 @@ The AI builder learns the schools record and `schools@1` (a request about school
 
 From each rail's public documentation, for iswallet, Paystack and Flutterwave (and Moniepoint's naming): issuing permanent accounts, naming and its limits, the credit event and its fields (gross or net, payer name and account), lookups of credits for a window, fees and limits per account, KYC each needs. Map `virtual_account`, `virtual_account.credited` and a credit lookup for each that documents them, with conformance fixtures; questions a rail does not answer are listed for the founder, as in 0045's T0.
 
+**Built** (B0): the facts and the founder's questions are in [rail facts for schools](schools-rail-facts.md). `virtual_account` takes an `account_name` and an `account` (the wallet), and the customer a `nin`; `virtual_account.credited` carries a shared credit shape (`credit_id`, `amount_kobo` as what the payer sent, optional `settled_kobo`, `fee_kobo`, `account_number`, payer name, account and bank, narration, when); a new read capability `list_credits` (since, until, account) serves the look-back. Mapped for iswallet (issuing in batches, `list_credits`), Paystack (dedicated accounts, the credit as `charge.success` on `dedicated_nuban`, `list_credits`) and Flutterwave (static accounts, the credit as `charge.completed` on a `tva_` reference, `list_credits`); Moniepoint gains `account_name` and `credit_id`. Differences from §6:
+
+- **Every credit is its own entry**: the money log's key includes `credit_id`, which fixed repeat payments into one permanent account (including Moniepoint's) being taken as one.
+- **iswallet's credit webhook is not mapped**: its documentation does not say which fields name the account, so iswallet credits reach the log through the look-back (B4) until iswallet answers.
+- **Paystack names accounts itself** ("Business name/Customer name") and needs an email per customer; Flutterwave needs a BVN or NIN per account and documents no name; §6.3's naming holds only where a rail lets the business set it.
+
 ### B1: matching for customers' accounts (M)
 
 The permanent-account rule (§7.1), split payments (§7.2), payer memory (§7.3) and gross counting (§7.4), for every business, with the web app and chat. Closes the open items for the permanent-account rule and split payments.
+
+**Built** (B1): migration 00210 (`customer_accounts`; invoices' `customer_key` and the derived `customer_id`; `money_entry_customers` for a customer's money and credit; `money_payers`; money entries' `account_number` and `net`; a database check, under the entry's lock, that an entry's parts never exceed what it counts for); `invoicing.Invoices.RegisterAccount` and `POST /v1/customer-accounts`; the rule, credit counted when an invoice is sent, split confirm and match, payer memory and `DELETE /v1/money/payers/{id}`, `GET /v1/invoices/{id}/customer` ([matching](../matching.md)). Differences from §7:
+
+- **A customer is the invoice's `customer.key` where given** (`student:<id>` for a school), otherwise the pseudonym from their phone or email, so siblings billed to one parent's phone stay apart.
+- **A rail that does not say which account was paid into** (Flutterwave, Moniepoint) is matched at the reference it issued; a credit is held only when its account number is given and differs, or its reference names another account.
+- **Leftover credit goes to the next invoice sent to the same customer**; offering it to siblings is the Schools setting (B4).
+- **Payers are remembered from a person's confirm or match only**, not from automatic matches, with weights in [matching](../matching.md) to be tuned on real data.
+- **The account number of a customer's account is stored as the business's own collection account** (in the clear, as one-time accounts' are), so it can be compared.
 
 ### B2: the Schools area and its record (M)
 
