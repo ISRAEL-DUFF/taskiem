@@ -1,0 +1,90 @@
+{
+  "schema": "wd-test/v1",
+  "template": "school-plan-decided",
+  "params": {
+    "look_back_days": 7
+  },
+  "cases": [
+    {
+      "name": "each decision not told yet is sent once; a family nobody could reach is reported to the bursar",
+      "mocks": {
+        "decisions": {
+          "output": {
+            "count": 2,
+            "decisions": [
+              {"id": "0192e2e0-0000-7000-8000-0000000000aa", "student_id": "0192e2e0-0000-7000-8000-000000000001", "admission_number": "GCA/001", "class": "JSS 1 A", "status": "approved", "decided_at": "2026-10-23T09:00:00Z", "told": false,
+               "instalments": [{"amount_kobo": 2000000, "due_on": "2026-11-01"}, {"amount_kobo": 2000000, "due_on": "2026-12-01"}]},
+              {"id": "0192e2e0-0000-7000-8000-0000000000bb", "student_id": "0192e2e0-0000-7000-8000-000000000002", "admission_number": "GCA/002", "class": "JSS 1 A", "status": "declined", "decided_at": "2026-10-23T10:00:00Z", "note": "Pay in full", "told": false,
+               "instalments": [{"amount_kobo": 4000000, "due_on": "2026-11-01"}]}
+            ]
+          }
+        },
+        "tell_each[0].tell": {"output": {"plan_id": "0192e2e0-0000-7000-8000-0000000000aa", "student_id": "0192e2e0-0000-7000-8000-000000000001", "admission_number": "GCA/001", "status": "approved", "told_before": false, "channels": {"whatsapp": 1}, "nobody": false}},
+        "tell_each[1].tell": {"output": {"plan_id": "0192e2e0-0000-7000-8000-0000000000bb", "student_id": "0192e2e0-0000-7000-8000-000000000002", "admission_number": "GCA/002", "status": "declined", "told_before": false, "channels": {}, "nobody": true}},
+        "tell_each[1].tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "decisions": {"untold": true, "since_days": 7, "limit": 50},
+          "tell_each[0].tell": {"plan": "0192e2e0-0000-7000-8000-0000000000aa"},
+          "tell_each[1].tell": {"plan": "0192e2e0-0000-7000-8000-0000000000bb"},
+          "tell_each[1].tell_bursar": {
+            "title": "A family could not be told of its payment plan",
+            "message": "The payment plan for GCA/002 was declined, but no guardian could be reached. Reach the family another way, or send a link from Families."
+          }
+        },
+        "steps": {
+          "tell_each[0].tell": "completed",
+          "tell_each[0].tell_bursar": "skipped",
+          "tell_each[1].tell": "completed",
+          "tell_each[1].tell_bursar": "completed"
+        },
+        "calls": {
+          "tell": 2,
+          "tell_bursar": 1
+        }
+      }
+    },
+    {
+      "name": "a decision that cannot be told does not stop the others",
+      "mocks": {
+        "decisions": {
+          "output": {
+            "count": 2,
+            "decisions": [
+              {"id": "0192e2e0-0000-7000-8000-0000000000cc", "student_id": "0192e2e0-0000-7000-8000-000000000003", "admission_number": "GCA/003", "class": "JSS 2", "status": "approved", "decided_at": "2026-10-23T09:00:00Z", "told": false, "instalments": []},
+              {"id": "0192e2e0-0000-7000-8000-0000000000dd", "student_id": "0192e2e0-0000-7000-8000-000000000004", "admission_number": "GCA/004", "class": "JSS 2", "status": "approved", "decided_at": "2026-10-23T09:30:00Z", "told": false, "instalments": []}
+            ]
+          }
+        },
+        "tell_each[0].tell": {"error": {"kind": "fatal", "message": "the plan request is not decided yet"}},
+        "tell_each[1].tell": {"output": {"plan_id": "0192e2e0-0000-7000-8000-0000000000dd", "student_id": "0192e2e0-0000-7000-8000-000000000004", "admission_number": "GCA/004", "status": "approved", "told_before": true, "channels": {}, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "tell_each[0].tell_failed": "completed",
+          "tell_each[1].tell": "completed",
+          "tell_each[1].tell_bursar": "skipped"
+        },
+        "outputs": {
+          "tell_each[0].tell_failed": {"plan": "0192e2e0-0000-7000-8000-0000000000cc", "reason": "the plan request is not decided yet"}
+        }
+      }
+    },
+    {
+      "name": "nothing to tell: nothing is sent",
+      "mocks": {
+        "decisions": {"output": {"count": 0, "decisions": []}}
+      },
+      "expect": {
+        "status": "completed",
+        "calls": {
+          "tell": 0,
+          "tell_bursar": 0
+        }
+      }
+    }
+  ]
+}

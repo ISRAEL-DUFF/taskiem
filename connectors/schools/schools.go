@@ -39,6 +39,11 @@ type Ops interface {
 	InvoiceTermOnce(ctx context.Context, tenant, term uuid.UUID, key string, send bool, by string) (schools.TermInvoiced, error)
 	IssueAccount(ctx context.Context, tenant uuid.UUID, student string, in schools.IssueIn, by string) (schools.StudentAccount, error)
 	FamilyLinkFor(ctx context.Context, tenant uuid.UUID, family, student string) (schools.FamilyLinkMinted, error)
+	ListDebtors(ctx context.Context, tenant uuid.UUID, f schools.DebtorFilter) (schools.Debtors, error)
+	FindStudents(ctx context.Context, tenant uuid.UUID, refs []string) ([]uuid.UUID, error)
+	SendRemindersOnce(ctx context.Context, tenant uuid.UUID, in schools.RemindIn, by string) (schools.Reminded, error)
+	ListPlanDecisions(ctx context.Context, tenant uuid.UUID, f schools.PlanDecisionFilter) ([]schools.PlanRequest, error)
+	TellPlan(ctx context.Context, tenant uuid.UUID, plan string) (schools.PlanTold, error)
 }
 
 var _ Ops = schools.Service{}
@@ -48,15 +53,19 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"list_students":  connector.ActionFunc(a.listStudents),
-		"get_student":    connector.ActionFunc(a.getStudent),
-		"list_classes":   connector.ActionFunc(a.listClasses),
-		"current_term":   connector.ActionFunc(a.currentTerm),
-		"list_fee_items": connector.ActionFunc(a.listFeeItems),
-		"term_invoices":  connector.ActionFunc(a.termInvoices),
-		"invoice_term":   connector.ActionFunc(a.invoiceTerm),
-		"issue_account":  connector.ActionFunc(a.issueAccount),
-		"family_link":    connector.ActionFunc(a.familyLink),
+		"list_students":      connector.ActionFunc(a.listStudents),
+		"get_student":        connector.ActionFunc(a.getStudent),
+		"list_classes":       connector.ActionFunc(a.listClasses),
+		"current_term":       connector.ActionFunc(a.currentTerm),
+		"list_fee_items":     connector.ActionFunc(a.listFeeItems),
+		"term_invoices":      connector.ActionFunc(a.termInvoices),
+		"invoice_term":       connector.ActionFunc(a.invoiceTerm),
+		"issue_account":      connector.ActionFunc(a.issueAccount),
+		"family_link":        connector.ActionFunc(a.familyLink),
+		"list_debtors":       connector.ActionFunc(a.listDebtors),
+		"send_reminders":     connector.ActionFunc(a.sendReminders),
+		"plan_decisions":     connector.ActionFunc(a.planDecisions),
+		"tell_plan_decision": connector.ActionFunc(a.tellPlanDecision),
 	}}
 }
 
@@ -490,6 +499,51 @@ func (l *Late) ListTermInvoices(ctx context.Context, t, term uuid.UUID, class *u
 		return nil, err
 	}
 	return o.ListTermInvoices(ctx, t, term, class, status)
+}
+
+// ListDebtors implements Ops.
+func (l *Late) ListDebtors(ctx context.Context, t uuid.UUID, f schools.DebtorFilter) (schools.Debtors, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.Debtors{}, err
+	}
+	return o.ListDebtors(ctx, t, f)
+}
+
+// FindStudents implements Ops.
+func (l *Late) FindStudents(ctx context.Context, t uuid.UUID, refs []string) ([]uuid.UUID, error) {
+	o, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return o.FindStudents(ctx, t, refs)
+}
+
+// SendRemindersOnce implements Ops.
+func (l *Late) SendRemindersOnce(ctx context.Context, t uuid.UUID, in schools.RemindIn, by string) (schools.Reminded, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.Reminded{}, err
+	}
+	return o.SendRemindersOnce(ctx, t, in, by)
+}
+
+// ListPlanDecisions implements Ops.
+func (l *Late) ListPlanDecisions(ctx context.Context, t uuid.UUID, f schools.PlanDecisionFilter) ([]schools.PlanRequest, error) {
+	o, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return o.ListPlanDecisions(ctx, t, f)
+}
+
+// TellPlan implements Ops.
+func (l *Late) TellPlan(ctx context.Context, t uuid.UUID, plan string) (schools.PlanTold, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.PlanTold{}, err
+	}
+	return o.TellPlan(ctx, t, plan)
 }
 
 // InvoiceTermOnce implements Ops.

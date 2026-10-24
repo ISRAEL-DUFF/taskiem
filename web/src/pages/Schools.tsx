@@ -7,6 +7,7 @@ import { StudentFeesPanel } from "./SchoolFees";
 import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
 import { StudentReceiptsPanel } from "./SchoolReceipts";
 import { FamilyLinkDays, SendFamilyLink, StudentClaimsPanel, StudentPlansPanel } from "./SchoolFamily";
+import { PlanGrace, ReminderWording, StudentChasingPanel } from "./SchoolDebtors";
 import {
   PROMOTION_ACTIONS,
   STATUS_FILTERS,
@@ -85,6 +86,7 @@ export function SchoolTabs() {
       <NavLink to="/schools/accounts">Account numbers</NavLink>
       <NavLink to="/schools/payments">Payments</NavLink>
       <NavLink to="/schools/receipts">Receipts</NavLink>
+      <NavLink to="/schools/debtors">Debtors</NavLink>
       {me?.roles.includes("owner") && <NavLink to="/settings/schools">Settings</NavLink>}
     </nav>
   );
@@ -563,6 +565,7 @@ export function SchoolStudentPage() {
           <StudentAccountPanel studentID={s.id} />
           <StudentFeesPanel studentID={s.id} />
           <StudentReceiptsPanel studentID={s.id} />
+          <StudentChasingPanel studentID={s.id} manage={may.manage} />
           <StudentClaimsPanel studentID={s.id} manage={may.manage} />
           <StudentPlansPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
@@ -1131,13 +1134,15 @@ export function SchoolSettingsPage() {
   const { me } = useAuth();
   return (
     <>
-      <PageHeader title="Schools settings" description="Turn the Schools area on or off for the business, choose who issues students' account numbers, and set the discount threshold." />
+      <PageHeader title="Schools settings" description="Turn the Schools area on or off for the business, choose who issues students' account numbers, set the thresholds, the family page links, the reminder ladder's wording and the payment plan grace." />
       {me?.schools && <SchoolTabs />}
       <SchoolsSwitch />
       {me?.schools && me.roles.includes("owner") && <IssuingSettings />}
       {me?.schools && me.roles.includes("owner") && <DiscountThreshold />}
       {me?.schools && me.roles.includes("owner") && <CashThreshold />}
       {me?.schools && me.roles.includes("owner") && <FamilyLinkDays />}
+      {me?.schools && me.roles.includes("owner") && <ReminderWording />}
+      {me?.schools && me.roles.includes("owner") && <PlanGrace />}
     </>
   );
 }

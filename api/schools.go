@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -81,6 +82,7 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	s.schoolAccountRoutes(r) // students' account numbers (schools_accounts.go)
 	s.schoolCashRoutes(r)    // cash at the desk, approvals, receipts (schools_cash.go)
 	s.schoolFamilyRoutes(r)  // the family page's claims, plans and links (schools_family.go)
+	s.schoolChasingRoutes(r) // debtors, reminders, promises, plan standing (schools_chasing.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }
 
@@ -135,14 +137,21 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	var on, bursar bool
 	var threshold int64
 	var cash *int64
-	var linkDays int
+	var linkDays, grace int
 	var issuing schools.Issuing
+	var wording map[int]string
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if on, err = schools.Enabled(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		if linkDays, err = schools.FamilyLinkDays(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if grace, err = schools.PlanGraceDays(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if wording, err = schools.CustomWording(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
@@ -165,7 +174,17 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100, "cash_threshold_naira": nairaOrNil(cash),
-		"family_link_days": linkDays, "issuing": issuing, "issuers": issuers})
+		"family_link_days": linkDays, "issuing": issuing, "issuers": issuers, "plan_grace_days": grace, "reminder_wording": wordingOut(wording), "reminder_defaults": wordingOut(schools.DefaultWording),
+		"reminder_placeholders": schools.ReminderPlaceholders})
+}
+
+// wordingOut is a rung-keyed wording as JSON ({"1": ...}).
+func wordingOut(w map[int]string) map[string]string {
+	out := map[string]string{}
+	for r, v := range w {
+		out[strconv.Itoa(r)] = v
+	}
+	return out
 }
 
 // nairaOrNil is a nullable threshold in whole naira.
@@ -203,6 +222,12 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		// FamilyLinkDays, when given, is how long a family page link works
 		// (1 to 30 days; 3 by default, B6).
 		FamilyLinkDays *int `json:"family_link_days"`
+		// ReminderWording, when given, sets the rungs named ("1", "2",
+		// "3"; "" takes a rung back to the default) (B7).
+		ReminderWording map[string]string `json:"reminder_wording"`
+		// PlanGraceDays, when given, is how many days past an instalment's
+		// date a payment plan stays in good standing (0 to 60) (B7).
+		PlanGraceDays *int `json:"plan_grace_days"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -222,8 +247,9 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	bursar, threshold := false, int64(0)
 	var cash *int64
-	var linkDays int
+	var linkDays, grace int
 	var issuing schools.Issuing
+	var wording map[int]string
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		changed, err := schools.SetEnabled(r.Context(), tx, p.TenantID, req.Enabled, p.Actor())
 		if err != nil {
@@ -294,6 +320,34 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if len(req.ReminderWording) > 0 && req.Enabled {
+			in := map[int]string{}
+			for k, v := range req.ReminderWording {
+				n, err := strconv.Atoi(k)
+				if err != nil {
+					return errors.Join(errBadRequest, errors.New("reminder_wording is keyed by rung: 1, 2 or 3"))
+				}
+				in[n] = v
+			}
+			was, err := schools.SetReminderWording(r.Context(), tx, p.TenantID, in, p.Actor())
+			if err != nil {
+				return schoolErr(err)
+			}
+			if err := auditTx(r, tx, "settings.schools.reminder_wording", p.TenantID.String(), map[string]any{"rungs": slices.Sorted(maps.Keys(req.ReminderWording)), "before": wordingOut(was)}); err != nil {
+				return err
+			}
+		}
+		if req.PlanGraceDays != nil && req.Enabled {
+			was, err := schools.SetPlanGraceDays(r.Context(), tx, p.TenantID, *req.PlanGraceDays, p.Actor())
+			if err != nil {
+				return schoolErr(err)
+			}
+			if was != *req.PlanGraceDays {
+				if err := auditTx(r, tx, "settings.schools.plan_grace_days", p.TenantID.String(), map[string]any{"from": was, "to": *req.PlanGraceDays}); err != nil {
+					return err
+				}
+			}
+		}
 		if req.Issuing != nil && req.Enabled {
 			was, err := schools.SetIssuing(r.Context(), tx, p.TenantID, *req.Issuing, p.Actor())
 			if err != nil {
@@ -314,6 +368,12 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		if linkDays, err = schools.FamilyLinkDays(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
+		if grace, err = schools.PlanGraceDays(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if wording, err = schools.CustomWording(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
 		if issuing, err = schools.GetIssuing(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
@@ -328,7 +388,8 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100, "cash_threshold_naira": nairaOrNil(cash),
-		"family_link_days": linkDays, "issuing": issuing, "issuers": issuers})
+		"family_link_days": linkDays, "issuing": issuing, "issuers": issuers, "plan_grace_days": grace, "reminder_wording": wordingOut(wording), "reminder_defaults": wordingOut(schools.DefaultWording),
+		"reminder_placeholders": schools.ReminderPlaceholders})
 }
 
 // --- masking ---

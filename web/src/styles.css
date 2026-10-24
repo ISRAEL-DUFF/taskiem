@@ -986,3 +986,8 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 .column-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
 .template-group { border-left: 3px solid var(--border); padding-left: 8px; margin: 8px 0; }
 .template-group > summary { cursor: pointer; margin-bottom: 4px; }
+
+/* Schools > Debtors: the aging totals as a row of buttons (B7). */
+.aging { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.aging li { margin: 0; }
+.aging button { width: 100%; text-align: left; line-height: 1.4; }

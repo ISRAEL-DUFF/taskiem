@@ -3979,6 +3979,342 @@ paths:
                     $ref: '#/components/schemas/SchoolFamilySent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/debtors:
+    get:
+      operationId: listSchoolDebtors
+      tags:
+      - Schools
+      summary: List debtors with aging
+      description: 'Students with a balance on a sent term invoice (this term''s and earlier terms'' still open), by class, each aged by days past the invoice''s due date in Lagos time (not_due, 0_7, 7_14, 14_30, over_30), with the last reminder, any promise to pay (open, or the last one missed) and the standing of any approved payment plan (docs/schools.md#debtors). Totals by bucket are those of the class filter, before the bucket and has filters. ?format=csv answers the same rows as a file, with the same masking. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: bucket
+        in: query
+        schema:
+          type: string
+          enum: [not_due, 0_7, 7_14, 14_30, over_30]
+      - name: has
+        in: query
+        description: Only students with an open promise, a missed promise, a plan in good standing, a plan in arrears, or neither
+        schema:
+          type: string
+          enum: [promise, missed, plan, arrears, none]
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [csv]
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The debtors and the totals by bucket
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [debtors, totals, students, balance_kobo, today, revealed]
+                properties:
+                  debtors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolDebtor'
+                  totals:
+                    type: object
+                    description: By bucket, how many students and how much
+                    additionalProperties:
+                      type: object
+                      properties:
+                        students:
+                          type: integer
+                        balance_kobo:
+                          type: integer
+                  students:
+                    type: integer
+                  balance_kobo:
+                    type: integer
+                  today:
+                    type: string
+                    format: date
+                  revealed:
+                    type: boolean
+            text/csv:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/reminders:
+    post:
+      operationId: sendSchoolReminders
+      tags:
+      - Schools
+      summary: Send fee reminders
+      description: 'Sends each chosen student''s family one message per guardian with a fresh link to its page, on WhatsApp or Telegram where a guardian gets the business''s updates there, otherwise by SMS, in the school''s wording for the rung (docs/schools.md#the-ladder). At most 50 students per send (400 above). A student with nothing due or no family, a family with a promise to pay not yet due or a plan in good standing, and a family sent the rung today already are skipped and the reason answered. Exactly once per Idempotency-Key, which is required: the same key answers what the first send did (replayed: true). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+        description: 'Makes the request safe to retry: the same key answers the same send, and messages nobody twice'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [students, rung]
+              properties:
+                students:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                    format: uuid
+                rung:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+      responses:
+        '200':
+          description: What the send did, student by student
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolReminded'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/chasing:
+    get:
+      operationId: getSchoolStudentChasing
+      tags:
+      - Schools
+      summary: A student's balance, promises, reminders and plan standing
+      description: 'By id or admission number: the balance on sent term invoices and its aging, the promises to pay (every state), the reminders sent, the standing of the latest approved payment plan, and the instalments marked in arrears (docs/schools.md#promises).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The student's chasing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance_kobo, days_past_due, bucket, promises, reminders, arrears, invoices]
+                properties:
+                  balance_kobo:
+                    type: integer
+                  due_on:
+                    type: string
+                    format: date
+                  days_past_due:
+                    type: integer
+                  bucket:
+                    type: string
+                    enum: [not_due, 0_7, 7_14, 14_30, over_30]
+                  promises:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPromise'
+                  reminders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolReminder'
+                  plan:
+                    $ref: '#/components/schemas/SchoolPlanStanding'
+                  arrears:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPlanArrear'
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolDebtorInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/promise:
+    post:
+      operationId: recordSchoolPromise
+      tags:
+      - Schools
+      summary: Record a promise to pay
+      description: 'A promise to pay by a date (today to a year on) with a note, for a student with a balance (409 for nothing due, or a promise open already). Reminders skip the family until the date; the day after, the check finds it kept when the balance moved down, missed otherwise, and a missed promise flags the student on Debtors. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date:
+                  type: string
+                  format: date
+                note:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: The promise
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promise]
+                properties:
+                  promise:
+                    $ref: '#/components/schemas/SchoolPromise'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/promises:
+    get:
+      operationId: listSchoolPromises
+      tags:
+      - Schools
+      summary: List promises to pay
+      description: Promises to pay, newest first, by student and status (every status by default).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, kept, missed, withdrawn]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: The promises
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promises]
+                properties:
+                  promises:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPromise'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/promises/{id}/withdraw:
+    post:
+      operationId: withdrawSchoolPromise
+      tags:
+      - Schools
+      summary: Withdraw a promise to pay
+      description: Withdraws an open promise (409 once it is kept, missed or withdrawn); the record is kept. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The promise, withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promise]
+                properties:
+                  promise:
+                    $ref: '#/components/schemas/SchoolPromise'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/chasing/check:
+    post:
+      operationId: checkSchoolChasing
+      tags:
+      - Schools
+      summary: Run the chasing check now
+      description: 'Runs the school''s chasing check now, as it runs every hour by itself: promises past their date are found kept or missed, each once; a plan''s instalments past their date plus the school''s grace and not covered by what was paid since the plan was approved are marked in arrears, each once, and the bursars told. Running it again changes nothing. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: What the check did
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promises_kept, promises_missed, arrears]
+                properties:
+                  promises_kept:
+                    type: integer
+                  promises_missed:
+                    type: integer
+                  arrears:
+                    type: integer
+                    description: Instalments newly found missed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/families/{id}/link:
     post:
       operationId: sendSchoolFamilyLink
@@ -13513,6 +13849,16 @@ paths:
                   minimum: 1
                   maximum: 30
                   description: How many days a link to a family's page works (3 by default); set while the area is on. Audited.
+                reminder_wording:
+                  type: object
+                  description: 'The reminder ladder''s wording by rung ("1", "2", "3"), with the placeholders {balance}, {child}, {account_number}, {due_date} and {link} ({link} is added when missing; up to 600 characters; an unknown placeholder is refused); "" takes a rung back to the default. Audited.'
+                  additionalProperties:
+                    type: string
+                plan_grace_days:
+                  type: integer
+                  minimum: 0
+                  maximum: 60
+                  description: How many days past an instalment's date a payment plan stays in good standing (0 by default). Audited.
                 issuing:
                   $ref: '#/components/schemas/SchoolIssuing'
       responses:
@@ -17965,6 +18311,22 @@ components:
         family_link_days:
           type: integer
           description: How many days a link to a family's page works (1 to 30; 3 by default)
+        reminder_wording:
+          type: object
+          description: The school's own wording by rung (only the rungs it changed)
+          additionalProperties:
+            type: string
+        reminder_defaults:
+          type: object
+          description: The default wording by rung
+          additionalProperties:
+            type: string
+        reminder_placeholders:
+          type: array
+          items:
+            type: string
+        plan_grace_days:
+          type: integer
         issuing:
           $ref: '#/components/schemas/SchoolIssuing'
         issuers:
@@ -18093,6 +18455,271 @@ components:
         nobody:
           type: boolean
           description: No guardian could be reached (no phone, over the limits)
+    SchoolDebtorInvoice:
+      type: object
+      description: One open term invoice of a debtor
+      required: [invoice_id, number, term_id, term, due_kobo]
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        due_on:
+          type: string
+          format: date
+        due_kobo:
+          type: integer
+    SchoolDebtor:
+      type: object
+      description: 'A student with a balance, aged (docs/schools.md#debtors).'
+      required: [student_id, admission_number, status, class_id, class, balance_kobo, days_past_due, bucket, invoices]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        status:
+          type: string
+          enum: [active, withdrawn, graduated]
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        family_id:
+          type: [string, 'null']
+          format: uuid
+        balance_kobo:
+          type: integer
+        due_on:
+          type: string
+          format: date
+          description: The oldest open invoice's due date
+        days_past_due:
+          type: integer
+          description: Whole days past it, Lagos time; 0 when not yet due
+        bucket:
+          type: string
+          enum: [not_due, 0_7, 7_14, 14_30, over_30]
+        invoices:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolDebtorInvoice'
+        last_reminder:
+          type: object
+          description: The last rung the family got, and when
+          properties:
+            rung:
+              type: integer
+            at:
+              type: string
+              format: date-time
+            nobody:
+              type: boolean
+        promise:
+          $ref: '#/components/schemas/SchoolPromise'
+        promise_missed:
+          type: boolean
+          description: The last promise was missed (the balance did not move by the day after its date)
+        plan:
+          $ref: '#/components/schemas/SchoolPlanStanding'
+    SchoolPromise:
+      type: object
+      description: 'A promise to pay by a date (docs/schools.md#promises).'
+      required: [id, student_id, admission_number, promised_on, balance_kobo, status, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        family_id:
+          type: string
+          format: uuid
+        promised_on:
+          type: string
+          format: date
+        note:
+          type: string
+        balance_kobo:
+          type: integer
+          description: The balance when the promise was made
+        status:
+          type: string
+          enum: [open, kept, missed, withdrawn]
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+    SchoolPlanStanding:
+      type: object
+      description: 'Where a student''s latest approved payment plan stands (docs/schools.md#payment-plans): good while every instalment past its date plus the grace is covered by what was paid since approval, arrears from the first not covered, settled once the instalments are paid.'
+      required: [plan_id, student_id, state, approved_at, instalments, grace_days, paid_since_kobo, due_so_far_kobo, missed]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [good, arrears, settled]
+        approved_at:
+          type: string
+          format: date-time
+        instalments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolInstalment'
+        grace_days:
+          type: integer
+        paid_since_kobo:
+          type: integer
+        due_so_far_kobo:
+          type: integer
+        missed:
+          type: array
+          items:
+            type: object
+            properties:
+              instalment:
+                type: integer
+              due_on:
+                type: string
+                format: date
+              amount_kobo:
+                type: integer
+              short_kobo:
+                type: integer
+              days_past:
+                type: integer
+        next_due_on:
+          type: string
+          format: date
+        next_amount_kobo:
+          type: integer
+    SchoolPlanArrear:
+      type: object
+      description: An instalment the check found missed, marked once
+      required: [plan_id, instalment, student_id, due_on, amount_kobo, short_kobo, marked_at]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        instalment:
+          type: integer
+        student_id:
+          type: string
+          format: uuid
+        due_on:
+          type: string
+          format: date
+        amount_kobo:
+          type: integer
+        short_kobo:
+          type: integer
+        marked_at:
+          type: string
+          format: date-time
+    SchoolReminder:
+      type: object
+      description: A reminder sent for a student
+      required: [id, student_id, family_id, rung, balance_kobo, sent_on, channels, nobody, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        rung:
+          type: integer
+        balance_kobo:
+          type: integer
+        sent_on:
+          type: string
+          format: date
+        channels:
+          type: object
+          additionalProperties:
+            type: integer
+        nobody:
+          type: boolean
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    SchoolReminded:
+      type: object
+      description: What a send did
+      required: [key, sent, skipped, by_rung, results]
+      properties:
+        key:
+          type: string
+        sent:
+          type: integer
+        skipped:
+          type: integer
+        by_rung:
+          type: object
+          additionalProperties:
+            type: integer
+        results:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, status]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              family_id:
+                type: string
+                format: uuid
+              rung:
+                type: integer
+              status:
+                type: string
+                enum: [sent, skipped]
+              reason:
+                type: string
+              balance_kobo:
+                type: integer
+              channels:
+                type: object
+                additionalProperties:
+                  type: integer
+              nobody:
+                type: boolean
+        replayed:
+          type: boolean
+          description: The key was seen before; this is what the first send did
     SchoolPosting:
       type: object
       description: 'A request of the school (docs/schools.md#cash-and-transfers): a cash posting (pending, posted at once or after approval, or declined), or a discount, a discount amendment or a held term invoice waiting for a second person.'

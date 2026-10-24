@@ -312,6 +312,8 @@ type PlanRequest struct {
 	DecidedUser        *uuid.UUID   `json:"decided_user,omitempty"`
 	DecisionNote       string       `json:"decision_note,omitempty"`
 	DecidedInstalments []Instalment `json:"decided_instalments,omitempty"`
+	// ToldAt is when the family was told of the decision (B7).
+	ToldAt *time.Time `json:"told_at,omitempty"`
 }
 
 // TotalKobo is what the instalments come to.
@@ -394,7 +396,7 @@ func (s *Schools) RequestPlan(ctx context.Context, tx pgx.Tx, tenant, family uui
 }
 
 const planCols = `p.id, p.family_id, p.student_id, s.admission_number, s.details, cl.name || CASE WHEN cl.arm = '' THEN '' ELSE ' ' || cl.arm END,
-	p.instalments, p.message, p.status, p.created_at, p.decided_at, COALESCE(p.decided_by, ''), p.decided_user, COALESCE(p.decision_note, ''), p.decided_instalments
+	p.instalments, p.message, p.status, p.created_at, p.decided_at, COALESCE(p.decided_by, ''), p.decided_user, COALESCE(p.decision_note, ''), p.decided_instalments, p.told_at
 	FROM school_plan_requests p JOIN school_students s ON s.id = p.student_id JOIN school_classes cl ON cl.id = s.class_id`
 
 func (s *Schools) scanPlans(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows pgx.Rows) ([]PlanRequest, error) {
@@ -405,7 +407,7 @@ func (s *Schools) scanPlans(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ro
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
 		var x row
 		err := r.Scan(&x.p.ID, &x.p.FamilyID, &x.p.StudentID, &x.p.AdmissionNumber, &x.student, &x.p.Class, &x.p.Instalments, &x.message, &x.p.Status, &x.p.CreatedAt,
-			&x.p.DecidedAt, &x.p.DecidedBy, &x.p.DecidedUser, &x.p.DecisionNote, &x.p.DecidedInstalments)
+			&x.p.DecidedAt, &x.p.DecidedBy, &x.p.DecidedUser, &x.p.DecisionNote, &x.p.DecidedInstalments, &x.p.ToldAt)
 		return x, err
 	})
 	if err != nil {
@@ -530,24 +532,6 @@ func (s *Schools) DecidePlan(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUI
 		return PlanRequest{}, refused("the plan request was decided already")
 	}
 	return s.Plan(ctx, tx, tenant, id)
-}
-
-// PlanDecidedAfter tells the family of a decision, with a fresh link, in
-// a transaction of its own after the decision committed.
-func (s *Schools) PlanDecidedAfter(ctx context.Context, tenant uuid.UUID, p PlanRequest) (FamilySent, error) {
-	var out FamilySent
-	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
-		var business string
-		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
-			return err
-		}
-		var err error
-		out, err = s.SendFamily(ctx, tx, tenant, p.FamilyID, FamilyMessage{Purpose: "decision", Key: "plan:" + p.ID.String() + ":" + p.Status,
-			Text:  func(link string) string { return PlanDecisionText(business, p, link) },
-			Short: func(link string) string { return PlanDecisionShort(p, link) }}, p.DecidedBy)
-		return err
-	})
-	return out, err
 }
 
 // PlanDecisionShort is the SMS: the decision and the page, where the

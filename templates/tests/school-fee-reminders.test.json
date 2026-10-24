@@ -1,0 +1,69 @@
+{
+  "schema": "wd-test/v1",
+  "template": "school-fee-reminders",
+  "params": {
+    "send_time": "09:00",
+    "first_day": "Monday",
+    "second_day": "Thursday",
+    "class": ""
+  },
+  "cases": [
+    {
+      "name": "the debtors past due are reminded by the ladder, at most fifty, and the bursar told what went out",
+      "mocks": {
+        "remind": {
+          "output": {
+            "sent": 3,
+            "skipped": 2,
+            "by_rung": {"1": 1, "2": 2, "3": 0},
+            "results": [
+              {"student_id": "0192e2e0-0000-7000-8000-000000000001", "admission_number": "GCA/001", "rung": 1, "status": "sent", "balance_kobo": 4000000, "nobody": false},
+              {"student_id": "0192e2e0-0000-7000-8000-000000000002", "admission_number": "GCA/002", "rung": 2, "status": "sent", "balance_kobo": 4000000, "nobody": false},
+              {"student_id": "0192e2e0-0000-7000-8000-000000000003", "admission_number": "GCA/003", "rung": 2, "status": "sent", "balance_kobo": 2500000, "nobody": false},
+              {"student_id": "0192e2e0-0000-7000-8000-000000000004", "admission_number": "GCA/004", "rung": 2, "status": "skipped", "reason": "a promise to pay by 25 Oct 2026", "balance_kobo": 4000000, "nobody": false},
+              {"student_id": "0192e2e0-0000-7000-8000-000000000005", "admission_number": "GCA/005", "rung": 3, "status": "skipped", "reason": "a payment plan in good standing (next instalment 15 Nov 2026)", "balance_kobo": 6000000, "nobody": false}
+            ]
+          }
+        },
+        "tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "remind": {"class": "", "rung": "auto", "limit": 50},
+          "tell_bursar": {
+            "title": "School fee reminders",
+            "message": "Fee reminders: 3 sent (gentle 1, firmer 2, final 0), 2 skipped for a promise, a plan or a reminder sent already. Debtors shows each."
+          }
+        },
+        "steps": {
+          "remind": "completed",
+          "tell_bursar": "completed"
+        },
+        "calls": {
+          "remind": 1,
+          "tell_bursar": 1
+        }
+      }
+    },
+    {
+      "name": "one class only: the class is passed through",
+      "params": {
+        "class": "JSS 1 A"
+      },
+      "mocks": {
+        "remind": {"output": {"sent": 0, "skipped": 0, "by_rung": {"1": 0, "2": 0, "3": 0}, "results": []}},
+        "tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "remind": {"class": "JSS 1 A", "rung": "auto", "limit": 50},
+          "tell_bursar": {
+            "message": "Fee reminders: 0 sent (gentle 0, firmer 0, final 0), 0 skipped for a promise, a plan or a reminder sent already. Debtors shows each."
+          }
+        }
+      }
+    }
+  ]
+}
