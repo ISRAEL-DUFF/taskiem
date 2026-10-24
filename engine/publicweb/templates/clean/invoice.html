@@ -4,7 +4,7 @@
 <p class="facts"><span class="badge">{{.Status}}</span>{{with .DueOn}}<span>{{.}}</span>{{end}}</p>
 {{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
 <div class="panel inv">
-{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span> <span class="line-price">{{.Each}}</span></div><span>{{.Amount}}</span></div>
+{{range .Lines}}<div class="line"><div class="inv-what"><span>{{.Description}}</span> {{with .Each}}<span class="line-price">{{.}}</span>{{end}}{{with .Note}} <span class="line-price">{{.}}</span>{{end}}</div><span>{{.Amount}}</span></div>
 {{end}}<dl class="inv-sums">
 <dt>Total</dt><dd>{{.Total}}</dd>
 {{with .Paid}}<dt>Paid</dt><dd>{{.}}</dd>

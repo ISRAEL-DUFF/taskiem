@@ -65,6 +65,56 @@ func (s Service) ListClasses(ctx context.Context, tenant uuid.UUID) ([]Class, er
 	return out, err
 }
 
+// ResolveTerm is a term by id, or the current one for "" (refused when
+// none runs).
+func (s Service) ResolveTerm(ctx context.Context, tenant uuid.UUID, id string) (Term, error) {
+	var out Term
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		if id == "" {
+			t, ok, err := s.CurrentTerm(ctx, tx, tenant)
+			if err == nil && !ok {
+				err = refused("no term is current")
+			}
+			out = t
+			return err
+		}
+		tid, err := uuid.Parse(id)
+		if err != nil {
+			return ErrNotFound
+		}
+		out, err = s.Term(ctx, tx, tenant, tid)
+		return err
+	})
+	return out, err
+}
+
+// ListFees is a term's fee structures, optionally of one class.
+func (s Service) ListFees(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID) ([]ClassFees, error) {
+	out := []ClassFees{}
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		list, err := s.TermFees(ctx, tx, tenant, term)
+		for _, f := range list {
+			if class == nil || f.ClassID == *class {
+				out = append(out, f)
+			}
+		}
+		return err
+	})
+	return out, err
+}
+
+// ListTermInvoices is a term's invoices, optionally of one class and
+// status.
+func (s Service) ListTermInvoices(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID, status string) ([]TermInvoice, error) {
+	var out []TermInvoice
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.TermInvoices(ctx, tx, tenant, term, class, status)
+		return err
+	})
+	return out, err
+}
+
 // Current is the current term; ok false when none runs.
 func (s Service) Current(ctx context.Context, tenant uuid.UUID) (Term, bool, error) {
 	var out Term

@@ -30,7 +30,9 @@ import (
 // one fixed answer.
 
 // reachCodeRe finds a WhatsApp link's code in the message it filled in.
-var reachCodeRe = regexp.MustCompile(`\bU-([A-Za-z0-9_-]{32})\b`)
+// A code may end in "-", after which there is no word boundary, so the
+// end is the end of the text or a character a code cannot hold.
+var reachCodeRe = regexp.MustCompile(`\bU-([A-Za-z0-9_-]{32})(?:[^A-Za-z0-9_-]|$)`)
 
 // reachStart links the chat address that sent a code.
 func (s *Server) reachStart(ctx context.Context, ch chatChannel, channel, addr, code string) error {

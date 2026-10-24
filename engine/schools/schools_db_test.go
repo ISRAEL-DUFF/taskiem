@@ -1,6 +1,7 @@
 package schools_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -15,9 +16,11 @@ import (
 	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/schools"
+	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 var ctx = context.Background()
@@ -30,7 +33,9 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	env := rt.New(t)
-	w := &world{t: t, env: env, s: &schools.Schools{Pool: env.DB.App, Vault: env.Vault}}
+	inv := &invoicing.Invoices{Pool: env.DB.App, Vault: env.Vault, PageBase: "https://forms.test",
+		Messages: &sender.Queue{Vault: env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}}
+	w := &world{t: t, env: env, s: &schools.Schools{Pool: env.DB.App, Vault: env.Vault, Invoices: inv}}
 	w.in(func(tx pgx.Tx) error {
 		_, err := schools.SetEnabled(ctx, tx, env.Tenant, true, "user:ada")
 		return err
@@ -462,5 +467,49 @@ func TestMirror(t *testing.T) {
 	}
 	if n := w.count(`SELECT count(*) FROM school_students WHERE mirrored_at IS DISTINCT FROM updated_at`); n != 0 {
 		t.Errorf("%d students not copied", n)
+	}
+
+	// A term's invoices: school_term_fees follows each as it is sent.
+	var fam schools.Family
+	var term schools.Term
+	w.in(func(tx pgx.Tx) error {
+		sess, err := w.s.AddSession(ctx, tx, e.Tenant, "2026/2027", "user:ada")
+		if err != nil {
+			return err
+		}
+		if term, err = w.s.AddTerm(ctx, tx, e.Tenant, sess.ID, schools.TermIn{Name: "First term", StartsOn: "2026-09-14", EndsOn: "2099-12-11", FeesDueOn: "2099-09-07"}, "user:ada"); err != nil {
+			return err
+		}
+		if fam, err = w.s.AddFamily(ctx, tx, e.Tenant, []schools.GuardianIn{{Name: "Ngozi Eze", Phone: "08031234567"}}, "user:ada"); err != nil {
+			return err
+		}
+		if _, err := w.s.AddStudent(ctx, tx, e.Tenant, schools.StudentIn{Name: "Chidi Eze", AdmissionNumber: "GCA/002", ClassID: j1.ID, FamilyID: &fam.ID}, "user:ada"); err != nil {
+			return err
+		}
+		if _, err := w.s.StartTerm(ctx, tx, e.Tenant, term.ID, "user:ada"); err != nil {
+			return err
+		}
+		if _, err := w.s.SetFees(ctx, tx, e.Tenant, term.ID, j1.ID, []schools.FeeItemIn{{Name: "Tuition", AmountKobo: 5_000_000}}, "user:ada"); err != nil {
+			return err
+		}
+		_, err = w.s.InvoiceTerm(ctx, tx, e.Tenant, term.ID, "", false, "user:ada")
+		return err
+	})
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := w.s.SendTerm(ctx, e.Tenant, term.ID, "user:ada"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err = rows.Call(ctx, e.Tenant, "read_rows", map[string]any{"table": schools.TermFeesTable, "limit": 10}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := got["rows"].([]any); len(list) != 1 || list[0].(map[string]any)["status"] != "sent" || list[0].(map[string]any)["admission_number"] != "GCA/002" ||
+		list[0].(map[string]any)["term"] != "First term 2026/2027" {
+		t.Fatalf("term fees %v", list)
 	}
 }

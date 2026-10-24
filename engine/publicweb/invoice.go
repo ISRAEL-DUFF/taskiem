@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -101,6 +102,31 @@ type invoiceData struct {
 
 type invoiceLine struct {
 	Description, Each, Amount string
+	// Note: "Collected on behalf of WAEC" for a pass-through line, the
+	// reason for a discount or an amendment.
+	Note string
+}
+
+// invoiceLineView is how the page shows a line: a pass-through line as
+// collected on its body's behalf (decision 0046 point 11), a discount or
+// an amendment with its reason and no unit price.
+func invoiceLineView(l invoicing.Line) invoiceLine {
+	v := invoiceLine{Description: l.Description, Amount: invoicing.Naira(l.AmountKobo())}
+	if l.Kind == "" {
+		v.Each = fmt.Sprintf("%d × %s", l.Quantity, invoicing.Naira(l.UnitKobo))
+	}
+	var notes []string
+	if l.PassThroughFor != "" {
+		notes = append(notes, "Collected on behalf of "+l.PassThroughFor+".")
+	}
+	if l.Amendment != "" && l.Kind == "" {
+		notes = append(notes, "Added after the invoice was sent.")
+	}
+	if l.Reason != "" {
+		notes = append(notes, l.Reason)
+	}
+	v.Note = strings.Join(notes, " ")
+	return v
 }
 
 // serveInvoice serves /i/{token}. A token that is malformed, unknown or a
@@ -136,8 +162,7 @@ func (s *Server) serveInvoice(w http.ResponseWriter, r *http.Request, token, sub
 	d := invoiceData{pageData: pageData{Title: "Invoice " + p.Number, Lang: "en", Look: s.lookFor(r.Context(), p.Tenant, business)},
 		Business: business, Number: p.Number, Status: words, Total: invoicing.Naira(p.TotalKobo), Note: p.Note}
 	for _, l := range p.Lines {
-		d.Lines = append(d.Lines, invoiceLine{Description: l.Description,
-			Each: fmt.Sprintf("%d × %s", l.Quantity, invoicing.Naira(l.UnitKobo)), Amount: invoicing.Naira(l.AmountKobo())})
+		d.Lines = append(d.Lines, invoiceLineView(l))
 	}
 	if p.PaidKobo > 0 {
 		d.Paid = invoicing.Naira(p.PaidKobo)

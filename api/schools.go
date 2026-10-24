@@ -76,11 +76,12 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	r.With(read).Get("/schools/families/{id}", s.getSchoolFamily)
 	r.With(manage, s.tenantWide).Post("/schools/families/{id}/guardians", s.addSchoolGuardian)
 	r.With(manage, s.tenantWide).Put("/schools/families/{id}/guardians/{guardian}", s.changeSchoolGuardian)
+	s.schoolFeeRoutes(r) // fees and term invoices (schools_fees.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }
 
 func (s *Server) schoolsSvc() *schools.Schools {
-	return &schools.Schools{Pool: s.Store.Pool, Vault: s.Vault}
+	return &schools.Schools{Pool: s.Store.Pool, Vault: s.Vault, Invoices: s.Invoices}
 }
 
 func schoolErr(err error) error {
@@ -114,9 +115,13 @@ func (s *Server) schoolsOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) boo
 func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var on, bursar bool
+	var threshold int64
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if on, err = schools.Enabled(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
 			return err
 		}
 		return tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1)`, bursarRole.Name).Scan(&bursar)
@@ -124,7 +129,7 @@ func (s *Server) getSchoolSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar})
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": on, "bursar_role": bursar, "discount_threshold_naira": threshold / 100})
 }
 
 // putSchoolSettings answers PUT /v1/settings/schools: only an owner turns
@@ -139,6 +144,10 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Enabled    bool `json:"enabled"`
 		BursarRole bool `json:"bursar_role"`
+		// DiscountThresholdNaira, when given, sets the school's discount
+		// threshold in whole naira (0: none). Discounts at or above it
+		// need a second person (B5; refused until then).
+		DiscountThresholdNaira *int64 `json:"discount_threshold_naira"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -148,7 +157,7 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 	if addBursar && s.Billing.Require(r.Context(), p.TenantID, billing.FeatureCustomRoles) != nil {
 		addBursar = false // the plan has no custom roles: the area still turns on
 	}
-	bursar := false
+	bursar, threshold := false, int64(0)
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		changed, err := schools.SetEnabled(r.Context(), tx, p.TenantID, req.Enabled, p.Actor())
 		if err != nil {
@@ -174,12 +183,29 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if req.DiscountThresholdNaira != nil && req.Enabled {
+			if *req.DiscountThresholdNaira < 0 || *req.DiscountThresholdNaira > 1_000_000_000 {
+				return errors.Join(errBadRequest, errors.New("discount_threshold_naira is 0 (none) to 1,000,000,000"))
+			}
+			was, err := schools.SetDiscountThreshold(r.Context(), tx, p.TenantID, *req.DiscountThresholdNaira*100, p.Actor())
+			if err != nil {
+				return schoolErr(err)
+			}
+			if was != *req.DiscountThresholdNaira*100 {
+				if err := auditTx(r, tx, "settings.schools.discount_threshold", p.TenantID.String(), map[string]any{"from_kobo": was, "to_kobo": *req.DiscountThresholdNaira * 100}); err != nil {
+					return err
+				}
+			}
+		}
+		if threshold, err = schools.DiscountThreshold(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
 		return tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1)`, bursarRole.Name).Scan(&bursar)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar})
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": req.Enabled, "bursar_role": bursar, "discount_threshold_naira": threshold / 100})
 }
 
 // --- masking ---

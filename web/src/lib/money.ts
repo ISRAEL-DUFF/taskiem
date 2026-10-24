@@ -541,6 +541,18 @@ export interface MoneySummary {
   leaks_open: number;
   leaks_open_kobo: number;
   recovered_kobo: number;
+  /** Money in collected on others' behalf (pass-through lines), by body, and what is left as the business's own. */
+  collected_for_others_kobo?: number;
+  collected_for?: { body: string; kobo: number }[] | null;
+  own_in_settled_kobo?: number;
+}
+
+/** The money collected for others, in words: "₦36,000 for WAEC, ₦5,000 for NECO"; empty for none. */
+export function collectedForLine(s: Pick<MoneySummary, "collected_for">): string {
+  return (s.collected_for ?? [])
+    .filter((b) => b.kobo > 0)
+    .map((b) => `${naira(b.kobo)} for ${b.body}`)
+    .join(", ");
 }
 
 export const SUMMARY_PATH = "/v1/money/summary";

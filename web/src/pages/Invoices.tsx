@@ -4,6 +4,12 @@ import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import {
+  amendmentProblem,
+  amendmentRequest,
+  emptyAmendment,
+  lineNote,
+  removableLines,
+  type AmendmentForm,
   FEE_CHOICES,
   INVOICE_FILTERS,
   INVOICE_LIMITS,
@@ -911,9 +917,12 @@ export function InvoicePage() {
                 <tbody>
                   {(x.lines ?? []).map((l, i) => (
                     <tr key={i}>
-                      <td>{l.description}</td>
+                      <td>
+                        {l.description}
+                        {lineNote(l) && <div className="hint">{lineNote(l)}</div>}
+                      </td>
                       <td>{l.quantity}</td>
-                      <td className="sf-price">{naira(l.unit_kobo)}</td>
+                      <td className="sf-price">{l.kind ? "" : naira(l.unit_kobo)}</td>
                       <td className="sf-price">{naira(l.quantity * l.unit_kobo)}</td>
                     </tr>
                   ))}
@@ -931,6 +940,8 @@ export function InvoicePage() {
               <dd className="sf-price">{x.status === "void" ? "Nothing: it is void" : naira(x.due_kobo)}</dd>
             </dl>
           </section>
+
+          {may.amend && <Amend invoice={x} onDone={reload} />}
 
           <section className="card" aria-labelledby="inv-details">
             <h2 id="inv-details">Details</h2>
@@ -1024,6 +1035,116 @@ export function InvoicePage() {
         </>
       )}
     </>
+  );
+}
+
+/** Amendments to a sent invoice: each a recorded change with a reason, a line of its own. */
+function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<AmendmentForm>(emptyAmendment);
+  const [tried, setTried] = useState(false);
+  const act = useAction();
+  const problem = amendmentProblem(f);
+  const removable = removableLines(x);
+  const done = x.amendments ?? [];
+  return (
+    <section className="card" aria-labelledby="inv-amend">
+      <h2 id="inv-amend">Amendments</h2>
+      <p className="hint">
+        A sent invoice is not edited: it is amended, with a reason, and each amendment shows as its own line to the customer. The total never goes below what was paid; a paid invoice whose total rises
+        is part-paid again.
+      </p>
+      {done.length > 0 && (
+        <ul data-testid="amendments">
+          {done.map((a) => (
+            <li key={a.id}>
+              {a.line.description}: {naira(a.amount_kobo)}. {a.reason} <span className="hint">({fmtTime(a.created_at)})</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!open ? (
+        <button type="button" onClick={() => setOpen(true)}>
+          Amend…
+        </button>
+      ) : (
+        <form
+          aria-label="Amend the invoice"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setTried(true);
+            if (problem) return;
+            void act.run(async () => {
+              await plainly(post(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
+              setF(emptyAmendment());
+              setTried(false);
+              setOpen(false);
+              onDone();
+            }, "Invoice amended");
+          }}
+        >
+          <Field label="Change">
+            <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as AmendmentForm["kind"] })}>
+              <option value="add">Add a line</option>
+              <option value="discount">Give a discount</option>
+              <option value="remove" disabled={removable.length === 0}>
+                Take a line out
+              </option>
+            </select>
+          </Field>
+          {f.kind === "remove" ? (
+            <Field label="Line to take out">
+              <select value={f.line} onChange={(e) => setF({ ...f, line: e.target.value })}>
+                <option value="">Choose…</option>
+                {removable.map((l) => (
+                  <option key={l.index} value={String(l.index)}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <>
+              <Field label={f.kind === "add" ? "What it is for" : "Description (optional)"}>
+                <input value={f.description} maxLength={INVOICE_LIMITS.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+              </Field>
+              <Field label="Amount (₦)">
+                <input inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+              </Field>
+              {f.kind === "add" && (
+                <Field label="Collected on behalf of (optional)" hint="For money passed on to someone else, such as an exam body.">
+                  <input value={f.passThroughFor} maxLength={60} onChange={(e) => setF({ ...f, passThroughFor: e.target.value })} />
+                </Field>
+              )}
+            </>
+          )}
+          <Field label="Reason">
+            <textarea value={f.reason} rows={2} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+          </Field>
+          {tried && problem && (
+            <div className="error" role="alert">
+              {problem}
+            </div>
+          )}
+          <ErrorBox error={act.error} />
+          <div className="toolbar">
+            <button type="submit" className="primary" disabled={act.busy}>
+              Amend the invoice
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setTried(false);
+                act.clear();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </section>
   );
 }
 

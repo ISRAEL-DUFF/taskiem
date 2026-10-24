@@ -82,6 +82,11 @@ The invoices **sent** in the period, whatever they are now.
 | `sent`, `due` | Days |
 | `total`, `paid`, `still_due` | `still_due` is 0 for a void invoice |
 | `paid_on`, `voided_on` | Days, when so |
+| `pass_through` | What of the total is collected for others ([pass-through](#pass-through)) |
+| `pass_through_for` | For whom, separated by `; ` (`WAEC; NECO`) |
+| `pass_through_paid` | How much of what was paid is theirs (the business's own lines are paid first) |
+| `amended` | The net of the [amendments](invoices.md#amending-a-sent-invoice) made after it was sent (negative for a discount) |
+| `student`, `class`, `term` | A school's term invoice: the student's admission number (no name), their class and the term ([Schools](schools.md#invoicing-a-term)); empty otherwise |
 
 ### The accounting journal
 
@@ -89,7 +94,7 @@ The period's **settled** movements as a double-entry journal, in the shape bookk
 
 | Movement | Debit | Credit |
 | --- | --- | --- |
-| Money in matched to an invoice | `Bank: <channel>` | `Accounts receivable` |
+| Money in matched to an invoice | `Bank: <channel>` | `Accounts receivable`, and `Collected for <body>` for its pass-through share |
 | Money in matched to a storefront order | `Bank: <channel>` | `Sales` |
 | A POS sale | `Bank: <channel>` | `Sales` |
 | Cash put in | `Cash` | `Owner's cash movements` |
@@ -102,6 +107,14 @@ The period's **settled** movements as a double-entry journal, in the shape bookk
 | The fee on any of these | `Bank and payment fees` | `Bank: <channel>` |
 
 The channel `cash` is the account `Cash`; any other is `Bank: ` and the channel. A movement matched to an invoice is described as "Invoice INV-0104".
+
+### Pass-through
+
+An invoice line can be collected on someone else's behalf (`pass_through_for`, such as a school's WAEC fee, [decision 0046](decisions/0046-balans-in-taskiem.md) point 11): that money is owed to them, never the business's income. Every payment counted towards such an invoice is split between the business's own lines and the pass-through lines by one rule, **own lines first**: a payment counts towards the business's own lines until they are paid in full (after discounts), and only then towards the pass-through lines, in the order they appear on the invoice. A ₦120,000 invoice of ₦100,000 tuition and ₦20,000 for WAEC paid as ₦90,000 then ₦30,000 is ₦90,000 own, then ₦10,000 own and ₦20,000 WAEC's. The rule works in whole kobo with nothing to round, and never reports money as held for someone else while the business's own fees are still unpaid. Payments undone are left out, and the shares are worked out again from the payments that still count.
+
+- **The Overview and `GET /v1/money/summary`**: `collected_for_others_kobo` is the pass-through share of the period's settled money in, `collected_for` the same by body, and `own_in_settled_kobo` the rest of the settled money in, the business's own.
+- **The invoices export**: the `pass_through`, `pass_through_for` and `pass_through_paid` columns above.
+- **The journal**: a movement's pass-through share is credited to `Collected for <body>` (`Collected for WAEC`) instead of `Accounts receivable`; the bank's debit is the same, so debits still equal credits.
 
 ### Formulas are not run
 

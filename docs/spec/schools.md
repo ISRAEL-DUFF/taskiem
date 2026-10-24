@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B2 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B3 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -341,6 +341,15 @@ Turning the area on; permissions and the gate role (the role only; its screen is
 ### B3: fees and term invoices (M)
 
 Fee structures with required, optional and pass-through items; invoicing a term exactly once per student; discounts and amendments with reasons; `schools@1` `invoice_term`; pass-through in summaries and exports.
+
+**Built** (B3): migration 00212 (fee items per class and term; students' optional items and standing discounts; `school_term_invoices` linking each invoice to its student and term; `customer_invoice_amendments`; the discount threshold); invoicing a term with a plan and a confirm by its hash, exactly once per student and term; `schools@1` `invoice_term`, `list_fee_items`, `term_invoices`; amendments for every business's sent invoices (`POST /v1/invoices/{id}/amendments`: add, remove or discount, with a reason); pass-through in the invoice page, the summary, the exports and the journal; the kept copy `school_term_fees`; the Fees and term Invoices pages ([schools](../schools.md)). Differences from §5:
+
+- **An invoice goes to the family's first guardian**, with `customer.key = student:<id>` so a student's own account pays their own invoices (B1).
+- **A sent invoice's lines only grow**: each amendment is a new line naming its record; the total never goes below what was paid, a paid invoice whose total rises goes back to part-paid, and discounts never come off pass-through lines.
+- **A payment pays the school's own lines first and pass-through lines last**, in whole kobo; the journal credits the pass-through share to `Collected for <body>`.
+- **Discounts at or above the threshold are refused** (409 `needs_approval`) until B5 turns the refusal into an approval request; a term invoice for such a student is held in the plan as needing approval.
+- **Only the current term can be invoiced**, since enrollments are made when a term starts.
+- **Not yet**: schools in the daily and monthly summaries (B9); editing a school draft in the general invoice editor is not supported (drafts change through fees, options and discounts).
 
 ### B4: students' account numbers (M)
 

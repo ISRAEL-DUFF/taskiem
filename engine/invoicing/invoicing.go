@@ -74,7 +74,25 @@ type Line struct {
 	Description string `json:"description"`
 	Quantity    int64  `json:"quantity"`
 	UnitKobo    int64  `json:"unit_kobo"`
+	// PassThroughFor names the body a pass-through line is collected for
+	// (WAEC, NECO): money the business collects on someone else's behalf,
+	// never its own income (docs/money-reports.md#pass-through).
+	PassThroughFor string `json:"pass_through_for,omitempty"`
+	// Kind is empty for an item, LineDiscount for a discount and
+	// LineRemoval for an amendment taking an earlier line out: the only
+	// lines with a negative price.
+	Kind string `json:"kind,omitempty"`
+	// Reason says why a discount or an amendment was given.
+	Reason string `json:"reason,omitempty"`
+	// Amendment is the amendment that added the line to a sent invoice.
+	Amendment string `json:"amendment,omitempty"`
 }
+
+// Kinds of line.
+const (
+	LineDiscount = "discount"
+	LineRemoval  = "removal"
+)
 
 // AmountKobo is the line's total.
 func (l Line) AmountKobo() int64 { return l.Quantity * l.UnitKobo }
@@ -116,6 +134,9 @@ type Invoice struct {
 	CreatedBy         string     `json:"created_by"`
 	CreatedAt         time.Time  `json:"created_at"`
 	Payments          []Payment  `json:"payments,omitempty"`
+	// Amendments are the changes made to it after it was sent, each also
+	// a line (amendments.go).
+	Amendments []Amendment `json:"amendments,omitempty"`
 
 	customerEnv map[string]any
 	tokenEnv    map[string]any
@@ -331,7 +352,10 @@ func (s *Invoices) Get(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNum
 	if err := s.open(ctx, tx, tenant, &x); err != nil {
 		return Invoice{}, err
 	}
-	x.Payments, err = payments(ctx, tx, x.ID)
+	if x.Payments, err = payments(ctx, tx, x.ID); err != nil {
+		return Invoice{}, err
+	}
+	x.Amendments, err = amendments(ctx, tx, x.ID)
 	return x, err
 }
 
@@ -422,11 +446,30 @@ func check(d Draft) ([]Line, int64, error) {
 	var total int64
 	for i, l := range lines {
 		lines[i].Description = strings.TrimSpace(l.Description)
+		lines[i].PassThroughFor = strings.Join(strings.Fields(l.PassThroughFor), " ")
+		lines[i].Reason = strings.TrimSpace(l.Reason)
 		if lines[i].Description == "" || len(lines[i].Description) > 200 {
 			return nil, 0, invalid("item %d needs a description (up to 200 characters)", i+1)
 		}
-		if l.Quantity < 1 || l.Quantity > 1_000_000 || l.UnitKobo < 1 || l.UnitKobo > MaxTotalKobo {
-			return nil, 0, invalid("item %d needs a quantity of at least 1 and a price of at least 1 kobo", i+1)
+		if l.Amendment != "" || l.Kind == LineRemoval {
+			return nil, 0, invalid("item %d: amendments are made to a sent invoice (amend it)", i+1)
+		}
+		if len(lines[i].PassThroughFor) > 60 || len(lines[i].Reason) > 300 {
+			return nil, 0, invalid("item %d: pass_through_for has up to 60 characters and a reason up to 300", i+1)
+		}
+		switch l.Kind {
+		case "":
+			if l.Quantity < 1 || l.Quantity > 1_000_000 || l.UnitKobo < 1 || l.UnitKobo > MaxTotalKobo {
+				return nil, 0, invalid("item %d needs a quantity of at least 1 and a price of at least 1 kobo", i+1)
+			}
+		case LineDiscount:
+			// A discount is the business's own: it is never collected for
+			// someone else.
+			if l.Quantity != 1 || l.UnitKobo > -1 || -l.UnitKobo > MaxTotalKobo || lines[i].PassThroughFor != "" {
+				return nil, 0, invalid("item %d is a discount: a quantity of 1, a negative price, and not pass-through", i+1)
+			}
+		default:
+			return nil, 0, invalid("item %d: kind is empty or discount", i+1)
 		}
 		total += l.AmountKobo()
 		if total > MaxTotalKobo {
@@ -435,6 +478,9 @@ func check(d Draft) ([]Line, int64, error) {
 	}
 	if total < 100 {
 		return nil, 0, invalid("the total must be at least ₦1")
+	}
+	if own, _ := PassThrough(lines); own < 0 {
+		return nil, 0, invalid("the discounts are more than the business's own items")
 	}
 	if d.DueOn != "" {
 		if _, err := time.Parse(time.DateOnly, d.DueOn); err != nil {
@@ -726,8 +772,12 @@ func TokenHash(token string) []byte {
 	return h[:]
 }
 
-// Naira formats kobo as naira for people: ₦25,000 or ₦25,000.50.
+// Naira formats kobo as naira for people: ₦25,000 or ₦25,000.50, and a
+// negative amount −₦5,000.
 func Naira(kobo int64) string {
+	if kobo < 0 {
+		return "−" + Naira(-kobo)
+	}
 	n, k := kobo/100, kobo%100
 	s := fmt.Sprint(n)
 	for i := len(s) - 3; i > 0; i -= 3 {

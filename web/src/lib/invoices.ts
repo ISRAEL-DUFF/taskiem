@@ -24,7 +24,26 @@ export interface InvoiceCustomer {
 export interface InvoiceLine {
   description: string;
   quantity: number;
+  /** Negative for a discount and for an amendment taking a line out. */
   unit_kobo: number;
+  /** Who a pass-through line is collected for (WAEC): not the business's income. */
+  pass_through_for?: string;
+  kind?: "discount" | "removal";
+  reason?: string;
+  /** The amendment that added the line to a sent invoice. */
+  amendment?: string;
+}
+
+/** A recorded change to a sent invoice (InvoiceAmendment). */
+export interface InvoiceAmendment {
+  id: string;
+  kind: "add" | "remove" | "discount";
+  line: InvoiceLine;
+  amount_kobo: number;
+  removes?: number;
+  reason: string;
+  by: string;
+  created_at: string;
 }
 
 /** A payment counted towards an invoice (InvoicePayment). A row with
@@ -65,6 +84,7 @@ export interface CustomerInvoice {
   created_by: string;
   created_at: string;
   payments?: InvoicePayment[] | null;
+  amendments?: InvoiceAmendment[] | null;
 }
 
 /** The POST /v1/invoices and PUT /v1/invoices/{id} body (InvoiceDraft). */
@@ -191,6 +211,8 @@ export interface InvoiceActions {
   void: boolean;
   undo: boolean;
   reveal: boolean;
+  /** A sent invoice changes only by amendment, with a reason. */
+  amend: boolean;
 }
 
 /** The actions an invoice offers, by its status and the person's permissions. */
@@ -203,7 +225,64 @@ export function invoiceActions(status: InvoiceStatus | string, can: (perm: strin
     void: manage && status !== "paid" && status !== "void",
     undo: manage,
     reveal: can("pii.reveal"),
+    amend: manage && status !== "draft" && status !== "void",
   };
+}
+
+// --- amendments ---
+
+export type AmendmentKind = "add" | "remove" | "discount";
+
+/** The amendment form: amount as typed in naira; line the position of the item a removal takes out. */
+export interface AmendmentForm {
+  kind: AmendmentKind;
+  description: string;
+  amount: string;
+  passThroughFor: string;
+  line: string;
+  reason: string;
+}
+
+export function emptyAmendment(): AmendmentForm {
+  return { kind: "add", description: "", amount: "", passThroughFor: "", line: "", reason: "" };
+}
+
+/** The items a removal may take out: their position and words. Discounts, removals and lines taken out already are not offered. */
+export function removableLines(x: Pick<CustomerInvoice, "lines" | "amendments">): { index: number; label: string }[] {
+  const gone = new Set((x.amendments ?? []).map((a) => a.removes).filter((n): n is number => typeof n === "number"));
+  return (x.lines ?? []).flatMap((l, index) =>
+    !l.kind && l.unit_kobo > 0 && !gone.has(index) ? [{ index, label: `${l.description} (${naira(l.quantity * l.unit_kobo)})` }] : [],
+  );
+}
+
+/** Why the amendment would be refused here, or null. A total below what was paid is the server's to refuse. */
+export function amendmentProblem(f: AmendmentForm): string | null {
+  if (!f.reason.trim()) return "Say why the invoice is amended. The customer's page shows the reason.";
+  if (f.reason.trim().length > 300) return "The reason is at most 300 characters.";
+  if (f.kind === "remove") return f.line === "" ? "Choose the item to take out." : null;
+  const k = toKobo(f.amount);
+  if (k === undefined || Number.isNaN(k) || k < 100) return "Give the amount, at least ₦1.";
+  if (f.kind === "add" && !f.description.trim()) return "Say what the added line is for.";
+  return null;
+}
+
+/** The POST /v1/invoices/{id}/amendments body. */
+export function amendmentRequest(f: AmendmentForm): Record<string, unknown> {
+  const reason = f.reason.trim();
+  if (f.kind === "remove") return { kind: "remove", line: Number(f.line), reason };
+  const body: Record<string, unknown> = { kind: f.kind, amount_kobo: toKobo(f.amount), reason };
+  if (f.description.trim()) body.description = f.description.trim();
+  if (f.kind === "add" && f.passThroughFor.trim()) body.pass_through_for = f.passThroughFor.trim();
+  return body;
+}
+
+/** What a line says beside its description: who a pass-through line is collected for, and why a discount or an amendment was given. */
+export function lineNote(l: InvoiceLine): string {
+  const out: string[] = [];
+  if (l.pass_through_for) out.push(`Collected on behalf of ${l.pass_through_for}.`);
+  if (l.amendment && !l.kind) out.push("Added after the invoice was sent.");
+  if (l.reason) out.push(l.reason);
+  return out.join(" ");
 }
 
 /** Why a void would be refused here, or null. */

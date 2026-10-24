@@ -1945,8 +1945,20 @@ export interface SchoolsGetStudentInput {
   /** The student's id or admission number */
   student: Val<string>;
 }
+export interface SchoolsInvoiceTermInput {
+  /** Send the invoices now (else they are drafts for a person to send) */
+  send?: Val<boolean>;
+  /** A term's id; the current term by default */
+  term?: Val<string>;
+}
 export interface SchoolsListClassesInput {
   [key: string]: Value;
+}
+export interface SchoolsListFeeItemsInput {
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** A term's id; the current term by default */
+  term?: Val<string>;
 }
 export interface SchoolsListStudentsInput {
   /** A class's id or label, such as JSS 1 A */
@@ -1956,15 +1968,30 @@ export interface SchoolsListStudentsInput {
   /** active by default; any for every status */
   status?: Val<"active" | "withdrawn" | "graduated" | "any">;
 }
+export interface SchoolsTermInvoicesInput {
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** At most this many (default 200) */
+  limit?: Val<number>;
+  status?: Val<"draft" | "sent" | "part_paid" | "paid" | "overdue" | "void">;
+  /** A term's id; the current term by default */
+  term?: Val<string>;
+}
 export const schools = {
   /** The current term (read) */
   current_term: (input?: SchoolsCurrentTermInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "current_term", input, extra),
   /** Read a student (read) */
   get_student: (input: SchoolsGetStudentInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "get_student", input, extra),
+  /** Invoice the term (idempotent_write) */
+  invoice_term: (input?: SchoolsInvoiceTermInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "invoice_term", input, extra),
   /** List classes (read) */
   list_classes: (input?: SchoolsListClassesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_classes", input, extra),
+  /** List fee items (read) */
+  list_fee_items: (input?: SchoolsListFeeItemsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_fee_items", input, extra),
   /** List students (read) */
   list_students: (input?: SchoolsListStudentsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_students", input, extra),
+  /** List a term's invoices (read) */
+  term_invoices: (input?: SchoolsTermInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "term_invoices", input, extra),
 };
 
 // SFTP (sftp@1)
@@ -2686,7 +2713,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
-  "schools@1": ["current_term", "get_student", "list_classes", "list_students"],
+  "schools@1": ["current_term", "get_student", "invoice_term", "list_classes", "list_fee_items", "list_students", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
