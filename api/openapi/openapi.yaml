@@ -319,7 +319,7 @@ paths:
       tags:
       - AI
       summary: Get AI building status
-      description: Whether AI building is on, and the tenant's monthly token budget and use.
+      description: Whether AI building is on, the tenant's monthly token budget and use, and for AI steps the models offered, what the provider keeps, and whether the business and its plan allow them.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -18015,27 +18015,41 @@ components:
             type: string
         forks:
           type: object
+          description: 'The run''s links to other runs: the failed run it resumed, or the run whose subflow step started it (parent_step set); the runs that resumed it; and the child runs its subflow steps started.'
           required:
           - parent_run_id
           - resumed_step
+          - parent_step
           - resumed_by
+          - subflows
           properties:
             parent_run_id:
               type:
               - string
               - 'null'
               format: uuid
-              description: The failed run this run resumed.
+              description: The failed run this run resumed, or the run whose subflow step started it.
             resumed_step:
               type:
               - string
               - 'null'
+            parent_step:
+              type:
+              - string
+              - 'null'
+              description: The subflow step (instance) of the parent run that started this run; null for a fork.
             resumed_by:
               type: array
               items:
                 type: string
                 format: uuid
               description: Runs that resumed this one.
+            subflows:
+              type: array
+              items:
+                type: string
+                format: uuid
+              description: Child runs started by this run's subflow steps, oldest first.
     RunStatus:
       type: object
       required:
@@ -20522,6 +20536,20 @@ components:
             used_tokens:
               type: integer
           additionalProperties: false
+        step_models:
+          type: array
+          items:
+            type: string
+          description: The models a workflow's AI steps may name (decision 0050), the default first. Present when enabled.
+        retention:
+          type: string
+          description: What the provider keeps of what it is sent, as the deployment states it (TASKIEM_AI_RETENTION); empty when not stated. Present when enabled.
+        steps_allowed:
+          type: boolean
+          description: Whether the business lets its workflows ask the AI model (governance `ai_steps`).
+        steps_plan:
+          type: boolean
+          description: Whether the business's plan includes AI.
       additionalProperties: false
     AIBuildRequest:
       type: object
@@ -26088,6 +26116,9 @@ components:
         default_retention:
           type: string
           description: How long run history is kept when a workflow does not say, e.g. `30d`; empty is the platform's.
+        ai_steps:
+          type: boolean
+          description: Whether the business's workflows may ask the AI model at run time (decision 0050); on unless an owner turns it off.
         updated_by:
           type: string
         updated_at:
@@ -26095,7 +26126,7 @@ components:
       additionalProperties: false
     GovernanceRequest:
       type: object
-      description: Replaces every setting; one left out is off (`false`, or no default retention).
+      description: Replaces every setting; one left out is off (`false`, or no default retention), except `ai_steps`, which a request without it keeps.
       properties:
         four_eyes_publish:
           type: boolean
@@ -26104,6 +26135,9 @@ components:
         default_retention:
           type: string
           description: A duration of at least `1d`, or empty.
+        ai_steps:
+          type: boolean
+          description: Whether the business's workflows may ask the AI model at run time; left out, it stays as it is.
     PolicyVersion:
       type: object
       required:

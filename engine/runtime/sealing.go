@@ -225,3 +225,32 @@ func (s *Store) OpenedHistoryWithTaint(ctx context.Context, ref RunRef) ([]histo
 	})
 	return h, taint, err
 }
+
+// aiTextPaths are the texts in an ai step's question that contain a known
+// personal value (decision 0050): the prompt, or an input string built
+// from personal data, sealed whole in history. The model sees them with
+// the personal data masked.
+func aiTextPaths(p history.ScheduledPayload, taint pii.Taint) []pii.Path {
+	if p.Queue != "ai" {
+		return nil
+	}
+	var out []pii.Path
+	var walk func(v any, segs []string)
+	walk = func(v any, segs []string) {
+		switch t := v.(type) {
+		case map[string]any:
+			for k, x := range t {
+				walk(x, append(append([]string{}, segs...), k))
+			}
+		case string:
+			if _, whole := taint["s:"+t]; whole {
+				return // sealed as the value it is
+			}
+			if cat, ok := taint.Within(t); ok {
+				out = append(out, pii.Path{Segments: segs, Category: cat})
+			}
+		}
+	}
+	walk(p.Input, []string{"input"})
+	return out
+}

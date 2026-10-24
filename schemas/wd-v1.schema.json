@@ -1301,6 +1301,7 @@
       ]
     },
     "subflowStep": {
+      "description": "Runs another workflow of the business as its own run, a child of this one (docs/contracts/wd-v1.md, subflow steps): input is the child's run inputs; with wait (the default) the step waits for the child to end and its output is {run_id, status, outputs}; without, it completes once the child has started.",
       "type": "object",
       "required": [
         "type",
@@ -1317,17 +1318,19 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "workflow",
-            "version"
+            "workflow"
           ],
           "properties": {
             "workflow": {
               "type": "string",
-              "pattern": "^wf_[0-9A-Za-z]{1,40}$"
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "The workflow's id (the business's own; it must have a published version and a manual or subflow trigger)."
             },
             "version": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "A version to run; without it, the version published when the step starts."
             },
             "wait": {
               "type": "boolean",
@@ -1372,6 +1375,7 @@
       ]
     },
     "aiStep": {
+      "description": "Asks an AI model at run time and gets a typed answer (docs/contracts/wd-v1.md, AI steps): the prompt and input, with personal data masked, go to the deployment's model; the output is the answer, matching output_schema.",
       "type": "object",
       "required": [
         "type",
@@ -1395,13 +1399,27 @@
             "prompt": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 65536
+              "maxLength": 65536,
+              "description": "What to ask the model: text, or an expression (=...) over this workflow. Personal data in it is masked."
             },
             "output_schema": {
-              "$ref": "#/$defs/jsonSchema"
+              "$ref": "#/$defs/jsonSchema",
+              "description": "The answer's shape: an object schema; the step's output is the answer, checked against it."
             },
             "model": {
-              "type": "string"
+              "type": "string",
+              "description": "A model this deployment offers for AI steps; without it, the deployment's default."
+            },
+            "personal_data": {
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "description": "Input fields whose personal data reaches the model as it is (decision 0050). Every other personal value, in the input and the prompt, is replaced by a placeholder, and put back in the answer."
             }
           }
         }

@@ -44,6 +44,10 @@ export function summary(s: Step): string {
       return s.template !== undefined ? `${words(s.template.replaceAll("-", " "))} · its steps run here` : "One of your workflows · its steps run here";
     case "callback":
       return s.config?.timeout ? `wait up to ${s.config.timeout} to be called back` : "wait to be called back";
+    case "ai":
+      return s.config.personal_data?.length ? `ask the AI model · sees ${s.config.personal_data.join(", ")}` : "ask the AI model · personal data hidden";
+    case "subflow":
+      return s.config.wait === false ? "start one of your workflows · carry on" : "run one of your workflows · wait for it";
     case "respond":
       return `answer ${s.config.status ?? 200}`;
     case "http":
@@ -95,6 +99,7 @@ const KINDS: Record<string, [string, string]> = {
   code: ["Code", "audit"],
   container: ["Container", "catalogue"],
   subflow: ["Workflow", "workflows"],
+  ai: ["Ask the AI", "templates"],
 };
 
 export function StepNode({ data, selected }: NodeProps<StepFlowNode>) {

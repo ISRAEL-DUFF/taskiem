@@ -1,8 +1,8 @@
 // Edits one top-level step. Nested steps (branch paths, foreach bodies,
 // on_error) are edited as JSON inside their parent.
 import { useState } from "react";
-import type { Step } from "@sdk/wd";
-import { get, type CapabilityInfo, type ConnectorInfo, type Problem } from "../api";
+import type { Step, WorkflowDefinition } from "@sdk/wd";
+import { get, type CapabilityInfo, type ConnectorInfo, type Problem, type WorkflowSummary } from "../api";
 import { FormStepEditor } from "./FormEditor";
 import { RolePicker } from "../forms/RolePicker";
 import { ConnectionPicker, type ConnectionName } from "../forms/ConnectionPicker";
@@ -126,6 +126,8 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
+      {step.type === "subflow" && <SubflowConfig step={step} set={set} advanced={advanced} sources={sources} />}
+      {step.type === "ai" && <AIConfig step={step} set={set} advanced={advanced} />}
       {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel", "callback", "respond"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
@@ -532,6 +534,147 @@ function TemplateConfig({ step, set, advanced, sources }: { step: Extract<Step, 
           </ol>
         </details>
       )}
+    </>
+  );
+}
+
+interface AIStatus {
+  enabled: boolean;
+  model?: string;
+  step_models?: string[];
+  retention?: string;
+  steps_allowed: boolean;
+  steps_plan: boolean;
+}
+
+function AIConfig({ step, set, advanced }: { step: Extract<Step, { type: "ai" }>; set: (p: Any) => void; advanced: boolean }) {
+  const status = useLoad(() => get<AIStatus>("/v1/ai/status"), []);
+  const cfg = step.config;
+  const input = (step.input ?? {}) as Record<string, unknown>;
+  const through = cfg.personal_data ?? [];
+  const setCfg = (patch: Partial<typeof cfg>) => set({ config: { ...cfg, ...patch } });
+  const st = status.data;
+  return (
+    <>
+      {st && !st.enabled && <p className="notice">This deployment has no AI model, so this step cannot run.</p>}
+      {st && st.enabled && !st.steps_allowed && <p className="notice">Your business has turned AI steps off (Settings, Governance).</p>}
+      {st && st.enabled && !st.steps_plan && <p className="notice">Your plan does not include AI.</p>}
+      <Field label="What to ask" hint="Say what you want in plain words: sort the message, pull out the address, write a short reply.">
+        <textarea rows={5} value={cfg.prompt} onChange={(e) => setCfg({ prompt: e.target.value })} />
+      </Field>
+      {!advanced && (
+        <>
+          <p className="hint">It reads: {Object.keys(input).join(", ") || "nothing yet"}.</p>
+          <p className="hint">It answers with: {answerFields(cfg.output_schema).join(", ") || "nothing yet"}.</p>
+        </>
+      )}
+      {advanced && (
+        <div data-technical>
+          <Field label="What it reads (JSON)" hint="The data the model reads, by name; values may be expressions such as =trigger.body.message.">
+            <JsonInput value={input} onChange={(v) => set({ input: (v as object | undefined) ?? {} })} rows={6} />
+          </Field>
+          <Field label="The answer's shape (JSON Schema)" hint={'An object schema, e.g. {"type": "object", "properties": {"urgent": {"type": "boolean"}}, "required": ["urgent"]}. The step\'s output is the answer.'}>
+            <JsonInput value={cfg.output_schema} onChange={(v) => v !== undefined && setCfg({ output_schema: v as object })} rows={8} />
+          </Field>
+        </div>
+      )}
+      <h3>Personal data</h3>
+      <p className="hint">
+        Names, phone numbers, emails, BVNs and other personal data reach the model as placeholders such as [[name_1]], and are put back in its answer. Tick a field only when the model must read it as it
+        is; publishing such a step is recorded in the audit log.
+      </p>
+      {Object.keys(input).length === 0 && <p className="hint">The step reads no fields yet.</p>}
+      {Object.keys(input).map((k) => (
+        <label key={k} style={{ display: "block" }}>
+          <input
+            type="checkbox"
+            checked={through.includes(k)}
+            onChange={(e) => {
+              const next = e.target.checked ? [...through, k] : through.filter((x) => x !== k);
+              setCfg({ personal_data: next.length > 0 ? next : undefined });
+            }}
+          />{" "}
+          Let the model see <code>{k}</code> as it is
+        </label>
+      ))}
+      {advanced && st?.enabled && (
+        <Field label="Model" hint={st.retention ? `What the provider keeps: ${st.retention}` : "The deployment's default unless you pick another it offers."}>
+          <select value={cfg.model ?? ""} onChange={(e) => setCfg({ model: e.target.value || undefined })}>
+            <option value="">Default ({st.model})</option>
+            {(st.step_models ?? []).filter((m) => m !== st.model).map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+    </>
+  );
+}
+
+/** The names of the fields an answer's shape gives. */
+function answerFields(shape: unknown): string[] {
+  const props = (shape as { properties?: Record<string, unknown> } | undefined)?.properties;
+  return props ? Object.keys(props) : [];
+}
+
+function SubflowConfig({ step, set, advanced, sources }: { step: Extract<Step, { type: "subflow" }>; set: (p: Any) => void; advanced: boolean; sources: Source[] }) {
+  const list = useLoad(() => get<{ workflows: WorkflowSummary[] }>("/v1/workflows"), []);
+  // The business's published workflows that start on demand (decision 0049).
+  const startable = (list.data?.workflows ?? []).filter((w) => w.active_version !== null && (w.trigger?.type === "manual" || w.trigger?.type === "subflow"));
+  const chosen = startable.find((w) => w.id === step.config.workflow);
+  const version = step.config.version ?? chosen?.active_version ?? null;
+  const target = useLoad(
+    () => (chosen && version ? get<{ definition: WorkflowDefinition }>(`/v1/workflows/${chosen.id}/versions/${version}`) : Promise.resolve(null)),
+    [chosen?.id, version],
+  );
+  const inputs = target.data?.definition.inputs?.schema;
+  const outputs = target.data?.definition.outputs ?? [];
+  const waits = step.config.wait !== false;
+  return (
+    <>
+      <Field label="Workflow" hint="One of your published workflows, run as its own run with its own history. Pick a workflow that starts by hand or when another workflow calls it.">
+        <select value={step.config.workflow} onChange={(e) => set({ config: { ...step.config, workflow: e.target.value, version: undefined }, input: {} })}>
+          {!chosen && <option value={step.config.workflow}>{step.config.workflow || "Choose a workflow"}</option>}
+          {startable.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Then" hint={waits ? "This workflow waits for that run to end; the step's output is what it gave back." : "This workflow carries on as soon as that run has started."}>
+        <select value={waits ? "wait" : "continue"} onChange={(e) => set({ config: { ...step.config, wait: e.target.value === "wait" ? undefined : false } })}>
+          <option value="wait">Wait for it to finish</option>
+          <option value="continue">Carry on without waiting</option>
+        </select>
+      </Field>
+      {advanced && (
+        <Field label="Version" hint="Leave blank to run the version published when the step starts.">
+          <input
+            type="number"
+            min={1}
+            value={step.config.version ?? ""}
+            onChange={(e) => set({ config: { ...step.config, version: e.target.value === "" ? undefined : Number(e.target.value) } })}
+          />
+        </Field>
+      )}
+      <h3>What it starts with</h3>
+      <SchemaForm schema={inputs as never} value={step.input} onChange={(v) => set({ input: v })} expressions={advanced} sources={sources} />
+      {waits && outputs.length > 0 && (
+        <>
+          <h3>What it gives back</h3>
+          <ul className="plain-list">
+            {outputs.map((o) => (
+              <li key={o.name}>
+                <strong>{o.title}</strong>: {o.description} {advanced && <code>steps.{step.id}.output.outputs.{o.name}</code>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {waits && outputs.length === 0 && chosen && <p className="hint">It gives nothing back: add outputs to it to use its results here. The step's output has the run's id and status.</p>}
     </>
   );
 }

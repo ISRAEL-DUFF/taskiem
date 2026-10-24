@@ -2629,6 +2629,16 @@
       "reviewed": true,
       "context": "A number linked to no one wrote"
     },
+    "wd.ai": {
+      "text": "Ask the AI model, with personal data hidden from it",
+      "reviewed": true,
+      "context": "Read-back: an ai step; personal data is replaced by placeholders before the model sees it"
+    },
+    "wd.ai.through": {
+      "text": "Ask the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": true,
+      "context": "Read-back: an ai step that lets some input fields reach the model unmasked; {fields} is a comma-separated list of field names"
+    },
     "wd.alongside": {
       "text": "Alongside: {name}",
       "reviewed": true,
@@ -2928,6 +2938,16 @@
       "text": "Wait for {event}",
       "reviewed": true,
       "context": "Read-back: waits for a named event; {event} is the tenant's"
+    },
+    "wd.subflow": {
+      "text": "Run your workflow: {workflow}, and wait for it to finish",
+      "reviewed": true,
+      "context": "Read-back: a subflow step that waits for the child run; {workflow} is its name"
+    },
+    "wd.subflow.nowait": {
+      "text": "Start your workflow: {workflow}, and carry on",
+      "reviewed": true,
+      "context": "Read-back: a subflow step that does not wait for the child run"
     },
     "wd.template": {
       "text": "Use the template: {template}",

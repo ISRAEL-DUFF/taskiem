@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -27,6 +28,10 @@ type Env struct {
 	Store    *runtime.Store
 	Registry *connector.Registry
 	Provider *Provider
+	// AI answers ai steps when Drain runs them (decision 0050); AIModels
+	// are the models steps may name besides the default.
+	AI       ai.Provider
+	AIModels []string
 	Tenant   uuid.UUID
 	Secrets  runtime.MapSecrets
 	// VaultSecrets makes workers read workflow secrets from Vault (which
@@ -146,6 +151,16 @@ func (e *Env) Worker(id string) *runtime.Worker {
 		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: timeout}
 }
 
+// AIWorker returns a worker for the ai queue answering with prov, which
+// stands for the deployment's default model and any in models.
+func (e *Env) AIWorker(id string, prov ai.Provider, models ...string) *runtime.Worker {
+	w := e.Worker(id)
+	w.Queue = "ai"
+	w.AI = &runtime.AISteps{Config: ai.Config{Provider: "fake", Model: "default-model", StepModels: models},
+		For: func(string) (ai.Provider, error) { return prov, nil }}
+	return w
+}
+
 // ContainerWorker returns a worker for the container queue.
 func (e *Env) ContainerWorker(id string) *runtime.Worker {
 	w := e.Worker(id)
@@ -167,6 +182,11 @@ func (e *Env) Drain(t testing.TB) {
 	sb := e.Worker("drain-sandbox")
 	sb.Queue = "sandbox"
 	cw := e.ContainerWorker("drain-container")
+	// The ai queue, answered by e.AI (nil: ai steps are not set up).
+	aw := e.AIWorker("drain-ai", e.AI, e.AIModels...)
+	if e.AI == nil {
+		aw.AI = nil
+	}
 	for i := 0; i < 1000; i++ {
 		n, err := w.RunOnce(ctx)
 		if err != nil {
@@ -178,6 +198,10 @@ func (e *Env) Drain(t testing.TB) {
 		}
 		n += m
 		if m, err = cw.RunOnce(ctx); err != nil {
+			t.Fatal(err)
+		}
+		n += m
+		if m, err = aw.RunOnce(ctx); err != nil {
 			t.Fatal(err)
 		}
 		n += m

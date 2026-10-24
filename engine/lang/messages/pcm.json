@@ -2104,6 +2104,14 @@
       "text": "This number never join any Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code wey we go send you.",
       "reviewed": false
     },
+    "wd.ai": {
+      "text": "Ask the AI model, but hide people private info from am",
+      "reviewed": false
+    },
+    "wd.ai.through": {
+      "text": "Ask the AI model; e go see {fields} as dem be, but other private info go hide from am",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "Same time: {name}",
       "reviewed": false
@@ -2342,6 +2350,14 @@
     },
     "wd.signal_named": {
       "text": "Wait for {event}",
+      "reviewed": false
+    },
+    "wd.subflow": {
+      "text": "Run your own workflow: {workflow}, and wait make e finish",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Start your own workflow: {workflow}, and continue",
       "reviewed": false
     },
     "wd.template": {

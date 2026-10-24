@@ -7,6 +7,7 @@
 package wdtest
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -58,8 +59,11 @@ type Case struct {
 	// Approvals answer approval steps, keyed the same way.
 	Approvals map[string]ApprovalMock `json:"approvals,omitempty"`
 	// Forms answer form steps, keyed the same way.
-	Forms  map[string]FormMock `json:"forms,omitempty"`
-	Expect Expect              `json:"expect"`
+	Forms map[string]FormMock `json:"forms,omitempty"`
+	// Subflows answer subflow steps that wait for their child run, keyed
+	// the same way; a step that does not wait needs none.
+	Subflows map[string]SubflowMock `json:"subflows,omitempty"`
+	Expect   Expect                 `json:"expect"`
 }
 
 // Mock is one attempt's outcome: an output (values may be expressions over
@@ -102,6 +106,14 @@ func (m *Mocks) UnmarshalJSON(b []byte) error {
 type SignalMock struct {
 	Payload any  `json:"payload,omitempty"`
 	Timeout bool `json:"timeout,omitempty"`
+}
+
+// SubflowMock is how a subflow step's child run ended: completed with
+// these outputs (the default), or failed or cancelled with a message.
+type SubflowMock struct {
+	Status  string `json:"status,omitempty"` // completed | failed | cancelled
+	Outputs any    `json:"outputs,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // ApprovalMock decides an approval, or lets its timeout fire.
@@ -543,6 +555,27 @@ func (r *runner) act() bool {
 				r.append(history.SignalReceived, s.id, 0, map[string]any{"event": p.Event, "payload": m.Payload}, history.OriginSignal)
 				return true
 			}
+		case history.KindSubflow:
+			if s.signal {
+				continue
+			}
+			// The child run as the runtime reports it: started at once for
+			// a step that does not wait, else as the case says it ended.
+			payload := map[string]any{"run_id": "test-run/" + s.id, "status": "started"}
+			m, ok := r.subflowMock(s.id)
+			if p.Subflow != nil && p.Subflow.Wait {
+				if !ok {
+					continue
+				}
+				payload["status"] = cmp.Or(m.Status, "completed")
+				if payload["status"] == "completed" {
+					payload["outputs"] = orEmptyMap(m.Outputs)
+				} else if m.Error != "" {
+					payload["error"] = map[string]any{"kind": "failed", "message": m.Error}
+				}
+			}
+			r.append(history.SignalReceived, s.id, 0, map[string]any{"event": p.Event, "payload": payload}, history.OriginSignal)
+			return true
 		}
 	}
 	for _, s := range order {
@@ -659,7 +692,15 @@ func (r *runner) mock(id string, attempt int) (Mock, bool) {
 	return ms[attempt-1], true
 }
 
-func (r *runner) signalMock(id string) (SignalMock, bool)     { return lookup(r.c.Signals, id) }
+func (r *runner) signalMock(id string) (SignalMock, bool)   { return lookup(r.c.Signals, id) }
+func (r *runner) subflowMock(id string) (SubflowMock, bool) { return lookup(r.c.Subflows, id) }
+
+func orEmptyMap(v any) any {
+	if v == nil {
+		return map[string]any{}
+	}
+	return v
+}
 func (r *runner) approvalMock(id string) (ApprovalMock, bool) { return lookup(r.c.Approvals, id) }
 func (r *runner) formMock(id string) (FormMock, bool)         { return lookup(r.c.Forms, id) }
 
@@ -860,6 +901,8 @@ func (r *runner) blockedOn(order []*inst) string {
 			waits = append(waits, "approval "+s.id+" has no decision in approvals")
 		case s.sched[s.last].Kind == history.KindSignal && !s.signal:
 			waits = append(waits, "signal "+s.id+" has no entry in signals")
+		case s.sched[s.last].Kind == history.KindSubflow && !s.signal:
+			waits = append(waits, "subflow "+s.id+" has no entry in subflows")
 		}
 	}
 	if len(waits) == 0 {

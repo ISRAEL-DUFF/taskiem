@@ -6,7 +6,7 @@ Taskiem can draft a workflow from a plain-language goal (spec 12.1) and propose 
 
 From the workflow list (**Build with AI**) or the editor (**Change with AI**), a person with `workflow.edit` describes what the workflow should do. The server then runs the builder pipeline (`engine/ai/builder`):
 
-1. **Context.** It offers up to two starting templates from the [SME template library](templates.md) whose keywords match the goal (templates first, then free drafting): the model may answer with a template's id and the parameter values the goal states, which the builder instantiates, listing the required parameters the goal did not state (the draft holds the template's examples for them, with a warning); or write the workflow itself, from a template or from scratch. It ranks every connector available to the tenant against the goal by keyword overlap (names, categories, actions, triggers, with a small synonym table; no vector database) and takes the full schemas of the top six, and of the connectors the best starting template uses (so "bill a customer", which names no connector, still carries `invoices@1`'s), plus a one-line catalogue of all of them, and of the [callable templates](templates.md#callable-templates) with their parameters, run inputs, outputs and effect: when the goal asks for what two or more templates do together, or one with steps of its own around it, the model composes them with `template` steps instead of copying their steps ([decision 0047](decisions/0047-composable-templates.md)); the publishing checks, policy rules and dry run read the draft with them expanded. The business's own callable workflows ([decision 0048](decisions/0048-callable-workflows.md)) are listed the same way (`callable_workflows`: id, name, inputs, outputs and effect), and a draft may use one as a template step by its id. It adds the tenant's connections by name and connector, variables by name, active approval policies by name and a summary of who approves, and the structure of up to three similar workflows (step ids, types and connector actions, never their inputs). When the goal changes an existing workflow, that workflow's latest definition is included.
+1. **Context.** It offers up to two starting templates from the [SME template library](templates.md) whose keywords match the goal (templates first, then free drafting): the model may answer with a template's id and the parameter values the goal states, which the builder instantiates, listing the required parameters the goal did not state (the draft holds the template's examples for them, with a warning); or write the workflow itself, from a template or from scratch. It ranks every connector available to the tenant against the goal by keyword overlap (names, categories, actions, triggers, with a small synonym table; no vector database) and takes the full schemas of the top six, and of the connectors the best starting template uses (so "bill a customer", which names no connector, still carries `invoices@1`'s), plus a one-line catalogue of all of them, and of the [callable templates](templates.md#callable-templates) with their parameters, run inputs, outputs and effect: when the goal asks for what two or more templates do together, or one with steps of its own around it, the model composes them with `template` steps instead of copying their steps ([decision 0047](decisions/0047-composable-templates.md)); the publishing checks, policy rules and dry run read the draft with them expanded. The business's own callable workflows ([decision 0048](decisions/0048-callable-workflows.md)) are listed the same way (`callable_workflows`: id, name, inputs, outputs and effect), and a draft may use one as a template step by its id; its published workflows that start on demand are listed too (`startable_workflows`), for a `subflow` step that runs one as its own run ([decision 0049](decisions/0049-subflows.md)). It adds the tenant's connections by name and connector, variables by name, active approval policies by name and a summary of who approves, and the structure of up to three similar workflows (step ids, types and connector actions, never their inputs). When the goal changes an existing workflow, that workflow's latest definition is included.
 2. **Draft.** The model answers with structured output (see [the schema choice](#structured-output)): a summary, assumptions to confirm, the definition, and up to three test cases.
 3. **Validate.** The definition goes through exactly the checks publishing runs (`wdcheck`: the wd/v1 schema and semantic rules, connector and action existence, code compilation, trigger checks), plus the builder's policy rule: a write action of a `payments` connector that no approval step precedes is flagged (`payment_write_without_approval`).
 4. **Self-correct.** Problems and policy findings are sent back to the model, up to three times. Whatever remains is shown: problems as "would not publish yet", policy findings as warnings.
@@ -59,8 +59,10 @@ The rule (spec 12, gate G3): **the AI can never publish, approve, read secrets, 
 | `TASKIEM_AI_MAX_TOKENS` | 32000 | Per answer, thinking included (1024–128000); above 16000 requests stream |
 | `TASKIEM_AI_FALLBACKS` | on | `off` stops sending server-side refusal fallbacks |
 | `TASKIEM_DEFAULT_AI_MONTHLY_TOKENS` | 2,000,000 | Platform default budget ([plan limits](operations.md#plan-limits)) |
+| `TASKIEM_AI_STEP_MODELS` | — | Comma-separated models a workflow's [AI steps](#ai-steps) may name, besides the default |
+| `TASKIEM_AI_RETENTION` | — | What the provider keeps of what it is sent, shown to every business's admins ("Zero data retention under our agreement with Anthropic"). State it; without it, admins are told it is not stated |
 
-Set these on the `api` and `edge` roles alike. The `edge` role answers WhatsApp, so `build` there uses the same model, effort, answer size and tenant budgets as the web app.
+Set these on the `api` and `edge` roles alike, and on `worker` roles serving the `ai` queue (`TASKIEM_WORKER_QUEUES`, which includes it by default). The `edge` role answers WhatsApp, so `build` there uses the same model, effort, answer size and tenant budgets as the web app.
 
 ### Claude
 
@@ -146,6 +148,18 @@ The failed version's definition, the failure (step, error kind and redacted mess
 
 Each model call is a row in `ai_interactions` (`repair_id`), each proposal appends `ai.repair.propose` (actor type `ai`), each acceptance `ai.repair.accept`, and each resume `run.resume` in the person's name.
 
+## AI steps
+
+A workflow can ask the model at run time with an `ai` step ([contract](contracts/wd-v1.md#ai-steps), [decision 0050](decisions/0050-ai-steps.md)): to sort a message, pull details out of free text, summarise, or draft a reply. The step's prompt and input go to the deployment's model (or another it offers, `TASKIEM_AI_STEP_MODELS`) with the run's personal data replaced by placeholders, which are put back in the answer; a step lets a field through as it is only when it lists it in `personal_data`, and publishing one that does is audited. The answer must match the step's `output_schema`; one that does not is sent back once.
+
+Three controls sit with the business and the deployment:
+
+- **The switch.** Owners turn AI steps off under **Secrets & settings → Governance** (`ai_steps`); saving a workflow with one is then refused, and one already published fails when it starts.
+- **The plan.** AI steps need a plan with the `ai` feature, as AI building does.
+- **What the provider keeps.** `GET /v1/ai/status` and the Governance page show the model, the models steps may use, and the deployment's statement of what the provider retains (`TASKIEM_AI_RETENTION`).
+
+Each call is recorded in `ai_interactions` against the run and step, with personal data masked, and counts against the monthly budget below. The builder proposes an ai step only when the business may use one (rule 21).
+
 ## Budgets
 
 Each tenant has a monthly AI budget in tokens, `ai_monthly_tokens` in its [plan limits](operations.md#plan-limits): the platform default (2,000,000, or `TASKIEM_DEFAULT_AI_MONTHLY_TOKENS`) unless an operator sets another (`taskiem tenants limits <tenant> --set ai_monthly_tokens=5000000`; 0 means no limit). Every token a call processes counts (input, output, cache writes and cache reads), summed from `ai_interactions` for the UTC month; tenants see their use in `GET /v1/limits` and in the panel.
@@ -209,4 +223,4 @@ go run ./tools/aieval -baseline-out evals/builder/baseline.json         # accept
 
 - The suites reviewed by people and the real-model gate result (AI1, AI2); a calibrated judge.
 - Cost budgets in currency (tokens only for now), and per-plan amounts (AI3).
-- An `ai` step type that calls a model at run time: it validates but fails with kind `unsupported`.
+- A step-level token cap for AI steps (they share the monthly budget), and models from more than one provider at once.

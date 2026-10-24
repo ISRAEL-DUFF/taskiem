@@ -98,6 +98,7 @@ export function startedByWords(startedBy: string | null, triggerType: string | u
   if (startedBy?.startsWith("email:")) return "an email";
   if (startedBy?.startsWith("form:")) return "a form";
   if (startedBy?.startsWith("invoice:")) return "a paid invoice";
+  if (startedBy?.startsWith("subflow:")) return "another workflow";
   if (startedBy) return names.get(startedBy) ?? "an app or API key";
   switch (triggerType) {
     case "schedule":

@@ -31,19 +31,32 @@ type governance struct {
 	FourEyesPolicies bool `json:"four_eyes_policies"`
 	// DefaultRetention keeps run payloads this long after a run ends when
 	// its workflow sets no settings.retention (spec 9.4); empty is 90 days.
-	DefaultRetention string     `json:"default_retention"`
-	UpdatedBy        string     `json:"updated_by,omitempty"`
-	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
+	DefaultRetention string `json:"default_retention"`
+	// AISteps lets the business's workflows ask the AI model at run time
+	// (decision 0050); on unless an owner turns it off. A request that
+	// leaves it out keeps it as it is.
+	AISteps   *bool      `json:"ai_steps,omitempty"`
+	UpdatedBy string     `json:"updated_by,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 func governanceTx(ctx context.Context, tx pgx.Tx) (governance, error) {
 	var g governance
-	err := tx.QueryRow(ctx, `SELECT four_eyes_publish, four_eyes_policies, COALESCE(default_retention, ''), updated_by, updated_at FROM governance_settings`).
-		Scan(&g.FourEyesPublish, &g.FourEyesPolicies, &g.DefaultRetention, &g.UpdatedBy, &g.UpdatedAt)
+	on := true
+	g.AISteps = &on
+	err := tx.QueryRow(ctx, `SELECT four_eyes_publish, four_eyes_policies, COALESCE(default_retention, ''), ai_steps, updated_by, updated_at FROM governance_settings`).
+		Scan(&g.FourEyesPublish, &g.FourEyesPolicies, &g.DefaultRetention, g.AISteps, &g.UpdatedBy, &g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return governance{}, nil
+		return governance{AISteps: &on}, nil
 	}
 	return g, err
+}
+
+// aiStepsAllowed reports whether the business lets its workflows ask the
+// AI model (governance_settings.ai_steps, decision 0050).
+func aiStepsAllowed(ctx context.Context, tx pgx.Tx) (bool, error) {
+	g, err := governanceTx(ctx, tx)
+	return g.AISteps == nil || *g.AISteps, err
 }
 
 func (s *Server) getGovernance(w http.ResponseWriter, r *http.Request) {
@@ -84,15 +97,18 @@ func (s *Server) putGovernance(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(r.Context(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, four_eyes_policies, default_retention, updated_by) VALUES ($1, $2, $3, NULLIF($4, ''), $5)
+		if req.AISteps == nil {
+			req.AISteps = before.AISteps
+		}
+		if _, err := tx.Exec(r.Context(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, four_eyes_policies, default_retention, ai_steps, updated_by) VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6)
 			ON CONFLICT (tenant_id) DO UPDATE SET four_eyes_publish = EXCLUDED.four_eyes_publish, four_eyes_policies = EXCLUDED.four_eyes_policies,
-			  default_retention = EXCLUDED.default_retention, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-			p.TenantID, req.FourEyesPublish, req.FourEyesPolicies, req.DefaultRetention, p.Actor()); err != nil {
+			  default_retention = EXCLUDED.default_retention, ai_steps = EXCLUDED.ai_steps, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+			p.TenantID, req.FourEyesPublish, req.FourEyesPolicies, req.DefaultRetention, *req.AISteps, p.Actor()); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "governance.change", "", map[string]any{
-			"before": map[string]any{"four_eyes_publish": before.FourEyesPublish, "four_eyes_policies": before.FourEyesPolicies, "default_retention": before.DefaultRetention},
-			"after":  map[string]any{"four_eyes_publish": req.FourEyesPublish, "four_eyes_policies": req.FourEyesPolicies, "default_retention": req.DefaultRetention},
+			"before": map[string]any{"four_eyes_publish": before.FourEyesPublish, "four_eyes_policies": before.FourEyesPolicies, "default_retention": before.DefaultRetention, "ai_steps": *before.AISteps},
+			"after":  map[string]any{"four_eyes_publish": req.FourEyesPublish, "four_eyes_policies": req.FourEyesPolicies, "default_retention": req.DefaultRetention, "ai_steps": *req.AISteps},
 		})
 	})
 	if err != nil {

@@ -137,6 +137,8 @@ type Step struct {
 	Transform *TransformConfig `json:"-"`
 	Callback  *CallbackConfig  `json:"-"`
 	Respond   *RespondConfig   `json:"-"`
+	Subflow   *SubflowConfig   `json:"-"`
+	AI        *AIConfig        `json:"-"`
 }
 
 // CallbackConfig is a callback step's wait: how long another system has
@@ -146,6 +148,28 @@ type CallbackConfig struct {
 	Timeout   string `json:"timeout,omitempty"`
 	OnTimeout string `json:"on_timeout,omitempty"` // fail (default) | continue
 }
+
+// AIConfig is an ai step's question (decision 0050): the prompt (text or
+// an expression), the answer's schema, an optional model, and the input
+// fields whose personal data may reach the model as it is.
+type AIConfig struct {
+	Prompt       string          `json:"prompt"`
+	OutputSchema json.RawMessage `json:"output_schema"`
+	Model        string          `json:"model,omitempty"`
+	PersonalData []string        `json:"personal_data,omitempty"`
+}
+
+// SubflowConfig is a subflow step's child run: which workflow of the
+// business, which version (0: the one published when the step starts),
+// and whether the step waits for the child to end (the default).
+type SubflowConfig struct {
+	Workflow string `json:"workflow"`
+	Version  int    `json:"version,omitempty"`
+	Wait     *bool  `json:"wait,omitempty"`
+}
+
+// Waits reports whether the step waits for the child run to end.
+func (c *SubflowConfig) Waits() bool { return c == nil || c.Wait == nil || *c.Wait }
 
 // RespondConfig is a respond step's answer to the webhook call that
 // started the run: a status, headers and a body, values or expressions.
@@ -390,6 +414,12 @@ func (s *Step) parse() error {
 	case "callback":
 		s.Callback = &CallbackConfig{}
 		target = s.Callback
+	case "subflow":
+		s.Subflow = &SubflowConfig{}
+		target = s.Subflow
+	case "ai":
+		s.AI = &AIConfig{}
+		target = s.AI
 	case "respond":
 		v, err := expr.DecodeJSON(s.RawConfig)
 		if err != nil {
