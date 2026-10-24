@@ -266,6 +266,13 @@ func (d describer) what(st *wd.Step) string {
 			return d.t("wd.capability.via", "what", what, "connection", st.Connection)
 		}
 		return d.t("wd.capability", "what", what)
+	case "callback":
+		if c := st.Callback; c != nil && c.Timeout != "" {
+			return d.t("wd.callback_for", "duration", DurationIn(c.Timeout, d.lang))
+		}
+		return d.t("wd.callback")
+	case "respond":
+		return d.t("wd.respond")
 	case "template":
 		title := st.Template
 		if t, ok := templates.Default().Get(st.Template); ok {

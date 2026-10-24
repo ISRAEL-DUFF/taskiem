@@ -126,7 +126,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
-      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel"].includes(step.type) && <ByHand />}
+      {!advanced && ["http", "code", "signal", "branch", "foreach", "parallel", "callback", "respond"].includes(step.type) && <ByHand />}
       {advanced && step.type === "http" && (
         <>
           <div className="row">
@@ -264,7 +264,13 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           problems={problems.filter((p) => p.path.startsWith("/config")).map((p) => ({ ...p, path: p.path.slice("/config".length) }))}
         />
       )}
-      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel") && (
+      {advanced && step.type === "callback" && (
+        <p className="hint">
+          The run pauses here until another system calls <code>run.callbacks.{step.id}</code>: send that address with an earlier step. The call's body and query are this step's output.
+        </p>
+      )}
+      {advanced && step.type === "respond" && <p className="hint">The caller of the webhook that started this run gets this status, headers and body. The trigger needs respond: true.</p>}
+      {advanced && (step.type === "branch" || step.type === "foreach" || step.type === "parallel" || step.type === "callback" || step.type === "respond") && (
         <Field label="Configuration (JSON)" hint="Nested steps are edited here.">
           <JsonInput value={cfg} onChange={(v) => v && set({ config: v })} rows={14} />
         </Field>

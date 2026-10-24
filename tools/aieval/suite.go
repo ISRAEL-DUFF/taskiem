@@ -45,7 +45,7 @@ type Case struct {
 
 var difficulties = []string{"easy", "medium", "hard"}
 
-var stepTypes = []string{"connector", "capability", "template", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "approval", "form"}
+var stepTypes = []string{"connector", "capability", "template", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "callback", "respond", "approval", "form"}
 
 var triggerTypes = []string{"webhook", "schedule", "connector_event", "capability_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form", "invoice"}
 

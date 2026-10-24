@@ -162,6 +162,8 @@ func HappyPath(def *wd.Definition, reg connector.Lookup) wdtest.Case {
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":
 				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{}}
+			case "callback":
+				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{"body": map[string]any{}, "query": map[string]any{}, "received_at": "2026-01-01T09:00:00Z"}}
 			case "form":
 				answers := map[string]any{}
 				if st.Form != nil {

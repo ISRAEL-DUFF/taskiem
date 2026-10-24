@@ -128,6 +128,24 @@ type Step struct {
 	Approval  *ApprovalConfig  `json:"-"`
 	Form      *FormConfig      `json:"-"`
 	Transform *TransformConfig `json:"-"`
+	Callback  *CallbackConfig  `json:"-"`
+	Respond   *RespondConfig   `json:"-"`
+}
+
+// CallbackConfig is a callback step's wait: how long another system has
+// to call the run back at the step's address (run.callbacks.<id>), and
+// what happens when it does not.
+type CallbackConfig struct {
+	Timeout   string `json:"timeout,omitempty"`
+	OnTimeout string `json:"on_timeout,omitempty"` // fail (default) | continue
+}
+
+// RespondConfig is a respond step's answer to the webhook call that
+// started the run: a status, headers and a body, values or expressions.
+type RespondConfig struct {
+	Status  int            `json:"status,omitempty"`
+	Headers map[string]any `json:"headers,omitempty"`
+	Body    any            `json:"body"`
 }
 
 type HTTPConfig struct {
@@ -361,6 +379,21 @@ func (s *Step) parse() error {
 			return err
 		}
 		s.Transform = &TransformConfig{Output: v.(map[string]any)["output"]}
+		return nil
+	case "callback":
+		s.Callback = &CallbackConfig{}
+		target = s.Callback
+	case "respond":
+		v, err := expr.DecodeJSON(s.RawConfig)
+		if err != nil {
+			return err
+		}
+		m := v.(map[string]any)
+		s.Respond = &RespondConfig{Body: m["body"]}
+		if st, ok := m["status"].(int64); ok {
+			s.Respond.Status = int(st)
+		}
+		s.Respond.Headers, _ = m["headers"].(map[string]any)
 		return nil
 	default:
 		return nil

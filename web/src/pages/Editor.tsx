@@ -23,7 +23,7 @@ import type { ReadyNeed, Readiness } from "../lib/readiness";
 import type { Template } from "../lib/templates";
 
 const nodeTypes = { step: StepNode, trigger: TriggerNode };
-const PALETTE: Step["type"][] = ["connector", "capability", "template", "http", "code", "transform", "approval", "form", "signal", "wait", "branch", "parallel", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "capability", "template", "http", "code", "transform", "approval", "form", "signal", "callback", "respond", "wait", "branch", "parallel", "foreach"];
 
 /** The steps an owner adds without Advanced, in their words. */
 const PLAIN_PALETTE: [Step["type"], string][] = [

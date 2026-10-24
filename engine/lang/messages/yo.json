@@ -2088,6 +2088,14 @@
       "text": "Pinnu ohun tí a ó ṣe:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Dúró kí ètò mìíràn pè padà",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Dúró tó {duration} kí ètò mìíràn pè padà",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} pẹ̀lú àkáǹtì ìsanwó tí a so",
       "reviewed": false
@@ -2206,6 +2214,10 @@
     },
     "wd.parallel": {
       "text": "Ṣe àwọn wọ̀nyí ní àkókò kan náà:",
+      "reviewed": false
+    },
+    "wd.respond": {
+      "text": "Dáhùn ìbéèrè tó bẹ̀rẹ̀ èyí",
       "reviewed": false
     },
     "wd.schedule.daily": {

@@ -138,6 +138,18 @@ export interface SignalStep extends StepBase {
   config: { event: string; correlation: Expression; timeout?: Duration };
 }
 
+/** Waits for another system to call the run back at run.callbacks.<id> (docs/contracts/wd-v1.md, callback steps). */
+export interface CallbackStep extends StepBase {
+  type: "callback";
+  config?: { timeout?: Duration; on_timeout?: "fail" | "continue" };
+}
+
+/** Answers the webhook call that started the run (a webhook trigger with respond: true). */
+export interface RespondStep extends StepBase {
+  type: "respond";
+  config: { status?: number; headers?: Values; body: unknown };
+}
+
 export interface ApprovalStep extends StepBase {
   type: "approval";
   config: {
@@ -192,7 +204,7 @@ export interface AiStep extends StepBase {
 
 export type Step =
   | ConnectorStep | CapabilityStep | TemplateStep | CodeStep | ContainerStep | HttpStep | BranchStep | ParallelStep | ForeachStep
-  | WaitStep | SignalStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
+  | WaitStep | SignalStep | CallbackStep | RespondStep | ApprovalStep | FormStep | SubflowStep | TransformStep | AiStep;
 
 export type StepType = Step["type"];
 

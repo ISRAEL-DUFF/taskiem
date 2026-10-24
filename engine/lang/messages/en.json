@@ -2609,6 +2609,16 @@
       "reviewed": true,
       "context": "Read-back: a decision between paths"
     },
+    "wd.callback": {
+      "text": "Wait for the other system to call back",
+      "reviewed": true,
+      "context": "Read-back: a callback step with the default wait"
+    },
+    "wd.callback_for": {
+      "text": "Wait up to {duration} for the other system to call back",
+      "reviewed": true,
+      "context": "Read-back: a callback step; {duration} is read aloud (wd.unit.*)"
+    },
     "wd.capability": {
       "text": "{what} with whichever payments account is connected",
       "reviewed": true,
@@ -2758,6 +2768,11 @@
       "text": "Do these at the same time:",
       "reviewed": true,
       "context": "Read-back: branches run at the same time"
+    },
+    "wd.respond": {
+      "text": "Answer the request that started this",
+      "reviewed": true,
+      "context": "Read-back: a respond step (the webhook caller gets this answer)"
     },
     "wd.schedule.daily": {
       "text": "Every day at {time} ({tz} time)",

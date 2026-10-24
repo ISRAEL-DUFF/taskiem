@@ -1,7 +1,7 @@
 export type * from "./wd.js";
 export { isExpression, isStepId, parseDuration } from "./contract.js";
 export {
-  ai, approval, branch, capability, cel, code, connector, connectorEvent, container, foreach, form, formTrigger, http, invoiceTrigger, manual, parallel, schedule, signal, steps, subflow,
+  ai, approval, branch, callback, capability, cel, code, connector, connectorEvent, container, foreach, form, formTrigger, http, invoiceTrigger, manual, parallel, respond, schedule, signal, steps, subflow,
   template, transform, trigger, ussd, wait, webhook, workflow, Steps, Workflow, lowerAt,
 } from "./builder.js";
 export type { ApprovalConfig, CapabilityExtra, CodeConfig, ConnectorExtra, ContainerConfig, Context, Expr, FormConfig, HttpConfig, StepOptions, StepSpec, UssdMenuSpec, Val, Values, WorkflowOptions } from "./builder.js";

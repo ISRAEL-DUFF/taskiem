@@ -30,12 +30,14 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // Secrets reads an environment secret (webhook HMAC keys and tokens).
@@ -54,6 +56,7 @@ type Connections interface {
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}   connector events
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}
 //	                                                        the same, for providers whose callback URLs may not carry a query string (path_secret)
+//	POST /hooks/{tenant}/callbacks/{run}/{token}/{step}     a call back to a run's callback step (wd-v1 callback steps)
 //
 // Connector events are also taken as PUT (MTN MoMo calls back with PUT or
 // POST). A delivery names its environment with ?env= (default prod), or in
@@ -102,12 +105,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
 		rt.Put("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
 		rt.Get("/{tenant}/connectors/{connector}/{trigger}", h.connectorHandshake)
+		rt.Post("/{tenant}/callbacks/{run}/{token}/{inst}", h.callback)
+		rt.Put("/{tenant}/callbacks/{run}/{token}/{inst}", h.callback)
 		rt.Post("/{tenant}/*", h.webhook)
 		h.router = rt
 	})
 	kind := "webhook"
 	if strings.Contains(r.URL.Path, "/connectors/") {
 		kind = "connector"
+	} else if strings.Contains(r.URL.Path, "/callbacks/") {
+		kind = "callback"
 	}
 	ctx, span := telemetry.Tracer().Start(r.Context(), "ingest "+kind)
 	defer span.End()
@@ -520,7 +527,167 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	if st.Queued {
 		out["queued"] = true
 	}
+	if def.Responds() && st.Created && !st.Queued {
+		h.respond(w, r, st.Ref, def, out)
+		return
+	}
 	reply(w, http.StatusAccepted, out)
+}
+
+// respondBudget is how long a synchronous webhook (respond: true) waits
+// for the run's respond step (spec 8.2).
+const respondBudget = 30 * time.Second
+
+// respondHeaders are the response headers a respond step may set, besides
+// X- headers; the rest are the server's.
+var respondHeaders = map[string]bool{"content-type": true, "location": true, "cache-control": true}
+
+// respond answers a synchronous webhook: it watches the run's history for
+// its first completed respond step and sends what it says, or the run's
+// end, or, when neither comes within respondBudget, the usual 202 with
+// the run id so the caller can follow it.
+func (h *Handler) respond(w http.ResponseWriter, r *http.Request, ref runtime.RunRef, def *wd.Definition, accepted map[string]any) {
+	ctx, cancel := context.WithTimeout(r.Context(), respondBudget)
+	defer cancel()
+	var after int64
+	wait := 50 * time.Millisecond
+	for {
+		events, err := h.Store.HistoryAfterOpened(ctx, ref, after, 500)
+		if err != nil {
+			if ctx.Err() != nil {
+				break
+			}
+			h.Logger.Warn("ingest: reading the run for its response", "run", ref.ID, "err", err)
+			break
+		}
+		for _, ev := range events {
+			after = ev.Seq
+			switch {
+			case ev.Type == history.StepCompleted && isRespondStep(def, ev.StepID):
+				var p history.CompletedPayload
+				if err := json.Unmarshal(ev.Payload, &p); err != nil {
+					break
+				}
+				writeResponse(w, p.Output, ref)
+				return
+			case ev.Type == history.RunCompleted:
+				reply(w, http.StatusOK, map[string]any{"run_id": ref.ID, "status": "completed"})
+				return
+			case ev.Type == history.RunFailed:
+				reply(w, http.StatusInternalServerError, map[string]any{"run_id": ref.ID, "status": "failed", "error": "the workflow failed before it answered"})
+				return
+			case ev.Type == history.RunCancelled:
+				reply(w, http.StatusConflict, map[string]any{"run_id": ref.ID, "status": "cancelled"})
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			reply(w, http.StatusAccepted, accepted)
+			return
+		case <-time.After(wait):
+		}
+		if wait < 500*time.Millisecond {
+			wait *= 2
+		}
+	}
+	reply(w, http.StatusAccepted, accepted)
+}
+
+func isRespondStep(def *wd.Definition, inst string) bool {
+	_, id := history.SplitInstance(inst)
+	st := def.Step(id)
+	return st != nil && st.Type == "respond"
+}
+
+// writeResponse sends a respond step's output: its status, the headers it
+// may set, and its body as JSON, or as text when it is a string.
+func writeResponse(w http.ResponseWriter, output any, ref runtime.RunRef) {
+	out, _ := output.(map[string]any)
+	status := http.StatusOK
+	if n, ok := out["status"].(float64); ok && n >= 200 && n < 600 {
+		status = int(n)
+	}
+	if hs, ok := out["headers"].(map[string]any); ok {
+		for k, v := range hs {
+			if lk := strings.ToLower(k); respondHeaders[lk] || strings.HasPrefix(lk, "x-") {
+				if sv, ok := v.(string); ok {
+					w.Header().Set(k, sv)
+				}
+			}
+		}
+	}
+	w.Header().Set("X-Taskiem-Run", ref.ID.String())
+	body := out["body"]
+	if text, ok := body.(string); ok {
+		if w.Header().Get("Content-Type") == "" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(text))
+		return
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.WriteHeader(status)
+	if body == nil {
+		return
+	}
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+// callback takes a call back to a run's callback step (wd-v1 callback
+// steps): the address names the run, a token derived from the run's key
+// and the step instance, and the instance. A good token delivers the
+// request as the step's signal; the run carries on from there.
+func (h *Handler) callback(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), budget)
+	defer cancel()
+	d, ok := h.receive(w, r)
+	if !ok {
+		return
+	}
+	run, err := uuid.Parse(chi.URLParam(r, "run"))
+	if err != nil {
+		replyErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	inst, err := url.PathUnescape(chi.URLParam(r, "inst"))
+	if err != nil {
+		replyErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	cr, err := h.Store.Callback(ctx, d.tenant, run)
+	if errors.Is(err, runtime.ErrNotFound) {
+		replyErr(w, http.StatusNotFound, "no run waits at this address")
+		return
+	}
+	if err != nil {
+		h.unavailable(w, r, err)
+		return
+	}
+	want, got := history.CallbackToken(cr.Key, inst), chi.URLParam(r, "token")
+	if subtle.ConstantTimeCompare([]byte(want), []byte(got)) != 1 {
+		replyErr(w, http.StatusUnauthorized, "the callback token does not match")
+		return
+	}
+	switch cr.Status {
+	case "completed", "failed", "cancelled":
+		reply(w, http.StatusGone, map[string]any{"error": "the run has ended", "run_id": run, "status": cr.Status})
+		return
+	}
+	p := parse(r, d.body)
+	payload := map[string]any{"body": p.body, "query": p.query, "received_at": history.FormatTime(time.Now())}
+	woke, err := h.Store.DeliverSignal(ctx, d.tenant, cr.Env, history.CallbackEvent, history.CallbackCorrelation(run.String(), inst), payload)
+	if err != nil {
+		h.unavailable(w, r, err)
+		return
+	}
+	// Not waiting yet (the call came before the step began) is buffered
+	// for it; already called is kept too, and ignored when the step is
+	// done, so a repeated call never answers 5xx.
+	reply(w, http.StatusAccepted, map[string]any{"run_id": run, "step": inst, "delivered": len(woke) > 0})
 }
 
 // connectorEvent handles a provider webhook declared in a connector

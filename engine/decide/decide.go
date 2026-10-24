@@ -501,6 +501,10 @@ func (d *decider) begin(sc scope, s *wd.Step, inst string, act map[string]any) s
 		return running
 	case s.Type == "form":
 		return d.formBegin(sc, s, inst, act)
+	case s.Type == "callback":
+		return d.callbackBegin(s, inst)
+	case s.Type == "respond":
+		return d.respondBegin(sc, s, inst, act)
 	case s.Type == "approval":
 		subj, err := engine.Resolve(s.Approval.Subject, act, false)
 		if err != nil {
@@ -589,6 +593,8 @@ func (d *decider) progress(sc scope, s *wd.Step, inst string, f *facts, start bo
 		return running
 	case s.Type == "form":
 		return d.formProgress(s, inst, f)
+	case s.Type == "callback":
+		return d.callbackProgress(s, inst, f)
 	case s.Type == "approval":
 		return d.approvalProgress(s, inst, f)
 	case s.Type == "branch":
@@ -1173,7 +1179,7 @@ func (d *decider) activation(sc scope, _ map[string]any) map[string]any {
 	act := map[string]any{
 		"trigger": d.trigger,
 		"steps":   steps,
-		"run":     d.runInfo,
+		"run":     d.runRoot(sc),
 		"env":     d.env,
 	}
 	if sc.iter != nil {

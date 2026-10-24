@@ -50,7 +50,7 @@ func Validate(doc []byte) []Problem {
 	if err != nil {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
-	return append(append(append(append(checkExpressions(d), checkUSSD(d)...), checkForms(d)...), checkCapabilities(d)...), checkTemplates(d)...)
+	return append(append(append(append(append(checkExpressions(d), checkUSSD(d)...), checkForms(d)...), checkCapabilities(d)...), checkTemplates(d)...), checkCallbacks(d)...)
 }
 
 type validator struct {
@@ -174,6 +174,11 @@ func (v *validator) secretsInStep(p string, st map[string]any) {
 			continue // nested scopes are checked on their own
 		case "config":
 			switch st["type"] {
+			case "respond":
+				// An answer to the caller is recorded in history and sent
+				// outside: no secret may be in it.
+				v.forbidSecrets(p+"/config", val)
+				continue
 			case "branch", "parallel", "foreach":
 				// only the control fields themselves; nested steps are checked separately
 				cfg := val.(map[string]any)

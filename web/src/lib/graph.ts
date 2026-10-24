@@ -137,6 +137,10 @@ export function newStep(type: Step["type"], id: string): Step {
       return { id, type, uses: "balance" };
     case "template":
       return { id, type, template: "send-invoice", input: {} };
+    case "callback":
+      return { id, type, config: { timeout: "24h" } };
+    case "respond":
+      return { id, type, config: { status: 200, body: { ok: true } } };
     case "http":
       return { id, type, config: { method: "GET", url: "https://example.com" } };
     case "code":

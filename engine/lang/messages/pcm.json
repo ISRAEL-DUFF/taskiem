@@ -2088,6 +2088,14 @@
       "text": "Decide wetin to do:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Wait make the other system call back",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Wait up to {duration} make the other system call back",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} with any payments account wey dey connected",
       "reviewed": false
@@ -2206,6 +2214,10 @@
     },
     "wd.parallel": {
       "text": "Do all these same time:",
+      "reviewed": false
+    },
+    "wd.respond": {
+      "text": "Answer the request wey start this one",
       "reviewed": false
     },
     "wd.schedule.daily": {

@@ -2088,6 +2088,14 @@
       "text": "Yanke abin da za a yi:",
       "reviewed": false
     },
+    "wd.callback": {
+      "text": "Jira sauran tsarin ya sake kira",
+      "reviewed": false
+    },
+    "wd.callback_for": {
+      "text": "Jira har {duration} sauran tsarin ya sake kira",
+      "reviewed": false
+    },
     "wd.capability": {
       "text": "{what} da asusun biyan kuɗi da aka haɗa",
       "reviewed": false
@@ -2206,6 +2214,10 @@
     },
     "wd.parallel": {
       "text": "Yi waɗannan a lokaci guda:",
+      "reviewed": false
+    },
+    "wd.respond": {
+      "text": "Amsa buƙatar da ta fara wannan",
       "reviewed": false
     },
     "wd.schedule.daily": {

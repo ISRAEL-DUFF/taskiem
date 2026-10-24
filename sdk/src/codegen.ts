@@ -193,9 +193,14 @@ class Gen {
       case "signal":
       case "approval":
       case "form":
+      case "respond":
         take("config");
         this.use(s.type);
         return call(s.type, cfg);
+      case "callback":
+        take("config");
+        this.use("callback");
+        return call("callback", optional(cfg));
       case "subflow":
       case "ai":
         take("config", "input");

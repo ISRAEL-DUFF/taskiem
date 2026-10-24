@@ -217,6 +217,16 @@ export function signal(config: { event: string; correlation: Expr; timeout?: Dur
   return { type: "signal", config };
 }
 
+/** A callback step: the run pauses until something calls run.callbacks.<id>, for up to timeout (default 7d). */
+export function callback(config?: { timeout?: Duration; on_timeout?: "fail" | "continue" }): StepSpec {
+  return { type: "callback", ...(config === undefined ? {} : { config }) };
+}
+
+/** A respond step: the answer the webhook caller gets (the trigger must be a webhook with respond: true). */
+export function respond(config: { status?: number; headers?: Values; body: Value }): StepSpec {
+  return { type: "respond", config };
+}
+
 export interface ApprovalConfig {
   policy?: string;
   role?: string;
