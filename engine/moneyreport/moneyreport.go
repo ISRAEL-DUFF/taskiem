@@ -107,7 +107,8 @@ type Bucket struct {
 // buckets are the stretches of [from, to): hours for one day or less,
 // Lagos days for up to 92 days, none beyond.
 func buckets(from, to time.Time) (string, []Bucket) {
-	unit, step := "", func(t time.Time) time.Time { return t }
+	var unit string
+	var step func(time.Time) time.Time
 	switch {
 	case to.Sub(from) <= 25*time.Hour:
 		unit, step = "hour", func(t time.Time) time.Time { return t.Add(time.Hour) }
@@ -169,10 +170,11 @@ func Summarise(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.T
 			return s, err
 		}
 		if b := bucketOf(s.Buckets, at); b >= 0 && status == "settled" {
-			if dir == "in" {
+			switch dir {
+			case "in":
 				s.Buckets[b].InSettled += amount
 				s.Buckets[b].Payments++
-			} else if dir == "out" {
+			case "out":
 				s.Buckets[b].OutSettled += amount
 			}
 		}
