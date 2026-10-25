@@ -1,7 +1,7 @@
 // Package invoices is the invoices platform connector (docs/invoices.md,
 // decision 0045): create, send, read and void the business's invoices to
-// its customers, list the overdue and lately paid ones, and message their
-// customers. Like the storefront connector it acts on Taskiem's own
+// its customers, list the overdue and lately paid ones, message their
+// customers, and give a customer their own account number. Like the storefront connector it acts on Taskiem's own
 // records, for the tenant of the run calling it (connector.CallerFrom),
 // never one named in its input. It has no action that marks an invoice
 // paid.
@@ -35,6 +35,7 @@ type Ops interface {
 	Cancel(ctx context.Context, tenant uuid.UUID, number, reason, by string) (invoicing.Invoice, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, number, text, subject, key string) (map[string]any, error)
 	ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]invoicing.Listed, error)
+	GiveAccount(ctx context.Context, tenant uuid.UUID, in invoicing.AccountRequest, by string) (invoicing.CustomerAccount, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -42,12 +43,13 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"create":          connector.ActionFunc(a.create),
-		"send":            connector.ActionFunc(a.send),
-		"get":             connector.ActionFunc(a.get),
-		"void":            connector.ActionFunc(a.void),
-		"notify_customer": connector.ActionFunc(a.notify),
-		"list":            connector.ActionFunc(a.list),
+		"create":           connector.ActionFunc(a.create),
+		"send":             connector.ActionFunc(a.send),
+		"get":              connector.ActionFunc(a.get),
+		"void":             connector.ActionFunc(a.void),
+		"notify_customer":  connector.ActionFunc(a.notify),
+		"list":             connector.ActionFunc(a.list),
+		"register_account": connector.ActionFunc(a.registerAccount),
 	}}
 }
 
@@ -219,6 +221,40 @@ func (a *actions) list(ctx context.Context, req connector.Request) (connector.Re
 	return connector.Response{Output: map[string]any{"invoices": list, "count": len(list)}}, nil
 }
 
+// registerAccount gives a customer a permanent account number: issued on
+// the connection, or the one the business already has for them. Issuing
+// is once per customer and connection (the engine answers the account
+// already issued), so a retry of the step answers the same account.
+func (a *actions) registerAccount(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	in := map[string]any{}
+	for k, v := range req.Input {
+		if k != "idempotency_key" {
+			in[k] = v
+		}
+	}
+	raw, _ := json.Marshal(in)
+	var ar invoicing.AccountRequest
+	if err := json.Unmarshal(raw, &ar); err != nil {
+		return connector.Response{}, fmt.Errorf("register_account: %w: %w", err, effects.ErrFatal)
+	}
+	if !ar.Issue && (ar.AccountNumber == "" || ar.Reference == "") {
+		return connector.Response{}, fmt.Errorf("give the account_number and reference the business has for the customer, or issue true to issue one: %w", effects.ErrFatal)
+	}
+	x, err := a.ops.GiveAccount(ctx, c.Tenant, ar, by(c))
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	out := map[string]any{"account_number": x.AccountNumber, "reference": x.Reference, "connection": x.Channel, "customer_name": x.Customer.Name}
+	if x.BankName != "" {
+		out["bank_name"] = x.BankName
+	}
+	return connector.Response{Output: out}, nil
+}
+
 // intIn reads a whole number from a step's input (JSON numbers arrive as
 // float64).
 func intIn(v any) (int, bool) {
@@ -239,7 +275,7 @@ func classify(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, invoicing.ErrNotFound), errors.Is(err, invoicing.ErrInvalid), errors.Is(err, invoicing.ErrState),
+	case errors.Is(err, invoicing.ErrNotFound), errors.Is(err, invoicing.ErrInvalid), errors.Is(err, invoicing.ErrState), errors.Is(err, invoicing.ErrNoRail),
 		errors.Is(err, sender.ErrInvalid), errors.Is(err, sender.ErrRecipientLimit):
 		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
@@ -317,4 +353,13 @@ func (l *Late) NotifyCustomer(ctx context.Context, t uuid.UUID, number, text, su
 		return nil, err
 	}
 	return o.NotifyCustomer(ctx, t, number, text, subject, key)
+}
+
+// GiveAccount implements Ops.
+func (l *Late) GiveAccount(ctx context.Context, t uuid.UUID, in invoicing.AccountRequest, by string) (invoicing.CustomerAccount, error) {
+	o, err := l.get()
+	if err != nil {
+		return invoicing.CustomerAccount{}, err
+	}
+	return o.GiveAccount(ctx, t, in, by)
 }

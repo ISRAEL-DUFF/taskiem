@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -78,6 +79,11 @@ type connectionInfo struct {
 	// MoneyLogWebhooks are the addresses to set in a rail's dashboard so
 	// the money log hears this prod connection's events (decision 0045).
 	MoneyLogWebhooks []moneyWebhook `json:"money_log_webhooks,omitempty" db:"-"`
+	// Notes are what a prod connection still needs from its service, in
+	// plain words: Paystack's Pay with Transfer turned on by its support,
+	// until a transfer has been collected (the readiness check says the
+	// same for a workflow that collects by transfer).
+	Notes []string `json:"notes,omitempty" db:"-"`
 }
 
 func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +98,18 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 		}
 		if out, err = pgx.CollectRows(rows, pgx.RowToStructByPos[connectionInfo]); err != nil {
 			return err
+		}
+		for i, c := range out {
+			if c.Environment != "prod" || c.Status != "active" || c.Connector != "paystack" {
+				continue
+			}
+			seen, err := transfersSeen(r.Context(), tx, c.Connector, c.Name)
+			if err != nil {
+				return err
+			}
+			if !seen {
+				out[i].Notes = []string{tr(lang.EN, "ready.paystack_transfer")}
+			}
 		}
 		subs, err := remote.List(r.Context(), tx, `$1 = '' OR environment = $1`, only)
 		summarise(out, subs)

@@ -376,6 +376,10 @@
       "text": "Ẹ so {service} pọ̀.",
       "reviewed": false
     },
+    "ready.paystack_transfer": {
+      "text": "Paystack gbọ́dọ̀ tan Pay with Transfer fún iṣẹ́ yìí: béèrè lọ́wọ́ àwọn olùrànlọ́wọ́ Paystack. Títí di ìgbà náà, àwọn oníbàárà kò lè san owó nípa ìgbéranṣẹ́ sí àwọn nọ́mbà àkọ́ọ́lẹ̀ tí ó ṣí.",
+      "reviewed": false
+    },
     "ready.role": {
       "text": "Kò sí ẹni tó ní ipa {role} síbẹ̀, nítorí náà a ó béèrè lọ́wọ́ àwọn olùní; ẹ fi fún ẹnìkan bí ó bá yẹ kí wọ́n pinnu.",
       "reviewed": false
