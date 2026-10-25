@@ -416,3 +416,94 @@ actions:
           description: Guardians reached by channel (whatsapp, telegram, sms)
           additionalProperties: { type: integer }
         nobody:           { type: boolean, description: No guardian could be reached }
+  clearance:
+    title: A student's clearance
+    description: "Where a student stands for a term (the current one by default) by the clearance rule: cleared when the term's invoices are paid in full, an approved payment plan is in good standing, or an override is in force; partly_paid when some money was counted but a balance is left (never cleared); not_paid otherwise. Give a student (id or admission number) for one, or a class for every student of it, with the balances. Computed as it is read; nothing is stored."
+    class: read
+    input:
+      type: object
+      properties:
+        student: { type: string, description: "The student's id or admission number" }
+        class:   { type: string, description: "A class's id or label, such as JSS 1 A: every student of it" }
+        term:    { type: string, description: "The term's id; the current term when empty" }
+    output:
+      type: object
+      properties:
+        term_id:          { type: string }
+        term:             { type: string }
+        student_id:       { type: string }
+        admission_number: { type: string }
+        name:             { type: string }
+        class:            { type: string }
+        class_id:         { type: string }
+        student_status:   { type: string, enum: [active, withdrawn, graduated] }
+        status:           { type: string, enum: [cleared, partly_paid, not_paid] }
+        reason:           { type: string, enum: [paid, plan, override, no_fees, balance, no_invoice] }
+        invoiced:         { type: boolean }
+        total_kobo:       { type: integer }
+        paid_kobo:        { type: integer }
+        balance_kobo:     { type: integer }
+        plan:             { type: string, enum: [good, arrears, settled] }
+        override_ends_on: { type: string }
+        count:            { type: integer, description: "With a class: how many students" }
+        cleared:          { type: integer }
+        partly_paid:      { type: integer }
+        not_paid:         { type: integer }
+        students:
+          type: array
+          description: "With a class: each student"
+          items:
+            type: object
+            properties:
+              student_id:       { type: string }
+              admission_number: { type: string }
+              name:             { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              student_status:   { type: string }
+              status:           { type: string, enum: [cleared, partly_paid, not_paid] }
+              reason:           { type: string }
+              invoiced:         { type: boolean }
+              total_kobo:       { type: integer }
+              paid_kobo:        { type: integer }
+              balance_kobo:     { type: integer }
+              plan:             { type: string }
+              override_ends_on: { type: string }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.students.*.name, category: name }
+  clearance_list:
+    title: Clearance lists for teachers
+    description: "The clearance list of each class of a term (the current one by default; one class when given), for a class teacher or an exam: how many are cleared, partly paid and not paid, who is not cleared (name and admission number), and a message ready to send (text), with no amounts at all. Send each class's text with notify@1 message."
+    class: read
+    input:
+      type: object
+      properties:
+        class: { type: string, description: "One class, its id or label; every class of the term when empty" }
+        term:  { type: string, description: "The term's id; the current term when empty" }
+    output:
+      type: object
+      properties:
+        term_id:     { type: string }
+        term:        { type: string }
+        count:       { type: integer, description: How many classes }
+        students:    { type: integer }
+        cleared:     { type: integer }
+        partly_paid: { type: integer }
+        not_paid:    { type: integer }
+        classes:
+          type: array
+          items:
+            type: object
+            properties:
+              class_id:    { type: string }
+              class:       { type: string }
+              students:    { type: integer }
+              cleared:     { type: integer }
+              partly_paid: { type: integer }
+              not_paid:    { type: integer }
+              not_cleared: { type: array, items: { type: string }, description: "Each student not cleared: name (admission number): partly paid or not paid" }
+              text:        { type: string, description: "The list in words, up to 1,400 characters, no amounts" }
+    pii:
+      - { field: output.classes.*.not_cleared, category: name }
+      - { field: output.classes.*.text, category: name }

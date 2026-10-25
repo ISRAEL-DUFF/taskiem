@@ -1,0 +1,152 @@
+{
+  "id": "school-gate-list",
+  "title": "Send the clearance lists the day before resumption",
+  "summary": "The day before the date you set, send the head teacher or exam officer each class's clearance list: who is cleared and who should see the bursar, with no figures, one message per class; then tell the bursar.",
+  "description": "On the day and month you choose (the day before resumption or an exam), at the time you choose, reads each class's clearance list for the current term as the gate will see it: how many are cleared, and who is part-settled or owing by name and admission number, with no figures at all. Each class's list goes as one message to the number you give (the head teacher, the exam officer, or whoever hands the lists to the class teachers), on the chat they asked for the school's updates on, otherwise by SMS. Then the bursar is told how many classes went out and how many students are cleared. The lists are read as the messages go, so a transfer that lands the moment after this run is still seen at the gate: the gate screen reads clearance live. Run it by hand from the workflow's page for an earlier list. It runs once a year on that date until you change or turn it off.",
+  "category": "collections",
+  "tags": [
+    "schools",
+    "collections"
+  ],
+  "keywords": [
+    "school",
+    "clearance",
+    "gate",
+    "resumption",
+    "cleared",
+    "class teacher",
+    "exam list"
+  ],
+  "requires": [
+    "school clearance",
+    "clearance",
+    "gate"
+  ],
+  "connectors": [
+    "schools@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "send_day",
+      "type": "integer",
+      "title": "Day of the month",
+      "description": "The day the lists go out: the day before resumption or the exam.",
+      "required": true,
+      "minimum": 1,
+      "maximum": 31,
+      "default": 10,
+      "example": 10
+    },
+    {
+      "name": "send_month",
+      "type": "integer",
+      "title": "Month",
+      "description": "The month, as a number (1 for January, 9 for September).",
+      "required": true,
+      "minimum": 1,
+      "maximum": 12,
+      "default": 1,
+      "example": 9
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the lists go out, Lagos time.",
+      "required": true,
+      "default": "16:00",
+      "example": "16:00"
+    },
+    {
+      "name": "phone",
+      "type": "string",
+      "title": "Number to send the lists to",
+      "description": "The head teacher's or exam officer's mobile (0803 123 4567): every class's list goes there, one message per class, for them to pass to each class teacher.",
+      "required": true,
+      "example": "0803 123 4567",
+      "max_length": 40
+    },
+    {
+      "name": "class",
+      "type": "string",
+      "title": "Class",
+      "description": "Only this class, as written on the Classes page (JSS 1 A). Leave empty for every class.",
+      "required": false,
+      "default": "",
+      "example": "JSS 1 A",
+      "max_length": 80
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_schoolGateList",
+    "version": 1,
+    "name": "School clearance lists",
+    "description": "Sends each class's clearance list, with no amounts, the day before resumption.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} {{send_day}} {{send_month}} *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "lists",
+        "type": "connector",
+        "name": "Read each class's clearance list",
+        "connector": "schools@1",
+        "action": "clearance_list",
+        "input": {
+          "class": "{{class}}"
+        }
+      },
+      {
+        "id": "send_each",
+        "type": "foreach",
+        "name": "For each class",
+        "needs": [
+          "lists"
+        ],
+        "config": {
+          "items": "=has(steps.lists.output.classes) ? steps.lists.output.classes : []",
+          "max_concurrency": 2,
+          "max_items": 200,
+          "steps": [
+            {
+              "id": "send",
+              "type": "connector",
+              "name": "Send the class's list",
+              "connector": "notify@1",
+              "action": "message",
+              "input": {
+                "phone": "{{phone}}",
+                "title": "='Clearance list: ' + item.class",
+                "about": "='clearance list, ' + item.class",
+                "message": "=item.text"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_bursar",
+        "type": "connector",
+        "name": "Tell the bursar",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "send_each"
+        ],
+        "input": {
+          "title": "School clearance lists",
+          "message": "='Clearance lists for ' + steps.lists.output.term + ' sent for ' + string(steps.lists.output.count) + ' class(es): ' + string(steps.lists.output.cleared) + ' of ' + string(steps.lists.output.students) + ' students cleared, ' + string(steps.lists.output.partly_paid) + ' partly paid, ' + string(steps.lists.output.not_paid) + ' not paid. Schools > Clearance shows each.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}
