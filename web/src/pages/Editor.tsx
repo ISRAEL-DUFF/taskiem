@@ -10,6 +10,7 @@ import { StepNode, TRIGGER_NODE, TriggerNode, triggerCard, type StepFlowNode, ty
 import { StepPanel } from "../canvas/StepPanel";
 import { FormTriggerEditor, startFormTrigger } from "../canvas/FormEditor";
 import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
+import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
 import { connect, disconnect, freshId, newStep, removeStep, renameStep, toGraph, type Layout } from "../lib/graph";
 import { merge } from "../lib/schema";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
@@ -710,21 +711,11 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
       {t.type === "webhook" && !advanced && <p className="hint">Another system starts it at its web address (under Web addresses). Turn on Advanced in Settings to change how.</p>}
       {t.type === "webhook" && advanced && (
         <>
-          <div className="row">
-            <Field label="Path">
-              <input className="mono" value={String(cfg.path ?? "")} onChange={(e) => setCfg({ path: e.target.value })} />
-            </Field>
-            <Field label="Authentication" hint={`Key: the environment secret webhook_${def.id}`}>
-              <select value={String(cfg.auth ?? "hmac")} onChange={(e) => setCfg({ auth: e.target.value })}>
-                <option value="hmac">HMAC-SHA256 signature</option>
-                <option value="bearer">Bearer token</option>
-                <option value="none">None</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Deduplicate on" hint="Expression; deliveries with the same value start one run. Default: the body's hash.">
+          <WebhookTriggerSettings wdId={def.id} config={cfg} onChange={setCfg} />
+          <Field label="Deduplicate on" hint="Expression; deliveries with the same value start one run. Default: the body's hash (for a GET, its query).">
             <input className="mono" value={String(cfg.dedup ?? "")} placeholder="=trigger.body.id" onChange={(e) => setCfg({ dedup: e.target.value })} />
           </Field>
+          <WebhookListener workflow={workflow} config={cfg} onUseSchema={(schema) => onChange({ ...def, inputs: { ...(def.inputs ?? {}), schema } } as WorkflowDefinition)} />
         </>
       )}
       {t.type === "schedule" && !advanced && <SchedulePicker cron={String(cfg.cron ?? "")} onChange={(cron) => setCfg({ cron, timezone: cfg.timezone ?? "Africa/Lagos" })} />}
@@ -778,12 +769,12 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
         <>
           <h2>Inputs schema</h2>
           <p className="hint">JSON Schema for trigger.body; fields marked "x-pii" are encrypted per data subject.</p>
-          <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as WorkflowDefinition)} rows={8} />
+          <JsonInput value={def.inputs?.schema} onChange={(v) => onChange({ ...def, inputs: v === undefined ? undefined : { schema: v as object } } as WorkflowDefinition)} rows={8} label="Inputs schema" />
           <h2>What it gives back</h2>
           <p className="hint">
             Outputs make this workflow usable as a step of your other workflows once it is published: a list of {"{name, type, title, description, value}"}, each value an expression over this workflow's steps (steps.&lt;id&gt;.output). It needs an inputs schema too.
           </p>
-          <JsonInput value={def.outputs} onChange={(v) => onChange({ ...def, outputs: v === undefined ? undefined : (v as WorkflowDefinition["outputs"]) } as WorkflowDefinition)} rows={6} />
+          <JsonInput value={def.outputs} onChange={(v) => onChange({ ...def, outputs: v === undefined ? undefined : (v as WorkflowDefinition["outputs"]) } as WorkflowDefinition)} rows={6} label="What it gives back" />
         </>
       )}
       {advanced && (
@@ -839,7 +830,7 @@ function Endpoints({ workflow }: { workflow: string }) {
       {made && (
         <div className="card" role="status">
           <p>
-            The new {made.auth === "bearer" ? "token" : "signing secret"} for {made.environment}. Copy it now and give it to the sender: it is not shown again.
+            The new {{ bearer: "token", basic: "user name and password (user:password)", jwt: "key to sign tokens with (HS256)" }[made.auth] ?? "signing secret"} for {made.environment}. Copy it now and give it to the sender: it is not shown again.
           </p>
           <pre className="secret-once">{made.secret}</pre>
           <p>
