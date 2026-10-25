@@ -40,7 +40,11 @@ The choices are per business (a person in two businesses chooses for each), kept
 
 ## The Overview
 
-**Money > Overview** in the web app (`invoice.read`) shows the period you pick (today, yesterday, this week from Monday, this month, last month, or dates you choose): the totals (money in and out, settled and pending, fees and the effective fee rate, invoices paid, leaks opened, open now and recovered), each channel's money, and the three downloads below for the same period; the invoices download names customers only for people with `pii.reveal` who tick **with customers' names**. It reads `GET /v1/money/summary` with `?from=2026-10-01&to=2026-10-31` (Lagos days, both included; at most 400 days) or `?month=2026-10`, and today with neither.
+**Money > Overview** in the web app (`invoice.read`) shows the period you pick (Today, This week from Monday and This month are one press away; yesterday, last month and dates you choose are under **Other**): money in, money out and what was kept, with bars of money in and out for each day (each hour for a day) that show a day's figures when pressed, and a table of them under **See the figures**; where the money in came from, each account's share; what to look at (payments not matched, the leaks, the fees and the effective fee rate, invoices paid, money collected for others); each channel's money; and the three downloads below for the same period. The invoices download names customers only for people with `pii.reveal` who tick **with customers' names**. It reads `GET /v1/money/summary` with `?from=2026-10-01&to=2026-10-31` (Lagos days, both included; at most 400 days) or `?month=2026-10`, and today with neither.
+
+**Home** shows the same summary for today on its money card: money in, how many payments, a line of the money in through the day (from 6 am, or the first payment if earlier, to now), money out, and the payments waiting to be matched (`GET /v1/money/unmatched`).
+
+**The period in stretches.** The summary's `buckets` split the period for the charts: an hour each for a period of one day (`unit: "hour"`, 24 of them), a Lagos day each for up to 92 days (`unit: "day"`), and none for longer (`unit: ""`). Each has its settled money `in_settled_kobo` and `out_settled_kobo` and the number of settled `payments` in. A movement counts in the stretch of its first entry, as it counts in the period, so the stretches add up to the period's settled totals.
 
 The **effective fee rate** is the fees taken over the settled money in they were taken on, so channels that report no fee do not lower it.
 

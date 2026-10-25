@@ -85,6 +85,32 @@ func TestSummaryAndExports(t *testing.T) {
 		s.InvoicesPaid != 1 || s.InvoicesPaidKobo != 25000000 || len(s.Channels) != 3 || s.Channels[0].Channel != "paystack/main" {
 		t.Fatalf("summary %+v", s)
 	}
+	// The day in hours, the week in days, and none past 92 days; the
+	// stretches add up to the period.
+	sums := func(s moneyreport.Summary) (in, out int64, payments int) {
+		for _, b := range s.Buckets {
+			in, out, payments = in+b.InSettled, out+b.OutSettled, payments+b.Payments
+		}
+		return
+	}
+	if in, out, n := sums(s); s.Unit != "hour" || len(s.Buckets) != 24 || !s.Buckets[0].From.Equal(from) || in != s.InSettled || out != s.OutSettled || n != 2 {
+		t.Fatalf("day in hours: unit %q, %d buckets, in %d, out %d, payments %d", s.Unit, len(s.Buckets), in, out, n)
+	}
+	var week, long moneyreport.Summary
+	in(func(tx pgx.Tx) error {
+		var err error
+		if week, err = moneyreport.Summarise(ctx, tx, e.Tenant, from.AddDate(0, 0, -6), to); err != nil {
+			return err
+		}
+		long, err = moneyreport.Summarise(ctx, tx, e.Tenant, from.AddDate(0, 0, -119), to)
+		return err
+	})
+	if in, out, n := sums(week); week.Unit != "day" || len(week.Buckets) != 7 || !week.Buckets[6].From.Equal(from) || week.Buckets[6].InSettled != s.InSettled || in != s.InSettled || out != s.OutSettled || n != 2 {
+		t.Fatalf("week in days: unit %q, %d buckets, in %d, out %d, payments %d", week.Unit, len(week.Buckets), in, out, n)
+	}
+	if long.Unit != "" || len(long.Buckets) != 0 || long.InSettled != s.InSettled {
+		t.Fatalf("120 days: unit %q, %d buckets", long.Unit, len(long.Buckets))
+	}
 
 	// The log: one line per movement, its latest status.
 	var buf bytes.Buffer

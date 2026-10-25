@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, get, type Approval, type RunSummary, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
@@ -10,6 +11,11 @@ import { formatPrice } from "../lib/storefront";
 import { greeting, shortWhen } from "../lib/time";
 import { ErrorBox, Skeleton, useCountUp, useLiveRefresh, useLoad } from "../ui";
 import type { FormRequest } from "./FormFill";
+import { Decide } from "./Approvals";
+import { MoneyCard } from "./MoneyParts";
+import { channelWords, invoiceAccess, naira, UNMATCHED_PATH, type UnmatchedMoney } from "../lib/invoices";
+import { SUMMARY_PATH, type MoneySummary } from "../lib/money";
+import { subjectWords } from "../lib/approvals";
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const none = <T,>(): Promise<T | null> => Promise.resolve(null);
@@ -33,15 +39,26 @@ export function Home() {
   const approvals = useLoad(() => (decides ? get<{ approvals: Approval[] }>("/v1/approvals") : none<{ approvals: Approval[] }>()), [decides]);
   const toFill = useLoad(() => get<{ requests: FormRequest[] }>("/v1/form-requests").catch(() => ({ requests: [] })), []);
   const workflows = useLoad(() => (can("workflow.read") ? get<{ workflows: WorkflowSummary[] }>(`/v1/workflows?tz=${encodeURIComponent(tz)}`) : none<{ workflows: WorkflowSummary[] }>()), []);
+  // Money in today from the money log, for people who may see the business's money.
+  const moneyOK = invoiceAccess(can).see;
+  const day = useLoad(() => (moneyOK ? get<MoneySummary>(SUMMARY_PATH) : none<MoneySummary>()), [moneyOK]);
+  const unmatched = useLoad(
+    () => (moneyOK ? get<{ payments: UnmatchedMoney[] | null }>(UNMATCHED_PATH).catch(() => ({ payments: [] })) : none<{ payments: UnmatchedMoney[] | null }>()),
+    [moneyOK],
+  );
   useLiveRefresh(runs.reload);
   useLiveRefresh(orders.reload);
+  useLiveRefresh(day.reload);
+  const [deciding, setDeciding] = useState<Approval | null>(null);
 
   const first = (me?.user?.name || "").split(" ")[0];
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const money = orders.data ? moneyToday(orders.data.orders) : null;
   const counts = orders.data ? ordersToday(orders.data.orders) : null;
   const waitingOrders = orders.data?.orders.filter((o) => o.status === "received" || o.status === "price_changed" || o.status === "refund_due") ?? [];
-  const needs = (approvals.data?.approvals.length ?? 0) + (toFill.data?.requests.length ?? 0) + waitingOrders.length;
+  const toMatch = unmatched.data?.payments ?? [];
+  const needs = (approvals.data?.approvals.length ?? 0) + (toFill.data?.requests.length ?? 0) + waitingOrders.length + toMatch.length;
+  const paymentsToday = day.data?.buckets?.reduce((n, b) => n + b.payments, 0) ?? 0;
   const setup = onboarding && onboarding.self_serve && !onboarding.complete && !onboarding.dismissed ? onboarding : null;
   const live = workflows.data?.workflows.filter((w) => w.active_version) ?? [];
 
@@ -58,44 +75,49 @@ export function Home() {
         </p>
       </div>
 
-      <section className="stats" aria-label="At a glance">
-        {money && (
-          <Link className="stat" to="/storefront/orders">
-            <span className="stat-label">Money in today</span>
-            <span className="stat-value">
-              <Count value={money.kobo} money />
-            </span>
-            <span className="stat-hint">{money.count === 1 ? "1 payment" : `${money.count} payments`}</span>
-          </Link>
+      <div className={day.data || money ? "home-top" : undefined}>
+        {day.data ? (
+          <MoneyCard inKobo={day.data.in_settled_kobo} payments={paymentsToday} outKobo={day.data.out_settled_kobo} buckets={day.data.unit === "hour" ? day.data.buckets : undefined} toMatch={unmatched.data ? toMatch.length : undefined} />
+        ) : (
+          money && <MoneyCard inKobo={money.kobo} payments={money.count} to="/storefront/orders" />
         )}
-        {counts && (
-          <Link className="stat" to="/storefront/orders">
-            <span className="stat-label">Orders today</span>
-            <span className="stat-value">
-              <Count value={counts.count} />
-            </span>
-            <span className="stat-hint">{counts.waiting > 0 ? `${counts.waiting} waiting for you` : "None waiting for you"}</span>
-          </Link>
-        )}
-        {week.data && (
-          <Link className="stat" to="/runs">
-            <span className="stat-label">Workflows ran this week</span>
-            <span className="stat-value">
-              <Count value={week.data.runs.total} />
-            </span>
-            <span className="stat-hint">{week.data.runs.failed > 0 ? `${week.data.runs.failed} did not finish` : week.data.runs.total > 0 ? "All went well" : "Nothing yet"}</span>
-          </Link>
-        )}
-        {workflows.data && (
-          <Link className="stat" to="/workflows">
-            <span className="stat-label">Working for you</span>
-            <span className="stat-value">
-              <Count value={live.length} />
-            </span>
-            <span className="stat-hint">{live.length === 1 ? "workflow is live" : "workflows are live"}</span>
-          </Link>
-        )}
-      </section>
+        <section className="stats" aria-label="At a glance">
+          {counts && (
+            <Link className="stat" to="/storefront/orders">
+              <span className="stat-label">Orders today</span>
+              <span className="stat-value">
+                <Count value={counts.count} />
+              </span>
+              <span className={counts.waiting > 0 ? "stat-hint strong" : "stat-hint"}>{counts.waiting > 0 ? `${counts.waiting} waiting for you` : "None waiting for you"}</span>
+            </Link>
+          )}
+          {week.data && (
+            <Link className="stat" to="/runs">
+              <span className="stat-label">Jobs done this week</span>
+              <span className="stat-value">
+                <Count value={week.data.runs.total} />
+              </span>
+              {week.data.runs.failed > 0 ? (
+                <span className="stat-hint warn">
+                  <Icon name="alerts" />
+                  {week.data.runs.failed === 1 ? "1 needs a look" : `${week.data.runs.failed} need a look`}
+                </span>
+              ) : (
+                <span className="stat-hint">{week.data.runs.total > 0 ? "All went well" : "Nothing yet"}</span>
+              )}
+            </Link>
+          )}
+          {workflows.data && !counts && (
+            <Link className="stat" to="/workflows">
+              <span className="stat-label">Working for you</span>
+              <span className="stat-value">
+                <Count value={live.length} />
+              </span>
+              <span className="stat-hint">{live.length === 1 ? "workflow is live" : "workflows are live"}</span>
+            </Link>
+          )}
+        </section>
+      </div>
 
       <div className="home-grid">
         <div className="home-col">
@@ -103,23 +125,29 @@ export function Home() {
             <div className="panel-head">
               <h2 id="needs">Needs you</h2>
               {needs > 0 && <span className="pill-count">{needs}</span>}
+              <span className="grow" />
+              {(approvals.data?.approvals.length ?? 0) > 0 && <Link to="/approvals">See all</Link>}
             </div>
             <ErrorBox error={approvals.error} />
             {needs === 0 && <p className="panel-body hint">Nothing needs you right now.</p>}
             {approvals.data?.approvals.slice(0, 5).map((a) => (
-              <Link key={`${a.run_id}/${a.step_id}`} className="list-row" to="/approvals">
+              // The row opens Approvals; Approve decides here, in a confirm sheet.
+              <div key={`${a.run_id}/${a.step_id}`} className="list-row has-action">
                 <span className="list-icon">
                   <Icon name="approvals" />
                 </span>
-                <span className="grow">
-                  <span className="title">{a.step_name}</span>
+                <Link className="grow row-link" to="/approvals">
+                  <span className="title">{approvalTitle(a.step_name, a.subject)}</span>
                   <span className="sub">
                     {a.workflow} · asked {shortWhen(new Date(a.requested_at))}
                   </span>
-                </span>
-                <span className="button">Review</span>
-              </Link>
+                </Link>
+                <button type="button" className="primary" aria-label={`Approve ${a.step_name}`} onClick={() => setDeciding(a)}>
+                  Approve
+                </button>
+              </div>
             ))}
+            {deciding && <Decide a={deciding} decision="approved" showSubject onClose={() => setDeciding(null)} onDone={() => (setDeciding(null), approvals.reload())} />}
             {toFill.data?.requests.slice(0, 3).map((f) => (
               <Link key={f.id} className="list-row" to={`/forms/requests/${f.id}`}>
                 <span className="list-icon">
@@ -132,9 +160,23 @@ export function Home() {
                 <span className="button">Fill in</span>
               </Link>
             ))}
+            {toMatch.slice(0, 3).map((p) => (
+              <Link key={p.entry_id} className="list-row" to="/invoices/match">
+                <span className="list-icon warn">
+                  <Icon name="money" />
+                </span>
+                <span className="grow">
+                  <span className="title">Match {p.amount_kobo === null ? "a payment" : naira(p.left_kobo ?? p.amount_kobo)}</span>
+                  <span className="sub">
+                    {channelWords(p.channel)} · {shortWhen(new Date(p.received_at))} · no invoice found yet
+                  </span>
+                </span>
+                <Icon name="chevron" className="go" />
+              </Link>
+            ))}
             {waitingOrders.slice(0, 3).map((o) => (
               <Link key={o.id} className="list-row" to={`/storefront/orders/${o.reference}`}>
-                <span className="list-icon">
+                <span className={o.status === "refund_due" ? "list-icon warn" : "list-icon"}>
                   <Icon name={o.status === "refund_due" ? "refund" : "orders"} />
                 </span>
                 <span className="grow">
@@ -245,4 +287,10 @@ export function Home() {
 function Count({ value, money }: { value: number; money?: boolean }) {
   const n = useCountUp(value);
   return <>{money ? formatPrice(n) : n}</>;
+}
+
+/** A Needs you row's title: the step's name, with the amount when the approval names one. */
+function approvalTitle(step: string, subject: unknown): string {
+  const w = subjectWords(subject);
+  return w.amount ? `${step} ${w.amount}` : step;
 }

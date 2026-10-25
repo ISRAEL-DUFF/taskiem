@@ -192,13 +192,26 @@ export function useScrollableTables(box: RefObject<HTMLElement | null>) {
   }, [box]);
 }
 
-/** A page's title, a one-line description of what it is for, and its main actions. */
+/** A page's title, a one-line description of what it is for, and its main
+ * actions. On phones the description folds behind an "About this page"
+ * button so the page opens on what it shows. */
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  const [about, setAbout] = useState(false);
+  const id = useId();
   return (
     <div className="page-header">
       <div className="page-heading">
         <h1>{title}</h1>
-        {description && <p className="page-desc">{description}</p>}
+        {description && (
+          <>
+            <button type="button" className="about-page" aria-label="About this page" aria-expanded={about} aria-controls={id} onClick={() => setAbout(!about)}>
+              <Icon name="info" />
+            </button>
+            <p className={about ? "page-desc open" : "page-desc"} id={id}>
+              {description}
+            </p>
+          </>
+        )}
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </div>

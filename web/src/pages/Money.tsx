@@ -3,6 +3,8 @@ import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, useAction, useLiveRefresh, useLoad } from "../ui";
+import { Icon } from "../icons";
+import { MoneyBars, MoneySources } from "./MoneyParts";
 import { UNMATCHED_PATH, channelWords, dateLabel, naira, newRequestKey, plainMessage, type UnmatchedMoney } from "../lib/invoices";
 import {
   CLOSE_CHOICES,
@@ -85,6 +87,9 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
   }
 }
 
+/** The periods one press away; the rest are under "Other". */
+const QUICK_PERIODS = PERIOD_CHOICES.filter((c) => c.value === "today" || c.value === "week" || c.value === "month");
+
 /** Overview, Leaks, Upload statement, Cash and expenses, Fees. */
 function MoneyTabs() {
   return (
@@ -143,6 +148,7 @@ export function MoneyOverview() {
   const problem = choice === "custom" ? periodProblem(p) : null;
   const key = problem ? "" : summaryPath(p);
   const sum = useLoad(() => (key ? get<MoneySummary>(key) : Promise.resolve(undefined)), [key]);
+  const unmatched = useLoad(() => get<{ payments: UnmatchedMoney[] | null }>(UNMATCHED_PATH).catch(() => ({ payments: [] })), []);
   useLiveRefresh(sum.reload);
   const [reveal, setReveal] = useState(false);
   const fromId = useId();
@@ -157,15 +163,24 @@ export function MoneyOverview() {
   const s = sum.data && !problem ? sum.data : undefined;
   const channels = s?.channels ?? [];
   const rate = feeRatePercent(s?.fee_rate_bp);
+  const waiting = unmatched.data?.payments ?? [];
   return (
     <>
       <PageHeader title="Money" description="Your business's money for a period: what came in and went out, settled and pending, the fees taken, invoices paid and leaks." />
       <MoneyTabs />
-      <div className="filters" role="group" aria-label="Period">
+      <div className="period-bar">
+        <div className="segmented" role="group" aria-label="Period">
+          {QUICK_PERIODS.map((c) => (
+            <button key={c.value} type="button" aria-pressed={choice === c.value} onClick={() => choose(c.value)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
         <label>
-          Period{" "}
-          <select value={choice} onChange={(e) => choose(e.target.value as PeriodChoice)}>
-            {PERIOD_CHOICES.map((c) => (
+          <span className="sr-only">Other period</span>
+          <select aria-label="Other period" value={QUICK_PERIODS.some((c) => c.value === choice) ? "" : choice} onChange={(e) => e.target.value && choose(e.target.value as PeriodChoice)}>
+            <option value="">Other…</option>
+            {PERIOD_CHOICES.filter((c) => !QUICK_PERIODS.some((q) => q.value === c.value)).map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
               </option>
@@ -180,9 +195,6 @@ export function MoneyOverview() {
             <input id={toId} type="date" value={custom.to} min={custom.from || undefined} onChange={(e) => setDate({ to: e.target.value })} />
           </>
         )}
-        <button type="button" onClick={sum.reload} disabled={!!problem}>
-          Refresh
-        </button>
       </div>
       {problem ? (
         <div className="error" role="alert">
@@ -197,50 +209,96 @@ export function MoneyOverview() {
       {!problem && !s && !sum.error && <Skeleton rows={3} label="Loading the period's money…" />}
       {s && (
         <>
-          <section className="stats" aria-label="The period's money" data-testid="money-totals">
-            <div className="stat" data-testid="money-in">
-              <span className="stat-label">Money in</span>
-              <span className="stat-value">{naira(s.in_settled_kobo)}</span>
-              <span className="stat-hint">{s.in_pending_kobo ? `Settled. ${naira(s.in_pending_kobo)} more pending.` : "Settled."}</span>
-            </div>
-            <div className="stat" data-testid="money-out">
-              <span className="stat-label">Money out</span>
-              <span className="stat-value">{naira(s.out_settled_kobo)}</span>
-              <span className="stat-hint">{s.out_pending_kobo ? `Settled. ${naira(s.out_pending_kobo)} more pending.` : "Settled."}</span>
-            </div>
-            <div className="stat" data-testid="money-fees">
-              <span className="stat-label">Fees</span>
-              <span className="stat-value">{naira(s.fees_kobo)}</span>
-              {rate && <span className="stat-hint">{rate} of the money they were taken on</span>}
-            </div>
-            <div className="stat" data-testid="invoices-paid">
-              <span className="stat-label">Invoices paid</span>
-              <span className="stat-value">{naira(s.invoices_paid_kobo)}</span>
-              <span className="stat-hint">{counted(s.invoices_paid, "invoice")}</span>
-            </div>
+          <section className="money-panel" aria-label="The period's money" data-testid="money-totals">
+            <dl className="money-sum">
+              <div data-testid="money-in">
+                <dt>
+                  <span className="swatch in" aria-hidden="true" />
+                  Money in
+                </dt>
+                <dd>
+                  {naira(s.in_settled_kobo)}
+                  {!!s.in_pending_kobo && <span className="pending">{naira(s.in_pending_kobo)} more pending</span>}
+                </dd>
+              </div>
+              <div data-testid="money-out">
+                <dt>
+                  <span className="swatch out" aria-hidden="true" />
+                  Money out
+                </dt>
+                <dd>
+                  {naira(s.out_settled_kobo)}
+                  {!!s.out_pending_kobo && <span className="pending">{naira(s.out_pending_kobo)} more pending</span>}
+                </dd>
+              </div>
+              <div className="kept">
+                <dt>Kept</dt>
+                <dd>{naira(s.in_settled_kobo - s.out_settled_kobo)}</dd>
+              </div>
+            </dl>
+            {s.unit && s.buckets && s.buckets.length > 1 && <MoneyBars key={key} buckets={s.buckets} unit={s.unit} caption={`Money in and out, ${periodWords(p)}`} />}
+          </section>
+          <MoneySources channels={channels} total={s.in_settled_kobo} />
+          <section className="money-panel to-look" aria-labelledby="look-h" data-testid="overview-leaks">
+            <h2 id="look-h">To look at</h2>
+            {waiting.length > 0 && (
+              <Link className="list-row" to="/invoices/match">
+                <span className="list-icon warn">
+                  <Icon name="money" />
+                </span>
+                <span className="grow">
+                  <span className="title">{waiting.length === 1 ? "1 payment not matched" : `${waiting.length} payments not matched`}</span>
+                  <span className="sub">{naira(waiting.reduce((n, w) => n + (w.left_kobo ?? w.amount_kobo ?? 0), 0))} with no invoice yet</span>
+                </span>
+                <span className="button">Match</span>
+              </Link>
+            )}
+            <Link className="list-row" to="/money/leaks">
+              <span className={s.leaks_open > 0 ? "list-icon warn" : "list-icon"}>
+                <Icon name="alerts" />
+              </span>
+              <span className="grow">
+                <span className="title">See the leaks</span>
+                <span className="sub">
+                  Open now: {counted(s.leaks_open, "leak")}, {naira(s.leaks_open_kobo)} · opened in the period: {counted(s.leaks_opened, "leak")}
+                  {s.leaks_opened ? `, ${naira(s.leaks_opened_kobo)}` : ""} · recovered so far: {naira(s.recovered_kobo)}
+                </span>
+              </span>
+              <Icon name="chevron" className="go" />
+            </Link>
+            <Link className="list-row" to="/money/fees" data-testid="money-fees">
+              <span className="list-icon">
+                <Icon name="invoices" />
+              </span>
+              <span className="grow">
+                <span className="title">Fees taken: {naira(s.fees_kobo)}</span>
+                <span className="sub">{rate ? `${rate} of the money they were taken on` : "What each payments account charges"}</span>
+              </span>
+              <Icon name="chevron" className="go" />
+            </Link>
+            <Link className="list-row" to="/invoices" data-testid="invoices-paid">
+              <span className="list-icon">
+                <Icon name="invoices" />
+              </span>
+              <span className="grow">
+                <span className="title">Invoices paid: {naira(s.invoices_paid_kobo)}</span>
+                <span className="sub">{counted(s.invoices_paid, "invoice")}</span>
+              </span>
+              <Icon name="chevron" className="go" />
+            </Link>
             {!!s.collected_for_others_kobo && (
-              <div className="stat" data-testid="collected-for-others">
-                <span className="stat-label">Collected for others</span>
-                <span className="stat-value">{naira(s.collected_for_others_kobo)}</span>
-                <span className="stat-hint">
-                  {collectedForLine(s)}: not the business's own. Its own money in: {naira(s.own_in_settled_kobo ?? 0)}.
+              <div className="list-row" data-testid="collected-for-others">
+                <span className="list-icon">
+                  <Icon name="schools" />
+                </span>
+                <span className="grow">
+                  <span className="title">Collected for others: {naira(s.collected_for_others_kobo)}</span>
+                  <span className="sub">
+                    {collectedForLine(s)}: not the business's own. Its own money in: {naira(s.own_in_settled_kobo ?? 0)}.
+                  </span>
                 </span>
               </div>
             )}
-          </section>
-          <section className="card" aria-labelledby="leaks-h" data-testid="overview-leaks">
-            <h2 id="leaks-h">Leaks</h2>
-            <ul>
-              <li>
-                Opened in the period: {counted(s.leaks_opened, "leak")}
-                {s.leaks_opened ? `, ${naira(s.leaks_opened_kobo)}` : ""}
-              </li>
-              <li>
-                Open now: {counted(s.leaks_open, "leak")}, {naira(s.leaks_open_kobo)}
-              </li>
-              <li>Recovered so far: {naira(s.recovered_kobo)}</li>
-            </ul>
-            <Link to="/money/leaks">See the leaks</Link>
           </section>
           <h2>By channel</h2>
           {channels.length === 0 ? (

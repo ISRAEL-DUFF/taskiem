@@ -5,6 +5,9 @@ import { ApiError, del, get, post, type Approval, type Delegation, type PublishR
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Json, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { requestDetails, requestTitle, type Posting } from "../lib/schoolPayments";
+import { subjectWords } from "../lib/approvals";
+import { shortWhen } from "../lib/time";
+import { Icon } from "../icons";
 
 export function Approvals() {
   const { can, me } = useAuth();
@@ -12,57 +15,103 @@ export function Approvals() {
   const [deciding, setDeciding] = useState<{ a: Approval; decision: "approved" | "rejected" } | null>(null);
   return (
     <>
-      <PageHeader title="Approvals" description="Decisions waiting for a role you hold, or one delegated to you." />
-      <p className="hint">
-        You cannot approve a run you started or a workflow version you wrote or published, unless nobody else can, and with distinct approvers you approve
-        one level of a request at most.
-      </p>
+      <PageHeader
+        title="Approvals"
+        description="Decisions waiting for a role you hold, or one delegated to you. You cannot approve a run you started or a workflow version you wrote or published, unless nobody else can, and with distinct approvers you approve one level of a request at most."
+      />
       <ErrorBox error={error} />
       {!data && !error && <Skeleton rows={2} />}
       {data && data.approvals.length === 0 && (
         <EmptyState icon="approvals">Nothing waiting for you. When a run reaches an approval step for one of your roles, it waits here for your decision.</EmptyState>
       )}
-      {data?.approvals.map((a) => (
-        <div className="card" key={`${a.run_id}/${a.step_id}`} data-testid="approval">
-          <div className="toolbar">
-            <strong className="grow">
-              {a.workflow} · {a.step_name || a.step_id}
-            </strong>
-            <span className="hint">
-              {a.levels > 1 && `level ${a.level} of ${a.levels} · `}
-              {a.approvals} of {a.required} approvals · {a.environment}
-            </span>
-          </div>
-          {a.on_behalf_of && <p className="hint">You are covering for {a.on_behalf_of} under a delegation.</p>}
-          {a.sole_approver && <p className="hint">You are the only person who can approve this.</p>}
-          {a.step_up && (
-            <p className="hint">
-              {a.step_up === "passkey"
-                ? "This approval needs your passkey."
-                : a.step_up === "whatsapp_pin"
-                  ? "This approval needs your passkey or a code from your authenticator app here, or your WhatsApp PIN in WhatsApp."
-                  : "This approval needs your passkey or a code from your authenticator app."}
-            </p>
-          )}
-          <Json value={a.subject} />
-          <div className="toolbar" style={{ marginTop: 8 }}>
-            <button className="primary" onClick={() => setDeciding({ a, decision: "approved" })}>
-              Approve
-            </button>
-            <button className="danger" onClick={() => setDeciding({ a, decision: "rejected" })}>
-              Reject
-            </button>
-            <span className="grow" />
-            <span className="hint">
-              requested {fmtTime(a.requested_at)}
-              {a.timeout_at && ` · expires ${fmtTime(a.timeout_at)}`}
-              {a.role && ` · role ${a.role}`}
-              {a.policy && ` · policy ${a.policy}`}
-            </span>
-            <Link to={`/runs/${a.run_id}`}>Open run</Link>
-          </div>
-        </div>
-      ))}
+      {data?.approvals.map((a) => {
+        const w = subjectWords(a.subject);
+        return (
+          <article className="approval-card" key={`${a.run_id}/${a.step_id}`} data-testid="approval" aria-labelledby={`ap-${a.run_id}-${a.step_id}`}>
+            <div className="approval-meta">
+              <span>{a.workflow}</span>
+              <span>{shortWhen(new Date(a.requested_at))}</span>
+            </div>
+            <h2 className="approval-title" id={`ap-${a.run_id}-${a.step_id}`}>
+              {a.step_name || a.step_id}
+            </h2>
+            {w.amount && (
+              <div>
+                <div className="approval-amount">{w.amount}</div>
+                {(w.to || w.account) && (
+                  <div className="approval-to">
+                    {w.to && (
+                      <>
+                        to <strong>{w.to}</strong>
+                      </>
+                    )}
+                    {w.to && w.account && " · "}
+                    {w.account}
+                  </div>
+                )}
+              </div>
+            )}
+            <ul className="chips">
+              {a.sole_approver && <li className="warn">You are the only person who can approve this</li>}
+              {a.on_behalf_of && <li>Covering for {a.on_behalf_of}</li>}
+              {a.step_up && (
+                <li>
+                  <Icon name="lock" />
+                  {a.step_up === "passkey"
+                    ? "Needs your passkey"
+                    : a.step_up === "whatsapp_pin"
+                      ? "Needs your passkey or a code from your authenticator app here, or your WhatsApp PIN in WhatsApp"
+                      : "Needs your passkey or a code from your authenticator app"}
+                </li>
+              )}
+              {a.levels > 1 && (
+                <li>
+                  Level {a.level} of {a.levels}
+                </li>
+              )}
+              {a.required > 1 && (
+                <li>
+                  {a.approvals} of {a.required} approvals
+                </li>
+              )}
+              {a.timeout_at && (
+                <li>
+                  <Icon name="clock" />
+                  Waits until {fmtTime(a.timeout_at)}
+                </li>
+              )}
+            </ul>
+            {!w.amount && w.rest.length === 0 && a.subject !== undefined && a.subject !== null && <Json value={a.subject} />}
+            {w.rest.length > 0 && (
+              <dl className="approval-fields">
+                {w.rest.map(([k, v]) => (
+                  <div key={k} style={{ display: "contents" }}>
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <div className="approval-actions">
+              <button className="danger" onClick={() => setDeciding({ a, decision: "rejected" })}>
+                Reject
+              </button>
+              <button className="primary" onClick={() => setDeciding({ a, decision: "approved" })}>
+                Approve
+              </button>
+              <span className="grow" />
+              <span className="hint">
+                {a.role && `For the ${a.role} role`}
+                {a.role && a.policy && " · "}
+                {a.policy && `policy ${a.policy}`}
+                {(a.role || a.policy) && " · "}
+                {a.environment}
+              </span>
+              <Link to={`/runs/${a.run_id}`}>Open run</Link>
+            </div>
+          </article>
+        );
+      })}
       {deciding && <Decide {...deciding} onClose={() => setDeciding(null)} onDone={() => (setDeciding(null), reload())} />}
       {me?.schools && can("school.approve") && <SchoolRequests />}
       {can("workflow.publish") && <PublishReviews />}
@@ -148,7 +197,10 @@ function SchoolRequests() {
   );
 }
 
-function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "approved" | "rejected"; onClose: () => void; onDone: () => void }) {
+/** Confirms one decision. Opened from somewhere other than this page
+ * (Home's Needs you), `showSubject` shows what is being decided too, since
+ * the decision records what the person was shown. */
+export function Decide({ a, decision, onClose, onDone, showSubject }: { a: Approval; decision: "approved" | "rejected"; onClose: () => void; onDone: () => void; showSubject?: boolean }) {
   const [comment, setComment] = useState("");
   const [code, setCode] = useState("");
   const [needsCode, setNeedsCode] = useState(Boolean(a.step_up) && decision === "approved");
@@ -171,8 +223,9 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
       <p>
         {decision === "approved" ? "Approve" : "Reject"} <strong>{a.step_name || a.step_id}</strong> on {a.workflow}? Your decision and what you were shown are recorded.
       </p>
+      {showSubject && <SubjectSummary subject={a.subject} />}
       <Field label="Comment (optional, audited)">
-        <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+        <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
       </Field>
       {needsCode && passkeysSupported() && (
         <p>
@@ -190,13 +243,37 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
         </Field>
       )}
       <ErrorBox error={act.error} />
-      <div className="toolbar">
+      <div className="decide-actions">
         <button className={decision === "approved" ? "primary" : "danger"} disabled={act.busy || (needsCode && (passkeyOnly || code.length !== 6))} onClick={() => void submit()}>
           Confirm
         </button>
-        <button onClick={onClose}>Cancel</button>
+        <button className="quiet" onClick={onClose}>
+          Cancel
+        </button>
       </div>
     </Modal>
+  );
+}
+
+/** What an approval asks, for its confirm sheet: the amount, payee and fields in words, or the subject as it is when it has no fields. */
+function SubjectSummary({ subject }: { subject: unknown }) {
+  const w = subjectWords(subject);
+  const rows: [string, string][] = [
+    ...(w.amount ? [["Amount", w.amount] as [string, string]] : []),
+    ...(w.to ? [["To", w.to] as [string, string]] : []),
+    ...(w.account ? [["Account", w.account] as [string, string]] : []),
+    ...w.rest,
+  ];
+  if (rows.length === 0) return subject === undefined || subject === null ? null : <Json value={subject} />;
+  return (
+    <dl className="sheet-summary">
+      {rows.map(([k, v]) => (
+        <div key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

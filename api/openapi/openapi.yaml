@@ -22072,6 +22072,27 @@ components:
         own_in_settled_kobo:
           type: integer
           description: The settled money in less what was collected for others
+        unit:
+          type: string
+          enum: [hour, day, ""]
+          description: The stretch each bucket covers; hours for a period of one day, days for up to 92 days, none ("") for longer
+        buckets:
+          type: array
+          description: The period in stretches, for charts. A movement counts in the stretch of its first entry
+          items:
+            type: object
+            required: [from, in_settled_kobo, out_settled_kobo, payments]
+            properties:
+              from:
+                type: string
+                format: date-time
+              in_settled_kobo:
+                type: integer
+              out_settled_kobo:
+                type: integer
+              payments:
+                type: integer
+                description: Settled payments in
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]

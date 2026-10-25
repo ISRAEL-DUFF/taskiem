@@ -12,3 +12,4 @@ Plain how-tos for running your business on Taskiem: no code and no technical ste
 - [Your own domain](own-domain.md): your page on a domain you own, step by step for your registrar.
 - [On your website](your-website.md): your page on a website you already have, and sending the details to your web designer.
 - [Your own WhatsApp number](own-whatsapp-number.md): messages from your own number instead of the shared one.
+- [On your phone](on-your-phone.md): Taskiem on your home screen like an app, and approving from Home.

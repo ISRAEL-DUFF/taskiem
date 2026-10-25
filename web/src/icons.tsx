@@ -40,6 +40,8 @@ const paths: Record<string, string> = {
   bolt: "M13 3L5 14h6l-1 7 8-11h-6z",
   invoices: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3",
   money: "M3 6h18v12H3zM12 9a3 3 0 100 6 3 3 0 000-6zM6.5 9.5v.01M17.5 14.5v.01",
+  info: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.01",
+  back: "M15 6l-6 6 6 6",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {
