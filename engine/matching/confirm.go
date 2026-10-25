@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -126,8 +127,13 @@ type Split struct {
 }
 
 // SplitReason is the reason a part of a split gives, beside the
-// suggestion's own for the invoice suggested.
-const SplitReason = "part of one payment split across the customer's open invoices"
+// suggestion's own for the invoice suggested; SplitSiblingReason the one
+// a part for a sibling's invoice gives, where the school shares family
+// credit (invoicing.SharedWith).
+const (
+	SplitReason        = "part of one payment split across the customer's open invoices"
+	SplitSiblingReason = "part of one payment split across the family's open invoices, for a sibling (the school shares family credit)"
+)
 
 // counting is a match a person or matching asks for.
 type counting struct {
@@ -141,10 +147,12 @@ type counting struct {
 }
 
 // count counts an entry in parts, in one transaction: each part towards
-// its invoice or order, the suggestion confirmed, the rest left as the
-// customer's credit or for a person, the payer remembered when a person
-// decided. A run waiting on an invoice it paid is told after it commits,
-// and an order's paid flow runs.
+// its invoice or order (a further part towards an invoice the entry
+// already counts towards adds to it), the suggestion confirmed, the rest
+// left as the customer's credit or for a person, the payer remembered for
+// the invoices' and orders' customers when a person decided. A run
+// waiting on an invoice it paid is told after it commits, and an order's
+// paid flow runs.
 func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Split, error) {
 	var out Split
 	var done []counted
@@ -200,27 +208,72 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 		if err := checkParts(parts, left); err != nil {
 			return err
 		}
+		// A part towards an invoice the entry already counts towards adds
+		// to it (a person splitting again), except the rest with nothing
+		// left: the same match again is then a no-op, and towards another
+		// invoice or order it is refused with what it counts towards.
+		add := true
 		if len(parts) == 1 && parts[0].AmountKobo == 0 {
-			// The rest. With nothing left, counting it again towards the
-			// same invoice or order is a no-op, and towards another is
-			// refused with what it counts towards.
+			add = left > 0
 			parts = []Part{{Invoice: parts[0].Invoice, Order: parts[0].Order, AmountKobo: max(left, 1)}}
 		}
-		var customers []string
+		// The customer whose money this is, when the rest is left as
+		// credit: the suggested invoice's, else the first part's. A part
+		// for a sibling's invoice is allowed where the school shares
+		// family credit (invoicing.SharedWith), as the exact path counts.
+		var primary string
+		if sugInvoice != nil {
+			x, err := m.Invoices.Get(ctx, tx, tenant, sugInvoice.String())
+			if err != nil {
+				return err
+			}
+			primary = x.CustomerID()
+		}
+		var shared []string
+		sharedWith := func() ([]string, error) {
+			if shared != nil || primary == "" {
+				return shared, nil
+			}
+			var err error
+			if shared, err = invoicing.SharedWith(ctx, tx, tenant, primary); err != nil {
+				return nil, err
+			}
+			if shared == nil {
+				shared = []string{}
+			}
+			return shared, nil
+		}
+		var customers, payees []string
 		var sugPayment, sugOrderPayment *uuid.UUID
 		for _, p := range parts {
 			why := reasons
 			if len(parts) > 1 && c.suggestion != nil && !p.isSuggested(ctx, tx, tenant, sugInvoice, sugOrder) {
 				why = []string{SplitReason}
+				if p.Invoice != "" && primary != "" {
+					y, err := m.Invoices.Get(ctx, tx, tenant, p.Invoice)
+					if err != nil {
+						return err
+					}
+					if y.CustomerID() != primary {
+						sib, err := sharedWith()
+						if err != nil {
+							return err
+						}
+						if slices.Contains(sib, y.CustomerID()) {
+							why = []string{SplitSiblingReason}
+						}
+					}
+				}
 			}
 			k, err := m.countPart(ctx, tx, tenant, p, invoicing.PaymentIn{AmountKobo: p.AmountKobo, PaymentID: reference,
-				EntryID: &c.entry, Connection: channel, How: c.how, By: c.by, Reasons: why})
+				EntryID: &c.entry, Connection: channel, How: c.how, By: c.by, Reasons: why, Add: add})
 			if err != nil {
 				return err
 			}
 			done = append(done, k)
 			out.Parts, out.PartKobo = append(out.Parts, k.Result), append(out.PartKobo, p.AmountKobo)
 			if o := k.Order; o != nil {
+				payees = append(payees, o.CustomerID())
 				if sugOrder != nil && *sugOrder == o.ID && k.paymentID != uuid.Nil {
 					id := k.paymentID
 					sugOrderPayment = &id
@@ -229,6 +282,10 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 			}
 			x := k.Invoice
 			customers = append(customers, x.CustomerID())
+			payees = append(payees, x.CustomerID())
+			if primary == "" {
+				primary = x.CustomerID()
+			}
 			if sugInvoice != nil && *sugInvoice == x.ID {
 				pay := k.paymentID
 				if pay == uuid.Nil {
@@ -261,14 +318,25 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 			return err
 		}
 		if rest > 0 && c.creditRest {
-			one := map[string]bool{}
-			for _, x := range customers {
-				one[x] = true
-			}
-			if len(one) != 1 || customers[0] == "" {
+			// Every part one customer's invoices, or their siblings'
+			// where the school shares family credit: the rest is the
+			// customer's (the primary's) credit.
+			if len(customers) != len(parts) || primary == "" {
 				return fmt.Errorf("%w: the rest can be left as credit only when every part is for one customer's invoices", invoicing.ErrInvalid)
 			}
-			if err := invoicing.MarkCustomers(ctx, tx, tenant, c.entry, customers[0], nil, "person", c.by); err != nil {
+			for _, x := range customers {
+				if x == primary {
+					continue
+				}
+				sib, err := sharedWith()
+				if err != nil {
+					return err
+				}
+				if !slices.Contains(sib, x) {
+					return fmt.Errorf("%w: the rest can be left as credit only when every part is for one customer's invoices", invoicing.ErrInvalid)
+				}
+			}
+			if err := invoicing.MarkCustomers(ctx, tx, tenant, c.entry, primary, nil, "person", c.by); err != nil {
 				return err
 			}
 			out.CreditKobo = rest
@@ -276,7 +344,7 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 			out.LeftKobo = max(rest, 0)
 		}
 		if c.how == "suggested" || c.how == "manual" {
-			if err := m.remember(ctx, tx, tenant, c.entry, customers, c.by); err != nil {
+			if err := m.remember(ctx, tx, tenant, c.entry, payees, c.by); err != nil {
 				return err
 			}
 		}
@@ -320,7 +388,7 @@ func (m *Matcher) countPart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p 
 		if err != nil {
 			return counted{}, err
 		}
-		k, err := orders.CountPayment(ctx, tx, tenant, p.Order, storefront.PaymentIn{EntryID: in.EntryID, AmountKobo: in.AmountKobo, How: in.How, By: in.By, Reasons: in.Reasons})
+		k, err := orders.CountPayment(ctx, tx, tenant, p.Order, storefront.PaymentIn{EntryID: in.EntryID, AmountKobo: in.AmountKobo, How: in.How, By: in.By, Reasons: in.Reasons, Add: in.Add})
 		if err != nil {
 			return counted{}, orderErr(err)
 		}
@@ -377,7 +445,9 @@ func (p Part) isSuggested(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, invo
 
 // checkParts refuses parts that cannot be counted: none or too many, a
 // part naming no invoice or order or both, an amount below 1 kobo (but a
-// single part of 0, the rest), one target twice, or more than is left.
+// single part of 0, the rest), one target twice in one request (give it
+// one amount; a further part later adds to the first), or more than is
+// left.
 func checkParts(parts []Part, left int64) error {
 	if len(parts) == 0 || len(parts) > MaxParts {
 		return fmt.Errorf("%w: a payment is matched in 1 to %d parts", invoicing.ErrInvalid, MaxParts)
@@ -440,26 +510,28 @@ func (m *Matcher) ConfirmParts(ctx context.Context, tenant, suggestion uuid.UUID
 	return m.count(ctx, tenant, counting{suggestion: &suggestion, parts: parts, how: "suggested", by: by, creditRest: creditRest})
 }
 
-// ConfirmSplit confirms a suggestion split as Propose offers it: across
-// the customer's open invoices oldest first, the rest left as their
-// credit.
+// ConfirmSplit confirms a suggestion split as Propose offers it in chat:
+// across the customer's open invoices oldest first (then their siblings',
+// where the school shares family credit), the rest left as their credit.
 func (m *Matcher) ConfirmSplit(ctx context.Context, tenant, suggestion uuid.UUID, by string) (Split, error) {
 	var p Proposal
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
-		p, err = m.Propose(ctx, tx, tenant, suggestion)
+		p, err = m.Propose(ctx, tx, tenant, suggestion, false)
 		return err
 	})
 	if err != nil {
 		return Split{}, err
 	}
-	if len(p.Parts) == 0 {
+	var parts []Part
+	for _, x := range p.Parts {
+		if x.AmountKobo > 0 {
+			parts = append(parts, x.Part)
+		}
+	}
+	if len(parts) == 0 {
 		s, err := m.count(ctx, tenant, counting{suggestion: &suggestion, how: "suggested", by: by})
 		return s, err
-	}
-	parts := make([]Part, len(p.Parts))
-	for i, x := range p.Parts {
-		parts[i] = x.Part
 	}
 	return m.count(ctx, tenant, counting{suggestion: &suggestion, parts: parts, how: "suggested", by: by, creditRest: p.CreditKobo > 0})
 }
@@ -487,26 +559,37 @@ func (m *Matcher) MatchParts(ctx context.Context, tenant, entryID uuid.UUID, par
 }
 
 // ProposedPart is a part Propose offers, with its invoice's number and
-// what is due on it.
+// what is due on it; an amount of 0 is an invoice the person may still
+// give part of the payment to. Sibling marks a sibling's invoice, where
+// the school shares family credit.
 type ProposedPart struct {
 	Part
 	Number  string `json:"number"`
 	DueKobo int64  `json:"due_kobo"`
+	Sibling bool   `json:"sibling,omitempty"`
 }
 
 // Proposal is how a payment could be split across a customer's open
-// invoices: oldest first, each as much as is due, until the money runs
-// out; what is left over would be the customer's credit.
+// invoices (and their siblings', where the school shares family credit):
+// each as much as is due, in order, until the money runs out, the rest
+// of the invoices listed with 0 to choose from; what is left over would
+// be the customer's credit. Over is true when the payment is more than
+// is due on the suggested invoice alone (chat offers the split only then).
 type Proposal struct {
 	Parts      []ProposedPart `json:"parts"`
 	CreditKobo int64          `json:"credit_kobo"`
+	Over       bool           `json:"over"`
 }
 
-// Propose offers a split for a suggestion of an invoice when the payment
-// is more than is due on it: across its customer's open invoices oldest
-// first. No parts when there is nothing to split (an order, or a payment
-// no more than is due).
-func (m *Matcher) Propose(ctx context.Context, tx pgx.Tx, tenant, suggestion uuid.UUID) (Proposal, error) {
+// Propose offers a split for a suggestion of an invoice whenever there is
+// something to split it across: the customer has another open invoice
+// (or a sibling has, where the school shares family credit), or the
+// payment is more than is due on the suggested one (Over). The parts are
+// the customer's open invoices oldest first, the suggested one first
+// instead when suggestedFirst (To match), then the siblings' oldest
+// first, each given as much as is due while the money lasts. No parts
+// for an order, or an invoice alone that the payment does not exceed.
+func (m *Matcher) Propose(ctx context.Context, tx pgx.Tx, tenant, suggestion uuid.UUID, suggestedFirst bool) (Proposal, error) {
 	var p Proposal
 	var invoice *uuid.UUID
 	var entry uuid.UUID
@@ -525,22 +608,49 @@ func (m *Matcher) Propose(ctx context.Context, tx pgx.Tx, tenant, suggestion uui
 	if err != nil {
 		return p, err
 	}
-	if left <= x.DueKobo || x.CustomerID() == "" {
+	p.Over = left > x.DueKobo
+	if x.CustomerID() == "" {
 		return p, nil
 	}
 	list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, x.CustomerID())
 	if err != nil {
 		return p, err
 	}
+	if suggestedFirst {
+		for i, y := range list {
+			if y.ID == x.ID && i > 0 {
+				list = append([]invoicing.Invoice{y}, append(list[:i:i], list[i+1:]...)...)
+				break
+			}
+		}
+	}
+	type candidate struct {
+		invoicing.Invoice
+		sibling bool
+	}
+	all := make([]candidate, 0, len(list))
 	for _, y := range list {
-		if left <= 0 {
-			break
+		all = append(all, candidate{Invoice: y})
+	}
+	shared, err := invoicing.SharedWith(ctx, tx, tenant, x.CustomerID())
+	if err != nil {
+		return p, err
+	}
+	for _, sib := range shared {
+		list, err := m.Invoices.OpenInvoicesOf(ctx, tx, tenant, sib)
+		if err != nil {
+			return p, err
 		}
-		part := min(left, y.DueKobo)
-		if part <= 0 {
-			continue
+		for _, y := range list {
+			all = append(all, candidate{Invoice: y, sibling: true})
 		}
-		p.Parts = append(p.Parts, ProposedPart{Part: Part{Invoice: y.Number, AmountKobo: part}, Number: y.Number, DueKobo: y.DueKobo})
+	}
+	if len(all) == 0 || len(all) == 1 && !p.Over {
+		return p, nil
+	}
+	for _, y := range all {
+		part := max(min(left, y.DueKobo), 0)
+		p.Parts = append(p.Parts, ProposedPart{Part: Part{Invoice: y.Number, AmountKobo: part}, Number: y.Number, DueKobo: y.DueKobo, Sibling: y.sibling})
 		left -= part
 	}
 	p.CreditKobo = max(left, 0)
@@ -623,8 +733,10 @@ type Waiting struct {
 	When      time.Time `json:"received_at"`
 	Kind      string    `json:"kind"`
 	// Split is how the payment could be split across the customer's open
-	// invoices, oldest first, when it is more than is due on the suggested
-	// one (filled by the caller: Matcher.Propose).
+	// invoices (the suggested one first, then oldest first, then
+	// siblings' where the school shares family credit), offered whenever
+	// there is more than one, or the payment is more than is due on the
+	// suggested one (filled by the caller: Matcher.Propose).
 	Split *Proposal `json:"split,omitempty"`
 }
 

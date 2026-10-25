@@ -507,7 +507,7 @@ describe("matching money to storefront orders", () => {
   it("offers invoices and orders by hand, leaving out what is suggested", () => {
     const c = matchChoices([inv], open, [order("1")]);
     expect(c.map((x) => x.value)).toEqual(["i1", "order:AK-2"]);
-    expect(c[1]).toEqual({ value: "order:AK-2", kind: "order", number: "AK-2", label: `Order AK-2 · ${naira(120000)} to pay · C•••` });
+    expect(c[1]).toEqual({ value: "order:AK-2", kind: "order", number: "AK-2", label: `Order AK-2 · ${naira(120000)} to pay · C•••`, due_kobo: 120000 });
     expect(matchChoices([inv], null, [])).toHaveLength(1);
     expect(matchRequest("order:AK-2")).toEqual({ order: "AK-2" });
     expect(matchRequest("i1")).toEqual({ invoice: "i1" });

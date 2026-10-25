@@ -16,8 +16,9 @@ import (
 // Counting money towards invoices and storefront orders: one path for
 // both. Parts.Count counts a part of an entry towards a target and
 // Parts.Undo undoes one; what they share is the entry's lock, the entry
-// counted towards the same target once, a part no more than is left of
-// the entry, the row; and the undoing, a row naming the part, once. What
+// counted towards the same target once (unless a further part is meant,
+// Counting.Add), a part no more than is left of the entry, the row; and
+// the undoing, a row naming the part, once. What
 // differs stays with the target's owner, as the callbacks of Counting and
 // Undoing: invoicing (Invoices.RecordPayment, UndoPayment) and storefront
 // (Orders.CountPayment, UndoPayment) find and lock the invoice or order,
@@ -70,6 +71,12 @@ type Counting struct {
 	AmountKobo int64
 	How, By    string
 	Reasons    []string
+	// Add is a further part of the entry towards a target it already
+	// counts towards (a person splitting the payment again): it is added
+	// to the first, a new row, rather than taken as counted already. Left
+	// false by the paths that may hear of the same money twice (the
+	// rails' payments, a customer's own account), so those count it once.
+	Add bool
 	// Open finds the target under the entry's lock, locking its row when
 	// counting may move it, and returns its id.
 	Open func() (uuid.UUID, error)
@@ -96,9 +103,9 @@ type Counted struct {
 
 // Count counts a part towards a target, in the caller's transaction:
 // under the entry's lock, the same entry again towards the same target is
-// a no-op (Already), and a part more than is left of the entry is refused
-// (Refused; the database refuses it too, 00210); then the target decides,
-// and the row is written.
+// a no-op (Already) unless a further part is meant (Add), and a part more
+// than is left of the entry is refused (Refused; the database refuses it
+// too, 00210); then the target decides, and the row is written.
 func (t Parts) Count(ctx context.Context, tx pgx.Tx, c Counting) (Counted, error) {
 	var out Counted
 	if c.Entry != nil {
@@ -113,9 +120,11 @@ func (t Parts) Count(ctx context.Context, tx pgx.Tx, c Counting) (Counted, error
 	out.Target = id
 	if c.Entry != nil {
 		var here bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+t.Table+` p WHERE p.`+t.Target+` = $1 AND p.entry_id = $2 AND p.undoes IS NULL
-			AND NOT EXISTS (SELECT 1 FROM `+t.Table+` u WHERE u.undoes = p.id))`, id, *c.Entry).Scan(&here); err != nil {
-			return out, err
+		if !c.Add {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+t.Table+` p WHERE p.`+t.Target+` = $1 AND p.entry_id = $2 AND p.undoes IS NULL
+				AND NOT EXISTS (SELECT 1 FROM `+t.Table+` u WHERE u.undoes = p.id))`, id, *c.Entry).Scan(&here); err != nil {
+				return out, err
+			}
 		}
 		if here {
 			out.Already = true

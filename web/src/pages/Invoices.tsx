@@ -74,12 +74,20 @@ import {
   leftWords,
   payerPath,
   payerWords,
+  handProblem,
+  handRequest,
+  handRest,
+  handRestWords,
+  handRows,
+  splitHint,
   splitLine,
   splitProblem,
   splitRequest,
+  splitRowLabel,
   splitRows,
   splitTotal,
   type InvoiceCustomerView,
+  type HandRow,
   type MoneySplit,
   type SplitRow,
 } from "../lib/invoices";
@@ -278,40 +286,43 @@ function WaitingCard({
           {choices.length === 0 ? (
             <p className="hint">{words.none}</p>
           ) : (
-            <form
-              noValidate
-              onSubmit={(e) => {
-                e.preventDefault();
-                setOtherTried(true);
-                if (!other) return;
-                const chosen = choices.find((x) => x.value === other);
-                void act.run(async () => {
-                  await plainly(post(entryMatchPath(p.entry_id), matchRequest(other)));
-                  onDone(matchedLine(p.amount_kobo, chosen?.number ?? other, chosen?.kind));
-                }, false);
-              }}
-            >
-              <div className="row match-other-row">
-                <Field label={words.label} hint={words.hint}>
-                  <select value={other} onChange={(e) => setOther(e.target.value)}>
-                    <option value="">{words.empty}</option>
-                    {choices.map((x) => (
-                      <option key={x.value} value={x.value}>
-                        {x.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <button type="submit" disabled={act.busy}>
-                  {words.submit}
-                </button>
-              </div>
-              {otherTried && !other && (
-                <div className="error" role="alert">
-                  {words.missing}
+            <>
+              <form
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setOtherTried(true);
+                  if (!other) return;
+                  const chosen = choices.find((x) => x.value === other);
+                  void act.run(async () => {
+                    await plainly(post(entryMatchPath(p.entry_id), matchRequest(other)));
+                    onDone(matchedLine(p.amount_kobo, chosen?.number ?? other, chosen?.kind));
+                  }, false);
+                }}
+              >
+                <div className="row match-other-row">
+                  <Field label={words.label} hint={words.hint}>
+                    <select value={other} onChange={(e) => setOther(e.target.value)}>
+                      <option value="">{words.empty}</option>
+                      {choices.map((x) => (
+                        <option key={x.value} value={x.value}>
+                          {x.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <button type="submit" disabled={act.busy}>
+                    {words.submit}
+                  </button>
                 </div>
-              )}
-            </form>
+                {otherTried && !other && (
+                  <div className="error" role="alert">
+                    {words.missing}
+                  </div>
+                )}
+              </form>
+              <HandSplit payment={p} choices={matchChoices(open, orders, [])} onDone={onDone} />
+            </>
           )}
         </details>
       )}
@@ -320,7 +331,72 @@ function WaitingCard({
   );
 }
 
-/** Split a payment across the customer's open invoices, oldest first as offered, amounts editable. */
+/** Split a payment by hand: pick invoices and orders, give each its part; the rest waits to be matched. */
+function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; choices: MatchChoice[]; onDone: (line: string) => void }) {
+  const act = useAction();
+  const [rows, setRows] = useState<HandRow[]>(() => handRows(choices));
+  const [tried, setTried] = useState(false);
+  const leftKobo = p.left_kobo ?? p.amount_kobo ?? 0;
+  const problem = handProblem(rows, leftKobo);
+  const rest = handRest(rows, leftKobo);
+  const id = `hand-${p.entry_id}`;
+  const set = (i: number, patch: Partial<HandRow>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  return (
+    <details className="match-split" data-testid="hand-split">
+      <summary>Split by hand across several…</summary>
+      <p className="hint">
+        Tick each invoice or order this payment is for and give it its part. The parts can add up to at most what is left of the payment; what they leave waits here to be
+        matched. Each part is a match of its own, and can be undone on its own.
+      </p>
+      <form
+        noValidate
+        aria-labelledby={id}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setTried(true);
+          if (problem) return;
+          void act.run(async () => {
+            const r = await plainly(post<MoneySplit>(entryMatchPath(p.entry_id), handRequest(rows)));
+            onDone(splitLine(r));
+          }, false);
+        }}
+      >
+        <h3 id={id} className="sr-only">
+          Split by hand
+        </h3>
+        {rows.map((r, i) => (
+          <div key={r.value} className="row match-other-row">
+            <label className="row">
+              <input type="checkbox" checked={r.picked} onChange={(e) => set(i, { picked: e.target.checked })} />
+              <span>{r.label}</span>
+            </label>
+            {r.picked && (
+              <Field label={`Part for ${r.kind === "order" ? `order ${r.number}` : r.number}`}>
+                <input inputMode="decimal" value={r.amount} onChange={(e) => set(i, { amount: e.target.value })} aria-describedby={`${id}-rest`} />
+              </Field>
+            )}
+          </div>
+        ))}
+        <p className="hint" id={`${id}-rest`} data-testid="hand-rest">
+          {handRestWords(rest)}
+        </p>
+        {tried && problem && (
+          <div className="error" role="alert">
+            {problem}
+          </div>
+        )}
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy}>
+            Match these parts
+          </button>
+        </div>
+      </form>
+      <ErrorBox error={act.error} />
+    </details>
+  );
+}
+
+/** Split a payment across the customer's open invoices as offered (the suggested one first, then oldest first; siblings' where the school shares family credit), amounts editable. */
 function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySuggestion; leftKobo: number; onDone: (line: string) => void }) {
   const act = useAction();
   const [rows, setRows] = useState<SplitRow[]>(() => splitRows(c.split));
@@ -333,10 +409,7 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
   return (
     <details className="match-split" data-testid="split">
       <summary>Split across the customer's invoices…</summary>
-      <p className="hint">
-        The payment is more than is due on {c.number}. Offered oldest first across the same customer's open invoices; change the amounts if you know better. Each part is a
-        match of its own, and can be undone on its own.
-      </p>
+      <p className="hint">{splitHint(c.split, c.number)} Each part is a match of its own, and can be undone on its own.</p>
       <form
         noValidate
         aria-labelledby={id}
@@ -354,7 +427,7 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
           Split for {c.number}
         </h4>
         {rows.map((r, i) => (
-          <Field key={r.invoice} label={`${r.invoice} (${naira(r.due_kobo)} due)`}>
+          <Field key={r.invoice} label={splitRowLabel(r)}>
             <input
               inputMode="decimal"
               value={r.amount}

@@ -561,7 +561,7 @@ export interface MoneySuggestion {
   amount_kobo: number | null;
   /** What is left of the payment to match. */
   left_kobo?: number | null;
-  /** How the payment could be split across the customer's open invoices, oldest first, when it is more than is due. */
+  /** How the payment could be split across the customer's open invoices (this one first), whenever they have more than one, or it is more than is due. */
   split?: SplitProposal;
   channel: string;
   reference: string;
@@ -569,10 +569,11 @@ export interface MoneySuggestion {
   kind: string;
 }
 
-/** A split the server offers (MoneySplitProposal): each invoice with what of the payment would count towards it, and what would be left as the customer's credit. */
+/** A split the server offers (MoneySplitProposal): each invoice with what of the payment would count towards it (0 for one left to choose), a sibling's marked where the school shares family credit, what would be left as the customer's credit, and whether the payment is more than is due on the suggested invoice (over). */
 export interface SplitProposal {
-  parts: { invoice?: string; amount_kobo: number; number: string; due_kobo: number }[] | null;
+  parts: { invoice?: string; amount_kobo: number; number: string; due_kobo: number; sibling?: boolean }[] | null;
   credit_kobo: number;
+  over?: boolean;
 }
 
 /** One editable row of a split: an invoice, what is due on it and the amount typed. */
@@ -580,11 +581,23 @@ export interface SplitRow {
   invoice: string;
   due_kobo: number;
   amount: string;
+  sibling?: boolean;
 }
 
-/** A proposal as editable rows. */
+/** A proposal as editable rows: an invoice offered nothing has an empty amount. */
 export function splitRows(p: SplitProposal | undefined): SplitRow[] {
-  return (p?.parts ?? []).map((x) => ({ invoice: x.number, due_kobo: x.due_kobo, amount: koboInput(x.amount_kobo) }));
+  return (p?.parts ?? []).map((x) => ({ invoice: x.number, due_kobo: x.due_kobo, amount: x.amount_kobo > 0 ? koboInput(x.amount_kobo) : "", ...(x.sibling ? { sibling: true } : {}) }));
+}
+
+/** A split row's label: the invoice, what is due, and that it is a sibling's where it is. */
+export const splitRowLabel = (r: SplitRow) => `${r.invoice} (${naira(r.due_kobo)} due${r.sibling ? ", a sibling's" : ""})`;
+
+/** Why the split is offered, for its hint: the payment is more than is due on the suggested invoice, or the customer has other open invoices. */
+export function splitHint(p: SplitProposal | undefined, number: string): string {
+  const family = (p?.parts ?? []).some((x) => x.sibling);
+  const whose = family ? "the family's" : "the same customer's";
+  if (p?.over) return `The payment is more than is due on ${number}. Offered across ${whose} open invoices, ${number} first then oldest first; change the amounts if you know better.`;
+  return `${number} is offered all of it. If this payment is for several of ${whose} open invoices, give each its part. An invoice can take more of this payment later: a further part adds to the first.`;
 }
 
 /** What the rows add up to, in kobo; NaN when one is not an amount. */
@@ -807,23 +820,24 @@ export const targetLabel = (c: Pick<MoneySuggestion, "target_kind" | "number">) 
 export const targetPath = (c: Pick<MoneySuggestion, "target_kind" | "number">) =>
   isOrder(c) ? `/storefront/orders/${encodeURIComponent(c.number)}` : `/invoices/${encodeURIComponent(c.number)}`;
 
-/** One choice of the "match by hand" picker: an invoice (value its id) or an order (value "order:<reference>"). */
+/** One choice of the "match by hand" picker: an invoice (value its id) or an order (value "order:<reference>"), with what is due on it. */
 export interface MatchChoice {
   value: string;
   kind: "invoice" | "order";
   number: string;
   label: string;
+  due_kobo: number;
 }
 
 /** The invoices and orders a payment can be matched to by hand, those already suggested for it left out. */
 export function matchChoices(invoices: CustomerInvoice[], orders: MoneyOpenOrder[] | null | undefined, candidates: MoneySuggestion[]): MatchChoice[] {
   const out: MatchChoice[] = invoices
     .filter((x) => !candidates.some((c) => !isOrder(c) && c.invoice_id === x.id))
-    .map((x) => ({ value: x.id, kind: "invoice", number: x.number, label: `${x.number} · ${naira(x.due_kobo)} due · ${x.customer.name}` }));
+    .map((x) => ({ value: x.id, kind: "invoice", number: x.number, label: `${x.number} · ${naira(x.due_kobo)} due · ${x.customer.name}`, due_kobo: x.due_kobo }));
   for (const o of orders ?? []) {
     if (candidates.some((c) => isOrder(c) && c.number === o.number)) continue;
     const who = o.customer ? ` · ${o.customer}` : "";
-    out.push({ value: `order:${o.number}`, kind: "order", number: o.number, label: `Order ${o.number} · ${naira(o.due_kobo)} to pay${who}` });
+    out.push({ value: `order:${o.number}`, kind: "order", number: o.number, label: `Order ${o.number} · ${naira(o.due_kobo)} to pay${who}`, due_kobo: o.due_kobo });
   }
   return out;
 }
@@ -832,6 +846,59 @@ export function matchChoices(invoices: CustomerInvoice[], orders: MoneyOpenOrder
 export function matchRequest(value: string): { invoice: string } | { order: string } {
   return value.startsWith("order:") ? { order: value.slice("order:".length) } : { invoice: value };
 }
+
+// --- splitting by hand ---
+
+/** One row of a split by hand: an invoice or order the person may pick, and the amount typed for it. */
+export interface HandRow extends MatchChoice {
+  picked: boolean;
+  amount: string;
+}
+
+/** The picker's choices as rows to pick from, none picked. */
+export const handRows = (choices: MatchChoice[]): HandRow[] => choices.map((c) => ({ ...c, picked: false, amount: "" }));
+
+/** What the picked rows add up to, in kobo; NaN when one is not an amount. */
+export function handTotal(rows: HandRow[]): number {
+  let sum = 0;
+  for (const r of rows) {
+    if (!r.picked) continue;
+    const k = toKobo(r.amount);
+    if (k === undefined) continue;
+    if (Number.isNaN(k)) return NaN;
+    sum += k;
+  }
+  return sum;
+}
+
+/** What is left of the payment after the picked parts, never below nothing. */
+export function handRest(rows: HandRow[], leftKobo: number): number {
+  const total = handTotal(rows);
+  return Number.isNaN(total) ? leftKobo : Math.max(leftKobo - total, 0);
+}
+
+/** Why the picked rows cannot be matched, or "": at least one picked, each picked one an amount above nothing, and the parts no more than is left of the payment (the rule the database keeps too). */
+export function handProblem(rows: HandRow[], leftKobo: number): string {
+  const picked = rows.filter((r) => r.picked);
+  if (picked.length === 0) return "Tick the invoices or orders this payment is for.";
+  for (const r of picked) {
+    const k = toKobo(r.amount);
+    if (k === undefined || Number.isNaN(k) || k <= 0) return `Give ${r.kind === "order" ? `order ${r.number}` : r.number} its part as naira, like 20,000.`;
+  }
+  const total = handTotal(rows);
+  if (total > leftKobo) return `The parts add up to ${naira(total)}, more than the ${naira(leftKobo)} left of this payment.`;
+  return "";
+}
+
+/** The POST /v1/money/entries/{id}/match body for the picked rows: each a part of the payment; the rest waits to be matched. */
+export function handRequest(rows: HandRow[]): { parts: (({ invoice: string } | { order: string }) & { amount_kobo: number })[] } {
+  return {
+    parts: rows.filter((r) => r.picked).map((r) => ({ ...matchRequest(r.value), amount_kobo: toKobo(r.amount) ?? 0 })),
+  };
+}
+
+/** What a split by hand leaves, in words. */
+export const handRestWords = (rest: number) => (rest > 0 ? `${naira(rest)} left to match afterwards.` : "All of the payment counts towards these.");
 
 /** The picker's words: about invoices only while the business has no order waiting for money. */
 export function pickerWords(orders: boolean) {

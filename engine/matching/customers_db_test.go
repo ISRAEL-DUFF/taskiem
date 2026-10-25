@@ -320,11 +320,21 @@ func TestSplitConfirmAndPartialUndo(t *testing.T) {
 	var prop matching.Proposal
 	w.in(func(tx pgx.Tx) error {
 		var err error
-		prop, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID)
+		prop, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID, false)
 		return err
 	})
-	if len(prop.Parts) != 2 || prop.Parts[0].Number != older.Number || prop.Parts[0].AmountKobo != 2000000 || prop.Parts[1].AmountKobo != 3000000 || prop.CreditKobo != 1000000 {
+	if len(prop.Parts) != 2 || prop.Parts[0].Number != older.Number || prop.Parts[0].AmountKobo != 2000000 || prop.Parts[1].AmountKobo != 3000000 || prop.CreditKobo != 1000000 || !prop.Over {
 		t.Fatalf("proposal %+v", prop)
+	}
+	// For To match, the suggested invoice first, the same amounts.
+	var first matching.Proposal
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		first, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID, true)
+		return err
+	})
+	if len(first.Parts) != 2 || first.Parts[0].Number != open[0].Number || first.Parts[0].AmountKobo != w.read(open[0].Number).DueKobo || first.CreditKobo != 1000000 {
+		t.Fatalf("proposal, suggested first %+v (suggested %s)", first, open[0].Number)
 	}
 	// More than the payment: refused.
 	if _, err := w.m.ConfirmParts(ctx, w.env.Tenant, open[0].ID, []matching.Part{{Invoice: older.Number, AmountKobo: 4000000}, {Invoice: newer.Number, AmountKobo: 3000000}}, false, "user:ada"); !errors.Is(err, invoicing.ErrInvalid) {
@@ -346,21 +356,35 @@ func TestSplitConfirmAndPartialUndo(t *testing.T) {
 	if len(left) != 1 || left[0].LeftKobo == nil || *left[0].LeftKobo != 1500000 || len(w.open()) != 0 {
 		t.Fatalf("the rest %+v %+v", left, w.open())
 	}
-	// The rest matched by hand to a third invoice (a second part towards the
-	// same invoice is not added: undo and split again).
-	third := w.invoiceFor(ada, 1500000, "")
-	if r, err := w.m.Match(ctx, w.env.Tenant, left[0].EntryID, third.Number, "user:ada"); err != nil || r.Invoice == nil || r.Invoice.Status != "paid" {
-		t.Fatalf("rest %v %+v", err, r)
+	// The rest by hand: a second part of the same payment towards the
+	// older invoice adds to the first (a row of its own), and the rest
+	// goes to a third invoice.
+	third := w.invoiceFor(ada, 1000000, "")
+	if s, err := w.m.MatchParts(ctx, w.env.Tenant, left[0].EntryID, []matching.Part{{Invoice: older.Number, AmountKobo: 500000}, {Invoice: third.Number, AmountKobo: 1000000}}, false, "user:ada"); err != nil || len(s.Parts) != 2 || s.LeftKobo != 0 {
+		t.Fatalf("rest %v %+v", err, s)
+	}
+	if o := w.read(older.Number); o.Status != "paid" || o.PaidKobo != 2000000 || len(o.Payments) != 2 || o.Payments[0].AmountKobo+o.Payments[1].AmountKobo != 2000000 {
+		t.Fatalf("a second part towards the same invoice: %s %d %+v", o.Status, o.PaidKobo, o.Payments)
 	}
 	if len(w.unmatched()) != 0 {
 		t.Errorf("nothing should be left: %+v", w.unmatched())
 	}
-	// Undo the newer invoice's part: the older stays paid; ₦30,000 waits.
+	// Nothing left: the same match again is a no-op, and any more towards
+	// another invoice is refused, naming what the payment counts towards.
+	if r, err := w.m.Match(ctx, w.env.Tenant, left[0].EntryID, third.Number, "user:ada"); err != nil || r.Invoice == nil || len(r.Invoice.Payments) != 1 {
+		t.Fatalf("again: %v %+v", err, r)
+	}
+	fourth := w.invoiceFor(ada, 100, "")
+	if _, err := w.m.Match(ctx, w.env.Tenant, left[0].EntryID, fourth.Number, "user:ada"); !errors.Is(err, invoicing.ErrState) || !strings.Contains(err.Error(), "already counted towards") {
+		t.Fatalf("over: %v", err)
+	}
+	// Undo the newer invoice's part: the older stays paid (both its
+	// parts); ₦30,000 waits.
 	w.in(func(tx pgx.Tx) error {
 		_, err := w.inv.UndoPayment(ctx, tx, w.env.Tenant, newer.Number, n.Payments[0].ID, "user:ada")
 		return err
 	})
-	if n, o := w.read(newer.Number), w.read(older.Number); n.Status == "paid" || o.Status != "part_paid" || o.PaidKobo != 1500000 || w.read(third.Number).Status != "paid" {
+	if n, o := w.read(newer.Number), w.read(older.Number); n.Status == "paid" || o.Status != "paid" || o.PaidKobo != 2000000 || w.read(third.Number).Status != "paid" {
 		t.Fatalf("after undoing one part %s %s %d", n.Status, o.Status, o.PaidKobo)
 	}
 	if left := w.unmatched(); len(left) != 1 || *left[0].LeftKobo != 3000000 {
@@ -371,7 +395,7 @@ func TestSplitConfirmAndPartialUndo(t *testing.T) {
 	w.in(func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT count(*) FROM customer_invoice_payments WHERE entry_id = $1`, left[0].EntryID).Scan(&parts)
 	})
-	if parts != 3 {
+	if parts != 4 {
 		t.Errorf("parts %d", parts)
 	}
 }
@@ -535,5 +559,54 @@ func TestPayerMemory(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The split is offered whenever the customer has more than one open
+// invoice, not only when the payment is more than is due on the suggested
+// one: for To match the suggested invoice first with what it is due, the
+// rest with 0 to choose from; for chat oldest first, and not offered
+// (Over false) when the payment is no more than is due.
+func TestSplitOfferedAcrossOpenInvoices(t *testing.T) {
+	w := newWorld(t)
+	ada := invoicing.Customer{Name: "Ada Obi", Phone: "+2348031230006"}
+	older := w.invoiceFor(ada, 2000000, "2099-09-01")
+	newer := w.invoiceFor(ada, 3000000, "2099-12-01")
+	w.heard("virtual_account.credited", map[string]any{"reference": "PAY-SEVERAL", "amount_kobo": int64(3000000), "payer_name": "ADA OBI"})
+	open := w.open()
+	if len(open) == 0 || open[0].Number != newer.Number {
+		t.Fatalf("suggestions %+v", open)
+	}
+	var first, oldest matching.Proposal
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		if first, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID, true); err != nil {
+			return err
+		}
+		oldest, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID, false)
+		return err
+	})
+	if first.Over || len(first.Parts) != 2 || first.Parts[0].Number != newer.Number || first.Parts[0].AmountKobo != 3000000 || first.Parts[1].Number != older.Number || first.Parts[1].AmountKobo != 0 || first.CreditKobo != 0 {
+		t.Fatalf("suggested first %+v", first)
+	}
+	if oldest.Over || len(oldest.Parts) != 2 || oldest.Parts[0].Number != older.Number || oldest.Parts[0].AmountKobo != 2000000 || oldest.Parts[1].AmountKobo != 1000000 {
+		t.Fatalf("oldest first %+v", oldest)
+	}
+	// An invoice alone, and a payment no more than is due: nothing to split.
+	bola := invoicing.Customer{Name: "Bola Ade", Phone: "+2348031230007"}
+	only := w.invoiceFor(bola, 1000000, "")
+	w.heard("virtual_account.credited", map[string]any{"reference": "PAY-ONE", "amount_kobo": int64(1000000), "payer_name": "BOLA ADE"})
+	for _, s := range w.open() {
+		if s.Number != only.Number {
+			continue
+		}
+		w.in(func(tx pgx.Tx) error {
+			var err error
+			first, err = w.m.Propose(ctx, tx, w.env.Tenant, s.ID, true)
+			return err
+		})
+		if len(first.Parts) != 0 || first.Over {
+			t.Fatalf("one invoice %+v", first)
+		}
 	}
 }
