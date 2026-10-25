@@ -264,6 +264,39 @@ export function Item({ to, icon, tone, title, sub, side, sideSub, extra, testid,
   );
 }
 
+/** One row of Items with its own buttons instead of a link (a member, a
+ * channel, a key): an icon or a letter on a tint, a title with something
+ * at its end, lines under it, and the actions under those. */
+export function Row({ icon, letter, tone, title, side, sub, children, testid, className, attrs }: {
+  icon?: string;
+  letter?: string;
+  tone?: "warn" | "danger" | "ok" | "info" | "muted";
+  title: ReactNode;
+  side?: ReactNode;
+  sub?: ReactNode;
+  children?: ReactNode;
+  testid?: string;
+  className?: string;
+  /** More attributes for the row, such as data-status for tests. */
+  attrs?: Record<string, string>;
+}) {
+  return (
+    <li className={className ? `act-row ${className}` : "act-row"} data-testid={testid} {...attrs}>
+      <span className={tone ? `list-icon ${tone}` : "list-icon"} aria-hidden="true">
+        {letter ? letter.slice(0, 1).toUpperCase() : <Icon name={icon ?? "more"} />}
+      </span>
+      <div className="grow">
+        <div className="item-top">
+          <span className="title">{title}</span>
+          {side}
+        </div>
+        {sub}
+        {children && <div className="row-actions">{children}</div>}
+      </div>
+    </li>
+  );
+}
+
 /** What a list shows before it has anything: an icon, one sentence saying
  * what goes here, and the action that adds the first one. */
 export function EmptyState({ icon, children, action }: { icon: string; children: ReactNode; action?: ReactNode }) {

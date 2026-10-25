@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useLoad } from "../ui";
+import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useLoad, Row } from "../ui";
 import { naira } from "../lib/invoices";
 import { receiptHow, receiptPDF, receiptQuery, receiptStatus, type Receipt } from "../lib/schoolPayments";
 import { SchoolTabs } from "./Schools";
@@ -72,61 +72,50 @@ export function SchoolReceiptsPage() {
   );
 }
 
-/** Receipts as a table: number, student, amount, date, invoice, state, the PDF. */
+/** Receipts as rows: number, student, amount, date, invoice, state, the PDF. */
 export function ReceiptTable({ receipts, student }: { receipts: Receipt[]; student?: boolean }) {
   return (
-    <table className="cards">
-      <thead>
-        <tr>
-          <th scope="col">Number</th>
-          {!student && <th scope="col">Student</th>}
-          <th scope="col">Amount</th>
-          <th scope="col">Paid</th>
-          <th scope="col">Invoice</th>
-          <th scope="col">State</th>
-          <th scope="col">
-            <span className="sr-only">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {receipts.map((r) => {
-          const st = receiptStatus(r);
-          return (
-            <tr key={r.id} data-testid="receipt" data-voided={r.voided}>
-              <td className="primary" data-label="Number">
-                {r.number}
-                <div className="hint">{receiptHow(r.how)}</div>
-              </td>
-              {!student && (
-                <td data-label="Student">
-                  <Link to={`/schools/students/${encodeURIComponent(r.student_id)}`}>{r.admission_number}</Link> {r.name}
-                  <div className="hint">{r.class}</div>
-                </td>
-              )}
-              <td className="sf-price" data-label="Amount">
-                {naira(r.amount_kobo)}
-                <div className="hint">{r.balance_after_kobo === 0 ? "Paid in full after it" : `${naira(r.balance_after_kobo)} left after it`}</div>
-              </td>
-              <td data-label="Paid">{fmtTime(r.paid_at)}</td>
-              <td data-label="Invoice">
-                <Link to={`/invoices/${encodeURIComponent(r.invoice_id)}`}>{r.invoice_number}</Link>
-                <div className="hint">{r.term}</div>
-              </td>
-              <td data-label="State">
-                <span className={`badge sf-status ${st.tone}`}>{st.label}</span>
-                {r.voided && r.void_reason && <div className="hint">{r.void_reason}</div>}
-              </td>
-              <td data-label="">
-                <a href={receiptPDF(r)} target="_blank" rel="noopener" aria-label={`Open PDF of receipt ${r.number}`}>
-                  Open PDF
-                </a>
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <ul className="items" aria-label="Receipts">
+      {receipts.map((r) => {
+        const st = receiptStatus(r);
+        return (
+          <Row
+            key={r.id}
+            testid="receipt"
+            attrs={{ "data-voided": String(r.voided) }}
+            icon="invoices"
+            tone={r.voided ? "muted" : "ok"}
+            title={r.number}
+            side={<span className="item-figure">{naira(r.amount_kobo)}</span>}
+            sub={
+              <>
+                <span className="sub">
+                  {receiptHow(r.how)} · paid {fmtTime(r.paid_at)} · {r.balance_after_kobo === 0 ? "paid in full after it" : `${naira(r.balance_after_kobo)} left after it`}
+                </span>
+                <span className="sub">
+                  {!student && (
+                    <>
+                      <Link to={`/schools/students/${encodeURIComponent(r.student_id)}`}>{r.admission_number}</Link> {r.name} · {r.class} ·{" "}
+                    </>
+                  )}
+                  <Link to={`/invoices/${encodeURIComponent(r.invoice_id)}`}>{r.invoice_number}</Link> · {r.term}
+                </span>
+                <span className="item-tag">
+                  <span className={`badge sf-status ${st.tone}`}>
+                    {st.label}
+                  </span>
+                  {r.voided && r.void_reason && <span>{r.void_reason}</span>}
+                </span>
+              </>
+            }
+          >
+            <a className="button" href={receiptPDF(r)} target="_blank" rel="noopener" aria-label={`Open PDF of receipt ${r.number}`}>
+              Open PDF
+            </a>
+          </Row>
+        );
+      })}
+    </ul>
   );
 }
 

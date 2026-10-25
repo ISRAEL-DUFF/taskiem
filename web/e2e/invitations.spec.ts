@@ -34,11 +34,11 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
 
   await page.goto("/members");
   const pending = page.getByTestId("pending-invitations");
-  await expect(pending.getByRole("cell", { name: bob })).toBeVisible();
-  await expect(pending.getByRole("cell", { name: carol })).toBeVisible();
+  await expect(pending.getByTestId("invitation").filter({ hasText: bob })).toBeVisible();
+  await expect(pending.getByTestId("invitation").filter({ hasText: carol })).toBeVisible();
   page.once("dialog", (d) => void d.accept());
-  await pending.getByRole("row", { name: new RegExp(carol) }).getByRole("button", { name: "Withdraw" }).click();
-  await expect(pending.getByRole("cell", { name: carol })).toHaveCount(0);
+  await pending.getByTestId("invitation").filter({ hasText: carol }).getByRole("button", { name: "Withdraw" }).click();
+  await expect(pending.getByTestId("invitation").filter({ hasText: carol })).toHaveCount(0);
   await page.request.post("/v1/auth/logout", { headers: H });
   await page.context().clearCookies();
 

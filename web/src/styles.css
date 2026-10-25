@@ -1259,3 +1259,17 @@ th { background: var(--panel-2); }
 .empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
 .empty-icon svg { width: 26px; height: 26px; }
 .empty-state { gap: 14px; }
+/* Rows with their own buttons (Row in ui.tsx): members, channels, keys. */
+.items > li.act-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; }
+.act-row .list-icon { font-weight: 700; font-size: 16px; }
+.act-row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.act-row .title { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.act-row .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.row-actions button, .row-actions .button { min-height: 36px; border-radius: 999px; }
+.card > .items, .card > section > .items { margin-top: 4px; }
+@media (max-width: 860px) { .items > li.act-row { padding: 14px 16px; gap: 12px; } }
+.switch-label { margin: 0; font-size: 13px; font-weight: 500; flex: none; }
+.act-row .perms { margin-top: 4px; }
+.alert-row { padding: 12px 0; border-top: 1px solid var(--border); }
+.act-row .audit-detail { max-width: none; white-space: normal; }

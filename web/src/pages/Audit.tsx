@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { get } from "../api";
-import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
 import { Icon } from "../icons";
 import { useAuth } from "../auth";
 import { detailWords, shortIds } from "../lib/audit";
@@ -64,43 +64,48 @@ export function Audit() {
         </EmptyState>
       )}
       {data && data.entries.length > 0 && (
-        <table className="audit">
-          <thead>
-            <tr>
-              <th className="num">#</th>
-              <th>When</th>
-              <th>Who</th>
-              <th>Action</th>
-              <th>Target</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.entries.map((e) => (
-              <tr key={e.seq}>
-                <td className="num hint">{e.seq}</td>
-                <td className="nowrap">{fmtTime(e.at)}</td>
-                <td className="nowrap" title={e.actor_id}>
-                  {names.get(e.actor_id) ?? (
-                    <>
-                      <span className="hint">{e.actor_type}</span> <code>{shortIds(e.actor_id)}</code>
-                    </>
+        <ul className="items audit-list" aria-label="Audit log">
+          {data.entries.map((e) => (
+            <Row
+              key={e.seq}
+              testid="audit-entry"
+              icon={auditIcon(e.action)}
+              title={<code>{e.action}</code>}
+              side={<span className="item-sub">{fmtTime(e.at)}</span>}
+              sub={
+                <>
+                  <span className="sub" title={e.actor_id}>
+                    {names.get(e.actor_id) ?? (
+                      <>
+                        {e.actor_type} <code>{shortIds(e.actor_id)}</code>
+                      </>
+                    )}{" "}
+                    · <span title={e.target}>{shortIds(e.target)}</span> · #{e.seq}
+                  </span>
+                  {detailWords(e.detail) && (
+                    <span className="sub audit-detail" title={JSON.stringify(e.detail)}>
+                      {detailWords(e.detail)}
+                    </span>
                   )}
-                </td>
-                <td>
-                  <code>{e.action}</code>
-                </td>
-                <td title={e.target}>
-                  <code>{shortIds(e.target)}</code>
-                </td>
-                <td className="audit-detail" title={JSON.stringify(e.detail)}>
-                  {detailWords(e.detail)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </>
+              }
+            />
+          ))}
+        </ul>
       )}
     </>
   );
+}
+
+/** An audit entry's icon, by the kind of action. */
+function auditIcon(action: string): string {
+  const kind = action.split(".")[0] ?? "";
+  if (kind === "auth" || kind === "session" || kind === "passkey" || kind === "user") return "lock";
+  if (kind === "workflow" || kind === "run") return "workflows";
+  if (kind === "approval" || kind === "policy") return "approvals";
+  if (kind === "secret" || kind === "key" || kind === "api_key") return "keys";
+  if (kind === "member" || kind === "role" || kind === "invitation") return "members";
+  if (kind === "connection") return "connections";
+  if (kind === "invoice" || kind === "money") return "money";
+  return "audit";
 }
