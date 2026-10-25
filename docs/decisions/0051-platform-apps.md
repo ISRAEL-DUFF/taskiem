@@ -1,4 +1,4 @@
-# 0051. Platform apps: one app per provider, webhooks routed to the business
+# 0051. Platform apps, webhooks routed to the business, and books capabilities
 
 **Status:** Proposed (2026-10-24)
 
@@ -26,6 +26,8 @@ Two smaller gaps come with these apps:
 6. **Refreshed credentials are written back.** A connector may return credentials it refreshed with its response. The worker writes them to the connection, sealed, before the step's result is recorded, under a per-connection advisory lock. Refreshes for one connection happen one at a time across workers, and a worker that waited reads the newer token instead of refreshing. The write is audited as `connection.refresh` with no values. A refresh the provider refuses marks the connection expired with the reason.
 7. **Per-account hosts are connection fields.** Zoho's accounts server and API domain, and Mailchimp's server prefix, are kept on the connection when it is made. The token refresh and every call use them, and the egress allow-list follows them as it follows Xenibase's `base_url`. The allowed hosts are fixed per connector (`*.zoho.com`, `*.zoho.eu`, …; `*.api.mailchimp.com`), so a field cannot point a connection anywhere else.
 
+8. **Books capabilities.** Connector/v1 rule 16 lets only a `kind: rail` declare capabilities. A `kind: product` may now declare the books capabilities of `schemas/capabilities-v1.json` (`books_customer`, `books_invoice`, `books_payment`, `books_sale`, `books_expense`, `books_bill`, and the pickers `books_accounts`, `books_items`, `books_taxes`) and the events `books.invoice.created`, `books.invoice.paid` and `books.payment.recorded`, and no others. A template that keeps the books is written once and runs on Zoho Books, QuickBooks or a later books, as a payroll template runs on any rail ([plan §4.7](../spec/business-connectors.md#47-books-capabilities)).
+
 ## Alternatives considered
 
 | Alternative | Why not |
@@ -34,11 +36,13 @@ Two smaller gaps come with these apps:
 | A webhook URL per business on the provider | Slack, Meta and Intuit don't offer it: the URL belongs to the app |
 | A relay service that receives the app's webhooks and forwards them to tenant URLs | A second ingress with its own verification, secrets and retries, and a second place for an event to be lost. Routing inside the edge reuses ingest's guarantees |
 | Extend 0031's partner routing to the whole platform | 0031's trust boundary is one partner and its own sub-tenants; crossing tenants needs a platform secret and the account key recorded at connect time, which is this decision |
+| A books template per provider | Two copies of every books template to keep in step, and a third with Xero; the rails already showed capabilities avoid that |
 | A refresh service that owns all tokens | Refreshing in the connector stays as 0034 has it; only the write-back and the lock are new |
 
 ## Consequences
 
 - Connector/v1 manifests gain `auth.oauth2.client`, a trigger's `account_key` expression and `delivery: app` for triggers that arrive at the platform URL; the `svix` verification scheme is added in the same work ([plan](../spec/business-connectors.md) K1).
+- `schemas/capabilities-v1.json` gains the books capabilities and events; rule 16 names which kinds may declare which.
 - `connector.Response` gains `Credentials`, honoured only for OAuth connections and only for the keys the manifest declares.
 - The edge gains `/hooks/apps/{client}`. It is the one ingress path that writes into a tenant named by data rather than by the URL, so its routing function is the place to review and test cross-tenant isolation.
 - Uninstall and revoke events (Slack's `app_uninstalled` and `tokens_revoked`, Meta's deauthorisation callback, Intuit's disconnect) mark the account's connections expired.

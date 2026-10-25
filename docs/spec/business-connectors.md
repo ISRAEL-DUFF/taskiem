@@ -35,12 +35,13 @@ Contents:
 
 Five providers, each built as ordinary connector/v1 connectors under the clean-room policy: from their public documentation only, read and cited in each manifest's header.
 
-They share four things the platform does not do yet, and those come first (K1):
+They share five things the platform does not do yet, and those come first (K1):
 
 - **Taskiem's own app at each provider.** A business connects with OAuth through Taskiem's registered app instead of making its own. Slack, Meta and Intuit require this for one-click connecting; Zoho and Mailchimp offer it.
 - **Webhooks sent to the app, not to the business.** Slack, Meta and Intuit send every connected business's events to the one URL on Taskiem's app. Today every hooks URL is a tenant's own (`/hooks/{tenant}/...`). [Decision 0051](../decisions/0051-platform-apps.md) adds a platform URL per provider and routes each verified event to the connections that hold its account (a workspace, a Page, a company).
 - **Refresh tokens that change.** QuickBooks issues a new refresh token on each refresh and revokes the chain if an old one is used again; Zoho's access tokens last an hour. Connectors refresh in the process today (Google does), but cannot store what the provider hands back. K1 lets them, under a lock per connection.
 - **Accounts in several places.** Zoho keeps each user's data in one of several data centres, and Mailchimp in a server prefix. The token answer says which, and the connection keeps it.
+- **Books templates written once.** Payment templates already run on any rail through capabilities ([0044](../decisions/0044-rails-and-products.md)). Books capabilities (§4.7) do the same for Zoho Books and QuickBooks, so "copy an invoice to the books" is one template, not two.
 
 Then, in order: Slack (small, and proves the platform pieces), QuickBooks and Zoho Books (the books, which invoices and the money log of [0045](../decisions/0045-tally-in-taskiem.md) feed), Instagram and Facebook (the longest wait is Meta's review, so its application starts in K0), Zoho's other products, and email.
 
@@ -64,13 +65,19 @@ Then, in order: Slack (small, and proves the platform pieces), QuickBooks and Zo
 | Taskiem's Meta app, for the WhatsApp platform number (app secret, `X-Hub-Signature-256`) | [WhatsApp](../whatsapp.md) |
 | Messages to people outside a business, consent by a one-tap link | [Decision 0039](../decisions/0039-reaching-people-outside.md) |
 | Invoices, the money log and matching | [0045](../decisions/0045-tally-in-taskiem.md), [money log](../money-log.md) |
-| Callable templates and workflows | [0047](../decisions/0047-composable-templates.md), [0048](../decisions/0048-callable-workflows.md) |
+| Callable templates and workflows; subflows, another workflow as a child run | [0047](../decisions/0047-composable-templates.md), [0048](../decisions/0048-callable-workflows.md), [0049](../decisions/0049-subflows.md) |
+| AI steps: a model asked at run time, the run's personal data masked by default, an owner's switch | [0050](../decisions/0050-ai-steps.md) |
+| Capabilities: templates written once for any rail (`pay_bank`, `collect_transfer`…), but only a `kind: rail` declares them | [0044](../decisions/0044-rails-and-products.md), [connector/v1](../contracts/connector-v1.md) rule 16 |
+| Approvals decided by buttons on a member's linked WhatsApp or Telegram (signed decision tokens, step-up handed to the web app), from Home on a phone, and school approvals the same way; "First payment to this account" on an approval paying a new bank account | [Governance](../governance.md), [money log](../money-log.md#accounts-paid) |
+| Slack alert channels, by a pasted incoming-webhook URL | [Alerts](../alerts.md) |
+| The schools daily close and the money log's matched payments: what the books should receive | [Schools](schools.md) B9, [money log](../money-log.md) |
 | Remita, the certified provider Zoho Books' Nigeria edition uses for NRS e-invoicing | [Remita](../integrations/remita.md) |
 
 **Missing:**
 - app-level webhooks;
 - storing rotated refresh tokens;
 - per-account API hosts;
+- capabilities for anything but rails, so a books template would be written once for Zoho Books and again for QuickBooks;
 - connectors for Meta messaging, Zoho, QuickBooks, Resend, Brevo and Mailchimp;
 - templates for any of them.
 
@@ -129,6 +136,21 @@ Each connector gets the pickers its templates need, so no owner types an id (no-
 
 Each picker is a list action plus `picker` in the template parameter, as sheets and tables already are.
 
+### 4.7 Books capabilities
+
+Zoho Books and QuickBooks (and Xero and Sage later) do the same few things. As payment rails do for paying, a books connector says what it can do in Taskiem's words, and a template written once runs on whichever books the business connected ([decision 0051](../decisions/0051-platform-apps.md) point 8; connector/v1 rule 16 extended beyond `kind: rail`):
+
+| Capability | Input | Never twice by |
+| --- | --- | --- |
+| `books_customer` | Name, email, phone; answers the books' own id | Found by email or phone before creating |
+| `books_invoice` | Taskiem's invoice number, customer, lines, VAT, due date | The invoice number as the books' reference (`reference_number`, `DocNumber`) |
+| `books_payment` | Invoice, amount, date, the money log entry's reference | That reference |
+| `books_sale` | A day's takings by method (a sales receipt) | The day and the source as the reference |
+| `books_expense`, `books_bill` | Supplier, amount, account, date, VAT | The supplier's bill number |
+| `books_accounts`, `books_items`, `books_taxes` | Pickers | Reads |
+
+The normalised events `books.invoice.created`, `books.invoice.paid` and `books.payment.recorded` start a `capability_event` trigger on either books. A books mapping needs only the expressions its rail mappings already use; what is new is that a `kind: product` may declare the books capabilities, and only those.
+
 ## 5. Slack, finished
 
 **Connecting.** **Add to Slack** through Taskiem's Slack app (OAuth v2, `oauth.v2.access`):
@@ -147,15 +169,22 @@ Each picker is a list action plus `picker` in the template parameter, as sheets 
 | `open_conversation` | `conversations.open` | A direct message to one person found by email |
 | `schedule_message` | `chat.scheduleMessage` | Reminders at a time |
 
+**Approvals in Slack: a third chat channel.** WhatsApp and Telegram already decide approvals by buttons on a member's linked chat. Slack joins them on the same machinery rather than as a workflow waiting on a button:
+- **Linking:** a member links their Slack user from their profile, found by their email (`users.lookupByEmail`) and confirmed by them in Slack. An unlinked Slack user's click decides nothing.
+- **The request:** the approval's heading, amount, payee and expiry in the member's language, with "First payment to this account" when it applies. Sent as a direct message to each approver who linked Slack, besides their other channels.
+- **The buttons:** they carry the signed decision token chat buttons carry, checked against the approver's role as the web inbox is. An approval that needs a passkey or code hands off to the web app, as WhatsApp's step-up does. Once it is decided anywhere, the Slack message is updated to say by whom.
+- **School approvals** (cash postings and discounts) come the same way to holders of `school.approve`.
+
+**Alerts:** an alert channel can be a channel of a Slack connection, picked rather than pasted. The incoming-webhook URL stays for businesses that don't connect Slack. A connection's bot token is in the vault like the URL, so the BYOK note on Slack channels holds for both.
+
 **Templates** (all post to a channel the owner picks):
 - Failed payouts and returned salaries.
-- A daily money summary from the money log.
+- A daily money summary from the money log, and the schools daily close where the area is on.
 - New storefront orders and paid invoices.
-- An approval request with Approve and Reject buttons, decided through interactivity and checked against the approver's role. This is the Slack counterpart of the WhatsApp buttons, and uses the same decision tokens.
 
 **Done when:**
 - a business adds Slack with one click;
-- a workflow posts, waits for a button and goes on;
+- an approval is decided by a linked member's button in Slack, refused for an unlinked user, and handed to the web app when it needs a passkey;
 - the events of two businesses' workspaces reach only their own workflows;
 - uninstalling marks the connection expired.
 
@@ -197,6 +226,8 @@ After connecting, Taskiem subscribes the Page to the app (`POST /{page-id}/subsc
 | `get_conversation` | Recent messages, for context |
 | `reply_to_comment` (later) | A private reply to a comment |
 
+**Personal data.** The `messages` trigger's schema marks the sender's id, name and the message text `x-pii`, so they are sealed in history. An `ai` step that reads a DM to draft a reply or pull out an order (decision 0050) gets them as placeholders and puts the name back in its answer. A template that needs the model to read the text as it is (an address written in words) lists it in `personal_data`, which is audited at publish. Without the owner's AI switch or the plan's `ai` feature, the auto-reply templates offer fixed replies instead.
+
 **Never twice.** Meta's Send API takes no idempotency key, so `send_message` is an unsafe write: an unknown outcome parks it for a person.
 
 **People and consent.** A person who wrote first opened the window. Their Instagram or Page-scoped id is their address there, and becomes a contact of the business, as 0039 does for WhatsApp. Nothing is sent to anyone who has not written.
@@ -224,7 +255,7 @@ Books' API (v3) calls carry the organisation (`organization_id`). A connection i
 
 | Action | Notes |
 | --- | --- |
-| `list_organizations` | The connection test and the picker |
+| `list_organizations` | The connection test and the picker; every action below also maps to a books capability (§4.7) |
 | `create_contact`, `find_contact` | Customers and vendors, found by email or phone before creating, so a retry finds the one it made |
 | `create_invoice`, `get_invoice`, `find_invoices` | With items, VAT and due date; `reference_number` set from Taskiem's invoice number, so a retry finds the invoice instead of making a second (a reconcilable write) |
 | `record_payment` | A customer payment against invoices, with the money log entry's reference; reconcilable by that reference |
@@ -274,7 +305,7 @@ These are each a small connector on the same client, built when a template needs
 
 | Action | Notes |
 | --- | --- |
-| `get_company` | The connection test (CompanyInfo) |
+| `get_company` | The connection test (CompanyInfo); every action below also maps to a books capability (§4.7) |
 | `find_customer`, `create_customer` | By email or display name first |
 | `create_invoice`, `get_invoice`, `query_invoices` | `DocNumber` from Taskiem's invoice number. Creates send Intuit's `requestid`, so a repeated request is answered once (K0 confirms the window); also reconcilable by `DocNumber` |
 | `create_payment` | A received payment applied to invoices, with the money log reference in its memo |
@@ -320,18 +351,21 @@ Each connector ships with templates, made callable where they return something (
 
 | Connector | Templates |
 | --- | --- |
-| Slack | Money alerts to a channel; daily money summary; approvals with buttons; new orders and paid invoices |
-| Instagram, Messenger | Answer DMs outside working hours; a DM order becomes a payment link; thank the customer when paid; assign new conversations |
-| Zoho Books, QuickBooks | Copy each Taskiem invoice to the books; record matched payments; a day's POS takings as a sales receipt; supplier bills from email |
-| Zoho Mail | Invoices and receipts from the business's own mailbox; supplier bills from mail into the books |
+| Slack | Money alerts to a channel; daily money summary and the schools daily close; new orders and paid invoices (approvals are the chat channel of §5, not a template) |
+| Instagram, Messenger | Answer DMs outside working hours (an `ai` step drafting from the business's FAQ table, or fixed replies); a DM order becomes a payment link; thank the customer when paid; assign new conversations |
+| Books, on either (§4.7) | **Copy an invoice to the books**, a callable template (0047) that finds or creates the customer and records the invoice, used by the others; record matched payments from the money log; a day's POS and storefront takings, or a school's daily close, as a sales receipt; supplier bills from email |
+| Zoho Mail | Invoices and receipts from the business's own mailbox; supplier bills from mail into the books (an `ai` step reads the bill into the `books_bill` input; paying it later is an ordinary approval, with the first-payment warning for a new supplier account) |
 | Zoho CRM | New customers and storefront orders as contacts and deals |
 | Resend | Receipts and invoices by email |
 | Brevo, Mailchimp | Opted-in customers into a list; win-back campaigns to customers who have not bought in 60 days |
 
+**Template step or subflow.** Copying to the books is a template step (0047): it is short, and its writes belong to the run that made the invoice. A long job that runs on its own, such as a monthly catch-up copying every invoice the books are missing, is a workflow the others start as a subflow (0049), so its history and retries stay its own.
+
 The AI builder learns each connector from its manifest as it does today. The eval suite gains cases per connector, and rules:
 - a reply after the window is never planned;
 - marketing only to opted-in contacts;
-- invoices copied once, with their reference.
+- invoices copied once, with their reference;
+- books work through the books capabilities, not one provider's actions, unless the business asks for that provider's own feature.
 
 ## 11. Milestones
 
@@ -359,6 +393,7 @@ The AI builder learns each connector from its manifest as it does today. The eva
 - **Per-account API hosts** (§4.4), with the egress allow-list following them.
 - **The `svix` verification scheme.**
 - **Remote registration's renewal** for subscriptions that expire.
+- **Books capabilities** (§4.7): the schema, rule 16 for `kind: product`, the books events. The first mappings come with K3 and K4.
 
 **Done when:**
 - two tenants' events for two accounts at one provider each reach only their own connection;
@@ -368,15 +403,15 @@ The AI builder learns each connector from its manifest as it does today. The eva
 
 ### K2: Slack (M; needs K1)
 
-§5: **Add to Slack**, platform routing, uninstall handling, the three actions, the templates, the approval buttons.
+§5: **Add to Slack**, platform routing, uninstall handling, the three actions, Slack as an approvals chat channel with member linking, alert channels from the connection, the templates.
 
 ### K3: QuickBooks Online (L; needs K1, K0's sandbox)
 
-§8, on Intuit's sandbox companies, with the invoice and payment templates over invoices and the money log.
+§8, on Intuit's sandbox companies: the connector, its books capability mappings, and the books templates of §10 written against the capabilities. K4 then only adds Zoho Books' mappings, and the same templates run on it.
 
 ### K4: Zoho platform and Zoho Books (L; needs K1)
 
-The Zoho client with data centres (§7, §4.4), `zoho_books@1` (§7.1), the organisation picker, the Books templates, both editions in tests.
+The Zoho client with data centres (§7, §4.4), `zoho_books@1` (§7.1) with its books capability mappings, the organisation picker, and K3's books templates passing on Zoho Books in both editions.
 
 ### K5: Instagram and Facebook messages (L; needs K1, Meta's review)
 
@@ -421,7 +456,9 @@ The eval cases and rules of §10, the Start page entries by connected service, a
 | Routing | Two tenants and two accounts per provider; an unknown account; an account connected twice in one tenant; a connection deleted while its events arrive |
 | Refreshing | Concurrent refreshes across workers spend one refresh token; a rotated token persists; an invalid refresh expires the connection with its reason |
 | Never twice | An invoice copied to QuickBooks and Zoho Books once despite a lost answer; a Resend email sent once; a Brevo send whose outcome is unknown parks |
-| Rules | A Meta reply after the window refused before sending; a marketing add without consent refused |
+| Rules | A Meta reply after the window refused before sending; a marketing add without consent refused; a DM's sender and text reach an `ai` step only as placeholders unless let through |
+| Capabilities | Every books template run on both Zoho Books and QuickBooks fakes with the same expected writes |
+| Approvals | A Slack button from a linked approver decides once; an unlinked user's, a forged token's and a second click's decide nothing; a step-up approval hands off |
 | Templates | Workflow tests for each template on fake services, as R4 and R7's do |
 | End to end | One per provider on the real stack with a fake provider: connect by OAuth, an event in, a write out |
 
@@ -449,6 +486,7 @@ The eval cases and rules of §10, the Start page entries by connected service, a
 | Providers change webhook formats (Intuit's CloudEvents move) | Build to the current format; fixtures recorded from the sandbox; the integration page names the version |
 | Email sent from unverified domains, or marketing without consent | Refused before calling (§9, §4.5) |
 | A business with several Zoho organisations or QuickBooks companies | One connection each, as Xenibase projects are |
+| Zoho Books and QuickBooks differ more than the capabilities allow (tax codes, multicurrency) | Mappings carry the differences as rails' do; a field one books lacks is in `unsupported`, and a template that needs it says so when the business picks that books |
 | Should Taskiem write to the books automatically, or only when a person confirms? | Proposed: templates copy invoices and matched payments automatically (they are records of what happened), and never edit or delete what the accountant wrote |
 
 ## 16. Out of scope

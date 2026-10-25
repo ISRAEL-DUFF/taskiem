@@ -43,7 +43,7 @@ The [business connectors plan](spec/business-connectors.md) and [decision 0051](
 | --- | --- | --- | --- | --- |
 | K0-1 | Meta Business Verification of Taskiem's business | Founders | — | K5, Instagram and Facebook messages |
 | K0-2 | Meta App Review for Advanced Access to `pages_messaging`, `pages_manage_metadata`, `instagram_basic`, `instagram_manage_messages` as a Tech Provider, with a screencast of each use; and the choice of Facebook Login or Instagram Login | Founders, with engineering | Plan written | K5 going to businesses |
-| K0-3 | Slack app with public distribution turned on; Slack test workspace | Engineering | Plan written | K2, Slack |
+| K0-3 | Slack app with public distribution turned on; Slack test workspace (the workspace also serves P13) | Engineering | Plan written | K2, Slack |
 | K0-4 | Intuit developer app; sandbox companies; production keys after Intuit's app assessment (security questionnaire, privacy policy and terms URLs) | Founders, with engineering | Plan written | K3, QuickBooks going to businesses |
 | K0-5 | Zoho server-based client with multi-data-centre support; Zoho Books test organisations in the Nigeria and global editions | Engineering | Plan written | K4, K6 |
 | K0-6 | Mailchimp app registration; Resend and Brevo test accounts with verified test domains | Engineering | Plan written | K7, K8 |
