@@ -149,6 +149,29 @@ func (t Taint) RedactText(s string) string {
 	return strings.NewReplacer(pairs...).Replace(s)
 }
 
+// Within reports whether free text contains a known personal value (at
+// least MinRedact long), and its category: text built from personal data,
+// such as an AI step's prompt, is sealed whole.
+func (t Taint) Within(s string) (string, bool) {
+	if len(t) == 0 || len(s) < MinRedact {
+		return "", false
+	}
+	best, cat := "", ""
+	for k, c := range t {
+		v := k[2:]
+		if len(v) >= MinRedact && len(v) > len(best) && strings.Contains(s, v) {
+			best, cat = v, c
+		}
+	}
+	if best == "" {
+		return "", false
+	}
+	if cat == "" {
+		cat = "other"
+	}
+	return cat, true
+}
+
 // Seal replaces values at the declared paths, and anywhere a tainted value
 // appears, with envelopes. It returns the new value; v is not modified.
 func Seal(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, paths []Path, taint Taint) (any, error) {

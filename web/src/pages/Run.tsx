@@ -7,14 +7,16 @@ import { RunCanvas } from "../canvas/RunCanvas";
 import { RepairPanel } from "./RepairPanel";
 import { duration, templateGroups, timeline, type StepRow } from "../lib/timeline";
 import { respondentText } from "./Forms";
+import { Icon } from "../icons";
+import { runLook, stepCounts } from "../lib/lists";
 import { Badge, ErrorBox, Field, Json, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface RunDoc {
   run: RunSummary;
   events: RunEvent[];
   revealed: boolean;
-  /** The run this one resumed from a failed step, and the runs that resumed it. */
-  forks?: { parent_run_id: string | null; resumed_step: string | null; resumed_by: string[] };
+  /** The run this one resumed from a failed step (or whose subflow step started it: parent_step), the runs that resumed it, and the child runs its subflow steps started. */
+  forks?: { parent_run_id: string | null; resumed_step: string | null; parent_step?: string | null; resumed_by: string[]; subflows?: string[] };
   /** Each failed step's error in plain words (no-technical-steps N5). */
   plain_errors?: Record<string, string>;
 }
@@ -94,6 +96,8 @@ export function RunPage() {
   // A run a form started: the submission, masked (trigger.form).
   const started = events.find((e) => e.type === "RunStarted")?.payload as { trigger?: { type?: string; form?: Record<string, unknown> } } | undefined;
   const form = started?.trigger?.form;
+  const look = runLook(shownStatus);
+  const steps = stepCounts(rows.map((x) => x.status));
   return (
     <>
       <p className="crumbs">
@@ -101,39 +105,25 @@ export function RunPage() {
           Activity
         </Link>
       </p>
-      <div className="editor-head">
-        <div className="editor-title">
-          <h1>{r.workflow}</h1>
-          <Badge value={shownStatus} />
-          {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
+      <section className="run-card" aria-labelledby="run-title">
+        <div className="run-card-head">
+          <span className={`list-icon big ${look.tone ?? ""}`}>
+            <Icon name={look.icon} />
+          </span>
+          <div className="run-card-name">
+            <div className="run-card-title">
+              <h1 id="run-title">{r.workflow}</h1>
+              <Badge value={shownStatus} />
+              {!reveal && !TERMINAL.has(shownStatus) && <span className="hint live-dot">live</span>}
+            </div>
+            <p className="run-summary">
+              Started {fmtTime(r.started_at)} by {startedByWords(r.started_by, started?.trigger?.type, names)}
+              {r.ended_at && ` · took ${duration(r.started_at, r.ended_at)}`}
+            </p>
+          </div>
         </div>
-        <div className="page-actions">
-          {can("pii.reveal") && (
-            <label className="inline" title="Decrypt personal data for this view; the access is audited">
-              <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
-            </label>
-          )}
-          <Link className="button" to={`/workflows/${r.workflow_id}?v=${r.version}`}>
-            Open the workflow
-          </Link>
-          {can("run.cancel") && !TERMINAL.has(shownStatus) && (
-            <button
-              className="danger"
-              disabled={act.busy}
-              onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()), "Run cancelled")}
-            >
-              Cancel run
-            </button>
-          )}
-        </div>
-      </div>
-      <p className="run-summary">
-        Started {fmtTime(r.started_at)} by {startedByWords(r.started_by, started?.trigger?.type, names)}
-        {r.ended_at && ` · took ${duration(r.started_at, r.ended_at)}`}
-      </p>
-      <ErrorBox error={act.error} />
-      <div className="card">
-        <dl className="kv">
+        {steps && <p className="run-steps">Steps: {steps}</p>}
+        <dl className="kv run-facts">
           {form && (
             <>
               <dt>Form answers</dt>
@@ -155,7 +145,30 @@ export function RunPage() {
           <dd>
             <code>{r.id}</code>
           </dd>
-          {data.forks?.parent_run_id && (
+          {data.forks?.parent_run_id && data.forks.parent_step && (
+            <>
+              <dt>Started by</dt>
+              <dd data-testid="started-by-run">
+                step <code>{data.forks.parent_step}</code> of run{" "}
+                <Link to={`/runs/${data.forks.parent_run_id}`}>
+                  <code>{data.forks.parent_run_id}</code>
+                </Link>
+              </dd>
+            </>
+          )}
+          {(data.forks?.subflows?.length ?? 0) > 0 && (
+            <>
+              <dt>Started runs</dt>
+              <dd data-testid="started-runs">
+                {data.forks?.subflows?.map((c) => (
+                  <Link key={c} to={`/runs/${c}`} style={{ marginRight: 10 }}>
+                    <code>{c}</code>
+                  </Link>
+                ))}
+              </dd>
+            </>
+          )}
+          {data.forks?.parent_run_id && !data.forks.parent_step && (
             <>
               <dt>Resumed from</dt>
               <dd data-testid="resumed-from">
@@ -184,7 +197,27 @@ export function RunPage() {
             A step's outcome is unknown and cannot be safely retried. Check with the provider, then resolve the parked step below.
           </div>
         )}
+      </section>
+      <div className="run-actions">
+        <Link className="button" to={`/workflows/${r.workflow_id}?v=${r.version}`}>
+          Open the workflow
+        </Link>
+        {can("run.cancel") && !TERMINAL.has(shownStatus) && (
+          <button
+            className="danger"
+            disabled={act.busy}
+            onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()), "Run cancelled")}
+          >
+            Cancel run
+          </button>
+        )}
+        {can("pii.reveal") && (
+          <label className="inline" title="Decrypt personal data for this view; the access is audited">
+            <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
+          </label>
+        )}
       </div>
+      <ErrorBox error={act.error} />
       <RepairPanel run={id} status={shownStatus} />
       <div className="toolbar">
         <h2 className="grow">Steps</h2>

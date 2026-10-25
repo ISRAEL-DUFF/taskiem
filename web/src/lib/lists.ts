@@ -36,3 +36,56 @@ export function filterRuns(runs: RunSummary[], q: string, from: string): RunSumm
     return ws.every((w) => text.includes(w));
   });
 }
+
+/** Runs grouped by the day they started, newest first, in the browser's time
+ * zone: "Today", "Yesterday", then "Monday 19 October". */
+export function dayGroups<T extends { started_at: string }>(runs: T[], now = new Date()): { label: string; runs: T[] }[] {
+  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const today = key(now);
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  const yesterday = key(y);
+  const out: { label: string; runs: T[] }[] = [];
+  const at = new Map<string, number>();
+  for (const r of runs) {
+    const d = new Date(r.started_at);
+    const k = key(d);
+    let i = at.get(k);
+    if (i === undefined) {
+      const label = k === today ? "Today" : k === yesterday ? "Yesterday" : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+      i = out.push({ label, runs: [] }) - 1;
+      at.set(k, i);
+    }
+    out[i]?.runs.push(r);
+  }
+  return out;
+}
+
+/** A run's icon and its tint, by status. */
+export function runLook(status: string): { icon: string; tone?: "warn" | "danger" | "ok" | "info" | "muted" } {
+  switch (status) {
+    case "completed":
+      return { icon: "start", tone: "ok" };
+    case "failed":
+    case "needs_reconciliation":
+      return { icon: "alerts", tone: "danger" };
+    case "waiting":
+      return { icon: "clock", tone: "warn" };
+    case "running":
+    case "queued":
+      return { icon: "runs", tone: "info" };
+    default:
+      return { icon: "close", tone: "muted" };
+  }
+}
+
+/** A run's steps so far by how they stand, in words ("2 done · 1 waiting"); "" with none yet. */
+export function stepCounts(statuses: string[]): string {
+  const n: Record<string, number> = {};
+  for (const s of statuses) {
+    const k = s === "completed" || s === "skipped" ? "done" : s === "failed" || s === "parked" ? "stuck" : s === "waiting" ? "waiting" : s === "cancelled" ? "stopped" : "going";
+    n[k] = (n[k] ?? 0) + 1;
+  }
+  const said: Record<string, string> = { done: "done", going: "running", waiting: "waiting", stuck: "stuck", stopped: "stopped" };
+  return ["done", "going", "waiting", "stuck", "stopped"].filter((k) => n[k]).map((k) => `${n[k]} ${said[k]}`).join(" · ");
+}

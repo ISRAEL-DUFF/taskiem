@@ -29,7 +29,7 @@ var manifest []byte
 // Ops is what the actions call: schools.Service.
 type Ops interface {
 	FindClass(ctx context.Context, tenant uuid.UUID, idOrLabel string) (schools.Class, error)
-	ListStudents(ctx context.Context, tenant uuid.UUID, class *uuid.UUID, status string, limit int) ([]schools.Student, int, error)
+	ListStudents(ctx context.Context, tenant uuid.UUID, f schools.Filter) ([]schools.Student, int, error)
 	GetStudent(ctx context.Context, tenant uuid.UUID, idOrNumber string) (schools.StudentDetail, error)
 	ListClasses(ctx context.Context, tenant uuid.UUID) ([]schools.Class, error)
 	Current(ctx context.Context, tenant uuid.UUID) (schools.Term, bool, error)
@@ -39,6 +39,14 @@ type Ops interface {
 	InvoiceTermOnce(ctx context.Context, tenant, term uuid.UUID, key string, send bool, by string) (schools.TermInvoiced, error)
 	IssueAccount(ctx context.Context, tenant uuid.UUID, student string, in schools.IssueIn, by string) (schools.StudentAccount, error)
 	FamilyLinkFor(ctx context.Context, tenant uuid.UUID, family, student string) (schools.FamilyLinkMinted, error)
+	ListDebtors(ctx context.Context, tenant uuid.UUID, f schools.DebtorFilter) (schools.Debtors, error)
+	FindStudents(ctx context.Context, tenant uuid.UUID, refs []string) ([]uuid.UUID, error)
+	SendRemindersOnce(ctx context.Context, tenant uuid.UUID, in schools.RemindIn, by string) (schools.Reminded, error)
+	ListPlanDecisions(ctx context.Context, tenant uuid.UUID, f schools.PlanDecisionFilter) ([]schools.PlanRequest, error)
+	TellPlan(ctx context.Context, tenant uuid.UUID, plan string) (schools.PlanTold, error)
+	ClearanceOf(ctx context.Context, tenant uuid.UUID, student string, term uuid.UUID) (schools.ClearanceRow, error)
+	ListClearance(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID) (schools.ClearanceList, error)
+	CloseFor(ctx context.Context, tenant uuid.UUID, day, by string) (schools.Close, error)
 }
 
 var _ Ops = schools.Service{}
@@ -48,15 +56,22 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"list_students":  connector.ActionFunc(a.listStudents),
-		"get_student":    connector.ActionFunc(a.getStudent),
-		"list_classes":   connector.ActionFunc(a.listClasses),
-		"current_term":   connector.ActionFunc(a.currentTerm),
-		"list_fee_items": connector.ActionFunc(a.listFeeItems),
-		"term_invoices":  connector.ActionFunc(a.termInvoices),
-		"invoice_term":   connector.ActionFunc(a.invoiceTerm),
-		"issue_account":  connector.ActionFunc(a.issueAccount),
-		"family_link":    connector.ActionFunc(a.familyLink),
+		"list_students":      connector.ActionFunc(a.listStudents),
+		"get_student":        connector.ActionFunc(a.getStudent),
+		"list_classes":       connector.ActionFunc(a.listClasses),
+		"current_term":       connector.ActionFunc(a.currentTerm),
+		"list_fee_items":     connector.ActionFunc(a.listFeeItems),
+		"term_invoices":      connector.ActionFunc(a.termInvoices),
+		"invoice_term":       connector.ActionFunc(a.invoiceTerm),
+		"issue_account":      connector.ActionFunc(a.issueAccount),
+		"family_link":        connector.ActionFunc(a.familyLink),
+		"list_debtors":       connector.ActionFunc(a.listDebtors),
+		"send_reminders":     connector.ActionFunc(a.sendReminders),
+		"plan_decisions":     connector.ActionFunc(a.planDecisions),
+		"tell_plan_decision": connector.ActionFunc(a.tellPlanDecision),
+		"clearance":          connector.ActionFunc(a.clearance),
+		"clearance_list":     connector.ActionFunc(a.clearanceList),
+		"daily_close":        connector.ActionFunc(a.dailyClose),
 	}}
 }
 
@@ -252,7 +267,8 @@ func (a *actions) listStudents(ctx context.Context, req connector.Request) (conn
 		}
 		class = &cl.ID
 	}
-	list, total, err := a.ops.ListStudents(ctx, c.Tenant, class, status, limit)
+	without, _ := req.Input["without_account"].(bool)
+	list, total, err := a.ops.ListStudents(ctx, c.Tenant, schools.Filter{ClassID: class, Status: status, Limit: limit, WithoutAccount: without})
 	if err != nil {
 		return connector.Response{}, classify(err)
 	}
@@ -430,12 +446,12 @@ func (l *Late) FindClass(ctx context.Context, t uuid.UUID, idOrLabel string) (sc
 }
 
 // ListStudents implements Ops.
-func (l *Late) ListStudents(ctx context.Context, t uuid.UUID, class *uuid.UUID, status string, limit int) ([]schools.Student, int, error) {
+func (l *Late) ListStudents(ctx context.Context, t uuid.UUID, f schools.Filter) ([]schools.Student, int, error) {
 	o, err := l.get()
 	if err != nil {
 		return nil, 0, err
 	}
-	return o.ListStudents(ctx, t, class, status, limit)
+	return o.ListStudents(ctx, t, f)
 }
 
 // GetStudent implements Ops.
@@ -492,6 +508,51 @@ func (l *Late) ListTermInvoices(ctx context.Context, t, term uuid.UUID, class *u
 	return o.ListTermInvoices(ctx, t, term, class, status)
 }
 
+// ListDebtors implements Ops.
+func (l *Late) ListDebtors(ctx context.Context, t uuid.UUID, f schools.DebtorFilter) (schools.Debtors, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.Debtors{}, err
+	}
+	return o.ListDebtors(ctx, t, f)
+}
+
+// FindStudents implements Ops.
+func (l *Late) FindStudents(ctx context.Context, t uuid.UUID, refs []string) ([]uuid.UUID, error) {
+	o, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return o.FindStudents(ctx, t, refs)
+}
+
+// SendRemindersOnce implements Ops.
+func (l *Late) SendRemindersOnce(ctx context.Context, t uuid.UUID, in schools.RemindIn, by string) (schools.Reminded, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.Reminded{}, err
+	}
+	return o.SendRemindersOnce(ctx, t, in, by)
+}
+
+// ListPlanDecisions implements Ops.
+func (l *Late) ListPlanDecisions(ctx context.Context, t uuid.UUID, f schools.PlanDecisionFilter) ([]schools.PlanRequest, error) {
+	o, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return o.ListPlanDecisions(ctx, t, f)
+}
+
+// TellPlan implements Ops.
+func (l *Late) TellPlan(ctx context.Context, t uuid.UUID, plan string) (schools.PlanTold, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.PlanTold{}, err
+	}
+	return o.TellPlan(ctx, t, plan)
+}
+
 // InvoiceTermOnce implements Ops.
 func (l *Late) InvoiceTermOnce(ctx context.Context, t, term uuid.UUID, key string, send bool, by string) (schools.TermInvoiced, error) {
 	o, err := l.get()
@@ -499,4 +560,31 @@ func (l *Late) InvoiceTermOnce(ctx context.Context, t, term uuid.UUID, key strin
 		return schools.TermInvoiced{}, err
 	}
 	return o.InvoiceTermOnce(ctx, t, term, key, send, by)
+}
+
+// ClearanceOf implements Ops.
+func (l *Late) ClearanceOf(ctx context.Context, t uuid.UUID, student string, term uuid.UUID) (schools.ClearanceRow, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.ClearanceRow{}, err
+	}
+	return o.ClearanceOf(ctx, t, student, term)
+}
+
+// ListClearance implements Ops.
+func (l *Late) ListClearance(ctx context.Context, t, term uuid.UUID, class *uuid.UUID) (schools.ClearanceList, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.ClearanceList{}, err
+	}
+	return o.ListClearance(ctx, t, term, class)
+}
+
+// CloseFor implements Ops.
+func (l *Late) CloseFor(ctx context.Context, t uuid.UUID, day, by string) (schools.Close, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.Close{}, err
+	}
+	return o.CloseFor(ctx, t, day, by)
 }

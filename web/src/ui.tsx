@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Link } from "react-router-dom";
 import { onScreen, toast } from "./toast";
 import { ApiError } from "./api";
 import { Icon } from "./icons";
@@ -192,16 +193,107 @@ export function useScrollableTables(box: RefObject<HTMLElement | null>) {
   }, [box]);
 }
 
-/** A page's title, a one-line description of what it is for, and its main actions. */
+/** A page's title, a one-line description of what it is for, and its main
+ * actions. On phones the description folds behind an "About this page"
+ * button so the page opens on what it shows. */
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  const [about, setAbout] = useState(false);
+  const id = useId();
   return (
     <div className="page-header">
       <div className="page-heading">
         <h1>{title}</h1>
-        {description && <p className="page-desc">{description}</p>}
+        {description && (
+          <>
+            <button type="button" className="about-page" aria-label="About this page" aria-expanded={about} aria-controls={id} onClick={() => setAbout(!about)}>
+              <Icon name="info" />
+            </button>
+            <p className={about ? "page-desc open" : "page-desc"} id={id}>
+              {description}
+            </p>
+          </>
+        )}
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </div>
+  );
+}
+
+/** A list of rows that each open something, as on Home (the mockups):
+ * an icon on a tint, a title with a line under it, figures on the right. */
+export function Items({ label, children }: { label?: string; children: ReactNode }) {
+  return (
+    <ul className="items" aria-label={label}>
+      {children}
+    </ul>
+  );
+}
+
+/** One row of Items. `tone` tints the icon: warn (amber), danger, ok, info, or the brand's.
+ * `side` sits at the end of the title line (an amount, a time); `sideSub` under the text (a status). */
+export function Item({ to, icon, tone, title, sub, side, sideSub, extra, testid, className }: {
+  to: string;
+  icon: string;
+  tone?: "warn" | "danger" | "ok" | "info" | "muted";
+  title: ReactNode;
+  sub?: ReactNode;
+  side?: ReactNode;
+  sideSub?: ReactNode;
+  extra?: ReactNode;
+  testid?: string;
+  className?: string;
+}) {
+  return (
+    <li className={className} data-testid={testid}>
+      <Link className="item" to={to}>
+        <span className={tone ? `list-icon ${tone}` : "list-icon"}>
+          <Icon name={icon} />
+        </span>
+        <span className="grow">
+          <span className="item-top">
+            <span className="title">{title}</span>
+            {side && <span className="item-figure">{side}</span>}
+          </span>
+          {sub && <span className="sub">{sub}</span>}
+          {extra}
+          {sideSub && <span className="item-tag">{sideSub}</span>}
+        </span>
+        <Icon name="chevron" className="go" />
+      </Link>
+    </li>
+  );
+}
+
+/** One row of Items with its own buttons instead of a link (a member, a
+ * channel, a key): an icon or a letter on a tint, a title with something
+ * at its end, lines under it, and the actions under those. */
+export function Row({ icon, letter, tone, title, side, sub, children, testid, className, attrs }: {
+  icon?: string;
+  letter?: string;
+  tone?: "warn" | "danger" | "ok" | "info" | "muted";
+  title: ReactNode;
+  side?: ReactNode;
+  sub?: ReactNode;
+  children?: ReactNode;
+  testid?: string;
+  className?: string;
+  /** More attributes for the row, such as data-status for tests. */
+  attrs?: Record<string, string>;
+}) {
+  return (
+    <li className={className ? `act-row ${className}` : "act-row"} data-testid={testid} {...attrs}>
+      <span className={tone ? `list-icon ${tone}` : "list-icon"} aria-hidden="true">
+        {letter ? letter.slice(0, 1).toUpperCase() : <Icon name={icon ?? "more"} />}
+      </span>
+      <div className="grow">
+        <div className="item-top">
+          <span className="title">{title}</span>
+          {side}
+        </div>
+        {sub}
+        {children && <div className="row-actions">{children}</div>}
+      </div>
+    </li>
   );
 }
 

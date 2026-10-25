@@ -42,7 +42,9 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 	if err != nil {
 		return []problem{{Path: "/", Message: "the tenant's connectors could not be loaded: " + err.Error()}}
 	}
-	return append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
+	out := append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
+	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
 }
 
 // callables finds a template step's template for a definition not saved
@@ -85,7 +87,9 @@ func (s *Server) checkVersion(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UU
 	if err := s.withCodeSlot(ctx, tenant, func() { out = wdcheck.CheckWith(doc, reg, find) }); err != nil {
 		return []problem{{Path: "/", Message: "the definition could not be checked: " + err.Error()}}
 	}
-	return append(out, s.keptProblems(ctx, tenant, doc)...)
+	out = append(out, s.keptProblems(ctx, tenant, doc)...)
+	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
 }
 
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code
@@ -112,11 +116,18 @@ func (s *Server) checkFor(r *http.Request, doc []byte) []problem {
 
 // usesItself is the problem of a workflow whose template steps name the
 // workflow itself (decision 0048): its published version would be a copy
-// of what is being saved.
+// of what is being saved. A subflow step naming the workflow itself
+// (decision 0049) would run it without end.
 func usesItself(wf uuid.UUID, doc []byte) *problem {
 	var root map[string]any
-	if json.Unmarshal(doc, &root) == nil && slices.Contains(embed.WorkflowsOf(root["steps"]), wf.String()) {
+	if json.Unmarshal(doc, &root) != nil {
+		return nil
+	}
+	if slices.Contains(embed.WorkflowsOf(root["steps"]), wf.String()) {
 		return &problem{Path: "/steps", Message: "a workflow may not use itself as a step"}
+	}
+	if slices.Contains(subflowsOf(root["steps"]), wf.String()) {
+		return &problem{Path: "/steps", Message: "a workflow may not run itself as a subflow"}
 	}
 	return nil
 }
@@ -680,6 +691,9 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 	}
 	d, err := wd.Load(def)
 	if err != nil {
+		return nil, "", false, err
+	}
+	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, d, by); err != nil {
 		return nil, "", false, err
 	}
 	targets, err := deployTargets(ctx, tx, gitEnv)

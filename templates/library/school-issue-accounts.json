@@ -1,0 +1,181 @@
+{
+  "id": "school-issue-accounts",
+  "title": "Give each new student their own account number",
+  "summary": "Every 15 minutes, find the students who have no account number yet, issue each one their own number on the school's issuing connection, and send the family the number, the bank and a link to their fees page. Run it by hand for everyone when you first turn it on.",
+  "description": "Every 15 minutes, finds the active students with no account number on the school's issuing connection (Schools > Settings) and issues each one their own permanent account number, named for the school and the child where the rail lets the school name it, at most the number you choose per run. A student is issued one account per connection, ever: a student who has one is never asked for again, and running the same run twice issues nobody twice. The family's first guardian then gets one message, on the WhatsApp or Telegram they get the school's updates on, otherwise by SMS: the child's account number and bank, the name they should see when they transfer, and a fresh link to the family's fees page. A student the rail would not issue (a missing guardian email, a parent's BVN or NIN needed on Flutterwave) is left for the student's page, where the rail's reason shows, and tried again next time. A new student is enrolled on the Students page or by import; this is how they get their number within the quarter hour. Run it by hand from the workflow's page to issue a whole school when you first turn it on. Each run that did anything tells the bursar how many.",
+  "category": "collections",
+  "tags": [
+    "schools",
+    "collections"
+  ],
+  "keywords": [
+    "school",
+    "account number",
+    "account numbers",
+    "students",
+    "pupils",
+    "new student",
+    "issue",
+    "parents"
+  ],
+  "requires": [
+    "school",
+    "student",
+    "students",
+    "pupil",
+    "pupils"
+  ],
+  "connectors": [
+    "schools@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "per_run",
+      "type": "integer",
+      "title": "Students per run",
+      "description": "At most this many students get a number each run; the rest wait for the next quarter hour.",
+      "required": false,
+      "minimum": 1,
+      "maximum": 200,
+      "default": 50,
+      "example": 50
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_schoolIssueAccounts",
+    "version": 1,
+    "name": "Students' account numbers",
+    "description": "Issues each student without an account number their own, and sends it to the family.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "*/15 * * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "students",
+        "type": "connector",
+        "name": "Find the students without an account number",
+        "connector": "schools@1",
+        "action": "list_students",
+        "input": {
+          "status": "active",
+          "without_account": true,
+          "limit": "{{per_run}}"
+        }
+      },
+      {
+        "id": "each",
+        "type": "foreach",
+        "name": "For each student",
+        "needs": [
+          "students"
+        ],
+        "config": {
+          "items": "=has(steps.students.output.students) ? steps.students.output.students : []",
+          "max_concurrency": 2,
+          "max_items": 200,
+          "steps": [
+            {
+              "id": "issue",
+              "type": "connector",
+              "name": "Issue the student's account number",
+              "connector": "schools@1",
+              "action": "issue_account",
+              "input": {
+                "student": "=item.id"
+              },
+              "effect": {
+                "idempotency_seed": "='issue-account:' + item.id"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "not_issued",
+                    "type": "transform",
+                    "name": "Note the student the rail did not issue",
+                    "config": {
+                      "output": {
+                        "student": "=item.admission_number",
+                        "reason": "=steps.issue.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "family",
+              "type": "connector",
+              "name": "Read the family's guardians",
+              "connector": "schools@1",
+              "action": "get_student",
+              "needs": [
+                "issue"
+              ],
+              "input": {
+                "student": "=item.id"
+              }
+            },
+            {
+              "id": "link",
+              "type": "connector",
+              "name": "A fresh link to the fees page",
+              "connector": "schools@1",
+              "action": "family_link",
+              "needs": [
+                "issue"
+              ],
+              "input": {
+                "student": "=item.id"
+              }
+            },
+            {
+              "id": "tell_family",
+              "type": "connector",
+              "name": "Send the family the account number",
+              "connector": "notify@1",
+              "action": "message",
+              "needs": [
+                "family",
+                "link"
+              ],
+              "when": "=size(steps.family.output.guardians) > 0",
+              "input": {
+                "phone": "=steps.family.output.guardians[0].phone",
+                "title": "=item.name + \"'s school fees account number\"",
+                "about": "=item.name + \"'s account number\"",
+                "message": "='Dear parent, ' + item.name + \"'s own account number for school fees is \" + steps.issue.output.account_number + ' (' + steps.issue.output.bank_name + (has(steps.issue.output.account_name) ? ', in the name ' + steps.issue.output.account_name : '') + '). Pay the fees by transfer to it: the money lands on ' + item.name + \"'s fees by itself, and a receipt follows. Your fees page: \" + steps.link.output.link"
+              },
+              "effect": {
+                "idempotency_seed": "='issue-account-tell:' + item.id"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_bursar",
+        "type": "connector",
+        "name": "Tell the bursar",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "each"
+        ],
+        "when": "=size(steps.each.output) > 0",
+        "input": {
+          "title": "Students' account numbers",
+          "message": "='Account numbers: ' + string(size(steps.each.output)) + ' student(s) issued or tried this run; the page of each shows the number, or the reason the rail gave. Schools > Account numbers has the rest.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

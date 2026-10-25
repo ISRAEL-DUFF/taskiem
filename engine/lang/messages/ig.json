@@ -312,6 +312,10 @@
       "text": "Peeji ego: {link}",
       "reviewed": false
     },
+    "money.daily.school": {
+      "text": "Ụgwọ akwụkwọ ({term}): {collected} abatala, {outstanding} fọdụrụ, {cleared}% nke ụmụ akwụkwọ akwụchaala.",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Mkparịta ụka a na-ezitere gị ozi site na {businesses}. Zipu STOP iji kwụsị nke ikpeazụ.",
       "reviewed": false
@@ -2104,6 +2108,14 @@
       "text": "Ejikọghị nọmba a na akaụntụ Taskiem ọ bụla. Iji Taskiem ebe a, banye, mepee {where}, tinye nọmba a n'okpuru WhatsApp, wee pịnye ma ọ bụ zighachi koodu anyị zitere gị.",
       "reviewed": false
     },
+    "wd.ai": {
+      "text": "Jụọ ụdị AI ajụjụ, ezoro ya ozi nzuzo",
+      "reviewed": false
+    },
+    "wd.ai.through": {
+      "text": "Jụọ ụdị AI ajụjụ, nke ga-ahụ {fields} otú ha dị; ezoro ya ozi nzuzo ndị ọzọ",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "N'otu oge: {name}",
       "reviewed": false
@@ -2342,6 +2354,14 @@
     },
     "wd.signal_named": {
       "text": "Chere {event}",
+      "reviewed": false
+    },
+    "wd.subflow": {
+      "text": "Gbaa ọrụ gị: {workflow}, chere ka ọ gwụ",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Malite ọrụ gị: {workflow}, gaa n'ihu",
       "reviewed": false
     },
     "wd.template": {

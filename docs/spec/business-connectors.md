@@ -1,6 +1,6 @@
 # Business connectors: Slack, Instagram and Facebook, Zoho, QuickBooks, email
 
-Status: **Proposed** 2026-10-24 · Decision: [0049](../decisions/0049-platform-apps.md) (proposed) · Workstream **K0 to K9**, one pull request per milestone
+Status: **Proposed** 2026-10-24 · Decision: [0051](../decisions/0051-platform-apps.md) (proposed) · Workstream **K0 to K9**, one pull request per milestone
 
 The services small businesses already run their day on, connected so that a business clicks **Connect** and signs in, with no developer setup:
 
@@ -38,7 +38,7 @@ Five providers, each built as ordinary connector/v1 connectors under the clean-r
 They share four things the platform does not do yet, and those come first (K1):
 
 - **Taskiem's own app at each provider.** A business connects with OAuth through Taskiem's registered app instead of making its own. Slack, Meta and Intuit require this for one-click connecting; Zoho and Mailchimp offer it.
-- **Webhooks sent to the app, not to the business.** Slack, Meta and Intuit send every connected business's events to the one URL on Taskiem's app. Today every hooks URL is a tenant's own (`/hooks/{tenant}/...`). [Decision 0049](../decisions/0049-platform-apps.md) adds a platform URL per provider and routes each verified event to the connections that hold its account (a workspace, a Page, a company).
+- **Webhooks sent to the app, not to the business.** Slack, Meta and Intuit send every connected business's events to the one URL on Taskiem's app. Today every hooks URL is a tenant's own (`/hooks/{tenant}/...`). [Decision 0051](../decisions/0051-platform-apps.md) adds a platform URL per provider and routes each verified event to the connections that hold its account (a workspace, a Page, a company).
 - **Refresh tokens that change.** QuickBooks issues a new refresh token on each refresh and revokes the chain if an old one is used again; Zoho's access tokens last an hour. Connectors refresh in the process today (Google does), but cannot store what the provider hands back. K1 lets them, under a lock per connection.
 - **Accounts in several places.** Zoho keeps each user's data in one of several data centres, and Mailchimp in a server prefix. The token answer says which, and the connection keeps it.
 
@@ -82,7 +82,7 @@ Each provider gets one registered app, its credentials in the environment as 003
 
 Connecting asks only for the scopes the connector needs. A business that connects Zoho Books and later Zoho Mail grants Mail separately, so revoking one leaves the other.
 
-### 4.2 App-level webhooks (decision 0049)
+### 4.2 App-level webhooks (decision 0051)
 
 - **A platform URL per provider**: `POST /hooks/apps/{provider}` on the edge, and `GET` for handshakes (Meta's `hub.challenge`, Slack's `url_verification`).
 - **Verified with the platform app's secret** from the environment:
@@ -353,7 +353,7 @@ The AI builder learns each connector from its manifest as it does today. The eva
 
 ### K1: platform apps, routing and refreshing (L)
 
-- **App-level webhooks** (§4.2, decision 0049): `/hooks/apps/{provider}`, verification by the platform secret, routing by account key in one audited function, the counted drop of unknown accounts, handshakes.
+- **App-level webhooks** (§4.2, decision 0051): `/hooks/apps/{provider}`, verification by the platform secret, routing by account key in one audited function, the counted drop of unknown accounts, handshakes.
 - **Clients shared by several connectors** (§4.1).
 - **Refreshed credentials**, stored under a per-connection lock with an in-memory access-token cache (§4.3).
 - **Per-account API hosts** (§4.4), with the egress allow-list following them.

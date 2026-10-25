@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { AgentVisits } from "./AgentVisits";
-import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
 import { Icon } from "../icons";
 import { roleLabel, roleName, type ApproverRole } from "../forms/RolePicker";
 
@@ -58,37 +58,31 @@ function PendingInvitations({ refresh }: { refresh: unknown }) {
       <h2>Pending invitations</h2>
       <p className="hint">These people already have a Taskiem account. They join, with the roles offered, when they accept.</p>
       <ErrorBox error={act.error} />
-      <table>
-        <thead>
-          <tr>
-            <th>Email</th>
-            <th>Roles offered</th>
-            <th>Invited</th>
-            <th><span className="sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.data.invitations.map((i) => (
-            <tr key={i.user_id}>
-              <td>{i.email}</td>
-              <td>{i.roles.join(", ")}</td>
-              <td className="hint">
-                {fmtTime(i.invited_at)}
+      <ul className="items" aria-label="Pending invitations">
+        {list.data.invitations.map((i) => (
+          <Row
+            key={i.user_id}
+            testid="invitation"
+            icon="inbox"
+            tone="warn"
+            title={i.email}
+            sub={
+              <span className="sub">
+                Offered {i.roles.join(", ")} · invited {fmtTime(i.invited_at)}
                 {i.source === "scim" ? " by SCIM" : i.source === "partner" ? " by your platform partner" : ""}
-              </td>
-              <td style={{ textAlign: "right" }}>
-                <button
-                  className="danger"
-                  disabled={act.busy}
-                  onClick={() => confirm(`Withdraw the invitation to ${i.email}?`) && void act.run(async () => (await del(`/v1/invitations/${i.user_id}`), list.reload()), "Invitation cancelled")}
-                >
-                  Withdraw
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </span>
+            }
+          >
+            <button
+              className="danger"
+              disabled={act.busy}
+              onClick={() => confirm(`Withdraw the invitation to ${i.email}?`) && void act.run(async () => (await del(`/v1/invitations/${i.user_id}`), list.reload()), "Invitation cancelled")}
+            >
+              Withdraw
+            </button>
+          </Row>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -122,38 +116,25 @@ export function Members() {
         </EmptyState>
       )}
       {members.data && members.data.members.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Name</th>
-              <th>Roles</th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.data.members.map((m) => (
-              <tr key={m.user_id}>
-                <td>{m.email}</td>
-                <td>{m.name}</td>
-                <td>
-                  {m.roles.map((r) => (
-                    <span key={r} className="chip">
-                      {r}
-                      <button
-                        className="chip-x"
-                        aria-label={`Take ${r} from ${m.email}`}
-                        title={`Take ${r} from ${m.email}`}
-                        onClick={() => confirm(`Take ${r} from ${m.email}?`) && void act.run(async () => (await del(`/v1/members/${m.user_id}/roles/${encodeURIComponent(r)}`), members.reload(), roles.reload()), "Role removed")}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="items" aria-label="Members">
+          {members.data.members.map((m) => (
+            <Row key={m.user_id} testid="member" letter={m.name || m.email} title={m.name || m.email} sub={m.name ? <span className="sub">{m.email}</span> : undefined}>
+              {m.roles.map((r) => (
+                <span key={r} className="chip">
+                  {r}
+                  <button
+                    className="chip-x"
+                    aria-label={`Take ${r} from ${m.email}`}
+                    title={`Take ${r} from ${m.email}`}
+                    onClick={() => confirm(`Take ${r} from ${m.email}?`) && void act.run(async () => (await del(`/v1/members/${m.user_id}/roles/${encodeURIComponent(r)}`), members.reload(), roles.reload()), "Role removed")}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </Row>
+          ))}
+        </ul>
       )}
       <PendingInvitations refresh={members.data} />
       <AgentVisits />
@@ -166,44 +147,41 @@ export function Members() {
       <p className="hint">Custom roles are named sets of permissions. No one can create or grant a role with permissions they do not hold themselves.</p>
       <ErrorBox error={roles.error} />
       {roles.data && (
-        <table>
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th>Permissions</th>
-              <th>Members</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {roles.data.roles.map((r) => (
-              <tr key={r.name}>
-                <td>
+        <ul className="items" aria-label="Roles">
+          {roles.data.roles.map((r) => (
+            <Row
+              key={r.name}
+              testid="role"
+              icon="members"
+              tone={r.built_in ? "muted" : undefined}
+              title={
+                <>
                   {r.name} {r.built_in && <span className="hint">built-in</span>}
-                  {r.description && <div className="hint">{r.description}</div>}
-                </td>
-                <td>
+                </>
+              }
+              side={<span className="item-figure">{r.members === 1 ? "1 member" : `${r.members} members`}</span>}
+              sub={
+                <>
+                  {r.description && <span className="sub">{r.description}</span>}
                   <span className="perms">
                     {r.permissions.map((p) => (
                       <code key={p}>{p}</code>
                     ))}
                   </span>
-                </td>
-                <td>{r.members}</td>
-                <td>
-                  {!r.built_in && can("role.manage") && (
-                    <>
-                      <button onClick={() => setEditing(r)}>Edit</button>{" "}
-                      <button className="danger" disabled={r.members > 0} onClick={() => confirm(`Delete ${r.name}?`) && void act.run(async () => (await del(`/v1/roles/${r.name}`), roles.reload()), "Role deleted")}>
-                        Delete
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </>
+              }
+            >
+              {!r.built_in && can("role.manage") && (
+                <>
+                  <button onClick={() => setEditing(r)}>Edit</button>
+                  <button className="danger" disabled={r.members > 0} onClick={() => confirm(`Delete ${r.name}?`) && void act.run(async () => (await del(`/v1/roles/${r.name}`), roles.reload()), "Role deleted")}>
+                    Delete
+                  </button>
+                </>
+              )}
+            </Row>
+          ))}
+        </ul>
       )}
       <div className="toolbar" style={{ marginTop: 24 }}>
         <h2 className="grow" style={{ margin: 0 }}>
@@ -218,46 +196,38 @@ export function Members() {
         </EmptyState>
       )}
       {keys.data && keys.data.api_keys.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Key</th>
-              <th>Permissions</th>
-              <th>Expires</th>
-              <th>Last used</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {keys.data.api_keys.map((k) => (
-              <tr key={k.id}>
-                <td>{k.name}</td>
-                <td>
-                  <code>{k.prefix}…</code>
-                </td>
-                <td>
+        <ul className="items" aria-label="API keys">
+          {keys.data.api_keys.map((k) => (
+            <Row
+              key={k.id}
+              testid="api-key"
+              icon="keys"
+              tone={k.revoked_at ? "muted" : undefined}
+              title={k.name}
+              side={<code>{k.prefix}…</code>}
+              sub={
+                <>
+                  <span className="sub">
+                    Expires {fmtTime(k.expires_at)} · last used {fmtTime(k.last_used_at)}
+                  </span>
                   <span className="perms">
                     {k.permissions.map((p) => (
                       <code key={p}>{p}</code>
                     ))}
                   </span>
-                </td>
-                <td>{fmtTime(k.expires_at)}</td>
-                <td>{fmtTime(k.last_used_at)}</td>
-                <td>
-                  {k.revoked_at ? (
-                    <span className="hint">revoked</span>
-                  ) : (
-                    <button className="danger" onClick={() => confirm(`Revoke ${k.name}?`) && void act.run(async () => (await del(`/v1/api-keys/${k.id}`), keys.reload()), "Key deleted")}>
-                      Revoke
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </>
+              }
+            >
+              {k.revoked_at ? (
+                <span className="hint">revoked</span>
+              ) : (
+                <button className="danger" onClick={() => confirm(`Revoke ${k.name}?`) && void act.run(async () => (await del(`/v1/api-keys/${k.id}`), keys.reload()), "Key deleted")}>
+                  Revoke
+                </button>
+              )}
+            </Row>
+          ))}
+        </ul>
       )}
       {can("member.manage") && <SingleSignOn />}
       {can("member.manage") && can("scim.provision") && <Provisioning />}

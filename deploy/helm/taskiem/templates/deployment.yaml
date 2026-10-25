@@ -65,7 +65,7 @@ spec:
             {{- include "taskiem.shutdownEnv" $root | nindent 12 }}
             {{- if or (eq $role "worker") (eq $role "all") }}
             - name: TASKIEM_WORKER_QUEUES
-              value: {{ default "connector,sandbox" $r.queues | quote }}
+              value: {{ default "connector,sandbox,ai" $r.queues | quote }}
             {{- end }}
             {{- if and $root.Values.storage.enabled (or (eq $role "scheduler") (eq $role "all")) }}
             - name: TASKIEM_ARCHIVE_DIR

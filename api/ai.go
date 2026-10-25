@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -45,6 +46,9 @@ type AISettings struct {
 	// Moderation is the model storefront moderation uses, when it is not
 	// Provider (TASKIEM_AI_MODERATION_MODEL).
 	Moderation ai.Provider
+	// Config is the deployment's AI configuration: the models ai steps may
+	// name and what the provider retains (decision 0050).
+	Config ai.Config
 }
 
 // aiRoutes is every route under /v1/ai, with the one permission each
@@ -102,7 +106,22 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		out["provider"], out["model"] = s.AI.Provider.Name(), s.AI.Provider.Model()
 		out["budget"] = map[string]int64{"monthly_tokens": limit, "used_tokens": used}
+		// AI steps (decision 0050): the models they may name, what the
+		// provider keeps, and whether the business allows them.
+		out["step_models"] = nonNil(s.AI.Config.OfferedStepModels())
+		out["retention"] = s.AI.Config.Retention
 	}
+	var allowed bool
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		allowed, err = aiStepsAllowed(r.Context(), tx)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out["steps_allowed"] = allowed
+	out["steps_plan"] = s.Billing.Require(r.Context(), principalFrom(r.Context()).TenantID, billing.FeatureAI) == nil
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -177,6 +196,8 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 		if breq.Context, err = aiContext(ctx, tx, reg, req.Environment, req.Workflow); err != nil {
 			return err
 		}
+		// A plan without AI gets no ai steps proposed.
+		breq.Context.AISteps = breq.Context.AISteps && s.Billing.Require(ctx, who.tenant, billing.FeatureAI) == nil
 		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, who.tenant, who.actor, pii.Redact(req.Goal), req.Workflow, req.Environment,
 			s.AI.Provider.Name(), s.AI.Provider.Model(), channel)
@@ -462,6 +483,18 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 		return x, r.Scan(&x.Environment, &x.Name)
 	})
 	if err != nil {
+		return c, err
+	}
+	// AI steps (decision 0050), when the business may use them: the
+	// builder proposes one only then.
+	if allowed, err := aiStepsAllowed(ctx, tx); err != nil {
+		return c, err
+	} else {
+		c.AISteps = allowed
+	}
+	// The Schools area (decision 0046): on, the builder knows the record
+	// and schools@1 are the business's.
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(bool_or(enabled), false) FROM school_settings`).Scan(&c.Schools); err != nil {
 		return c, err
 	}
 	// The business's own workflows a template step may use (decision

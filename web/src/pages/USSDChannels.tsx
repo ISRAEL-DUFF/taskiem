@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { del, get, put } from "../api";
 import { useEnvironments } from "../environments";
-import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, Item, Items, fmtTime, useAction, useLoad } from "../ui";
 
 interface Channel {
   provider: string;
@@ -79,26 +79,19 @@ export function USSDChannels() {
       {v.routes.length === 0 ? (
         <p className="hint">No workflow with a USSD trigger is deployed yet.</p>
       ) : (
-        <table data-testid="ussd-routes">
-          <thead>
-            <tr>
-              <th>Environment</th>
-              <th>Service code</th>
-              <th>Workflow</th>
-            </tr>
-          </thead>
-          <tbody>
-            {v.routes.map((r) => (
-              <tr key={r.environment + r.service_code}>
-                <td>{r.environment}</td>
-                <td className="mono">{r.service_code}</td>
-                <td>
-                  <a href={`/workflows/${r.workflow_id}`}>{r.workflow}</a> <span className="hint">v{r.version}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Service codes">
+          {v.routes.map((r) => (
+            <Item
+              key={r.environment + r.service_code}
+              to={`/workflows/${r.workflow_id}`}
+              icon="workflows"
+              title={<span className="mono">{r.service_code}</span>}
+              side={r.environment}
+              sub={`${r.workflow} · version ${r.version}`}
+              testid="ussd-route"
+            />
+          ))}
+        </Items>
       )}
     </section>
   );

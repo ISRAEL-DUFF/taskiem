@@ -36,11 +36,14 @@ import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
 import { MoneyEntries, MoneyFees, MoneyLeaks, MoneyOverview, MoneyStatements } from "./pages/Money";
-import { GateHome, SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
+import { SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
 import { SchoolTermFees, SchoolTermInvoices } from "./pages/SchoolFees";
 import { SchoolAccountsPage } from "./pages/SchoolAccounts";
 import { SchoolPaymentsPage } from "./pages/SchoolPayments";
 import { SchoolReceiptsPage } from "./pages/SchoolReceipts";
+import { SchoolDebtorsPage } from "./pages/SchoolDebtors";
+import { GateHome, SchoolClearancePage, SchoolGatePage } from "./pages/SchoolClearance";
+import { SchoolOverviewPage } from "./pages/SchoolOverview";
 import { showSchools } from "./lib/schools";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
@@ -51,6 +54,8 @@ import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { brandFile } from "./brand";
+import { standalone, useInstall } from "./install";
+import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
 
 export function App() {
   return (
@@ -112,7 +117,24 @@ function Shell() {
   const loc = useLocation();
   const agentSession = useAgentSession();
   // Signed-out pages are a single card; it is the page's main landmark.
-  const alone = (page: ReactNode) => <main className="signed-out">{page}</main>;
+  // Signed out: the brand on pine beside (on a phone, above) one card.
+  const alone = (page: ReactNode) => (
+    <div className="signed-out">
+      <aside className="auth-side">
+        <div className="auth-brand">
+          <img src={brandFile("mark.svg")} alt="" width={40} height={40} />
+          <img className="auth-wordmark" src={brandFile("wordmark-reversed.svg")} alt="Taskiem" height={22} />
+        </div>
+        <p className="auth-line">Orders, payments and approvals for your business, in one place.</p>
+        <ul className="auth-points">
+          <li>Send invoices and see when they are paid</li>
+          <li>Take orders and bookings on your own page</li>
+          <li>Approve payments from your phone</li>
+        </ul>
+      </aside>
+      <main className="auth-main">{page}</main>
+    </div>
+  );
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
@@ -125,8 +147,8 @@ function Shell() {
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
-  // The gate role: one screen, the server refuses every other route (B8 adds the screen).
-  if (me.gate_only) return alone(<GateHome />);
+  // The gate role: one screen, whatever the address; the server refuses every other route.
+  if (me.gate_only) return <GateHome />;
   if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/home")} replace />;
   // A field agent's home is the agent app, not the workspace's workflows (N6).
   if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/home" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
@@ -153,6 +175,19 @@ function SignedIn() {
   useScrollableTables(mainRef);
   const { pathname } = useLocation();
   useEffect(() => setDrawer(false), [pathname]);
+  // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      for (const tabs of Array.from(mainRef.current?.querySelectorAll<HTMLElement>(".tabs") ?? [])) {
+        const on = tabs.querySelector<HTMLElement>('.active, [aria-current="page"], [aria-selected="true"], [aria-checked="true"]');
+        if (!on || tabs.scrollWidth <= tabs.clientWidth) continue;
+        const box = tabs.getBoundingClientRect();
+        const at = on.getBoundingClientRect();
+        tabs.scrollLeft += at.left - box.left - (box.width - at.width) / 2;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
   // Widening the window past the drawer's breakpoint closes it.
   useEffect(() => {
     const wide = window.matchMedia("(min-width: 861px)");
@@ -193,6 +228,9 @@ function SignedIn() {
   }, [pathname]);
   // The bell: a person's notifications and approvals waiting (N12).
   const bell = useBellCount(!!me?.user, pathname);
+  const install = useInstall();
+  // Pulling down from the top of a page draws it again with fresh data.
+  const [fresh, setFresh] = useState(0);
   if (!me) return null;
   // The sidebar: what a business uses every day, then everything else
   // under More (open while one of its pages is). [path, label, icon, visible, count].
@@ -237,6 +275,16 @@ function SignedIn() {
       {count && <span className="count alert">{count}</span>}
     </NavLink>
   );
+  // The tab bar on a phone: what an owner opens most, four at most, then Menu.
+  const quick = (
+    [
+      ["/home", "Home", "home", true],
+      ["/money", "Money", "money", invoiceAccess(can).see],
+      ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
+      ["/workflows", "Workflows", "workflows", can("workflow.read")],
+      ["/runs", "Activity", "activity", can("run.read")],
+    ] as Item[]
+  ).filter(([, , , ok]) => ok);
   const name = me.user?.name || me.user?.email || "API key";
   const business = me.tenant_name || "Taskiem";
   return (
@@ -284,6 +332,12 @@ function SignedIn() {
             </div>
           </>
         )}
+        {install && (
+          <button type="button" className="nav-toggle nav-install" onClick={() => void install()}>
+            <Icon name="plus" />
+            Install the app
+          </button>
+        )}
         <div className="spacer" />
         <div className="who">
           <span className="avatar" aria-hidden="true">
@@ -300,7 +354,7 @@ function SignedIn() {
       </nav>
       <main className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
-        <div className="page" key={pathname}>
+        <div className="page" key={`${pathname}#${fresh}`}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
@@ -337,6 +391,10 @@ function SignedIn() {
           <Route path="/schools/accounts" element={<SchoolAccountsPage />} />
           <Route path="/schools/payments" element={<SchoolPaymentsPage />} />
           <Route path="/schools/receipts" element={<SchoolReceiptsPage />} />
+          <Route path="/schools/debtors" element={<SchoolDebtorsPage />} />
+          <Route path="/schools/clearance" element={<SchoolClearancePage />} />
+          <Route path="/schools/overview" element={<SchoolOverviewPage />} />
+          <Route path="/schools/gate" element={<SchoolGatePage />} />
           <Route path="/settings/schools" element={<SchoolSettingsPage />} />
           <Route path="/forms" element={<Forms />} />
           <Route path="/forms/requests" element={<FormRequests />} />
@@ -367,29 +425,25 @@ function SignedIn() {
         </Routes>
         </div>
       </main>
+      <PullToRefresh
+        onRefresh={() => {
+          setFresh((n) => n + 1);
+          bell.reload();
+        }}
+      />
       <nav className="tabbar" aria-label="Quick" inert={drawer || undefined}>
-        <NavLink to="/home">
-          <Icon name="home" />
-          Home
-        </NavLink>
-        {can("storefront.manage") && (
-          <NavLink to="/storefront/orders">
-            <Icon name="orders" />
-            Orders
+        {quick.slice(0, 4).map(([to, label, icon]) => (
+          <NavLink key={to} to={to}>
+            <span className="tab-icon">
+              <Icon name={icon} />
+            </span>
+            {label}
           </NavLink>
-        )}
-        <NavLink to="/workflows">
-          <Icon name="workflows" />
-          Workflows
-        </NavLink>
-        {can("run.read") && (
-          <NavLink to="/runs">
-            <Icon name="activity" />
-            Activity
-          </NavLink>
-        )}
+        ))}
         <button type="button" aria-label="Open menu" aria-expanded={drawer} aria-controls="main-nav" onClick={() => setDrawer(true)}>
-          <Icon name="menu" />
+          <span className="tab-icon">
+            <Icon name="menu" />
+          </span>
           Menu
         </button>
       </nav>
@@ -401,4 +455,73 @@ function SignedIn() {
 export function initials(name: string): string {
   const [a = "", b = ""] = name.includes("@") ? [] : name.split(/\s+/).filter(Boolean);
   return (a && b ? a.charAt(0) + b.charAt(0) : name.slice(0, 2)).toUpperCase();
+}
+
+/** Pull to refresh, in the installed app on a phone (a browser tab has its
+ * own): pulling down from the top of a page past the mark draws the page
+ * again, which loads its data afresh. */
+function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
+  const [on, setOn] = useState(false);
+  const [shown, setShown] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const refresh = useRef(onRefresh);
+  refresh.current = onRefresh;
+  useEffect(() => {
+    if (!standalone() || typeof window.matchMedia !== "function" || !window.matchMedia("(pointer: coarse)").matches) return;
+    setOn(true);
+    let start: number | null = null;
+    let dy = 0;
+    const down = (e: TouchEvent) => {
+      // Only from the very top, one finger, and not over a dialog or the canvas.
+      const t = e.target instanceof Element ? e.target : null;
+      start = window.scrollY <= 0 && e.touches.length === 1 && !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel") ? (e.touches[0]?.clientY ?? null) : null;
+      dy = 0;
+    };
+    const move = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY;
+      if (start === null || y === undefined) return;
+      dy = y - start;
+      if (dy <= 0 || window.scrollY > 0) {
+        start = null;
+        setShown(0);
+        return;
+      }
+      setShown(pullShown(dy));
+    };
+    const up = () => {
+      if (start !== null && pullRefreshes(dy)) {
+        setBusy(true);
+        refresh.current();
+        window.setTimeout(() => setBusy(false), 700);
+      }
+      start = null;
+      setShown(0);
+    };
+    window.addEventListener("touchstart", down, { passive: true });
+    window.addEventListener("touchmove", move, { passive: true });
+    window.addEventListener("touchend", up);
+    window.addEventListener("touchcancel", up);
+    return () => {
+      window.removeEventListener("touchstart", down);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+      window.removeEventListener("touchcancel", up);
+    };
+  }, []);
+  // Nothing in a browser tab; in the installed app, a status for "Refreshing".
+  if (!on) return null;
+  if (!busy && shown === 0) return <span className="sr-only" role="status" />;
+  const at = busy ? PULL_AT : shown;
+  return (
+    <>
+      <div className={`pull${busy ? " busy" : at >= PULL_AT ? " ready" : ""}`} aria-hidden="true" style={{ transform: `translateY(${at - 40}px)`, opacity: Math.min(1, at / PULL_AT) }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" style={{ transform: busy ? undefined : `rotate(${(at / PULL_AT) * 270}deg)` }}>
+          <path d="M20 12a8 8 0 11-2.3-5.6M20 4v4h-4" />
+        </svg>
+      </div>
+      <span className="sr-only" role="status">
+        {busy ? "Refreshing" : ""}
+      </span>
+    </>
+  );
 }

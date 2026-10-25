@@ -282,11 +282,22 @@ export function foreach(config: { items: Expr<unknown[]>; max_concurrency?: numb
   return { type: "foreach", config: { ...config, steps: body } };
 }
 
-export function subflow(config: { workflow: `wf_${string}`; version: number; wait?: boolean }, input?: Values): StepSpec {
+/**
+ * Runs another workflow of the business as its own run, by the workflow's
+ * id, with its run inputs. Without a version, the version published when
+ * the step starts runs; with wait (the default) the step waits for the run
+ * to end and its output is {run_id, status, outputs}.
+ */
+export function subflow(config: { workflow: string; version?: number; wait?: boolean }, input?: Values): StepSpec {
   return { type: "subflow", ...(input === undefined ? {} : { input }), config };
 }
 
-export function ai(config: { prompt: string; output_schema: object | boolean; model?: string }, input?: Values): StepSpec {
+/**
+ * Asks the deployment's AI model at run time. Personal data in the prompt
+ * and input reaches the model as placeholders, put back in the answer;
+ * personal_data lists the input fields it may read as they are.
+ */
+export function ai(config: { prompt: Expr<string> | string; output_schema: object | boolean; model?: string; personal_data?: string[] }, input?: Values): StepSpec {
   return { type: "ai", ...(input === undefined ? {} : { input }), config };
 }
 

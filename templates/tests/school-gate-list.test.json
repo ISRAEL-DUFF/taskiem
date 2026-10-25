@@ -1,0 +1,110 @@
+{
+  "schema": "wd-test/v1",
+  "template": "school-gate-list",
+  "params": {
+    "send_day": 10,
+    "send_month": 9,
+    "send_time": "16:00",
+    "phone": "0803 123 4567",
+    "class": ""
+  },
+  "cases": [
+    {
+      "name": "each class's list goes to the phone given, one message per class with no amounts, and the bursar is told",
+      "mocks": {
+        "lists": {
+          "output": {
+            "term_id": "0192e2e0-0000-7000-8000-0000000000t1",
+            "term": "First term 2026/2027",
+            "count": 2,
+            "students": 5,
+            "cleared": 3,
+            "partly_paid": 1,
+            "not_paid": 1,
+            "classes": [
+              {"class_id": "0192e2e0-0000-7000-8000-0000000000c1", "class": "JSS 1 A", "students": 3, "cleared": 1, "partly_paid": 1, "not_paid": 1,
+               "not_cleared": ["Chidi Eze (GCA/002): partly paid", "Tolu Ade (GCA/003): not paid"],
+               "text": "Clearance list, JSS 1 A, First term 2026/2027: 1 of 3 cleared. See the bursar:\n- Chidi Eze (GCA/002): partly paid\n- Tolu Ade (GCA/003): not paid"},
+              {"class_id": "0192e2e0-0000-7000-8000-0000000000c2", "class": "JSS 2 A", "students": 2, "cleared": 2, "partly_paid": 0, "not_paid": 0,
+               "not_cleared": [],
+               "text": "Clearance list, JSS 2 A, First term 2026/2027: 2 of 2 cleared. Everyone is cleared."}
+            ]
+          }
+        },
+        "send_each[0].send": {"output": {"via": "whatsapp", "over_allowance": false}},
+        "send_each[1].send": {"output": {"via": "sms", "over_allowance": false}},
+        "tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "lists": {"class": ""},
+          "send_each[0].send": {
+            "phone": "0803 123 4567",
+            "title": "Clearance list: JSS 1 A",
+            "about": "clearance list, JSS 1 A",
+            "message": "Clearance list, JSS 1 A, First term 2026/2027: 1 of 3 cleared. See the bursar:\n- Chidi Eze (GCA/002): partly paid\n- Tolu Ade (GCA/003): not paid"
+          },
+          "send_each[1].send": {
+            "phone": "0803 123 4567",
+            "title": "Clearance list: JSS 2 A",
+            "message": "Clearance list, JSS 2 A, First term 2026/2027: 2 of 2 cleared. Everyone is cleared."
+          },
+          "tell_bursar": {
+            "title": "School clearance lists",
+            "message": "Clearance lists for First term 2026/2027 sent for 2 class(es): 3 of 5 students cleared, 1 partly paid, 1 not paid. Schools > Clearance shows each."
+          }
+        },
+        "steps": {
+          "lists": "completed",
+          "send_each[0].send": "completed",
+          "send_each[1].send": "completed",
+          "tell_bursar": "completed"
+        },
+        "calls": {
+          "lists": 1,
+          "send": 2,
+          "tell_bursar": 1
+        }
+      }
+    },
+    {
+      "name": "one class only: the class is passed through and one message goes",
+      "params": {
+        "class": "JSS 1 A"
+      },
+      "mocks": {
+        "lists": {
+          "output": {
+            "term_id": "0192e2e0-0000-7000-8000-0000000000t1",
+            "term": "First term 2026/2027",
+            "count": 1,
+            "students": 3,
+            "cleared": 3,
+            "partly_paid": 0,
+            "not_paid": 0,
+            "classes": [
+              {"class_id": "0192e2e0-0000-7000-8000-0000000000c1", "class": "JSS 1 A", "students": 3, "cleared": 3, "partly_paid": 0, "not_paid": 0, "not_cleared": [],
+               "text": "Clearance list, JSS 1 A, First term 2026/2027: 3 of 3 cleared. Everyone is cleared."}
+            ]
+          }
+        },
+        "send_each[0].send": {"output": {"via": "sms", "over_allowance": false}},
+        "tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "lists": {"class": "JSS 1 A"},
+          "tell_bursar": {
+            "message": "Clearance lists for First term 2026/2027 sent for 1 class(es): 3 of 3 students cleared, 0 partly paid, 0 not paid. Schools > Clearance shows each."
+          }
+        },
+        "calls": {
+          "send": 1,
+          "tell_bursar": 1
+        }
+      }
+    }
+  ]
+}

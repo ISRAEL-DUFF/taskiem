@@ -1,0 +1,74 @@
+{
+  "schema": "wd-test/v1",
+  "template": "school-daily-close",
+  "params": {
+    "send_time": "06:30",
+    "app_link": "https://app.example"
+  },
+  "cases": [
+    {
+      "name": "yesterday's close goes to the owners as its text, a day that does not reconcile flagged in the title",
+      "mocks": {
+        "close": {
+          "output": {
+            "id": "0192e2e0-0000-7000-8000-0000000000dd", "day": "2026-10-24", "term": "First term 2026/2027", "ran_at": "2026-10-25T01:00:00Z", "reconciles": false, "problems": 1,
+            "money_in": {"count": 2, "kobo": 15000000}, "into_accounts": {"count": 1, "kobo": 10000000}, "at_the_desk": {"count": 1, "kobo": 5000000},
+            "matched_auto": {"count": 1, "kobo": 10000000}, "matched_person": {"count": 1, "kobo": 5000000}, "unmatched": {"count": 0, "kobo": 0}, "lookback_found": {"count": 0, "kobo": 0},
+            "pending": 0, "claims": 0, "problem_list": [{"kind": "part_without_receipt", "message": "₦50,000 counted towards INV-0002 (GCA/002) has no receipt", "path": "/invoices/x", "amount_kobo": 5000000, "ref": "INV-0002"}],
+            "pending_list": [], "claim_list": [], "unmatched_list": [],
+            "text": "Daily close, 24 Oct 2026 (First term 2026/2027).\nMoney in on students: ₦150,000 (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk.\nMatched to fees: ₦100,000 by itself, ₦50,000 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nDOES NOT RECONCILE: 1 problem(s).\n\nProblems:\n- ₦50,000 counted towards INV-0002 (GCA/002) has no receipt → https://app.example/invoices/x"
+          }
+        },
+        "send": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "close": {"link": "https://app.example"},
+          "send": {
+            "to": "owner",
+            "title": "Daily close 2026-10-24: DOES NOT RECONCILE",
+            "message": "Daily close, 24 Oct 2026 (First term 2026/2027).\nMoney in on students: ₦150,000 (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk.\nMatched to fees: ₦100,000 by itself, ₦50,000 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nDOES NOT RECONCILE: 1 problem(s).\n\nProblems:\n- ₦50,000 counted towards INV-0002 (GCA/002) has no receipt → https://app.example/invoices/x"
+          }
+        },
+        "steps": {
+          "close": "completed",
+          "send": "completed"
+        },
+        "calls": {
+          "close": 1,
+          "send": 1
+        }
+      }
+    },
+    {
+      "name": "a day that reconciles has a plain title",
+      "params": {
+        "app_link": ""
+      },
+      "mocks": {
+        "close": {
+          "output": {
+            "id": "0192e2e0-0000-7000-8000-0000000000de", "day": "2026-10-25", "ran_at": "2026-10-26T01:00:00Z", "reconciles": true, "problems": 0,
+            "money_in": {"count": 0, "kobo": 0}, "into_accounts": {"count": 0, "kobo": 0}, "at_the_desk": {"count": 0, "kobo": 0},
+            "matched_auto": {"count": 0, "kobo": 0}, "matched_person": {"count": 0, "kobo": 0}, "unmatched": {"count": 0, "kobo": 0}, "lookback_found": {"count": 0, "kobo": 0},
+            "pending": 0, "claims": 0, "problem_list": [], "pending_list": [], "claim_list": [], "unmatched_list": [],
+            "text": "Daily close, 25 Oct 2026.\nMoney in on students: ₦0 (0 payments): ₦0 into account numbers, ₦0 at the desk.\nMatched to fees: ₦0 by itself, ₦0 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nEverything reconciles."
+          }
+        },
+        "send": {"output": {"people": 1, "chat": 0, "email": 1, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "close": {"link": ""},
+          "send": {"title": "Daily close 2026-10-25"}
+        },
+        "calls": {
+          "close": 1,
+          "send": 1
+        }
+      }
+    }
+  ]
+}

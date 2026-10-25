@@ -46,6 +46,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/moneyreport"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/plain"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -78,9 +79,12 @@ type Digester struct {
 	From   string
 	// PublicURL is the web app's address, for the Money page's link.
 	PublicURL string
-	Interval  time.Duration // between looks; default 5 minutes
-	Logger    *slog.Logger
-	Now       func() time.Time
+	// Schools reads the schools section (SchoolSummarise) for businesses
+	// with the area on; nil leaves it out.
+	Schools  *schools.Schools
+	Interval time.Duration // between looks; default 5 minutes
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 func (d *Digester) now() time.Time {
@@ -384,7 +388,11 @@ func (d *Digester) monthly(ctx context.Context, tenant uuid.UUID, month time.Tim
 			return err
 		}
 		to = emails
-		subject, body = MonthlyEmail(name, s, d.Link())
+		school, err := SchoolSummarise(ctx, tx, d.Schools, tenant, month, month.AddDate(0, 1, 0))
+		if err != nil {
+			return err
+		}
+		subject, body = MonthlyEmailWith(name, s, school, d.Link())
 		return nil
 	})
 	if err != nil || len(to) == 0 {
@@ -486,7 +494,15 @@ func DailyHead(l lang.Tag, s moneyreport.Summary) string {
 // DailyText is the daily summary in l, without the business's name (the
 // channel's prefix adds it), with the link to the Money page.
 func DailyText(l lang.Tag, s moneyreport.Summary, link string) string {
+	return DailyTextWith(l, s, nil, link)
+}
+
+// DailyTextWith is DailyText with the schools section (nil for none).
+func DailyTextWith(l lang.Tag, s moneyreport.Summary, school *SchoolSummary, link string) string {
 	text := DailyHead(l, s)
+	if line := SchoolLine(l, school); line != "" {
+		text += "\n" + line
+	}
 	if link != "" {
 		text += "\n\n" + lang.Default().Text(l, "money.daily.link", "link", link)
 	}
@@ -502,6 +518,12 @@ func percent(bp *int) string {
 
 // MonthlyEmail is last month's email: its subject and plain-text body.
 func MonthlyEmail(business string, s moneyreport.Summary, link string) (string, string) {
+	return MonthlyEmailWith(business, s, nil, link)
+}
+
+// MonthlyEmailWith is MonthlyEmail with the schools section (nil for
+// none).
+func MonthlyEmailWith(business string, s moneyreport.Summary, school *SchoolSummary, link string) (string, string) {
 	month := s.From.In(moneyreport.Lagos).Format("January 2006")
 	n := invoicing.Naira
 	var b strings.Builder
@@ -520,6 +542,7 @@ func MonthlyEmail(business string, s moneyreport.Summary, link string) (string, 
 	fmt.Fprintf(&b, "Leaks opened: %d (%s)\n", s.LeaksOpened, n(s.LeaksOpenedKobo))
 	fmt.Fprintf(&b, "Leaks open now: %d (%s)\n", s.LeaksOpen, n(s.LeaksOpenKobo))
 	fmt.Fprintf(&b, "Recovered so far: %s\n", n(s.RecoveredKobo))
+	b.WriteString(schoolEmail(school))
 	b.WriteString("\nEach movement is counted once, at its latest status. Times are Lagos time.\n")
 	if link != "" {
 		fmt.Fprintf(&b, "\nThe month's money log, invoices and accounting journal, as spreadsheets (CSV), are on the Money page:\n%s\n", link)

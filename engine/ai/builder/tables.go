@@ -73,6 +73,10 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 			warns = append(warns, Warning{Kind: "table", Rule: RuleInvoiceTable, Message: fmt.Sprintf("the table %q keeps invoices with a status: invoices to customers are Taskiem's own (invoices@1), "+
 				"marked paid only by the payments counted towards them, with a page where the customer pays; use invoices@1 create and send, and wait for the invoice.paid signal (or start on the invoice trigger), instead of a table", t.Name)})
 		}
+		if schoolTable(t) {
+			warns = append(warns, Warning{Kind: "table", Rule: RuleSchoolTable, Message: fmt.Sprintf("the table %q keeps students with a paid or cleared column: a school's students, their term fees and their clearance are Taskiem's own (the Schools area and schools@1); "+
+				"a student's fees are invoices paid only by the payments counted towards them, and clearance is read from the money (schools@1 clearance), never written; read the kept tables school_students and school_term_fees, or schools@1, instead of a table", t.Name)})
+		}
 		err := checkTableShape(t)
 		if err == nil && check != nil {
 			err = check(t)
@@ -132,6 +136,33 @@ func invoiceTable(t TableSpec) bool {
 	}
 	for _, c := range t.Columns {
 		if slices.Contains([]string{"status", "paid", "is_paid", "payment_status", "invoice_status", "paid_at", "paid_on"}, c.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+// RuleSchoolTable flags a proposed table of students or pupils with a
+// paid, balance or cleared column: a school's fees are invoices and its
+// clearance is read from the money (rule 22).
+const RuleSchoolTable = "school_as_table"
+
+// schoolTable reports whether a proposed table keeps students or pupils
+// with a column saying who paid or is cleared.
+func schoolTable(t TableSpec) bool {
+	parts := strings.Split(t.Name, "_")
+	named := false
+	for _, p := range parts {
+		if slices.Contains([]string{"student", "students", "pupil", "pupils", "learner", "learners", "fee", "fees", "clearance"}, p) {
+			named = true
+		}
+	}
+	if !named {
+		return false
+	}
+	for _, c := range t.Columns {
+		if slices.Contains([]string{"paid", "is_paid", "fees_paid", "fee_paid", "amount_paid", "paid_at", "paid_on", "payment_status", "fee_status", "fees_status",
+			"balance", "balance_kobo", "outstanding", "cleared", "is_cleared", "clearance", "clearance_status", "owing"}, c.Name) {
 			return true
 		}
 	}

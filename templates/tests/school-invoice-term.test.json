@@ -1,0 +1,70 @@
+{
+  "schema": "wd-test/v1",
+  "template": "school-invoice-term",
+  "params": {
+    "send_day": 14,
+    "send_month": 9,
+    "send_time": "08:00",
+    "send_now": true
+  },
+  "cases": [
+    {
+      "name": "the term is invoiced and sent, and the bursar hears the counts and who was left out",
+      "mocks": {
+        "invoice": {
+          "output": {
+            "term_id": "0192e2e0-0000-7000-8000-0000000000t1", "term": "First term 2026/2027", "enrolled": 120, "to_invoice": 118, "created": 115, "already_invoiced": 2,
+            "total_kobo": 1180000000, "pass_through_kobo": 216000000, "no_contact": 1, "no_fees": 0, "nothing_to_pay": 1, "needs_approval": 1, "requested": 1, "sent": 115, "failed": 0
+          }
+        },
+        "tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "invoice": {"send": true},
+          "tell_bursar": {
+            "title": "First term 2026/2027 invoiced",
+            "message": "First term 2026/2027: 115 student(s) invoiced now, 2 were invoiced already, 115 invoice(s) sent to families. Left out: 1 with no guardian to send to, 0 with no fees for their class, 1 with nothing to pay, 1 waiting for a second person. The Invoices page of the term shows each."
+          }
+        },
+        "steps": {
+          "invoice": "completed",
+          "tell_bursar": "completed"
+        },
+        "calls": {
+          "invoice": 1,
+          "tell_bursar": 1
+        }
+      }
+    },
+    {
+      "name": "kept as drafts: nothing is sent, and a family that could not be reached is counted",
+      "params": {
+        "send_now": false
+      },
+      "mocks": {
+        "invoice": {
+          "output": {
+            "term_id": "0192e2e0-0000-7000-8000-0000000000t1", "term": "First term 2026/2027", "enrolled": 3, "to_invoice": 3, "created": 3, "already_invoiced": 0,
+            "total_kobo": 30000000, "pass_through_kobo": 0, "no_contact": 0, "no_fees": 0, "nothing_to_pay": 0, "needs_approval": 0, "requested": 0, "sent": 0, "failed": 0
+          }
+        },
+        "tell_bursar": {"output": {"people": 1, "chat": 0, "email": 1, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "invoice": {"send": false},
+          "tell_bursar": {
+            "message": "First term 2026/2027: 3 student(s) invoiced now, 0 were invoiced already, 0 invoice(s) sent to families. Left out: 0 with no guardian to send to, 0 with no fees for their class, 0 with nothing to pay, 0 waiting for a second person. The Invoices page of the term shows each."
+          }
+        },
+        "calls": {
+          "invoice": 1,
+          "tell_bursar": 1
+        }
+      }
+    }
+  ]
+}

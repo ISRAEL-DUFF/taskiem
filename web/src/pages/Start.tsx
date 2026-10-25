@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, put, type CapabilityInfo, type ConnectorInfo, type JSONSchema, type Problem } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { Help, useOnboarding } from "../onboarding";
 import { CHECKLIST, firstThings, formatDuration, sampleInput, starterTemplates } from "../lib/onboarding";
 import { initialValues, toParams, type Template } from "../lib/templates";
+import { Icon } from "../icons";
 import { Badge, ErrorBox, Field, JsonInput, Skeleton, useAction, useLoad } from "../ui";
-import { ParamField } from "./Templates";
+import { ParamField, usesWords } from "./Templates";
 import { NeedsList } from "./Readiness";
 import { ProblemLine } from "../forms/ProblemLine";
 import { plainValue, resolveSchema } from "../lib/values";
@@ -22,26 +23,37 @@ import type { ReadyNeed, Readiness } from "../lib/readiness";
 // connect its app, create and publish it, run it once.
 
 export function Start() {
-  const { can } = useAuth();
+  const { me, can } = useAuth();
   const { data, reload } = useOnboarding();
   const act = useAction();
   const [sent, setSent] = useState<string | null>(null);
   const nav = useNavigate();
   if (!data) return <Skeleton />;
   const more = firstThings(can);
+  const next = data.items.find((it) => !it.done);
   return (
     <>
       <div className="toolbar">
         <h1 className="grow" style={{ margin: 0 }}>
           Get started
         </h1>
-        <span className="hint" data-testid="onboarding-progress">
-          {data.done} of {data.total} done
-        </span>
         {!data.dismissed && can("workflow.edit") && (
           <button onClick={() => void act.run(async () => (await post("/v1/onboarding/dismiss"), reload(), nav("/home")), false)}>Hide this</button>
         )}
       </div>
+      <section className="hero" aria-label="Your setup">
+        <div className="hero-top">
+          <span className="hero-label">Your setup</span>
+          {data.done === data.total && <span className="hero-tag">All done</span>}
+        </div>
+        <div className="hero-amount words" data-testid="onboarding-progress">
+          {data.done} of {data.total} done
+        </div>
+        <div className="hero-bar" role="img" aria-label={`${Math.round((100 * data.done) / Math.max(1, data.total))}% done`}>
+          <span style={{ width: `${(100 * data.done) / Math.max(1, data.total)}%` }} />
+        </div>
+        {next && <p className="hero-sub hero-next">Next: {CHECKLIST[next.id].title}</p>}
+      </section>
       <ErrorBox error={act.error} />
       {data.seconds_to_first_run !== null && (
         <div className="notice" role="status" data-testid="first-run-time">
@@ -49,12 +61,12 @@ export function Start() {
         </div>
       )}
       <ol className="checklist" aria-label="Checklist">
-        {data.items.map((it) => {
+        {data.items.map((it, i) => {
           const c = CHECKLIST[it.id];
           return (
             <li key={it.id} className={it.done ? "done" : ""} data-testid={`check-${it.id}`}>
               <span className="check" aria-label={it.done ? "done" : "to do"}>
-                {it.done ? "✓" : "○"}
+                {it.done ? "✓" : i + 1}
               </span>
               <div className="grow">
                 <strong>{c.title}</strong>
@@ -63,12 +75,14 @@ export function Start() {
               {!it.done &&
                 (it.id === "verify_email" ? (
                   data.can_send_email && (
-                    <button disabled={act.busy} onClick={() => void act.run(async () => setSent((await post<{ status?: string }>("/v1/me/email/verify/resend")).status ?? "Your email is confirmed."), false)}>
+                    <button className="small" disabled={act.busy} onClick={() => void act.run(async () => setSent((await post<{ status?: string }>("/v1/me/email/verify/resend")).status ?? "Your email is confirmed."), false)}>
                       {c.action}
                     </button>
                   )
                 ) : (
-                  <Link to={c.href}>{c.action}</Link>
+                  <Link className="button small" to={c.href}>
+                    {c.action}
+                  </Link>
                 ))}
             </li>
           );
@@ -81,16 +95,22 @@ export function Start() {
           <ul className="checklist">
             {more.map((f) => (
               <li key={f.id} data-testid={`first-${f.id}`}>
+                <span className="list-icon">
+                  <Icon name={f.id === "invoice" ? "invoices" : "money"} />
+                </span>
                 <div className="grow">
                   <strong>{f.title}</strong>
                   <div className="hint">{f.text}</div>
                 </div>
-                <Link to={f.href}>{f.action}</Link>
+                <Link className="button small" to={f.href}>
+                  {f.action}
+                </Link>
               </li>
             ))}
           </ul>
         </section>
       )}
+      {(me?.schools || me?.roles.includes("owner")) && can("school.read") && <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />}
       {can("workflow.edit") && (
         <section>
           <h2>Your first workflow</h2>
@@ -103,12 +123,54 @@ export function Start() {
   );
 }
 
+/** The schools entry: for a business with the Schools area on, its pages and the school templates; for an owner without it, the offer to turn it on. */
+function SchoolStart({ on, owner }: { on: boolean; owner: boolean }) {
+  const { data, error } = useLoad(() => (on ? get<{ templates: Template[] }>("/v1/templates") : Promise.resolve(undefined)), [on]);
+  const list = useMemo(() => (data?.templates ?? []).filter((t) => t.available && t.tags.includes("schools")).sort((a, b) => a.title.localeCompare(b.title)), [data]);
+  if (!on) {
+    if (!owner) return null;
+    return (
+      <section aria-labelledby="school-start" data-testid="school-start-off">
+        <h2 id="school-start">Run a school?</h2>
+        <p className="hint">
+          Turn Schools on for students, families, term fees, each child's own account number, receipts, chasing, clearance and the daily close.{" "}
+          <Link to="/settings/schools">Turn Schools on</Link>
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section aria-labelledby="school-start" data-testid="school-start">
+      <h2 id="school-start">Your school</h2>
+      <p className="hint">
+        <Link to="/schools/overview">Overview</Link>: the term's fees as they stand. <Link to="/schools">Students</Link>, <Link to="/schools/classes">classes and terms</Link>,{" "}
+        <Link to="/schools/accounts">account numbers</Link>, <Link to="/schools/debtors">debtors</Link> and <Link to="/schools/clearance">clearance</Link>.
+      </p>
+      <ErrorBox error={error} />
+      {list.length > 0 && (
+        <>
+          <p>Ready workflows for a school. Each walks you through publishing it and running it once.</p>
+          <div className="template-grid">
+            {list.map((t) => (
+              <Link key={t.id} className="card template-card" to={`/start/guide?template=${t.id}`} data-testid={`school-template-${t.id}`}>
+                <strong>{t.title}</strong>
+                <span>{t.summary}</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 /** The starter templates as cards; a card opens the guide. */
 function TemplatePicker() {
   const { data, error } = useLoad(() => get<{ templates: Template[] }>("/v1/templates"), []);
   const names = useLoad(() => get<{ connections: ConnectionName[] }>("/v1/connection-names"), []);
   const list = useMemo(() => starterTemplates(data?.templates ?? [], (names.data?.connections ?? []).map((c) => c.connector)), [data, names.data]);
   const [all, setAll] = useState(false);
+  const advanced = useAdvanced();
   return (
     <>
       <ErrorBox error={error} />
@@ -118,7 +180,7 @@ function TemplatePicker() {
             <strong>{t.title}</strong>
             <span>{t.summary}</span>
             <span className="hint">
-              {t.connectors.map((c) => c.split("@")[0]).join(" · ")}
+              {usesWords(t.connectors, advanced)}
               {t.needs_developer && " · needs a developer"}
             </span>
           </Link>

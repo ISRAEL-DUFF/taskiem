@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useEnvironments } from "../environments";
-import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
 
 interface Channel {
   id: string;
@@ -69,81 +69,77 @@ export function Alerts() {
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Channels</h2>
         {channels.data && !channels.data.email_configured && <p className="hint">Email is not configured on this deployment (TASKIEM_SMTP_URL); email channels will show their deliveries as failing.</p>}
-        {chans.length > 0 && <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Kind</th>
-              <th>Destination</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
+        {chans.length > 0 && (
+          <ul className="items" aria-label="Channels">
             {chans.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.kind}</td>
-                <td className="hint">{c.kind === "email"
-                    ? c.config.to?.join(", ")
-                    : c.kind === "webhook"
-                      ? c.config.url
-                      : c.kind === "whatsapp"
-                        ? `WhatsApp: ${c.config.emails?.join(", ") ?? ""}`
-                        : c.kind === "telegram"
-                          ? `Telegram: ${c.config.emails?.join(", ") ?? ""}`
-                          : "Slack incoming webhook"}</td>
-                <td>
-                  <button onClick={() => void act.run(async () => (await post(`/v1/alerts/channels/${c.id}/test`), setNotice(`A test message reached ${c.name}.`)), false)}>Send test</button>{" "}
-                  <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/channels/${c.id}`), channels.reload(), rules.reload()), "Channel deleted")}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
+              <Row
+                key={c.id}
+                testid="channel"
+                icon={c.kind === "email" ? "inbox" : c.kind === "webhook" ? "connections" : "bell"}
+                title={c.name}
+                side={<span className="badge muted">{c.kind}</span>}
+                sub={
+                  <span className="sub">
+                    {c.kind === "email"
+                      ? c.config.to?.join(", ")
+                      : c.kind === "webhook"
+                        ? c.config.url
+                        : c.kind === "whatsapp"
+                          ? `WhatsApp: ${c.config.emails?.join(", ") ?? ""}`
+                          : c.kind === "telegram"
+                            ? `Telegram: ${c.config.emails?.join(", ") ?? ""}`
+                            : "Slack incoming webhook"}
+                  </span>
+                }
+              >
+                <button onClick={() => void act.run(async () => (await post(`/v1/alerts/channels/${c.id}/test`), setNotice(`A test message reached ${c.name}.`)), false)}>Send test</button>
+                <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/channels/${c.id}`), channels.reload(), rules.reload()), "Channel deleted")}>
+                  Delete
+                </button>
+              </Row>
             ))}
-          </tbody>
-        </table>}
+          </ul>
+        )}
         <AddChannel onAdded={(key) => (channels.reload(), key && setNotice(`Signing key (shown once; verify the Taskiem-Signature header with it): ${key}`))} />
       </section>
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Rules</h2>
         {(rules.data?.rules ?? []).length === 0 && <p className="hint">No rules yet. A rule says what to alert on and which channels hear about it.</p>}
-        {(rules.data?.rules ?? []).length > 0 && <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>When</th>
-              <th>Send to</th>
-              <th>On</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
+        {(rules.data?.rules ?? []).length > 0 && (
+          <ul className="items" aria-label="Rules">
             {(rules.data?.rules ?? []).map((r) => (
-              <tr key={r.id}>
-                <td>{r.name}</td>
-                <td>
-                  {KIND_LABELS[r.kind] ?? r.kind}
-                  {r.config.threshold && ` ${r.config.threshold}`}
-                  {r.config.environment && <span className="hint"> · {r.config.environment}</span>}
-                </td>
-                <td>{r.channel_ids.map(name).join(", ")}</td>
-                <td>
-                  <input
-                    type="checkbox"
-                    aria-label={`Rule ${r.name} on`}
-                    checked={r.enabled}
-                    onChange={(e) => void act.run(async () => (await put(`/v1/alerts/rules/${r.id}`, { name: r.name, kind: r.kind, config: r.config, channel_ids: r.channel_ids, enabled: e.target.checked }), rules.reload()), "Saved")}
-                  />
-                </td>
-                <td>
-                  <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/rules/${r.id}`), rules.reload()), "Rule deleted")}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
+              <Row
+                key={r.id}
+                testid="rule"
+                icon="alerts"
+                tone={r.enabled ? undefined : "muted"}
+                title={r.name}
+                side={
+                  <label className="inline switch-label">
+                    <input
+                      type="checkbox"
+                      aria-label={`Rule ${r.name} on`}
+                      checked={r.enabled}
+                      onChange={(e) => void act.run(async () => (await put(`/v1/alerts/rules/${r.id}`, { name: r.name, kind: r.kind, config: r.config, channel_ids: r.channel_ids, enabled: e.target.checked }), rules.reload()), "Saved")}
+                    />
+                    On
+                  </label>
+                }
+                sub={
+                  <span className="sub">
+                    {KIND_LABELS[r.kind] ?? r.kind}
+                    {r.config.threshold && ` ${r.config.threshold}`}
+                    {r.config.environment && ` · ${r.config.environment}`} · to {r.channel_ids.map(name).join(", ")}
+                  </span>
+                }
+              >
+                <button className="danger" onClick={() => void act.run(async () => (await del(`/v1/alerts/rules/${r.id}`), rules.reload()), "Rule deleted")}>
+                  Delete
+                </button>
+              </Row>
             ))}
-          </tbody>
-        </table>}
+          </ul>
+        )}
         {chans.length > 0 ? <AddRule channels={chans} onAdded={rules.reload} /> : <p className="hint">Add a channel first.</p>}
       </section>
       <section className="card">

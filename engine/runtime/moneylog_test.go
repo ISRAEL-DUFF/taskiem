@@ -81,3 +81,36 @@ func TestSettledPayoutReachesTheMoneyLog(t *testing.T) {
 		t.Errorf("after the event, %d entries: %+v", len(got), got)
 	}
 }
+
+// A payout that went out in prod remembers the account it went to, for the
+// approvals warning "First payment to this account"; one that never went
+// out does not.
+func TestPayoutRemembersTheAccount(t *testing.T) {
+	e := rt.New(t)
+	newRail(t, e, "testrail", "Test Rail")
+	connect(t, e, "rail", "testrail")
+	wf := e.Publish(t, payrollWD)
+	e.Start(t, wf, people)
+	e.Drain(t)
+
+	paid := func(account string) bool {
+		t.Helper()
+		var p bool
+		if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+			var err error
+			p, _, err = moneylog.PaidBefore(ctx, tx, e.Vault, e.Tenant, account, "058")
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	for _, a := range []string{"0123456789", "0987654321"} {
+		if !paid(a) {
+			t.Errorf("%s was paid and is not remembered", a)
+		}
+	}
+	if paid("0111111111") {
+		t.Error("an account never paid is remembered")
+	}
+}

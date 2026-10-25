@@ -220,7 +220,7 @@ func (x *templater) template(st map[string]any, depth int, chain []string) ([]an
 	if input == nil {
 		input = map[string]any{}
 	}
-	if err := inputFits(tm, input); err != nil {
+	if err := InputFits(tm, input); err != nil {
 		return nil, refuse("template %s: %v", tid, err)
 	}
 	inner, err := x.steps(tm["steps"].([]any), depth+1, append(slices.Clone(chain), tid))
@@ -283,7 +283,7 @@ func (x *templater) template(st map[string]any, depth int, chain []string) ([]an
 // inputs schema: every required input is given, and none it does not
 // take. The values themselves are checked when they are known, at run
 // time, by the template's own steps.
-func inputFits(tdef map[string]any, input map[string]any) error {
+func InputFits(tdef map[string]any, input map[string]any) error {
 	in, _ := tdef["inputs"].(map[string]any)
 	schema, _ := in["schema"].(map[string]any)
 	props, _ := schema["properties"].(map[string]any)

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { currentAgentSession, post } from "../api";
-import { ErrorBox, Field, Skeleton, fmtTime, useAction } from "../ui";
+import { ErrorBox, Field, Items, Row, Skeleton, fmtTime, useAction } from "../ui";
 import { tidy } from "../lib/storefront";
 import {
   REFUSAL_HELP,
@@ -184,35 +184,28 @@ export function TrustPanel({ trust, error, onChanged }: { trust: Trust | undefin
           {trust.reviews.length > 0 && (
             <>
               <h3>Checks by Taskiem</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>What</th>
-                    <th>Status</th>
-                    <th>Asked</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trust.reviews.map((r) => {
-                    const s = reviewStatus(r.status);
-                    const found = findingsSummary(r.findings);
-                    return (
-                      <tr key={r.id}>
-                        <td>
-                          {reviewKind(r.kind)}
-                          {r.findings.length > 0 && <div className="hint">{found}</div>}
-                        </td>
-                        <td>
-                          <ToneBadge label={s.label} tone={s.tone} />
-                        </td>
-                        <td>{fmtTime(r.created_at)}</td>
-                        <td>{r.decision_note ?? (r.decided_at ? "—" : "")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <Items label="Checks by Taskiem">
+                {trust.reviews.map((r) => {
+                  const st = reviewStatus(r.status);
+                  return (
+                    <Row
+                      key={r.id}
+                      icon="lock"
+                      tone={st.tone === "ok" ? "ok" : st.tone === "danger" ? "danger" : st.tone === "warn" ? "warn" : undefined}
+                      title={reviewKind(r.kind)}
+                      side={<ToneBadge label={st.label} tone={st.tone} />}
+                      sub={
+                        <span className="sub">
+                          Asked {fmtTime(r.created_at)}
+                          {r.findings.length > 0 && <span className="block">{findingsSummary(r.findings)}</span>}
+                          {r.decision_note && <span className="block">{r.decision_note}</span>}
+                        </span>
+                      }
+                      testid="trust-review"
+                    />
+                  );
+                })}
+              </Items>
             </>
           )}
         </>

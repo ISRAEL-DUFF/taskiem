@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { EnvSelect } from "../environments";
-import { ErrorBox, PageHeader, Skeleton, fmtTime, useLoad } from "../ui";
+import { ErrorBox, Item, Items, PageHeader, Row, Skeleton, fmtTime, useLoad } from "../ui";
 
 interface Day {
   day: string;
@@ -87,30 +87,20 @@ export function Dashboard() {
           </div>
           <section className="card">
             <h2 style={{ marginTop: 0 }}>Workflows</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Workflow</th>
-                  <th>Runs</th>
-                  <th>Success rate</th>
-                  <th>Failed</th>
-                  <th>p95</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.workflows.map((w) => (
-                  <tr key={w.id}>
-                    <td>
-                      <Link to={`/workflows/${w.id}`}>{w.name}</Link>
-                    </td>
-                    <td>{w.runs}</td>
-                    <td>{pct(w.success_rate)}</td>
-                    <td>{w.failed}</td>
-                    <td>{dur(w.p95_seconds)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Items label="Workflows">
+              {data.workflows.map((w) => (
+                <Item
+                  key={w.id}
+                  to={`/workflows/${w.id}`}
+                  icon="workflows"
+                  tone={w.failed > 0 ? "danger" : "ok"}
+                  title={w.name}
+                  side={`${w.runs} ${w.runs === 1 ? "run" : "runs"}`}
+                  sub={`${pct(w.success_rate)} succeeded · ${w.failed} failed · p95 ${dur(w.p95_seconds)}`}
+                  testid="dashboard-workflow"
+                />
+              ))}
+            </Items>
             {data.workflows.length === 0 && <p className="hint">No runs in this period.</p>}
           </section>
         </>
@@ -135,26 +125,20 @@ function Tile({ label, value, hint, warn, link }: { label: string; value: string
 function FailureTable({ rows, cols }: { rows: Failure[]; cols: (keyof Failure)[] }) {
   if (rows.length === 0) return <p className="hint">None in this period.</p>;
   return (
-    <table>
-      <thead>
-        <tr>
-          {cols.map((c) => (
-            <th key={c}>{c}</th>
-          ))}
-          <th>Failed attempts</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={i}>
-            {cols.map((c) => (
-              <td key={c}>{r[c] || <span className="hint">–</span>}</td>
-            ))}
-            <td>{r.count}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <Items>
+      {rows.map((r, i) => (
+        <Row
+          key={i}
+          icon="alerts"
+          tone="danger"
+          title={cols
+            .map((c) => r[c])
+            .filter(Boolean)
+            .join(" · ")}
+          side={<span className="item-figure">{`${r.count} failed`}</span>}
+        />
+      ))}
+    </Items>
   );
 }
 

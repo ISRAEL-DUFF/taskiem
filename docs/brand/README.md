@@ -32,7 +32,7 @@ Each folder holds the same files:
 
 The wordmarks' letters are outlines of Plus Jakarta Sans ExtraBold (SIL Open Font License), so they look the same everywhere without the font. `make.py` draws every SVG from the font, all three brands at once; change it and rerun it rather than editing the files by hand. The PNGs are the SVGs rendered at size.
 
-The web app serves its copies from `web/public/brand/<brand>/` (the tab icon, the phone home-screen icon, the mark, the wordmark).
+The web app serves its copies from `web/public/brand/<brand>/` (the tab icon, the phone home-screen icon, the mark, the wordmark). For relay it also serves the install icons the app's manifest (`web/public/manifest.json`) names: `icon-192.png` and `mark-512.png` from `mark.svg`, and `maskable-192.png` and `maskable-512.png` from `avatar.svg`, whose square background lets a phone cut its own shape; the "t" and the dot sit inside the middle 80% a phone keeps.
 
 ## Relay's colours
 

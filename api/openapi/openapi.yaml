@@ -319,7 +319,7 @@ paths:
       tags:
       - AI
       summary: Get AI building status
-      description: Whether AI building is on, and the tenant's monthly token budget and use.
+      description: Whether AI building is on, the tenant's monthly token budget and use, and for AI steps the models offered, what the provider keeps, and whether the business and its plan allow them.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -3977,6 +3977,784 @@ paths:
                     $ref: '#/components/schemas/SchoolPlanRequest'
                   sent:
                     $ref: '#/components/schemas/SchoolFamilySent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/debtors:
+    get:
+      operationId: listSchoolDebtors
+      tags:
+      - Schools
+      summary: List debtors with aging
+      description: 'Students with a balance on a sent term invoice (this term''s and earlier terms'' still open), by class, each aged by days past the invoice''s due date in Lagos time (not_due, 0_7, 7_14, 14_30, over_30), with the last reminder, any promise to pay (open, or the last one missed) and the standing of any approved payment plan (docs/schools.md#debtors). Totals by bucket are those of the class filter, before the bucket and has filters. ?format=csv answers the same rows as a file, with the same masking. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: bucket
+        in: query
+        schema:
+          type: string
+          enum: [not_due, 0_7, 7_14, 14_30, over_30]
+      - name: has
+        in: query
+        description: Only students with an open promise, a missed promise, a plan in good standing, a plan in arrears, or neither
+        schema:
+          type: string
+          enum: [promise, missed, plan, arrears, none]
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [csv]
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The debtors and the totals by bucket
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [debtors, totals, students, balance_kobo, today, revealed]
+                properties:
+                  debtors:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolDebtor'
+                  totals:
+                    type: object
+                    description: By bucket, how many students and how much
+                    additionalProperties:
+                      type: object
+                      properties:
+                        students:
+                          type: integer
+                        balance_kobo:
+                          type: integer
+                  students:
+                    type: integer
+                  balance_kobo:
+                    type: integer
+                  today:
+                    type: string
+                    format: date
+                  revealed:
+                    type: boolean
+            text/csv:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/reminders:
+    post:
+      operationId: sendSchoolReminders
+      tags:
+      - Schools
+      summary: Send fee reminders
+      description: 'Sends each chosen student''s family one message per guardian with a fresh link to its page, on WhatsApp or Telegram where a guardian gets the business''s updates there, otherwise by SMS, in the school''s wording for the rung (docs/schools.md#the-ladder). At most 50 students per send (400 above). A student with nothing due or no family, a family with a promise to pay not yet due or a plan in good standing, and a family sent the rung today already are skipped and the reason answered. Exactly once per Idempotency-Key, which is required: the same key answers what the first send did (replayed: true). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+        description: 'Makes the request safe to retry: the same key answers the same send, and messages nobody twice'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [students, rung]
+              properties:
+                students:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                    format: uuid
+                rung:
+                  type: integer
+                  minimum: 1
+                  maximum: 3
+      responses:
+        '200':
+          description: What the send did, student by student
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchoolReminded'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/chasing:
+    get:
+      operationId: getSchoolStudentChasing
+      tags:
+      - Schools
+      summary: A student's balance, promises, reminders and plan standing
+      description: 'By id or admission number: the balance on sent term invoices and its aging, the promises to pay (every state), the reminders sent, the standing of the latest approved payment plan, and the instalments marked in arrears (docs/schools.md#promises).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The student's chasing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance_kobo, days_past_due, bucket, promises, reminders, arrears, invoices]
+                properties:
+                  balance_kobo:
+                    type: integer
+                  due_on:
+                    type: string
+                    format: date
+                  days_past_due:
+                    type: integer
+                  bucket:
+                    type: string
+                    enum: [not_due, 0_7, 7_14, 14_30, over_30]
+                  promises:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPromise'
+                  reminders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolReminder'
+                  plan:
+                    $ref: '#/components/schemas/SchoolPlanStanding'
+                  arrears:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPlanArrear'
+                  invoices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolDebtorInvoice'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/promise:
+    post:
+      operationId: recordSchoolPromise
+      tags:
+      - Schools
+      summary: Record a promise to pay
+      description: 'A promise to pay by a date (today to a year on) with a note, for a student with a balance (409 for nothing due, or a promise open already). Reminders skip the family until the date; the day after, the check finds it kept when the balance moved down, missed otherwise, and a missed promise flags the student on Debtors. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date]
+              properties:
+                date:
+                  type: string
+                  format: date
+                note:
+                  type: string
+                  maxLength: 300
+      responses:
+        '201':
+          description: The promise
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promise]
+                properties:
+                  promise:
+                    $ref: '#/components/schemas/SchoolPromise'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/promises:
+    get:
+      operationId: listSchoolPromises
+      tags:
+      - Schools
+      summary: List promises to pay
+      description: Promises to pay, newest first, by student and status (every status by default).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [open, kept, missed, withdrawn]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: The promises
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promises]
+                properties:
+                  promises:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolPromise'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/promises/{id}/withdraw:
+    post:
+      operationId: withdrawSchoolPromise
+      tags:
+      - Schools
+      summary: Withdraw a promise to pay
+      description: Withdraws an open promise (409 once it is kept, missed or withdrawn); the record is kept. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The promise, withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promise]
+                properties:
+                  promise:
+                    $ref: '#/components/schemas/SchoolPromise'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/chasing/check:
+    post:
+      operationId: checkSchoolChasing
+      tags:
+      - Schools
+      summary: Run the chasing check now
+      description: 'Runs the school''s chasing check now, as it runs every hour by itself: promises past their date are found kept or missed, each once; a plan''s instalments past their date plus the school''s grace and not covered by what was paid since the plan was approved are marked in arrears, each once, and the bursars told. Running it again changes nothing. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: What the check did
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [promises_kept, promises_missed, arrears]
+                properties:
+                  promises_kept:
+                    type: integer
+                  promises_missed:
+                    type: integer
+                  arrears:
+                    type: integer
+                    description: Instalments newly found missed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/overview:
+    get:
+      operationId: getSchoolOverview
+      tags:
+      - Schools
+      summary: Schools > Overview
+      description: 'The term''s money as it stands (?term=, the current term by default; 409 when none is current and no term is named; docs/schools.md#overview): what the term''s sent invoices come to, what of it was due by today, what was collected and this week, what is outstanding and overdue; how much of the counted money was matched by itself against by a person; how parents paid (account number, card or POS, cash, a transfer to the school''s account, other); what of the collected money is for others (pass-through), by body; the five largest balances on Debtors with the aging totals (every term''s open invoices); the clearance totals; and the last daily close. The top debtors'' names are masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The overview
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overview, revealed]
+                properties:
+                  overview:
+                    $ref: '#/components/schemas/SchoolOverview'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/close:
+    post:
+      operationId: closeSchoolDay
+      tags:
+      - Schools
+      summary: Take the daily close
+      description: 'The close of a day (day, YYYY-MM-DD; yesterday in Lagos time by default; docs/schools.md#the-daily-close): students'' money that landed that day, into account numbers and at the desk; what was matched to fees by itself and by a person, and what is still unmatched; money the look-back found before any webhook; cash postings and discounts waiting for a second person; families'' claims not yet found; and what does not reconcile (a payment with no money log entry, a receipt still valid for a payment undone or gone back, a payment with no receipt), each with the page to fix it on. A day is closed once per school and never recomputed: the nightly run takes it after midnight, and asking for a day already closed answers the stored close (taken_now false). A day not over yet, or more than a year back, is refused (409). Audited when this call took it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                day:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: The close
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [close, taken_now]
+                properties:
+                  close:
+                    $ref: '#/components/schemas/SchoolClose'
+                  taken_now:
+                    type: boolean
+                    description: This call took the close; false when it was closed already
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/closes:
+    get:
+      operationId: listSchoolCloses
+      tags:
+      - Schools
+      summary: List the daily closes
+      description: The closes taken, newest first, between ?from and ?to (YYYY-MM-DD, either empty; the last 31 by default).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The closes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [closes]
+                properties:
+                  closes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolCloseBrief'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/closes/{day}:
+    get:
+      operationId: getSchoolClose
+      tags:
+      - Schools
+      summary: Read a day's close
+      description: A day's close (YYYY-MM-DD) as it was taken; 404 when the day was not closed.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: day
+        in: path
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The close
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [close]
+                properties:
+                  close:
+                    $ref: '#/components/schemas/SchoolClose'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/clearance:
+    get:
+      operationId: listSchoolClearance
+      tags:
+      - Schools
+      summary: The clearance list
+      description: 'Every student enrolled in the term (?term=, the current one by default; 409 when none is current and no term is named), of one class with ?class=, each cleared, partly paid or not paid by the rule (docs/schools.md#clearance): cleared when the term''s invoices are paid in full, an approved payment plan is in good standing, or an override is in force; partly paid when some money was counted but a balance is left (never cleared); not paid otherwise; a student with no invoice is cleared only when their class has nothing required. Computed as it is read, stored nowhere. The balance is shown (this route needs school.read); ?format=csv answers the same rows as a file. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [csv]
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The students and the totals by status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [term_id, term, students, totals, today, revealed]
+                properties:
+                  term_id:
+                    type: string
+                    format: uuid
+                  term:
+                    type: string
+                  students:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClearanceRow'
+                  totals:
+                    $ref: '#/components/schemas/SchoolClearanceTotals'
+                  today:
+                    type: string
+                    format: date
+                  revealed:
+                    type: boolean
+            text/csv:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/clearance-overrides:
+    get:
+      operationId: listSchoolClearanceOverrides
+      tags:
+      - Schools
+      summary: List clearance overrides
+      description: 'Overrides by student and term, newest first; ?in_force=true keeps those counting today (not withdrawn, today within their dates). The reason is the approver''s words (docs/schools.md#overrides).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: in_force
+        in: query
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: The overrides
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overrides]
+                properties:
+                  overrides:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/clearance-overrides/{id}/withdraw:
+    post:
+      operationId: withdrawSchoolClearanceOverride
+      tags:
+      - Schools
+      summary: Withdraw a clearance override
+      description: Withdraws an override (409 once withdrawn); the student is no longer cleared by it from this moment. The record is kept. Audited (school.clearance.withdraw).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The override, withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [override]
+                properties:
+                  override:
+                    $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/clearance:
+    get:
+      operationId: getSchoolStudentClearance
+      tags:
+      - Schools
+      summary: A student's clearance
+      description: 'By id or admission number, for ?term= (the current term by default): where the student stands by the rule (docs/schools.md#clearance), with the amounts behind it, the plan standing and the override in force, and every override recorded for the student.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The student's clearance and overrides
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clearance, overrides]
+                properties:
+                  clearance:
+                    $ref: '#/components/schemas/SchoolClearance'
+                  overrides:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/clearance-override:
+    post:
+      operationId: addSchoolClearanceOverride
+      tags:
+      - Schools
+      summary: Clear a student by hand
+      description: 'Clears a student (by id or admission number) for a term who does not meet the rule, with a reason and the last day it counts (the term''s end by default; from today to a year on). One override in force per student and term (409 for a second); past its end it no longer counts. The reason is kept sealed. Audited (school.clearance.override).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                term_id:
+                  type: string
+                  format: uuid
+                  description: The term; the current one when left out
+                reason:
+                  type: string
+                  maxLength: 300
+                ends_on:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: The override
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [override]
+                properties:
+                  override:
+                    $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/gate/search:
+    get:
+      operationId: gateSearch
+      tags:
+      - Schools
+      summary: 'The gate: find a student by name'
+      description: 'For the gate screen (docs/schools.md#the-gate): active students whose name holds the letters typed (three or more; 400 for fewer), at most ten, those whose name starts with them first. Each is the student''s id, name and class and nothing else: this is the one route a gate session sees names on, since the gate''s purpose is to find the child. Open to the gate role (school.gate) and to anyone with school.read; rate-limited per session (429). No amount, balance or invoice appears in any gate answer.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 3
+      responses:
+        '200':
+          description: The students found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [students]
+                properties:
+                  students:
+                    type: array
+                    maxItems: 10
+                    items:
+                      $ref: '#/components/schemas/GateHit'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/gate/students/{id}:
+    get:
+      operationId: gateCheck
+      tags:
+      - Schools
+      summary: 'The gate: cleared or see the bursar'
+      description: 'For the gate screen (docs/schools.md#the-gate): whether the student is cleared for the current term by the rule (cleared), or should see the bursar (see_bursar: partly paid, not paid, or no term is current), with the student''s name and class and nothing else. Never an amount, a percentage or a balance. Open to the gate role (school.gate) and to anyone with school.read. Each check is in the audit log (school.gate.check).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The gate's answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateAnswer'
         default:
           $ref: '#/components/responses/Error'
   /v1/schools/families/{id}/link:
@@ -13513,6 +14291,16 @@ paths:
                   minimum: 1
                   maximum: 30
                   description: How many days a link to a family's page works (3 by default); set while the area is on. Audited.
+                reminder_wording:
+                  type: object
+                  description: 'The reminder ladder''s wording by rung ("1", "2", "3"), with the placeholders {balance}, {child}, {account_number}, {due_date} and {link} ({link} is added when missing; up to 600 characters; an unknown placeholder is refused); "" takes a rung back to the default. Audited.'
+                  additionalProperties:
+                    type: string
+                plan_grace_days:
+                  type: integer
+                  minimum: 0
+                  maximum: 60
+                  description: How many days past an instalment's date a payment plan stays in good standing (0 by default). Audited.
                 issuing:
                   $ref: '#/components/schemas/SchoolIssuing'
       responses:
@@ -17669,27 +18457,41 @@ components:
             type: string
         forks:
           type: object
+          description: 'The run''s links to other runs: the failed run it resumed, or the run whose subflow step started it (parent_step set); the runs that resumed it; and the child runs its subflow steps started.'
           required:
           - parent_run_id
           - resumed_step
+          - parent_step
           - resumed_by
+          - subflows
           properties:
             parent_run_id:
               type:
               - string
               - 'null'
               format: uuid
-              description: The failed run this run resumed.
+              description: The failed run this run resumed, or the run whose subflow step started it.
             resumed_step:
               type:
               - string
               - 'null'
+            parent_step:
+              type:
+              - string
+              - 'null'
+              description: The subflow step (instance) of the parent run that started this run; null for a fork.
             resumed_by:
               type: array
               items:
                 type: string
                 format: uuid
               description: Runs that resumed this one.
+            subflows:
+              type: array
+              items:
+                type: string
+                format: uuid
+              description: Child runs started by this run's subflow steps, oldest first.
     RunStatus:
       type: object
       required:
@@ -17965,6 +18767,22 @@ components:
         family_link_days:
           type: integer
           description: How many days a link to a family's page works (1 to 30; 3 by default)
+        reminder_wording:
+          type: object
+          description: The school's own wording by rung (only the rungs it changed)
+          additionalProperties:
+            type: string
+        reminder_defaults:
+          type: object
+          description: The default wording by rung
+          additionalProperties:
+            type: string
+        reminder_placeholders:
+          type: array
+          items:
+            type: string
+        plan_grace_days:
+          type: integer
         issuing:
           $ref: '#/components/schemas/SchoolIssuing'
         issuers:
@@ -18093,6 +18911,598 @@ components:
         nobody:
           type: boolean
           description: No guardian could be reached (no phone, over the limits)
+    SchoolDebtorInvoice:
+      type: object
+      description: One open term invoice of a debtor
+      required: [invoice_id, number, term_id, term, due_kobo]
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        due_on:
+          type: string
+          format: date
+        due_kobo:
+          type: integer
+    SchoolCloseSum:
+      type: object
+      description: Money counted.
+      required: [count, kobo]
+      properties:
+        count:
+          type: integer
+        kobo:
+          type: integer
+    SchoolCloseItem:
+      type: object
+      description: 'One thing in a close that waits for someone or does not reconcile, with where to fix it. Never a name.'
+      required: [kind, message, path]
+      properties:
+        kind:
+          type: string
+          enum: [unmatched, pending_posting, pending_discount, claim, credit_without_entry, receipt_not_voided, part_without_receipt]
+        message:
+          type: string
+        path:
+          type: string
+          description: The web app page to fix it on
+        amount_kobo:
+          type: integer
+        ref:
+          type: string
+          description: 'What it is about: an invoice or receipt number, an admission number, an entry''s id'
+    SchoolCloseBrief:
+      type: object
+      description: A daily close as the list shows it.
+      required: [id, day, ran_at, ran_by, reconciles, problems]
+      properties:
+        id:
+          type: string
+          format: uuid
+        day:
+          type: string
+          format: date
+        ran_at:
+          type: string
+          format: date-time
+        ran_by:
+          type: string
+        reconciles:
+          type: boolean
+        problems:
+          type: integer
+    SchoolClose:
+      type: object
+      description: 'A school''s daily close (docs/schools.md#the-daily-close).'
+      required: [id, day, ran_at, ran_by, reconciles, problems, money_in, into_accounts, at_the_desk, matched_auto, matched_person, unmatched, unmatched_list, lookback_found, pending, claims, problem_list]
+      properties:
+        id:
+          type: string
+          format: uuid
+        day:
+          type: string
+          format: date
+        ran_at:
+          type: string
+          format: date-time
+        ran_by:
+          type: string
+        reconciles:
+          type: boolean
+        problems:
+          type: integer
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        money_in:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        into_accounts:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        at_the_desk:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        matched_auto:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        matched_person:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        unmatched:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        unmatched_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+        lookback_found:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        pending:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+        problem_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+    SchoolOverview:
+      type: object
+      description: 'Schools > Overview for a term (docs/schools.md#overview).'
+      required: [term_id, term, term_state, today, enrolled, invoiced, expected_kobo, expected_by_now_kobo, collected_kobo, outstanding_kobo, overdue_kobo, collected_percent, this_week_kobo, pass_through_kobo, pass_through, matched, how_paid, top_debtors, aging, debtors, debtors_kobo, clearance]
+      properties:
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        term_state:
+          type: string
+          enum: [planned, current, past]
+        today:
+          type: string
+          format: date
+        enrolled:
+          type: integer
+        invoiced:
+          type: integer
+        expected_kobo:
+          type: integer
+          description: What the term's sent invoices come to
+        expected_by_now_kobo:
+          type: integer
+          description: Of it, what was due by today
+        collected_kobo:
+          type: integer
+        outstanding_kobo:
+          type: integer
+        overdue_kobo:
+          type: integer
+          description: What is left on invoices past their due date
+        collected_percent:
+          type: integer
+        this_week_kobo:
+          type: integer
+          description: Counted since Monday, Lagos time
+        pass_through_kobo:
+          type: integer
+          description: Of the collected money, what is for others
+        pass_through:
+          type: array
+          items:
+            type: object
+            required: [body, kobo]
+            properties:
+              body:
+                type: string
+              kobo:
+                type: integer
+        matched:
+          type: object
+          required: [auto_kobo, person_kobo, auto_percent]
+          properties:
+            auto_kobo:
+              type: integer
+            person_kobo:
+              type: integer
+            auto_percent:
+              type: integer
+        how_paid:
+          type: array
+          items:
+            type: object
+            required: [how, payments, kobo]
+            properties:
+              how:
+                type: string
+                enum: [account, card, cash, transfer, other]
+              payments:
+                type: integer
+              kobo:
+                type: integer
+        top_debtors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolDebtor'
+        aging:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              students:
+                type: integer
+              balance_kobo:
+                type: integer
+        debtors:
+          type: integer
+        debtors_kobo:
+          type: integer
+        clearance:
+          $ref: '#/components/schemas/SchoolClearanceTotals'
+        last_close:
+          $ref: '#/components/schemas/SchoolCloseBrief'
+    SchoolDebtor:
+      type: object
+      description: 'A student with a balance, aged (docs/schools.md#debtors).'
+      required: [student_id, admission_number, status, class_id, class, balance_kobo, days_past_due, bucket, invoices]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        name:
+          type: string
+          description: The student's name, masked unless revealed
+        status:
+          type: string
+          enum: [active, withdrawn, graduated]
+        class_id:
+          type: string
+          format: uuid
+        class:
+          type: string
+        family_id:
+          type: [string, 'null']
+          format: uuid
+        balance_kobo:
+          type: integer
+        due_on:
+          type: string
+          format: date
+          description: The oldest open invoice's due date
+        days_past_due:
+          type: integer
+          description: Whole days past it, Lagos time; 0 when not yet due
+        bucket:
+          type: string
+          enum: [not_due, 0_7, 7_14, 14_30, over_30]
+        invoices:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolDebtorInvoice'
+        last_reminder:
+          type: object
+          description: The last rung the family got, and when
+          properties:
+            rung:
+              type: integer
+            at:
+              type: string
+              format: date-time
+            nobody:
+              type: boolean
+        promise:
+          $ref: '#/components/schemas/SchoolPromise'
+        promise_missed:
+          type: boolean
+          description: The last promise was missed (the balance did not move by the day after its date)
+        plan:
+          $ref: '#/components/schemas/SchoolPlanStanding'
+    SchoolPromise:
+      type: object
+      description: 'A promise to pay by a date (docs/schools.md#promises).'
+      required: [id, student_id, admission_number, promised_on, balance_kobo, status, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        family_id:
+          type: string
+          format: uuid
+        promised_on:
+          type: string
+          format: date
+        note:
+          type: string
+        balance_kobo:
+          type: integer
+          description: The balance when the promise was made
+        status:
+          type: string
+          enum: [open, kept, missed, withdrawn]
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+    SchoolPlanStanding:
+      type: object
+      description: 'Where a student''s latest approved payment plan stands (docs/schools.md#payment-plans): good while every instalment past its date plus the grace is covered by what was paid since approval, arrears from the first not covered, settled once the instalments are paid.'
+      required: [plan_id, student_id, state, approved_at, instalments, grace_days, paid_since_kobo, due_so_far_kobo, missed]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [good, arrears, settled]
+        approved_at:
+          type: string
+          format: date-time
+        instalments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolInstalment'
+        grace_days:
+          type: integer
+        paid_since_kobo:
+          type: integer
+        due_so_far_kobo:
+          type: integer
+        missed:
+          type: array
+          items:
+            type: object
+            properties:
+              instalment:
+                type: integer
+              due_on:
+                type: string
+                format: date
+              amount_kobo:
+                type: integer
+              short_kobo:
+                type: integer
+              days_past:
+                type: integer
+        next_due_on:
+          type: string
+          format: date
+        next_amount_kobo:
+          type: integer
+    SchoolPlanArrear:
+      type: object
+      description: An instalment the check found missed, marked once
+      required: [plan_id, instalment, student_id, due_on, amount_kobo, short_kobo, marked_at]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        instalment:
+          type: integer
+        student_id:
+          type: string
+          format: uuid
+        due_on:
+          type: string
+          format: date
+        amount_kobo:
+          type: integer
+        short_kobo:
+          type: integer
+        marked_at:
+          type: string
+          format: date-time
+    SchoolClearance:
+      type: object
+      description: 'Where a student stands for a term by the rule (docs/schools.md#clearance): computed as it is read, stored nowhere.'
+      required: [student_id, term_id, status, reason, invoiced, total_kobo, paid_kobo, balance_kobo]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [cleared, partly_paid, not_paid]
+        reason:
+          type: string
+          enum: [paid, plan, override, no_fees, balance, no_invoice]
+          description: 'Why: paid in full; a plan in good standing; an override in force; no invoice and nothing required for the class; a balance left; fees for the class but no invoice yet'
+        invoiced:
+          type: boolean
+          description: The student has an invoice for the term
+        total_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+        balance_kobo:
+          type: integer
+        plan:
+          $ref: '#/components/schemas/SchoolPlanStanding'
+        override:
+          $ref: '#/components/schemas/SchoolClearanceOverride'
+    SchoolClearanceRow:
+      allOf:
+      - $ref: '#/components/schemas/SchoolClearance'
+      - type: object
+        required: [admission_number, name, student_status, class_id, class]
+        properties:
+          admission_number:
+            type: string
+          name:
+            type: string
+            description: Masked unless revealed
+          student_status:
+            type: string
+            enum: [active, withdrawn, graduated]
+          class_id:
+            type: string
+            format: uuid
+          class:
+            type: string
+    SchoolClearanceTotals:
+      type: object
+      required: [students, cleared, partly_paid, not_paid]
+      properties:
+        students:
+          type: integer
+        cleared:
+          type: integer
+        partly_paid:
+          type: integer
+        not_paid:
+          type: integer
+    SchoolClearanceOverride:
+      type: object
+      description: A student cleared by hand for a term, with a reason, until a date (docs/schools.md#overrides)
+      required: [id, student_id, admission_number, term_id, term, reason, starts_on, ends_on, created_by, created_at, in_force]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        reason:
+          type: string
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        withdrawn_at:
+          type: string
+          format: date-time
+        withdrawn_by:
+          type: string
+        in_force:
+          type: boolean
+          description: Not withdrawn, and today is within its dates
+    GateHit:
+      type: object
+      description: 'A student the gate''s search found: id, name and class, nothing else'
+      additionalProperties: false
+      required: [student_id, name, class]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        class:
+          type: string
+    GateAnswer:
+      type: object
+      description: 'The gate''s answer for one student: cleared or see the bursar, the name and class, and no other field, ever'
+      additionalProperties: false
+      required: [student_id, name, class, status]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        class:
+          type: string
+        status:
+          type: string
+          enum: [cleared, see_bursar]
+    SchoolReminder:
+      type: object
+      description: A reminder sent for a student
+      required: [id, student_id, family_id, rung, balance_kobo, sent_on, channels, nobody, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        family_id:
+          type: string
+          format: uuid
+        rung:
+          type: integer
+        balance_kobo:
+          type: integer
+        sent_on:
+          type: string
+          format: date
+        channels:
+          type: object
+          additionalProperties:
+            type: integer
+        nobody:
+          type: boolean
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    SchoolReminded:
+      type: object
+      description: What a send did
+      required: [key, sent, skipped, by_rung, results]
+      properties:
+        key:
+          type: string
+        sent:
+          type: integer
+        skipped:
+          type: integer
+        by_rung:
+          type: object
+          additionalProperties:
+            type: integer
+        results:
+          type: array
+          items:
+            type: object
+            required: [student_id, admission_number, status]
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              admission_number:
+                type: string
+              family_id:
+                type: string
+                format: uuid
+              rung:
+                type: integer
+              status:
+                type: string
+                enum: [sent, skipped]
+              reason:
+                type: string
+              balance_kobo:
+                type: integer
+              channels:
+                type: object
+                additionalProperties:
+                  type: integer
+              nobody:
+                type: boolean
+        replayed:
+          type: boolean
+          description: The key was seen before; this is what the first send did
     SchoolPosting:
       type: object
       description: 'A request of the school (docs/schools.md#cash-and-transfers): a cash posting (pending, posted at once or after approval, or declined), or a discount, a discount amendment or a held term invoice waiting for a second person.'
@@ -19895,6 +21305,20 @@ components:
             used_tokens:
               type: integer
           additionalProperties: false
+        step_models:
+          type: array
+          items:
+            type: string
+          description: The models a workflow's AI steps may name (decision 0050), the default first. Present when enabled.
+        retention:
+          type: string
+          description: What the provider keeps of what it is sent, as the deployment states it (TASKIEM_AI_RETENTION); empty when not stated. Present when enabled.
+        steps_allowed:
+          type: boolean
+          description: Whether the business lets its workflows ask the AI model (governance `ai_steps`).
+        steps_plan:
+          type: boolean
+          description: Whether the business's plan includes AI.
       additionalProperties: false
     AIBuildRequest:
       type: object
@@ -21417,6 +22841,27 @@ components:
         own_in_settled_kobo:
           type: integer
           description: The settled money in less what was collected for others
+        unit:
+          type: string
+          enum: [hour, day, ""]
+          description: The stretch each bucket covers; hours for a period of one day, days for up to 92 days, none ("") for longer
+        buckets:
+          type: array
+          description: The period in stretches, for charts. A movement counts in the stretch of its first entry
+          items:
+            type: object
+            required: [from, in_settled_kobo, out_settled_kobo, payments]
+            properties:
+              from:
+                type: string
+                format: date-time
+              in_settled_kobo:
+                type: integer
+              out_settled_kobo:
+                type: integer
+              payments:
+                type: integer
+                description: Settled payments in
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
@@ -25299,6 +26744,9 @@ components:
         sole_approver:
           type: boolean
           description: Nobody else can decide it, so the caller may approve it even if they made the run or workflow; the vote is recorded as self-approved. False when a policy sets `allow_sole_approver` to false.
+        first_payment:
+          type: boolean
+          description: The subject names a bank account (`account_number`, `nuban` or `account`, with `bank_code` when known) that this business has never paid in prod. Absent otherwise, and outside prod
         requested_at:
           $ref: '#/components/schemas/Timestamp'
         timeout_at:
@@ -25461,6 +26909,9 @@ components:
         default_retention:
           type: string
           description: How long run history is kept when a workflow does not say, e.g. `30d`; empty is the platform's.
+        ai_steps:
+          type: boolean
+          description: Whether the business's workflows may ask the AI model at run time (decision 0050); on unless an owner turns it off.
         updated_by:
           type: string
         updated_at:
@@ -25468,7 +26919,7 @@ components:
       additionalProperties: false
     GovernanceRequest:
       type: object
-      description: Replaces every setting; one left out is off (`false`, or no default retention).
+      description: Replaces every setting; one left out is off (`false`, or no default retention), except `ai_steps`, which a request without it keeps.
       properties:
         four_eyes_publish:
           type: boolean
@@ -25477,6 +26928,9 @@ components:
         default_retention:
           type: string
           description: A duration of at least `1d`, or empty.
+        ai_steps:
+          type: boolean
+          description: Whether the business's workflows may ask the AI model at run time; left out, it stays as it is.
     PolicyVersion:
       type: object
       required:

@@ -5,7 +5,8 @@
 # connection. The record itself changes through the Schools pages and the
 # API; invoice_term makes each enrolled student's term invoice, exactly
 # once, and issue_account issues a student their own account number,
-# once per student and connection (B4).
+# once per student and connection (B4); daily_close takes a day's close,
+# once per school and day (B9).
 manifest: connector/v1
 id: schools
 version: 1.0.0
@@ -17,13 +18,14 @@ auth:
 actions:
   list_students:
     title: List students
-    description: The school's students by admission number, optionally of one class (its id, or as written, such as JSS 1 A) and status (active by default).
+    description: The school's students by admission number, optionally of one class (its id, or as written, such as JSS 1 A) and status (active by default); with without_account, only those with no account number issued yet on the school's issuing connection.
     class: read
     input:
       type: object
       properties:
         class:  { type: string, description: "A class's id or label, such as JSS 1 A" }
         status: { type: string, enum: [active, withdrawn, graduated, any], description: "active by default; any for every status" }
+        without_account: { type: boolean, description: Only students with no account number issued yet on the issuing connection }
         limit:  { type: integer, minimum: 1, maximum: 1000, description: At most this many (default 200) }
     output:
       type: object
@@ -264,3 +266,278 @@ actions:
         expires_at: { type: string, description: When the link stops working }
     pii:
       - { field: output.link, category: other }
+  list_debtors:
+    title: List debtors
+    description: Students with a balance on a sent term invoice (this term's, and earlier terms' still open), by class, each aged by days past the due date (not_due, 0_7, 7_14, 14_30, over_30), with the last reminder's rung, any promise to pay (open or missed) and the standing of any payment plan (good, arrears or settled); optionally of one class, one bucket, or those with a promise, a missed promise, a plan or a plan in arrears. Totals by bucket. No names.
+    class: read
+    input:
+      type: object
+      properties:
+        class:  { type: string, description: "A class's id or label, such as JSS 1 A" }
+        bucket: { type: string, enum: [not_due, 0_7, 7_14, 14_30, over_30], description: Days past the due date }
+        has:    { type: string, enum: [promise, missed, plan, arrears, none], description: "Only students with an open promise, a missed promise, a plan in good standing, a plan in arrears, or neither" }
+        limit:  { type: integer, minimum: 1, maximum: 1000, description: At most this many (default 200) }
+    output:
+      type: object
+      properties:
+        count:        { type: integer }
+        total:        { type: integer, description: How many debtors match in all }
+        balance_kobo: { type: integer, description: What the debtors owe in all }
+        totals:
+          type: object
+          description: By bucket, how many students and how much
+          additionalProperties:
+            type: object
+            properties:
+              students:     { type: integer }
+              balance_kobo: { type: integer }
+        debtors:
+          type: array
+          items:
+            type: object
+            properties:
+              student_id:       { type: string }
+              admission_number: { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              family_id:        { type: string }
+              balance_kobo:     { type: integer }
+              due_on:           { type: string }
+              days_past_due:    { type: integer }
+              bucket:           { type: string, enum: [not_due, 0_7, 7_14, 14_30, over_30] }
+              last_rung:        { type: integer, description: The last reminder's rung (0 when none) }
+              last_reminded_at: { type: string }
+              promise:          { type: string, enum: [none, open, missed] }
+              promised_on:      { type: string }
+              plan:             { type: string, enum: [none, good, arrears, settled] }
+              plan_next_due_on: { type: string }
+  send_reminders:
+    title: Send fee reminders
+    description: Sends each chosen student's family one reminder per guardian with a fresh family page link, on WhatsApp or Telegram where a guardian gets the school's updates there, otherwise by SMS, in the school's wording for the rung (1 gentle, 2 firmer, 3 final; auto picks it by days past due, 1 up to a week, 2 up to two weeks, 3 after). Give students (ids or admission numbers, at most 50) or let it take the debtors past due, of one class if given, oldest due first, at most limit (50). A family with a promise to pay not yet due or a plan in good standing is skipped and the reason answered; a plan in arrears is reminded by the days past the instalment missed; a family gets one message per rung per day. Exactly once for the step, so a retry sends nothing twice.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        students:
+          type: array
+          maxItems: 50
+          items: { type: string }
+          description: The students to remind, by id or admission number (at most 50); leave out to take the debtors past due
+        class: { type: string, description: "Without students: only this class's debtors (id or label)" }
+        rung:  { type: string, enum: ["1", "2", "3", "auto"], description: "The rung; auto (the default) by days past due" }
+        limit: { type: integer, minimum: 1, maximum: 50, description: "Without students: at most this many (50)" }
+    output:
+      type: object
+      properties:
+        sent:    { type: integer }
+        skipped: { type: integer }
+        by_rung:
+          type: object
+          properties:
+            "1": { type: integer }
+            "2": { type: integer }
+            "3": { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              student_id:       { type: string }
+              admission_number: { type: string }
+              rung:             { type: integer }
+              status:           { type: string, enum: [sent, skipped] }
+              reason:           { type: string, description: Why it was skipped }
+              balance_kobo:     { type: integer }
+              nobody:           { type: boolean, description: No guardian could be reached }
+  plan_decisions:
+    title: List payment plan decisions
+    description: Payment plan requests decided (approved or declined) in the last since_days (7), oldest first; untold (the default) keeps those whose family was not told yet, for the template that tells them. Each with its student, the instalments as decided, the note and when it was decided. No names.
+    class: read
+    input:
+      type: object
+      properties:
+        status:     { type: string, enum: [approved, declined], description: Both when left out }
+        untold:     { type: boolean, description: Only decisions the family was not told of yet (true by default) }
+        since_days: { type: integer, minimum: 1, maximum: 90, description: How far back (7) }
+        limit:      { type: integer, minimum: 1, maximum: 200, description: At most this many (50) }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        decisions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:               { type: string }
+              student_id:       { type: string }
+              admission_number: { type: string }
+              class:            { type: string }
+              status:           { type: string, enum: [approved, declined] }
+              decided_at:       { type: string }
+              note:             { type: string }
+              told:             { type: boolean }
+              instalments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    amount_kobo: { type: integer }
+                    due_on:      { type: string }
+  tell_plan_decision:
+    title: Tell a family its plan's decision
+    description: Tells the family of a decided payment plan request (plan, its id) the decision, with the instalments as approved or the note, and a fresh family page link, on each guardian's chat app or by SMS. Exactly once per decision, whoever tells first (the school's page tells at once; this step is the safety net for a family it could not reach), so running it again sends nothing. A request not decided yet fails the step.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [plan]
+      properties:
+        plan: { type: string, description: The plan request's id }
+    output:
+      type: object
+      properties:
+        plan_id:          { type: string }
+        student_id:       { type: string }
+        admission_number: { type: string }
+        status:           { type: string, enum: [approved, declined] }
+        told_before:      { type: boolean, description: The family was told already; nothing was sent now }
+        channels:
+          type: object
+          description: Guardians reached by channel (whatsapp, telegram, sms)
+          additionalProperties: { type: integer }
+        nobody:           { type: boolean, description: No guardian could be reached }
+  clearance:
+    title: A student's clearance
+    description: "Where a student stands for a term (the current one by default) by the clearance rule: cleared when the term's invoices are paid in full, an approved payment plan is in good standing, or an override is in force; partly_paid when some money was counted but a balance is left (never cleared); not_paid otherwise. Give a student (id or admission number) for one, or a class for every student of it, with the balances. Computed as it is read; nothing is stored."
+    class: read
+    input:
+      type: object
+      properties:
+        student: { type: string, description: "The student's id or admission number" }
+        class:   { type: string, description: "A class's id or label, such as JSS 1 A: every student of it" }
+        term:    { type: string, description: "The term's id; the current term when empty" }
+    output:
+      type: object
+      properties:
+        term_id:          { type: string }
+        term:             { type: string }
+        student_id:       { type: string }
+        admission_number: { type: string }
+        name:             { type: string }
+        class:            { type: string }
+        class_id:         { type: string }
+        student_status:   { type: string, enum: [active, withdrawn, graduated] }
+        status:           { type: string, enum: [cleared, partly_paid, not_paid] }
+        reason:           { type: string, enum: [paid, plan, override, no_fees, balance, no_invoice] }
+        invoiced:         { type: boolean }
+        total_kobo:       { type: integer }
+        paid_kobo:        { type: integer }
+        balance_kobo:     { type: integer }
+        plan:             { type: string, enum: [good, arrears, settled] }
+        override_ends_on: { type: string }
+        count:            { type: integer, description: "With a class: how many students" }
+        cleared:          { type: integer }
+        partly_paid:      { type: integer }
+        not_paid:         { type: integer }
+        students:
+          type: array
+          description: "With a class: each student"
+          items:
+            type: object
+            properties:
+              student_id:       { type: string }
+              admission_number: { type: string }
+              name:             { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              student_status:   { type: string }
+              status:           { type: string, enum: [cleared, partly_paid, not_paid] }
+              reason:           { type: string }
+              invoiced:         { type: boolean }
+              total_kobo:       { type: integer }
+              paid_kobo:        { type: integer }
+              balance_kobo:     { type: integer }
+              plan:             { type: string }
+              override_ends_on: { type: string }
+    pii:
+      - { field: output.name, category: name }
+      - { field: output.students.*.name, category: name }
+  clearance_list:
+    title: Clearance lists for teachers
+    description: "The clearance list of each class of a term (the current one by default; one class when given), for a class teacher or an exam: how many are cleared, partly paid and not paid, who is not cleared (name and admission number), and a message ready to send (text), with no amounts at all. Send each class's text with notify@1 message."
+    class: read
+    input:
+      type: object
+      properties:
+        class: { type: string, description: "One class, its id or label; every class of the term when empty" }
+        term:  { type: string, description: "The term's id; the current term when empty" }
+    output:
+      type: object
+      properties:
+        term_id:     { type: string }
+        term:        { type: string }
+        count:       { type: integer, description: How many classes }
+        students:    { type: integer }
+        cleared:     { type: integer }
+        partly_paid: { type: integer }
+        not_paid:    { type: integer }
+        classes:
+          type: array
+          items:
+            type: object
+            properties:
+              class_id:    { type: string }
+              class:       { type: string }
+              students:    { type: integer }
+              cleared:     { type: integer }
+              partly_paid: { type: integer }
+              not_paid:    { type: integer }
+              not_cleared: { type: array, items: { type: string }, description: "Each student not cleared: name (admission number): partly paid or not paid" }
+              text:        { type: string, description: "The list in words, up to 1,400 characters, no amounts" }
+    pii:
+      - { field: output.classes.*.not_cleared, category: name }
+      - { field: output.classes.*.text, category: name }
+  daily_close:
+    title: The daily close
+    description: "A school day's close (yesterday, Lagos time, when day is empty; a day not over yet is refused): students' money that landed that day, into account numbers and at the desk; what was matched to fees by itself and by a person, and what is still unmatched; money the look-back found before any webhook; cash postings and discounts waiting for a second person; families' claims not yet found; and what does not reconcile (a payment with no money log entry, a receipt still valid for a payment undone or gone back, a payment with no receipt), each with the page to fix it on. A day is closed once per school and never recomputed: running the step again answers the stored close. text is the close in words, ready to send the proprietor, with link (the web app's address) before each page; it names no student."
+    class: read
+    input:
+      type: object
+      properties:
+        day:  { type: string, description: "The day to close, YYYY-MM-DD; yesterday when empty" }
+        link: { type: string, description: "The web app's address, put before each page in the text (https://app.taskiem.com)" }
+    output:
+      type: object
+      properties:
+        id:         { type: string }
+        day:        { type: string }
+        term:       { type: string }
+        ran_at:     { type: string }
+        reconciles: { type: boolean, description: Nothing fails to reconcile }
+        problems:   { type: integer, description: How many things do not reconcile }
+        money_in:       { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Students' money that landed that day }
+        into_accounts:  { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Of it, paid into students' account numbers }
+        at_the_desk:    { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Of it, posted at the desk }
+        matched_auto:   { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Payments counted that day by the automatic path }
+        matched_person: { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Payments counted that day by a person }
+        unmatched:      { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Students' money no invoice counts yet }
+        lookback_found: { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Money the look-back found before any webhook }
+        pending:        { type: integer, description: Cash postings and discounts waiting for a second person }
+        claims:         { type: integer, description: Families' claims not yet found }
+        problem_list:   { type: array, items: { type: object, properties: { kind: { type: string }, message: { type: string }, path: { type: string }, amount_kobo: { type: integer }, ref: { type: string } } } }
+        pending_list:   { type: array, items: { type: object, properties: { kind: { type: string }, message: { type: string }, path: { type: string }, amount_kobo: { type: integer }, ref: { type: string } } } }
+        claim_list:     { type: array, items: { type: object, properties: { kind: { type: string }, message: { type: string }, path: { type: string }, amount_kobo: { type: integer }, ref: { type: string } } } }
+        unmatched_list: { type: array, items: { type: object, properties: { kind: { type: string }, message: { type: string }, path: { type: string }, amount_kobo: { type: integer }, ref: { type: string } } } }
+        text:           { type: string, description: "The close in words, up to 1,400 characters, no names" }

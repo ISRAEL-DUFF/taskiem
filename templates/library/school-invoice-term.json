@@ -1,0 +1,121 @@
+{
+  "id": "school-invoice-term",
+  "title": "Bill the term's fees when the term starts",
+  "summary": "On the day you set (the start of term), invoice every enrolled student their term's fees exactly once and send each family its invoice with a link to its fees page, then tell the bursar what went out and who was left out.",
+  "description": "On the day and month you choose, at the time you choose (or by hand from the workflow's page), invoices the current term: one invoice per enrolled student, exactly once, from their class's fees, their optional items and their standing discounts, due on the term's fees due date. A student invoiced already is never invoiced again, so running it a second time, or after students join, invoices only those without one. With Send them now, each family gets its invoice by SMS and email with a fresh link to its fees page, where each child's fees, payments and ways to pay are; otherwise the invoices wait as drafts for a person to check and send from the term's Invoices page. Students left out are counted and said why: no guardian to send to, no fees for their class, nothing to pay after discounts, or a discount waiting for a second person (their invoice is made when it is approved). Then the bursar is told the counts. It runs once a year on that date until you change or turn it off.",
+  "category": "collections",
+  "tags": [
+    "schools",
+    "collections"
+  ],
+  "keywords": [
+    "school",
+    "term",
+    "fees",
+    "start of term",
+    "new term",
+    "bill the term",
+    "parents",
+    "families",
+    "bursar"
+  ],
+  "requires": [
+    "school",
+    "term",
+    "school fees",
+    "pupils",
+    "students"
+  ],
+  "connectors": [
+    "schools@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "send_day",
+      "type": "integer",
+      "title": "Day of the month",
+      "description": "The day the term is invoiced: the first day of term, or a few days before.",
+      "required": true,
+      "minimum": 1,
+      "maximum": 31,
+      "default": 1,
+      "example": 14
+    },
+    {
+      "name": "send_month",
+      "type": "integer",
+      "title": "Month",
+      "description": "The month, as a number (1 for January, 9 for September).",
+      "required": true,
+      "minimum": 1,
+      "maximum": 12,
+      "default": 9,
+      "example": 9
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the term is invoiced, Lagos time.",
+      "required": true,
+      "default": "08:00",
+      "example": "08:00"
+    },
+    {
+      "name": "send_now",
+      "type": "boolean",
+      "title": "Send them now",
+      "description": "Send each family its invoice at once, with a link to its fees page. Off, the invoices wait as drafts for you to check and send.",
+      "required": false,
+      "default": true,
+      "example": true
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_schoolInvoiceTerm",
+    "version": 1,
+    "name": "Invoice the term",
+    "description": "Invoices every enrolled student their term's fees once, sends the families their invoices, and tells the bursar.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} {{send_day}} {{send_month}} *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "invoice",
+        "type": "connector",
+        "name": "Invoice the term",
+        "connector": "schools@1",
+        "action": "invoice_term",
+        "input": {
+          "send": "={{send_now}}"
+        },
+        "effect": {
+          "idempotency_seed": "='invoice-term:' + run.id"
+        }
+      },
+      {
+        "id": "tell_bursar",
+        "type": "connector",
+        "name": "Tell the bursar",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "invoice"
+        ],
+        "input": {
+          "title": "=steps.invoice.output.term + ' invoiced'",
+          "message": "=steps.invoice.output.term + ': ' + string(steps.invoice.output.created) + ' student(s) invoiced now, ' + string(steps.invoice.output.already_invoiced) + ' were invoiced already, ' + string(steps.invoice.output.sent) + ' invoice(s) sent to families' + (steps.invoice.output.failed > 0 ? ' (' + string(steps.invoice.output.failed) + ' could not be sent)' : '') + '. Left out: ' + string(steps.invoice.output.no_contact) + ' with no guardian to send to, ' + string(steps.invoice.output.no_fees) + ' with no fees for their class, ' + string(steps.invoice.output.nothing_to_pay) + ' with nothing to pay, ' + string(steps.invoice.output.needs_approval) + ' waiting for a second person. The Invoices page of the term shows each.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}

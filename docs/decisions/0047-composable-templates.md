@@ -71,7 +71,7 @@ Taskiem already plans half of this. The `subflow` step type exists in wd/v1 (`co
 - Readiness and the publishing checks read the expanded definition, so nothing a template needs or does can hide behind its step.
 - Flow code (the SDK) gains `template(id, params, input)`, and the round trip keeps the step unexpanded.
 - The builder's catalogue, prompt and evals gain callable templates (point 6).
-- `subflow` (point 5) is unchanged here and stays in Phase 3.
+- `subflow` (point 5) is unchanged here and stays in Phase 3. Built since: [0049](0049-subflows.md).
 - **Not decided here:** a business's own workflows as callable components (a private library), and templates in the connector catalogue ([0020](0020-connector-catalogue.md)) for other publishers. Both would use the same contract. The first is now [0048](0048-callable-workflows.md).
 
 ## Open questions, as answered

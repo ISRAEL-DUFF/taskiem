@@ -187,10 +187,10 @@ A WD is a directed graph of steps plus metadata. Loops and parallelism are expli
 | `callback` | Pause until another system calls the run back at `run.callbacks.<id>` ([wd-v1](../contracts/wd-v1.md#callbacks-and-responses)) |
 | `respond` | Answer the webhook call that started the run (a trigger with `respond: true`) |
 | `approval` | Human decision under a governance policy |
-| `subflow` | Call another workflow, pinned to a version |
+| `subflow` | Run another workflow of the business as a child run, the published version or one named, waiting for it or not ([wd-v1](../contracts/wd-v1.md#subflow-steps)) |
 | `form` (proposed) | Send a person a one-time form link and wait for their answers ([forms](forms.md)) |
 | `transform` | Pure data mapping with expressions, no side effects |
-| `ai` | LLM call with a typed output schema |
+| `ai` | LLM call with a typed output schema; personal data masked by default ([wd-v1](../contracts/wd-v1.md#ai-steps)) |
 
 ### 3.3 Expressions
 

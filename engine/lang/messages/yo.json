@@ -312,6 +312,10 @@
       "text": "Ojú-ìwé owó: {link}",
       "reviewed": false
     },
+    "money.daily.school": {
+      "text": "Owó ilé-ìwé ({term}): {collected} ti wọlé, {outstanding} ṣì kù, {cleared}% àwọn akẹ́kọ̀ọ́ ti parí ìsanwó.",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Ìjíròrò yìí ń fi ìròyìn ránṣẹ́ sí ọ láti ọ̀dọ̀ {businesses}. Fi STOP ránṣẹ́ láti dá èyí tó kẹ́yìn dúró.",
       "reviewed": false
@@ -2104,6 +2108,14 @@
       "text": "A kò tíì so nọ́mbà yìí mọ́ àkọọ́lẹ̀ Taskiem kankan. Láti lo Taskiem níbí, ẹ wọlé, ẹ ṣí {where}, ẹ fi nọ́mbà yìí kún un lábẹ́ WhatsApp, lẹ́yìn náà ẹ tẹ kóòdù tí a fi ránṣẹ́ sí yín tàbí kí ẹ dá a padà.",
       "reviewed": false
     },
+    "wd.ai": {
+      "text": "Béèrè lọ́wọ́ AI, pẹ̀lú ìfipamọ́ àlàyé ìkọ̀kọ̀ kúrò lọ́dọ̀ rẹ̀",
+      "reviewed": false
+    },
+    "wd.ai.through": {
+      "text": "Béèrè lọ́wọ́ AI, tí yóò rí {fields} bí wọ́n ṣe wà; a fi àlàyé ìkọ̀kọ̀ yòókù pamọ́ fún un",
+      "reviewed": false
+    },
     "wd.alongside": {
       "text": "Lẹ́gbẹ̀ẹ́ rẹ̀: {name}",
       "reviewed": false
@@ -2342,6 +2354,14 @@
     },
     "wd.signal_named": {
       "text": "Dúró de {event}",
+      "reviewed": false
+    },
+    "wd.subflow": {
+      "text": "Ṣe iṣẹ́ rẹ: {workflow}, kí o sì dúró kí ó parí",
+      "reviewed": false
+    },
+    "wd.subflow.nowait": {
+      "text": "Bẹ̀rẹ̀ iṣẹ́ rẹ: {workflow}, kí o sì tẹ̀síwájú",
       "reviewed": false
     },
     "wd.template": {

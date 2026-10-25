@@ -121,7 +121,28 @@ const (
 	KindTask   = "task"
 	KindTimer  = "timer"
 	KindSignal = "signal"
+	// KindSubflow starts another workflow as a child run (wd-v1 subflow
+	// steps) and, when the step waits, waits as a signal step does for
+	// SubflowEvent correlated by SubflowCorrelation.
+	KindSubflow = "subflow"
 )
+
+// SubflowEvent is the signal a child run delivers to the subflow step
+// that started it when it ends (or at once, for a step that does not
+// wait): {run_id, status, outputs, error}.
+const SubflowEvent = "subflow"
+
+// SubflowCorrelation is the correlation a subflow step instance waits on.
+func SubflowCorrelation(run, inst string) string { return run + "/" + inst }
+
+// SubflowScheduled is what a subflow step starts: the workflow, the
+// version (0: the one published when the step starts) and whether the
+// step waits for the run to end.
+type SubflowScheduled struct {
+	Workflow string `json:"workflow"`
+	Version  int    `json:"version,omitempty"`
+	Wait     bool   `json:"wait"`
+}
 
 // ScheduledPayload is written by decide when a step starts.
 type ScheduledPayload struct {
@@ -139,6 +160,8 @@ type ScheduledPayload struct {
 	Event       string `json:"event,omitempty"`
 	Correlation string `json:"correlation,omitempty"`
 	TimeoutAt   string `json:"timeout_at,omitempty"`
+	// Subflow is set for KindSubflow: Input is then the child's run inputs.
+	Subflow *SubflowScheduled `json:"subflow,omitempty"`
 	// Form is a form step's request, waited for as a signal (FormEvent,
 	// correlated by Form.Request).
 	Form *FormScheduled `json:"form,omitempty"`
@@ -176,7 +199,7 @@ type FormScheduled struct {
 
 // Error is a classified failure.
 type Error struct {
-	Kind    string `json:"kind"` // retryable | fatal | unknown_outcome | not_sent | timeout | expression | child_failed | unsupported
+	Kind    string `json:"kind"` // retryable | fatal | unknown_outcome | not_sent | timeout | expression | child_failed | subflow | unsupported
 	Message string `json:"message"`
 	Next    string `json:"next"` // retry | reconcile | park | fail
 	// MaybeApplied is set by the worker when a write failed in a way that
@@ -289,6 +312,13 @@ type ControlStartedPayload struct {
 
 type RunFailedPayload struct {
 	Error Error `json:"error"`
+}
+
+// RunCompletedPayload carries the workflow's outputs (wd-v1 callable
+// workflows), evaluated when the run completed, for the subflow step
+// that started it.
+type RunCompletedPayload struct {
+	Outputs map[string]any `json:"outputs,omitempty"`
 }
 
 // CompensationPrefix marks the instance id of a compensating action.

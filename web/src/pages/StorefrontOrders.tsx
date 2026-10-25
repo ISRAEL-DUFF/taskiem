@@ -2,13 +2,12 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import { formatPrice, type Storefront } from "../lib/storefront";
 import {
   KIND_LABEL,
   ORDER_FILTERS,
   ordersPath,
-  customerLine,
   isMasked,
   orderStatus,
   orderTotal,
@@ -70,6 +69,9 @@ function OrderMoney({ payments, manage, onUndone }: { payments?: OrderPayment[] 
     </section>
   );
 }
+
+/** Orders waiting on the owner or the customer: their icon is tinted amber. */
+const WAITING = new Set(["received", "awaiting_payment", "price_changed"]);
 
 function StatusBadge({ status }: { status: string }) {
   const s = orderStatus(status);
@@ -168,48 +170,41 @@ export function StorefrontOrders() {
         </EmptyState>
       )}
       {orders && orders.length > 0 && (
-        <table className="cards">
-          <thead>
-            <tr>
-              <th scope="col">Reference</th>
-              <th scope="col">Status</th>
-              <th scope="col">Customer</th>
-              <th scope="col">What</th>
-              <th scope="col">Total</th>
-              <th scope="col">Payment</th>
-              <th scope="col">Received</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((o) => (
-              <tr key={o.id} className={o.status === "refund_due" ? "sf-refund" : undefined} data-testid="order">
-                <td className="primary" data-label="Reference">
-                  <Link to={`/storefront/orders/${encodeURIComponent(o.reference)}`}>{o.reference}</Link> <span className="hint">{KIND_LABEL[o.kind] ?? o.kind}</span>
-                </td>
-                <td data-label="Status">
-                  <StatusBadge status={o.status} />
-                  {o.status === "awaiting_payment" && o.expires_at && <div className="hint">Expires {timeLeft(o.expires_at, now)}</div>}
-                </td>
-                <td data-label="Customer">{customerLine(o.customer)}</td>
-                <td data-label="What">
-                  {orderWhat(o) || <span className="hint">—</span>}
-                  {o.status === "price_changed" && o.price_change && <div className="hint">{priceChangeLine(o.price_change)}</div>}
-                  {o.note && <div className="hint">{o.note}</div>}
-                  {o.status === "refund_due" && <div className="sf-refund-line">{refundLine(o.total_kobo)}</div>}
-                </td>
-                <td data-label="Total" className="sf-price">
-                  {orderTotal(o)}
-                </td>
-                <td data-label="Payment">{paymentSummary(o)}</td>
-                <td data-label="Received">
-                  <time dateTime={o.created_at} title={fmtTime(o.created_at)}>
-                    {relativeAge(o.created_at, now)}
-                  </time>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Orders">
+          {orders.map((o) => (
+            <Item
+              key={o.id}
+              testid="order"
+              className={o.status === "refund_due" ? "sf-refund" : undefined}
+              to={`/storefront/orders/${encodeURIComponent(o.reference)}`}
+              icon={o.status === "refund_due" ? "refund" : o.kind === "booking" ? "clock" : o.kind === "order" ? "orders" : "inbox"}
+              tone={o.status === "refund_due" ? "danger" : WAITING.has(o.status) ? "warn" : undefined}
+              title={
+                <>
+                  {o.customer.name || o.customer.phone || "A customer"} <span className="hint">· {KIND_LABEL[o.kind] ?? o.kind}</span>
+                </>
+              }
+              sub={
+                <>
+                  {o.customer.name && o.customer.phone ? `${o.customer.phone} · ` : ""}
+                  {o.reference}
+                  {orderWhat(o) ? ` · ${orderWhat(o)}` : ""} · <time dateTime={o.created_at} title={fmtTime(o.created_at)}>{relativeAge(o.created_at, now)}</time>
+                </>
+              }
+              extra={
+                <>
+                  <span className="sub">{paymentSummary(o)}</span>
+                  {o.status === "awaiting_payment" && o.expires_at && <span className="sub">Expires {timeLeft(o.expires_at, now)}</span>}
+                  {o.status === "price_changed" && o.price_change && <span className="sub">{priceChangeLine(o.price_change)}</span>}
+                  {o.note && <span className="sub">{o.note}</span>}
+                  {o.status === "refund_due" && <span className="sf-refund-line">{refundLine(o.total_kobo)}</span>}
+                </>
+              }
+              side={orderTotal(o)}
+              sideSub={<StatusBadge status={o.status} />}
+            />
+          ))}
+        </Items>
       )}
     </>
   );
@@ -231,14 +226,17 @@ export function StorefrontOrder() {
   const o = data?.order;
   return (
     <>
-      <PageHeader
-        title={`${o ? (KIND_LABEL[o.kind] ?? "Order") : "Order"} ${reference}`}
-        actions={<Link to="/storefront/orders">All orders</Link>}
-      />
+      <p className="crumbs">
+        <Link to="/storefront/orders" aria-label="Back to Orders">
+          Orders
+        </Link>
+      </p>
+      <PageHeader title={`${o ? (KIND_LABEL[o.kind] ?? "Order") : "Order"} ${reference}`} />
       <ErrorBox error={error} />
       {!o && !error && <Skeleton rows={4} label="Loading the order…" />}
       {o && (
         <>
+          <OrderHero o={o} />
           {o.status === "refund_due" && (
             <div className="sf-refund-note" role="status">
               {refundLine(o.deposit_kobo ?? o.total_kobo)}
@@ -396,6 +394,34 @@ export function StorefrontOrder() {
         </>
       )}
     </>
+  );
+}
+
+/** The top of an order's or a booking's page, on pine: its total, how it is
+ * paid, the customer and when. Questions and call-backs carry no money and have none. */
+function OrderHero({ o }: { o: Order }) {
+  if (o.kind !== "order" && o.kind !== "booking") return null;
+  const booking = o.kind === "booking";
+  const total = orderTotal(o);
+  return (
+    <section className="hero" aria-label={booking ? "The booking" : "The order"} data-testid="order-hero">
+      <div className="hero-top">
+        <span className="hero-label">{booking ? o.service_name || "Booking" : "Order total"}</span>
+        <span className="hero-tag">{orderStatus(o.status).label}</span>
+      </div>
+      <div className={total.startsWith("₦") ? "hero-amount" : "hero-amount words"}>{total}</div>
+      <p className="hero-sub">{paymentSummary(o)}</p>
+      <dl className="hero-foot">
+        <div>
+          <dt>Customer</dt>
+          <dd>{o.customer.name || "—"}</dd>
+        </div>
+        <div>
+          <dt>{booking ? "When" : "Received"}</dt>
+          <dd>{booking ? (o.starts_at ? whenLabel(o.starts_at) : "—") : relativeAge(o.created_at)}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

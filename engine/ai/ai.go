@@ -16,9 +16,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/israel-duff/taskiem/engine/pii"
 )
@@ -159,6 +164,76 @@ type Config struct {
 	// on the same provider (a cheaper one than building needs);
 	// TASKIEM_AI_MODERATION_MODEL.
 	ModerationModel string
+	// StepModels are the models workflows' ai steps may name
+	// (TASKIEM_AI_STEP_MODELS, comma-separated; decision 0050). The
+	// default model is always offered and is used when a step names none.
+	StepModels []string
+	// Retention says what the provider keeps of what it is sent, for the
+	// business's admins (TASKIEM_AI_RETENTION, free text such as "Zero
+	// data retention under our agreement with Anthropic").
+	Retention string
+}
+
+// StepModel is the model an ai step runs on: the one it names, when the
+// deployment offers it, else the default. ok is false when the step names
+// a model the deployment does not offer.
+func (c Config) StepModel(named string) (model string, ok bool) {
+	if named == "" || named == c.Model {
+		return c.Model, true
+	}
+	if slices.Contains(c.StepModels, named) {
+		return named, true
+	}
+	return "", false
+}
+
+// OfferedStepModels is every model ai steps may name, the default first.
+func (c Config) OfferedStepModels() []string {
+	out := []string{}
+	if c.Model != "" {
+		out = append(out, c.Model)
+	}
+	for _, m := range c.StepModels {
+		if !slices.Contains(out, m) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// StatusError is a provider's HTTP answer that was not a success.
+type StatusError struct {
+	Status int
+	Err    error
+}
+
+func (e *StatusError) Error() string { return e.Err.Error() }
+func (e *StatusError) Unwrap() error { return e.Err }
+
+// Transient reports whether a failed call may succeed if made again: a
+// rate limit, a server error, an overloaded provider, a timeout or a
+// broken connection. A refused request (400, 401, 403, 404) is not.
+func Transient(err error) bool {
+	if err == nil {
+		return false
+	}
+	status := 0
+	var se *StatusError
+	var ae *anthropic.Error
+	switch {
+	case errors.As(err, &se):
+		status = se.Status
+	case errors.As(err, &ae):
+		status = ae.StatusCode
+	}
+	if status != 0 {
+		return status == 408 || status == 409 || status == 429 || status >= 500
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	return errors.As(err, &ne) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }
 
 // Defaults.
@@ -182,6 +257,12 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (Config, error) {
 		Fallbacks: !strings.EqualFold(get("TASKIEM_AI_FALLBACKS"), "off"),
 
 		ModerationModel: get("TASKIEM_AI_MODERATION_MODEL"),
+		Retention:       get("TASKIEM_AI_RETENTION"),
+	}
+	for _, m := range strings.Split(get("TASKIEM_AI_STEP_MODELS"), ",") {
+		if m = strings.TrimSpace(m); m != "" && !slices.Contains(c.StepModels, m) {
+			c.StepModels = append(c.StepModels, m)
+		}
 	}
 	key := get("ANTHROPIC_API_KEY")
 	if c.Provider == "" && key != "" {

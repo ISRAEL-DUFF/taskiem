@@ -47,6 +47,9 @@ const PAGES = [
   "/schools/accounts",
   "/schools/payments",
   "/schools/receipts",
+  "/schools/debtors",
+  "/schools/clearance",
+  "/schools/gate",
   "/settings/schools",
 ];
 

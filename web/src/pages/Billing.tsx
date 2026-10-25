@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ApiError, get, post } from "../api";
-import { ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Items, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import {
   blockerLines,
   featureNames,
@@ -243,36 +243,28 @@ export function Billing() {
       {data.invoices.length > 0 && (
         <section className="card">
           <h2 style={{ marginTop: 0 }}>Invoices</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Number</th>
-                <th>Issued</th>
-                <th>Period</th>
-                <th>Total (VAT incl.)</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.invoices.map((i) => (
-                <tr key={i.id}>
-                  <td>
-                    <a href={`/v1/billing/invoices/${i.id}?format=html`} target="_blank" rel="noreferrer">
-                      {i.number}
-                    </a>
-                  </td>
-                  <td>{fmtTime(i.issued_at)}</td>
-                  <td>
-                    {day(i.period_start)} to {day(i.period_end)}
-                  </td>
-                  <td>{naira(i.total_kobo)}</td>
-                  <td>
+          <Items label="Invoices">
+            {data.invoices.map((i) => (
+              <Row
+                key={i.id}
+                icon="invoices"
+                tone={i.status === "paid" ? "ok" : i.status === "open" ? "warn" : "muted"}
+                title={i.number}
+                side={<span className="item-figure">{naira(i.total_kobo)}</span>}
+                sub={
+                  <span className="sub">
+                    {day(i.period_start)} to {day(i.period_end)} · issued {fmtTime(i.issued_at)} · VAT included{" "}
                     <span className={`badge ${i.status === "paid" ? "ok" : i.status === "open" ? "open" : "skipped"}`}>{i.status}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                }
+                testid="billing-invoice"
+              >
+                <a className="button small" href={`/v1/billing/invoices/${i.id}?format=html`} target="_blank" rel="noreferrer">
+                  Open {i.number}
+                </a>
+              </Row>
+            ))}
+          </Items>
         </section>
       )}
     </>

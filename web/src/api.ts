@@ -397,6 +397,8 @@ export interface Approval {
   step_name: string;
   /** Nobody else can decide it, so the caller may approve even what they made. */
   sole_approver: boolean;
+  /** The subject names a bank account this business has never paid (prod only). */
+  first_payment?: boolean;
   requested_at: string;
   timeout_at: string | null;
   subject: unknown;

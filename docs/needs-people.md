@@ -37,7 +37,7 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 
 ## Business connectors (K0)
 
-The [business connectors plan](spec/business-connectors.md) and [decision 0049](decisions/0049-platform-apps.md). Start the Meta and Intuit items first: their reviews are the longest waits.
+The [business connectors plan](spec/business-connectors.md) and [decision 0051](decisions/0051-platform-apps.md). Start the Meta and Intuit items first: their reviews are the longest waits.
 
 | # | Item | Who | Code status | Unblocks |
 | --- | --- | --- | --- | --- |

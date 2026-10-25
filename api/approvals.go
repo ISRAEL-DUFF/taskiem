@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
@@ -38,6 +39,9 @@ type approvalItem struct {
 	RequestedAt  time.Time  `json:"requested_at"`
 	TimeoutAt    *time.Time `json:"timeout_at"`
 	Subject      any        `json:"subject"`
+	// FirstPayment: the subject names a bank account this business has not
+	// paid before (prod only; docs/money-log.md#accounts-paid).
+	FirstPayment bool `json:"first_payment,omitempty"`
 }
 
 // listApprovals is the caller's inbox: open approvals for a role they hold
@@ -71,6 +75,9 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			out[i].Subject = opened
+			if out[i].FirstPayment, err = s.firstPayment(ctx, tx, p.TenantID, out[i].Environment, opened); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -79,6 +86,21 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"approvals": nonNil(out)})
+}
+
+// firstPayment reports whether an approval's subject names a bank account
+// the business has never paid: only in prod, where payouts are remembered.
+func (s *Server) firstPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, subject any) (bool, error) {
+	subjects, ok := s.Store.PII.(moneylog.Subjects)
+	if !ok || env != "prod" {
+		return false, nil
+	}
+	account, bank := moneylog.SubjectAccount(subject)
+	if account == "" {
+		return false, nil
+	}
+	paid, known, err := moneylog.PaidBefore(ctx, tx, subjects, tenant, account, bank)
+	return known && !paid, err
 }
 
 // openApprovalsTx are the approvals waiting for p to decide (the

@@ -22,12 +22,12 @@ test("add a passkey and sign in with it", async ({ page }) => {
   await page.getByLabel("Name for this passkey").fill("Virtual key");
   await page.getByLabel("Your password, to add or remove a passkey").fill("correct horse battery");
   await page.getByRole("button", { name: "Add a passkey" }).click();
-  await expect(page.getByRole("cell", { name: "Virtual key" })).toBeVisible();
+  await expect(page.getByTestId("passkey").filter({ hasText: "Virtual key" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
   await page.getByRole("button", { name: "Sign in with a passkey" }).click();
   // Back where the member signed out.
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Virtual key" })).toBeVisible();
+  await expect(page.getByTestId("passkey").filter({ hasText: "Virtual key" })).toBeVisible();
 });

@@ -239,6 +239,8 @@ func TestCallableWorkflowsBuild(t *testing.T) {
 	}
 	p, err := b.Build(context.Background(), builder.Request{Goal: "double the amount with my Double it workflow", Context: builder.Context{
 		CallableWorkflows: []builder.CallableWorkflow{{ID: id, Name: "Double it", Inputs: json.RawMessage(`{"type":"object"}`), Outputs: own.Outputs, Effect: "only reads"}},
+		Startable:         []builder.StartableWorkflow{{ID: id, Name: "Double it", Inputs: json.RawMessage(`{"type":"object"}`)}},
+		AISteps:           true,
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +252,13 @@ func TestCallableWorkflowsBuild(t *testing.T) {
 	if raw, _ := json.Marshal(ctxDoc["callable_workflows"]); !strings.Contains(string(raw), `"Double it"`) || !strings.Contains(string(raw), `"only reads"`) {
 		t.Errorf("the context lacks the callable workflows: %s", raw)
 	}
-	if !strings.Contains(f.Requests()[0].System[0].Text, "callable_workflows") {
+	if !strings.Contains(f.Requests()[0].System[0].Text, "callable_workflows") || !strings.Contains(f.Requests()[0].System[0].Text, "startable_workflows") {
 		t.Errorf("the prompt does not say how to use them")
+	}
+	if raw, _ := json.Marshal(ctxDoc["startable_workflows"]); !strings.Contains(string(raw), `"Double it"`) {
+		t.Errorf("the context lacks the startable workflows: %s", raw)
+	}
+	if ctxDoc["ai_steps"] != true || !strings.Contains(f.Requests()[0].System[0].Text, "21. Asking the AI model at run time") {
+		t.Errorf("the context or prompt lacks AI steps")
 	}
 }

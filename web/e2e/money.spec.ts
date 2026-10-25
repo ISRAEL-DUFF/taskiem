@@ -153,7 +153,8 @@ test("the overview shows the period's money, and the journal downloads as CSV", 
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Money" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Money" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Money" }).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("combobox", { name: "Period" })).toHaveValue("today");
+  const period = page.getByRole("group", { name: "Period" });
+  await expect(period.getByRole("button", { name: "Today" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("money-out")).toContainText("Money out");
   const row = page.getByTestId("channel-row").filter({ hasText: channel });
   await expect(row).toContainText("₦7,654");
@@ -163,12 +164,12 @@ test("the overview shows the period's money, and the journal downloads as CSV", 
   await axeBoth(page, "/money");
 
   // Dates chosen by hand; dates that cannot be a period are refused on the page.
-  await page.getByRole("combobox", { name: "Period" }).selectOption("custom");
+  await page.getByRole("combobox", { name: "Other period" }).selectOption("custom");
   await page.getByLabel("From", { exact: true }).fill("2026-10-05");
   await page.getByLabel("To", { exact: true }).fill("2026-10-01");
   await expect(page.getByRole("alert")).toHaveText("The last day is on or after the first.");
   await expect(page.getByTestId("exports")).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Period" }).selectOption("today");
+  await period.getByRole("button", { name: "Today" }).click();
 
   // The journal downloads for the period, a CSV with the expense on it.
   const download = page.waitForEvent("download");

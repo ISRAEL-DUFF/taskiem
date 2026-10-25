@@ -1,0 +1,135 @@
+{
+  "id": "school-plan-decided",
+  "title": "Tell families when their payment plan is decided",
+  "summary": "Every 15 minutes, find payment plan requests the school decided but the family was not told of, send each family the decision with the instalments and a fresh link to its fees page, once, and tell the bursar about any family that could not be reached.",
+  "description": "When someone with school.approve approves or declines a family's payment plan request, the school's page tells the family at once. This is the safety net: every 15 minutes it finds decisions of the last week whose family was not told (a guardian could not be reached, the message did not go) and sends the decision, with the instalments as approved or the note, and a fresh link to the family's fees page, on WhatsApp or Telegram where a guardian gets the school's updates there, otherwise by SMS. A family is told of a decision exactly once, whoever tells first, so running it again sends nothing. When no guardian of a family can be reached at all, the bursar is told to reach them another way.",
+  "category": "collections",
+  "tags": [
+    "schools",
+    "customers"
+  ],
+  "keywords": [
+    "school",
+    "payment plan",
+    "plan",
+    "instalments",
+    "approved",
+    "declined",
+    "family",
+    "parents",
+    "fees"
+  ],
+  "requires": [
+    "payment plan",
+    "plan"
+  ],
+  "connectors": [
+    "schools@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "look_back_days",
+      "type": "integer",
+      "title": "Days to look back",
+      "description": "How many days back to look for decisions the family was not told of.",
+      "required": false,
+      "default": 7,
+      "example": 7,
+      "minimum": 1,
+      "maximum": 90
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_schoolPlanDecided",
+    "version": 1,
+    "name": "Payment plan decided",
+    "description": "Tells each family of a plan decision it was not told of yet, once.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "*/15 * * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "decisions",
+        "type": "connector",
+        "name": "Find the decisions not told yet",
+        "connector": "schools@1",
+        "action": "plan_decisions",
+        "input": {
+          "untold": true,
+          "since_days": "{{look_back_days}}",
+          "limit": 50
+        }
+      },
+      {
+        "id": "tell_each",
+        "type": "foreach",
+        "name": "For each decision",
+        "needs": [
+          "decisions"
+        ],
+        "config": {
+          "items": "=has(steps.decisions.output.decisions) ? steps.decisions.output.decisions : []",
+          "max_concurrency": 5,
+          "max_items": 50,
+          "steps": [
+            {
+              "id": "tell",
+              "type": "connector",
+              "name": "Tell the family",
+              "connector": "schools@1",
+              "action": "tell_plan_decision",
+              "input": {
+                "plan": "=item.id"
+              },
+              "effect": {
+                "idempotency_seed": "='plan-decided:' + item.id"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "tell_failed",
+                    "type": "transform",
+                    "name": "Note the family that could not be told",
+                    "config": {
+                      "output": {
+                        "plan": "=item.id",
+                        "reason": "=steps.tell.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "tell_bursar",
+              "type": "connector",
+              "name": "Tell the bursar nobody could be reached",
+              "connector": "notify@1",
+              "action": "tell",
+              "needs": [
+                "tell"
+              ],
+              "when": "=steps.tell.output.nobody == true",
+              "input": {
+                "title": "A family could not be told of its payment plan",
+                "message": "='The payment plan for ' + item.admission_number + ' was ' + item.status + ', but no guardian could be reached. Reach the family another way, or send a link from Families.'"
+              },
+              "effect": {
+                "idempotency_seed": "='plan-decided-nobody:' + item.id"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}
