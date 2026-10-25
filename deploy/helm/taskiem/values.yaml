@@ -73,7 +73,9 @@ roles:
   worker:
     replicas: 2
     databasePool: 20
-    queues: connector,sandbox
+    # ai: AI steps, which ask the model (docs/ai.md#ai-steps); a list
+    # without it leaves them queued until their runs time out.
+    queues: connector,sandbox,ai
     # Python steps need room: the interpreter's memory cap is 256 MiB per
     # running step, on top of the process.
     resources:
@@ -101,7 +103,7 @@ roles:
 # queue stays in containerSteps.
 workerPools: []
 #  - name: acme                     # lowercase letters, digits, dashes
-#    queues: connector,sandbox      # default
+#    queues: connector,sandbox,ai   # default
 #    replicas: 2
 #    databasePool: 10
 #    resources:                     # default: roles.worker.resources

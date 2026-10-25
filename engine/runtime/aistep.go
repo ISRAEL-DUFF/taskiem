@@ -95,7 +95,7 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		return failed(p.c, "retryable", "reading the business's AI settings: "+err.Error(), "retry")
 	}
 	if !allowed {
-		return fail("disabled", "the business has turned AI steps off (Settings, Governance)")
+		return fail("disabled", "the business has turned AI steps off (Secrets & settings, AI steps)")
 	}
 	if limit > 0 && used >= limit && w.AI.Overage != nil {
 		if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {

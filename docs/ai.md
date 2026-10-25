@@ -62,7 +62,7 @@ The rule (spec 12, gate G3): **the AI can never publish, approve, read secrets, 
 | `TASKIEM_AI_STEP_MODELS` | — | Comma-separated models a workflow's [AI steps](#ai-steps) may name, besides the default |
 | `TASKIEM_AI_RETENTION` | — | What the provider keeps of what it is sent, shown to every business's admins ("Zero data retention under our agreement with Anthropic"). State it; without it, admins are told it is not stated |
 
-Set these on the `api` and `edge` roles alike, and on `worker` roles serving the `ai` queue (`TASKIEM_WORKER_QUEUES`, which includes it by default). The `edge` role answers WhatsApp, so `build` there uses the same model, effort, answer size and tenant budgets as the web app.
+Set these on the `api` and `edge` roles alike, and on `worker` roles serving the `ai` queue. `TASKIEM_WORKER_QUEUES` includes `ai` by default, and so do the VPS installer, the Helm chart (`roles.worker.queues`, `workerPools[].queues`) and the plain Kubernetes manifest; a deployment that sets its own list must add `ai`, or AI steps stay queued until their runs time out. Staging: [runbook, section 11](runbooks/staging.md#11-ai-steps). The `edge` role answers WhatsApp, so `build` there uses the same model, effort, answer size and tenant budgets as the web app.
 
 ### Claude
 
@@ -154,9 +154,9 @@ A workflow can ask the model at run time with an `ai` step ([contract](contracts
 
 Three controls sit with the business and the deployment:
 
-- **The switch.** Owners turn AI steps off under **Secrets & settings → Governance** (`ai_steps`); saving a workflow with one is then refused, and one already published fails when it starts.
+- **The switch.** Owners turn AI steps off under **Secrets & settings → AI steps** (`ai_steps`); saving a workflow with one is then refused, and one already published fails when it starts.
 - **The plan.** AI steps need a plan with the `ai` feature, as AI building does.
-- **What the provider keeps.** `GET /v1/ai/status` and the Governance page show the model, the models steps may use, and the deployment's statement of what the provider retains (`TASKIEM_AI_RETENTION`).
+- **What the provider keeps.** `GET /v1/ai/status` and the **AI steps** box under **Secrets & settings** show the model, the models steps may use, and the deployment's statement of what the provider retains (`TASKIEM_AI_RETENTION`).
 
 Each call is recorded in `ai_interactions` against the run and step, with personal data masked, and counts against the monthly budget below. The builder proposes an ai step only when the business may use one (rule 21).
 

@@ -23,13 +23,15 @@ import type { ReadyNeed, Readiness } from "../lib/readiness";
 import type { CallableWorkflow, Template } from "../lib/templates";
 
 const nodeTypes = { step: StepNode, trigger: TriggerNode };
-const PALETTE: Step["type"][] = ["connector", "capability", "template", "http", "code", "transform", "approval", "form", "signal", "callback", "respond", "wait", "branch", "parallel", "foreach"];
+const PALETTE: Step["type"][] = ["connector", "capability", "template", "subflow", "ai", "http", "code", "transform", "approval", "form", "signal", "callback", "respond", "wait", "branch", "parallel", "foreach"];
 
 /** The steps an owner adds without Advanced, in their words. */
 const PLAIN_PALETTE: [Step["type"], string][] = [
   ["connector", "Use a service"],
   ["capability", "Pay or get paid"],
   ["template", "Use a ready workflow"],
+  ["subflow", "Run another of your workflows"],
+  ["ai", "Ask the AI"],
   ["approval", "Ask for approval"],
   ["form", "Ask someone to fill in a form"],
   ["wait", "Wait"],

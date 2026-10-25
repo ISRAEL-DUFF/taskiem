@@ -136,7 +136,7 @@ The main worker Deployment does not serve the `container` queue; container steps
 ```yaml
 workerPools:
   - name: acme
-    queues: connector,sandbox
+    queues: connector,sandbox,ai
     replicas: 2
     nodeSelector: { pool: dedicated }   # optional: isolate it on its own nodes
     autoscaling: { enabled: true, minReplicas: 2, maxReplicas: 6 }

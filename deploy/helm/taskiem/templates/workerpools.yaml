@@ -16,7 +16,7 @@ roles.worker. */ -}}
 {{- fail (printf "workerPools: %q is listed twice" $p.name) }}
 {{- end }}
 {{- $_ := set $seen $p.name true }}
-{{- $queues := default "connector,sandbox" $p.queues }}
+{{- $queues := default "connector,sandbox,ai" $p.queues }}
 {{- if has "container" (splitList "," $queues) }}
 {{- fail (printf "workerPools: %q: the container queue runs only in the shared container worker pool (containerSteps)" $p.name) }}
 {{- end }}

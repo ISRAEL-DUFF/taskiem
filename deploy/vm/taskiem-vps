@@ -315,7 +315,7 @@ cmd_setup() {
   env_set "$t" TASKIEM_KMS_KEY taskiem
   env_set "$t" TASKIEM_PUBLIC_URL "https://$DOMAIN"
   env_set "$t" TASKIEM_TRUST_PROXY true
-  env_set "$t" TASKIEM_WORKER_QUEUES connector,sandbox
+  env_set "$t" TASKIEM_WORKER_QUEUES connector,sandbox,ai # ai: AI steps (docs/ai.md#ai-steps)
   env_set "$t" TASKIEM_WASM_CACHE /cache/wazero
   env_set "$t" TASKIEM_ARCHIVE_DIR /var/lib/taskiem/archive
   env_set "$t" TASKIEM_ANCHOR_DIR /var/lib/taskiem/anchors

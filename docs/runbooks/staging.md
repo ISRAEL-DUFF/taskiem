@@ -152,7 +152,9 @@ sudo nano /opt/taskiem/taskiem.env
 | Add | For | Without it |
 | --- | --- | --- |
 | `TASKIEM_XENIBASE_URL=` (the bare server, `https://host`), `TASKIEM_XENIBASE_TOKEN=`, `TASKIEM_XENIBASE_ORG=` (the organisation's **ID**, not its name: `curl -H "Authorization: Bearer $TOKEN" $URL/api/v1/me` shows it) | Data tables, so storefront catalogues, services and photos | Storefronts work, but without a catalogue or photos |
-| `ANTHROPIC_API_KEY=` | The moderation model, and AI building | Moderation uses the word list and price check only |
+| `ANTHROPIC_API_KEY=` | The moderation model, AI building, and [AI steps](../ai.md#ai-steps) (section 11) | Moderation uses the word list and price check only; workflows cannot use AI steps |
+| `TASKIEM_AI_RETENTION=` | What the AI provider keeps of what it is sent, as owners read it on the Governance page, e.g. `Kept 30 days for abuse monitoring, then deleted (Anthropic API default)`. Copy it from the provider's current terms for this account | Owners read "not stated" |
+| `TASKIEM_AI_STEP_MODELS=` | Other models AI steps may use besides the default, comma-separated (e.g. `claude-haiku-5-5`) | AI steps use the default model only |
 | `TASKIEM_SMS_TERMII_API_KEY=`, `TASKIEM_SMS_TERMII_SENDER_ID=` | SMS to customers: order texts, form codes | Customers who gave an email still get it |
 | `TASKIEM_PUBLIC_ADDRESSES=<the VPS's IPv4>` | The A record shown to a business connecting its own domain | The editor suggests an ALIAS record |
 | `TASKIEM_ALLOW_SIGNUP=true` | Self-serve sign-up, to test it | Only invited people join. **Re-running setup sets it back to false** |
@@ -277,6 +279,33 @@ To turn it off again: re-run setup and clear the mail domain. Published email tr
 | 6 | **Settings > People you message** | Your number, masked, with Telegram (stopped); **Remove** removes it |
 
 **Check:** `sudo taskiem-vps logs taskiem` shows no `ERROR` mentioning `reach` or `whatsapp: send failed` for these messages.
+
+## 11. AI steps
+
+[AI steps](../ai.md#ai-steps) let a workflow ask the AI model while it runs: sort a message, pull an address out of text, draft a reply. Personal data is hidden from the model unless a step lets a field through, and owners can turn AI steps off. They need `ANTHROPIC_API_KEY` (section 5) and the `ai` worker queue.
+
+### On a new server
+
+The installer sets `TASKIEM_WORKER_QUEUES=connector,sandbox,ai`. Add `ANTHROPIC_API_KEY` and `TASKIEM_AI_RETENTION` as section 5 says, then go to **Try it**.
+
+### On a server installed before AI steps
+
+1. **Upgrade.** Staging upgrades itself within 15 minutes of the merge; `sudo taskiem-vps update --now` does it at once. The upgrade migrates the database (`00218_ai_steps`) but does not change `taskiem.env`. **Check:** `sudo taskiem-vps status` shows the new commit, with no PROBLEM lines.
+2. **The queue.** Run `sudo taskiem-vps setup` and press Enter at every question to keep its answer; it rewrites `TASKIEM_WORKER_QUEUES` with `ai` and restarts Taskiem. Every secret and every setting from section 5 is kept. **Check:** `sudo grep WORKER_QUEUES /opt/taskiem/taskiem.env` prints `TASKIEM_WORKER_QUEUES='connector,sandbox,ai'`. Without this step AI steps are accepted and published, then wait without running until their runs time out.
+3. **The settings.** If not done already, add `ANTHROPIC_API_KEY` and `TASKIEM_AI_RETENTION` (section 5), then apply them as section 5 says. **Check:** `sudo taskiem-vps logs taskiem` shows no `ERROR` at start.
+
+### Try it
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 1 | In the app: **Secrets & settings**, the **AI steps** box | **Let workflows ask the AI model** is ticked, and the line under it names the model and what the provider keeps (your `TASKIEM_AI_RETENTION`) |
+| 2 | A new workflow started by hand. Turn on **Advanced** and give it the inputs schema `{"type":"object","properties":{"message":{"type":"string"},"phone":{"type":"string","x-pii":"phone"}}}`. Add **Ask the AI**: what to ask "Is this message urgent?", what it reads `{"message":"=trigger.body.message","phone":"=trigger.body.phone"}`, the answer's shape `{"type":"object","properties":{"urgent":{"type":"boolean"}},"required":["urgent"]}`. **Publish** | Published with no problems |
+| 3 | **Run** it with a message that mentions the phone number, and a phone | The run completes; the AI step's output answers `urgent` |
+| 4 | Open the run as someone without **reveal personal data** | The phone is sealed wherever it appears, the prompt and the answer included |
+| 5 | On the step, tick **Let the model see** `phone`, **Publish** | **Audit log** has `ai.personal_data.allow` for the workflow |
+| 6 | **Secrets & settings**: untick **Let workflows ask the AI model**, run the workflow again | The step fails: "the business has turned AI steps off". Tick it again |
+
+**Check:** `sudo taskiem-vps logs taskiem` shows no `ERROR` for the AI steps. If step 2's run waits instead of completing, the queue is missing (step 2 of the upgrade).
 
 ## When something fails
 

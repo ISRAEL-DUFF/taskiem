@@ -155,7 +155,7 @@ Git-led environments publish from merged commits: the repository's branch protec
 
 ## AI steps
 
-Owners decide whether the business's workflows may ask the AI model at run time ([AI steps](ai.md#ai-steps), decision 0050), under **Secrets & settings → Governance** (`ai_steps` in `PUT /v1/governance`; on unless turned off; a request that leaves it out keeps it). Turned off, saving a workflow with an ai step is refused and a published one fails when the step starts. The same section shows the model and what the provider keeps of what it is sent. Publishing a version whose ai steps let personal data through (`personal_data`) writes `ai.personal_data.allow` to the audit log. Every change of the switch is audited with its before and after.
+Owners decide whether the business's workflows may ask the AI model at run time ([AI steps](ai.md#ai-steps), decision 0050), under **Secrets & settings → AI steps** (`ai_steps` in `PUT /v1/governance`; on unless turned off; a request that leaves it out keeps it). Turned off, saving a workflow with an ai step is refused and a published one fails when the step starts. The same section shows the model and what the provider keeps of what it is sent. Publishing a version whose ai steps let personal data through (`personal_data`) writes `ai.personal_data.allow` to the audit log. Every change of the switch is audited with its before and after.
 
 ## School requests
 
