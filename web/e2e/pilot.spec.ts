@@ -6,7 +6,7 @@ import { H, PUBLIC, familyLink } from "./familyschool";
 
 // The pilot walkthrough (docs/spec/schools-open-items.md, "Pilot
 // checklist"): the demo school serve.sh seeds with `taskiem demo school
-// --create-tenant` (docs/schools.md "Try it with a demo school"), walked
+// --create-tenant` (a command only the e2e build has), walked
 // on a phone as the bursar: the Overview, a student's page with their
 // account number and receipts, To match with the held credit and the
 // families' claims, Approvals with the cash posting (as the approver, who

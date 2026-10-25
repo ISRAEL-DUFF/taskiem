@@ -66,9 +66,6 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`; `taskiem-public`, `taskiem-mail` and `clamav` when on) |
 | `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
 
-## A demo school on staging
-
-To show the Schools area with a term's worth of data in it, seed the [demo school](schools.md#try-it-with-a-demo-school) once from the kit's directory: `sudo docker compose --project-directory /opt/taskiem run --rm --no-deps taskiem demo school --create-tenant --name "Demo School"` (the same way the [staging runbook](runbooks/staging.md) adds an operator). It prints the four people's passwords once; keep them with the other staging secrets. The demo is a business of its own on the demo rail (no payment service, no real money), is never messaged, and is never removed: a second demo takes another `--name`, and a staging database rebuilt from scratch loses it with everything else.
 
 ## Alerts
 

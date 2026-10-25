@@ -1,5 +1,6 @@
-// Package demo seeds a demonstration school for staging and demos
-// (docs/schools.md#try-it-with-a-demo-school): a session of three terms
+// Package demo seeds a demonstration school for the tests only (the
+// browser tests' pilot walkthrough; the command that drives it is in an
+// e2e build of taskiem alone, never in a release): a session of three terms
 // with the current one open, six classes, forty students in twenty-five
 // families with made-up names and phone numbers in a reserved range, fee
 // structures with one pass-through line, the term invoiced, students'

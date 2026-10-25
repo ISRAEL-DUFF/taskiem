@@ -94,8 +94,6 @@ Usage:
                                      send one test message through the platform's SMS or mail (docs/messages.md)
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
   taskiem media check TENANT_ID      round trip through a tenant's Xenibase storage (docs/media.md)
-  taskiem demo school --create-tenant [--name NAME] | --tenant TENANT_ID [--rail CONNECTION]
-                                     seed a demonstration school for staging and demos (docs/schools.md)
   taskiem healthcheck [ADDR]         probe the local API, or ADDR's /readyz (container health checks)
   taskiem version                    print the version
 
@@ -165,8 +163,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return catalogueCmd(context.Background(), args[1:], stdout)
 	case "media":
 		return mediaCmd(context.Background(), args[1:], stdout)
-	case "demo":
-		return demoCmd(context.Background(), args[1:], stdout)
 	case "status":
 		return statusCmd(context.Background(), args[1:], stdout)
 	case "operators":
@@ -183,9 +179,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprint(stdout, usage)
 		return nil
 	}
+	if cmd, ok := testCommands[args[0]]; ok {
+		return cmd(context.Background(), args[1:], stdout)
+	}
 	fmt.Fprint(stderr, usage)
 	return fmt.Errorf("unknown command %q", args[0])
 }
+
+// testCommands are commands that exist only in a build with `-tags e2e`
+// (the browser tests' binary): fixtures no deployed Taskiem should carry.
+// A tagged file registers one from its init.
+var testCommands = map[string]func(context.Context, []string, io.Writer) error{}
 
 func migrate(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)

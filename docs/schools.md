@@ -8,19 +8,6 @@ An owner turns Schools on under **Secrets & settings** (or **Schools > Settings*
 
 When an owner turns it on, Taskiem can also add a **Bursar** role (below) for whoever runs the fees office, when the plan has custom roles and the business has no role named `bursar` yet.
 
-## Try it with a demo school
-
-To see the area with something in it before a school's own data goes in, seed the demonstration school on a staging server:
-
-```
-taskiem demo school --create-tenant --name "Demo School"
-```
-
-It makes a business of its own with four people, whose passwords are printed once: a **proprietor** (owner), a **bursar** (the Bursar role), an **approver** (a second owner, for the cash and discounts the bursar asks about) and a **gate** user. Through the engine's own services, as a bursar would: the area on; a session of three terms with the first one started six weeks ago and its fees due three weeks ago; six classes with fees (JSS 3 collects the BECE fee on NECO's behalf); forty students in twenty-five families, imported from a file, with made-up names and phone numbers in the 0800 range, which no network assigns; the term invoiced and sent; every student issued an account number; and what a bursar meets in a term: most families paid in full into their child's account and were matched by themselves with a receipt each, some paid part, three paid at the desk and one more waits for a second person, a hardship discount waits too, two families say they paid, a payment with the right reference landed in another account and is held, one payment went back and reopened its invoice with its receipt voided, a promise to pay, a payment plan in good standing and one in arrears, a student cleared by override, and yesterday's close, which reconciles.
-
-The account numbers come from the first connection that can issue them, when the business has one (`--rail connector/name`, with `--wallet` on iswallet), otherwise from the **demo rail**: numbers with no service behind them, which take no real money. On either, the demo's payments are simulated: credits are written to the [money log](money-log.md) as the rail's events would be and matched along the one path every payment takes. No message goes to the demo's guardians: the demo takes each one's daily allowance before the term is sent, so the invoices are sent and nothing is queued.
-
-Running it again for the same business changes nothing; a business with students of its own is refused (`--tenant TENANT_ID` seeds an existing business that has none, with its first owner doing everything). Money log rows are append-only, so a demo is never removed: keep it in its own business, and make a second one with another `--name`. The browser tests walk the same school on a phone (`web/e2e/pilot.spec.ts`); the steps for a real school are the pilot checklist in the plan's open items (internal).
 
 ## Who can do what
 

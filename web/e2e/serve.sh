@@ -9,7 +9,8 @@ db=taskiem_e2e
 psql "$TASKIEM_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS $db WITH (FORCE)" -c "CREATE DATABASE $db"
 dsn=$(printf '%s' "$TASKIEM_TEST_DATABASE_URL" | sed -E "s#/[^/?]*(\?.*)?\$#/$db\1#")
 cd "$root"
-go build -o bin/taskiem ./cmd/taskiem
+# -tags e2e builds in the test-only commands (the demo school below).
+go build -tags e2e -o bin/taskiem ./cmd/taskiem
 export TASKIEM_DATABASE_URL="$dsn"
 export TASKIEM_LOCAL_KMS_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 bin/taskiem migrate >/dev/null
@@ -62,7 +63,7 @@ export TASKIEM_PUBLIC_ENABLED=true TASKIEM_PUBLIC_LISTEN=127.0.0.1:18082 TASKIEM
 # on a local port instead of 25.
 export TASKIEM_MAIL_ENABLED=true TASKIEM_MAIL_DOMAIN=in.e2e.test TASKIEM_MAIL_LISTEN=127.0.0.1:12825
 # The demo school (pilot.spec.ts): a business of its own, seeded through the
-# engine on the demo rail, its people's passwords kept beside the operator's
-# link (bin/ is not committed).
+# engine on the demo rail by a command only this e2e build has, its people's
+# passwords kept beside the operator's link (bin/ is not committed).
 bin/taskiem demo school --create-tenant --name "Pilot Demo School" >"$root/bin/e2e-demo.txt"
 exec bin/taskiem serve --role all

@@ -44,7 +44,7 @@ jobs:
       # The api package's database tests take close to Go's default
       # 10-minute limit on a CI runner; a slow runner should not fail it.
       - name: Unit and database tests
-        run: go test -count=1 -timeout 25m ./...
+        run: go test -count=1 -timeout 25m -tags e2e ./...
       # Each theme draws every public page with its own templates (decision
       # 0042): the public host's suite runs again in the other two.
       - name: Public pages in every theme

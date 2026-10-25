@@ -2,7 +2,7 @@
 
 Everything built for [decision 0046](../decisions/0046-balans-in-taskiem.md) so far (B0 to B9 of the [schools plan](schools.md)) that is not done, not verified, or done differently from the plan, with what would close it; and, at the end, the [pilot checklist](#pilot-checklist): the ordered steps for the first school. Update this list as items close; the plan's "Built" notes say how each milestone differs from it, and the matching, invoices and money log items every business shares are in the [invoices open items](invoices-open-items.md).
 
-Status as of 25 October 2026: B0 to B9 are all built, and a [demo school](../schools.md#try-it-with-a-demo-school) can be seeded on staging in one command. Nothing has run against a real rail yet: every rail is tested against fakes and fixtures from its documentation. What is left is below.
+Status as of 25 October 2026: B0 to B9 are all built. Nothing has run against a real rail yet: every rail is tested against fakes and fixtures from its documentation. What is left is below.
 
 ## Needs people, not code
 
@@ -51,7 +51,6 @@ Built for every business; the general items are in the [invoices open items](inv
 - **Flutterwave students are issued one at a time** on the student's page, with a parent's BVN or NIN typed in, never in a batch.
 - **Two partial refunds of one payment are one entry** (the money log keys a refund by the payment it refunds), so only the first is taken back; the second is a correction by hand.
 - **The look-back's "the webhook missed money" notice** goes to the owners once a day; no page lists which credits the look-back found first (the daily close counts them).
-- **The demo rail** (`demo/school`, below) issues numbers with no service behind them: a demo school cannot issue more once seeded unless its setting is changed to a real connection.
 
 ## Cash, approvals and receipts (B5)
 
@@ -92,19 +91,13 @@ Built for every business; the general items are in the [invoices open items](inv
 - **The monthly email is English**; the chat summary's schools line is in five languages, four unreviewed (above).
 - **The AI builder's fourteen schools cases are measured offline** (the heuristic); the real-model eval needs the AI account, as the invoice cases do.
 
-## The demo school (pilot piece)
+## The demo school (test fixture only)
 
-`taskiem demo school` ([schools](../schools.md#try-it-with-a-demo-school)) seeds a school through the engine's own services, on the demo rail unless a connection that can issue accounts is chosen.
-
-- **Its payments are simulated**: credits into the students' accounts are written to the money log as the rail's events would be and matched by the one path; on a real rail, only the issuing is real.
-- **It is never removed**: money log rows are append-only, so a demo lives in a tenant of its own (`--create-tenant`), and a second demo needs another `--name`.
-- **With `--tenant`** the business's first owner posts the cash and asks for the discount, so a second person with `school.approve` is needed to decide them; `--create-tenant` makes the four people.
-- **No message reaches its guardians**: the demo takes each guardian's daily message allowance before the term is sent, so the invoices are sent and nothing is queued. A reminder sent from the demo the next day queues SMS to its 0800 numbers, which no network assigns.
-- **The web app's Account numbers page cannot plan a batch** for a demo on the demo rail (the server has no such connection): the numbers are there, and new students need a real connection.
+The founder decided (25 October 2026) that a first school is tested from scratch on staging, not with seeded data, so the demo school is a **test fixture only**: `engine/schools/demo` seeds one through the engine's own services, and the `taskiem demo school` command that drives it exists only in a binary built with `-tags e2e` (`web/e2e/serve.sh` and the Go tests). The image, the release build and `make build` carry no such command, so no deployed Taskiem can seed one. It is kept because `web/e2e/pilot.spec.ts` walks the whole school path over it on every run, and its own test checks the Overview, clearance and close over a full term's data.
 
 ## Pilot checklist
 
-The ordered steps for a first school, each with the page or command. Try them on staging with the [demo school](../schools.md#try-it-with-a-demo-school) first; `web/e2e/pilot.spec.ts` walks the same path on a phone.
+The ordered steps for a first school, each with the page or command. Walk them on staging from scratch, with the school's own roster and a sandbox rail; `web/e2e/pilot.spec.ts` walks the same path on a phone over the test fixture.
 
 | Step | What | Where |
 | --- | --- | --- |

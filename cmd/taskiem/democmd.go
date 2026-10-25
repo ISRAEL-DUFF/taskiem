@@ -1,3 +1,5 @@
+//go:build e2e
+
 package main
 
 import (
@@ -25,10 +27,10 @@ import (
 
 const demoUsage = `usage: taskiem demo school (--create-tenant [--name NAME] | --tenant TENANT_ID) [--rail CONNECTION [--wallet ID]]
 
-Seeds a demonstration school (docs/schools.md#try-it-with-a-demo-school):
+Seeds the demonstration school the browser tests walk (web/e2e/pilot.spec.ts):
 forty students in twenty-five families, the term invoiced, account numbers,
 and a realistic mix of payments and exceptions, through the engine's own
-services. --create-tenant makes a business of its own (default name "Demo
+services, in a test build only (-tags e2e). --create-tenant makes a business of its own (default name "Demo
 School") with a proprietor, a bursar, an approver and a gate user, whose
 passwords are printed once; --tenant seeds an existing business that has
 no students yet, with its first owner doing everything. --rail names the
@@ -37,7 +39,14 @@ without it the first connection that can issue them is used, else the
 demo rail, which needs no service. Seeding the same tenant again does
 nothing; money log rows are append-only, so a demo is never removed`
 
-// demoCmd is `taskiem demo school`.
+// The demo school is a test fixture: it is in the binary only when built
+// with `-tags e2e` (web/e2e/serve.sh and the Go tests), never in the image
+// or a release, so no deployed Taskiem can seed one.
+func init() {
+	testCommands["demo"] = demoCmd
+}
+
+// demoCmd is `taskiem demo school`, in an e2e build only.
 func demoCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 || args[0] != "school" {
 		return errors.New(demoUsage)
