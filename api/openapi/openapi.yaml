@@ -25975,6 +25975,9 @@ components:
         sole_approver:
           type: boolean
           description: Nobody else can decide it, so the caller may approve it even if they made the run or workflow; the vote is recorded as self-approved. False when a policy sets `allow_sole_approver` to false.
+        first_payment:
+          type: boolean
+          description: The subject names a bank account (`account_number`, `nuban` or `account`, with `bank_code` when known) that this business has never paid in prod. Absent otherwise, and outside prod
         requested_at:
           $ref: '#/components/schemas/Timestamp'
         timeout_at:

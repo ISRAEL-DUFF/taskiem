@@ -133,13 +133,13 @@ export function Home() {
             {approvals.data?.approvals.slice(0, 5).map((a) => (
               // The row opens Approvals; Approve decides here, in a confirm sheet.
               <div key={`${a.run_id}/${a.step_id}`} className="list-row has-action">
-                <span className="list-icon">
+                <span className={a.first_payment ? "list-icon warn" : "list-icon"}>
                   <Icon name="approvals" />
                 </span>
                 <Link className="grow row-link" to="/approvals">
                   <span className="title">{approvalTitle(a.step_name, a.subject)}</span>
                   <span className="sub">
-                    {a.workflow} · asked {shortWhen(new Date(a.requested_at))}
+                    {a.first_payment ? "First payment to this account" : a.workflow} · asked {shortWhen(new Date(a.requested_at))}
                   </span>
                 </Link>
                 <button type="button" className="primary" aria-label={`Approve ${a.step_name}`} onClick={() => setDeciding(a)}>

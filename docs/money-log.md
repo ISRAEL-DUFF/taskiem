@@ -32,6 +32,15 @@ If Taskiem cannot record an event, it answers the payment service with an error,
 - **Webhooks:** on the Connections page, each prod connection of a payment service shows its address under **Webhook for the money log**, with where to paste it in the service's dashboard. Paystack takes one address per account: paste the payments one, which also carries refunds; transfers still arrive because Taskiem checks Paystack every few minutes.
 - **Polling:** for Paystack, Taskiem also asks for new payments and transfers every few minutes, for every connected account, so a business that never set the webhook up is still recorded. The first look starts when the connection is made; nothing earlier is replayed. Refunds are not polled: they arrive only through the webhook.
 
+## Accounts paid
+
+Taskiem remembers the bank accounts a business has paid, so an approval to pay one it has never paid can say so. A changed account number on a supplier's invoice, or a new staff member's account slipped into payroll, is a common way money goes astray; the warning asks the person approving to check before the money leaves.
+
+- **What is remembered:** each account a workflow's payout step (`pay_bank`, and each account in a `pay_many` batch) sent money to in prod, whether the service answered settled or pending, with the bank's code. One the service answered failed moved no money and is not remembered, nor is an account in a batch whose own transfer failed. Sandbox and staging payouts are not remembered.
+- **How:** not the account number. Each account is kept as a pseudonym made from its digits with the business's own key, the way personal data is sealed, so the table means nothing without that key and another business's payments say nothing about this one's (`payout_accounts`).
+- **The warning:** an approval in prod whose subject names an account (`account_number`, else `nuban` or `account`) that the business has not paid shows **First payment to this account**: a chip on its card on Approvals, the line under it in Home's Needs you, and a note in the confirm sheet. Where both the approval and the remembered payment have a bank's code, they must agree: the same ten digits at another bank are another account. `GET /v1/approvals` gives it as `first_payment`.
+- **Not yet:** payouts made before this was added are not remembered, so the first approval to each account after it says first payment; payments made outside Taskiem (the bank's own app) are not known; WhatsApp and Telegram approvals do not show the warning yet.
+
 ## Where to see it
 
 The log is copied to a data table named `money_log`, a [kept table](data-tables.md#kept-tables): it can be read, searched and exported like any table, and read by workflows and templates, but no person or workflow can add, change or delete its rows through Taskiem. Copying happens within a minute of the entry being recorded; a business without data tables yet keeps its entries until it has them.

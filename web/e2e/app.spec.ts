@@ -95,10 +95,43 @@ test("an approval is decided from Home in a confirm sheet", async ({ page }) => 
   await expect(sheet).toBeVisible();
   // The sheet shows what is being approved: the decision records it.
   await expect(sheet).toContainText("Kunle Supplies");
+  // It names no account, so nothing says it is a first payment.
+  await expect(sheet.getByRole("note")).toHaveCount(0);
   await sheet.getByRole("button", { name: "Confirm" }).click();
   await expect(sheet).toHaveCount(0);
   await expect(needs.getByRole("button", { name: "Approve Pay Kunle Supplies" })).toHaveCount(0);
   await expect.poll(async () => ((await api("GET", `/v1/runs/${String(run.run_id)}`)).run as { status: string }).status).toBe("completed");
+});
+
+test("an approval to pay a new account says it is the first payment", async ({ page }) => {
+  const email = `owner-${Date.now()}@firstpay.test`;
+  const up = await page.request.post("/v1/signup", { headers: { "X-Taskiem-Request": "1" }, data: { tenant: "First Pay Stores", email, name: "Owner", password: "correct horse battery" } });
+  expect(up.status(), await up.text()).toBe(201);
+  const api = async (method: string, path: string, data?: unknown) => {
+    const r = await page.request.fetch(path, { method, data, headers: { "X-Taskiem-Request": "1" } });
+    expect(r.ok(), `${method} ${path}: ${r.status()} ${await r.text()}`).toBeTruthy();
+    return (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  };
+  const wf = await api("POST", "/v1/workflows", {
+    name: "Pay a new supplier",
+    definition: {
+      schema: "wd/v1", id: "wf_payNewSupplier", version: 1, name: "Pay a new supplier", trigger: { type: "manual" },
+      steps: [{ id: "ok", name: "Pay Tola Fabrics", type: "approval", config: { role: "owner", subject: { amount_kobo: 7500000, account_name: "Tola Fabrics", account_number: "0123456789", bank_code: "058" } } }],
+    },
+  });
+  await api("POST", `/v1/workflows/${String(wf.id)}/versions/1/publish`);
+  await api("POST", `/v1/workflows/${String(wf.id)}/runs`, { input: {} });
+
+  await page.goto("/approvals");
+  await expect(page.getByTestId("approval").filter({ hasText: "Pay Tola Fabrics" })).toContainText("First payment to this account");
+
+  await page.goto("/home");
+  const needs = page.getByRole("region", { name: "Needs you" });
+  await expect(needs).toContainText("First payment to this account");
+  await needs.getByRole("button", { name: "Approve Pay Tola Fabrics" }).click();
+  const sheet = page.getByRole("dialog", { name: "Approve" });
+  await expect(sheet.getByRole("note")).toContainText("Your business has not paid it before");
+  await sheet.getByRole("button", { name: "Cancel" }).click();
 });
 
 test("Home's money card and Money's week, from the money log", async ({ page }) => {

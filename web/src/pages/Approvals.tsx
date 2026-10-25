@@ -52,6 +52,7 @@ export function Approvals() {
               </div>
             )}
             <ul className="chips">
+              {a.first_payment && <li className="warn">First payment to this account</li>}
               {a.sole_approver && <li className="warn">You are the only person who can approve this</li>}
               {a.on_behalf_of && <li>Covering for {a.on_behalf_of}</li>}
               {a.step_up && (
@@ -224,6 +225,11 @@ export function Decide({ a, decision, onClose, onDone, showSubject }: { a: Appro
         {decision === "approved" ? "Approve" : "Reject"} <strong>{a.step_name || a.step_id}</strong> on {a.workflow}? Your decision and what you were shown are recorded.
       </p>
       {showSubject && <SubjectSummary subject={a.subject} />}
+      {a.first_payment && decision === "approved" && (
+        <div className="warning" role="note">
+          <strong>First payment to this account.</strong> Your business has not paid it before. Check the account number and name with the person you are paying, by phone or in person, before you approve.
+        </div>
+      )}
       <Field label="Comment (optional, audited)">
         <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
       </Field>

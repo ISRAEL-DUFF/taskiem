@@ -29,6 +29,8 @@ Taskiem's icon, a lime "t" on dark green, is now on your home screen. You stay s
 
 When a payment or another step waits for your approval, it shows under **Needs you** on Home with an **Approve** button. Pressing it opens a sheet showing exactly what you are approving: the amount, who it goes to and their account, when the workflow says them. Check it, then press **Confirm** (or confirm with your passkey if your business asks for one). To reject, or to see more about the request, press the row itself to open **Approvals**.
 
+If the payment is to a bank account your business has never paid through Taskiem, the row says **First payment to this account** and the sheet asks you to check the account number and name with the person you are paying first. A changed account number is a common way money goes to the wrong person.
+
 ## The colours
 
 The bar at the top of your phone is dark green in the light theme and follows the page in the dark theme. Choose light, dark or your phone's setting under **Account**.
