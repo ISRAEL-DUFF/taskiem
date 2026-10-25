@@ -7,6 +7,7 @@
 // overview's period, figures and exports.
 
 import { dateLabel, koboInput, naira, plainMessage, toKobo } from "./invoices";
+import type { MoneyBucket } from "./moneyChart";
 
 export type LeakKind = "unmatched" | "overdue" | "duplicate" | "overpaid" | "void_paid" | "fee";
 export type LeakStatus = "open" | "recovered" | "written_off" | "not_a_leak" | "resolved";
@@ -545,6 +546,9 @@ export interface MoneySummary {
   collected_for_others_kobo?: number;
   collected_for?: { body: string; kobo: number }[] | null;
   own_in_settled_kobo?: number;
+  /** The period in stretches, for charts: hours for one day, days for up to 92, none beyond. */
+  unit?: "hour" | "day" | "";
+  buckets?: MoneyBucket[];
 }
 
 /** The money collected for others, in words: "₦36,000 for WAEC, ₦5,000 for NECO"; empty for none. */

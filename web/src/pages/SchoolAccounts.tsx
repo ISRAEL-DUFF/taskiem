@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { get, post } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Item, Items, PageHeader, fmtTime, useAction, useLoad } from "../ui";
 import { schoolAccess } from "../lib/schools";
 import { accountStatus, feeLine, jobLine, jobPercent, planSummary, type AccountJob, type AccountPlan } from "../lib/schoolAccounts";
 import { plainly } from "./SchoolAccountParts";
@@ -91,24 +91,11 @@ function PlanView({ plan, busy, onConfirm }: { plan: AccountPlan; busy: boolean;
       {plan.cannot.length > 0 && (
         <>
           <h3>Cannot be issued yet</h3>
-          <table className="cards">
-            <thead>
-              <tr>
-                <th scope="col">Admission number</th>
-                <th scope="col">Why</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.cannot.map((c) => (
-                <tr key={c.student_id}>
-                  <td className="primary" data-label="Admission number">
-                    <Link to={`/schools/students/${c.student_id}`}>{c.admission_number}</Link>
-                  </td>
-                  <td data-label="Why">{c.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Items label="Cannot be issued yet">
+            {plan.cannot.map((c) => (
+              <Item key={c.student_id} to={`/schools/students/${c.student_id}`} icon="schools" tone="warn" title={c.admission_number} sub={c.reason} />
+            ))}
+          </Items>
         </>
       )}
       {plan.waiting.length > 0 && (
@@ -150,28 +137,20 @@ function JobView({ job }: { job: AccountJob }) {
       {job.problems.length > 0 && (
         <>
           <h3>Not issued</h3>
-          <table className="cards">
-            <thead>
-              <tr>
-                <th scope="col">Admission number</th>
-                <th scope="col">Status</th>
-                <th scope="col">The rail's reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {job.problems.map((p) => (
-                <tr key={p.student_id} data-testid="accounts-problem">
-                  <td className="primary" data-label="Admission number">
-                    <Link to={`/schools/students/${p.student_id}`}>{p.admission_number}</Link>
-                  </td>
-                  <td data-label="Status">
-                    <span className={`badge sf-status ${accountStatus(p.status).tone}`}>{accountStatus(p.status).label}</span>
-                  </td>
-                  <td data-label="The rail's reason">{p.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Items label="Not issued">
+            {job.problems.map((p) => (
+              <Item
+                key={p.student_id}
+                testid="accounts-problem"
+                to={`/schools/students/${p.student_id}`}
+                icon="schools"
+                tone="danger"
+                title={p.admission_number}
+                side={<span className={`badge sf-status ${accountStatus(p.status).tone}`}>{accountStatus(p.status).label}</span>}
+                sub={`The rail's reason: ${p.reason}`}
+              />
+            ))}
+          </Items>
           <p className="hint">Fix what the rail says (a guardian's email, the rail's own setup), then check again: the next batch tries them again.</p>
         </>
       )}

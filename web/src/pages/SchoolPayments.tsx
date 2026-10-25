@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, get, postOnce } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
 import { naira, newRequestKey } from "../lib/invoices";
 import { plainMessage, schoolAccess } from "../lib/schools";
 import {
@@ -69,63 +69,56 @@ export function SchoolPaymentsPage() {
         {!list.data && !list.error && <Skeleton rows={3} />}
         {list.data && list.data.postings.length === 0 && <EmptyState icon="schools">Nothing here yet. Money posted at the desk, and anything waiting for a second person, is listed here.</EmptyState>}
         {list.data && list.data.postings.length > 0 && (
-          <table className="cards">
-            <thead>
-              <tr>
-                <th scope="col">When</th>
-                <th scope="col">What</th>
-                <th scope="col">Amount</th>
-                <th scope="col">State</th>
-                <th scope="col">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.postings.map((p) => {
-                const st = postingStatus(p.status);
-                return (
-                  <tr key={p.id} data-testid="posting" data-status={p.status}>
-                    <td data-label="When">{fmtTime(p.requested_at)}</td>
-                    <td className="primary" data-label="What">
-                      {kindWords(p.kind)}
-                      {p.student_id && (
-                        <>
-                          {" · "}
-                          <Link to={`/schools/students/${encodeURIComponent(p.student_id)}`}>{p.admission_number}</Link>
-                          {p.name && ` ${p.name}`}
-                          {p.class && <span className="hint"> · {p.class}</span>}
-                        </>
-                      )}
-                      {p.invoice_number && (
-                        <>
-                          {" · "}
-                          <Link to={`/invoices/${encodeURIComponent(p.invoice_id ?? p.invoice_number)}`}>{p.invoice_number}</Link>
-                        </>
-                      )}
-                      {p.kind === "cash_posting" && <span className="hint"> · {howWords(String(p.details.how ?? "")).toLowerCase()}</span>}
-                    </td>
-                    <td className="sf-price" data-label="Amount">
-                      {naira(p.amount_kobo)}
-                    </td>
-                    <td data-label="State">
-                      <span className={`badge sf-status ${st.tone}`}>{st.label}</span>
-                      {p.yours && p.status === "pending" && <div className="hint">You asked: a second person decides it.</div>}
-                    </td>
-                    <td data-label="Details">
-                      {p.status === "posted" && p.kind === "cash_posting" && postedLine(p)}
-                      {p.status === "posted" && p.kind !== "cash_posting" && "Applied."}
-                      {p.status === "pending" && (p.yours ? "Waiting." : `Waiting; asked by ${p.requested_email || p.requested_by}.`)}
-                      {decisionLine(p) && <div className="hint">{decisionLine(p)}</div>}
-                      {p.status === "pending" && can("school.approve") && !p.yours && (
-                        <div>
-                          <Link to="/approvals">Decide it under Approvals</Link>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <ul className="items" aria-label="Payments and requests">
+            {list.data.postings.map((p) => {
+              const st = postingStatus(p.status);
+              return (
+                <Row
+                  key={p.id}
+                  testid="posting"
+                  attrs={{ "data-status": p.status }}
+                  icon={p.kind === "cash_posting" ? "money" : "invoices"}
+                  tone={p.status === "pending" ? "warn" : p.status === "posted" ? "ok" : "muted"}
+                  title={kindWords(p.kind)}
+                  side={<span className="item-figure">{naira(p.amount_kobo)}</span>}
+                  sub={
+                    <>
+                      <span className="sub">
+                        {fmtTime(p.requested_at)}
+                        {p.student_id && (
+                          <>
+                            {" · "}
+                            <Link to={`/schools/students/${encodeURIComponent(p.student_id)}`}>{p.admission_number}</Link>
+                            {p.name && ` ${p.name}`}
+                            {p.class && ` · ${p.class}`}
+                          </>
+                        )}
+                        {p.invoice_number && (
+                          <>
+                            {" · "}
+                            <Link to={`/invoices/${encodeURIComponent(p.invoice_id ?? p.invoice_number)}`}>{p.invoice_number}</Link>
+                          </>
+                        )}
+                        {p.kind === "cash_posting" && ` · ${howWords(String(p.details.how ?? "")).toLowerCase()}`}
+                      </span>
+                      <span className="sub">
+                        {p.status === "posted" && p.kind === "cash_posting" && postedLine(p)}
+                        {p.status === "posted" && p.kind !== "cash_posting" && "Applied."}
+                        {p.status === "pending" && (p.yours ? "Waiting: a second person decides it." : `Waiting; asked by ${p.requested_email || p.requested_by}.`)}
+                      </span>
+                      {decisionLine(p) && <span className="sub">{decisionLine(p)}</span>}
+                      <span className="item-tag">
+                        <span className={`badge sf-status ${st.tone}`}>
+                          {st.label}
+                        </span>
+                        {p.status === "pending" && can("school.approve") && !p.yours && <Link to="/approvals">Decide it under Approvals</Link>}
+                      </span>
+                    </>
+                  }
+                />
+              );
+            })}
+          </ul>
         )}
       </section>
     </>

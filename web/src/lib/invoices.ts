@@ -879,3 +879,19 @@ export const howMatchedOrder = (how: string, by = "") => (how === "exact" ? "Pai
 export function orderPaymentRows(list: OrderPayment[] | null | undefined): { payment: OrderPayment; undone: boolean }[] {
   return (list ?? []).filter((p) => !p.undoes).map((p) => ({ payment: p, undone: !!p.undone_by }));
 }
+
+/** The top of an invoice's page: the figure that matters for its status,
+ * what it is, a line under it and how much of the total is paid (0 to 1). */
+export function invoiceHero(x: { status: string; total_kobo: number; paid_kobo: number; due_kobo: number }): { label: string; kobo: number; sub: string; paid: number } {
+  const paid = x.total_kobo > 0 ? Math.min(1, Math.max(0, x.paid_kobo / x.total_kobo)) : 0;
+  switch (x.status) {
+    case "draft":
+      return { label: "To ask for", kobo: x.total_kobo, sub: "Not sent yet", paid };
+    case "void":
+      return { label: "Void", kobo: x.total_kobo, sub: x.paid_kobo > 0 ? `${naira(x.paid_kobo)} was paid before it was voided` : "It takes no payment", paid };
+    case "paid":
+      return { label: "Paid in full", kobo: x.total_kobo, sub: "Nothing left to pay", paid: 1 };
+    default:
+      return { label: x.status === "overdue" ? "Overdue" : "Still due", kobo: x.due_kobo, sub: `of ${naira(x.total_kobo)} · ${naira(x.paid_kobo)} paid`, paid };
+  }
+}

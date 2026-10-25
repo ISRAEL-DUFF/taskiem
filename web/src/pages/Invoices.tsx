@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import {
   amendmentProblem,
   amendmentRequest,
@@ -46,6 +46,7 @@ import {
   invoiceCustomerLine,
   invoicePath,
   invoiceProblem,
+  invoiceHero,
   invoiceStatus,
   invoicesPath,
   itemTotal,
@@ -497,38 +498,27 @@ export function Invoices() {
         </EmptyState>
       )}
       {invoices && invoices.length > 0 && (
-        <table className="cards">
-          <thead>
-            <tr>
-              <th scope="col">Number</th>
-              <th scope="col">Status</th>
-              <th scope="col">Customer</th>
-              <th scope="col">Total</th>
-              <th scope="col">Still due</th>
-              <th scope="col">Due date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((x) => (
-              <tr key={x.id} data-testid="invoice">
-                <td className="primary" data-label="Number">
-                  <Link to={`/invoices/${encodeURIComponent(x.number)}`}>{x.number}</Link>
-                </td>
-                <td data-label="Status">
-                  <StatusPill status={x.status} />
-                </td>
-                <td data-label="Customer">{invoiceCustomerLine(x.customer)}</td>
-                <td data-label="Total" className="sf-price">
-                  {naira(x.total_kobo)}
-                </td>
-                <td data-label="Still due" className="sf-price">
-                  {x.status === "void" ? <span className="hint">—</span> : naira(x.due_kobo)}
-                </td>
-                <td data-label="Due date">{dateLabel(x.due_on) || <span className="hint">—</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Invoices">
+          {invoices.map((x) => (
+            <Item
+              key={x.id}
+              testid="invoice"
+              to={`/invoices/${encodeURIComponent(x.number)}`}
+              icon="invoices"
+              tone={x.status === "overdue" ? "danger" : x.status === "paid" ? "ok" : x.status === "void" || x.status === "draft" ? "muted" : undefined}
+              title={invoiceCustomerLine(x.customer)}
+              side={naira(x.total_kobo)}
+              sub={
+                <>
+                  {x.number}
+                  {x.due_on ? ` · due ${dateLabel(x.due_on)}` : ""}
+                  {x.status !== "void" && x.status !== "paid" && x.due_kobo !== x.total_kobo ? ` · ${naira(x.due_kobo)} still due` : ""}
+                </>
+              }
+              sideSub={<StatusPill status={x.status} />}
+            />
+          ))}
+        </Items>
       )}
     </>
   );
@@ -822,11 +812,17 @@ export function InvoicePage() {
 
   return (
     <>
-      <PageHeader title={`Invoice ${x?.number ?? id}`} actions={<Link to="/invoices">All invoices</Link>} />
+      <p className="crumbs">
+        <Link to="/invoices" aria-label="Back to Invoices">
+          Invoices
+        </Link>
+      </p>
+      <PageHeader title={`Invoice ${x?.number ?? id}`} />
       <ErrorBox error={error} />
       {!x && !error && <Skeleton rows={4} label="Loading the invoice…" />}
       {x && (
         <>
+          <InvoiceHero invoice={x} />
           {sent && (
             <div className="notice" role="status" data-testid="sent">
               {sentLines(sent).map((l) => (
@@ -942,14 +938,10 @@ export function InvoicePage() {
             ) : (
               <p className="hint">No items.</p>
             )}
-            <dl className="kv" style={{ marginTop: 16 }}>
-              <dt>Total</dt>
-              <dd className="sf-price">{naira(x.total_kobo)}</dd>
-              <dt>Paid</dt>
-              <dd className="sf-price">{naira(x.paid_kobo)}</dd>
-              <dt>Still due</dt>
-              <dd className="sf-price">{x.status === "void" ? "Nothing: it is void" : naira(x.due_kobo)}</dd>
-            </dl>
+            <p className="lines-total">
+              <span>Total</span>
+              <strong className="sf-price">{naira(x.total_kobo)}</strong>
+            </p>
           </section>
 
           {may.amend && <Amend invoice={x} onDone={reload} />}
@@ -1047,6 +1039,38 @@ export function InvoicePage() {
         </>
       )}
     </>
+  );
+}
+
+/** The top of an invoice's page, on pine: what is still due (or what it
+ * was for, once paid or void), how much is paid, the customer and the due date. */
+function InvoiceHero({ invoice: x }: { invoice: CustomerInvoice }) {
+  const h = invoiceHero(x);
+  const pct = Math.round(h.paid * 100);
+  return (
+    <section className="hero" aria-label="What is due" data-testid="invoice-hero">
+      <div className="hero-top">
+        <span className="hero-label">{h.label}</span>
+        <span className="hero-tag">{invoiceStatus(x.status).label}</span>
+      </div>
+      <div className="hero-amount">{naira(h.kobo)}</div>
+      <p className="hero-sub">{h.sub}</p>
+      {x.status !== "draft" && x.status !== "void" && (
+        <div className="hero-bar" role="img" aria-label={`${pct}% paid`}>
+          <span style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      <dl className="hero-foot">
+        <div>
+          <dt>Customer</dt>
+          <dd>{x.customer.name || "—"}</dd>
+        </div>
+        <div>
+          <dt>Due</dt>
+          <dd>{dateLabel(x.due_on) || "No date set"}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

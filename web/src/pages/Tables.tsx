@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { currentAgentSession, del, get, patch, post, put, upload } from "../api";
 import { useAuth } from "../auth";
 import { Help } from "../onboarding";
-import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Item, Items } from "../ui";
 import { Icon } from "../icons";
 import {
   COLUMN_TYPES,
@@ -87,32 +87,27 @@ export function Tables() {
         </EmptyState>
       )}
       {list.data && list.data.tables.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Table</th>
-              <th>Columns</th>
-              <th>Rows</th>
-              <th>Changed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.data.tables.map((t) => (
-              <tr key={t.id}>
-                <td>
-                  <Link to={`/tables/${t.id}`}>{t.title || t.name}</Link>
-                  <div className="hint">
-                    <code>{t.name}</code>
-                    {isKept(t) && " · kept by Taskiem"}
-                  </div>
-                </td>
-                <td>{t.columns.map((c) => c.name).join(", ")}</td>
-                <td>{t.row_count === undefined ? <span className="hint">—</span> : t.row_count.toLocaleString()}</td>
-                <td>{fmtTime(t.updated_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Tables">
+          {list.data.tables.map((t) => (
+            <Item
+              key={t.id}
+              testid="data-table"
+              to={`/tables/${t.id}`}
+              icon="tables"
+              tone={isKept(t) ? "muted" : undefined}
+              title={t.title || t.name}
+              side={t.row_count === undefined ? undefined : t.row_count === 1 ? "1 row" : `${t.row_count.toLocaleString()} rows`}
+              sub={t.columns.map((c) => c.name).join(", ")}
+              sideSub={
+                <>
+                  <code>{t.name}</code>
+                  {isKept(t) && <span>kept by Taskiem</span>}
+                  <span>changed {fmtTime(t.updated_at)}</span>
+                </>
+              }
+            />
+          ))}
+        </Items>
       )}
       {adding && <NewTable onClose={() => setAdding(false)} onDone={() => (setAdding(false), list.reload(), status.reload())} />}
       {can("connection.manage") && status.data && <ProjectSettings status={status.data} tables={list.data?.tables.length ?? 0} onChange={() => (status.reload(), list.reload())} />}

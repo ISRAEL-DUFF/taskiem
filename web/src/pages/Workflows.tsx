@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { WorkflowDefinition } from "@sdk/wd";
 import { get, post, type WorkflowSummary } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Item, Items, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { AIBuilder } from "./AIBuild";
 import { filterWorkflows } from "../lib/lists";
@@ -141,35 +141,28 @@ export function Workflows() {
               No workflow matches these filters.
             </EmptyState>
           ) : (
-            <table className="cards">
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Runs when</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Last 14 days</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((w) => (
-                  <tr key={w.id} className="clickable" onClick={() => nav(`/workflows/${w.id}`)}>
-                    <td className="primary">
-                      <Link to={`/workflows/${w.id}`} onClick={(e) => e.stopPropagation()}>
-                        {w.name}
-                      </Link>
-                      {advanced && (
-                        <div className="hint">
-                          {w.active_version ? `v${w.active_version} live` : "Not published"} · latest v{w.latest_version} · made {fmtTime(w.created_at)}
-                        </div>
-                      )}
-                    </td>
-                    <td data-label="Runs when">{triggerWords(w.trigger)}</td>
-                    <td data-label="Status">{w.active_version ? <span className="badge published">Running</span> : <span className="badge draft">Draft</span>}</td>
-                    <td data-label="Last 14 days">{w.active_version ? <RecentBars days={w.recent ?? []} /> : <span className="hint">Not run yet</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Items label="Workflows">
+              {shown.map((w) => (
+                <Item
+                  key={w.id}
+                  testid="workflow"
+                  to={`/workflows/${w.id}`}
+                  icon={w.active_version ? "bolt" : "workflows"}
+                  tone={w.active_version ? undefined : "muted"}
+                  title={w.name}
+                  sub={triggerWords(w.trigger)}
+                  extra={
+                    advanced && (
+                      <span className="sub">
+                        {w.active_version ? `v${w.active_version} live` : "Not published"} · latest v{w.latest_version} · made {fmtTime(w.created_at)}
+                      </span>
+                    )
+                  }
+                  side={w.active_version ? <RecentBars days={w.recent ?? []} /> : undefined}
+                  sideSub={w.active_version ? <span className="badge published">Running</span> : <span className="badge draft">Draft</span>}
+                />
+              ))}
+            </Items>
           )}
         </>
       )}

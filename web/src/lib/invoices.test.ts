@@ -57,6 +57,7 @@ import {
   type InvoicePayment,
   type MoneyOpenOrder,
   type MoneySuggestion,
+  invoiceHero,
 } from "./invoices";
 
 const can =
@@ -535,5 +536,23 @@ describe("matching money to storefront orders", () => {
     expect(howMatchedOrder("exact")).toBe("Paid through the order's checkout page");
     expect(howMatchedOrder("suggested", "user:ada")).toBe("Suggested, confirmed by user:ada");
     expect(orderPaymentRows(undefined)).toEqual([]);
+  });
+});
+
+describe("invoiceHero", () => {
+  const inv = (status: string, total: number, paid: number) => ({ status, total_kobo: total, paid_kobo: paid, due_kobo: total - paid });
+  it("leads with what is still due, and how much is paid", () => {
+    expect(invoiceHero(inv("part_paid", 2000000, 500000))).toEqual({ label: "Still due", kobo: 1500000, sub: "of ₦20,000 · ₦5,000 paid", paid: 0.25 });
+    expect(invoiceHero(inv("overdue", 100000, 0)).label).toBe("Overdue");
+  });
+  it("says what a draft, a paid and a void invoice are", () => {
+    expect(invoiceHero(inv("draft", 100000, 0))).toMatchObject({ label: "To ask for", kobo: 100000, sub: "Not sent yet" });
+    expect(invoiceHero(inv("paid", 100000, 100000))).toMatchObject({ label: "Paid in full", kobo: 100000, paid: 1 });
+    expect(invoiceHero(inv("void", 100000, 0)).sub).toBe("It takes no payment");
+    expect(invoiceHero(inv("void", 100000, 40000)).sub).toBe("₦400 was paid before it was voided");
+  });
+  it("never shows more than all of it paid, or a share of nothing", () => {
+    expect(invoiceHero(inv("sent", 0, 0)).paid).toBe(0);
+    expect(invoiceHero({ status: "sent", total_kobo: 100, paid_kobo: 150, due_kobo: 0 }).paid).toBe(1);
   });
 });
