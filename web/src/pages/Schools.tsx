@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, patch, post, put } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad, Item, Items, Row } from "../ui";
 import { StudentFeesPanel } from "./SchoolFees";
 import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
 import { StudentReceiptsPanel } from "./SchoolReceipts";
@@ -196,30 +196,21 @@ export function Schools() {
           <p className="hint" data-testid="students-total">
             {list.data?.total === 1 ? "1 student" : `${list.data?.total ?? 0} students`}
           </p>
-          <table className="cards">
-            <thead>
-              <tr>
-                <th scope="col">Admission number</th>
-                <th scope="col">Name</th>
-                <th scope="col">Class</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => (
-                <tr key={s.id} data-testid="student">
-                  <td className="primary" data-label="Admission number">
-                    <Link to={`/schools/students/${s.id}`}>{s.admission_number}</Link>
-                  </td>
-                  <td data-label="Name">{s.name}</td>
-                  <td data-label="Class">{s.class}</td>
-                  <td data-label="Status">
-                    <StatusPill status={s.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Items label="Students">
+            {students.map((st) => (
+              <Item
+                key={st.id}
+                testid="student"
+                to={`/schools/students/${st.id}`}
+                icon="schools"
+                tone={st.status === "active" ? undefined : "muted"}
+                title={st.name}
+                side={<span className="item-sub">{st.class}</span>}
+                sub={st.admission_number}
+                sideSub={<StatusPill status={st.status} />}
+              />
+            ))}
+          </Items>
         </>
       )}
     </>
@@ -685,26 +676,19 @@ export function SchoolClasses() {
         {list === undefined && !classes.error && <Skeleton rows={3} label="Loading classes…" />}
         {list && list.length === 0 && <p className="hint">No classes yet. Add them in order: JSS 1 first, then JSS 2 and up.</p>}
         {list && list.length > 0 && (
-          <table className="cards">
-            <thead>
-              <tr>
-                <th scope="col">Class</th>
-                <th scope="col">Order</th>
-                <th scope="col">Active students</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((c) => (
-                <tr key={c.id} data-testid="class">
-                  <td className="primary" data-label="Class">
-                    <Link to={`/schools?class=${c.id}`}>{c.label}</Link>
-                  </td>
-                  <td data-label="Order">{c.order}</td>
-                  <td data-label="Active students">{c.students}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Items label="Classes">
+            {list.map((c) => (
+              <Item
+                key={c.id}
+                testid="class"
+                to={`/schools?class=${c.id}`}
+                icon="schools"
+                title={c.label}
+                side={c.students === 1 ? "1 student" : `${c.students} students`}
+                sub={`Order ${c.order}`}
+              />
+            ))}
+          </Items>
         )}
         {may.manage && list && <AddClass next={nextOrder(list)} onAdded={classes.reload} />}
       </section>
@@ -822,46 +806,32 @@ function SessionBlock({ session, manage, onChange, onStarted }: { session: Schoo
       <div role="status">{said && <div className="notice">{said}</div>}</div>
       {session.terms.length === 0 && <p className="hint">No terms yet.</p>}
       {session.terms.length > 0 && (
-        <table className="cards">
-          <thead>
-            <tr>
-              <th scope="col">Term</th>
-              <th scope="col">Dates</th>
-              <th scope="col">Fees due</th>
-              <th scope="col">State</th>
-              <th scope="col">Enrolled</th>
-              <th scope="col">Fees</th>
-              {manage && <th scope="col">Start</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {session.terms.map((t: SchoolTerm) => (
-              <tr key={t.id} data-testid="term">
-                <td className="primary" data-label="Term">
-                  {t.name}
-                </td>
-                <td data-label="Dates">
-                  {dateLabel(t.starts_on)} to {dateLabel(t.ends_on)}
-                </td>
-                <td data-label="Fees due">{dateLabel(t.fees_due_on)}</td>
-                <td data-label="State">{termStateWords(t.state)}</td>
-                <td data-label="Enrolled">{t.enrolled}</td>
-                <td data-label="Fees">
-                  <span className="row" style={{ flexWrap: "wrap" }}>
-                    <Link to={`/schools/terms/${t.id}/fees`} aria-label={`Fees for ${t.name} ${session.label}`}>
-                      Fees
-                    </Link>
-                    {t.state !== "planned" && (
-                      <Link to={`/schools/terms/${t.id}/invoices`} aria-label={`Invoices for ${t.name} ${session.label}`}>
-                        Invoices
-                      </Link>
-                    )}
-                  </span>
-                </td>
-                {manage && (
-                  <td data-label="Start">
-                    {t.state === "planned" &&
-                      (confirm === t.id ? (
+        <ul className="items" aria-label={`Terms of ${session.label}`}>
+          {session.terms.map((t: SchoolTerm) => (
+            <Row
+              key={t.id}
+              testid="term"
+              icon="clock"
+              tone={t.state === "current" ? "ok" : t.state === "planned" ? undefined : "muted"}
+              title={t.name}
+              side={<span className="badge muted">{termStateWords(t.state)}</span>}
+              sub={
+                <span className="sub">
+                  {dateLabel(t.starts_on)} to {dateLabel(t.ends_on)} · fees due {dateLabel(t.fees_due_on)} · {t.enrolled === 1 ? "1 enrolled" : `${t.enrolled} enrolled`}
+                </span>
+              }
+            >
+              <Link className="button" to={`/schools/terms/${t.id}/fees`} aria-label={`Fees for ${t.name} ${session.label}`}>
+                Fees
+              </Link>
+              {t.state !== "planned" && (
+                <Link className="button" to={`/schools/terms/${t.id}/invoices`} aria-label={`Invoices for ${t.name} ${session.label}`}>
+                  Invoices
+                </Link>
+              )}
+              {manage &&
+                t.state === "planned" &&
+                (confirm === t.id ? (
                         <span className="row" style={{ flexWrap: "wrap" }}>
                           <button
                             type="button"
@@ -888,12 +858,9 @@ function SessionBlock({ session, manage, onChange, onStarted }: { session: Schoo
                           Start…
                         </button>
                       ))}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </Row>
+          ))}
+        </ul>
       )}
       {confirm && <p className="hint">Starting a term makes it the current one and enrols every active student in their class. The term before becomes past and read-only.</p>}
       <ErrorBox error={act.error} />

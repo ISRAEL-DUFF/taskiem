@@ -226,14 +226,17 @@ export function StorefrontOrder() {
   const o = data?.order;
   return (
     <>
-      <PageHeader
-        title={`${o ? (KIND_LABEL[o.kind] ?? "Order") : "Order"} ${reference}`}
-        actions={<Link to="/storefront/orders">All orders</Link>}
-      />
+      <p className="crumbs">
+        <Link to="/storefront/orders" aria-label="Back to Orders">
+          Orders
+        </Link>
+      </p>
+      <PageHeader title={`${o ? (KIND_LABEL[o.kind] ?? "Order") : "Order"} ${reference}`} />
       <ErrorBox error={error} />
       {!o && !error && <Skeleton rows={4} label="Loading the order…" />}
       {o && (
         <>
+          <OrderHero o={o} />
           {o.status === "refund_due" && (
             <div className="sf-refund-note" role="status">
               {refundLine(o.deposit_kobo ?? o.total_kobo)}
@@ -391,6 +394,34 @@ export function StorefrontOrder() {
         </>
       )}
     </>
+  );
+}
+
+/** The top of an order's or a booking's page, on pine: its total, how it is
+ * paid, the customer and when. Questions and call-backs carry no money and have none. */
+function OrderHero({ o }: { o: Order }) {
+  if (o.kind !== "order" && o.kind !== "booking") return null;
+  const booking = o.kind === "booking";
+  const total = orderTotal(o);
+  return (
+    <section className="hero" aria-label={booking ? "The booking" : "The order"} data-testid="order-hero">
+      <div className="hero-top">
+        <span className="hero-label">{booking ? o.service_name || "Booking" : "Order total"}</span>
+        <span className="hero-tag">{orderStatus(o.status).label}</span>
+      </div>
+      <div className={total.startsWith("₦") ? "hero-amount" : "hero-amount words"}>{total}</div>
+      <p className="hero-sub">{paymentSummary(o)}</p>
+      <dl className="hero-foot">
+        <div>
+          <dt>Customer</dt>
+          <dd>{o.customer.name || "—"}</dd>
+        </div>
+        <div>
+          <dt>{booking ? "When" : "Received"}</dt>
+          <dd>{booking ? (o.starts_at ? whenLabel(o.starts_at) : "—") : relativeAge(o.created_at)}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

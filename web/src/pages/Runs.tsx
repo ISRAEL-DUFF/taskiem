@@ -6,7 +6,7 @@ import { useEnvironments } from "../environments";
 import { Badge, EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { duration } from "../lib/timeline";
-import { dayAfter, dayGroups, dayStart, filterRuns } from "../lib/lists";
+import { dayAfter, dayGroups, dayStart, filterRuns, runLook } from "../lib/lists";
 
 const STATUSES = ["", "running", "waiting", "queued", "needs_reconciliation", "completed", "failed", "cancelled"];
 const FILTERS = ["q", "status", "workflow", "env", "from", "to"];
@@ -164,22 +164,4 @@ export function Runs() {
       )}
     </>
   );
-}
-
-/** A run's icon and its tint, by status. */
-function runLook(status: string): { icon: string; tone?: "warn" | "danger" | "ok" | "info" | "muted" } {
-  switch (status) {
-    case "completed":
-      return { icon: "start", tone: "ok" };
-    case "failed":
-    case "needs_reconciliation":
-      return { icon: "alerts", tone: "danger" };
-    case "waiting":
-      return { icon: "clock", tone: "warn" };
-    case "running":
-    case "queued":
-      return { icon: "runs", tone: "info" };
-    default:
-      return { icon: "close", tone: "muted" };
-  }
 }

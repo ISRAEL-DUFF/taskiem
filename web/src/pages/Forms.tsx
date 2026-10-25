@@ -8,7 +8,7 @@ import { formWorkflow, type AfterAnswer } from "../lib/newform";
 import { get, patch, post } from "../api";
 import { useAuth } from "../auth";
 import { embedSnippet, linksCSV, maskContact, parseRecipients, showAnswer } from "../lib/forms";
-import { Badge, EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 export interface FormInfo {
   id: string;
@@ -353,24 +353,14 @@ function MakeLinks({ form: f, onClose }: { form: FormInfo; onClose: () => void }
               Download CSV
             </a>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Link</th>
-                <th>For</th>
-              </tr>
-            </thead>
-            <tbody>
-              {made.map((l) => (
-                <tr key={l.id}>
-                  <td>
-                    <code className="secret-once">{l.url}</code>
-                  </td>
-                  <td>{l.to ?? "Anyone holding it"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="link-list" aria-label="The links">
+            {made.map((l) => (
+              <li key={l.id}>
+                <code className="secret-once">{l.url}</code>
+                <span className="hint">For {l.to ?? "anyone holding it"}</span>
+              </li>
+            ))}
+          </ul>
           <div className="toolbar">
             <button onClick={onClose}>Done</button>
           </div>
@@ -432,35 +422,32 @@ export function FormSubmissions() {
       {!subs.data && !subs.error && <Skeleton rows={4} label="Loading the answers…" />}
       {subs.data?.submissions.length === 0 && <EmptyState icon="forms">No answers yet.</EmptyState>}
       {subs.data && subs.data.submissions.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Sent</th>
-              <th>Status</th>
-              <th>From</th>
-              <th>Run</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subs.data.submissions.map((s) => (
-              <tr key={s.id}>
-                <td>
-                  <button type="button" className="link" aria-expanded={open === s.id} onClick={() => setOpen(open === s.id ? null : s.id)}>
-                    {s.reference}
-                  </button>
-                </td>
-                <td>{fmtTime(s.created_at)}</td>
-                <td>
-                  <Badge value={s.status} />
-                  {s.note && <div className="hint">{s.note}</div>}
-                </td>
-                <td>{respondentText(s.respondent, s.channel)}</td>
-                <td>{s.run_id ? <Link to={`/runs/${s.run_id}`}>Open the run</Link> : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Answers">
+          {subs.data.submissions.map((s) => (
+            <Row
+              key={s.id}
+              icon="forms"
+              title={s.reference}
+              side={<Badge value={s.status} />}
+              sub={
+                <span className="sub">
+                  {respondentText(s.respondent, s.channel)} · {fmtTime(s.created_at)}
+                  {s.note && <span className="block">{s.note}</span>}
+                </span>
+              }
+              testid="submission"
+            >
+              <button type="button" className="small" aria-expanded={open === s.id} onClick={() => setOpen(open === s.id ? null : s.id)}>
+                See the answers<span className="sr-only"> to {s.reference}</span>
+              </button>
+              {s.run_id && (
+                <Link className="button small" to={`/runs/${s.run_id}`}>
+                  Open the run<span className="sr-only"> for {s.reference}</span>
+                </Link>
+              )}
+            </Row>
+          ))}
+        </Items>
       )}
       {open && <SubmissionDetail id={open} onClose={() => setOpen(null)} />}
     </>

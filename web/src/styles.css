@@ -316,7 +316,17 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-word; }
 
-/* Signed-out pages: one calm card. */
+/* Signed-out pages: the brand on pine, then one card (beside it on a wide screen). */
+body:has(.signed-out) { background: var(--bg); min-height: 100vh; }
+.signed-out { min-height: 100vh; display: flex; flex-direction: column; }
+.auth-side { background: var(--brand); color: #fff; padding: 28px 24px 64px; display: flex; flex-direction: column; gap: 12px; }
+.auth-brand { display: flex; align-items: center; gap: 12px; }
+.auth-brand img { display: block; }
+.auth-wordmark { width: auto; }
+.auth-line { margin: 6px 0 0; font-size: 18px; line-height: 1.35; font-weight: 600; max-width: 30ch; }
+.auth-points { display: none; }
+.auth-main { flex: 1; display: flex; justify-content: center; padding: 0 16px 32px; }
+/* One calm card: the ops console's sign-in, and inside the frame above. */
 body:has(.login) { background: var(--bg); min-height: 100vh; }
 .login { max-width: 400px; margin: 12vh auto; padding: 32px 32px 28px; border-radius: 16px; box-shadow: var(--shadow-lg); border-color: var(--border); }
 .login::before {
@@ -328,6 +338,23 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
 .login h1 { font-size: 22px; margin-bottom: 22px; }
 .login button.primary, .login button[type="submit"] { min-height: 40px; width: 100%; }
 .login p a { display: inline-block; padding: 4px 0; }
+.auth-main .login { width: 100%; max-width: 420px; margin: -40px 0 0; align-self: flex-start; padding: 28px 24px 24px; border-radius: 24px; }
+.auth-main .login::before { content: none; }
+.auth-main .login h1 { font-size: 24px; margin-bottom: 20px; letter-spacing: -0.01em; }
+.auth-main .login button:not(.link), .auth-main .login input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+.auth-main > .skeleton { width: 100%; max-width: 420px; margin-top: 24px; }
+@media (min-width: 900px) {
+  .signed-out { flex-direction: row; }
+  .auth-side { width: 44%; max-width: 560px; padding: 48px 56px; justify-content: center; gap: 20px; }
+  .auth-brand img:first-child { width: 48px; height: 48px; }
+  .auth-wordmark { height: 28px; }
+  .auth-line { font-size: 30px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
+  .auth-points { display: grid; gap: 12px; list-style: none; margin: 8px 0 0; padding: 0; font-size: 15px; color: rgba(255, 255, 255, 0.85); }
+  .auth-points li { display: flex; gap: 10px; align-items: center; }
+  .auth-points li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-dark); flex: none; }
+  .auth-main { align-items: center; padding: 48px 32px; }
+  .auth-main .login { margin: 0; align-self: center; padding: 36px 36px 30px; }
+}
 .modal-backdrop { position: fixed; inset: 0; background: rgba(14, 15, 12, 0.32); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 50; animation: fade-in 0.12s ease-out; }
 .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; width: min(560px, 92vw); max-height: 86vh; overflow: auto; box-shadow: var(--shadow-lg); animation: pop-in 0.16s ease-out; }
 .modal h2:first-child { font-size: 17px; }
@@ -368,7 +395,6 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
 .skeleton-row span { height: 9px; border-radius: 999px; background: linear-gradient(90deg, var(--code-bg) 25%, var(--panel-2) 50%, var(--code-bg) 75%); background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; }
 .skeleton-row span:nth-child(2) { width: 70%; }
 .skeleton-row span:nth-child(3) { width: 50%; }
-.signed-out > .skeleton { max-width: 400px; margin: 12vh auto; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton-row span { animation: none; } }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
@@ -1259,3 +1285,64 @@ th { background: var(--panel-2); }
 .empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
 .empty-icon svg { width: 26px; height: 26px; }
 .empty-state { gap: 14px; }
+/* Rows with their own buttons (Row in ui.tsx): members, channels, keys. */
+.items > li.act-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; }
+.act-row .list-icon { font-weight: 700; font-size: 16px; }
+.act-row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.act-row .title { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.act-row .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.row-actions button, .row-actions .button { min-height: 36px; border-radius: 999px; }
+.card > .items, .card > section > .items { margin-top: 4px; }
+@media (max-width: 860px) { .items > li.act-row { padding: 14px 16px; gap: 12px; } }
+.switch-label { margin: 0; font-size: 13px; font-weight: 500; flex: none; }
+.act-row .perms { margin-top: 4px; }
+.alert-row { padding: 12px 0; border-top: 1px solid var(--border); }
+.act-row .audit-detail { max-width: none; white-space: normal; }
+
+/* A page's own pine card (an invoice's or an order's money), as Home's money card. */
+.hero { background: var(--brand); color: #fff; border-radius: 24px; padding: 20px 20px 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 2px; }
+.hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hero-label { font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, 0.8); }
+.hero-tag { font-size: 12px; font-weight: 700; background: var(--brand-dark); color: var(--brand-dark-text); border-radius: 999px; padding: 3px 10px; }
+.hero-amount { font-size: 40px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.hero-sub { margin: 0; font-size: 13px; color: rgba(255, 255, 255, 0.8); }
+.hero-bar { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); margin-top: 14px; overflow: hidden; }
+.hero-bar span { display: block; height: 100%; border-radius: inherit; background: var(--brand-dark); }
+.hero-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.hero-foot dt { font-size: 12px; color: rgba(255, 255, 255, 0.75); }
+.hero-foot dd { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.hero-foot a { color: inherit; }
+@media (min-width: 900px) { .hero { padding: 24px 28px 20px; } .hero-amount { font-size: 48px; } }
+
+/* A run's page: a card with its status, then its actions. */
+.run-card { background: var(--panel); border: 1px solid var(--border); border-radius: 24px; padding: 20px; margin-bottom: 12px; }
+.run-card-head { display: flex; gap: 14px; align-items: flex-start; }
+.list-icon.big { width: 52px; height: 52px; border-radius: 16px; }
+.list-icon.big svg { width: 24px; height: 24px; }
+.run-card-name { flex: 1; min-width: 0; }
+.run-card-title { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.run-card-title h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.run-card .run-summary { margin: 4px 0 0; }
+.run-steps { margin: 14px 0 0; padding: 10px 14px; background: var(--bg); border-radius: 12px; font-size: 14px; }
+.run-facts { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.run-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 20px; }
+.lines-total { display: flex; justify-content: space-between; gap: 12px; margin: 12px 0 0; padding: 0 16px; font-size: 16px; }
+.hero-amount.words { font-size: 28px; }
+
+/* Get started: numbered steps, a tick when done, the action as a button. */
+.checklist li { padding: 16px 18px; }
+.checklist .check { width: 28px; height: 28px; font-size: 13px; font-weight: 700; color: var(--muted); border: 1.5px solid var(--border-strong); }
+.checklist li.done .check { color: #fff; }
+.checklist li .list-icon { width: 36px; height: 36px; border-radius: 10px; }
+.checklist .button.small, .checklist button.small { min-height: 36px; padding: 6px 14px; font-size: 14px; display: inline-flex; align-items: center; }
+.hero-next { margin-top: 10px; }
+@media (max-width: 640px) { .checklist li > .button.small, .checklist li > button.small { margin-left: 42px; } }
+.sub .block { display: block; }
+.link-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.link-list li { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+.link-list code { overflow-wrap: anywhere; }
+.row-actions .sf-row-actions { justify-content: flex-start; }
+.row-actions .sf-row-actions button { min-height: 36px; border-radius: 999px; padding: 6px 14px; font-size: 14px; }
+.switch-line { display: inline-flex; gap: 8px; align-items: center; min-height: 36px; padding: 4px 12px 4px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 14px; cursor: pointer; }
+.switch-line input { width: auto; margin: 0; }

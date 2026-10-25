@@ -34,6 +34,15 @@ test("the console is installable", async ({ page }) => {
   }
 });
 
+test("the signed-out pages show the brand above the card, and fit the phone", async ({ page }) => {
+  for (const path of ["/login", "/signup", "/forgot-password"]) {
+    await page.goto(path);
+    await expect(page.locator(".auth-side").getByRole("img", { name: "Taskiem" })).toBeVisible();
+    await expect(page.locator(".auth-main .login")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBeLessThanOrEqual(390);
+  }
+});
+
 test("the tab bar, tabs on one line and folded descriptions", async ({ page }) => {
   await signIn(page);
   const quick = page.getByRole("navigation", { name: "Quick" });
@@ -95,10 +104,43 @@ test("an approval is decided from Home in a confirm sheet", async ({ page }) => 
   await expect(sheet).toBeVisible();
   // The sheet shows what is being approved: the decision records it.
   await expect(sheet).toContainText("Kunle Supplies");
+  // It names no account, so nothing says it is a first payment.
+  await expect(sheet.getByRole("note")).toHaveCount(0);
   await sheet.getByRole("button", { name: "Confirm" }).click();
   await expect(sheet).toHaveCount(0);
   await expect(needs.getByRole("button", { name: "Approve Pay Kunle Supplies" })).toHaveCount(0);
   await expect.poll(async () => ((await api("GET", `/v1/runs/${String(run.run_id)}`)).run as { status: string }).status).toBe("completed");
+});
+
+test("an approval to pay a new account says it is the first payment", async ({ page }) => {
+  const email = `owner-${Date.now()}@firstpay.test`;
+  const up = await page.request.post("/v1/signup", { headers: { "X-Taskiem-Request": "1" }, data: { tenant: "First Pay Stores", email, name: "Owner", password: "correct horse battery" } });
+  expect(up.status(), await up.text()).toBe(201);
+  const api = async (method: string, path: string, data?: unknown) => {
+    const r = await page.request.fetch(path, { method, data, headers: { "X-Taskiem-Request": "1" } });
+    expect(r.ok(), `${method} ${path}: ${r.status()} ${await r.text()}`).toBeTruthy();
+    return (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  };
+  const wf = await api("POST", "/v1/workflows", {
+    name: "Pay a new supplier",
+    definition: {
+      schema: "wd/v1", id: "wf_payNewSupplier", version: 1, name: "Pay a new supplier", trigger: { type: "manual" },
+      steps: [{ id: "ok", name: "Pay Tola Fabrics", type: "approval", config: { role: "owner", subject: { amount_kobo: 7500000, account_name: "Tola Fabrics", account_number: "0123456789", bank_code: "058" } } }],
+    },
+  });
+  await api("POST", `/v1/workflows/${String(wf.id)}/versions/1/publish`);
+  await api("POST", `/v1/workflows/${String(wf.id)}/runs`, { input: {} });
+
+  await page.goto("/approvals");
+  await expect(page.getByTestId("approval").filter({ hasText: "Pay Tola Fabrics" })).toContainText("First payment to this account");
+
+  await page.goto("/home");
+  const needs = page.getByRole("region", { name: "Needs you" });
+  await expect(needs).toContainText("First payment to this account");
+  await needs.getByRole("button", { name: "Approve Pay Tola Fabrics" }).click();
+  const sheet = page.getByRole("dialog", { name: "Approve" });
+  await expect(sheet.getByRole("note")).toContainText("Your business has not paid it before");
+  await sheet.getByRole("button", { name: "Cancel" }).click();
 });
 
 test("Home's money card and Money's week, from the money log", async ({ page }) => {
@@ -161,6 +203,10 @@ test("Activity, Workflows and Invoices are lists of rows that open the item", as
   await expect(row.locator(".list-icon.ok")).toBeVisible();
   await row.getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`/runs/${String(run.run_id)}$`));
+  // The run's card: its status, and its steps by how they stand.
+  const card = page.getByRole("region", { name: "Daily tally" });
+  await expect(card.locator("h1 + .badge")).toHaveText("completed");
+  await expect(card).toContainText("Steps: 1 done");
 
   // Workflows: the live one, running, opens its editor.
   await page.getByRole("navigation", { name: "Quick" }).getByRole("link", { name: "Workflows" }).click();
@@ -175,4 +221,10 @@ test("Activity, Workflows and Invoices are lists of rows that open the item", as
   await expect(inv).toContainText("₦185,000");
   await expect(inv).toContainText("Draft");
   await expect(inv.getByRole("link")).toHaveAttribute("href", /^\/invoices\/INV-/);
+  // Its page leads with what it asks for, on pine.
+  await inv.getByRole("link").click();
+  const hero = page.getByTestId("invoice-hero");
+  await expect(hero).toContainText("To ask for");
+  await expect(hero).toContainText("₦185,000");
+  await expect(hero).toContainText("Not sent yet");
 });

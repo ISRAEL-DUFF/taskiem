@@ -95,7 +95,8 @@ test("an owner builds a members form in the canvas, finds it on Forms and fills 
   // Its answers are on the Forms page, with the run.
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Forms", exact: true }).click();
   await page.getByRole("article", { name: "Leave request" }).first().getByRole("link", { name: "See the answers" }).click();
-  await expect(page.getByRole("button", { name: ref })).toBeVisible();
-  await page.getByRole("button", { name: ref }).click();
+  const row = page.getByTestId("submission").filter({ hasText: ref });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: `See the answers to ${ref}` }).click();
   await expect(page.getByRole("dialog").getByText("Family wedding in Enugu")).toBeVisible();
 });

@@ -115,7 +115,24 @@ function Shell() {
   const loc = useLocation();
   const agentSession = useAgentSession();
   // Signed-out pages are a single card; it is the page's main landmark.
-  const alone = (page: ReactNode) => <main className="signed-out">{page}</main>;
+  // Signed out: the brand on pine beside (on a phone, above) one card.
+  const alone = (page: ReactNode) => (
+    <div className="signed-out">
+      <aside className="auth-side">
+        <div className="auth-brand">
+          <img src={brandFile("mark.svg")} alt="" width={40} height={40} />
+          <img className="auth-wordmark" src={brandFile("wordmark-reversed.svg")} alt="Taskiem" height={22} />
+        </div>
+        <p className="auth-line">Orders, payments and approvals for your business, in one place.</p>
+        <ul className="auth-points">
+          <li>Send invoices and see when they are paid</li>
+          <li>Take orders and bookings on your own page</li>
+          <li>Approve payments from your phone</li>
+        </ul>
+      </aside>
+      <main className="auth-main">{page}</main>
+    </div>
+  );
   // Password recovery works signed in or out.
   if (loc.pathname === "/forgot-password") return alone(<ForgotPassword />);
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);

@@ -25,9 +25,15 @@ Taskiem's icon, a lime "t" on dark green, is now on your home screen. You stay s
 
 **Orders, Workflows, Activity and Invoices** are lists you tap: each row shows who or what it is, the amount or time, and its status, and opens the order, workflow, run or invoice. Activity puts today's runs first, then yesterday's; the workflow, environment and date filters are under **More filters**.
 
+**An invoice or an order** opens on a green card with what is still due (or its total), how much is paid, the customer and the date. **A run** opens on a card with its status and how its steps stand, such as "1 done · 1 waiting". The link at the top of each goes back to its list.
+
+**Get started** shows how much of your setup is done and the next step, with each step's button beside it.
+
 ## Approving from Home
 
 When a payment or another step waits for your approval, it shows under **Needs you** on Home with an **Approve** button. Pressing it opens a sheet showing exactly what you are approving: the amount, who it goes to and their account, when the workflow says them. Check it, then press **Confirm** (or confirm with your passkey if your business asks for one). To reject, or to see more about the request, press the row itself to open **Approvals**.
+
+If the payment is to a bank account your business has never paid through Taskiem, the row says **First payment to this account** and the sheet asks you to check the account number and name with the person you are paying first. A changed account number is a common way money goes to the wrong person.
 
 ## The colours
 
