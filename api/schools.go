@@ -58,6 +58,23 @@ var bursarRole = struct {
 	Permissions       []string
 }{"bursar", "Runs the fees office: students, families, classes and terms, and invoices", []string{PermInvoiceManage, PermInvoiceRead, PermSchoolManage, PermSchoolRead}}
 
+// EnsureBursarRole adds the Bursar custom role to a tenant, in tx (the
+// tenant's scope), unless a role or membership has its name already; it
+// reports whether it was added. The web app's switch and the demo school
+// use it.
+func EnsureBursarRole(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, by string) (bool, error) {
+	var taken bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1) OR EXISTS (SELECT 1 FROM memberships WHERE role = $1)`, bursarRole.Name).Scan(&taken); err != nil || taken {
+		return false, err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO roles (tenant_id, name, description, permissions, created_by) VALUES ($1, $2, $3, $4, $5)`,
+		tenant, bursarRole.Name, bursarRole.Description, bursarRole.Permissions, by)
+	return err == nil, err
+}
+
+// BursarRoleName is the Bursar custom role's name.
+const BursarRoleName = "bursar"
+
 // schoolRoutes mounts /v1/schools inside the authenticated group.
 func (s *Server) schoolRoutes(r chi.Router) {
 	read, manage := s.need(PermSchoolRead), s.need(PermSchoolManage)
@@ -270,15 +287,11 @@ func (s *Server) putSchoolSettings(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if addBursar {
-			var taken bool
-			if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1) OR EXISTS (SELECT 1 FROM memberships WHERE role = $1)`, bursarRole.Name).Scan(&taken); err != nil {
+			added, err := EnsureBursarRole(r.Context(), tx, p.TenantID, p.Actor())
+			if err != nil {
 				return err
 			}
-			if !taken {
-				if _, err := tx.Exec(r.Context(), `INSERT INTO roles (tenant_id, name, description, permissions, created_by) VALUES ($1, $2, $3, $4, $5)`,
-					p.TenantID, bursarRole.Name, bursarRole.Description, bursarRole.Permissions, p.Actor()); err != nil {
-					return err
-				}
+			if added {
 				if err := auditTx(r, tx, "role.put", bursarRole.Name, map[string]any{"permissions": bursarRole.Permissions, "before": nil, "template": "schools"}); err != nil {
 					return err
 				}
