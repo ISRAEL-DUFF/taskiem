@@ -24,9 +24,10 @@ async function axeBoth(page: Page, where: string) {
 test("debtors are aged, reminded by the ladder, promises kept or missed, and a plan in arrears shown", async ({ page, browser }) => {
   test.setTimeout(300_000);
   await familySchool(page, "Chase Family Academy");
-  // The fees were due last month: the term's date and the invoices' follow.
-  sql(`UPDATE school_terms SET fees_due_on = current_date - 20 WHERE id IN (SELECT t.id FROM school_terms t JOIN tenants x ON x.id = t.tenant_id WHERE x.name = 'Chase Family Academy')`);
-  sql(`UPDATE customer_invoices SET due_on = current_date - 20, updated_at = now() WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Chase Family Academy')`);
+  // The fees were due last month: the term's date and the invoices' follow,
+  // in Lagos days, as the server ages them (the test database runs in UTC).
+  sql(`UPDATE school_terms SET fees_due_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 20 WHERE id IN (SELECT t.id FROM school_terms t JOIN tenants x ON x.id = t.tenant_id WHERE x.name = 'Chase Family Academy')`);
+  sql(`UPDATE customer_invoices SET due_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 20, updated_at = now() WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Chase Family Academy')`);
 
   // The owner's wording: a placeholder that does not exist is refused, a
   // good one previewed and saved.
@@ -108,7 +109,7 @@ test("debtors are aged, reminded by the ladder, promises kept or missed, and a p
 
   // The instalment's date passes unpaid: the check marks it, and the plan
   // is in arrears on Debtors and on the student's page.
-  sql(`UPDATE school_plan_requests SET decided_instalments = jsonb_build_array(jsonb_build_object('amount_kobo', 5000000, 'due_on', (current_date - 3)::text))
+  sql(`UPDATE school_plan_requests SET decided_instalments = jsonb_build_array(jsonb_build_object('amount_kobo', 5000000, 'due_on', ((now() AT TIME ZONE 'Africa/Lagos')::date - 3)::text))
     WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Chase Family Academy')`);
   await page.getByRole("button", { name: "Check promises and plans now" }).click();
   await expect(page.getByText("Checked: 0 promises missed, 0 kept, 1 instalment newly in arrears.")).toBeVisible();
