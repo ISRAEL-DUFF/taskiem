@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof } from "../passkeys";
-import { ErrorBox, Field, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, Items, PageHeader, Row, fmtTime, useAction, useLoad } from "../ui";
 import { ChangePassword } from "./Password";
 import { savedTheme, setTheme, type Theme } from "../theme";
 
@@ -49,38 +49,32 @@ export function Passkeys({ onAdded }: { onAdded?: () => void }) {
       <p className="hint">A passkey signs you in with your device's fingerprint, face or PIN, and cannot be phished. It also answers step-up on approvals.</p>
       <ErrorBox error={list.error ?? act.error} />
       {list.data && list.data.passkeys.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Added</th>
-              <th>Last used</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.data.passkeys.map((k) => (
-              <tr key={k.id}>
-                <td>
-                  {k.name} {k.synced && <span className="hint">synced</span>}
-                </td>
-                <td>{fmtTime(k.created_at)}</td>
-                <td>{fmtTime(k.last_used_at)}</td>
-                <td>
-                  <button
-                    className="danger"
-                    onClick={() =>
-                      confirm(`Remove ${k.name}?`) &&
-                      void act.run(async () => (await del(`/v1/me/passkeys/${k.id}`, await proof(me?.factors, typed, `passkey.remove/${k.id}`)), setTyped(""), list.reload(), await refresh()), "Passkey removed")
-                    }
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Passkeys">
+          {list.data.passkeys.map((k) => (
+            <Row
+              key={k.id}
+              icon="lock"
+              title={k.name}
+              side={k.synced ? <span className="hint">synced</span> : undefined}
+              sub={
+                <span className="sub">
+                  Added {fmtTime(k.created_at)} · last used {fmtTime(k.last_used_at)}
+                </span>
+              }
+              testid="passkey"
+            >
+              <button
+                className="danger"
+                onClick={() =>
+                  confirm(`Remove ${k.name}?`) &&
+                  void act.run(async () => (await del(`/v1/me/passkeys/${k.id}`, await proof(me?.factors, typed, `passkey.remove/${k.id}`)), setTyped(""), list.reload(), await refresh()), "Passkey removed")
+                }
+              >
+                Remove
+              </button>
+            </Row>
+          ))}
+        </Items>
       )}
       {passkeysSupported() ? (
         <div className="row" style={{ alignItems: "flex-end" }}>
@@ -337,32 +331,25 @@ export function Invitations({ always = false, onJoined }: { always?: boolean; on
     <section className="card" data-testid="my-invitations">
       <h2 style={{ marginTop: 0 }}>Invitations</h2>
       <ErrorBox error={act.error} />
-      <table>
-        <tbody>
-          {(list.data?.invitations ?? []).map((i) => (
-            <tr key={i.tenant_id}>
-              <td>{i.tenant}</td>
-              <td>{i.roles.join(", ")}</td>
-              <td>{fmtTime(i.invited_at)}</td>
-              <td>
-                <button
-                  className="primary"
-                  disabled={act.busy}
-                  onClick={() => void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/accept`), onJoined ? onJoined() : list.reload()), "Joined")}
-                >
-                  Accept
-                </button>{" "}
-                <button
-                  disabled={act.busy}
-                  onClick={() => confirm(`Decline the invitation from ${i.tenant}?`) && void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/decline`), list.reload()), "Invitation declined")}
-                >
-                  Decline
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Items label="Invitations">
+        {(list.data?.invitations ?? []).map((i) => (
+          <Row key={i.tenant_id} letter={i.tenant} title={i.tenant} sub={<span className="sub">{i.roles.join(", ")} · invited {fmtTime(i.invited_at)}</span>} testid="my-invitation">
+            <button
+              className="primary"
+              disabled={act.busy}
+              onClick={() => void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/accept`), onJoined ? onJoined() : list.reload()), "Joined")}
+            >
+              Accept
+            </button>
+            <button
+              disabled={act.busy}
+              onClick={() => confirm(`Decline the invitation from ${i.tenant}?`) && void act.run(async () => (await post(`/v1/me/invitations/${i.tenant_id}/decline`), list.reload()), "Invitation declined")}
+            >
+              Decline
+            </button>
+          </Row>
+        ))}
+      </Items>
       <p className="hint">Once accepted, choose the organisation when you sign in.</p>
     </section>
   );

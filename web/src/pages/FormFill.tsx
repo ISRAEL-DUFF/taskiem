@@ -6,7 +6,7 @@ import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import { FormView } from "../forms/FormView";
 import type { FormAfter, FormPage, FormSchema } from "../lib/forms";
-import { EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import type { FormSubmission } from "./Forms";
 
 interface MemberFormDoc {
@@ -149,29 +149,24 @@ export function FormRequests() {
       {!data && !error && <Skeleton rows={3} />}
       {data?.requests.length === 0 && <EmptyState icon="forms">Nothing to fill in.</EmptyState>}
       {data && data.requests.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Form</th>
-              <th>For</th>
-              <th>Asked</th>
-              <th>Until</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.requests.map((r) => (
-              <tr key={r.id}>
-                <td>
-                  <Link to={`/forms/requests/${r.id}`}>{r.title}</Link>
-                  {r.description && <div className="hint">{r.description}</div>}
-                </td>
-                <td>{r.role}</td>
-                <td>{fmtTime(r.created_at)}</td>
-                <td>{fmtTime(r.expires_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="To fill in">
+          {data.requests.map((r) => (
+            <Item
+              key={r.id}
+              to={`/forms/requests/${r.id}`}
+              icon="forms"
+              tone="warn"
+              title={r.title}
+              sub={
+                <>
+                  {r.description && <span className="block">{r.description}</span>}
+                  For {r.role} · asked {fmtTime(r.created_at)} · until {fmtTime(r.expires_at)}
+                </>
+              }
+              testid="form-request"
+            />
+          ))}
+        </Items>
       )}
     </>
   );

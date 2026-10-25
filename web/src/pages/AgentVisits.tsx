@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { get, post } from "../api";
 import { agentCodeOK, endReason, visitHours } from "../lib/agent";
-import { Badge, ErrorBox, Field, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, ErrorBox, Field, Items, Modal, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 interface Visit {
   id: string;
@@ -39,51 +39,34 @@ export function AgentVisits() {
       {!visits.data && !visits.error && <Skeleton rows={2} />}
       {visits.data && list.length === 0 && <p className="hint">No agent has worked on this organisation.</p>}
       {list.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Agent</th>
-              <th>Kind</th>
-              <th>Status</th>
-              <th>Started</th>
-              <th>Until</th>
-              <th>How it ended</th>
-              <th>
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((v) => (
-              <tr key={v.id}>
-                <td>
-                  {v.agent_name}
-                  <div className="hint">{v.agent_code}</div>
-                </td>
-                <td>{v.kind === "support" ? "Support visit" : "Sign-up"}</td>
-                <td>
-                  <Badge value={v.status} />
-                </td>
-                <td>{fmtTime(v.consent_at ?? v.created_at)}</td>
-                <td>{fmtTime(v.ended_at ?? v.expires_at)}</td>
-                <td>{v.status === "ended" ? endReason(v.end_reason) : "—"}</td>
-                <td>
-                  {v.status !== "ended" && (
-                    <button
-                      className="danger"
-                      disabled={act.busy}
-                      onClick={() =>
-                        confirm(`End ${v.agent_name}'s session now?`) && void act.run(async () => (await post(`/v1/agent-visits/${v.id}/end`), visits.reload()), "Visit ended")
-                      }
-                    >
-                      End
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Agent visits">
+          {list.map((v) => (
+            <Row
+              key={v.id}
+              letter={v.agent_name}
+              tone={v.status === "ended" ? "muted" : "warn"}
+              title={v.agent_name}
+              side={<Badge value={v.status} />}
+              sub={
+                <span className="sub">
+                  {v.kind === "support" ? "Support visit" : "Sign-up"} · {v.agent_code} · from {fmtTime(v.consent_at ?? v.created_at)} until {fmtTime(v.ended_at ?? v.expires_at)}
+                  {v.status === "ended" && <span className="block">{endReason(v.end_reason)}</span>}
+                </span>
+              }
+              testid="agent-visit"
+            >
+              {v.status !== "ended" && (
+                <button
+                  className="danger"
+                  disabled={act.busy}
+                  onClick={() => confirm(`End ${v.agent_name}'s session now?`) && void act.run(async () => (await post(`/v1/agent-visits/${v.id}/end`), visits.reload()), "Visit ended")}
+                >
+                  End
+                </button>
+              )}
+            </Row>
+          ))}
+        </Items>
       )}
       {inviting && <InviteAgent onClose={() => setInviting(false)} onDone={() => (setInviting(false), visits.reload())} />}
     </>

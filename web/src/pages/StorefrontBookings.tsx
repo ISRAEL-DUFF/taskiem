@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import { isKept, type Table } from "../lib/tables";
 import { DAYS, MAX_OPENINGS, columnsFor, thumb, tidy, type Storefront as SF } from "../lib/storefront";
 import { customerLine, orderStatus, type Order } from "../lib/orders";
@@ -137,46 +137,35 @@ function BookingList() {
       {groups?.map((g) => (
         <div key={g.day} className="sf-booking-day">
           <h3 id={`sf-day-${g.day}`}>{g.label}</h3>
-          <table className="cards" aria-labelledby={`sf-day-${g.day}`}>
-            <thead>
-              <tr>
-                <th scope="col">Time</th>
-                <th scope="col">Service</th>
-                <th scope="col">Customer</th>
-                <th scope="col">Status</th>
-                <th scope="col">Reference</th>
-                <th scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.bookings.map((b) => (
-                <tr key={b.id} data-testid="booking">
-                  <td className="primary" data-label="Time">
-                    {timeSpan(b)}
-                  </td>
-                  <td data-label="Service">{b.service_name || <span className="hint">—</span>}</td>
-                  <td data-label="Customer">{customerLine(b.customer)}</td>
-                  <td data-label="Status">
-                    <StatusBadge status={b.status} />
-                  </td>
-                  <td data-label="Reference">
-                    <Link to={`/storefront/orders/${encodeURIComponent(b.reference)}`}>{b.reference}</Link>
-                  </td>
-                  <td data-label="Actions">
-                    <BookingActions
-                      booking={b}
-                      onChanged={(msg) => {
-                        setNotice(msg);
-                        list.reload();
-                      }}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Items label={g.label}>
+            {g.bookings.map((b) => (
+              <Row
+                key={b.id}
+                testid="booking"
+                icon="clock"
+                tone={b.status === "cancelled" ? "muted" : undefined}
+                title={
+                  <>
+                    {timeSpan(b)} · {b.service_name || "Booking"}
+                  </>
+                }
+                side={<StatusBadge status={b.status} />}
+                sub={
+                  <span className="sub">
+                    {customerLine(b.customer)} · <Link to={`/storefront/orders/${encodeURIComponent(b.reference)}`}>{b.reference}</Link>
+                  </span>
+                }
+              >
+                <BookingActions
+                  booking={b}
+                  onChanged={(msg) => {
+                    setNotice(msg);
+                    list.reload();
+                  }}
+                />
+              </Row>
+            ))}
+          </Items>
         </div>
       ))}
     </section>

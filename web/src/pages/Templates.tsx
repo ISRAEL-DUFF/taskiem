@@ -356,7 +356,7 @@ function categoryIcon(category: string): string {
 }
 
 /** What a template uses, by name ("Gmail · Moniepoint pos"); what a step needs of a kind of account is shown under Advanced only. */
-function usesWords(connectors: string[], advanced: boolean): string {
+export function usesWords(connectors: string[], advanced: boolean): string {
   return connectors
     .filter((c) => advanced || !c.startsWith("capability:"))
     .map((c) => c.split("@")[0] ?? c)

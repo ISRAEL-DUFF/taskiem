@@ -1,6 +1,6 @@
 import { del, get, post } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Items, Row, fmtTime, useAction, useLoad } from "../ui";
 import { Copy } from "./Forms";
 
 interface ReachChannel {
@@ -83,51 +83,42 @@ export function PeopleYouMessage() {
       )}
       <ErrorBox error={act.error} />
       {v.contacts.length > 0 && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Phone</th>
-              <th>Gets updates on</th>
-              <th>Since</th>
-              {can("workflow.publish") && (
-                <th>
-                  <span className="sr-only">Remove</span>
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {v.contacts.map((c) => (
-              <tr key={c.id}>
-                <td>{c.phone}</td>
-                <td>
-                  {c.channels.map((ch) => (
-                    <div key={ch.channel}>
+        <Items label="People you message">
+          {v.contacts.map((c) => (
+            <Row
+              key={c.id}
+              icon="inbox"
+              title={c.phone}
+              sub={
+                <span className="sub">
+                  {c.channels.map((ch, i) => (
+                    <span key={ch.channel}>
+                      {i > 0 && " · "}
                       {APP[ch.channel]}
-                      {ch.stopped_at && <span className="hint"> (stopped {fmtTime(ch.stopped_at)})</span>}
-                    </div>
-                  ))}
-                </td>
-                <td>{fmtTime(c.created_at)}</td>
-                {can("workflow.publish") && (
-                  <td>
-                    <button
-                      type="button"
-                      className="small danger"
-                      disabled={act.busy}
-                      onClick={() =>
-                        confirm(`Stop messaging ${c.phone} on chat apps? Your workflows text them instead.`) &&
-                        void act.run(async () => (await del(`/v1/reach/contacts/${c.id}`), view.reload()), "Removed")
-                      }
-                    >
-                      Remove
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      {ch.stopped_at && ` (stopped ${fmtTime(ch.stopped_at)})`}
+                    </span>
+                  ))}{" "}
+                  · since {fmtTime(c.created_at)}
+                </span>
+              }
+              testid="reach-contact"
+            >
+              {can("workflow.publish") && (
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={act.busy}
+                  onClick={() =>
+                    confirm(`Stop messaging ${c.phone} on chat apps? Your workflows text them instead.`) &&
+                    void act.run(async () => (await del(`/v1/reach/contacts/${c.id}`), view.reload()), "Removed")
+                  }
+                >
+                  Remove
+                </button>
+              )}
+            </Row>
+          ))}
+        </Items>
       )}
       {on && v.contacts.length === 0 && <p className="hint">Nobody has asked for your updates on a chat app yet.</p>}
     </section>

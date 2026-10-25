@@ -50,7 +50,7 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   await signIn(page, bob);
   const mine = page.getByTestId("my-invitations");
   await expect(page.getByText("You do not belong to an organisation on Taskiem yet")).toBeVisible();
-  await expect(mine.getByRole("cell", { name: "E2E" })).toBeVisible();
+  await expect(mine.getByTestId("my-invitation").filter({ hasText: "E2E" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
   expect((await page.request.get("/v1/workflows")).status()).toBe(403);
   await mine.getByRole("button", { name: "Accept" }).click();

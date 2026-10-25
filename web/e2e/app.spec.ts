@@ -34,6 +34,15 @@ test("the console is installable", async ({ page }) => {
   }
 });
 
+test("the signed-out pages show the brand above the card, and fit the phone", async ({ page }) => {
+  for (const path of ["/login", "/signup", "/forgot-password"]) {
+    await page.goto(path);
+    await expect(page.locator(".auth-side").getByRole("img", { name: "Taskiem" })).toBeVisible();
+    await expect(page.locator(".auth-main .login")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), path).toBeLessThanOrEqual(390);
+  }
+});
+
 test("the tab bar, tabs on one line and folded descriptions", async ({ page }) => {
   await signIn(page);
   const quick = page.getByRole("navigation", { name: "Quick" });
@@ -194,6 +203,10 @@ test("Activity, Workflows and Invoices are lists of rows that open the item", as
   await expect(row.locator(".list-icon.ok")).toBeVisible();
   await row.getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`/runs/${String(run.run_id)}$`));
+  // The run's card: its status, and its steps by how they stand.
+  const card = page.getByRole("region", { name: "Daily tally" });
+  await expect(card.locator("h1 + .badge")).toHaveText("completed");
+  await expect(card).toContainText("Steps: 1 done");
 
   // Workflows: the live one, running, opens its editor.
   await page.getByRole("navigation", { name: "Quick" }).getByRole("link", { name: "Workflows" }).click();
@@ -208,4 +221,10 @@ test("Activity, Workflows and Invoices are lists of rows that open the item", as
   await expect(inv).toContainText("₦185,000");
   await expect(inv).toContainText("Draft");
   await expect(inv.getByRole("link")).toHaveAttribute("href", /^\/invoices\/INV-/);
+  // Its page leads with what it asks for, on pine.
+  await inv.getByRole("link").click();
+  const hero = page.getByTestId("invoice-hero");
+  await expect(hero).toContainText("To ask for");
+  await expect(hero).toContainText("₦185,000");
+  await expect(hero).toContainText("Not sent yet");
 });
