@@ -99,7 +99,7 @@ test("the clearance list, the gate's answers, an override until its end date, an
   await axeBoth(page, "/schools/students/{id} (clearance)");
 
   // Past its end date the override no longer counts.
-  sql(`UPDATE school_clearance_overrides SET starts_on = current_date - 10, ends_on = current_date - 1 WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Gate Family Academy')`);
+  sql(`UPDATE school_clearance_overrides SET starts_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 10, ends_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 1 WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Gate Family Academy')`);
   await page.goto("/schools/clearance");
   await expect(second).toContainText("Not paid");
   await expect(page.getByTestId("override")).toContainText("Ended");

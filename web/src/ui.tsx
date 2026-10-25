@@ -389,7 +389,7 @@ export function useAction(): {
 }
 
 /** A JSON text area that reports parse errors and only emits valid values. */
-export function JsonInput({ value, onChange, rows = 6 }: { value: unknown; onChange: (v: unknown) => void; rows?: number }) {
+export function JsonInput({ value, onChange, rows = 6, label }: { value: unknown; onChange: (v: unknown) => void; rows?: number; label?: string }) {
   const [text, setText] = useState(() => (value === undefined ? "" : JSON.stringify(value, null, 2)));
   const [bad, setBad] = useState(false);
   const last = useRef(value);
@@ -406,6 +406,7 @@ export function JsonInput({ value, onChange, rows = 6 }: { value: unknown; onCha
         className="mono"
         rows={rows}
         value={text}
+        aria-label={label}
         spellCheck={false}
         onChange={(e) => {
           setText(e.target.value);

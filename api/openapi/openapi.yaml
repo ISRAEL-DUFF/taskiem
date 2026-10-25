@@ -15677,6 +15677,93 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/webhook-listens:
+    post:
+      operationId: startWebhookListen
+      tags:
+      - Workflows
+      summary: Listen for a test webhook call
+      description: Makes a test address for the webhook trigger being built, with its config as it stands in the
+        editor, saved or not. The first call to the address within two minutes is kept, as a run would see it, with
+        what the webhook would say of its method, origin and auth (checked with the environment's `webhook_<WD id>`
+        secret); it starts nothing. Later calls get 409.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookListenRequest'
+        required: true
+      responses:
+        '201':
+          description: The test address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListen'
+        '400':
+          description: The config is not a webhook trigger's that could be published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: The key is limited to another environment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/webhook-listens/{listen}:
+    get:
+      operationId: webhookListen
+      tags:
+      - Workflows
+      summary: Read a test webhook address
+      description: Whether the test address is still waiting, has its call, or expired; with the call once it came.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      - name: listen
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Test address id
+      responses:
+        '200':
+          description: The test address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListenState'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/triggers:
     get:
       operationId: listTriggers
@@ -29489,6 +29576,55 @@ components:
           - sso_required
           description: The organisation requires single sign-on; the person is a member and signs in that way.
       additionalProperties: false
+    WebhookListenRequest:
+      type: object
+      required:
+      - config
+      properties:
+        environment:
+          type: string
+          description: Whose secret checks the call; `prod` when left out.
+        config:
+          type: object
+          description: The webhook trigger's `config` (wd/v1), as in the editor.
+      additionalProperties: false
+    WebhookListen:
+      type: object
+      required:
+      - id
+      - url
+      - expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          description: The test address; relative to the Taskiem host when no public hooks URL is set.
+        expires_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+    WebhookListenState:
+      type: object
+      required:
+      - status
+      - expires_at
+      properties:
+        status:
+          type: string
+          enum:
+          - waiting
+          - captured
+          - expired
+        expires_at:
+          type: string
+          format: date-time
+        call:
+          type: object
+          description: 'The call: `method`, `body`, `headers` (without Authorization and cookies), `query`, `bytes`,
+            `received_at`, and `checks` (`method`, `origin`, `auth`: `ok` or why not).'
+      additionalProperties: false
     SigningSecretRequest:
       type: object
       required:
@@ -29515,9 +29651,12 @@ components:
           enum:
           - hmac
           - bearer
+          - basic
+          - jwt
         secret:
           type: string
-          description: The new secret. Shown this once.
+          description: 'The new secret. Shown this once. For basic auth, `taskiem:<password>`: the user name and password;
+            for jwt, the HS256 key tokens are signed with.'
       additionalProperties: false
     PartnerInvitationRequest:
       type: object
@@ -29708,7 +29847,7 @@ components:
           description: Relative to the Taskiem host, `/hooks/<sub-tenant>/<path>?env=<environment>`.
         auth:
           type: string
-          description: How senders authenticate (`hmac`, `bearer`, `none`).
+          description: How senders authenticate (`hmac`, `bearer`, `basic`, `jwt`, `none`).
         secret_name:
           type: string
           description: The vault secret the webhook checks; the sub-tenant's people make it on the workflow's Endpoints
