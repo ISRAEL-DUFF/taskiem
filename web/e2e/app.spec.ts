@@ -96,3 +96,35 @@ test("an approval is decided from Home in a confirm sheet", async ({ page }) => 
   await expect(needs.getByRole("button", { name: "Approve Pay Kunle Supplies" })).toHaveCount(0);
   await expect.poll(async () => ((await api("GET", `/v1/runs/${String(run.run_id)}`)).run as { status: string }).status).toBe("completed");
 });
+
+test("Home's money card and Money's week, from the money log", async ({ page }) => {
+  await signIn(page);
+  const made = await page.request.post("/v1/money/entries", {
+    headers: { "X-Taskiem-Request": "1", "Idempotency-Key": `card-${Date.now()}` },
+    data: { kind: "cash", direction: "in", amount_kobo: 1234500, description: "Card e2e sale", channel: "cash" },
+  });
+  expect(made.status(), await made.text()).toBe(201);
+  await page.goto("/home");
+  const card = page.getByRole("region", { name: "Money in today" });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole("img", { name: /^Money in through the day/ })).toBeVisible();
+  await expect(card.getByRole("link", { name: /^₦/ })).toHaveAttribute("href", "/money");
+
+  // The week: in, out and kept, and a bar per day; pressing one shows its figures.
+  await page.getByRole("navigation", { name: "Quick" }).getByRole("link", { name: "Money" }).click();
+  await page.getByRole("group", { name: "Period" }).getByRole("button", { name: "This week" }).click();
+  await expect(page).toHaveURL(/period=week/);
+  // Seven days to today, whatever the weekday ("This week" starts on Monday).
+  const lagos = (ms: number) => new Date(ms + 3600_000).toISOString().slice(0, 10);
+  await page.goto(`/money?period=custom&from=${lagos(Date.now() - 6 * 86400_000)}&to=${lagos(Date.now())}`);
+  const totals = page.getByTestId("money-totals");
+  await expect(totals).toContainText("Kept");
+  const bars = totals.locator("button.money-bar");
+  await expect(bars).toHaveCount(7);
+  await expect(bars.last()).toHaveAttribute("aria-pressed", "true");
+  await expect(totals.locator(".money-bars-picked")).toContainText("Today");
+  await bars.first().click();
+  await expect(bars.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(totals.locator(".money-bars-picked")).not.toContainText("Today");
+  await expect(page.getByRole("region", { name: "Where it came from" })).toContainText("Cash");
+});

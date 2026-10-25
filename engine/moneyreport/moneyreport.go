@@ -45,7 +45,7 @@ const latest = `WITH moves AS (
 ), firsts AS (
 	SELECT id, COALESCE(occurred_at, recorded_at) AS at, amount_kobo FROM money_entries WHERE tenant_id = $1 AND corrects IS NULL
 )
-SELECT m.*, COALESCE(m.amount_kobo, f.amount_kobo, 0) AS amount FROM moves m JOIN firsts f ON f.id = m.movement WHERE f.at >= $2 AND f.at < $3`
+SELECT m.*, COALESCE(m.amount_kobo, f.amount_kobo, 0) AS amount, f.at AS first_at FROM moves m JOIN firsts f ON f.id = m.movement WHERE f.at >= $2 AND f.at < $3`
 
 // Channel is one channel's money in a period.
 type Channel struct {
@@ -88,6 +88,45 @@ type Summary struct {
 	CollectedForOthersKobo int64                  `json:"collected_for_others_kobo"`
 	CollectedFor           []invoicing.BodyAmount `json:"collected_for"`
 	OwnInSettled           int64                  `json:"own_in_settled_kobo"`
+	// The period in stretches, for charts: hours for a period of one day,
+	// days for up to 92, none for longer ("" unit). A movement counts in
+	// the stretch of its first entry, as it counts in the period.
+	Unit    string   `json:"unit"`
+	Buckets []Bucket `json:"buckets"`
+}
+
+// Bucket is one stretch of a period: its settled money in and out, and how
+// many payments came in.
+type Bucket struct {
+	From       time.Time `json:"from"`
+	InSettled  int64     `json:"in_settled_kobo"`
+	OutSettled int64     `json:"out_settled_kobo"`
+	Payments   int       `json:"payments"`
+}
+
+// buckets are the stretches of [from, to): hours for one day or less,
+// Lagos days for up to 92 days, none beyond.
+func buckets(from, to time.Time) (string, []Bucket) {
+	unit, step := "", func(t time.Time) time.Time { return t }
+	switch {
+	case to.Sub(from) <= 25*time.Hour:
+		unit, step = "hour", func(t time.Time) time.Time { return t.Add(time.Hour) }
+	case to.Sub(from) <= 92*24*time.Hour:
+		unit, step = "day", func(t time.Time) time.Time { return t.In(Lagos).AddDate(0, 0, 1) }
+	default:
+		return "", []Bucket{}
+	}
+	out := []Bucket{}
+	for t := from; t.Before(to); t = step(t) {
+		out = append(out, Bucket{From: t})
+	}
+	return unit, out
+}
+
+// bucketOf is the index of the stretch holding at, or -1.
+func bucketOf(bs []Bucket, at time.Time) int {
+	i := sort.Search(len(bs), func(i int) bool { return bs[i].From.After(at) }) - 1
+	return i
 }
 
 // Day is the Lagos day holding d, as [from, to).
@@ -107,11 +146,12 @@ func Month(d time.Time) (time.Time, time.Time) {
 // Summarise sums up the tenant's money in [from, to).
 func Summarise(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Time) (Summary, error) {
 	s := Summary{From: from, To: to, Channels: []Channel{}, CollectedFor: []invoicing.BodyAmount{}}
+	s.Unit, s.Buckets = buckets(from, to)
 	shares, err := passThroughByEntry(ctx, tx, tenant)
 	if err != nil {
 		return s, err
 	}
-	rows, err := tx.Query(ctx, `SELECT m.movement, m.channel, m.direction, m.status, m.amount, COALESCE(m.fee_kobo, 0), m.fee_kobo IS NOT NULL
+	rows, err := tx.Query(ctx, `SELECT m.movement, m.channel, m.direction, m.status, m.amount, COALESCE(m.fee_kobo, 0), m.fee_kobo IS NOT NULL, m.first_at
 		FROM (`+latest+`) m`, tenant, from, to)
 	if err != nil {
 		return s, err
@@ -123,9 +163,18 @@ func Summarise(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.T
 		var channel, dir, status string
 		var amount, fee int64
 		var hasFee bool
-		if err := rows.Scan(&movement, &channel, &dir, &status, &amount, &fee, &hasFee); err != nil {
+		var at time.Time
+		if err := rows.Scan(&movement, &channel, &dir, &status, &amount, &fee, &hasFee, &at); err != nil {
 			rows.Close()
 			return s, err
+		}
+		if b := bucketOf(s.Buckets, at); b >= 0 && status == "settled" {
+			if dir == "in" {
+				s.Buckets[b].InSettled += amount
+				s.Buckets[b].Payments++
+			} else if dir == "out" {
+				s.Buckets[b].OutSettled += amount
+			}
 		}
 		if dir == "in" && status == "settled" {
 			for _, b := range shares[movement] {

@@ -17,9 +17,15 @@ Taskiem's icon, a lime "t" on dark green, is now on your home screen. You stay s
 - **Tabs that do not fit**, such as Money's Overview, Leaks, Upload statement, Cash and expenses and Fees, slide sideways. The one you are on is always in view.
 - **The (i) button** beside a page's title says what the page is for. It is folded away on a phone so the page opens on what it shows.
 
+## Home and Money
+
+**Home** opens on a green card with the money that came in today, how many payments, a line showing how the day built up, the money that went out, and how many payments still need matching to an invoice. Under it: today's orders and this week's jobs, then **Needs you**.
+
+**Money** shows Today, This week or This month (other periods under **Other**): money in, money out and what you kept, a bar for each day (press one to see its figures), where the money came from, and what to look at.
+
 ## Approving from Home
 
-When a payment or another step waits for your approval, it shows under **Needs you** on Home with an **Approve** button. Pressing it opens a sheet showing exactly what you are approving. Check it, then press **Confirm** (or confirm with your passkey if your business asks for one). To reject, or to see more about the request, press the row itself to open **Approvals**.
+When a payment or another step waits for your approval, it shows under **Needs you** on Home with an **Approve** button. Pressing it opens a sheet showing exactly what you are approving: the amount, who it goes to and their account, when the workflow says them. Check it, then press **Confirm** (or confirm with your passkey if your business asks for one). To reject, or to see more about the request, press the row itself to open **Approvals**.
 
 ## The colours
 

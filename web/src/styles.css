@@ -3,13 +3,14 @@
    Light is the default; dark is the reader's choice (Account), or follows
    the system when they pick that (data-theme on <html>, main.tsx). */
 :root {
-  --bg: #fbfbfa;
+  /* The ground is the brand's mist (docs/brand/README.md), cards white on it. */
+  --bg: #f1f4ef;
   --panel: #ffffff;
-  --panel-2: #f7f7f5;
-  --text: #0e0f0c;
-  --muted: #62665f;
-  --border: #ecece8;
-  --border-strong: #deded8;
+  --panel-2: #f6f8f4;
+  --text: #0e1a14;
+  --muted: #55615a;
+  --border: #e2e7df;
+  --border-strong: #d3dbd0;
   /* Taskiem's colours (decision 0043): relay's pine, and lime on dark.
      Seal and signal, kept to experiment with, set the same --brand-*
      below (data-brand, brand.ts). */
@@ -22,7 +23,7 @@
   --accent-hover: var(--brand-hover);
   --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
   --accent-text: #ffffff;
-  /* Buttons that do the page's main thing: near-black in the console, the
+  /* Buttons that do the page's main thing: pine in the console (lime on dark), the
      partner's colour in the embedded builder (embed.css). */
   --primary: var(--brand);
   --primary-hover: var(--brand-hover);
@@ -31,13 +32,21 @@
   --warn: #b45309;
   --ok: #1f7a50;
   --info: #2f5bd3;
-  --code-bg: #f3f3f0;
-  --nav-bg: #fbfbfa;
-  --nav-text: #45483f;
-  --nav-muted: #6b6f68;
-  --nav-hover: #f0f0ec;
-  --nav-active: #ebebe6;
-  --radius: 12px;
+  --code-bg: #eaefe7;
+  --nav-bg: #f1f4ef;
+  --nav-text: #3d4741;
+  --nav-muted: #5d6862;
+  --nav-hover: #e6ebe3;
+  --nav-active: #dde5da;
+  /* Tints behind a row's icon: the brand's, and a warning's. */
+  --tint: color-mix(in srgb, var(--brand) 9%, var(--panel));
+  --tint-text: var(--brand);
+  --tint-warn: #fdf0dc;
+  --tint-warn-text: #8a3410;
+  /* Money in and out in charts: told apart by colour-blind readers too (checked on both grounds). */
+  --chart-in: #1f8060;
+  --chart-out: #c9822f;
+  --radius: 16px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(14, 15, 12, 0.04);
   --shadow-md: 0 1px 2px rgba(14, 15, 12, 0.04), 0 4px 12px -2px rgba(14, 15, 12, 0.06);
@@ -49,10 +58,11 @@
 :root[data-theme="dark"] {
   --bg: #0d0e0c; --panel: #151614; --panel-2: #1a1b19; --text: #ededea; --muted: #9a9d95;
   --border: #262724; --border-strong: #34362f; --accent: var(--brand-dark); --accent-hover: var(--brand-dark-hover); --accent-text: var(--brand-dark-text);
-  --primary: #ededea; --primary-hover: #ffffff; --primary-text: #0e0f0c;
+  --primary: var(--brand-dark); --primary-hover: var(--brand-dark-hover); --primary-text: var(--brand-dark-text);
   --danger: #f97066; --warn: #fdb022; --ok: #47cd89; --info: #84adff; --code-bg: #1c1d1a;
   --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
   --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
+  --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
   color-scheme: dark;
 }
 :root[data-brand="seal"] {
@@ -65,10 +75,11 @@
   :root[data-theme="system"] {
     --bg: #0d0e0c; --panel: #151614; --panel-2: #1a1b19; --text: #ededea; --muted: #9a9d95;
     --border: #262724; --border-strong: #34362f; --accent: var(--brand-dark); --accent-hover: var(--brand-dark-hover); --accent-text: var(--brand-dark-text);
-    --primary: #ededea; --primary-hover: #ffffff; --primary-text: #0e0f0c;
+    --primary: var(--brand-dark); --primary-hover: var(--brand-dark-hover); --primary-text: var(--brand-dark-text);
     --danger: #f97066; --warn: #fdb022; --ok: #47cd89; --info: #84adff; --code-bg: #1c1d1a;
     --nav-bg: #0d0e0c; --nav-text: #c9cbc4; --nav-muted: #8a8d85; --nav-hover: rgba(255, 255, 255, 0.05); --nav-active: rgba(255, 255, 255, 0.08);
     --shadow: none; --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35); --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
+    --tint: rgba(200, 241, 105, 0.12); --tint-text: var(--brand-dark); --tint-warn: rgba(253, 176, 34, 0.14); --tint-warn-text: #fdb022;
     color-scheme: dark;
   }
 }
@@ -89,7 +100,7 @@ a:hover { text-decoration: underline; text-underline-offset: 2px; }
    the text's to tell them apart by colour alone (WCAG 1.4.1). Tabs, cards
    and buttons style their own links further down, which wins. */
 :where(main) a:not([class]) { text-decoration: underline; text-underline-offset: 2px; }
-h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.022em; margin: 0 0 20px; line-height: 1.2; }
+h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.022em; margin: 0 0 20px; line-height: 1.2; }
 h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 32px 0 12px; line-height: 1.35; }
 h3 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; }
 p { margin: 0 0 12px; }
@@ -373,11 +384,11 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
 /* Home (pages/Home.tsx): the owner's morning view. */
 .greeting h1 { margin: 0; }
 .greeting p { margin: 6px 0 0; color: var(--muted); }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin: 28px 0 24px; }
-.stat { background: var(--panel); padding: 20px 22px; display: flex; flex-direction: column; gap: 8px; color: inherit; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 24px 0; }
+.stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; color: inherit; }
 a.stat:hover { text-decoration: none; background: var(--panel-2); }
 .stat-label { font-size: 13px; color: var(--muted); }
-.stat-value { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat-value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .stat-hint { font-size: 13px; color: var(--muted); }
 .exports { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
 .home-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -404,12 +415,16 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
 .row-link:focus-visible { box-shadow: none; }
 .row-link:focus-visible::after { box-shadow: inset 0 0 0 2px var(--accent); border-radius: inherit; }
 .list-row.has-action button { position: relative; z-index: 1; flex: none; }
-.list-icon { width: 32px; height: 32px; border-radius: 8px; flex: none; display: grid; place-items: center; background: var(--code-bg); color: var(--text); }
-.list-icon svg { width: 16px; height: 16px; }
+.list-icon { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center; background: var(--tint); color: var(--tint-text); }
+.list-icon.warn { background: var(--tint-warn); color: var(--tint-warn-text); }
+.list-icon svg { width: 20px; height: 20px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--ok); }
 .dot.failed { background: var(--danger); }
 .dot.waiting, .dot.running, .dot.queued { background: var(--info); }
-.pill-count { font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--warn) 80%, var(--text)); background: color-mix(in srgb, var(--warn) 13%, var(--panel)); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+/* A count beside a heading: lime on pine (pine on lime in the dark theme). */
+.pill-count { font-size: 12px; font-weight: 700; color: var(--brand-dark); background: var(--brand); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+:root[data-theme="dark"] .pill-count { color: var(--brand-dark-text); background: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .pill-count { color: var(--brand-dark-text); background: var(--brand-dark); } }
 .progress { height: 4px; border-radius: 999px; background: var(--code-bg); overflow: hidden; }
 .progress > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 .setup-item { display: flex; align-items: center; gap: 10px; color: var(--text); padding: 6px 0; }
@@ -1055,3 +1070,133 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 .aging { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .aging li { margin: 0; }
 .aging button { width: 100%; text-align: left; line-height: 1.4; }
+
+/* The owner's look (the mockups, docs/brand): Home's money card, the
+   approval cards, Money's period switch, bars and sources. Pine and lime
+   from the brand; lime only on pine (or as the accent on dark). */
+.panel, .card, .empty-state, .skeleton { border-radius: var(--radius); }
+.list-row .button, .list-row.has-action button { border-radius: 999px; min-height: 36px; padding: 0 16px; font-weight: 600; }
+.panel-head h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.panel-head a { font-weight: 600; color: var(--accent); }
+.greeting h1 { font-size: 28px; }
+
+.home-top { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; margin: 24px 0; align-items: stretch; }
+.home-top .stats { margin: 0; grid-template-columns: 1fr; align-content: start; }
+.home-top .stats:has(> :nth-child(3)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.money-card { background: var(--brand); color: #fff; border-radius: 24px; padding: 20px 20px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.money-card a { color: inherit; text-decoration: none; }
+.money-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.money-card-top h2 { margin: 0; font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, 0.8); letter-spacing: 0; }
+.money-card .live { font-size: 12px; font-weight: 700; background: var(--brand-dark); color: var(--brand-dark-text); border-radius: 999px; padding: 3px 10px; }
+.money-card-amount { font-size: 40px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; align-self: flex-start; }
+.money-card-amount:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.money-card-amount:focus-visible, .money-card-foot a:focus-visible { box-shadow: 0 0 0 3px var(--brand-dark); border-radius: 6px; }
+.money-card-sub { margin: 0; font-size: 13px; color: rgba(255, 255, 255, 0.8); }
+.money-line { display: block; width: 100%; height: 56px; margin-top: 12px; }
+.money-line .stroke { fill: none; stroke: var(--brand-dark); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.money-line .area { fill: color-mix(in srgb, var(--brand-dark) 15%, transparent); }
+.money-line-ends { display: flex; justify-content: space-between; font-size: 11px; color: rgba(255, 255, 255, 0.72); margin-top: 2px; }
+.money-card-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.16); }
+.money-card-foot dt { font-size: 12px; color: rgba(255, 255, 255, 0.75); }
+.money-card-foot dd { margin: 0; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.money-card-foot a.lime { color: var(--brand-dark); }
+.money-card-foot a:hover { text-decoration: underline; }
+
+/* Approvals: a card per decision, leading with the amount. */
+.approval-card { background: var(--panel); border: 1px solid var(--border); border-radius: 24px; padding: 18px 20px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 12px; }
+.approval-meta { display: flex; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.approval-title { margin: 0; font-size: 16px; font-weight: 600; }
+.approval-amount { font-size: 32px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.approval-to { font-size: 15px; }
+.approval-to strong { font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.chips li { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); color: var(--text); font-size: 13px; border-radius: 10px; padding: 6px 10px; }
+.chips li.warn { background: var(--tint-warn); color: var(--tint-warn-text); font-weight: 500; }
+.chips svg { width: 14px; height: 14px; }
+.approval-fields { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 14px; }
+.approval-fields dt { color: var(--muted); }
+.approval-fields dd { margin: 0; overflow-wrap: anywhere; }
+.approval-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.approval-actions button { min-height: 48px; border-radius: 14px; padding: 0 24px; font-size: 15px; font-weight: 600; }
+.approval-actions .grow { flex: 1; }
+.sheet-summary { margin: 0 0 16px; background: var(--bg); border-radius: 16px; padding: 4px 16px; }
+.sheet-summary > div { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.sheet-summary > div:last-child { border-bottom: 0; }
+.sheet-summary dt { color: var(--muted); font-size: 14px; }
+.sheet-summary dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.modal .decide-actions { display: flex; flex-direction: column; gap: 8px; }
+.modal .decide-actions button { min-height: 52px; border-radius: 16px; font-size: 16px; font-weight: 600; }
+.modal .decide-actions button.quiet { min-height: 44px; border: 0; background: none; box-shadow: none; color: var(--accent); }
+
+/* A small set of choices as one pill (Money's period). */
+.segmented { display: inline-flex; gap: 4px; padding: 4px; background: var(--code-bg); border-radius: 999px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.segmented::-webkit-scrollbar { display: none; }
+.segmented button { flex: none; min-height: 36px; border: 0; box-shadow: none; background: none; border-radius: 999px; padding: 0 16px; font-weight: 600; color: var(--nav-text); white-space: nowrap; }
+.segmented button:hover:not(:disabled) { background: none; color: var(--text); }
+.segmented button[aria-pressed="true"] { background: var(--brand); color: #fff; }
+:root[data-theme="dark"] .segmented button[aria-pressed="true"] { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .segmented button[aria-pressed="true"] { background: var(--brand-dark); color: var(--brand-dark-text); } }
+.period-bar { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.period-bar label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.period-bar select { width: auto; }
+
+/* Money: in, out and kept; the bars; where it came from. */
+.money-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 24px; padding: 18px 20px; margin-bottom: 16px; }
+.money-panel > h2 { margin: 0 0 14px; font-size: 16px; font-weight: 700; }
+.money-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
+.money-sum dt { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.money-sum dd { margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.money-sum .kept dd { color: var(--accent); }
+.money-sum .pending { display: block; font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.swatch.in { background: var(--chart-in); }
+.swatch.out { background: var(--chart-out); }
+.money-bars { margin: 0; }
+.money-bars-picked { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; background: var(--bg); border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; }
+.money-bars-picked strong { font-weight: 600; }
+.money-bars-plot { display: grid; gap: 4px; height: 120px; align-items: end; border-bottom: 1px solid var(--border-strong); }
+.money-bars-plot.many { gap: 2px; }
+.money-bar { display: flex; align-items: flex-end; justify-content: center; gap: 2px; height: 120px; min-height: 0; padding: 0; border: 0; box-shadow: none; background: none; border-radius: 8px 8px 0 0; }
+button.money-bar:hover:not(:disabled) { background: var(--panel-2); }
+button.money-bar[aria-pressed="true"] { background: var(--bg); }
+button.money-bar:active:not(:disabled) { transform: none; }
+.money-bar .bar { display: block; width: min(12px, 40%); border-radius: 4px 4px 0 0; }
+.money-bars-plot.many .bar { width: 45%; border-radius: 2px 2px 0 0; }
+.bar.in { background: var(--chart-in); }
+.bar.out { background: var(--chart-out); }
+.money-bars-days { display: grid; gap: 4px; padding-top: 6px; font-size: 12px; color: var(--muted); text-align: center; }
+.money-bars-days .on { color: var(--text); font-weight: 700; }
+.money-bars-table { margin-top: 10px; }
+.money-bars-table table { margin-top: 8px; }
+.sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.source-head { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin-bottom: 6px; }
+.source-head span:first-child { font-weight: 500; }
+.source-head .num { font-weight: 600; }
+.share { height: 8px; border-radius: 4px; background: var(--code-bg); overflow: hidden; }
+.share span { display: block; height: 100%; border-radius: 4px; background: var(--chart-in); }
+
+@media (max-width: 860px) {
+  .home-top { grid-template-columns: 1fr; margin: 16px 0; }
+  .home-top .stats, .home-top .stats:has(> :nth-child(3)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .greeting h1 { font-size: 26px; }
+  .stats { gap: 12px; }
+  .stat { border-radius: 20px; }
+  .panel, .card, .empty-state { border-radius: 20px; }
+  .money-card-amount { font-size: 38px; }
+  .approval-card { padding: 18px; border-radius: 24px; }
+  .approval-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .approval-actions .grow, .approval-actions .hint, .approval-actions a { grid-column: 1 / -1; }
+  .money-panel { padding: 18px; }
+  .money-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .money-sum .kept { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--border); padding-top: 10px; }
+  .money-sum dd { font-size: 19px; }
+  .segmented { display: flex; }
+  .segmented button { flex: 1; }
+}
+.stat-hint.strong { color: var(--accent); font-weight: 600; }
+.stat-hint.warn { color: var(--tint-warn-text); display: inline-flex; align-items: center; gap: 4px; }
+.stat-hint.warn svg { width: 14px; height: 14px; }
+.list-row svg.go { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.money-panel .list-row { padding-left: 0; padding-right: 0; }
+.money-panel > h2 + .list-row { border-top: 0; }
