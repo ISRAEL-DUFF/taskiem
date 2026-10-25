@@ -143,55 +143,46 @@ export function Connections() {
         </EmptyState>
       )}
       {list.data && list.data.connections.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Connector</th>
-              <th>Name</th>
-              <th>Environment</th>
-              <th>Status</th>
-              <th>Webhooks</th>
-              <th>Created</th>
-              <th>Last used</th>
-              <th><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.data.connections.map((c) => (
-              <tr key={c.id} className={c.id === back.linked ? "highlight" : undefined}>
-                <td>{c.connector}</td>
-                <td>
-                  {c.provisioned_by === "taskiem:data_tables" ? (
-                    <>
-                      <Link to="/tables">Data tables</Link> <span className="hint">({c.name}, kept by Taskiem)</span>
-                    </>
-                  ) : (
-                    c.name
+        <ul className="items" aria-label="Connections">
+          {list.data.connections.map((c) => {
+            const info = connectorOf(connectors.data?.connectors, c.connector);
+            const fields = c.status !== "expired" && (fieldsToComplete(info)?.length ?? 0) > 0;
+            return (
+              <li key={c.id} className={c.id === back.linked ? "conn highlight" : "conn"} data-testid="connection">
+                <span className={c.status === "active" ? "list-icon" : "list-icon warn"} aria-hidden="true">
+                  {(info?.name ?? c.connector).slice(0, 1).toUpperCase()}
+                </span>
+                <div className="grow">
+                  <div className="item-top">
+                    <span className="title">{info?.name ?? c.connector}</span>
+                    <Badge value={c.status === "active" ? "ok" : c.status} />
+                  </div>
+                  <span className="sub">
+                    {c.provisioned_by === "taskiem:data_tables" ? (
+                      <>
+                        <Link to="/tables">Data tables</Link> ({c.name}, kept by Taskiem)
+                      </>
+                    ) : (
+                      c.name
+                    )}{" "}
+                    · {c.environment} · {c.last_used_at ? `last used ${fmtTime(c.last_used_at)}` : "never used"} · added {fmtTime(c.created_at)}
+                  </span>
+                  {c.remote && (
+                    <div className="sub">
+                      <Remote remote={c.remote} />
+                    </div>
                   )}
-                </td>
-                <td>{c.environment}</td>
-                <td>
-                  <Badge value={c.status === "active" ? "ok" : c.status} />
-                </td>
-                <td>
-                  <Remote remote={c.remote} />
-                </td>
-                <td>{fmtTime(c.created_at)}</td>
-                <td>{c.last_used_at ? fmtTime(c.last_used_at) : <span className="hint">never</span>}</td>
-                <td>
                   {!c.provisioned_by && (
-                    <span className="row" style={{ gap: 6 }}>
-                      {c.status !== "expired" && (fieldsToComplete(connectorOf(connectors.data?.connectors, c.connector))?.length ?? 0) > 0 && (
-                        <button onClick={() => setCompleting(c)}>Add fields</button>
-                      )}
+                    <span className="conn-actions">
+                      {fields && <button onClick={() => setCompleting(c)}>Add fields</button>}
                       <button onClick={() => setRemoving(c)}>Disconnect</button>
                     </span>
                   )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
       {list.data && <MoneyLogWebhooks conns={withMoneyLogWebhooks(list.data.connections)} connectors={connectors.data?.connectors} />}
       {adding && connectors.data && (

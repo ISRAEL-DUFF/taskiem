@@ -49,7 +49,7 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
 
   // The run shows in the list, and the audit chain verifies.
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Activity" }).click();
-  await expect(page.getByRole("cell", { name: /Smoke flow/ })).toBeVisible();
+  await expect(page.getByTestId("run").filter({ hasText: "Smoke flow" }).first()).toBeVisible();
   await page.getByRole("link", { name: "Audit log" }).click();
   await expect(page.getByText("workflow.publish").first()).toBeVisible();
   await page.getByRole("button", { name: "Verify chain" }).click();

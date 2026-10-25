@@ -36,3 +36,27 @@ export function filterRuns(runs: RunSummary[], q: string, from: string): RunSumm
     return ws.every((w) => text.includes(w));
   });
 }
+
+/** Runs grouped by the day they started, newest first, in the browser's time
+ * zone: "Today", "Yesterday", then "Monday 19 October". */
+export function dayGroups<T extends { started_at: string }>(runs: T[], now = new Date()): { label: string; runs: T[] }[] {
+  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const today = key(now);
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  const yesterday = key(y);
+  const out: { label: string; runs: T[] }[] = [];
+  const at = new Map<string, number>();
+  for (const r of runs) {
+    const d = new Date(r.started_at);
+    const k = key(d);
+    let i = at.get(k);
+    if (i === undefined) {
+      const label = k === today ? "Today" : k === yesterday ? "Yesterday" : d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+      i = out.push({ label, runs: [] }) - 1;
+      at.set(k, i);
+    }
+    out[i]?.runs.push(r);
+  }
+  return out;
+}

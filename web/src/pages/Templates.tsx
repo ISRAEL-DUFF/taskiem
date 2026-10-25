@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
-import { useAuth } from "../auth";
+import { useAdvanced, useAuth } from "../auth";
 import { Help } from "../onboarding";
 import { byCategory, initialValues, inputKind, lineLabel, toParams, WEEKDAYS, type Template, type TemplateParam } from "../lib/templates";
 import { Badge, ErrorBox, Field, PageHeader, useAction, useLoad } from "../ui";
@@ -17,6 +17,7 @@ import { ColumnPicker, LanguagePicker, TabPicker, TablePicker, WhatsAppTemplateP
 
 export function Templates() {
   const { can } = useAuth();
+  const advanced = useAdvanced();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
   const query = params.get("q") ?? "";
@@ -69,10 +70,13 @@ export function Templates() {
             <div className="template-grid">
               {list.map((t) => (
                 <button key={t.id} className="card template-card" onClick={() => setParams(query ? { q: query, id: t.id } : { id: t.id })}>
+                  <span className="list-icon" aria-hidden="true">
+                    <Icon name={categoryIcon(category)} />
+                  </span>
                   <strong>{t.title}</strong>
                   <span>{t.summary}</span>
                   <span className="hint">
-                    {t.connectors.map((c) => c.split("@")[0]).join(" · ")}
+                    {usesWords(t.connectors, advanced)}
                     {!t.available && " · needs a connector not available here"}
                     {t.needs_developer && " · needs a developer"}
                   </span>
@@ -336,4 +340,26 @@ export function ParamField({
       {input}
     </Field>
   );
+}
+
+/** A template group's icon on its cards. */
+function categoryIcon(category: string): string {
+  const c = category.toLowerCase();
+  if (c.includes("alert")) return "alerts";
+  if (c.includes("approv")) return "approvals";
+  if (c.includes("pay") || c.includes("money") || c.includes("invoice")) return "money";
+  if (c.includes("order") || c.includes("shop") || c.includes("sale")) return "orders";
+  if (c.includes("school")) return "schools";
+  if (c.includes("form")) return "forms";
+  if (c.includes("report")) return "reports";
+  return "templates";
+}
+
+/** What a template uses, by name ("Gmail · Moniepoint pos"); what a step needs of a kind of account is shown under Advanced only. */
+function usesWords(connectors: string[], advanced: boolean): string {
+  return connectors
+    .filter((c) => advanced || !c.startsWith("capability:"))
+    .map((c) => c.split("@")[0] ?? c)
+    .map((c) => (advanced ? c : c.replaceAll("_", " ").replace(/^./, (x) => x.toUpperCase())))
+    .join(" · ");
 }

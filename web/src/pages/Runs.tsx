@@ -1,19 +1,20 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { get, type RunSummary, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
 import { useEnvironments } from "../environments";
-import { Badge, EmptyState, ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Badge, EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { duration } from "../lib/timeline";
-import { dayAfter, dayStart, filterRuns } from "../lib/lists";
+import { dayAfter, dayGroups, dayStart, filterRuns } from "../lib/lists";
 
 const STATUSES = ["", "running", "waiting", "queued", "needs_reconciliation", "completed", "failed", "cancelled"];
 const FILTERS = ["q", "status", "workflow", "env", "from", "to"];
+/** A bare id says nothing to a person; who started a run shows only when it reads as a name or address. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function Runs() {
   const { can } = useAuth();
-  const nav = useNavigate();
   const [params, setParams] = useSearchParams();
   const p = (k: string) => params.get(k) ?? "";
   const [q, status, workflow, env, from, to] = FILTERS.map(p) as [string, string, string, string, string, string];
@@ -56,38 +57,43 @@ export function Runs() {
             ))}
           </select>
         </label>
-        {(workflows.data?.workflows.length ?? 0) > 0 && (
-          <label>
-            <span className="sr-only">Workflow</span>
-            <select value={workflow} onChange={(e) => set("workflow", e.target.value)}>
-              <option value="">All workflows</option>
-              {workflows.data?.workflows.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label>
-          <span className="sr-only">Environment</span>
-          <select value={env} onChange={(e) => set("env", e.target.value)}>
-            <option value="">All environments</option>
-            {(envs.data?.environments ?? []).map((x) => (
-              <option key={x.name} value={x.name}>
-                {x.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Started from
-          <input type="date" value={from} max={to || undefined} onChange={(e) => set("from", e.target.value)} />
-        </label>
-        <label>
-          to
-          <input type="date" aria-label="Started up to" value={to} min={from || undefined} onChange={(e) => set("to", e.target.value)} />
-        </label>
+        <details className="more-filters" open={!!(workflow || env || from || to) || undefined}>
+          <summary>More filters</summary>
+          <div className="filters">
+            {(workflows.data?.workflows.length ?? 0) > 0 && (
+              <label>
+                <span className="sr-only">Workflow</span>
+                <select value={workflow} onChange={(e) => set("workflow", e.target.value)}>
+                  <option value="">All workflows</option>
+                  {workflows.data?.workflows.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              <span className="sr-only">Environment</span>
+              <select value={env} onChange={(e) => set("env", e.target.value)}>
+                <option value="">All environments</option>
+                {(envs.data?.environments ?? []).map((x) => (
+                  <option key={x.name} value={x.name}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Started from
+              <input type="date" value={from} max={to || undefined} onChange={(e) => set("from", e.target.value)} />
+            </label>
+            <label>
+              to
+              <input type="date" aria-label="Started up to" value={to} min={from || undefined} onChange={(e) => set("to", e.target.value)} />
+            </label>
+          </div>
+        </details>
         {filtered && (
           <button type="button" onClick={() => (setMore([]), setParams({}, { replace: true }))}>
             Clear filters
@@ -115,41 +121,29 @@ export function Runs() {
             Each run of a published workflow shows here, with its status and timeline. Nothing has run yet.
           </EmptyState>
         ))}
-      {runs.length > 0 && (
-        <table className="cards">
-          <thead>
-            <tr>
-              <th scope="col">Workflow</th>
-              <th scope="col">Status</th>
-              <th scope="col">Environment</th>
-              <th scope="col">Started</th>
-              <th scope="col">Duration</th>
-              <th scope="col">Started by</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r.id} className="clickable" onClick={() => nav(`/runs/${r.id}`)}>
-                <td className="primary">
-                  <Link to={`/runs/${r.id}`} onClick={(e) => e.stopPropagation()}>
-                    {r.workflow}
-                  </Link>{" "}
-                  <span className="hint">v{r.version}</span>
-                </td>
-                <td data-label="Status">
-                  <Badge value={r.status} />
-                </td>
-                <td data-label="Environment">{r.environment}</td>
-                <td data-label="Started">{fmtTime(r.started_at)}</td>
-                <td data-label="Duration">{r.ended_at ? duration(r.started_at, r.ended_at) : "—"}</td>
-                <td data-label="Started by" className="hint">
-                  {r.started_by ?? "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {dayGroups(runs).map((g) => (
+        <section className="panel day-group" key={g.label} aria-label={g.label}>
+          <h2 className="day-head">{g.label}</h2>
+          <Items>
+            {g.runs.map((r) => {
+              const look = runLook(r.status);
+              return (
+                <Item
+                  key={r.id}
+                  testid="run"
+                  to={`/runs/${r.id}`}
+                  icon={look.icon}
+                  tone={look.tone}
+                  title={r.workflow}
+                  sub={[`v${r.version}`, r.environment, r.started_by && !UUID.test(r.started_by) ? r.started_by : ""].filter(Boolean).join(" · ")}
+                  side={new Date(r.started_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                  sideSub={r.status === "completed" ? (r.ended_at ? duration(r.started_at, r.ended_at) : undefined) : <Badge value={r.status} />}
+                />
+              );
+            })}
+          </Items>
+        </section>
+      ))}
       {older && (
         <div className="toolbar" style={{ marginTop: 10 }}>
           <button
@@ -170,4 +164,22 @@ export function Runs() {
       )}
     </>
   );
+}
+
+/** A run's icon and its tint, by status. */
+function runLook(status: string): { icon: string; tone?: "warn" | "danger" | "ok" | "info" | "muted" } {
+  switch (status) {
+    case "completed":
+      return { icon: "start", tone: "ok" };
+    case "failed":
+    case "needs_reconciliation":
+      return { icon: "alerts", tone: "danger" };
+    case "waiting":
+      return { icon: "clock", tone: "warn" };
+    case "running":
+    case "queued":
+      return { icon: "runs", tone: "info" };
+    default:
+      return { icon: "close", tone: "muted" };
+  }
 }

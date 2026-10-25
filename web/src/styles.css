@@ -1200,3 +1200,62 @@ button.money-bar:active:not(:disabled) { transform: none; }
 .list-row svg.go { width: 20px; height: 20px; color: var(--muted); flex: none; }
 .money-panel .list-row { padding-left: 0; padding-right: 0; }
 .money-panel > h2 + .list-row { border-top: 0; }
+
+/* Lists of rows (Items in ui.tsx): Orders, Workflows, Activity and the
+   rest, as Home's rows: an icon on a tint, a title and a line under it,
+   figures on the right, a chevron. */
+.items { list-style: none; margin: 0 0 16px; padding: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.panel > .items, .money-panel > .items { border: 0; border-radius: 0; margin: 0; background: none; }
+.items > li + li { border-top: 1px solid var(--border); }
+.item { display: flex; align-items: center; gap: 14px; padding: 14px 18px; color: inherit; text-decoration: none; min-width: 0; }
+.item:hover { background: var(--panel-2); text-decoration: none; }
+.item:active { background: var(--panel-2); }
+.item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.item .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item .title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .title .hint { font-weight: 400; }
+.item .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.item-top { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.item-top .title { flex: 1; min-width: 0; }
+.item-figure { flex: none; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.item-tag { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+.item svg.go { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.items > li.sf-refund .item { box-shadow: inset 3px 0 0 var(--danger); }
+.list-icon.danger { background: color-mix(in srgb, var(--danger) 12%, var(--panel)); color: color-mix(in srgb, var(--danger) 85%, var(--text)); }
+.list-icon.ok { background: color-mix(in srgb, var(--ok) 12%, var(--panel)); color: color-mix(in srgb, var(--ok) 85%, var(--text)); }
+.list-icon.info { background: color-mix(in srgb, var(--info) 12%, var(--panel)); color: color-mix(in srgb, var(--info) 85%, var(--text)); }
+.list-icon.muted { background: var(--code-bg); color: var(--muted); }
+/* Activity: a panel per day. */
+.day-group { margin-bottom: 16px; overflow: hidden; }
+.day-head { margin: 0; padding: 14px 18px 10px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; border-bottom: 1px solid var(--border); }
+
+/* Tables on the mist ground: white, rounded, a quiet header. */
+th { background: var(--panel-2); }
+.filters .search input { border-radius: 999px; }
+.describe-bar { border-radius: 999px; padding-left: 18px; }
+.describe-bar button { border-radius: 999px; }
+
+@media (max-width: 860px) {
+  .items { border-radius: 20px; }
+  .panel > .items { border-radius: 0; }
+  .item { padding: 14px 16px; gap: 12px; }
+  table.cards tr { border-radius: 20px; padding: 16px; }
+}
+.more-filters { flex-basis: 100%; }
+.more-filters > summary { display: inline-flex; align-items: center; min-height: 36px; color: var(--accent); font-weight: 600; font-size: 13.5px; }
+.more-filters > .filters { margin: 8px 0 0; }
+/* Connections: a row per account, with its actions under it. */
+.items > li.conn { display: flex; align-items: flex-start; gap: 14px; padding: 14px 18px; }
+.items > li.conn.highlight { background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+.conn .list-icon { font-weight: 700; font-size: 16px; }
+.conn .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.conn .title { font-weight: 600; font-size: 15px; }
+.conn .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.conn-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.conn-actions button { min-height: 36px; border-radius: 999px; }
+.template-card .list-icon { margin-bottom: 4px; }
+.template-card strong { font-weight: 600; font-size: 15px; }
+/* Empty states: the icon larger, on the brand's tint. */
+.empty-icon { width: 56px; height: 56px; border-radius: 16px; background: var(--tint); color: var(--tint-text); }
+.empty-icon svg { width: 26px; height: 26px; }
+.empty-state { gap: 14px; }
