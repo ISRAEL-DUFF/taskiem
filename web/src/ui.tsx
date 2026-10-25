@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Link } from "react-router-dom";
 import { onScreen, toast } from "./toast";
 import { ApiError } from "./api";
 import { Icon } from "./icons";
@@ -215,6 +216,51 @@ export function PageHeader({ title, description, actions }: { title: ReactNode; 
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </div>
+  );
+}
+
+/** A list of rows that each open something, as on Home (the mockups):
+ * an icon on a tint, a title with a line under it, figures on the right. */
+export function Items({ label, children }: { label?: string; children: ReactNode }) {
+  return (
+    <ul className="items" aria-label={label}>
+      {children}
+    </ul>
+  );
+}
+
+/** One row of Items. `tone` tints the icon: warn (amber), danger, ok, info, or the brand's.
+ * `side` sits at the end of the title line (an amount, a time); `sideSub` under the text (a status). */
+export function Item({ to, icon, tone, title, sub, side, sideSub, extra, testid, className }: {
+  to: string;
+  icon: string;
+  tone?: "warn" | "danger" | "ok" | "info" | "muted";
+  title: ReactNode;
+  sub?: ReactNode;
+  side?: ReactNode;
+  sideSub?: ReactNode;
+  extra?: ReactNode;
+  testid?: string;
+  className?: string;
+}) {
+  return (
+    <li className={className} data-testid={testid}>
+      <Link className="item" to={to}>
+        <span className={tone ? `list-icon ${tone}` : "list-icon"}>
+          <Icon name={icon} />
+        </span>
+        <span className="grow">
+          <span className="item-top">
+            <span className="title">{title}</span>
+            {side && <span className="item-figure">{side}</span>}
+          </span>
+          {sub && <span className="sub">{sub}</span>}
+          {extra}
+          {sideSub && <span className="item-tag">{sideSub}</span>}
+        </span>
+        <Icon name="chevron" className="go" />
+      </Link>
+    </li>
   );
 }
 

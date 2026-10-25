@@ -23,6 +23,8 @@ Taskiem's icon, a lime "t" on dark green, is now on your home screen. You stay s
 
 **Money** shows Today, This week or This month (other periods under **Other**): money in, money out and what you kept, a bar for each day (press one to see its figures), where the money came from, and what to look at.
 
+**Orders, Workflows, Activity and Invoices** are lists you tap: each row shows who or what it is, the amount or time, and its status, and opens the order, workflow, run or invoice. Activity puts today's runs first, then yesterday's; the workflow, environment and date filters are under **More filters**.
+
 ## Approving from Home
 
 When a payment or another step waits for your approval, it shows under **Needs you** on Home with an **Approve** button. Pressing it opens a sheet showing exactly what you are approving: the amount, who it goes to and their account, when the workflow says them. Check it, then press **Confirm** (or confirm with your passkey if your business asks for one). To reject, or to see more about the request, press the row itself to open **Approvals**.

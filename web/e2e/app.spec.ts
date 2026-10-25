@@ -135,3 +135,44 @@ test("Home's money card and Money's week, from the money log", async ({ page }) 
   await expect(totals.locator(".money-bars-picked")).not.toContainText("Today");
   await expect(page.getByRole("region", { name: "Where it came from" })).toContainText("Cash");
 });
+
+test("Activity, Workflows and Invoices are lists of rows that open the item", async ({ page }) => {
+  // A business of its own, so the lists hold this test's rows only.
+  const email = `owner-${Date.now()}@rows.test`;
+  const up = await page.request.post("/v1/signup", { headers: { "X-Taskiem-Request": "1" }, data: { tenant: "Rows Stores", email, name: "Owner", password: "correct horse battery" } });
+  expect(up.status(), await up.text()).toBe(201);
+  const api = async (method: string, path: string, data?: unknown) => {
+    const r = await page.request.fetch(path, { method, data, headers: { "X-Taskiem-Request": "1" } });
+    expect(r.ok(), `${method} ${path}: ${r.status()} ${await r.text()}`).toBeTruthy();
+    return (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  };
+  const wf = await api("POST", "/v1/workflows", {
+    name: "Daily tally",
+    definition: { schema: "wd/v1", id: "wf_dailyTallyRows", version: 1, name: "Daily tally", trigger: { type: "manual" }, steps: [{ id: "sum", type: "transform", config: { output: { ok: true } } }] },
+  });
+  await api("POST", `/v1/workflows/${String(wf.id)}/versions/1/publish`);
+  const run = await api("POST", `/v1/workflows/${String(wf.id)}/runs`, { input: {} });
+
+  // Activity: the run under Today, with its status's icon; the row opens the run.
+  await page.goto("/runs");
+  const today = page.getByRole("region", { name: "Today" });
+  const row = today.getByTestId("run").filter({ hasText: "Daily tally" });
+  await expect(row).toBeVisible();
+  await expect(row.locator(".list-icon.ok")).toBeVisible();
+  await row.getByRole("link").click();
+  await expect(page).toHaveURL(new RegExp(`/runs/${String(run.run_id)}$`));
+
+  // Workflows: the live one, running, opens its editor.
+  await page.getByRole("navigation", { name: "Quick" }).getByRole("link", { name: "Workflows" }).click();
+  const w = page.getByTestId("workflow").filter({ hasText: "Daily tally" });
+  await expect(w).toContainText("Running");
+  await expect(w.getByRole("link")).toHaveAttribute("href", `/workflows/${String(wf.id)}`);
+
+  // Invoices: the customer, the total on the title line, and the status.
+  await api("POST", "/v1/invoices", { customer: { name: "Adaeze Okafor", phone: "08031234567" }, lines: [{ description: "Catering", quantity: 1, unit_kobo: 18500000 }] });
+  await page.goto("/invoices");
+  const inv = page.getByTestId("invoice").first();
+  await expect(inv).toContainText("₦185,000");
+  await expect(inv).toContainText("Draft");
+  await expect(inv.getByRole("link")).toHaveAttribute("href", /^\/invoices\/INV-/);
+});
