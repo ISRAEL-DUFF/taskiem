@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B7 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B8 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 
@@ -406,6 +406,8 @@ Debtors with aging; the three rungs with the school's wording; at most 50 per se
 ### B8: clearance and the gate (S)
 
 The clearance rule, overrides, clearance lists; the gate screen and the server refusing everything else for a gate session; `school-gate-list`.
+
+**Built** (B8): migration 00220 (`school_clearance_overrides`, a sealed reason with a start and an end defaulting to the term's end, withdrawable, one in force per student and term); `schools.Clearance`, computed every time it is read and stored nowhere: **cleared** when the term's invoices are paid, an approved plan is in good standing or settled, or an override is in force; **partly paid** when some money was counted and a balance is left, never cleared; **not paid** otherwise (a student with no invoice is cleared only when the class has nothing required); overrides by `school.approve` through `POST /v1/schools/students/{id}/clearance-override` and a withdraw route, audited; `GET /v1/schools/clearance` (and CSV) and a student's clearance; `schools@1` `clearance` and `clearance_list` (per-class lists with no amounts); the gate at `GET /v1/gate/search` and `GET /v1/gate/students/{id}` answering cleared or see the bursar with a name and class only, the OpenAPI schemas refusing any other property, a test walking every gate answer for a money-shaped key and another walking the whole route table for 403s on a gate session; the gate screen for a gate-only session at any address and at `/schools/gate` for bursars; Schools > Clearance; the template `school-gate-list` ([schools](../schools.md), [templates](../templates.md)). Differences from §12: none of substance; the override's end defaults to the term's end rather than being required.
 
 ### B9: the proprietor, templates and AI (M)
 
