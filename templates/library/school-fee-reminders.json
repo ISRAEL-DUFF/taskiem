@@ -1,0 +1,114 @@
+{
+  "id": "school-fee-reminders",
+  "title": "Remind families of school fees every week",
+  "summary": "On two chosen days each week, remind the families of students whose fees are past due, gently at first and more firmly as the weeks pass, skipping families who promised to pay or keep to a payment plan, and tell the bursar what went out.",
+  "description": "On the two days you choose, at the time you choose, finds the students with a balance past the term's due date (of one class, or the whole school) and sends each family one message per guardian with a fresh link to its fees page: on WhatsApp or Telegram where a guardian gets the school's updates there, otherwise by SMS. The wording is the school's own for each rung of the ladder (Schools > Settings), chosen by how long the fees are past due: the gentle reminder up to a week, the firmer one up to two weeks, the final one after. At most 50 families are reminded per run, oldest due first, so a run can never message a whole school at once. A family with a promise to pay that is not yet due, or a payment plan in good standing, is skipped; a family whose plan is in arrears is reminded by the days past the instalment it missed; a family is never sent the same rung twice in a day. Then the bursar is told how many went out and how many were skipped. Running the same run again sends nothing twice.",
+  "category": "collections",
+  "tags": [
+    "schools",
+    "collections"
+  ],
+  "keywords": [
+    "school",
+    "fees",
+    "reminder",
+    "remind",
+    "parents",
+    "families",
+    "term",
+    "bursar"
+  ],
+  "requires": [
+    "school fees",
+    "fees",
+    "school"
+  ],
+  "connectors": [
+    "schools@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the reminders go out, Lagos time.",
+      "required": true,
+      "default": "09:00",
+      "example": "09:00"
+    },
+    {
+      "name": "first_day",
+      "type": "weekday",
+      "title": "First day",
+      "description": "The first day of the week reminders go out.",
+      "required": true,
+      "default": "Monday",
+      "example": "Monday"
+    },
+    {
+      "name": "second_day",
+      "type": "weekday",
+      "title": "Second day",
+      "description": "The second day of the week reminders go out. Choose the same day as the first for once a week.",
+      "required": true,
+      "default": "Thursday",
+      "example": "Thursday"
+    },
+    {
+      "name": "class",
+      "type": "string",
+      "title": "Class",
+      "description": "Only this class, as written on the Classes page (JSS 1 A). Leave empty for the whole school.",
+      "required": false,
+      "default": "",
+      "example": "JSS 1 A",
+      "max_length": 80
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_schoolFeeReminders",
+    "version": 1,
+    "name": "School fee reminders",
+    "description": "Reminds the families of students past due, by the ladder, and tells the bursar.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * {{first_day:cron}},{{second_day:cron}}",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "remind",
+        "type": "connector",
+        "name": "Remind the families past due",
+        "connector": "schools@1",
+        "action": "send_reminders",
+        "input": {
+          "class": "{{class}}",
+          "rung": "auto",
+          "limit": 50
+        }
+      },
+      {
+        "id": "tell_bursar",
+        "type": "connector",
+        "name": "Tell the bursar what went out",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "remind"
+        ],
+        "input": {
+          "title": "School fee reminders",
+          "message": "='Fee reminders: ' + string(steps.remind.output.sent) + ' sent (gentle ' + string(steps.remind.output.by_rung[?\"1\"].orValue(0)) + ', firmer ' + string(steps.remind.output.by_rung[?\"2\"].orValue(0)) + ', final ' + string(steps.remind.output.by_rung[?\"3\"].orValue(0)) + '), ' + string(steps.remind.output.skipped) + ' skipped for a promise, a plan or a reminder sent already. Debtors shows each.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "1h"
+    }
+  }
+}

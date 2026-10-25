@@ -1968,6 +1968,16 @@ export interface SchoolsIssueAccountInput {
 export interface SchoolsListClassesInput {
   [key: string]: Value;
 }
+export interface SchoolsListDebtorsInput {
+  /** Days past the due date */
+  bucket?: Val<"not_due" | 7 | 714 | 1430 | "over_30">;
+  /** A class's id or label, such as JSS 1 A */
+  class?: Val<string>;
+  /** Only students with an open promise, a missed promise, a plan in good standing, a plan in arrears, or neither */
+  has?: Val<"promise" | "missed" | "plan" | "arrears" | "none">;
+  /** At most this many (default 200) */
+  limit?: Val<number>;
+}
 export interface SchoolsListFeeItemsInput {
   /** A class's id or label, such as JSS 1 A */
   class?: Val<string>;
@@ -1981,6 +1991,30 @@ export interface SchoolsListStudentsInput {
   limit?: Val<number>;
   /** active by default; any for every status */
   status?: Val<"active" | "withdrawn" | "graduated" | "any">;
+}
+export interface SchoolsPlanDecisionsInput {
+  /** At most this many (50) */
+  limit?: Val<number>;
+  /** How far back (7) */
+  since_days?: Val<number>;
+  /** Both when left out */
+  status?: Val<"approved" | "declined">;
+  /** Only decisions the family was not told of yet (true by default) */
+  untold?: Val<boolean>;
+}
+export interface SchoolsSendRemindersInput {
+  /** Without students: only this class's debtors (id or label) */
+  class?: Val<string>;
+  /** Without students: at most this many (50) */
+  limit?: Val<number>;
+  /** The rung; auto (the default) by days past due */
+  rung?: Val<"1" | "2" | "3" | "auto">;
+  /** The students to remind, by id or admission number (at most 50); leave out to take the debtors past due */
+  students?: Value;
+}
+export interface SchoolsTellPlanDecisionInput {
+  /** The plan request's id */
+  plan: Val<string>;
 }
 export interface SchoolsTermInvoicesInput {
   /** A class's id or label, such as JSS 1 A */
@@ -2004,10 +2038,18 @@ export const schools = {
   issue_account: (input: SchoolsIssueAccountInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "issue_account", input, extra),
   /** List classes (read) */
   list_classes: (input?: SchoolsListClassesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_classes", input, extra),
+  /** List debtors (read) */
+  list_debtors: (input?: SchoolsListDebtorsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_debtors", input, extra),
   /** List fee items (read) */
   list_fee_items: (input?: SchoolsListFeeItemsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_fee_items", input, extra),
   /** List students (read) */
   list_students: (input?: SchoolsListStudentsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_students", input, extra),
+  /** List payment plan decisions (read) */
+  plan_decisions: (input?: SchoolsPlanDecisionsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "plan_decisions", input, extra),
+  /** Send fee reminders (idempotent_write) */
+  send_reminders: (input?: SchoolsSendRemindersInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_reminders", input, extra),
+  /** Tell a family its plan's decision (idempotent_write) */
+  tell_plan_decision: (input: SchoolsTellPlanDecisionInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "tell_plan_decision", input, extra),
   /** List a term's invoices (read) */
   term_invoices: (input?: SchoolsTermInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "term_invoices", input, extra),
 };
@@ -2731,7 +2773,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
-  "schools@1": ["current_term", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_fee_items", "list_students", "term_invoices"],
+  "schools@1": ["current_term", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],

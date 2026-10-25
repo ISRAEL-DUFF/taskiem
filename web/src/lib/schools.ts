@@ -124,6 +124,13 @@ export interface SchoolSettings {
   cash_threshold_naira?: number | null;
   /** How many days a link to a family's page works (1 to 30; 3 by default). */
   family_link_days?: number;
+  /** The school's own reminder wording by rung ("1", "2", "3"); only the rungs it changed. */
+  reminder_wording?: Record<string, string>;
+  /** The default wording by rung. */
+  reminder_defaults?: Record<string, string>;
+  reminder_placeholders?: string[];
+  /** Days past an instalment's date a payment plan stays in good standing (0 to 60). */
+  plan_grace_days?: number;
 }
 
 // --- what a person may do ---

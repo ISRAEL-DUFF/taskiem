@@ -264,3 +264,155 @@ actions:
         expires_at: { type: string, description: When the link stops working }
     pii:
       - { field: output.link, category: other }
+  list_debtors:
+    title: List debtors
+    description: Students with a balance on a sent term invoice (this term's, and earlier terms' still open), by class, each aged by days past the due date (not_due, 0_7, 7_14, 14_30, over_30), with the last reminder's rung, any promise to pay (open or missed) and the standing of any payment plan (good, arrears or settled); optionally of one class, one bucket, or those with a promise, a missed promise, a plan or a plan in arrears. Totals by bucket. No names.
+    class: read
+    input:
+      type: object
+      properties:
+        class:  { type: string, description: "A class's id or label, such as JSS 1 A" }
+        bucket: { type: string, enum: [not_due, 0_7, 7_14, 14_30, over_30], description: Days past the due date }
+        has:    { type: string, enum: [promise, missed, plan, arrears, none], description: "Only students with an open promise, a missed promise, a plan in good standing, a plan in arrears, or neither" }
+        limit:  { type: integer, minimum: 1, maximum: 1000, description: At most this many (default 200) }
+    output:
+      type: object
+      properties:
+        count:        { type: integer }
+        total:        { type: integer, description: How many debtors match in all }
+        balance_kobo: { type: integer, description: What the debtors owe in all }
+        totals:
+          type: object
+          description: By bucket, how many students and how much
+          additionalProperties:
+            type: object
+            properties:
+              students:     { type: integer }
+              balance_kobo: { type: integer }
+        debtors:
+          type: array
+          items:
+            type: object
+            properties:
+              student_id:       { type: string }
+              admission_number: { type: string }
+              class:            { type: string }
+              class_id:         { type: string }
+              family_id:        { type: string }
+              balance_kobo:     { type: integer }
+              due_on:           { type: string }
+              days_past_due:    { type: integer }
+              bucket:           { type: string, enum: [not_due, 0_7, 7_14, 14_30, over_30] }
+              last_rung:        { type: integer, description: The last reminder's rung (0 when none) }
+              last_reminded_at: { type: string }
+              promise:          { type: string, enum: [none, open, missed] }
+              promised_on:      { type: string }
+              plan:             { type: string, enum: [none, good, arrears, settled] }
+              plan_next_due_on: { type: string }
+  send_reminders:
+    title: Send fee reminders
+    description: Sends each chosen student's family one reminder per guardian with a fresh family page link, on WhatsApp or Telegram where a guardian gets the school's updates there, otherwise by SMS, in the school's wording for the rung (1 gentle, 2 firmer, 3 final; auto picks it by days past due, 1 up to a week, 2 up to two weeks, 3 after). Give students (ids or admission numbers, at most 50) or let it take the debtors past due, of one class if given, oldest due first, at most limit (50). A family with a promise to pay not yet due or a plan in good standing is skipped and the reason answered; a plan in arrears is reminded by the days past the instalment missed; a family gets one message per rung per day. Exactly once for the step, so a retry sends nothing twice.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        students:
+          type: array
+          maxItems: 50
+          items: { type: string }
+          description: The students to remind, by id or admission number (at most 50); leave out to take the debtors past due
+        class: { type: string, description: "Without students: only this class's debtors (id or label)" }
+        rung:  { type: string, enum: ["1", "2", "3", "auto"], description: "The rung; auto (the default) by days past due" }
+        limit: { type: integer, minimum: 1, maximum: 50, description: "Without students: at most this many (50)" }
+    output:
+      type: object
+      properties:
+        sent:    { type: integer }
+        skipped: { type: integer }
+        by_rung:
+          type: object
+          properties:
+            "1": { type: integer }
+            "2": { type: integer }
+            "3": { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              student_id:       { type: string }
+              admission_number: { type: string }
+              rung:             { type: integer }
+              status:           { type: string, enum: [sent, skipped] }
+              reason:           { type: string, description: Why it was skipped }
+              balance_kobo:     { type: integer }
+              nobody:           { type: boolean, description: No guardian could be reached }
+  plan_decisions:
+    title: List payment plan decisions
+    description: Payment plan requests decided (approved or declined) in the last since_days (7), oldest first; untold (the default) keeps those whose family was not told yet, for the template that tells them. Each with its student, the instalments as decided, the note and when it was decided. No names.
+    class: read
+    input:
+      type: object
+      properties:
+        status:     { type: string, enum: [approved, declined], description: Both when left out }
+        untold:     { type: boolean, description: Only decisions the family was not told of yet (true by default) }
+        since_days: { type: integer, minimum: 1, maximum: 90, description: How far back (7) }
+        limit:      { type: integer, minimum: 1, maximum: 200, description: At most this many (50) }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        decisions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:               { type: string }
+              student_id:       { type: string }
+              admission_number: { type: string }
+              class:            { type: string }
+              status:           { type: string, enum: [approved, declined] }
+              decided_at:       { type: string }
+              note:             { type: string }
+              told:             { type: boolean }
+              instalments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    amount_kobo: { type: integer }
+                    due_on:      { type: string }
+  tell_plan_decision:
+    title: Tell a family its plan's decision
+    description: Tells the family of a decided payment plan request (plan, its id) the decision, with the instalments as approved or the note, and a fresh family page link, on each guardian's chat app or by SMS. Exactly once per decision, whoever tells first (the school's page tells at once; this step is the safety net for a family it could not reach), so running it again sends nothing. A request not decided yet fails the step.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [plan]
+      properties:
+        plan: { type: string, description: The plan request's id }
+    output:
+      type: object
+      properties:
+        plan_id:          { type: string }
+        student_id:       { type: string }
+        admission_number: { type: string }
+        status:           { type: string, enum: [approved, declined] }
+        told_before:      { type: boolean, description: The family was told already; nothing was sent now }
+        channels:
+          type: object
+          description: Guardians reached by channel (whatsapp, telegram, sms)
+          additionalProperties: { type: integer }
+        nobody:           { type: boolean, description: No guardian could be reached }

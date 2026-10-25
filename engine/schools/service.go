@@ -2,6 +2,7 @@ package schools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -154,4 +155,57 @@ func (s Service) Current(ctx context.Context, tenant uuid.UUID) (Term, bool, err
 		return err
 	})
 	return out, ok, err
+}
+
+// SendRemindersOnce sends reminders under a workflow step's key
+// (SendReminders).
+func (s Service) SendRemindersOnce(ctx context.Context, tenant uuid.UUID, in RemindIn, by string) (Reminded, error) {
+	return s.SendReminders(ctx, tenant, in, by)
+}
+
+// ListDebtors is Debtors in its own transaction.
+func (s Service) ListDebtors(ctx context.Context, tenant uuid.UUID, f DebtorFilter) (Debtors, error) {
+	var out Debtors
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.Debtors(ctx, tx, tenant, f)
+		return err
+	})
+	return out, err
+}
+
+// ListPlanDecisions is PlanDecisions in its own transaction.
+func (s Service) ListPlanDecisions(ctx context.Context, tenant uuid.UUID, f PlanDecisionFilter) ([]PlanRequest, error) {
+	var out []PlanRequest
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.PlanDecisions(ctx, tx, tenant, f)
+		return err
+	})
+	return out, err
+}
+
+// TellPlan tells a family of its plan's decision, once (TellPlanDecision).
+func (s Service) TellPlan(ctx context.Context, tenant uuid.UUID, plan string) (PlanTold, error) {
+	id, err := uuid.Parse(plan)
+	if err != nil {
+		return PlanTold{}, ErrNotFound
+	}
+	return s.TellPlanDecision(ctx, tenant, id)
+}
+
+// FindStudents resolves students by id or admission number.
+func (s Service) FindStudents(ctx context.Context, tenant uuid.UUID, refs []string) ([]uuid.UUID, error) {
+	out := make([]uuid.UUID, 0, len(refs))
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		for _, ref := range refs {
+			st, err := s.Student(ctx, tx, tenant, ref)
+			if err != nil {
+				return fmt.Errorf("student %q: %w", ref, err)
+			}
+			out = append(out, st.ID)
+		}
+		return nil
+	})
+	return out, err
 }

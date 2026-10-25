@@ -314,6 +314,11 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		if _, err := s.Invoices.Overdue(ctx); err != nil && ctx.Err() == nil {
 			s.Logger.Error("invoices: overdue", "err", err)
 		}
+		// Schools' promises past their date and plans' instalments missed
+		// (docs/schools.md#promises), each decided once.
+		if _, err := s.schoolsSvc().CheckAllChasing(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("schools: chasing check", "err", err)
+		}
 		select {
 		case <-ctx.Done():
 			return nil
