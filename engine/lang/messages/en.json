@@ -389,6 +389,11 @@
       "reviewed": true,
       "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: the link to the Money page in the web app"
     },
+    "money.daily.school": {
+      "text": "School fees ({term}): {collected} collected, {outstanding} outstanding, {cleared}% of students cleared.",
+      "reviewed": true,
+      "context": "The daily money summary's line for a school (the Schools area on): what was collected for school fees that day, what the term's invoices still owe, and the share of the term's students cleared to come in; {term} is like First term 2026/2027"
+    },
     "reach.about": {
       "text": "This chat sends you updates from {businesses}. Send STOP to stop the latest one.",
       "reviewed": true,

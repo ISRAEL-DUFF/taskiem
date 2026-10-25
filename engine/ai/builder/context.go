@@ -40,6 +40,9 @@ type Context struct {
 	// deployment has a model, the plan includes AI, and the business has
 	// not turned them off.
 	AISteps bool `json:"ai_steps,omitempty"`
+	// Schools says the business has the Schools area on (decision 0046):
+	// its students, fees, clearance and the daily close are schools@1's.
+	Schools bool `json:"schools,omitempty"`
 }
 
 // StartableWorkflow is one of the business's workflows a subflow step may
@@ -166,6 +169,11 @@ var synonyms = map[string][]string{
 	// Invoices to customers are invoices@1's (rule 17) however they are
 	// worded; "invoice" itself already names it.
 	"billing": {"invoices"}, "owe": {"invoices"}, "owes": {"invoices"}, "owed": {"invoices"},
+	// A school's fees, pupils, parents, terms, clearance and gate are the
+	// schools record's (rule 22); "school" itself already names it.
+	"fees": {"schools", "invoices"}, "pupil": {"schools"}, "pupils": {"schools"}, "students": {"schools"}, "student": {"schools"},
+	"parents": {"schools"}, "guardians": {"schools"}, "bursar": {"schools"}, "term": {"schools"}, "clearance": {"schools"},
+	"gate": {"schools"}, "resumption": {"schools"}, "proprietor": {"schools"}, "class": {"schools"}, "classes": {"schools"},
 }
 
 var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "when": true, "then": true, "that": true,

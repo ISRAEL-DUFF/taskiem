@@ -312,6 +312,10 @@
       "text": "Money page: {link}",
       "reviewed": false
     },
+    "money.daily.school": {
+      "text": "School fees ({term}): {collected} don enter, {outstanding} still dey remain, {cleared}% of students don clear.",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Dis chat dey send you update from {businesses}. Send STOP make the last one stop.",
       "reviewed": false

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -95,5 +96,59 @@ func TestClearanceList(t *testing.T) {
 	}
 	if _, err := c.Actions["clearance_list"].Execute(ctx, connector.Request{Input: map[string]any{"class": "JSS 9"}}); !errors.Is(err, effects.ErrFatal) {
 		t.Errorf("unknown class: %v", err)
+	}
+}
+
+var closed []string
+
+func (o *ops) CloseFor(_ context.Context, _ uuid.UUID, day, by string) (schools.Close, error) {
+	closed = append(closed, day+"|"+by)
+	c := schools.Close{CloseBrief: schools.CloseBrief{ID: uuid.MustParse("0192e2e0-0000-7000-8000-0000000000dd"), Day: "2026-10-24", RanAt: time.Date(2026, 10, 25, 1, 0, 0, 0, time.UTC), RanBy: by, Reconciles: false, Problems: 1},
+		Term: "First term 2026/2027", MoneyIn: schools.CloseSum{Count: 2, Kobo: 15_000_000}, IntoAccounts: schools.CloseSum{Count: 1, Kobo: 10_000_000}, AtTheDesk: schools.CloseSum{Count: 1, Kobo: 5_000_000},
+		MatchedAuto: schools.CloseSum{Count: 1, Kobo: 10_000_000}, MatchedPerson: schools.CloseSum{Count: 1, Kobo: 5_000_000},
+		Pending: []schools.CloseItem{{Kind: schools.ItemPendingPosting, Message: "₦60,000 posted for GCA/002 (cash) waits for a second person since 24 Oct", Path: schools.PathApprovals, AmountKobo: 6_000_000, Ref: "GCA/002"}},
+		Claims:  []schools.CloseItem{}, UnmatchedList: []schools.CloseItem{},
+		ProblemList: []schools.CloseItem{{Kind: schools.ProblemPartWithoutReceipt, Message: "₦50,000 counted towards INV-0002 (GCA/002) has no receipt", Path: "/invoices/x", AmountKobo: 5_000_000, Ref: "INV-0002"}}}
+	if day == "2020-01-01" {
+		return schools.Close{}, schools.ErrState
+	}
+	return c, nil
+}
+
+// daily_close: the close answered with its text, no names in it; a bad
+// day fails the step; the day the close was taken by passes through.
+func TestDailyClose(t *testing.T) {
+	o := &ops{}
+	c := conn.New(o)
+	closed = nil
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "s"})
+	r, err := c.Actions["daily_close"].Execute(ctx, connector.Request{Input: map[string]any{"link": "https://app.test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	if out["day"] != "2026-10-24" || out["reconciles"] != false || out["problems"] != 1 || out["pending"] != 1 || out["claims"] != 0 || out["term"] != "First term 2026/2027" {
+		t.Fatalf("close %v", out)
+	}
+	if in := out["money_in"].(map[string]any); in["kobo"] != int64(15_000_000) || in["count"] != 2 {
+		t.Fatalf("money in %v", in)
+	}
+	text := out["text"].(string)
+	for _, want := range []string{"Daily close, 24 Oct 2026 (First term 2026/2027)", "₦150,000 (2 payments)", "DOES NOT RECONCILE: 1 problem(s)", "Problems:", "has no receipt → https://app.test/invoices/x", "Waiting:", "https://app.test/approvals"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text lacks %q:\n%s", want, text)
+		}
+	}
+	if len(closed) != 1 || !strings.HasPrefix(closed[0], "|workflow:") {
+		t.Fatalf("closed %v", closed)
+	}
+	if _, err := c.Actions["daily_close"].Execute(ctx, connector.Request{Input: map[string]any{"day": "yesterday"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("a bad day: %v", err)
+	}
+	if _, err := c.Actions["daily_close"].Execute(ctx, connector.Request{Input: map[string]any{"day": "2020-01-01"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("a refused day: %v", err)
+	}
+	if closed[len(closed)-1] != "2020-01-01|workflow:"+strings.TrimPrefix(closed[0], "|workflow:") {
+		t.Fatalf("day passed %v", closed)
 	}
 }

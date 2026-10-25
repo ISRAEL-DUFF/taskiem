@@ -319,6 +319,9 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		if _, err := s.schoolsSvc().CheckAllChasing(ctx); err != nil && ctx.Err() == nil {
 			s.Logger.Error("schools: chasing check", "err", err)
 		}
+		// Schools' daily close of yesterday (docs/schools.md#the-daily-close),
+		// taken once per school and day.
+		s.runSchoolCloses(ctx)
 		select {
 		case <-ctx.Done():
 			return nil

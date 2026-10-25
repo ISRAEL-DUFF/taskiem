@@ -312,6 +312,10 @@
       "text": "Shafin kuɗi: {link}",
       "reviewed": false
     },
+    "money.daily.school": {
+      "text": "Kuɗin makaranta ({term}): {collected} sun shigo, {outstanding} sun rage, {cleared}% na ɗalibai sun kammala biya.",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Wannan hira tana aiko maka da labarai daga {businesses}. Aika STOP don dakatar da na ƙarshe.",
       "reviewed": false

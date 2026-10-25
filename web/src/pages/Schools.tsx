@@ -79,6 +79,7 @@ export function SchoolTabs() {
   const { me } = useAuth();
   return (
     <nav className="tabs" aria-label="Schools">
+      <NavLink to="/schools/overview">Overview</NavLink>
       <NavLink to="/schools" end>
         Students
       </NavLink>

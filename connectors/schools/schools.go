@@ -29,7 +29,7 @@ var manifest []byte
 // Ops is what the actions call: schools.Service.
 type Ops interface {
 	FindClass(ctx context.Context, tenant uuid.UUID, idOrLabel string) (schools.Class, error)
-	ListStudents(ctx context.Context, tenant uuid.UUID, class *uuid.UUID, status string, limit int) ([]schools.Student, int, error)
+	ListStudents(ctx context.Context, tenant uuid.UUID, f schools.Filter) ([]schools.Student, int, error)
 	GetStudent(ctx context.Context, tenant uuid.UUID, idOrNumber string) (schools.StudentDetail, error)
 	ListClasses(ctx context.Context, tenant uuid.UUID) ([]schools.Class, error)
 	Current(ctx context.Context, tenant uuid.UUID) (schools.Term, bool, error)
@@ -46,6 +46,7 @@ type Ops interface {
 	TellPlan(ctx context.Context, tenant uuid.UUID, plan string) (schools.PlanTold, error)
 	ClearanceOf(ctx context.Context, tenant uuid.UUID, student string, term uuid.UUID) (schools.ClearanceRow, error)
 	ListClearance(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID) (schools.ClearanceList, error)
+	CloseFor(ctx context.Context, tenant uuid.UUID, day, by string) (schools.Close, error)
 }
 
 var _ Ops = schools.Service{}
@@ -70,6 +71,7 @@ func New(ops Ops) *connector.Connector {
 		"tell_plan_decision": connector.ActionFunc(a.tellPlanDecision),
 		"clearance":          connector.ActionFunc(a.clearance),
 		"clearance_list":     connector.ActionFunc(a.clearanceList),
+		"daily_close":        connector.ActionFunc(a.dailyClose),
 	}}
 }
 
@@ -265,7 +267,8 @@ func (a *actions) listStudents(ctx context.Context, req connector.Request) (conn
 		}
 		class = &cl.ID
 	}
-	list, total, err := a.ops.ListStudents(ctx, c.Tenant, class, status, limit)
+	without, _ := req.Input["without_account"].(bool)
+	list, total, err := a.ops.ListStudents(ctx, c.Tenant, schools.Filter{ClassID: class, Status: status, Limit: limit, WithoutAccount: without})
 	if err != nil {
 		return connector.Response{}, classify(err)
 	}
@@ -443,12 +446,12 @@ func (l *Late) FindClass(ctx context.Context, t uuid.UUID, idOrLabel string) (sc
 }
 
 // ListStudents implements Ops.
-func (l *Late) ListStudents(ctx context.Context, t uuid.UUID, class *uuid.UUID, status string, limit int) ([]schools.Student, int, error) {
+func (l *Late) ListStudents(ctx context.Context, t uuid.UUID, f schools.Filter) ([]schools.Student, int, error) {
 	o, err := l.get()
 	if err != nil {
 		return nil, 0, err
 	}
-	return o.ListStudents(ctx, t, class, status, limit)
+	return o.ListStudents(ctx, t, f)
 }
 
 // GetStudent implements Ops.
@@ -575,4 +578,13 @@ func (l *Late) ListClearance(ctx context.Context, t, term uuid.UUID, class *uuid
 		return schools.ClearanceList{}, err
 	}
 	return o.ListClearance(ctx, t, term, class)
+}
+
+// CloseFor implements Ops.
+func (l *Late) CloseFor(ctx context.Context, t uuid.UUID, day, by string) (schools.Close, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.Close{}, err
+	}
+	return o.CloseFor(ctx, t, day, by)
 }

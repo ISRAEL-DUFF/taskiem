@@ -312,6 +312,10 @@
       "text": "Peeji ego: {link}",
       "reviewed": false
     },
+    "money.daily.school": {
+      "text": "Ụgwọ akwụkwọ ({term}): {collected} abatala, {outstanding} fọdụrụ, {cleared}% nke ụmụ akwụkwọ akwụchaala.",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Mkparịta ụka a na-ezitere gị ozi site na {businesses}. Zipu STOP iji kwụsị nke ikpeazụ.",
       "reviewed": false

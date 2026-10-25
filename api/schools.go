@@ -90,6 +90,7 @@ func (s *Server) schoolRoutes(r chi.Router) {
 	s.schoolFamilyRoutes(r)    // the family page's claims, plans and links (schools_family.go)
 	s.schoolChasingRoutes(r)   // debtors, reminders, promises, plan standing (schools_chasing.go)
 	s.schoolClearanceRoutes(r) // clearance, overrides (schools_clearance.go)
+	s.schoolOverviewRoutes(r)  // the overview and the daily close (schools_overview.go)
 	s.gateScreenRoutes(r)      // the gate's two routes, under /v1/gate (schools_clearance.go)
 	r.With(manage, s.tenantWide).Delete("/schools/families/{id}/guardians/{guardian}", s.removeSchoolGuardian)
 }

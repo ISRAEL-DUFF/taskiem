@@ -312,6 +312,10 @@
       "text": "Ojú-ìwé owó: {link}",
       "reviewed": false
     },
+    "money.daily.school": {
+      "text": "Owó ilé-ìwé ({term}): {collected} ti wọlé, {outstanding} ṣì kù, {cleared}% àwọn akẹ́kọ̀ọ́ ti parí ìsanwó.",
+      "reviewed": false
+    },
     "reach.about": {
       "text": "Ìjíròrò yìí ń fi ìròyìn ránṣẹ́ sí ọ láti ọ̀dọ̀ {businesses}. Fi STOP ránṣẹ́ láti dá èyí tó kẹ́yìn dúró.",
       "reviewed": false

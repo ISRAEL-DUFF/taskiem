@@ -32,13 +32,14 @@ func (s Service) FindClass(ctx context.Context, tenant uuid.UUID, idOrLabel stri
 	return out, err
 }
 
-// ListStudents lists students, optionally of one class and status.
-func (s Service) ListStudents(ctx context.Context, tenant uuid.UUID, class *uuid.UUID, status string, limit int) ([]Student, int, error) {
+// ListStudents lists students, optionally of one class and status, and
+// those without an account number.
+func (s Service) ListStudents(ctx context.Context, tenant uuid.UUID, f Filter) ([]Student, int, error) {
 	var out []Student
 	var total int
 	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
 		var err error
-		out, total, err = s.Students(ctx, tx, tenant, Filter{ClassID: class, Status: status, Limit: limit})
+		out, total, err = s.Students(ctx, tx, tenant, f)
 		return err
 	})
 	return out, total, err

@@ -43,6 +43,7 @@ import { SchoolPaymentsPage } from "./pages/SchoolPayments";
 import { SchoolReceiptsPage } from "./pages/SchoolReceipts";
 import { SchoolDebtorsPage } from "./pages/SchoolDebtors";
 import { GateHome, SchoolClearancePage, SchoolGatePage } from "./pages/SchoolClearance";
+import { SchoolOverviewPage } from "./pages/SchoolOverview";
 import { showSchools } from "./lib/schools";
 import { FormSubmissions, Forms } from "./pages/Forms";
 import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
@@ -341,6 +342,7 @@ function SignedIn() {
           <Route path="/schools/receipts" element={<SchoolReceiptsPage />} />
           <Route path="/schools/debtors" element={<SchoolDebtorsPage />} />
           <Route path="/schools/clearance" element={<SchoolClearancePage />} />
+          <Route path="/schools/overview" element={<SchoolOverviewPage />} />
           <Route path="/schools/gate" element={<SchoolGatePage />} />
           <Route path="/settings/schools" element={<SchoolSettingsPage />} />
           <Route path="/forms" element={<Forms />} />

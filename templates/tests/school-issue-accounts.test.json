@@ -1,0 +1,85 @@
+{
+  "schema": "wd-test/v1",
+  "template": "school-issue-accounts",
+  "params": {
+    "per_run": 50
+  },
+  "cases": [
+    {
+      "name": "each student without a number is issued one and the family told; a student the rail refuses is noted, not retried here; the bursar hears the count",
+      "mocks": {
+        "students": {
+          "output": {
+            "count": 2,
+            "total": 2,
+            "students": [
+              {"id": "0192e2e0-0000-7000-8000-0000000000a1", "admission_number": "GCA/001", "name": "Ebube Eze", "class": "JSS 1 A", "class_id": "0192e2e0-0000-7000-8000-0000000000c1", "status": "active", "family_id": "0192e2e0-0000-7000-8000-0000000000f1"},
+              {"id": "0192e2e0-0000-7000-8000-0000000000a2", "admission_number": "GCA/002", "name": "Chidi Eze", "class": "JSS 1 A", "class_id": "0192e2e0-0000-7000-8000-0000000000c1", "status": "active", "family_id": "0192e2e0-0000-7000-8000-0000000000f1"}
+            ]
+          }
+        },
+        "each[0].issue": {"output": {"student_id": "0192e2e0-0000-7000-8000-0000000000a1", "connection": "iswallet/main", "status": "issued", "account_number": "9912345678", "bank_name": "Wema Bank", "account_name": "GREENFIELD / EBUBE EZE", "named_by_rail": false, "reference": "tsk_abc"}},
+        "each[0].family": {"output": {"id": "0192e2e0-0000-7000-8000-0000000000a1", "admission_number": "GCA/001", "name": "Ebube Eze", "class": "JSS 1 A", "status": "active", "guardians": [{"name": "Ngozi Eze", "phone": "+2348031234567", "relationship": "Mother"}]}},
+        "each[0].link": {"output": {"link": "https://forms.example/s/tok1", "expires_at": "2026-10-28T09:00:00Z"}},
+        "each[0].tell_family": {"output": {"via": "whatsapp", "over_allowance": false}},
+        "each[1].issue": {"error": {"kind": "fatal", "message": "iswallet KYC_REQUIRED: the director's BVN is missing"}},
+        "tell_bursar": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "students": {"status": "active", "without_account": true, "limit": 50},
+          "each[0].issue": {"student": "0192e2e0-0000-7000-8000-0000000000a1"},
+          "each[0].link": {"student": "0192e2e0-0000-7000-8000-0000000000a1"},
+          "each[0].tell_family": {
+            "phone": "+2348031234567",
+            "title": "Ebube Eze's school fees account number",
+            "about": "Ebube Eze's account number",
+            "message": "Dear parent, Ebube Eze's own account number for school fees is 9912345678 (Wema Bank, in the name GREENFIELD / EBUBE EZE). Pay the fees by transfer to it: the money lands on Ebube Eze's fees by itself, and a receipt follows. Your fees page: https://forms.example/s/tok1"
+          },
+          "tell_bursar": {
+            "title": "Students' account numbers",
+            "message": "Account numbers: 2 student(s) issued or tried this run; the page of each shows the number, or the reason the rail gave. Schools > Account numbers has the rest."
+          }
+        },
+        "steps": {
+          "students": "completed",
+          "each[0].issue": "completed",
+          "each[0].family": "completed",
+          "each[0].link": "completed",
+          "each[0].tell_family": "completed",
+          "each[1].issue": "failed",
+          "each[1].not_issued": "completed",
+          "each[1].family": "skipped",
+          "each[1].link": "skipped",
+          "each[1].tell_family": "skipped",
+          "tell_bursar": "completed"
+        },
+        "calls": {
+          "students": 1,
+          "issue": 2,
+          "tell_family": 1,
+          "tell_bursar": 1
+        }
+      }
+    },
+    {
+      "name": "nobody waiting: nothing is issued and the bursar hears nothing",
+      "mocks": {
+        "students": {"output": {"count": 0, "total": 0, "students": []}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "students": "completed",
+          "tell_bursar": "skipped"
+        },
+        "calls": {
+          "students": 1,
+          "issue": 0,
+          "tell_bursar": 0
+        }
+      }
+    }
+  ]
+}

@@ -14,8 +14,9 @@ import (
 )
 
 type ops struct {
-	class  *uuid.UUID
-	status string
+	class   *uuid.UUID
+	status  string
+	without bool
 }
 
 var jss1 = schools.Class{ID: uuid.New(), Name: "JSS 1", Arm: "A", Label: "JSS 1 A", Order: 7, Students: 1}
@@ -26,8 +27,8 @@ func (o *ops) FindClass(_ context.Context, _ uuid.UUID, s string) (schools.Class
 	}
 	return schools.Class{}, schools.ErrNotFound
 }
-func (o *ops) ListStudents(_ context.Context, _ uuid.UUID, class *uuid.UUID, status string, _ int) ([]schools.Student, int, error) {
-	o.class, o.status = class, status
+func (o *ops) ListStudents(_ context.Context, _ uuid.UUID, f schools.Filter) ([]schools.Student, int, error) {
+	o.class, o.status, o.without = f.ClassID, f.Status, f.WithoutAccount
 	return []schools.Student{{ID: uuid.New(), AdmissionNumber: "GCA/001", Name: "Ebube Eze", ClassID: jss1.ID, Class: "JSS 1 A", Status: "active"}}, 1, nil
 }
 func (o *ops) GetStudent(_ context.Context, _ uuid.UUID, id string) (schools.StudentDetail, error) {
@@ -195,8 +196,11 @@ func TestActions(t *testing.T) {
 	if out["count"] != 1 || o.class == nil || *o.class != jss1.ID || o.status != "active" {
 		t.Fatalf("list %v %v %q", out, o.class, o.status)
 	}
-	if _, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"status": "any"}}); err != nil || o.status != "" || o.class != nil {
+	if _, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"status": "any"}}); err != nil || o.status != "" || o.class != nil || o.without {
 		t.Fatalf("any: %v %q", err, o.status)
+	}
+	if _, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"without_account": true}}); err != nil || !o.without {
+		t.Fatalf("without an account: %v %v", err, o.without)
 	}
 	if _, err := c.Actions["list_students"].Execute(ctx, connector.Request{Input: map[string]any{"class": "JSS 9"}}); !errors.Is(err, effects.ErrFatal) {
 		t.Errorf("an unknown class: %v", err)
