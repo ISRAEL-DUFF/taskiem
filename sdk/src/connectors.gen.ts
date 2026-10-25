@@ -1955,6 +1955,12 @@ export interface SchoolsClearanceListInput {
 export interface SchoolsCurrentTermInput {
   [key: string]: Value;
 }
+export interface SchoolsDailyCloseInput {
+  /** The day to close, YYYY-MM-DD; yesterday when empty */
+  day?: Val<string>;
+  /** The web app's address, put before each page in the text (https://app.taskiem.com) */
+  link?: Val<string>;
+}
 export interface SchoolsFamilyLinkInput {
   /** The family's id */
   family?: Val<string>;
@@ -2005,6 +2011,8 @@ export interface SchoolsListStudentsInput {
   limit?: Val<number>;
   /** active by default; any for every status */
   status?: Val<"active" | "withdrawn" | "graduated" | "any">;
+  /** Only students with no account number issued yet on the issuing connection */
+  without_account?: Val<boolean>;
 }
 export interface SchoolsPlanDecisionsInput {
   /** At most this many (50) */
@@ -2046,6 +2054,8 @@ export const schools = {
   clearance_list: (input?: SchoolsClearanceListInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "clearance_list", input, extra),
   /** The current term (read) */
   current_term: (input?: SchoolsCurrentTermInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "current_term", input, extra),
+  /** The daily close (read) */
+  daily_close: (input?: SchoolsDailyCloseInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "daily_close", input, extra),
   /** A family's fees page link (read) */
   family_link: (input?: SchoolsFamilyLinkInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "family_link", input, extra),
   /** Read a student (read) */
@@ -2791,7 +2801,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
-  "schools@1": ["clearance", "clearance_list", "current_term", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
+  "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
