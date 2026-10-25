@@ -1,6 +1,6 @@
 # Schools: specification and build plan
 
-Status: **Accepted** 2026-10-23; **B0 to B9 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md)
+Status: **Accepted** 2026-10-23; **B0 to B9 built** · Decision: [0046](../decisions/0046-balans-in-taskiem.md) · Workstream **B0 to B9**, one pull request per milestone · Source: [Balans overview](../strategy/balans-overview.md) · What remains, and the pilot checklist: [open items](schools-open-items.md)
 
 What a private school needed from Balans, built in Taskiem as an area any business can turn on: every student with their own account number, so a parent's transfer lands on the right child by itself; a term's fees as invoices; money nobody can place held for the bursar with suggestions; receipts; a parent page with no login; chasing that respects how families pay; a second person for cash and discounts; clearance nobody can set by hand; a gate screen with no amounts; and the proprietor's numbers on a phone in the evening.
 

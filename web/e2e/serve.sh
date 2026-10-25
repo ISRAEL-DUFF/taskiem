@@ -61,4 +61,8 @@ export TASKIEM_PUBLIC_ENABLED=true TASKIEM_PUBLIC_LISTEN=127.0.0.1:18082 TASKIEM
 # Email triggers (email.spec.ts): the mail role takes mail for in.e2e.test
 # on a local port instead of 25.
 export TASKIEM_MAIL_ENABLED=true TASKIEM_MAIL_DOMAIN=in.e2e.test TASKIEM_MAIL_LISTEN=127.0.0.1:12825
+# The demo school (pilot.spec.ts): a business of its own, seeded through the
+# engine on the demo rail, its people's passwords kept beside the operator's
+# link (bin/ is not committed).
+bin/taskiem demo school --create-tenant --name "Pilot Demo School" >"$root/bin/e2e-demo.txt"
 exec bin/taskiem serve --role all

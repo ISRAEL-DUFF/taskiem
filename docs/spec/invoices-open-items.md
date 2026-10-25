@@ -2,7 +2,7 @@
 
 Everything built for [decision 0045](../decisions/0045-tally-in-taskiem.md) so far (T1 to T8 of the [build plan](invoices-and-money-log.md)) that is not done, not verified, or done differently from the plan. Each item says what is missing, why, and what would close it. Update this list as items close; the plan's "Built" notes say how each milestone differs from it.
 
-Status as of 23 October 2026: T1 to T8 are all built. What is left is below.
+Status as of 23 October 2026: T1 to T8 are all built. What is left is below. The Schools work ([decision 0046](../decisions/0046-balans-in-taskiem.md)) closed the permanent-account rule and split payments for every business (B1, under [Matching](#matching-t5)); what remains of the schools' own milestones, and the pilot checklist, are in the [schools open items](schools-open-items.md).
 
 ## Needs people, not code
 
