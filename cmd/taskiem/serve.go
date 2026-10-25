@@ -1023,7 +1023,7 @@ func serve(ctx context.Context, args []string) error {
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
 		// Money summaries: yesterday's to owners on chat each morning,
 		// last month's by email on the 1st (docs/money-reports.md).
-		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Logger: log.With("component", "moneydigest")}
+		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Schools: e.schools(), Logger: log.With("component", "moneydigest")}
 		if e.wa != nil {
 			money.Channels = append(money.Channels, "whatsapp")
 		}

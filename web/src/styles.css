@@ -1097,6 +1097,51 @@ table.audit code { font-size: 12px; white-space: nowrap; }
 .aging li { margin: 0; }
 .aging button { width: 100%; text-align: left; line-height: 1.4; }
 
+/* The gate screen (docs/schools.md "The gate"): one phone, one hand, in
+   public. Large targets, high contrast in both themes, no amounts. */
+.gate-main { min-height: 100vh; background: var(--bg); padding: 16px; }
+.gate { max-width: 560px; margin: 0 auto; }
+.gate.standalone { padding-bottom: 32px; }
+.gate-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
+.gate-head h1 { font-size: 20px; margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.gate-dot { color: var(--muted); }
+.gate-signout { min-height: 44px; }
+.gate-search, .gate-answer, .gate-recent { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+.gate-label { display: block; font-weight: 600; margin-bottom: 8px; }
+.gate-input { width: 100%; font-size: 22px; min-height: 56px; padding: 10px 14px; }
+.gate-hint { color: var(--muted); margin: 10px 0 0; min-height: 1.4em; }
+.gate-hits { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }
+.gate-hit { width: 100%; min-height: 60px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; text-align: left; font-size: 18px; padding: 10px 14px; }
+.gate-hit-name { font-weight: 600; overflow-wrap: anywhere; }
+.gate-hit-class { color: var(--muted); font-size: 15px; white-space: nowrap; }
+.gate-hit-go { font-size: 24px; color: var(--muted); }
+.gate-answer { text-align: center; padding: 28px 18px; border-width: 2px; }
+.gate-answer.ok { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, var(--panel)); }
+.gate-answer.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--panel)); }
+.gate-who { font-size: 20px; margin: 0 0 10px; overflow-wrap: anywhere; }
+.gate-mark { font-size: 84px; line-height: 1; margin: 6px 0; }
+.gate-answer.ok .gate-mark { color: var(--ok); }
+.gate-answer.warn .gate-mark { color: var(--warn); }
+.gate-verdict { font-size: 34px; letter-spacing: 0.04em; margin: 0 0 6px; }
+.gate-answer.ok .gate-verdict { color: color-mix(in srgb, var(--ok) 80%, var(--text)); }
+.gate-answer.warn .gate-verdict { color: color-mix(in srgb, var(--warn) 70%, var(--text)); }
+.gate-again { width: 100%; min-height: 56px; font-size: 18px; margin-top: 18px; }
+.gate-recent h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.gate-recent ul { list-style: none; margin: 0; padding: 0; }
+.gate-recent li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 16px; }
+.gate-recent li:first-child { border-top: 0; }
+.gate-recent-mark { font-size: 22px; width: 28px; text-align: center; }
+.gate-recent-mark.ok { color: var(--ok); }
+.gate-recent-mark.warn { color: var(--warn); }
+.gate-recent-what { color: var(--muted); font-size: 14px; white-space: nowrap; }
+.gate-foot { color: var(--muted); font-size: 13px; text-align: center; margin: 8px 0 0; }
+@media (max-width: 480px) {
+  .gate-hit { grid-template-columns: minmax(0, 1fr) auto; }
+  .gate-hit-class { grid-column: 1; white-space: normal; }
+  .gate-hit-go { grid-row: 1 / span 2; }
+  .gate-verdict { font-size: 28px; }
+}
+
 /* The owner's look (the mockups, docs/brand): Home's money card, the
    approval cards, Money's period switch, bars and sources. Pine and lime
    from the brand; lime only on pine (or as the accent on dark). */

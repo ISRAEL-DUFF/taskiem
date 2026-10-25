@@ -32,6 +32,7 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	}
 	var business string
 	var sum moneyreport.Summary
+	var school *moneydigest.SchoolSummary
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		var period, sentAt time.Time
 		if err := tx.QueryRow(ctx, `SELECT period, sent_at FROM money_digests WHERE id = $1 AND kind = 'daily'`, *it.Digest).Scan(&period, &sentAt); err != nil {
@@ -51,7 +52,10 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 			return err
 		}
 		from, to := moneyreport.Day(time.Date(period.Year(), period.Month(), period.Day(), 12, 0, 0, 0, moneyreport.Lagos))
-		sum, err = moneyreport.Summarise(ctx, tx, it.Tenant, from, to)
+		if sum, err = moneyreport.Summarise(ctx, tx, it.Tenant, from, to); err != nil {
+			return err
+		}
+		school, err = moneydigest.SchoolSummarise(ctx, tx, s.schoolsSvc(), it.Tenant, from, to)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -78,7 +82,7 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 		tplLink = "-"
 	}
 	tpl := whatsapp.TplAlert
-	m := whatsapp.Message{Text: ch.Prefix(business) + moneydigest.DailyText(l, sum, link), Template: &tpl,
+	m := whatsapp.Message{Text: ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, link), Template: &tpl,
 		Vars: map[string]string{"tenant": business, "title": head, "link": tplLink}, Tenant: it.Tenant}
 	_, err = ch.Send(ctx, addr, m)
 	switch {

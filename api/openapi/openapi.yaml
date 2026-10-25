@@ -4315,6 +4315,448 @@ paths:
                     description: Instalments newly found missed
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/overview:
+    get:
+      operationId: getSchoolOverview
+      tags:
+      - Schools
+      summary: Schools > Overview
+      description: 'The term''s money as it stands (?term=, the current term by default; 409 when none is current and no term is named; docs/schools.md#overview): what the term''s sent invoices come to, what of it was due by today, what was collected and this week, what is outstanding and overdue; how much of the counted money was matched by itself against by a person; how parents paid (account number, card or POS, cash, a transfer to the school''s account, other); what of the collected money is for others (pass-through), by body; the five largest balances on Debtors with the aging totals (every term''s open invoices); the clearance totals; and the last daily close. The top debtors'' names are masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The overview
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overview, revealed]
+                properties:
+                  overview:
+                    $ref: '#/components/schemas/SchoolOverview'
+                  revealed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/close:
+    post:
+      operationId: closeSchoolDay
+      tags:
+      - Schools
+      summary: Take the daily close
+      description: 'The close of a day (day, YYYY-MM-DD; yesterday in Lagos time by default; docs/schools.md#the-daily-close): students'' money that landed that day, into account numbers and at the desk; what was matched to fees by itself and by a person, and what is still unmatched; money the look-back found before any webhook; cash postings and discounts waiting for a second person; families'' claims not yet found; and what does not reconcile (a payment with no money log entry, a receipt still valid for a payment undone or gone back, a payment with no receipt), each with the page to fix it on. A day is closed once per school and never recomputed: the nightly run takes it after midnight, and asking for a day already closed answers the stored close (taken_now false). A day not over yet, or more than a year back, is refused (409). Audited when this call took it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                day:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: The close
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [close, taken_now]
+                properties:
+                  close:
+                    $ref: '#/components/schemas/SchoolClose'
+                  taken_now:
+                    type: boolean
+                    description: This call took the close; false when it was closed already
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/closes:
+    get:
+      operationId: listSchoolCloses
+      tags:
+      - Schools
+      summary: List the daily closes
+      description: The closes taken, newest first, between ?from and ?to (YYYY-MM-DD, either empty; the last 31 by default).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The closes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [closes]
+                properties:
+                  closes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolCloseBrief'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/closes/{day}:
+    get:
+      operationId: getSchoolClose
+      tags:
+      - Schools
+      summary: Read a day's close
+      description: A day's close (YYYY-MM-DD) as it was taken; 404 when the day was not closed.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: day
+        in: path
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The close
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [close]
+                properties:
+                  close:
+                    $ref: '#/components/schemas/SchoolClose'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/clearance:
+    get:
+      operationId: listSchoolClearance
+      tags:
+      - Schools
+      summary: The clearance list
+      description: 'Every student enrolled in the term (?term=, the current one by default; 409 when none is current and no term is named), of one class with ?class=, each cleared, partly paid or not paid by the rule (docs/schools.md#clearance): cleared when the term''s invoices are paid in full, an approved payment plan is in good standing, or an override is in force; partly paid when some money was counted but a balance is left (never cleared); not paid otherwise; a student with no invoice is cleared only when their class has nothing required. Computed as it is read, stored nowhere. The balance is shown (this route needs school.read); ?format=csv answers the same rows as a file. Names masked unless ?reveal=true with pii.reveal (audited).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: class
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [csv]
+      - name: reveal
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The students and the totals by status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [term_id, term, students, totals, today, revealed]
+                properties:
+                  term_id:
+                    type: string
+                    format: uuid
+                  term:
+                    type: string
+                  students:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClearanceRow'
+                  totals:
+                    $ref: '#/components/schemas/SchoolClearanceTotals'
+                  today:
+                    type: string
+                    format: date
+                  revealed:
+                    type: boolean
+            text/csv:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/clearance-overrides:
+    get:
+      operationId: listSchoolClearanceOverrides
+      tags:
+      - Schools
+      summary: List clearance overrides
+      description: 'Overrides by student and term, newest first; ?in_force=true keeps those counting today (not withdrawn, today within their dates). The reason is the approver''s words (docs/schools.md#overrides).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: student
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: in_force
+        in: query
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: The overrides
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overrides]
+                properties:
+                  overrides:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/clearance-overrides/{id}/withdraw:
+    post:
+      operationId: withdrawSchoolClearanceOverride
+      tags:
+      - Schools
+      summary: Withdraw a clearance override
+      description: Withdraws an override (409 once withdrawn); the student is no longer cleared by it from this moment. The record is kept. Audited (school.clearance.withdraw).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The override, withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [override]
+                properties:
+                  override:
+                    $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/clearance:
+    get:
+      operationId: getSchoolStudentClearance
+      tags:
+      - Schools
+      summary: A student's clearance
+      description: 'By id or admission number, for ?term= (the current term by default): where the student stands by the rule (docs/schools.md#clearance), with the amounts behind it, the plan standing and the override in force, and every override recorded for the student.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: term
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The student's clearance and overrides
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clearance, overrides]
+                properties:
+                  clearance:
+                    $ref: '#/components/schemas/SchoolClearance'
+                  overrides:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/clearance-override:
+    post:
+      operationId: addSchoolClearanceOverride
+      tags:
+      - Schools
+      summary: Clear a student by hand
+      description: 'Clears a student (by id or admission number) for a term who does not meet the rule, with a reason and the last day it counts (the term''s end by default; from today to a year on). One override in force per student and term (409 for a second); past its end it no longer counts. The reason is kept sealed. Audited (school.clearance.override).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.approve
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                term_id:
+                  type: string
+                  format: uuid
+                  description: The term; the current one when left out
+                reason:
+                  type: string
+                  maxLength: 300
+                ends_on:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: The override
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [override]
+                properties:
+                  override:
+                    $ref: '#/components/schemas/SchoolClearanceOverride'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/gate/search:
+    get:
+      operationId: gateSearch
+      tags:
+      - Schools
+      summary: 'The gate: find a student by name'
+      description: 'For the gate screen (docs/schools.md#the-gate): active students whose name holds the letters typed (three or more; 400 for fewer), at most ten, those whose name starts with them first. Each is the student''s id, name and class and nothing else: this is the one route a gate session sees names on, since the gate''s purpose is to find the child. Open to the gate role (school.gate) and to anyone with school.read; rate-limited per session (429). No amount, balance or invoice appears in any gate answer.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 3
+      responses:
+        '200':
+          description: The students found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [students]
+                properties:
+                  students:
+                    type: array
+                    maxItems: 10
+                    items:
+                      $ref: '#/components/schemas/GateHit'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/gate/students/{id}:
+    get:
+      operationId: gateCheck
+      tags:
+      - Schools
+      summary: 'The gate: cleared or see the bursar'
+      description: 'For the gate screen (docs/schools.md#the-gate): whether the student is cleared for the current term by the rule (cleared), or should see the bursar (see_bursar: partly paid, not paid, or no term is current), with the student''s name and class and nothing else. Never an amount, a percentage or a balance. Open to the gate role (school.gate) and to anyone with school.read. Each check is in the audit log (school.gate.check).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The gate's answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GateAnswer'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/families/{id}/link:
     post:
       operationId: sendSchoolFamilyLink
@@ -18489,6 +18931,203 @@ components:
           format: date
         due_kobo:
           type: integer
+    SchoolCloseSum:
+      type: object
+      description: Money counted.
+      required: [count, kobo]
+      properties:
+        count:
+          type: integer
+        kobo:
+          type: integer
+    SchoolCloseItem:
+      type: object
+      description: 'One thing in a close that waits for someone or does not reconcile, with where to fix it. Never a name.'
+      required: [kind, message, path]
+      properties:
+        kind:
+          type: string
+          enum: [unmatched, pending_posting, pending_discount, claim, credit_without_entry, receipt_not_voided, part_without_receipt]
+        message:
+          type: string
+        path:
+          type: string
+          description: The web app page to fix it on
+        amount_kobo:
+          type: integer
+        ref:
+          type: string
+          description: 'What it is about: an invoice or receipt number, an admission number, an entry''s id'
+    SchoolCloseBrief:
+      type: object
+      description: A daily close as the list shows it.
+      required: [id, day, ran_at, ran_by, reconciles, problems]
+      properties:
+        id:
+          type: string
+          format: uuid
+        day:
+          type: string
+          format: date
+        ran_at:
+          type: string
+          format: date-time
+        ran_by:
+          type: string
+        reconciles:
+          type: boolean
+        problems:
+          type: integer
+    SchoolClose:
+      type: object
+      description: 'A school''s daily close (docs/schools.md#the-daily-close).'
+      required: [id, day, ran_at, ran_by, reconciles, problems, money_in, into_accounts, at_the_desk, matched_auto, matched_person, unmatched, unmatched_list, lookback_found, pending, claims, problem_list]
+      properties:
+        id:
+          type: string
+          format: uuid
+        day:
+          type: string
+          format: date
+        ran_at:
+          type: string
+          format: date-time
+        ran_by:
+          type: string
+        reconciles:
+          type: boolean
+        problems:
+          type: integer
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        money_in:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        into_accounts:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        at_the_desk:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        matched_auto:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        matched_person:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        unmatched:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        unmatched_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+        lookback_found:
+          $ref: '#/components/schemas/SchoolCloseSum'
+        pending:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+        problem_list:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolCloseItem'
+    SchoolOverview:
+      type: object
+      description: 'Schools > Overview for a term (docs/schools.md#overview).'
+      required: [term_id, term, term_state, today, enrolled, invoiced, expected_kobo, expected_by_now_kobo, collected_kobo, outstanding_kobo, overdue_kobo, collected_percent, this_week_kobo, pass_through_kobo, pass_through, matched, how_paid, top_debtors, aging, debtors, debtors_kobo, clearance]
+      properties:
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        term_state:
+          type: string
+          enum: [planned, current, past]
+        today:
+          type: string
+          format: date
+        enrolled:
+          type: integer
+        invoiced:
+          type: integer
+        expected_kobo:
+          type: integer
+          description: What the term's sent invoices come to
+        expected_by_now_kobo:
+          type: integer
+          description: Of it, what was due by today
+        collected_kobo:
+          type: integer
+        outstanding_kobo:
+          type: integer
+        overdue_kobo:
+          type: integer
+          description: What is left on invoices past their due date
+        collected_percent:
+          type: integer
+        this_week_kobo:
+          type: integer
+          description: Counted since Monday, Lagos time
+        pass_through_kobo:
+          type: integer
+          description: Of the collected money, what is for others
+        pass_through:
+          type: array
+          items:
+            type: object
+            required: [body, kobo]
+            properties:
+              body:
+                type: string
+              kobo:
+                type: integer
+        matched:
+          type: object
+          required: [auto_kobo, person_kobo, auto_percent]
+          properties:
+            auto_kobo:
+              type: integer
+            person_kobo:
+              type: integer
+            auto_percent:
+              type: integer
+        how_paid:
+          type: array
+          items:
+            type: object
+            required: [how, payments, kobo]
+            properties:
+              how:
+                type: string
+                enum: [account, card, cash, transfer, other]
+              payments:
+                type: integer
+              kobo:
+                type: integer
+        top_debtors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchoolDebtor'
+        aging:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              students:
+                type: integer
+              balance_kobo:
+                type: integer
+        debtors:
+          type: integer
+        debtors_kobo:
+          type: integer
+        clearance:
+          $ref: '#/components/schemas/SchoolClearanceTotals'
+        last_close:
+          $ref: '#/components/schemas/SchoolCloseBrief'
     SchoolDebtor:
       type: object
       description: 'A student with a balance, aged (docs/schools.md#debtors).'
@@ -18655,6 +19294,136 @@ components:
         marked_at:
           type: string
           format: date-time
+    SchoolClearance:
+      type: object
+      description: 'Where a student stands for a term by the rule (docs/schools.md#clearance): computed as it is read, stored nowhere.'
+      required: [student_id, term_id, status, reason, invoiced, total_kobo, paid_kobo, balance_kobo]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        term_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [cleared, partly_paid, not_paid]
+        reason:
+          type: string
+          enum: [paid, plan, override, no_fees, balance, no_invoice]
+          description: 'Why: paid in full; a plan in good standing; an override in force; no invoice and nothing required for the class; a balance left; fees for the class but no invoice yet'
+        invoiced:
+          type: boolean
+          description: The student has an invoice for the term
+        total_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+        balance_kobo:
+          type: integer
+        plan:
+          $ref: '#/components/schemas/SchoolPlanStanding'
+        override:
+          $ref: '#/components/schemas/SchoolClearanceOverride'
+    SchoolClearanceRow:
+      allOf:
+      - $ref: '#/components/schemas/SchoolClearance'
+      - type: object
+        required: [admission_number, name, student_status, class_id, class]
+        properties:
+          admission_number:
+            type: string
+          name:
+            type: string
+            description: Masked unless revealed
+          student_status:
+            type: string
+            enum: [active, withdrawn, graduated]
+          class_id:
+            type: string
+            format: uuid
+          class:
+            type: string
+    SchoolClearanceTotals:
+      type: object
+      required: [students, cleared, partly_paid, not_paid]
+      properties:
+        students:
+          type: integer
+        cleared:
+          type: integer
+        partly_paid:
+          type: integer
+        not_paid:
+          type: integer
+    SchoolClearanceOverride:
+      type: object
+      description: A student cleared by hand for a term, with a reason, until a date (docs/schools.md#overrides)
+      required: [id, student_id, admission_number, term_id, term, reason, starts_on, ends_on, created_by, created_at, in_force]
+      properties:
+        id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        admission_number:
+          type: string
+        term_id:
+          type: string
+          format: uuid
+        term:
+          type: string
+        reason:
+          type: string
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        withdrawn_at:
+          type: string
+          format: date-time
+        withdrawn_by:
+          type: string
+        in_force:
+          type: boolean
+          description: Not withdrawn, and today is within its dates
+    GateHit:
+      type: object
+      description: 'A student the gate''s search found: id, name and class, nothing else'
+      additionalProperties: false
+      required: [student_id, name, class]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        class:
+          type: string
+    GateAnswer:
+      type: object
+      description: 'The gate''s answer for one student: cleared or see the bursar, the name and class, and no other field, ever'
+      additionalProperties: false
+      required: [student_id, name, class, status]
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        class:
+          type: string
+        status:
+          type: string
+          enum: [cleared, see_bursar]
     SchoolReminder:
       type: object
       description: A reminder sent for a student

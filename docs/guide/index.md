@@ -6,6 +6,7 @@ Plain how-tos for running your business on Taskiem: no code and no technical ste
 - [Templates](templates.md): filling in a template's details.
 - [Connecting your apps](connections.md): Paystack, Google Sheets, WhatsApp and the rest.
 - [Paying people](paying-people.md): staff and suppliers by bank and account number.
+- [Running a school](schools.md): students, term fees, each child's own account number, receipts, the family page, chasing, clearance and the gate, and the daily close.
 - [Your tables](tables.md): keeping records in Taskiem instead of a spreadsheet.
 - [Changing a workflow](changing-a-workflow.md): when it runs, values from earlier steps, and "run only when".
 - [Settings](settings.md): the settings your workflows read, and the Advanced switch.

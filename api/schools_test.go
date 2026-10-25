@@ -2,9 +2,14 @@ package api_test
 
 import (
 	"context"
+	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 func schoolAudits(t *testing.T, w *world, tenant, action string) int {
@@ -92,6 +97,30 @@ func TestGateSessionIsRefusedEverythingElse(t *testing.T) {
 		if code != 403 || out["gate_only"] != true {
 			t.Errorf("%s %s: %d %v", r.method, r.path, code, out)
 		}
+	}
+	// The whole route table: every authenticated route but who it is,
+	// signing out and the gate's own two is refused, whatever its path
+	// parameters (the refusal comes before any of them is read).
+	source := routeSource(t)
+	allowed := map[string]bool{"GET /v1/me": true, "POST /v1/auth/logout": true, "GET /v1/gate/search": true, "GET /v1/gate/students/{id}": true}
+	param := regexp.MustCompile(`\{[^}]+\}`)
+	walked := 0
+	err := chi.Walk(w.srv.Handler().(chi.Routes), func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		route = strings.TrimSuffix(route, "/")
+		meta, ok := source[method+" "+route]
+		if !ok || meta.Auth != "member" || allowed[method+" "+route] || route == "/*" {
+			return nil
+		}
+		walked++
+		path := param.ReplaceAllString(route, uuid.NewString())
+		code, out := gate.do(method, path, map[string]any{}, invalidBody("a gate session is refused before the body is read")...)
+		if code != 403 || out["gate_only"] != true {
+			t.Errorf("%s %s: a gate session got %d %v", method, route, code, out)
+		}
+		return nil
+	})
+	if err != nil || walked < 200 {
+		t.Fatalf("walked %d routes: %v", walked, err)
 	}
 	gate.must(204, "POST", "/v1/auth/logout", nil)
 	// A member with the gate role and another is not a gate session.

@@ -492,6 +492,11 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	} else {
 		c.AISteps = allowed
 	}
+	// The Schools area (decision 0046): on, the builder knows the record
+	// and schools@1 are the business's.
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(bool_or(enabled), false) FROM school_settings`).Scan(&c.Schools); err != nil {
+		return c, err
+	}
 	// The business's own workflows a template step may use (decision
 	// 0048), with their interface.
 	callable, err := runtime.CallableWorkflows(ctx, tx, reg)

@@ -8,6 +8,7 @@ import { IssuingSettings, StudentAccountPanel } from "./SchoolAccountParts";
 import { StudentReceiptsPanel } from "./SchoolReceipts";
 import { FamilyLinkDays, SendFamilyLink, StudentClaimsPanel, StudentPlansPanel } from "./SchoolFamily";
 import { PlanGrace, ReminderWording, StudentChasingPanel } from "./SchoolDebtors";
+import { StudentClearancePanel } from "./SchoolClearance";
 import {
   PROMOTION_ACTIONS,
   STATUS_FILTERS,
@@ -78,6 +79,7 @@ export function SchoolTabs() {
   const { me } = useAuth();
   return (
     <nav className="tabs" aria-label="Schools">
+      <NavLink to="/schools/overview">Overview</NavLink>
       <NavLink to="/schools" end>
         Students
       </NavLink>
@@ -87,6 +89,7 @@ export function SchoolTabs() {
       <NavLink to="/schools/payments">Payments</NavLink>
       <NavLink to="/schools/receipts">Receipts</NavLink>
       <NavLink to="/schools/debtors">Debtors</NavLink>
+      <NavLink to="/schools/clearance">Clearance</NavLink>
       {me?.roles.includes("owner") && <NavLink to="/settings/schools">Settings</NavLink>}
     </nav>
   );
@@ -557,6 +560,7 @@ export function SchoolStudentPage() {
           <StudentFeesPanel studentID={s.id} />
           <StudentReceiptsPanel studentID={s.id} />
           <StudentChasingPanel studentID={s.id} manage={may.manage} />
+          <StudentClearancePanel studentID={s.id} approve={can("school.approve")} />
           <StudentClaimsPanel studentID={s.id} manage={may.manage} />
           <StudentPlansPanel studentID={s.id} />
           <section className="card" aria-labelledby="student-history">
@@ -1219,21 +1223,5 @@ function DiscountThreshold() {
       )}
       <ErrorBox error={act.error} />
     </section>
-  );
-}
-
-/** A gate session's home until the gate screen (B8): who they are, and signing out. */
-export function GateHome() {
-  const { me, logout } = useAuth();
-  return (
-    <div className="login card" style={{ maxWidth: 640 }}>
-      <h1>The gate</h1>
-      <p>
-        You are signed in{me?.user?.name ? ` as ${me.user.name}` : ""} for the school gate. The gate screen, which answers Cleared or See the bursar for a student, is coming soon. Nothing else is open to the gate.
-      </p>
-      <p>
-        <button onClick={() => void logout()}>Sign out</button>
-      </p>
-    </div>
   );
 }

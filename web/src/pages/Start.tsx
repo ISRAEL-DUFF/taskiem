@@ -23,7 +23,7 @@ import type { ReadyNeed, Readiness } from "../lib/readiness";
 // connect its app, create and publish it, run it once.
 
 export function Start() {
-  const { can } = useAuth();
+  const { me, can } = useAuth();
   const { data, reload } = useOnboarding();
   const act = useAction();
   const [sent, setSent] = useState<string | null>(null);
@@ -110,6 +110,7 @@ export function Start() {
           </ul>
         </section>
       )}
+      {(me?.schools || me?.roles.includes("owner")) && can("school.read") && <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />}
       {can("workflow.edit") && (
         <section>
           <h2>Your first workflow</h2>
@@ -119,6 +120,47 @@ export function Start() {
       )}
       <Help topic="start" />
     </>
+  );
+}
+
+/** The schools entry: for a business with the Schools area on, its pages and the school templates; for an owner without it, the offer to turn it on. */
+function SchoolStart({ on, owner }: { on: boolean; owner: boolean }) {
+  const { data, error } = useLoad(() => (on ? get<{ templates: Template[] }>("/v1/templates") : Promise.resolve(undefined)), [on]);
+  const list = useMemo(() => (data?.templates ?? []).filter((t) => t.available && t.tags.includes("schools")).sort((a, b) => a.title.localeCompare(b.title)), [data]);
+  if (!on) {
+    if (!owner) return null;
+    return (
+      <section aria-labelledby="school-start" data-testid="school-start-off">
+        <h2 id="school-start">Run a school?</h2>
+        <p className="hint">
+          Turn Schools on for students, families, term fees, each child's own account number, receipts, chasing, clearance and the daily close.{" "}
+          <Link to="/settings/schools">Turn Schools on</Link>
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section aria-labelledby="school-start" data-testid="school-start">
+      <h2 id="school-start">Your school</h2>
+      <p className="hint">
+        <Link to="/schools/overview">Overview</Link>: the term's fees as they stand. <Link to="/schools">Students</Link>, <Link to="/schools/classes">classes and terms</Link>,{" "}
+        <Link to="/schools/accounts">account numbers</Link>, <Link to="/schools/debtors">debtors</Link> and <Link to="/schools/clearance">clearance</Link>.
+      </p>
+      <ErrorBox error={error} />
+      {list.length > 0 && (
+        <>
+          <p>Ready workflows for a school. Each walks you through publishing it and running it once.</p>
+          <div className="template-grid">
+            {list.map((t) => (
+              <Link key={t.id} className="card template-card" to={`/start/guide?template=${t.id}`} data-testid={`school-template-${t.id}`}>
+                <strong>{t.title}</strong>
+                <span>{t.summary}</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

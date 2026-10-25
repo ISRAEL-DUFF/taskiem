@@ -171,3 +171,53 @@ func TestReviewTablesInvoiceTable(t *testing.T) {
 		}
 	}
 }
+
+// A proposed table of students or pupils with a paid, balance or cleared
+// column is flagged; a students table without one, or a table of
+// something else with a status, is not.
+func TestReviewTablesSchoolTable(t *testing.T) {
+	doc := func(name string) []byte {
+		return []byte(`{"schema":"wd/v1","id":"wf_sch","version":1,"name":"Sch","trigger":{"type":"manual"},"steps":[
+ {"id":"add","type":"connector","connector":"xenibase@1","action":"insert_rows","connection":"data_tables","input":{"table":"` + name + `","rows":[]}}]}`)
+	}
+	cols := func(names ...string) []ColumnSpec {
+		var out []ColumnSpec
+		for _, n := range names {
+			out = append(out, ColumnSpec{Name: n, Title: n, Type: "text"})
+		}
+		return out
+	}
+	for _, c := range []struct {
+		table TableSpec
+		flag  bool
+	}{
+		{TableSpec{Name: "students", Columns: cols("name", "class", "paid")}, true},
+		{TableSpec{Name: "pupil_fees", Columns: cols("admission_number", "balance")}, true},
+		{TableSpec{Name: "school_clearance", Columns: cols("student", "cleared")}, true},
+		{TableSpec{Name: "students", Columns: cols("name", "class", "phone")}, false},
+		{TableSpec{Name: "orders", Columns: cols("customer", "paid")}, false},
+	} {
+		keep, warns := reviewTables([]TableSpec{c.table}, nil, doc(c.table.Name), nil)
+		flagged := false
+		for _, w := range warns {
+			flagged = flagged || (w.Rule == RuleSchoolTable && strings.Contains(w.Message, "schools@1"))
+		}
+		if flagged != c.flag || len(keep) != 1 {
+			t.Errorf("%s %v: flagged %v, kept %d (%+v)", c.table.Name, c.table.Columns, flagged, len(keep), warns)
+		}
+	}
+}
+
+// The instructions teach the schools record (rule 22): schools@1, its
+// actions, term fees as invoices, clearance never written.
+func TestInstructionsTeachSchools(t *testing.T) {
+	text := Instructions()
+	for _, want := range []string{"schools@1", "daily_close", "clearance_list", "issue_account", "family_link", "school_students", "school_term_fees", "never written", "without_account"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the instructions lack %q", want)
+		}
+	}
+	if !slices.Contains(synonyms["pupils"], "schools") || !slices.Contains(synonyms["clearance"], "schools") {
+		t.Error("the synonyms do not reach the schools connector")
+	}
+}

@@ -154,6 +154,10 @@ type Filter struct {
 	Query string
 	Names bool
 	Limit int
+	// WithoutAccount keeps the students with no account number issued on
+	// the school's issuing connection (for the template that issues
+	// them); every student when no issuing connection is set.
+	WithoutAccount bool
 }
 
 // MaxListed is the most students one list returns.
@@ -175,11 +179,32 @@ func (s *Schools) Students(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f F
 	if err != nil {
 		return nil, 0, err
 	}
+	issued := map[uuid.UUID]bool{}
+	if f.WithoutAccount {
+		st, err := GetIssuing(ctx, tx, tenant)
+		if err != nil {
+			return nil, 0, err
+		}
+		rows, err := tx.Query(ctx, `SELECT student_id FROM school_student_accounts WHERE tenant_id = $1 AND channel = $2 AND status = 'issued'`, tenant, st.Channel)
+		if err != nil {
+			return nil, 0, err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return nil, 0, err
+		}
+		for _, id := range ids {
+			issued[id] = true
+		}
+	}
 	q := strings.ToLower(strings.TrimSpace(f.Query))
 	out := make([]Student, 0, min(len(list), f.Limit))
 	total := 0
 	for _, st := range list {
 		if q != "" && !strings.Contains(strings.ToLower(st.AdmissionNumber), q) && (!f.Names || !strings.Contains(strings.ToLower(st.Name), q)) {
+			continue
+		}
+		if issued[st.ID] {
 			continue
 		}
 		total++
