@@ -68,7 +68,11 @@ test("the tab bar, tabs on one line and folded descriptions", async ({ page }) =
 });
 
 test("an approval is decided from Home in a confirm sheet", async ({ page }) => {
-  await signIn(page);
+  // A business of its own with one owner: the maker of a run may approve it
+  // only when nobody else can, and other tests add people to the shared one.
+  const email = `owner-${Date.now()}@approvehome.test`;
+  const up = await page.request.post("/v1/signup", { headers: { "X-Taskiem-Request": "1" }, data: { tenant: "Approve Home Stores", email, name: "Owner", password: "correct horse battery" } });
+  expect(up.status(), await up.text()).toBe(201);
   const api = async (method: string, path: string, data?: unknown) => {
     const r = await page.request.fetch(path, { method, data, headers: { "X-Taskiem-Request": "1" } });
     expect(r.ok(), `${method} ${path}: ${r.status()} ${await r.text()}`).toBeTruthy();
@@ -98,7 +102,10 @@ test("an approval is decided from Home in a confirm sheet", async ({ page }) => 
 });
 
 test("Home's money card and Money's week, from the money log", async ({ page }) => {
-  await signIn(page);
+  // A business of its own: its money is in no other test's lists (matching.spec counts To match).
+  const email = `owner-${Date.now()}@moneycard.test`;
+  const up = await page.request.post("/v1/signup", { headers: { "X-Taskiem-Request": "1" }, data: { tenant: "Money Card Stores", email, name: "Owner", password: "correct horse battery" } });
+  expect(up.status(), await up.text()).toBe(201);
   const made = await page.request.post("/v1/money/entries", {
     headers: { "X-Taskiem-Request": "1", "Idempotency-Key": `card-${Date.now()}` },
     data: { kind: "cash", direction: "in", amount_kobo: 1234500, description: "Card e2e sale", channel: "cash" },

@@ -439,12 +439,14 @@ export function initials(name: string): string {
  * own): pulling down from the top of a page past the mark draws the page
  * again, which loads its data afresh. */
 function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
+  const [on, setOn] = useState(false);
   const [shown, setShown] = useState(0);
   const [busy, setBusy] = useState(false);
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
   useEffect(() => {
     if (!standalone() || typeof window.matchMedia !== "function" || !window.matchMedia("(pointer: coarse)").matches) return;
+    setOn(true);
     let start: number | null = null;
     let dy = 0;
     const down = (e: TouchEvent) => {
@@ -484,6 +486,8 @@ function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
       window.removeEventListener("touchcancel", up);
     };
   }, []);
+  // Nothing in a browser tab; in the installed app, a status for "Refreshing".
+  if (!on) return null;
   if (!busy && shown === 0) return <span className="sr-only" role="status" />;
   const at = busy ? PULL_AT : shown;
   return (
