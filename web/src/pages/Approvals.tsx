@@ -148,7 +148,10 @@ function SchoolRequests() {
   );
 }
 
-function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "approved" | "rejected"; onClose: () => void; onDone: () => void }) {
+/** Confirms one decision. Opened from somewhere other than this page
+ * (Home's Needs you), `showSubject` shows what is being decided too, since
+ * the decision records what the person was shown. */
+export function Decide({ a, decision, onClose, onDone, showSubject }: { a: Approval; decision: "approved" | "rejected"; onClose: () => void; onDone: () => void; showSubject?: boolean }) {
   const [comment, setComment] = useState("");
   const [code, setCode] = useState("");
   const [needsCode, setNeedsCode] = useState(Boolean(a.step_up) && decision === "approved");
@@ -171,6 +174,7 @@ function Decide({ a, decision, onClose, onDone }: { a: Approval; decision: "appr
       <p>
         {decision === "approved" ? "Approve" : "Reject"} <strong>{a.step_name || a.step_id}</strong> on {a.workflow}? Your decision and what you were shown are recorded.
       </p>
+      {showSubject && <Json value={a.subject} />}
       <Field label="Comment (optional, audited)">
         <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
       </Field>

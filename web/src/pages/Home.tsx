@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, get, type Approval, type RunSummary, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
@@ -10,6 +11,7 @@ import { formatPrice } from "../lib/storefront";
 import { greeting, shortWhen } from "../lib/time";
 import { ErrorBox, Skeleton, useCountUp, useLiveRefresh, useLoad } from "../ui";
 import type { FormRequest } from "./FormFill";
+import { Decide } from "./Approvals";
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const none = <T,>(): Promise<T | null> => Promise.resolve(null);
@@ -35,6 +37,7 @@ export function Home() {
   const workflows = useLoad(() => (can("workflow.read") ? get<{ workflows: WorkflowSummary[] }>(`/v1/workflows?tz=${encodeURIComponent(tz)}`) : none<{ workflows: WorkflowSummary[] }>()), []);
   useLiveRefresh(runs.reload);
   useLiveRefresh(orders.reload);
+  const [deciding, setDeciding] = useState<Approval | null>(null);
 
   const first = (me?.user?.name || "").split(" ")[0];
   const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
@@ -107,19 +110,23 @@ export function Home() {
             <ErrorBox error={approvals.error} />
             {needs === 0 && <p className="panel-body hint">Nothing needs you right now.</p>}
             {approvals.data?.approvals.slice(0, 5).map((a) => (
-              <Link key={`${a.run_id}/${a.step_id}`} className="list-row" to="/approvals">
+              // The row opens Approvals; Approve decides here, in a confirm sheet.
+              <div key={`${a.run_id}/${a.step_id}`} className="list-row has-action">
                 <span className="list-icon">
                   <Icon name="approvals" />
                 </span>
-                <span className="grow">
+                <Link className="grow row-link" to="/approvals">
                   <span className="title">{a.step_name}</span>
                   <span className="sub">
                     {a.workflow} · asked {shortWhen(new Date(a.requested_at))}
                   </span>
-                </span>
-                <span className="button">Review</span>
-              </Link>
+                </Link>
+                <button type="button" className="primary" aria-label={`Approve ${a.step_name}`} onClick={() => setDeciding(a)}>
+                  Approve
+                </button>
+              </div>
             ))}
+            {deciding && <Decide a={deciding} decision="approved" showSubject onClose={() => setDeciding(null)} onDone={() => (setDeciding(null), approvals.reload())} />}
             {toFill.data?.requests.slice(0, 3).map((f) => (
               <Link key={f.id} className="list-row" to={`/forms/requests/${f.id}`}>
                 <span className="list-icon">

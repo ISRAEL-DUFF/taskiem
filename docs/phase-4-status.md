@@ -302,6 +302,23 @@ Done 8 October 2026. No API or database changes: the filters use the query param
 
 `axe-core` is MPL-2.0: it is a dev-only dependency of the browser tests, injected into the page under test and never bundled. Its licence exception (`tools/licencecheck/policy.json`) was approved by the founder on 8 October 2026, for dev and test use only.
 
+### On a phone, like an app
+
+Added 25 October 2026, after looking at every owner page at 390 px. No API or database changes. The owner's guide is [on your phone](guide/on-your-phone.md).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Fixes | Rows of tabs (Money, Schools, Invoices, Storefront…) stay on one line and slide sideways, with the open tab scrolled into view; they wrapped and ran off the screen. Checkboxes in filters ("Show names") sit beside their words; they were stretched to the full width and pushed the page 40 px wider than the screen | `web/src/styles.css`, `web/src/App.tsx` |
+| Density | Figures two to a row on Home, Money and the dashboard (an odd last one takes the row); tighter cards, panels and rows; a page's description folds behind an (i) "About this page" button so the page opens on its content | `web/src/styles.css`, `PageHeader` in `web/src/ui.tsx` |
+| Installable | `public/manifest.json` (standalone, starts at Home, shortcuts to Approvals, Money and Orders); install icons drawn from the brand files (`icon-192.png`, `mark-512.png`, and maskable ones from `avatar.svg`); iPhone home-screen tags; the page draws under a notch with the top bar, drawer and tab bar kept clear of it; "Install the app" in the menu when the browser offers it. No service worker: nothing is cached, so a deploy is never hidden behind an old copy | `web/public/manifest.json`, `web/index.html`, `web/src/install.ts` |
+| Status bar | Pine on the light theme, the page's ground on dark, following the device on "System" | `web/src/theme.ts` |
+| Tab bar | Home, Money, Orders, Workflows (Activity when one of those is not open to the person), then Menu; the open tab's icon in a lime-on-pine pill (pine on lime in the dark theme); pressed states instead of the browser's grey flash | `web/src/App.tsx`, `web/src/styles.css` |
+| Pull to refresh | In the installed app on a touch screen (a browser tab has its own): pulling down from the top of a page past the mark draws the page again, which reloads its data, and refreshes the bell | `PullToRefresh` in `web/src/App.tsx`, `web/src/lib/pull.ts` |
+| Approve from Home | Needs you's approval rows carry an Approve button; the confirm sheet (a bottom sheet on a phone) shows what is being approved, since the decision records what the person was shown, and takes the passkey or code the approval asks for; the row itself still opens Approvals | `web/src/pages/Home.tsx`, `Decide` in `web/src/pages/Approvals.tsx` |
+| Tests | `app.spec.ts` at 390 px: the manifest and every icon served, the tab bar, Money's tabs on one row inside their own scroll with the open one in view, the folded description, and an approval decided from Home with its run completing; the existing phone-width checks in `accessibility.spec.ts` (no page wider than the screen, axe). Unit tests for the pull distances | `web/e2e/app.spec.ts`, `web/src/lib/pull.test.ts` |
+
+Not yet: push notifications (they need a service worker, and are the reason to add one); the visual pass shown in the mockups (Home's money card, colour for money in and out, drawn empty states), page by page; offline pages.
+
 What is left: the operator console (`/ops`) and the embedded builder keep their own layouts (the operator sidebar still wraps on phones); axe cannot judge everything, so a pass with a real screen reader (VoiceOver, TalkBack, NVDA) is still worth doing; the date range's start is applied to the loaded pages because `GET /v1/runs` has no `after` parameter.
 
 ## Shared provider clients
