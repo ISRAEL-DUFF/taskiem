@@ -191,6 +191,9 @@ type Invoices struct {
 	// Rails issues accounts and links and looks payments up (T4); nil:
 	// invoices take no payments on their page.
 	Rails Rails
+	// AccountRails issue customers' permanent account numbers
+	// (virtual_account, issue.go); nil: Rails, when it can.
+	AccountRails CapabilityRails
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)

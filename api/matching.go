@@ -34,6 +34,8 @@ func (s *Server) matchingRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Delete("/money/payers/{id}", s.forgetPayer)
 	r.With(read).Get("/invoices/{id}/customer", s.getInvoiceCustomer)
 	r.With(manage, s.tenantWide).Post("/customer-accounts", s.registerCustomerAccount)
+	r.With(manage).Get("/customer-accounts/issuers", s.listAccountIssuers)
+	r.With(manage, s.tenantWide).Post("/invoices/{id}/customer-accounts", s.giveInvoiceCustomerAccount)
 }
 
 // matcher is Server.Matcher, or one made from Invoices and Orders, asking

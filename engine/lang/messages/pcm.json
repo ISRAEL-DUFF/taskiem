@@ -376,6 +376,10 @@
       "text": "Connect {service}.",
       "reviewed": false
     },
+    "ready.paystack_transfer": {
+      "text": "Paystack must on Pay with Transfer for this business: ask Paystack support. Until then customers no fit pay by transfer into the account numbers wey e open.",
+      "reviewed": false
+    },
     "ready.role": {
       "text": "Nobody get the role {role} yet, so na owners we go ask; give am to person if na dem suppose decide.",
       "reviewed": false

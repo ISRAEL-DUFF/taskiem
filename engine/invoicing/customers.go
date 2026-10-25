@@ -89,17 +89,15 @@ func (s *Invoices) sealCustomer(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 // the same account for the same customer again returns it. An account
 // (its reference or its number, on the connection) already registered
 // for another customer, or with another number or reference, is refused.
-// schools@1 issuing students' accounts calls it (B4).
+// Issuing an account (IssueAccount, and schools@1 issuing students'
+// accounts, B4) registers it here.
 func (s *Invoices) RegisterAccount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a AccountIn, by string) (CustomerAccount, error) {
 	a.Customer.Name = strings.TrimSpace(a.Customer.Name)
 	a.Reference, a.AccountNumber = strings.TrimSpace(a.Reference), strings.TrimSpace(a.AccountNumber)
+	if err := checkCustomer(a.Customer); err != nil {
+		return CustomerAccount{}, err
+	}
 	switch {
-	case a.Customer.Name == "" || len(a.Customer.Name) > 120:
-		return CustomerAccount{}, invalid("the customer's name is required (up to 120 characters)")
-	case a.Customer.Phone == "" && a.Customer.Email == "" && a.Customer.Key == "":
-		return CustomerAccount{}, invalid("give the customer's phone number, email or key, as their invoices have it")
-	case !ValidCustomerKey(a.Customer.Key):
-		return CustomerAccount{}, invalid("the customer's key has up to 100 letters, digits and ':', '.', '_', '/' or '-'")
 	case !channelRE.MatchString(a.Channel):
 		return CustomerAccount{}, invalid("channel names the connection the account is on, like paystack/main")
 	case !numberRE.MatchString(a.AccountNumber):

@@ -962,3 +962,83 @@ export function invoiceHero(x: { status: string; total_kobo: number; paid_kobo: 
       return { label: x.status === "overdue" ? "Overdue" : "Still due", kobo: x.due_kobo, sub: `of ${naira(x.total_kobo)} · ${naira(x.paid_kobo)} paid`, paid };
   }
 }
+
+// --- giving a customer an account number ---
+
+/** A connection that can issue customers' account numbers (GET /v1/customer-accounts/issuers). */
+export interface AccountIssuer {
+  connection: string;
+  rail: string;
+  needs_email: boolean;
+  needs_bvn: boolean;
+  needs_account: boolean;
+  names_itself: boolean;
+}
+
+export const ISSUERS_PATH = "/v1/customer-accounts/issuers";
+export const customerAccountsPath = (id: string) => `/v1/invoices/${encodeURIComponent(id)}/customer-accounts`;
+
+/** The "Give this customer an account number" form: issued on a connection, or one the business has, typed in. */
+export interface AccountForm {
+  by_hand: boolean;
+  connection: string;
+  account_number: string;
+  reference: string;
+  bank_name: string;
+  /** The wallet, on a rail that holds several. */
+  account: string;
+  bvn: string;
+  nin: string;
+}
+
+/** A form for the issuers the business has: the first issuer, else by hand. */
+export function newAccountForm(issuers: AccountIssuer[]): AccountForm {
+  return { by_hand: issuers.length === 0, connection: issuers[0]?.connection ?? "", account_number: "", reference: "", bank_name: "", account: "", bvn: "", nin: "" };
+}
+
+/** The issuer the form names, when it issues. */
+export const issuerOf = (f: AccountForm, issuers: AccountIssuer[]): AccountIssuer | undefined => (f.by_hand ? undefined : issuers.find((i) => i.connection === f.connection));
+
+/** What stops the form being sent, in words; undefined when nothing does. */
+export function accountProblem(f: AccountForm, issuers: AccountIssuer[]): string | undefined {
+  if (f.by_hand) {
+    if (!/^[a-z0-9_]{1,60}\/[A-Za-z0-9_.-]{1,100}$/.test(f.connection.trim())) return "Name the connection the account is on, like paystack/main.";
+    if (!/^[0-9A-Za-z-]{4,40}$/.test(f.account_number.trim())) return "The account number has 4 to 40 letters and digits.";
+    if (!f.reference.trim()) return "The account's reference is required: the payments provider's reference for it, which its payments carry.";
+    return undefined;
+  }
+  const i = issuerOf(f, issuers);
+  if (!i) return "Choose the connection to issue the account on.";
+  if (i.needs_account && !f.account.trim()) return `${i.rail} needs the wallet the number pays into.`;
+  if (i.needs_bvn && !/^\d{11}$/.test(f.bvn.trim()) && !/^\d{11}$/.test(f.nin.trim())) return `${i.rail} needs the customer's BVN or NIN (11 digits).`;
+  return undefined;
+}
+
+/** The request body (POST /v1/invoices/{id}/customer-accounts). */
+export function accountRequest(f: AccountForm): Record<string, unknown> {
+  if (f.by_hand) {
+    const body: Record<string, unknown> = { connection: f.connection.trim(), account_number: f.account_number.trim(), reference: f.reference.trim() };
+    if (f.bank_name.trim()) body.bank_name = f.bank_name.trim();
+    return body;
+  }
+  const body: Record<string, unknown> = { connection: f.connection, issue: true };
+  if (f.account.trim()) body.account = f.account.trim();
+  if (f.bvn.trim()) body.bvn = f.bvn.trim();
+  if (f.nin.trim()) body.nin = f.nin.trim();
+  return body;
+}
+
+/** What an issuer needs, in words, for its choice. */
+export function issuerWords(i: AccountIssuer): string {
+  const needs: string[] = [];
+  if (i.needs_email) needs.push("the customer's email");
+  if (i.needs_bvn) needs.push("their BVN or NIN (typed in, never kept)");
+  if (i.needs_account) needs.push("the wallet the number pays into");
+  const name = i.names_itself ? `${i.rail} names the account itself` : "named for your business and the customer";
+  return `${i.rail} (${i.connection}): ${name}${needs.length > 0 ? `; needs ${needs.join(", ")}` : ""}.`;
+}
+
+/** An account in words: "9900000001 · Wema Bank (iswallet/main), reference tsk_ab12". */
+export function accountWords(a: CustomerAccount): string {
+  return `${a.account_number}${a.bank_name ? ` · ${a.bank_name}` : ""} (${a.channel}), reference ${a.reference}`;
+}

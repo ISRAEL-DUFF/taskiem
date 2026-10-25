@@ -9,7 +9,8 @@ export interface ReadyNeed {
   name: string;
   connector?: string;
   service?: string;
-  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot";
+  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); never blocking. */
+  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot" | "support";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -42,7 +43,8 @@ export type Fix =
   | { kind: "set_secret"; environment: string; name: string }
   | { kind: "make_table"; name: string; table?: TableSpec }
   | { kind: "give_role"; role: string }
-  | { kind: "ask_phone"; field: string };
+  | { kind: "ask_phone"; field: string }
+  | { kind: "ask_support"; service: string };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -50,6 +52,7 @@ export const DEFAULT_CONNECTION = "main";
 export function fixFor(n: ReadyNeed): Fix {
   switch (n.kind) {
     case "connection":
+      if (n.problem === "support") return { kind: "ask_support", service: n.service ?? n.connector ?? "" };
       if (n.capability && n.problem !== "ambiguous") return { kind: "connect_rail", rails: n.rails ?? [], environment: n.environment, name: n.name || DEFAULT_CONNECTION };
       if (n.capability) return { kind: "choose_connection", connector: "", service: n.service ?? "" };
       if (n.problem === "ambiguous") return { kind: "choose_connection", connector: n.connector ?? "", service: n.service ?? n.connector ?? "" };

@@ -576,6 +576,26 @@ export interface InvoicesNotifyCustomerInput {
   subject?: Val<string>;
   text: Val<string>;
 }
+export interface InvoicesRegisterAccountInput {
+  /** The wallet the number pays into, on rails that hold several */
+  account?: Val<string>;
+  /** The name asked for when issuing, where the rail lets the business name it; the business's and the customer's when left out */
+  account_name?: Val<string>;
+  /** The account the business already has for the customer (not with issue) */
+  account_number?: Val<string>;
+  bank_name?: Val<string>;
+  /** The customer's BVN (11 digits), for rails that need one per account (Flutterwave); never kept */
+  bvn?: Val<string>;
+  /** The connection the account is on or is issued on, as connector/name: paystack/main */
+  connection: Val<string>;
+  customer: Value;
+  /** Issue the account on the connection (it must be able to issue account numbers) */
+  issue?: Val<boolean>;
+  /** Or their NIN (11 digits) */
+  nin?: Val<string>;
+  /** Its reference */
+  reference?: Val<string>;
+}
 export interface InvoicesSendInput {
   number: Val<string>;
 }
@@ -592,6 +612,8 @@ export const invoices = {
   list: (input: InvoicesListInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "list", input, extra),
   /** Message the invoice's customer (idempotent_write) */
   notify_customer: (input: InvoicesNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "notify_customer", input, extra),
+  /** Give a customer their own account number (idempotent_write) */
+  register_account: (input: InvoicesRegisterAccountInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "register_account", input, extra),
   /** Send an invoice (idempotent_write) */
   send: (input: InvoicesSendInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "send", input, extra),
   /** Void an invoice (idempotent_write) */
@@ -2783,7 +2805,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "get", "list", "notify_customer", "send", "void"],
+  "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["get_balance", "get_payout", "issue_virtual_account", "list_banks", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],

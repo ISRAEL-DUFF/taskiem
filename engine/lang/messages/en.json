@@ -469,6 +469,11 @@
       "reviewed": true,
       "context": "Readiness: a step needs a service the business has not connected"
     },
+    "ready.paystack_transfer": {
+      "text": "Paystack must turn on Pay with Transfer for this business: ask Paystack support. Until then customers cannot pay by transfer into the account numbers it opens.",
+      "reviewed": true,
+      "context": "Readiness: a workflow collects payments by transfer on Paystack, which turns the feature on per business, and none has been collected yet"
+    },
     "ready.role": {
       "text": "Nobody has the role {role} yet, so owners will be asked; give it to someone if they should decide.",
       "reviewed": true,

@@ -90,6 +90,16 @@ import {
   type HandRow,
   type MoneySplit,
   type SplitRow,
+  type AccountForm,
+  type AccountIssuer,
+  ISSUERS_PATH,
+  accountProblem,
+  accountRequest,
+  accountWords,
+  customerAccountsPath,
+  issuerOf,
+  issuerWords,
+  newAccountForm,
 } from "../lib/invoices";
 import { isMasked, telLink } from "../lib/orders";
 import type { Claim } from "../lib/schoolFamily";
@@ -482,15 +492,15 @@ function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manag
               {(v.accounts ?? []).length === 0 ? (
                 <span className="hint">None. Money into an account number of the customer's own is matched to their oldest open invoice first.</span>
               ) : (
-                <ul className="plain-list">
+                <ul className="plain-list" aria-label="The customer's account numbers">
                   {(v.accounts ?? []).map((a) => (
-                    <li key={a.id}>
-                      {a.account_number}
-                      {a.bank_name ? ` · ${a.bank_name}` : ""} <span className="hint">({a.channel})</span>
+                    <li key={a.id} data-testid="customer-account">
+                      {accountWords(a)}
                     </li>
                   ))}
                 </ul>
               )}
+              {manage && <GiveAccount invoice={invoice} onDone={view.reload} />}
             </dd>
           </dl>
           <h3>Payers remembered</h3>
@@ -524,6 +534,118 @@ function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manag
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * "Give this customer an account number": issued on a connection that can
+ * (the business's issuers, with what each needs), or one the business
+ * already has for them, typed in. The customer is the invoice's, so no
+ * details are typed again; the account and its reference show on the
+ * panel once registered (docs/matching.md "Customers' own account numbers").
+ */
+function GiveAccount({ invoice, onDone }: { invoice: CustomerInvoice; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const issuers = useLoad(() => (open ? get<{ issuers: AccountIssuer[] }>(ISSUERS_PATH) : Promise.resolve(undefined)), [open]);
+  const [form, setForm] = useState<AccountForm>();
+  const [tried, setTried] = useState(false);
+  const act = useAction();
+  const list = issuers.data?.issuers ?? [];
+  const f = form ?? newAccountForm(list);
+  const set = (patch: Partial<AccountForm>) => setForm({ ...f, ...patch });
+  const problem = accountProblem(f, list);
+  const issuer = issuerOf(f, list);
+  if (!open) {
+    return (
+      <p>
+        <button type="button" className="small" onClick={() => setOpen(true)}>
+          Give this customer an account number
+        </button>
+      </p>
+    );
+  }
+  return (
+    <form
+      className="stack"
+      aria-label="Give this customer an account number"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setTried(true);
+        if (problem) return;
+        void act.run(async () => {
+          await plainly(post(customerAccountsPath(invoice.id), accountRequest(f)));
+          setOpen(false);
+          setForm(undefined);
+          setTried(false);
+          onDone();
+        }, "Account number registered");
+      }}
+    >
+      {!issuers.data && !issuers.error && <Skeleton rows={1} label="Looking for connections that can issue account numbers…" />}
+      {issuers.data && (
+        <>
+          {list.length === 0 && <p className="hint">None of your connections can issue account numbers; enter one your payments provider gave you for this customer.</p>}
+          {list.length > 0 && (
+            <Field label="Where from">
+              <select aria-label="Where from" value={f.by_hand ? "by_hand" : f.connection} onChange={(e) => set(e.target.value === "by_hand" ? { by_hand: true, connection: "" } : { by_hand: false, connection: e.target.value })}>
+                {list.map((i) => (
+                  <option key={i.connection} value={i.connection}>
+                    Issue one with {i.rail} ({i.connection})
+                  </option>
+                ))}
+                <option value="by_hand">Enter one by hand</option>
+              </select>
+            </Field>
+          )}
+          {issuer && <p className="hint">{issuerWords(issuer)}</p>}
+          {issuer?.needs_account && (
+            <Field label="Wallet the number pays into">
+              <input value={f.account} onChange={(e) => set({ account: e.target.value })} />
+            </Field>
+          )}
+          {issuer?.needs_bvn && (
+            <>
+              <Field label="The customer's BVN" hint="11 digits; sent to the provider, never kept.">
+                <input inputMode="numeric" autoComplete="off" value={f.bvn} onChange={(e) => set({ bvn: e.target.value })} />
+              </Field>
+              <Field label="Or their NIN">
+                <input inputMode="numeric" autoComplete="off" value={f.nin} onChange={(e) => set({ nin: e.target.value })} />
+              </Field>
+            </>
+          )}
+          {f.by_hand && (
+            <>
+              <Field label="Connection" hint="The connection the account is on, as the money log names it: paystack/main.">
+                <input value={f.connection} onChange={(e) => set({ connection: e.target.value })} placeholder="paystack/main" />
+              </Field>
+              <Field label="Account number">
+                <input inputMode="numeric" value={f.account_number} onChange={(e) => set({ account_number: e.target.value })} />
+              </Field>
+              <Field label="Reference" hint="The provider's reference for the account, which its payments carry.">
+                <input value={f.reference} onChange={(e) => set({ reference: e.target.value })} />
+              </Field>
+              <Field label="Bank">
+                <input value={f.bank_name} onChange={(e) => set({ bank_name: e.target.value })} />
+              </Field>
+            </>
+          )}
+          {tried && problem && (
+            <p className="notice" role="alert">
+              {problem}
+            </p>
+          )}
+          <div className="toolbar">
+            <button type="submit" className="primary small" disabled={act.busy}>
+              {act.busy ? "Registering…" : f.by_hand ? "Register this account" : "Issue the account number"}
+            </button>
+            <button type="button" className="small" onClick={() => (setOpen(false), setForm(undefined), setTried(false))}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+      <ErrorBox error={act.error ?? issuers.error} />
+    </form>
   );
 }
 

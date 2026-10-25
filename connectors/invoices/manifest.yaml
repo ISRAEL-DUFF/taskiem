@@ -175,3 +175,49 @@ actions:
       properties:
         number: { type: string }
         queued: { type: array, items: { type: string } }
+  register_account:
+    title: Give a customer their own account number
+    description: "A permanent account number of the customer's own: money paid into it is matched to their open invoices, oldest first, and the rest kept as their credit. Either issue one (issue true) on a connection that can issue account numbers, or register one the business already has for them (account_number and reference). The same customer and connection again answers the account already issued. One per customer, never one per invoice: an invoice's page offers its own. The customer is as their invoices have them: by key when given, else phone, else email."
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [customer, connection]
+      properties:
+        customer:
+          type: object
+          required: [name]
+          properties:
+            name:  { type: string }
+            phone: { type: string }
+            email: { type: string }
+            key:   { type: string, description: The business's own key for the customer, when its invoices give one }
+        connection:     { type: string, description: "The connection the account is on or is issued on, as connector/name: paystack/main" }
+        issue:          { type: boolean, description: Issue the account on the connection (it must be able to issue account numbers) }
+        account_number: { type: string, description: The account the business already has for the customer (not with issue) }
+        reference:      { type: string, description: Its reference, which its payments carry (not with issue) }
+        bank_name:      { type: string }
+        account_name:   { type: string, description: "The name asked for when issuing, where the rail lets the business name it; the business's and the customer's when left out" }
+        account:        { type: string, description: "The wallet the number pays into, on rails that hold several" }
+        bvn:            { type: string, description: "The customer's BVN (11 digits), for rails that need one per account (Flutterwave); never kept" }
+        nin:            { type: string, description: "Or their NIN (11 digits)" }
+    output:
+      type: object
+      properties:
+        account_number: { type: string }
+        bank_name:      { type: string }
+        reference:      { type: string, description: The account's reference, which its payments carry }
+        connection:     { type: string }
+        customer_name:  { type: string }
+    pii:
+      - { field: customer.name, category: name }
+      - { field: customer.phone, category: phone }
+      - { field: customer.email, category: email }
+      - { field: bvn, category: bvn }
+      - { field: nin, category: nin }
+      - { field: output.customer_name, category: name }
