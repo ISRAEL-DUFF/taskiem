@@ -311,6 +311,19 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", err)
 		return
 	}
+	if err == nil && c.Link != nil {
+		// The grant made into the account (Meta: the one Page, its own
+		// token, subscribed to Taskiem's app: rule 21).
+		creds, err = s.oauthLink(ctx, req.Tenant, c, prov, creds, token)
+		// What it made lasts as the connector says, not as the granted
+		// token did (a Page token does not expire).
+		expiresAt = nil
+	}
+	if err != nil {
+		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
+		s.oauthDone(w, r, "", err)
+		return
+	}
 	if err := checkCredentials(c, creds); err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
 		s.oauthDone(w, r, "", err)
@@ -418,14 +431,31 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 		form.Del("client_id")
 		form.Del("client_secret")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.token, strings.NewReader(form.Encode()))
+	var req *http.Request
+	if c.Manifest.Auth.OAuth2.TokenMethod == "get" {
+		// Meta's Graph API takes the exchange as a GET (rule 21).
+		u, perr := url.Parse(prov.token)
+		if perr != nil {
+			return nil, perr
+		}
+		q := u.Query()
+		for k, vs := range form {
+			q[k] = vs
+		}
+		u.RawQuery = q.Encode()
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	} else {
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, prov.token, strings.NewReader(form.Encode()))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
 	if basic {
 		req.SetBasicAuth(prov.client.ID, prov.client.Secret)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -459,6 +489,21 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 		return nil, fmt.Errorf("%w: %s's token answer is not the published shape", errOAuthProvider, c.Manifest.Name)
 	}
 	return answer, nil
+}
+
+// oauthLink runs the connector's Link on a new connection's fields: its
+// refusals are the person's to read; anything else is the provider not
+// answering as published.
+func (s *Server) oauthLink(ctx context.Context, tenant uuid.UUID, c *connector.Connector, prov oauthProvider, creds map[string]string, token string) (map[string]string, error) {
+	hc := s.egressGuard().Client(egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "oauth:" + c.Manifest.ID}, 30*time.Second)
+	out, err := c.Link(ctx, connector.LinkCall{Credentials: creds, Token: token, ClientID: prov.client.ID, ClientSecret: prov.client.Secret, HTTP: hc})
+	switch {
+	case errors.Is(err, connector.ErrLinkRefused):
+		return nil, fmt.Errorf("%w: %s", errOAuthGrant, strings.TrimSuffix(strings.TrimSuffix(err.Error(), connector.ErrLinkRefused.Error()), ": "))
+	case err != nil:
+		return nil, fmt.Errorf("%w: %s did not complete the connection: %w", errOAuthProvider, c.Manifest.Name, err)
+	}
+	return out, nil
 }
 
 // oauthCredentials builds a connection's fields from the token answer as

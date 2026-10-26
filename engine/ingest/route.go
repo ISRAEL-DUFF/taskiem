@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
 
@@ -126,7 +128,7 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
 			TenantID: t.tenant, WorkflowID: s.workflow, Version: s.version, Environment: ev.env,
 			Trigger: runTrig, StartedBy: "connector:" + ev.ref, TriggerID: "event/" + s.workflow.String() + "/" + ev.env, DedupKey: ev.dedup,
-			Throttled: t.throttled,
+			Throttled: t.throttled, TriggerPII: triggerPII(ev),
 		})
 		if le, ok := runtime.IsLimit(err); ok {
 			limited(w, le)
@@ -364,4 +366,18 @@ func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, 
 func asList(v any) []string {
 	l, _ := v.([]string)
 	return l
+}
+
+// triggerPII is the trigger's declared personal data (connector/v1 rule
+// 21) as paths under the run's trigger.
+func triggerPII(ev eventItem) []pii.Path {
+	if ev.conn == nil {
+		return nil
+	}
+	spec := ev.conn.Manifest.Triggers[ev.name]
+	out := make([]pii.Path, 0, len(spec.PII))
+	for _, p := range spec.PII {
+		out = append(out, pii.Path{Segments: strings.Split(p.Field, "."), Category: p.Category})
+	}
+	return out
 }

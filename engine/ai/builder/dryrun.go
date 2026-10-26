@@ -116,6 +116,19 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 		if evs, ok := def.Trigger.Config["events"].([]any); ok && len(evs) > 0 {
 			trig["event"] = evs[0]
 		}
+		// The trigger's own example delivery, where its manifest gives one.
+		ref, _ := def.Trigger.Config["connector"].(string)
+		name, _ := def.Trigger.Config["trigger"].(string)
+		if conn, ok := reg.Get(ref); ok {
+			if ex := conn.Manifest.Triggers[name].Example; ex != nil {
+				if ex.Body != nil {
+					trig["body"] = ex.Body
+				}
+				if ex.Item != nil {
+					trig["item"] = ex.Item
+				}
+			}
+		}
 	}
 	c.Trigger = trig
 	// A template step's steps are mocked as the workflow's own, by their

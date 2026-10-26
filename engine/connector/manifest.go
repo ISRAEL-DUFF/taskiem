@@ -108,6 +108,12 @@ type OAuth2 struct {
 	// RevokeEncoding is the revoke request's body: "form" (default, RFC
 	// 7009) or "json" ({"token": …}, Intuit's).
 	RevokeEncoding string `json:"revoke_encoding,omitempty"`
+	// TokenMethod is how the code is exchanged: "post" (default, RFC
+	// 6749) or "get" (the parameters in the query, Meta's Graph API).
+	TokenMethod string `json:"token_method,omitempty"`
+	// LinkedFields are auth fields the connector's Link fills when the
+	// connection is made (Meta's Page and its token: rule 21).
+	LinkedFields []string `json:"linked_fields,omitempty"`
 }
 
 // ScopeSeparator is what joins the scopes on the consent URL.
@@ -615,6 +621,11 @@ func (m *Manifest) check() []string {
 				add("/auth/oauth2/fields_from_callback/%s: not an auth field", k)
 			}
 		}
+		for _, k := range o.LinkedFields {
+			if !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == k }) {
+				add("/auth/oauth2/linked_fields: %q is not an auth field", k)
+			}
+		}
 		if o.AccountField != "" && !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == o.AccountField }) {
 			add("/auth/oauth2/account_field: %q is not an auth field", o.AccountField)
 		}
@@ -622,7 +633,8 @@ func (m *Manifest) check() []string {
 			_, fromToken := o.FieldsFromToken[f.Key]
 			_, fromCallback := o.FieldsFromCallback[f.Key]
 			_, fromClient := o.PlatformClientFields[f.Key]
-			if !fromToken && !fromCallback && !fromClient && (f.Required == nil || *f.Required) {
+			fromLink := slices.Contains(o.LinkedFields, f.Key)
+			if !fromToken && !fromCallback && !fromClient && !fromLink && (f.Required == nil || *f.Required) {
 				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token or the callback; a linked connection would be missing it", f.Key)
 			}
 		}

@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -160,5 +161,30 @@ func TestModeClients(t *testing.T) {
 	}
 	if _, probs := Parse([]byte(strings.Replace(src, "client_auth: basic", "client_auth: header", 1))); len(probs) == 0 {
 		t.Error("an unknown client_auth was taken")
+	}
+}
+
+// A grant the connector completes (rule 21): linked fields count as
+// filled, and they need a Link, as a Link needs them.
+func TestLinkedFields(t *testing.T) {
+	src := strings.Replace(zohoLike, "    fields_from_token: { access_token: access_token, api_domain: api_domain }\n",
+		"    fields_from_token: { api_domain: api_domain }\n    token_method: get\n    linked_fields: [access_token]\n", 1)
+	m, probs := Parse([]byte(src))
+	if len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	if m.Auth.OAuth2.TokenMethod != "get" {
+		t.Errorf("token_method %q", m.Auth.OAuth2.TokenMethod)
+	}
+	ping := ActionFunc(func(context.Context, Request) (Response, error) { return Response{}, nil })
+	if err := NewRegistry().Register(&Connector{Manifest: m, Actions: map[string]Action{"ping": ping}}); err == nil || !strings.Contains(err.Error(), "linked_fields") {
+		t.Errorf("linked fields without a Link: %v", err)
+	}
+	link := func(context.Context, LinkCall) (map[string]string, error) { return nil, nil }
+	if err := NewRegistry().Register(&Connector{Manifest: m, Actions: map[string]Action{"ping": ping}, Link: link}); err != nil {
+		t.Errorf("with a Link: %v", err)
+	}
+	if _, probs := Parse([]byte(strings.Replace(src, "linked_fields: [access_token]", "linked_fields: [nope]", 1))); !strings.Contains(strings.Join(probs, "; "), `"nope" is not an auth field`) {
+		t.Errorf("an unknown linked field: %v", probs)
 	}
 }

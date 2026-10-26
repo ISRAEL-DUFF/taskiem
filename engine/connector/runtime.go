@@ -124,7 +124,28 @@ type Connector struct {
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
 	CheckCredentials func(creds map[string]string) error
+	// Link completes a connection made by OAuth before it is saved, for
+	// providers whose grant is not yet the account (Meta: the user's token
+	// becomes the one Page's own, and the Page is subscribed to Taskiem's
+	// app). It fills the manifest's auth.oauth2.linked_fields (rule 21);
+	// an error wrapping ErrLinkRefused is shown to the person as it is.
+	Link func(ctx context.Context, c LinkCall) (map[string]string, error)
 }
+
+// LinkCall is what Link gets: the fields made so far, the token the
+// provider granted, Taskiem's client, and an egress-guarded client for
+// the connector's hosts.
+type LinkCall struct {
+	Credentials  map[string]string
+	Token        string
+	ClientID     string
+	ClientSecret string
+	HTTP         *http.Client
+}
+
+// ErrLinkRefused is a grant that makes no connection, in the person's
+// words ("choose exactly one Page").
+var ErrLinkRefused = errors.New("link refused")
 
 // WebhookVerifier checks one delivery; secret is the connection credential
 // named by the trigger's secret_field. A non-nil error refuses it.
@@ -271,6 +292,9 @@ func (c *Connector) Check() error {
 		if _, ok := c.Manifest.Triggers[name]; !ok {
 			return fmt.Errorf("connector %s: enricher %q is not a trigger in the manifest", c.Manifest.ID, name)
 		}
+	}
+	if o := c.Manifest.Auth.OAuth2; o != nil && (len(o.LinkedFields) > 0) != (c.Link != nil) {
+		return fmt.Errorf("connector %s: auth.oauth2.linked_fields and a Link handler go together", c.Manifest.ID)
 	}
 	return nil
 }

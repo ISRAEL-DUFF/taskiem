@@ -71,6 +71,20 @@ type TriggerSpec struct {
 	Delivery   string `json:"delivery,omitempty"`
 	AccountKey string `json:"account_key,omitempty"`
 	Revokes    string `json:"revokes,omitempty"`
+	// PII is the personal data a delivery carries, as paths under the
+	// run's trigger (body.…, item.…; * for every element): sealed in
+	// history when a run starts (rule 21: a message's sender and text).
+	PII []PIIField `json:"pii,omitempty"`
+	// Example is a delivery as a run sees it ({body, item}), for dry runs
+	// and the docs: a split trigger's item cannot be guessed.
+	Example *TriggerExample `json:"example,omitempty"`
+}
+
+// TriggerExample is an example delivery: its body and, for a split
+// trigger, one item.
+type TriggerExample struct {
+	Body any `json:"body,omitempty"`
+	Item any `json:"item,omitempty"`
 }
 
 // AppDelivered reports whether the trigger's deliveries come (also) to

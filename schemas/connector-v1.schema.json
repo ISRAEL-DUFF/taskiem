@@ -606,6 +606,15 @@
               "enum": ["body", "basic"],
               "description": "How Taskiem's client proves itself at the token URL (rule 20): body (default; client_id and client_secret in the form) or basic (HTTP Basic, RFC 6749 section 2.3.1; Intuit's)."
             },
+            "token_method": {
+              "enum": ["post", "get"],
+              "description": "How the code is exchanged (rule 21): post (default, RFC 6749) or get (the parameters in the query; Meta's Graph API)."
+            },
+            "linked_fields": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/name" },
+              "description": "Auth fields the connector's Link handler fills when a connection is made by OAuth, before it is saved (rule 21: Meta's Page, its token and its Instagram account)."
+            },
             "revoke_encoding": {
               "enum": ["form", "json"],
               "description": "The revoke request's body (rule 20): form (default, RFC 7009) or json ({\"token\": ...}; Intuit's)."
@@ -1071,6 +1080,25 @@
             "both"
           ],
           "description": "connection (default): deliveries come to each connection's own URL under a tenant's hooks. both: either, so a business may bring its own app (its connection's secret_field verifies) or connect through Taskiem's (Slack). app: the provider sends every business's events to the one URL of Taskiem's platform app, /hooks/apps/<connector>/<trigger>; they are verified with the app's secret (TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET) and delivered to the connections whose account_field holds account_key (rule 18)."
+        },
+        "example": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "An example delivery as a run sees it: its body and, for a split trigger, one item (dry runs and the docs).",
+          "properties": { "body": {}, "item": {} }
+        },
+        "pii": {
+          "type": "array",
+          "description": "Personal data in a delivery (rule 21): paths under the run's trigger (body.entry.*.messaging.*.message.text, item.message.text; * for every element) and their category, sealed in run history when a run starts.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "category"],
+            "properties": {
+              "field": { "type": "string", "pattern": "^(body|item)(\\.[A-Za-z0-9_*]+)+$" },
+              "category": { "$ref": "#/$defs/pii/items/oneOf/1/properties/category" }
+            }
+          }
         },
         "account_key": {
           "$ref": "#/$defs/expr",
