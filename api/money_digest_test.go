@@ -77,8 +77,28 @@ func TestMoneyDailyInChat(t *testing.T) {
 	}
 	w.tick(t)
 	last := w.graph.Last(t, on)
-	if last.Template != "taskiem_alert" || !strings.Contains(last.Text, "Yesterday: ₦25,000 in") || !strings.Contains(last.Text, "https://taskiem.test/money") {
+	if last.Template != "taskiem_daily_summary" || !strings.Contains(last.Text, "Yesterday's money, ") || !strings.Contains(last.Text, ": ₦25,000 in — Paystack ₦25,000; ₦0 out") ||
+		!strings.Contains(last.Text, "Tap Open for the Money page") {
 		t.Errorf("outside the window: %+v", last)
+	}
+
+	// With the summary template not approved in the number's account, the
+	// alert template carries the first line, as before.
+	gatePlatform(t, w.graph, w.wa)
+	approve(t, w.graph, w.wa, "taskiem_alert")
+	when3 := tomorrow.AddDate(0, 0, 1).Add(10 * time.Hour)
+	if _, _, err := log.Record(ctx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: "paystack/main", Reference: "P-3",
+		Event: "payment.received", AmountKobo: &amount, OccurredAt: &when3, Source: "event"}); err != nil {
+		t.Fatal(err)
+	}
+	d.Now = func() time.Time { return tomorrow.AddDate(0, 0, 2).Add(8*time.Hour + 5*time.Minute) }
+	if _, err := d.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.tick(t)
+	last = w.graph.Last(t, on)
+	if last.Template != "taskiem_alert" || !strings.Contains(last.Text, "Yesterday: ") || !strings.Contains(last.Text, "https://taskiem.test/money") {
+		t.Errorf("without the summary template: %+v", last)
 	}
 }
 

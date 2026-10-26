@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { del, get, put, type WorkflowSummary } from "../api";
+import { del, get, post, put, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
+import { canSubmit, statusWords, summaryLine, type TemplatesView, type TemplateView } from "../lib/whatsappTemplates";
 import { ErrorBox, Field, fmtTime, useAction, useLoad } from "../ui";
 
 interface NumberView {
@@ -54,6 +55,7 @@ export function WhatsAppNumber() {
           <button className="danger" disabled={act.busy} onClick={() => confirm("Disconnect this number? Messages go from the shared number again.") && void act.run(async () => (await del("/v1/whatsapp/number"), view.reload()), "Disconnected")}>
             Disconnect
           </button>
+          <Templates />
           {can("workflow.publish") && <PublicMenu view={v} onSaved={view.reload} />}
         </>
       ) : (
@@ -98,6 +100,66 @@ export function WhatsAppNumber() {
         </form>
       )}
     </section>
+  );
+}
+
+/** The templates in the number's WhatsApp Business Account: what Meta
+ * approved, with Submit and Check now (docs/whatsapp.md#templates). */
+function Templates() {
+  const view = useLoad(() => get<TemplatesView>("/v1/whatsapp/number/templates"), []);
+  const act = useAction();
+  const v = view.data;
+  if (!v) return view.error ? <ErrorBox error={view.error} /> : null;
+  const submit = (t: TemplateView) =>
+    void act.run(async () => (await post(`/v1/whatsapp/number/templates/${encodeURIComponent(t.name)}/submit`), view.reload()), `Submitted ${t.name} to Meta`);
+  return (
+    <div data-testid="whatsapp-templates">
+      <h3>Templates</h3>
+      <p className="hint">
+        WhatsApp delivers a message outside a person's 24-hour window only as a template Meta approved in your WhatsApp Business Account. Submit each one from
+        here (the token needs whatsapp_business_management), or in WhatsApp Manager under the same name; Meta's answer arrives by itself, and <strong>Check now</strong> asks
+        at once.
+      </p>
+      <p data-testid="whatsapp-templates-summary">{summaryLine(v)}</p>
+      <ErrorBox error={act.error} />
+      <div className="toolbar">
+        <button disabled={act.busy} onClick={() => void act.run(async () => (await post("/v1/whatsapp/number/templates/check"), view.reload()), "Checked with Meta")}>
+          Check now
+        </button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Template</th>
+            <th>Status</th>
+            <th>Sent when</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {v.templates.map((t) => (
+            <tr key={t.name} data-testid={`whatsapp-template-${t.name}`}>
+              <td>
+                <code>{t.name}</code>
+              </td>
+              <td>
+                <span data-testid="status">{statusWords(t.status)}</span>
+                {t.reason && <div className="hint">{t.reason}</div>}
+                {t.checked_at && <div className="hint">checked {fmtTime(t.checked_at)}</div>}
+              </td>
+              <td className="hint">{t.purpose}</td>
+              <td>
+                {canSubmit(t) && (
+                  <button disabled={act.busy} onClick={() => submit(t)}>
+                    Submit
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

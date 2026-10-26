@@ -609,6 +609,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		emailOps.Set(e.email)
 	}
 	if cfg.WhatsApp != nil {
+		// The templates' url buttons open the web app and the form host
+		// (docs/whatsapp.md#templates).
+		cfg.WhatsApp.Hosts = whatsappHosts(cfg)
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
 		// Tenants' own numbers (credentials in their vaults) and template
 		// cost accounting against their plans (spec 11.4, 16).
@@ -948,6 +951,10 @@ func serve(ctx context.Context, args []string) error {
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
+		if e.wa != nil {
+			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
+			tasks = append(tasks, func(ctx context.Context) error { e.wa.RunTemplatePolls(ctx, time.Hour); return nil })
+		}
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
 			tasks = append(tasks, w.Run)

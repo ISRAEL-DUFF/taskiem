@@ -126,6 +126,16 @@ func (s *Server) waReceive(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
 	defer cancel()
+	// Template statuses (message_template_status_update) name the
+	// WhatsApp Business Account, not a number: recorded in that account's
+	// registry, the platform's or an own number's (docs/whatsapp.md#templates).
+	if updates, err := whatsapp.ParseTemplateStatuses(body); err == nil {
+		for _, u := range updates {
+			if err := hook.ApplyTemplateStatus(ctx, u); err != nil {
+				s.Logger.Error("whatsapp: recording a template status", "template", u.Name, "err", err)
+			}
+		}
+	}
 	for _, m := range msgs {
 		if m.ID == "" {
 			continue

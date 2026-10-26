@@ -72,11 +72,11 @@ func (p *Platform) ForTenant(ctx context.Context, tenant uuid.UUID) (*Platform, 
 		}
 		return q, nil
 	}
-	var pnid, display string
+	var pnid, display, waba string
 	var ownApp bool
 	err := db.InTenantTx(ctx, p.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT phone_number_id, display_number, own_app FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active'`, tenant).
-			Scan(&pnid, &display, &ownApp)
+		return tx.QueryRow(ctx, `SELECT phone_number_id, display_number, own_app, waba_id FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active'`, tenant).
+			Scan(&pnid, &display, &ownApp, &waba)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		p.own.Put("t:"+tenant.String(), ownEntry{at: time.Now()})
@@ -89,6 +89,7 @@ func (p *Platform) ForTenant(ctx context.Context, tenant uuid.UUID) (*Platform, 
 	if err != nil {
 		return nil, err
 	}
+	q.WABA = waba
 	p.own.Put("t:"+tenant.String(), ownEntry{p: q, at: time.Now()})
 	p.own.Put("n:"+pnid, ownEntry{p: q, at: time.Now()})
 	return q, nil
@@ -148,7 +149,7 @@ func (p *Platform) build(ctx context.Context, tenant uuid.UUID, pnid, display st
 		}
 	}
 	return &Platform{Pool: p.Pool, Config: cfg, Logger: p.Logger, Now: p.Now, Signer: p.Signer, Meter: p.Meter, Tenant: tenant, OwnApp: ownApp,
-		Client: &Client{BaseURL: p.Client.BaseURL, PhoneNumberID: pnid, Token: cfg.AccessToken, Egress: p.Client.Egress, HTTP: p.Client.HTTP}}, nil
+		Client: &Client{BaseURL: p.Client.BaseURL, PhoneNumberID: pnid, Token: cfg.AccessToken, Egress: p.Client.Egress, HTTP: p.Client.HTTP, Hosts: p.Client.Hosts}}, nil
 }
 
 // --- Graph API calls for connecting a number ---
