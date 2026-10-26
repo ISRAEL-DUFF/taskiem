@@ -66,7 +66,27 @@ export const cel = {
 
 // -------------------------------------------------------------- triggers
 
-export function webhook(config: { path: string; auth: "hmac" | "bearer" | "mtls" | "none"; dedup?: Expr; secret?: string } & Values): Trigger {
+export type WebhookMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type JwtAlgorithm = "HS256" | "HS384" | "HS512" | "RS256" | "RS384" | "RS512" | "ES256" | "ES384";
+
+/**
+ * A webhook trigger. `methods` defaults to POST; a GET's query parameters
+ * are its trigger.body. `jwt` (with auth "jwt") names the issuer and
+ * audience tokens must carry; `cors.origins` lets web pages at those
+ * origins call it (with auth "jwt" or "none").
+ */
+export function webhook(
+  config: {
+    path: string;
+    auth: "hmac" | "bearer" | "basic" | "jwt" | "mtls" | "none";
+    methods?: WebhookMethod[];
+    jwt?: { issuer?: string; audience?: string; algorithms?: JwtAlgorithm[] };
+    cors?: { origins: string[] };
+    dedup?: Expr;
+    respond?: boolean;
+    secret?: string;
+  } & Values,
+): Trigger {
   return { type: "webhook", config };
 }
 export function schedule(config: { cron: string; timezone?: string } & Values): Trigger {

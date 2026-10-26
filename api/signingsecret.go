@@ -18,7 +18,9 @@ import (
 // "New signing secret". It replaces the old one at once, so the sender must
 // switch to it. This is how a sub-tenant's people get the secret for a
 // workflow their partner installed, without the partner ever holding it
-// (decision 0030).
+// (decision 0030). For basic auth the secret is a user name and password,
+// "taskiem:<password>"; for jwt it is the shared HS256 key the sender
+// signs tokens with (a PEM public key is put in the vault by hand).
 func (s *Server) newSigningSecret(w http.ResponseWriter, r *http.Request) {
 	wf, err := uuid.Parse(chi.URLParam(r, "wf"))
 	if err != nil {
@@ -70,6 +72,10 @@ func (s *Server) newSigningSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := "whsec_" + hex.EncodeToString(raw)
+	if auth == "basic" {
+		// The vault holds user:password; the sender gets both.
+		secret = "taskiem:" + hex.EncodeToString(raw)
+	}
 	if _, err := s.Vault.Put(r.Context(), p.TenantID, req.Environment, name, []byte(secret), p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return

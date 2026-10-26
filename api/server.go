@@ -374,6 +374,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/versions/{v}/readiness", s.versionReadiness)
 			r.With(s.need(PermWorkflowRead)).Get("/workflows/{wf}/triggers", s.listTriggers)
 			r.With(s.need(PermSecretManage)).Post("/workflows/{wf}/signing-secret", s.newSigningSecret)
+			r.With(s.need(PermWorkflowEdit)).Post("/workflows/{wf}/webhook-listens", s.startWebhookListen)
+			r.With(s.need(PermWorkflowEdit)).Get("/workflows/{wf}/webhook-listens/{listen}", s.webhookListen)
 			r.With(s.need(PermWorkflowPublish), s.tenantCode).Post("/workflows/{wf}/promote", s.promote)
 			r.With(s.need(PermWorkflowPublish)).Delete("/workflows/{wf}/deployments/{env}", s.undeploy)
 			r.With(s.need(PermWorkflowRead)).Get("/environments", s.listEnvironments)

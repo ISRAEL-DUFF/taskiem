@@ -376,6 +376,10 @@
       "text": "Haɗa {service}.",
       "reviewed": false
     },
+    "ready.paystack_transfer": {
+      "text": "Dole Paystack ya kunna Pay with Transfer wa wannan kasuwancin: tambayi masu taimakon Paystack. Har sai lokacin, abokan ciniki ba za su iya biya ta hanyar tura kuɗi zuwa lambobin asusun da yake buɗewa ba.",
+      "reviewed": false
+    },
     "ready.role": {
       "text": "Babu wanda ke da matsayin {role} tukuna, don haka za a tambayi masu shi; ba wani idan ya kamata su yanke shawara.",
       "reviewed": false

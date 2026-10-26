@@ -1490,9 +1490,77 @@
                     "enum": [
                       "hmac",
                       "bearer",
+                      "basic",
+                      "jwt",
                       "mtls",
                       "none"
                     ]
+                  },
+                  "methods": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE"
+                      ]
+                    },
+                    "description": "The HTTP methods the webhook takes; POST when left out. A request without a body (a GET) has its query parameters as trigger.body."
+                  },
+                  "jwt": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "issuer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "audience": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "algorithms": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": {
+                          "enum": [
+                            "HS256",
+                            "HS384",
+                            "HS512",
+                            "RS256",
+                            "RS384",
+                            "RS512",
+                            "ES256",
+                            "ES384"
+                          ]
+                        }
+                      }
+                    },
+                    "description": "With auth jwt: the iss and aud the token must carry, and the algorithms allowed (by default those the key fits)."
+                  },
+                  "cors": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "origins"
+                    ],
+                    "properties": {
+                      "origins": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 20,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": "Web pages at these origins may call the webhook from a browser; * for any."
                   },
                   "dedup": {
                     "$ref": "#/$defs/expr"

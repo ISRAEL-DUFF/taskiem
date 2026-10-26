@@ -1792,6 +1792,95 @@ paths:
                 $ref: '#/components/schemas/CustomerAccount'
         default:
           $ref: '#/components/responses/Error'
+  /v1/customer-accounts/issuers:
+    get:
+      operationId: listAccountIssuers
+      tags:
+      - Invoices
+      summary: The connections that can issue customers' account numbers
+      description: "The business's active prod connections whose payment service can issue a permanent account number for a customer (virtual_account), with what each needs: the customer's email, their BVN or NIN (typed in, never kept), or the wallet the numbers pay into. For the web app's \"Give this customer an account number\" (docs/matching.md#customers-own-account-numbers)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      responses:
+        '200':
+          description: The issuers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issuers]
+                properties:
+                  issuers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountIssuer'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/customer-accounts:
+    post:
+      operationId: giveInvoiceCustomerAccount
+      tags:
+      - Invoices
+      summary: Give the invoice's customer their own account number
+      description: "Gives the invoice's customer a permanent account number: issued on a connection that can (issue true; GET /v1/customer-accounts/issuers lists them), or the one the business already has for them (account_number and reference), registered as POST /v1/customer-accounts does. The customer is the invoice's, so no details travel. The same customer and connection again answers the account already issued; a connection that cannot issue, or a payment service's refusal, is 400 or 409 with the reason. Money paid into the account is matched to the customer's oldest open invoice, then the next, the rest kept as their credit (docs/matching.md#customers-own-account-numbers). Audited."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: The invoice's id or number
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connection]
+              properties:
+                connection:
+                  type: string
+                  description: The connection, as connector/name, like paystack/main
+                issue:
+                  type: boolean
+                  description: Issue the account on the connection
+                account_number:
+                  type: string
+                  description: The account the business already has for the customer (not with issue)
+                reference:
+                  type: string
+                  description: Its reference, which its payments carry (not with issue)
+                bank_name:
+                  type: string
+                account_name:
+                  type: string
+                  description: The name asked for when issuing, where the service lets the business name it; the business's and the customer's when left out
+                account:
+                  type: string
+                  description: The wallet the number pays into, on services that hold several
+                bvn:
+                  type: string
+                  description: The customer's BVN (11 digits), for services that need one per account; never kept
+                nin:
+                  type: string
+                  description: Or their NIN (11 digits)
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerAccount'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/money/leaks:
     get:
       operationId: listMoneyLeaks
@@ -15677,6 +15766,93 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/webhook-listens:
+    post:
+      operationId: startWebhookListen
+      tags:
+      - Workflows
+      summary: Listen for a test webhook call
+      description: Makes a test address for the webhook trigger being built, with its config as it stands in the
+        editor, saved or not. The first call to the address within two minutes is kept, as a run would see it, with
+        what the webhook would say of its method, origin and auth (checked with the environment's `webhook_<WD id>`
+        secret); it starts nothing. Later calls get 409.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookListenRequest'
+        required: true
+      responses:
+        '201':
+          description: The test address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListen'
+        '400':
+          description: The config is not a webhook trigger's that could be published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: The key is limited to another environment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/webhook-listens/{listen}:
+    get:
+      operationId: webhookListen
+      tags:
+      - Workflows
+      summary: Read a test webhook address
+      description: Whether the test address is still waiting, has its call, or expired; with the call once it came.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      - name: listen
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Test address id
+      responses:
+        '200':
+          description: The test address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListenState'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/triggers:
     get:
       operationId: listTriggers
@@ -17798,8 +17974,8 @@ components:
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot]
-          description: cannot, for a capability step whose connection's rail cannot do it.
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support]
+          description: "cannot, for a capability step whose connection's rail cannot do it; support, for a connection whose service must turn a feature on for the business (Paystack's Pay with Transfer), never blocking."
         capability:
           type: string
           description: For a connection a capability step needs, what its rail must do (pay_bank).
@@ -22464,6 +22640,27 @@ components:
         created_at:
           type: string
           format: date-time
+    AccountIssuer:
+      type: object
+      required: [connection, rail, needs_email, needs_bvn, needs_account, names_itself]
+      properties:
+        connection:
+          type: string
+          description: As connector/name, like paystack/main
+        rail:
+          type: string
+          description: The payment service's name
+        needs_email:
+          type: boolean
+        needs_bvn:
+          type: boolean
+          description: The service needs the customer's BVN or NIN, typed in and never kept
+        needs_account:
+          type: boolean
+          description: The wallet the numbers pay into must be chosen
+        names_itself:
+          type: boolean
+          description: Payers see the service's name for the account, whatever is asked
     MoneyPayer:
       type: object
       required: [id, kind, payer, times, first_by, created_at, last_at]
@@ -25757,6 +25954,11 @@ components:
           description: For a prod connection of a rail whose events the money log records, the addresses to set in the provider's dashboard so Taskiem hears them without a workflow, one per trigger (triggers Taskiem registers itself are left out). Never carries a secret.
           items:
             $ref: '#/components/schemas/MoneyLogWebhook'
+        notes:
+          type: array
+          description: "What a prod connection still needs from its service, in plain words: Paystack must turn on Pay with Transfer for the business (ask Paystack support), until a transfer has been collected on it."
+          items:
+            type: string
       additionalProperties: false
     MoneyLogWebhook:
       type: object
@@ -29489,6 +29691,55 @@ components:
           - sso_required
           description: The organisation requires single sign-on; the person is a member and signs in that way.
       additionalProperties: false
+    WebhookListenRequest:
+      type: object
+      required:
+      - config
+      properties:
+        environment:
+          type: string
+          description: Whose secret checks the call; `prod` when left out.
+        config:
+          type: object
+          description: The webhook trigger's `config` (wd/v1), as in the editor.
+      additionalProperties: false
+    WebhookListen:
+      type: object
+      required:
+      - id
+      - url
+      - expires_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          description: The test address; relative to the Taskiem host when no public hooks URL is set.
+        expires_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+    WebhookListenState:
+      type: object
+      required:
+      - status
+      - expires_at
+      properties:
+        status:
+          type: string
+          enum:
+          - waiting
+          - captured
+          - expired
+        expires_at:
+          type: string
+          format: date-time
+        call:
+          type: object
+          description: 'The call: `method`, `body`, `headers` (without Authorization and cookies), `query`, `bytes`,
+            `received_at`, and `checks` (`method`, `origin`, `auth`: `ok` or why not).'
+      additionalProperties: false
     SigningSecretRequest:
       type: object
       required:
@@ -29515,9 +29766,12 @@ components:
           enum:
           - hmac
           - bearer
+          - basic
+          - jwt
         secret:
           type: string
-          description: The new secret. Shown this once.
+          description: 'The new secret. Shown this once. For basic auth, `taskiem:<password>`: the user name and password;
+            for jwt, the HS256 key tokens are signed with.'
       additionalProperties: false
     PartnerInvitationRequest:
       type: object
@@ -29708,7 +29962,7 @@ components:
           description: Relative to the Taskiem host, `/hooks/<sub-tenant>/<path>?env=<environment>`.
         auth:
           type: string
-          description: How senders authenticate (`hmac`, `bearer`, `none`).
+          description: How senders authenticate (`hmac`, `bearer`, `basic`, `jwt`, `none`).
         secret_name:
           type: string
           description: The vault secret the webhook checks; the sub-tenant's people make it on the workflow's Endpoints

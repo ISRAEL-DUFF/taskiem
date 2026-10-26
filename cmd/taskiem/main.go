@@ -179,9 +179,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprint(stdout, usage)
 		return nil
 	}
+	if cmd, ok := testCommands[args[0]]; ok {
+		return cmd(context.Background(), args[1:], stdout)
+	}
 	fmt.Fprint(stderr, usage)
 	return fmt.Errorf("unknown command %q", args[0])
 }
+
+// testCommands are commands that exist only in a build with `-tags e2e`
+// (the browser tests' binary): fixtures no deployed Taskiem should carry.
+// A tagged file registers one from its init.
+var testCommands = map[string]func(context.Context, []string, io.Writer) error{}
 
 func migrate(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)

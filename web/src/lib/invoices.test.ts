@@ -57,6 +57,12 @@ import {
   type InvoicePayment,
   type MoneyOpenOrder,
   type MoneySuggestion,
+  type AccountIssuer,
+  accountProblem,
+  accountRequest,
+  accountWords,
+  issuerWords,
+  newAccountForm,
   invoiceHero,
 } from "./invoices";
 
@@ -507,7 +513,7 @@ describe("matching money to storefront orders", () => {
   it("offers invoices and orders by hand, leaving out what is suggested", () => {
     const c = matchChoices([inv], open, [order("1")]);
     expect(c.map((x) => x.value)).toEqual(["i1", "order:AK-2"]);
-    expect(c[1]).toEqual({ value: "order:AK-2", kind: "order", number: "AK-2", label: `Order AK-2 · ${naira(120000)} to pay · C•••` });
+    expect(c[1]).toEqual({ value: "order:AK-2", kind: "order", number: "AK-2", label: `Order AK-2 · ${naira(120000)} to pay · C•••`, due_kobo: 120000 });
     expect(matchChoices([inv], null, [])).toHaveLength(1);
     expect(matchRequest("order:AK-2")).toEqual({ order: "AK-2" });
     expect(matchRequest("i1")).toEqual({ invoice: "i1" });
@@ -554,5 +560,43 @@ describe("invoiceHero", () => {
   it("never shows more than all of it paid, or a share of nothing", () => {
     expect(invoiceHero(inv("sent", 0, 0)).paid).toBe(0);
     expect(invoiceHero({ status: "sent", total_kobo: 100, paid_kobo: 150, due_kobo: 0 }).paid).toBe(1);
+  });
+});
+
+describe("giving a customer an account number", () => {
+  const iswallet: AccountIssuer = { connection: "iswallet/main", rail: "iswallet", needs_email: false, needs_bvn: false, needs_account: true, names_itself: true };
+  const flw: AccountIssuer = { connection: "flutterwave/main", rail: "Flutterwave", needs_email: true, needs_bvn: true, needs_account: false, names_itself: false };
+
+  it("starts from the first issuer, else by hand", () => {
+    expect(newAccountForm([iswallet, flw])).toMatchObject({ by_hand: false, connection: "iswallet/main" });
+    expect(newAccountForm([])).toMatchObject({ by_hand: true, connection: "" });
+  });
+
+  it("says what each issuer needs", () => {
+    expect(issuerWords(iswallet)).toBe("iswallet (iswallet/main): iswallet names the account itself; needs the wallet the number pays into.");
+    expect(issuerWords(flw)).toBe("Flutterwave (flutterwave/main): named for your business and the customer; needs the customer's email, their BVN or NIN (typed in, never kept).");
+  });
+
+  it("checks the form and builds the request", () => {
+    const f = newAccountForm([iswallet, flw]);
+    expect(accountProblem(f, [iswallet, flw])).toBe("iswallet needs the wallet the number pays into.");
+    expect(accountProblem({ ...f, account: "wal_1" }, [iswallet, flw])).toBeUndefined();
+    expect(accountRequest({ ...f, account: " wal_1 " })).toEqual({ connection: "iswallet/main", issue: true, account: "wal_1" });
+    expect(accountProblem({ ...f, connection: "flutterwave/main" }, [iswallet, flw])).toBe("Flutterwave needs the customer's BVN or NIN (11 digits).");
+    expect(accountRequest({ ...f, connection: "flutterwave/main", nin: "12345678901" })).toEqual({ connection: "flutterwave/main", issue: true, nin: "12345678901" });
+    expect(accountProblem({ ...f, connection: "opay/main" }, [iswallet, flw])).toBe("Choose the connection to issue the account on.");
+    const hand = { ...newAccountForm([]), connection: "paystack/main", account_number: "1234567890", reference: "CUS_ada", bank_name: "Titan" };
+    expect(accountProblem({ ...hand, connection: "paystack" }, [])).toMatch(/like paystack\/main/);
+    expect(accountProblem({ ...hand, account_number: "12" }, [])).toMatch(/4 to 40/);
+    expect(accountProblem({ ...hand, reference: "" }, [])).toMatch(/reference is required/);
+    expect(accountProblem(hand, [])).toBeUndefined();
+    expect(accountRequest(hand)).toEqual({ connection: "paystack/main", account_number: "1234567890", reference: "CUS_ada", bank_name: "Titan" });
+  });
+
+  it("words an account", () => {
+    expect(accountWords({ id: "a", channel: "iswallet/main", account_number: "9900000001", bank_name: "Wema Bank", reference: "tsk_ab12" })).toBe(
+      "9900000001 · Wema Bank (iswallet/main), reference tsk_ab12",
+    );
+    expect(accountWords({ id: "a", channel: "paystack/main", account_number: "1234567890", reference: "CUS_ada" })).toBe("1234567890 (paystack/main), reference CUS_ada");
   });
 });

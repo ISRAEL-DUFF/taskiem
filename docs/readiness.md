@@ -11,6 +11,7 @@ Before a workflow is published, Taskiem checks that everything it needs is in pl
 | **Table** | A step writes or reads a data table that does not exist | Yes | **Make it**, with the columns the workflow writes, filters and orders by (each typed from the form field that fills it, else text); from the AI review; or on the Tables page |
 | **Setting** (variable) | An expression reads `env.<name>` and it is not set | No: it can be set later | Type it in place |
 | **Role** | An approval or form step names a role no member holds | No: owners decide meanwhile | Give it to a member in place |
+| **A feature the service turns on** (`support`) | A step collects payments by transfer (`collect_transfer`) on Paystack, which turns Pay with Transfer on for each business through its support, and no transfer account has been opened on that connection yet | No | Ask Paystack support; the note goes once a transfer account has been opened (the Connections page says the same beside the connection) |
 
 Publishing deploys to every environment without a promotion step (normally dev and prod). Gaps in **prod** block a publish; gaps in **dev**, a rehearsal, are listed but do not.
 

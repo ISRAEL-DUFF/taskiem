@@ -18,11 +18,13 @@ import (
 
 // Payer memory (decision 0046 point 6; docs/spec/schools.md 7.3;
 // docs/matching.md#payer-memory). When a person confirms or matches money
-// to a customer's invoice, the payer is remembered for that customer: the
-// payer's name as the rail sent it and, where the rail gave it, the paying
-// account. The next payment from them suggests that customer's invoices
-// first ("this payer paid for this customer before"), strongly enough to
-// be matched on its own when the business has automatic matching on.
+// to a customer's invoice or storefront order, the payer is remembered for
+// that customer (an order's customer is the pseudonym of their phone, as
+// an invoice's without a key is): the payer's name as the rail sent it
+// and, where the rail gave it, the paying account. The next payment from
+// them suggests that customer's invoices and orders first ("this payer
+// paid for this customer before"), strongly enough to be matched on its
+// own when the business has automatic matching on.
 //
 // Payers are personal data. A payer is found by the pseudonym sealing
 // derives from their normalised name or account (payer_key: keyed by the
@@ -118,7 +120,7 @@ func (m *Matcher) remembered(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, n
 }
 
 // remember remembers an entry's payer for customers a person matched it
-// to.
+// to (invoices' and orders').
 func (m *Matcher) remember(ctx context.Context, tx pgx.Tx, tenant, entryID uuid.UUID, customers []string, by string) error {
 	if m.PII == nil || len(customers) == 0 {
 		return nil

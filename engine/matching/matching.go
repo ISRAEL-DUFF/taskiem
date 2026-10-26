@@ -284,7 +284,7 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 			return err
 		}
 		for _, x := range orders {
-			if s, ok := ScoreOrder(e.AmountKobo, e.Payer, e.Reference, e.When, x); ok {
+			if s, ok := ScoreOrderRemembered(e.AmountKobo, e.Payer, e.Reference, e.When, x, remembered[x.CustomerID()]); ok {
 				found = append(found, s)
 			}
 		}
@@ -420,8 +420,15 @@ func ScoreRemembered(amount int64, payer, reference string, when time.Time, x in
 // customer is the order's, and the days count from when it was placed.
 // An order takes no part payments.
 func ScoreOrder(amount int64, payer, reference string, when time.Time, x storefront.Order) (Suggestion, bool) {
+	return ScoreOrderRemembered(amount, payer, reference, when, x, "")
+}
+
+// ScoreOrderRemembered is ScoreOrder for a payer remembered as having
+// paid for the order's customer before (their invoices' or orders'): by
+// their paying "account" or their "name" (or "" for not remembered).
+func ScoreOrderRemembered(amount int64, payer, reference string, when time.Time, x storefront.Order, remembered string) (Suggestion, bool) {
 	id, placed := x.ID, x.CreatedAt
-	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.Payable(), customer: x.Customer.Name, since: &placed, verb: "placed"})
+	return score(amount, payer, reference, when, candidate{order: &id, number: x.Reference, due: x.Payable(), customer: x.Customer.Name, since: &placed, verb: "placed", remembered: remembered})
 }
 
 func score(amount int64, payer, reference string, when time.Time, x candidate) (Suggestion, bool) {

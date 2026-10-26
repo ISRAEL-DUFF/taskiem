@@ -1,6 +1,7 @@
 package matching_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -212,5 +213,70 @@ func TestReturnedPaymentReopensInvoice(t *testing.T) {
 	}
 	if len(w.open()) != 0 || len(w.unmatched()) != 0 {
 		t.Fatalf("a returned payment was offered: %+v %+v", w.open(), w.unmatched())
+	}
+}
+
+// With the school sharing family credit, To match offers a sibling's open
+// invoice as a part of the split, and a split by hand across the family
+// may leave the rest as the student's credit; the sibling's part says so.
+func TestSplitOfferedToSiblings(t *testing.T) {
+	w := newWorld(t)
+	a, b := w.family(true)
+	own := w.invoiceFor(a, 2000000, "2099-09-01")
+	sib := w.invoiceFor(b, 1500000, "2099-09-01")
+	w.heard("virtual_account.credited", map[string]any{"reference": "PAY-FAM", "amount_kobo": int64(2000000), "payer_name": "NGOZI EZE"})
+	open := w.open()
+	if len(open) == 0 || open[0].Number != own.Number {
+		t.Fatalf("suggestions %+v", open)
+	}
+	var p matching.Proposal
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		p, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID, true)
+		return err
+	})
+	if p.Over || len(p.Parts) != 2 || p.Parts[0].Number != own.Number || p.Parts[0].AmountKobo != 2000000 || p.Parts[1].Number != sib.Number || p.Parts[1].AmountKobo != 0 || !p.Parts[1].Sibling || p.CreditKobo != 0 {
+		t.Fatalf("proposal %+v", p)
+	}
+	s, err := w.m.ConfirmParts(ctx, w.env.Tenant, open[0].ID, []matching.Part{{Invoice: own.Number, AmountKobo: 1000000}, {Invoice: sib.Number, AmountKobo: 500000}}, true, "user:ada")
+	if err != nil || len(s.Parts) != 2 || s.CreditKobo != 500000 || s.LeftKobo != 0 {
+		t.Fatalf("split %v %+v", err, s)
+	}
+	if y := w.read(sib.Number); y.PaidKobo != 500000 || len(y.Payments) != 1 || y.Payments[0].Reasons[0] != matching.SplitSiblingReason {
+		t.Fatalf("the sibling's part %d %+v", y.PaidKobo, y.Payments)
+	}
+	if w.read(own.Number).PaidKobo != 1000000 || w.creditOf("key:"+a.Key) != 500000 {
+		t.Fatalf("own %d, credit %d", w.read(own.Number).PaidKobo, w.creditOf("key:"+a.Key))
+	}
+}
+
+// Off (the default), a sibling's invoice is not offered, and the rest
+// cannot be left as credit when a part is a sibling's; the split by hand
+// itself is allowed, as across any invoices.
+func TestSplitNotOfferedToSiblingsByDefault(t *testing.T) {
+	w := newWorld(t)
+	a, b := w.family(false)
+	own := w.invoiceFor(a, 2000000, "2099-09-01")
+	sib := w.invoiceFor(b, 1500000, "2099-09-01")
+	w.heard("virtual_account.credited", map[string]any{"reference": "PAY-FAM2", "amount_kobo": int64(2000000), "payer_name": "NGOZI EZE"})
+	open := w.open()
+	if len(open) == 0 || open[0].Number != own.Number {
+		t.Fatalf("suggestions %+v", open)
+	}
+	var p matching.Proposal
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		p, err = w.m.Propose(ctx, tx, w.env.Tenant, open[0].ID, true)
+		return err
+	})
+	if len(p.Parts) != 0 || p.Over {
+		t.Fatalf("proposal %+v", p)
+	}
+	parts := []matching.Part{{Invoice: own.Number, AmountKobo: 1000000}, {Invoice: sib.Number, AmountKobo: 500000}}
+	if _, err := w.m.ConfirmParts(ctx, w.env.Tenant, open[0].ID, parts, true, "user:ada"); !errors.Is(err, invoicing.ErrInvalid) {
+		t.Fatalf("credit across customers: %v", err)
+	}
+	if s, err := w.m.ConfirmParts(ctx, w.env.Tenant, open[0].ID, parts, false, "user:ada"); err != nil || s.LeftKobo != 500000 || w.read(sib.Number).Payments[0].Reasons[0] != matching.SplitReason {
+		t.Fatalf("split %v %+v", err, s)
 	}
 }

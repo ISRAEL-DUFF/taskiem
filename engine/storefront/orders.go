@@ -138,6 +138,13 @@ type Order struct {
 	customerEnv map[string]any
 }
 
+// CustomerID is the order's customer as matching knows customers
+// (invoicing.Invoice.CustomerID): the pseudonym of their phone, the same
+// an invoice to that phone without a key carries, so a payer remembered
+// for an order's customer is remembered for their invoices too. "" when
+// the order has none.
+func (x Order) CustomerID() string { return x.subject }
+
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change`

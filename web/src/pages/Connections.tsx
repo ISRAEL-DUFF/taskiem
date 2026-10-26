@@ -41,6 +41,8 @@ interface Conn {
   };
   /** Addresses to set in the rail's dashboard so the money log hears this prod connection, workflow or not. */
   money_log_webhooks?: MoneyLogWebhook[];
+  /** What the connection still needs from its service, in plain words (Paystack's Pay with Transfer turned on by its support). */
+  notes?: string[];
 }
 
 /** The worst state of a connection's remote subscriptions, with what is wrong. */
@@ -172,6 +174,11 @@ export function Connections() {
                       <Remote remote={c.remote} />
                     </div>
                   )}
+                  {(c.notes ?? []).map((n) => (
+                    <div key={n} className="sub" data-testid="connection-note">
+                      {n}
+                    </div>
+                  ))}
                   {!c.provisioned_by && (
                     <span className="conn-actions">
                       {fields && <button onClick={() => setCompleting(c)}>Add fields</button>}

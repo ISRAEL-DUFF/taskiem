@@ -18,6 +18,7 @@ import (
 type ops struct {
 	created invoicing.Draft
 	listed  string
+	account invoicing.AccountRequest
 }
 
 func (o *ops) CreateOnce(_ context.Context, _ uuid.UUID, _ string, d invoicing.Draft, _ string) (invoicing.Invoice, error) {
@@ -44,7 +45,50 @@ func (o *ops) ListFor(_ context.Context, _ uuid.UUID, status string, within time
 	return []invoicing.Listed{{Number: "INV-0007", Status: "overdue", TotalKobo: 2500000, DueKobo: 500000, DueOn: "2026-10-01", DaysOverdue: 22}}, nil
 }
 
+func (o *ops) GiveAccount(_ context.Context, _ uuid.UUID, in invoicing.AccountRequest, _ string) (invoicing.CustomerAccount, error) {
+	o.account = in
+	if in.Channel == "nope/main" {
+		return invoicing.CustomerAccount{}, invoicing.ErrNoRail
+	}
+	return invoicing.CustomerAccount{Channel: in.Channel, AccountNumber: "9900000001", BankName: "Wema Bank", Reference: "tsk_abc", Customer: in.Customer}, nil
+}
+
 var _ invoices.Ops = invoicing.Service{}
+
+// register_account: issued on the connection, or the one the business
+// has; by hand needs the number and reference; a connection that cannot
+// issue fails the step.
+func TestRegisterAccount(t *testing.T) {
+	o := &ops{}
+	c := invoices.New(o)
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "acct"})
+	r, err := c.Actions["register_account"].Execute(ctx, connector.Request{Input: map[string]any{"customer": map[string]any{"name": "Ada Obi", "phone": "+2348012345678"},
+		"connection": "paystack/main", "issue": true, "idempotency_key": "tsk_a"}, IdempotencyKey: "tsk_a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	if out["account_number"] != "9900000001" || out["reference"] != "tsk_abc" || out["connection"] != "paystack/main" || out["bank_name"] != "Wema Bank" || out["customer_name"] != "Ada Obi" ||
+		!o.account.Issue || o.account.Customer.Phone != "+2348012345678" {
+		t.Errorf("issued: %v (%+v)", out, o.account)
+	}
+	r, err = c.Actions["register_account"].Execute(ctx, connector.Request{Input: map[string]any{"customer": map[string]any{"name": "Ada Obi", "key": "cust:7"},
+		"connection": "iswallet/main", "account_number": "1234567890", "reference": "ref-1", "bank_name": "Sterling"}})
+	if err != nil || o.account.Issue || o.account.AccountNumber != "1234567890" || o.account.Customer.Key != "cust:7" || r.Output.(map[string]any)["connection"] != "iswallet/main" {
+		t.Errorf("by hand: %v %v %+v", r.Output, err, o.account)
+	}
+	for _, in := range []map[string]any{
+		{"customer": map[string]any{"name": "Ada"}, "connection": "iswallet/main"},
+		{"customer": map[string]any{"name": "Ada"}, "connection": "nope/main", "issue": true},
+	} {
+		if _, err := c.Actions["register_account"].Execute(ctx, connector.Request{Input: in}); !errors.Is(err, effects.ErrFatal) {
+			t.Errorf("%v: %v", in, err)
+		}
+	}
+	if _, err := c.Actions["register_account"].Execute(context.Background(), connector.Request{Input: map[string]any{"customer": map[string]any{"name": "Ada"}, "connection": "x/y", "issue": true}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("outside a run: %v", err)
+	}
+}
 
 // list reads overdue or lately paid invoices, with what is due and how
 // late, and no customer details.
