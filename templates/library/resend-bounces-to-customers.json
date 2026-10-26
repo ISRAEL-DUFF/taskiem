@@ -1,0 +1,131 @@
+{
+  "id": "resend-bounces-to-customers",
+  "title": "Mark bounced Resend emails in your table",
+  "summary": "When an email sent through Resend bounces or is marked as spam, note it on the customer's row and stop marketing to them.",
+  "description": "Whenever an email you sent through Resend bounces, or the person marks it as spam, Taskiem finds them in your customers table by their address and sets their email status (bounced or complained). A complaint also turns their marketing_opt_in off, so no newsletter goes to them again.",
+  "category": "customers",
+  "tags": [
+    "resend",
+    "email",
+    "bounce"
+  ],
+  "keywords": [
+    "resend",
+    "bounce",
+    "bounced",
+    "complaint",
+    "spam"
+  ],
+  "requires": [
+    "resend"
+  ],
+  "connectors": [
+    "resend@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "resend_connection",
+      "type": "connection",
+      "connector": "resend",
+      "title": "Resend connection",
+      "description": "Your Resend account, by its API key.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "customers_table",
+      "type": "string",
+      "title": "Customers table",
+      "description": "Your customers: name, email, phone, whether they agreed to marketing, and how their email is doing. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{customers_table}}",
+      "title": "Customers",
+      "description": "Your customers. marketing_opt_in is true only when the customer said yes to your newsletter; email_status says when their address bounced or they unsubscribed or complained.",
+      "columns": [
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "text",
+          "required": true,
+          "personal": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "phone",
+          "title": "Phone",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "marketing_opt_in",
+          "title": "Agreed to marketing",
+          "type": "boolean"
+        },
+        {
+          "name": "email_status",
+          "title": "Email status",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_resendBouncesToCustomers",
+    "version": 1,
+    "name": "Mark bounced emails",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "resend@1",
+        "trigger": "email_events",
+        "events": [
+          "email.bounced",
+          "email.complained"
+        ],
+        "connection": "{{resend_connection}}"
+      }
+    },
+    "steps": [
+      {
+        "id": "mark",
+        "type": "connector",
+        "name": "Note it on the customer's row",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{customers_table}}",
+          "filters": [
+            {
+              "column": "email",
+              "op": "ilike",
+              "value": "=trigger.body.data.to[0]"
+            }
+          ],
+          "max_affected": 10,
+          "return": "minimal",
+          "set": "=trigger.body.type == 'email.complained' ? {'email_status': 'complained', 'marketing_opt_in': false} : {'email_status': 'bounced'}"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

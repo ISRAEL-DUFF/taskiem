@@ -1,0 +1,88 @@
+{
+  "schema": "wd-test/v1",
+  "template": "slack-payment-alerts",
+  "params": {
+    "slack_connection": "main",
+    "channel": "C0PAY"
+  },
+  "cases": [
+    {
+      "name": "a failed payment is posted with its reason",
+      "trigger": {
+        "event": "payout.failed",
+        "fields": {
+          "payout_id": "tsk_po_9",
+          "reason": "Account closed"
+        }
+      },
+      "mocks": {
+        "post": {
+          "output": {
+            "channel": "C0PAY",
+            "ts": "1700000000.1"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "channel": "C0PAY",
+            "text": "A payment you sent (tsk_po_9) failed: Account closed."
+          }
+        }
+      }
+    },
+    {
+      "name": "a payment that came back says so",
+      "trigger": {
+        "event": "payout.reversed",
+        "fields": {
+          "payout_id": "tsk_po_9"
+        }
+      },
+      "mocks": {
+        "post": {
+          "output": {
+            "channel": "C0PAY",
+            "ts": "1700000000.2"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "text": "A payment you sent (tsk_po_9) came back from the bank."
+          }
+        }
+      }
+    },
+    {
+      "name": "a returned payment names what came in",
+      "trigger": {
+        "event": "payment.returned",
+        "fields": {
+          "payment_id": "ref_77",
+          "reason": "disputed"
+        }
+      },
+      "mocks": {
+        "post": {
+          "output": {
+            "channel": "C0PAY",
+            "ts": "1700000000.3"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "text": "A payment you received (ref_77) was returned to the payer: disputed."
+          }
+        }
+      }
+    }
+  ]
+}

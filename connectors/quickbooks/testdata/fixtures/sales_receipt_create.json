@@ -1,0 +1,54 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/company/9341453050298730/salesreceipt",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  },
+  "body": {
+   "DocNumber": "pos-2026-10-25",
+   "TxnDate": "2026-10-25",
+   "DepositToAccountRef": {
+    "value": "35"
+   },
+   "Line": [
+    {
+     "DetailType": "SalesItemLineDetail",
+     "Amount": 300000.0,
+     "Description": "Card",
+     "SalesItemLineDetail": {
+      "Qty": 1,
+      "UnitPrice": 300000.0
+     }
+    },
+    {
+     "DetailType": "SalesItemLineDetail",
+     "Amount": 112500.0,
+     "Description": "Transfer",
+     "SalesItemLineDetail": {
+      "Qty": 1,
+      "UnitPrice": 112500.0
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "SalesReceipt": {
+    "Id": "205",
+    "DocNumber": "pos-2026-10-25",
+    "TotalAmt": 412500.0,
+    "TxnDate": "2026-10-25",
+    "DepositToAccountRef": {
+     "value": "35"
+    }
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

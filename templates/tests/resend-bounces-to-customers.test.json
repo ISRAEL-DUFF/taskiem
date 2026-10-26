@@ -1,0 +1,86 @@
+{
+  "schema": "wd-test/v1",
+  "template": "resend-bounces-to-customers",
+  "params": {},
+  "cases": [
+    {
+      "name": "a bounce is noted",
+      "trigger": {
+        "event": "email.bounced",
+        "body": {
+          "type": "email.bounced",
+          "created_at": "2026-10-26T12:00:05.000Z",
+          "data": {
+            "email_id": "49a3999c",
+            "from": "orders@adacakes.ng",
+            "to": [
+              "ada@example.com"
+            ],
+            "subject": "Receipt"
+          }
+        }
+      },
+      "mocks": {
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "mark": {
+            "table": "customers",
+            "filters": [
+              {
+                "column": "email",
+                "op": "ilike",
+                "value": "ada@example.com"
+              }
+            ],
+            "set": {
+              "email_status": "bounced"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a complaint also stops marketing",
+      "trigger": {
+        "event": "email.complained",
+        "body": {
+          "type": "email.complained",
+          "created_at": "2026-10-26T12:00:05.000Z",
+          "data": {
+            "email_id": "49a3999c",
+            "from": "orders@adacakes.ng",
+            "to": [
+              "ada@example.com"
+            ],
+            "subject": "Receipt"
+          }
+        }
+      },
+      "mocks": {
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "mark": {
+            "set": {
+              "email_status": "complained",
+              "marketing_opt_in": false
+            }
+          }
+        }
+      }
+    }
+  ]
+}

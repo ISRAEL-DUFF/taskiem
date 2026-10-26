@@ -1,0 +1,94 @@
+{
+  "schema": "wd-test/v1",
+  "template": "books-school-daily-takings",
+  "params": {
+    "send_time": "20:00"
+  },
+  "cases": [
+    {
+      "name": "the day's takings are one sale, by where the money came in",
+      "trigger": {
+        "scheduled_time": "2026-10-26T19:00:00Z"
+      },
+      "mocks": {
+        "close": {
+          "output": {
+            "day": "2026-10-26",
+            "reconciles": true,
+            "money_in": {
+              "count": 14,
+              "kobo": 412500000
+            },
+            "into_accounts": {
+              "count": 11,
+              "kobo": 300000000
+            },
+            "at_the_desk": {
+              "count": 3,
+              "kobo": 112500000
+            },
+            "text": "Daily close"
+          }
+        },
+        "sale": {
+          "output": {
+            "sale_id": "205"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "sale": {
+            "reference": "fees-2026-10-26",
+            "date": "2026-10-26",
+            "takings": [
+              {
+                "description": "Into account numbers",
+                "amount_kobo": 300000000,
+                "account_id": ""
+              },
+              {
+                "description": "At the desk",
+                "amount_kobo": 112500000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "a day with no money records nothing",
+      "trigger": {
+        "scheduled_time": "2026-10-26T19:00:00Z"
+      },
+      "mocks": {
+        "close": {
+          "output": {
+            "day": "2026-10-26",
+            "reconciles": true,
+            "money_in": {
+              "count": 0,
+              "kobo": 0
+            },
+            "into_accounts": {
+              "count": 0,
+              "kobo": 0
+            },
+            "at_the_desk": {
+              "count": 0,
+              "kobo": 0
+            },
+            "text": "Daily close"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "sale": "skipped"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/accounts/2560636000000008002/messages/1761480000000100001",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "fromAddress": "orders@adacakes.ng",
+   "toAddress": "ada@example.com",
+   "content": "Yes, we deliver to Lekki.",
+   "mailFormat": "plaintext",
+   "action": "replyall"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": {
+    "messageId": "1761480000000200003"
+   }
+  }
+ }
+}

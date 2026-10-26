@@ -1,0 +1,30 @@
+{
+ "action": "list_accounts",
+ "input": {
+  "type": "bank"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "accounts"
+ ],
+ "expect": {
+  "output": {
+   "accounts": [
+    {
+     "id": "35",
+     "name": "Zenith Current",
+     "type": "bank",
+     "account_type": "Bank",
+     "currency": "NGN"
+    }
+   ]
+  }
+ }
+}

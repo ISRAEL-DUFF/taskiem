@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,12 @@ func (m MapSecrets) Get(_ context.Context, _ uuid.UUID, _ string, name string) (
 // Connections resolves connector credentials for a tenant and environment.
 type Connections interface {
 	Credentials(ctx context.Context, tenant uuid.UUID, environment, connector, name string) (map[string]string, error)
+}
+
+// CredentialRotator stores credentials a provider rotates, once across
+// workers (connector.Request.Rotate); secrets.Vault implements it.
+type CredentialRotator interface {
+	RotateCredentials(ctx context.Context, tenant uuid.UUID, environment, connector, name string, fn func(map[string]string) (map[string]string, error)) (map[string]string, error)
 }
 
 // Hooks inject faults for the crash-recovery suite. A hook returning an
@@ -1001,7 +1008,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc})
+	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -1092,7 +1099,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
@@ -1262,21 +1269,47 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 	if err != nil {
 		return nil, err
 	}
-	declared := map[string]bool{}
 	for _, f := range p.conn.Manifest.Auth.Fields {
 		if creds[f.Key] == "" && (f.Required == nil || *f.Required) {
 			return nil, fmt.Errorf("connection is missing %q", f.Key)
 		}
-		declared[f.Key] = !f.Secret
 	}
-	declared[connector.ModeKey] = true // live or test: not a secret
-	for k, v := range creds {
-		if public, ok := declared[k]; !ok || !public {
-			p.scrub = append(p.scrub, v) // secret fields, and tokens the manifest does not list
-		}
-	}
+	addScrub(p, creds)
 	p.creds = creds
 	return creds, nil
+}
+
+// addScrub keeps a connection's secret values out of what the step
+// records: its secret fields, and tokens the manifest does not list.
+func addScrub(p *plan, creds map[string]string) {
+	declared := map[string]bool{connector.ModeKey: true} // live or test: not a secret
+	for _, f := range p.conn.Manifest.Auth.Fields {
+		declared[f.Key] = !f.Secret
+	}
+	for k, v := range creds {
+		if public, ok := declared[k]; (!ok || !public) && v != "" && !slices.Contains(p.scrub, v) {
+			p.scrub = append(p.scrub, v)
+		}
+	}
+}
+
+// rotate is the step's connector.Request.Rotate: credentials the provider
+// rotates are refreshed once across workers and stored before use, and
+// their new secret values are scrubbed like the old ones.
+func (w *Worker) rotate(p *plan) func(context.Context, connector.RotateFunc) (map[string]string, error) {
+	r, ok := w.Connections.(CredentialRotator)
+	if !ok || p.conn == nil {
+		return nil
+	}
+	return func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+		creds, err := r.RotateCredentials(secrets.WithUse(ctx, p.use(secrets.KindConnection)), p.c.tenant, p.env, p.conn.Manifest.ID, p.sched.Connection, fn)
+		if err != nil {
+			return nil, err
+		}
+		addScrub(p, creds)
+		p.creds = creds
+		return creds, nil
+	}
 }
 
 // policy is the egress policy for this task: a connector may reach only its

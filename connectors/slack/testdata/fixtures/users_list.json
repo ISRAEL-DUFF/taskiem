@@ -1,0 +1,17 @@
+{
+ "status": 200,
+ "body": {
+  "ok": true,
+  "members": [
+   {"id": "W012A3CDE", "name": "spengler", "deleted": false, "real_name": "Egon Spengler", "is_bot": false,
+    "profile": {"real_name": "Egon Spengler", "display_name": "spengler", "email": "spengler@ghostbusters.example.com"}},
+   {"id": "W07QCRPA4", "name": "glinda", "deleted": false, "real_name": "Glinda Southgood", "is_bot": false,
+    "profile": {"real_name": "Glinda Southgood", "display_name": "Glinda the Fairly Good", "email": "glenda@south.oz.coven"}},
+   {"id": "B01BOT", "name": "a_bot", "deleted": false, "is_bot": true, "profile": {"real_name": "A bot"}},
+   {"id": "USLACKBOT", "name": "slackbot", "deleted": false, "is_bot": false, "profile": {"real_name": "Slackbot"}},
+   {"id": "W0GONE", "name": "gone", "deleted": true, "is_bot": false, "profile": {"real_name": "Gone"}}
+  ],
+  "cache_ts": 1498777272,
+  "response_metadata": {"next_cursor": "dXNlcjpVMEc5V0ZYTlo="}
+ }
+}

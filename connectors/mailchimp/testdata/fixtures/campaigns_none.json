@@ -1,0 +1,26 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/campaigns",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  },
+  "query": {
+   "list_id": "a6b5da1054"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "campaigns": [
+    {
+     "id": "x1",
+     "status": "sent",
+     "settings": {
+      "title": "Win-back 2026-09"
+     }
+    }
+   ]
+  }
+ }
+}

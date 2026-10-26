@@ -1,0 +1,235 @@
+# Zoho CRM (API v8), connected through Taskiem's Zoho client (K6 of
+# docs/spec/business-connectors.md; decision 0051), in the account's own
+# data centre. Built from Zoho's public developer documentation, read 26
+# October 2026:
+#   https://www.zoho.com/crm/developer/docs/api/v8/ (overview, OAuth, multi-DC)
+#   https://www.zoho.com/crm/developer/docs/api/v8/modules-api.html
+#   https://www.zoho.com/crm/developer/docs/api/v8/get-records.html (and
+#     get-record, search-records, update-records)
+#   https://www.zoho.com/crm/developer/docs/api/v8/upsert-records.html
+#   https://www.zoho.com/crm/developer/docs/api/v8/create-notes.html (and
+#     get-related-records for a record's notes)
+#   https://www.zoho.com/crm/developer/docs/api/v8/notifications/enable.html
+#     (and update-info, get-details, disable)
+# See docs/integrations/zoho-crm.md.
+manifest: connector/v1
+id: zoho_crm
+version: 1.0.0
+name: Zoho CRM
+description: Add and update leads, contacts, deals and any other CRM module (without duplicates), read and search them, add notes, and start workflows when records change.
+category: productivity
+auth:
+  type: oauth2
+  fields:
+    - { key: refresh_token, label: Refresh token, secret: true }
+    - { key: client_id, label: Zoho client id (Taskiem's) }
+    - { key: client_secret, label: Zoho client secret (Taskiem's), secret: true }
+    - { key: accounts_server, label: Zoho accounts server (filled when you connect) }
+    - { key: api_domain, label: Zoho API domain (filled when you connect) }
+    - { key: location, label: Zoho data centre, required: false }
+    - { key: access_token, label: Access token (kept by Taskiem), secret: true, required: false }
+    - { key: access_expires_at, label: Access token expiry (kept by Taskiem), required: false }
+  # One click through Taskiem's Zoho client (client zoho, shared with Books
+  # and Mail), in the account's data centre (rule 19).
+  oauth2:
+    authorize_url: https://accounts.zoho.com/oauth/v2/auth
+    token_url: "${connection.accounts_server}/oauth/v2/token"
+    revoke_url: "${connection.accounts_server}/oauth/v2/token/revoke"
+    scopes: [ZohoCRM.modules.ALL, ZohoCRM.settings.modules.READ, ZohoCRM.notifications.ALL]
+    scope_separator: ","
+    pkce: true
+    client: zoho
+    authorize_params: { access_type: offline, prompt: consent }
+    fields_from_callback: { accounts_server: accounts-server, location: location }
+    fields_from_token: { refresh_token: refresh_token, api_domain: api_domain }
+    platform_client_fields: { client_id: id, client_secret: secret }
+  test: { action: list_modules }
+connection_hosts:
+  - "*.zoho.com"
+  - "*.zoho.eu"
+  - "*.zoho.in"
+  - "*.zoho.com.au"
+  - "*.zoho.jp"
+  - "*.zoho.ca"
+  - "*.zohocloud.ca"
+  - "*.zoho.com.cn"
+  - "*.zoho.sa"
+  - "*.zoho.ae"
+  - "*.zohoapis.com"
+  - "*.zohoapis.eu"
+  - "*.zohoapis.in"
+  - "*.zohoapis.com.au"
+  - "*.zohoapis.jp"
+  - "*.zohoapis.ca"
+  - "*.zohoapis.com.cn"
+  - "*.zohoapis.sa"
+  - "*.zohoapis.ae"
+egress_hosts: ["${connection.api_domain}", "${connection.accounts_server}"]
+base_url: https://www.zohoapis.com/crm/v8
+actions:
+  list_modules:
+    title: List modules
+    description: The CRM's modules the API reaches (Leads, Contacts, Deals, and the business's own), by their API names. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              api_name: { type: string, description: What the other actions take as module }
+              singular: { type: string }
+              plural:   { type: string }
+  upsert_record:
+    title: Add or update a record
+    description: >-
+      CRM's upsert: the record is matched by its module's unique fields
+      (Leads and Contacts by Email, Deals by Deal_Name, Accounts by
+      Account_Name, or duplicate_check_fields) and updated, or added when
+      there is none, so a retry updates the one it made rather than adding a
+      second. Fields by their API names (Last_Name, Email, Phone, Company,
+      Deal_Name, Stage, Amount…). request_key is the engine's and is not
+      sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [module, record]
+      properties:
+        module:                 { type: string, description: "The module's API name: Leads, Contacts, Deals…" }
+        record:                 { type: object, description: Fields by their API names }
+        duplicate_check_fields: { type: array, items: { type: string }, description: The unique fields to match by, in order }
+        run_workflows:          { type: boolean, default: true, description: Whether CRM's own workflow rules run for the change }
+        request_key:            { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        id:              { type: string }
+        action:          { enum: [insert, update], description: Added, or an existing one updated }
+        duplicate_field: { type: string, description: The field it was matched by }
+    pii:
+      - { field: record, category: other }
+  update_record:
+    title: Update a record
+    description: Sets fields of a record by its id. Setting the same fields twice leaves the same record; request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [module, id, record]
+      properties:
+        module:        { type: string }
+        id:            { type: string }
+        record:        { type: object, description: The fields to set, by their API names }
+        run_workflows: { type: boolean, default: true }
+        request_key:   { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        id: { type: string }
+    pii:
+      - { field: record, category: other }
+  get_record:
+    title: Read a record
+    class: read
+    input:
+      type: object
+      required: [module, id]
+      properties:
+        module: { type: string }
+        id:     { type: string }
+    output:
+      type: object
+      properties:
+        id:     { type: string }
+        record: { type: object, description: The record as CRM returns it }
+    pii:
+      - { field: output.record, category: other }
+  search_records:
+    title: Find records
+    description: "By email, phone, a word, or CRM's criteria ((Last_Name:equals:Okafor)and(City:equals:Lagos)); at most 200."
+    class: read
+    input:
+      type: object
+      required: [module]
+      properties:
+        module:   { type: string }
+        email:    { type: string }
+        phone:    { type: string }
+        word:     { type: string }
+        criteria: { type: string }
+        limit:    { type: integer, minimum: 1, maximum: 200, default: 50 }
+    output:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              id:     { type: string }
+              record: { type: object }
+    pii:
+      - { field: email, category: email }
+      - { field: phone, category: phone }
+      - { field: word, category: other }
+      - { field: criteria, category: other }
+      - { field: output.records.*.record, category: other }
+  add_note:
+    title: Add a note
+    description: >-
+      A note on a record. A note with the same title and text already on the
+      record is answered (created false) rather than added twice; request_key
+      is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [module, id, content]
+      properties:
+        module:      { type: string }
+        id:          { type: string, description: The record the note is on }
+        title:       { type: string }
+        content:     { type: string }
+        request_key: { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        note_id: { type: string }
+        created: { type: boolean }
+    pii:
+      - { field: title, category: other }
+      - { field: content, category: other }
+triggers:
+  # CRM's notification API: Taskiem asks CRM to watch a module and tell its
+  # URL when records are added, changed or deleted (registration remote,
+  # decision 0021). A watch lasts a week at most, so Taskiem renews it
+  # before it lapses. CRM sends the token Taskiem gave the watch in each
+  # notification's body (body_token): nothing is signed.
+  record_changes:
+    type: webhook
+    title: Records added, changed or deleted in Zoho CRM
+    registration: remote
+    verify: { scheme: body_token, field: token }
+    options:
+      type: object
+      required: [module]
+      additionalProperties: false
+      properties:
+        module: { type: string, description: "The module watched, by its API name: Leads, Contacts, Deals…" }
+    events: [insert, update, delete]
+    # One notification names every record the change touched.
+    split: '=has(body.ids) ? body.ids.map(i, {"id": string(i), "module": body.module, "operation": body.operation}) : []'
+    event_type: =item.operation
+    dedup: '=item.id + ":" + item.operation + ":" + string(body.server_time)'
+    # The record: a run waiting on a deal wakes when it changes.
+    correlation: =item.id
+    example:
+      body: { server_time: 1761480000000, module: Deals, resource_uri: "https://www.zohoapis.com/crm/v8/Deals", ids: ["5843104000000425001"], operation: update, channel_id: "1000000068001", token: "sample" }
+      item: { id: "5843104000000425001", module: Deals, operation: update }

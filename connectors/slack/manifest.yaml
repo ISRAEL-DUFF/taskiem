@@ -12,10 +12,18 @@
 #   https://docs.slack.dev/reference/events/url_verification/
 #   https://docs.slack.dev/interactivity/handling-user-interaction/
 #   https://docs.slack.dev/reference/interaction-payloads/block_actions-payload/
+# Add to Slack (K2 of docs/spec/business-connectors.md; decision 0051), read
+# 26 October 2026:
+#   https://docs.slack.dev/authentication/installing-with-oauth/
+#   https://docs.slack.dev/reference/methods/oauth.v2.access/
+#   https://docs.slack.dev/reference/methods/auth.revoke/
+#   https://docs.slack.dev/reference/events/app_uninstalled/ (and tokens_revoked)
+#   https://docs.slack.dev/reference/methods/users.list/ (and conversations.open,
+#     chat.scheduleMessage)
 # See docs/integrations/slack.md.
 manifest: connector/v1
 id: slack
-version: 1.0.0
+version: 1.1.0
 name: Slack
 description: Post, update and react to messages, upload files, look up channels and people, and start or resume workflows from Slack events and button clicks.
 category: messaging
@@ -30,7 +38,24 @@ auth:
       link: https://api.slack.com/apps
       prefixes: [{ prefix: xoxb- }]
       refuse: [{ prefix: xoxp-, message: "That is a user token. Copy the Bot User OAuth Token: it starts with xoxb-." }]
-    - { key: signing_secret, label: Signing secret (Basic Information page; needed for events and interactions), secret: true, required: false }
+    - { key: signing_secret, label: "Signing secret (Basic Information page; needed for events and interactions from your own app)", secret: true, required: false }
+    - { key: team_id, label: Workspace ID (filled when you add Taskiem's app), required: false }
+    - { key: team_name, label: Workspace name, required: false }
+  # Add to Slack: Taskiem's own Slack app, installed in the workspace with
+  # one click (OAuth v2). The bot token and the workspace come back with the
+  # token; Slack wants the scopes comma-separated. The workspace is the
+  # connection's account: the app's events for it come here (rule 18).
+  # A business may still paste its own app's bot token and signing secret.
+  oauth2:
+    authorize_url: https://slack.com/oauth/v2/authorize
+    token_url: https://slack.com/api/oauth.v2.access
+    revoke_url: https://slack.com/api/auth.revoke
+    scopes: [app_mentions:read, channels:history, channels:read, chat:write, chat:write.public, files:write, groups:read, im:history, im:write, reactions:write, users:read, users:read.email]
+    scope_separator: ","
+    pkce: true
+    client: slack
+    account_field: team_id
+    fields_from_token: { bot_token: access_token, team_id: team.id, team_name: team.name }
   test: { action: auth_test }
 base_url: https://slack.com/api
 # files.slack.com receives the bytes of upload_file (the URL Slack returns
@@ -219,6 +244,79 @@ actions:
       - { field: output.name, category: name }
       - { field: output.real_name, category: name }
       - { field: output.display_name, category: name }
+  list_users:
+    title: List the workspace's people
+    description: >-
+      users.list (needs users:read, and users:read.email for emails): a page
+      of the workspace's members, for a member picker or whom to mention.
+      Pass next_cursor back as cursor for the next page.
+    class: read
+    input:
+      type: object
+      properties:
+        cursor: { type: string }
+        limit:  { type: integer, minimum: 1, maximum: 1000, description: Default 200 }
+        include_bots: { type: boolean, description: Bots and deactivated people are left out unless true }
+    output:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              id:           { type: string }
+              name:         { type: string }
+              real_name:    { type: string }
+              display_name: { type: string }
+              email:        { type: string }
+              is_bot:       { type: boolean }
+              deleted:      { type: boolean }
+        next_cursor: { type: string }
+    pii:
+      - { field: output.members, category: other }
+  open_conversation:
+    title: Open a direct message
+    description: >-
+      conversations.open (needs im:write): the direct message between the app
+      and one person (or a group DM with up to eight), as a channel id to
+      post to. It answers the same channel every time, so it is safe to repeat.
+    class: read
+    input:
+      type: object
+      required: [users]
+      properties:
+        users: { type: string, description: "User ids, comma-separated (U123 or U123,U456)" }
+    output:
+      type: object
+      properties:
+        channel: { type: string }
+  schedule_message:
+    title: Schedule a message
+    description: >-
+      chat.scheduleMessage: Slack posts the message at post_at (at most 120
+      days ahead). Like post_message it has no idempotency key, so an
+      unknown outcome is parked for a person rather than scheduled twice.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [channel, post_at]
+      properties:
+        channel:   { type: string }
+        post_at:   { type: string, description: "When, RFC 3339 (2026-10-27T09:00:00+01:00), or Unix seconds" }
+        text:      { type: string }
+        blocks:    { type: array, items: { type: object } }
+        thread_ts: { type: string }
+    output:
+      type: object
+      properties:
+        channel:              { type: string }
+        scheduled_message_id: { type: string }
+        post_at:              { type: integer, description: Unix seconds }
+    pii:
+      - { field: text, category: other }
+      - { field: blocks, category: other }
   upload_file:
     title: Upload a file
     description: >-
@@ -254,8 +352,15 @@ triggers:
   # Events API: one Request URL per app. Slack checks it with a signed
   # url_verification POST, answered with the challenge; then it delivers
   # event_callback envelopes, retrying up to three times (same event_id).
+  # Both an own app's Request URL (the connection's signing secret) and
+  # Taskiem's app's (/hooks/apps/slack@1/events, every workspace's events,
+  # routed by team_id; rule 18).
   events:
     type: webhook
+    delivery: both
+    account_key: '=has(body.team_id) ? body.team_id : ""'
+    # Taken away: the app was uninstalled, or its bot token revoked.
+    revokes: '=body.type == "event_callback" && (body.event.type == "app_uninstalled" || (body.event.type == "tokens_revoked" && has(body.event.tokens.bot)))'
     verify: { scheme: slack_v0, header: X-Slack-Signature, timestamp_header: X-Slack-Request-Timestamp, secret_field: signing_secret }
     handshake: { method: POST, when: '=has(body.type) && body.type == "url_verification"', respond: =body.challenge }
     event_type: '=body.type == "event_callback" ? body.event.type : body.type'
@@ -278,6 +383,8 @@ triggers:
   # Repeats are dropped on the body's hash.
   interactions:
     type: webhook
+    delivery: both
+    account_key: '=!has(body.payload) ? "" : string(parseJSON(body.payload).team.id)'
     verify: { scheme: slack_v0, header: X-Slack-Signature, timestamp_header: X-Slack-Request-Timestamp, secret_field: signing_secret }
     # The interaction arrives as a form field holding JSON; parseJSON reads it.
     event_type: '=!has(body.payload) ? "unknown" : string(parseJSON(body.payload).type)'

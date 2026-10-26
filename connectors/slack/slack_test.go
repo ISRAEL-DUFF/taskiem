@@ -490,3 +490,87 @@ func TestInteractionsTrigger(t *testing.T) {
 		t.Error("interactions dedup on the body hash")
 	}
 }
+
+func TestListUsersLeavesOutBotsAndTheDeparted(t *testing.T) {
+	out, got, err := run(t, "list_users", map[string]any{"cursor": "abc"}, step{"/users.list", "users_list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Form.Get("cursor") != "abc" || got[0].Form.Get("limit") != "200" {
+		t.Errorf("form %v", got[0].Form)
+	}
+	members := out["members"].([]any)
+	if len(members) != 2 || members[1].(map[string]any)["display_name"] != "Glinda the Fairly Good" || members[0].(map[string]any)["email"] != "spengler@ghostbusters.example.com" {
+		t.Errorf("members %v", members)
+	}
+	if out["next_cursor"] != "dXNlcjpVMEc5V0ZYTlo=" {
+		t.Errorf("cursor %v", out["next_cursor"])
+	}
+	out, _, _ = run(t, "list_users", map[string]any{"include_bots": true}, step{"/users.list", "users_list"})
+	if n := len(out["members"].([]any)); n != 5 {
+		t.Errorf("with bots: %d", n)
+	}
+}
+
+func TestOpenConversation(t *testing.T) {
+	out, got, err := run(t, "open_conversation", map[string]any{"users": "W012A3CDE, W07QCRPA4"}, step{"/conversations.open", "conversations_open"})
+	if err != nil || out["channel"] != "D069C7QFK" || got[0].Form.Get("users") != "W012A3CDE,W07QCRPA4" {
+		t.Errorf("%v %v %v", out, got[0].Form, err)
+	}
+}
+
+func TestScheduleMessage(t *testing.T) {
+	out, got, err := run(t, "schedule_message", map[string]any{"channel": "C1H9RESGL", "post_at": "2019-07-03T19:00:00Z", "text": "Here's a message for you in the future"},
+		step{"/chat.scheduleMessage", "schedule_message"})
+	if err != nil || out["scheduled_message_id"] != "Q1298393284" || out["post_at"] != int64(1562180400) {
+		t.Fatalf("%v %v", out, err)
+	}
+	if got[0].JSON["post_at"] != float64(1562180400) || got[0].JSON["channel"] != "C1H9RESGL" {
+		t.Errorf("body %v", got[0].JSON)
+	}
+	if _, _, err := run(t, "schedule_message", map[string]any{"channel": "C1", "post_at": "tomorrow", "text": "x"}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("a bad time: %v", err)
+	}
+}
+
+// The platform app's deliveries say which workspace they are for, and an
+// uninstall takes the app away (connector/v1 rule 18).
+func TestAppDeliveryExpressions(t *testing.T) {
+	m := New(Options{}).Manifest
+	eng := expr.MustNewTriggerEngine("body", "headers", "query", "item")
+	eval := func(src string, body any) any {
+		t.Helper()
+		v, err := eng.Eval(src, map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}, "item": nil})
+		if err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		return v
+	}
+	ev, ia := m.Triggers["events"], m.Triggers["interactions"]
+	if ev.Delivery != "both" || ia.Delivery != "both" || m.Auth.OAuth2.AccountField != "team_id" || m.ClientName() != "slack" {
+		t.Fatalf("delivery %q %q, account %q, client %q", ev.Delivery, ia.Delivery, m.Auth.OAuth2.AccountField, m.ClientName())
+	}
+	msg := map[string]any{"type": "event_callback", "team_id": "T012AB3C4", "event": map[string]any{"type": "message"}}
+	if eval(ev.AccountKey, msg) != "T012AB3C4" || eval(ev.Revokes, msg) != false {
+		t.Errorf("a message")
+	}
+	for _, gone := range []map[string]any{
+		{"type": "event_callback", "team_id": "T1", "event": map[string]any{"type": "app_uninstalled"}},
+		{"type": "event_callback", "team_id": "T1", "event": map[string]any{"type": "tokens_revoked", "tokens": map[string]any{"bot": []any{"U1"}}}},
+	} {
+		if eval(ev.Revokes, gone) != true {
+			t.Errorf("not revoking: %v", gone)
+		}
+	}
+	userOnly := map[string]any{"type": "event_callback", "team_id": "T1", "event": map[string]any{"type": "tokens_revoked", "tokens": map[string]any{"oauth": []any{"U1"}}}}
+	if eval(ev.Revokes, userOnly) != false {
+		t.Error("a user token revoked takes the bot away")
+	}
+	payload := `{"type":"block_actions","team":{"id":"T9TEAM"},"actions":[{"value":"x"}]}`
+	if eval(ia.AccountKey, map[string]any{"payload": payload}) != "T9TEAM" {
+		t.Errorf("an interaction's workspace")
+	}
+	if !strings.Contains(m.Auth.OAuth2.ScopeSeparator(), ",") || m.Auth.OAuth2.FieldsFromToken["team_id"] != "team.id" {
+		t.Errorf("oauth: %+v", m.Auth.OAuth2)
+	}
+}

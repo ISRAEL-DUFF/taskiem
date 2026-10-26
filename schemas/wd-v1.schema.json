@@ -1952,7 +1952,7 @@
                 "required": [
                   "events"
                 ],
-                "description": "Starts on a rail's normalised payment events (schemas/capabilities-v1.json), whichever rail the business connected: each environment's connections whose rail sends them (or the one named).",
+                "description": "Starts on normalised events (schemas/capabilities-v1.json), whichever connector the business connected sends them: a rail's payment events, or the books' (books.*, decision 0051); each environment's connections that send them (or the one named).",
                 "properties": {
                   "events": {
                     "type": "array",
@@ -1969,7 +1969,10 @@
                         "refund.processed",
                         "refund.failed",
                         "virtual_account.credited",
-                        "pos.sale"
+                        "pos.sale",
+                        "books.invoice.created",
+                        "books.invoice.paid",
+                        "books.payment.recorded"
                       ]
                     }
                   },
@@ -2302,7 +2305,7 @@
       ]
     },
     "capabilityStep": {
-      "description": "A capability (schemas/capabilities-v1.json) done by whichever rail the connection is: expanded into that rail's own action when a run starts (docs/contracts/wd-v1.md, capability steps).",
+      "description": "A capability (schemas/capabilities-v1.json) done by whichever connector the connection is: a rail for paying and collecting, the books (Zoho Books, QuickBooks) for books_*; expanded into that connector's own action when a run starts (docs/contracts/wd-v1.md, capability steps).",
       "type": "object",
       "required": [
         "type",
@@ -2329,6 +2332,15 @@
             "virtual_account",
             "list_credits",
             "refund",
+            "books_customer",
+            "books_invoice",
+            "books_payment",
+            "books_sale",
+            "books_expense",
+            "books_bill",
+            "books_accounts",
+            "books_items",
+            "books_taxes",
             "await_settlement",
             "await_reversal",
             "await_payment"

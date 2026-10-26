@@ -129,6 +129,12 @@ type WhatsApp interface {
 	Queue(ctx context.Context, tenant, alert uuid.UUID, members []uuid.UUID) error
 }
 
+// Slack posts an alert to a channel of a workspace through the business's
+// Slack connection (its bot token; decision 0051).
+type Slack interface {
+	PostAlert(ctx context.Context, tenant uuid.UUID, connection, channel, text string) error
+}
+
 // Alerter evaluates rules and delivers alerts.
 type Alerter struct {
 	Pool    *pgxpool.Pool
@@ -144,6 +150,10 @@ type Alerter struct {
 	// accounts, decision 0035) through the same interface; nil leaves them
 	// failing with a reason.
 	Telegram WhatsApp
+	// Slack posts to a channel through the business's Slack connection,
+	// for slack channels made from it rather than a pasted webhook URL;
+	// nil leaves those failing with a reason.
+	Slack Slack
 	// PublicURL builds links back into the web app.
 	PublicURL string
 	Interval  time.Duration // default 30s
@@ -767,6 +777,18 @@ func (a *Alerter) SendTo(ctx context.Context, tenant, channelID uuid.UUID, kind 
 		}
 		return a.Mailer.Send(ctx, a.From, cfg.To, BuildEmail(a.From, cfg.To, subject, text, m.ID.String()))
 	case "slack":
+		var cfg struct {
+			Connection string `json:"connection"`
+			Channel    string `json:"channel"`
+		}
+		_ = json.Unmarshal(cfgRaw, &cfg)
+		if cfg.Connection != "" {
+			// Made from the Slack connection: posted by its bot.
+			if a.Slack == nil {
+				return errors.New("Slack connections cannot post alerts on this deployment")
+			}
+			return a.Slack.PostAlert(ctx, tenant, cfg.Connection, cfg.Channel, "*"+slackEscape(m.Title)+"*\n"+slackEscape(text))
+		}
 		hook, err := a.Secrets.Get(secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindAlertChannel, Purpose: secrets.PurposeAlertDeliver}), tenant, VaultEnv, SecretName(channelID))
 		if err != nil {
 			return fmt.Errorf("reading the Slack webhook: %w", err)

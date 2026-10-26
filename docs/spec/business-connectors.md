@@ -1,6 +1,6 @@
 # Business connectors: Slack, Instagram and Facebook, Zoho, QuickBooks, email
 
-Status: **Proposed** 2026-10-24 · Decision: [0051](../decisions/0051-platform-apps.md) (proposed) · Workstream **K0 to K9**, one pull request per milestone
+Status: **K1 built** 2026-10-26 (proposed 2026-10-24) · Decision: [0051](../decisions/0051-platform-apps.md) (accepted) · Workstream **K0 to K9**, one pull request per milestone
 
 The services small businesses already run their day on, connected so that a business clicks **Connect** and signs in, with no developer setup:
 
@@ -91,7 +91,7 @@ Connecting asks only for the scopes the connector needs. A business that connect
 
 ### 4.2 App-level webhooks (decision 0051)
 
-- **A platform URL per provider**: `POST /hooks/apps/{provider}` on the edge, and `GET` for handshakes (Meta's `hub.challenge`, Slack's `url_verification`).
+- **A platform URL per app-delivered trigger**: `POST /hooks/apps/{connector}/{trigger}` on the edge (Slack's app takes two: events and interactivity), and `GET` for handshakes (Meta's `hub.challenge`; Slack's `url_verification` comes by POST).
 - **Verified with the platform app's secret** from the environment:
   - Slack's signing secret, scheme `slack_v0`;
   - Meta's app secret, `X-Hub-Signature-256`, as for WhatsApp;
@@ -103,13 +103,13 @@ Connecting asks only for the scopes the connector needs. A business that connect
 
 ### 4.3 Refreshing tokens
 
-A connector may return credentials it refreshed (`Response.Credentials`, and the same from a refresh helper on every call). Taskiem then:
+A connector whose provider rotates refresh tokens refreshes through `req.RotateCredentials` (decision 0051 point 6, as built). Taskiem:
 
-- **Stores them before the step's result is recorded**, under a per-connection advisory lock: one refresh at a time per connection, across workers, so two workers never spend one QuickBooks refresh token. A worker that waited reads the stored token instead of refreshing again.
-- **Never logs them**, and records the write in the audit log as `connection.refresh` with no values.
+- **Refreshes once, and stores first**: the vault locks the connection's row, reads its credentials as stored now, and lets the connector refresh only if they are still stale; what it returns is stored before the lock goes. Ten workers that find the token expired at once spend one refresh token, and a worker that waited uses the new one.
+- **Never logs them**, and records the write in the audit log as `connection.refresh` with no values; the worker scrubs the new secret values from step records.
 - **Marks the connection expired** (the existing `ErrCredentialsRejected` path) when the provider says the refresh token is invalid, with the plain reason: "QuickBooks asks you to connect again".
 
-Access tokens are cached in memory per connection until shortly before they expire, so a busy workflow does not refresh on every step.
+The access token and its expiry are kept with the credentials, so the next step uses it without refreshing, whichever worker runs it.
 
 ### 4.4 Where an account lives
 
@@ -159,7 +159,7 @@ The normalised events `books.invoice.created`, `books.invoice.paid` and `books.p
 - The pasted-token connection stays, as an own app.
 - Slack's app must have public distribution turned on to be installed outside Taskiem's own workspace. A Marketplace listing is optional and comes later.
 
-**Events and interactivity** for platform connections come to `/hooks/apps/slack` and are routed by `team_id`. Slack sends `url_verification` once for the app; the existing handshake answers it. `app_uninstalled` and `tokens_revoked` mark the workspace's connections expired.
+**Events and interactivity** for platform connections come to `/hooks/apps/slack@1/events` (and `/interactions`) and are routed by `team_id`. Slack sends `url_verification` once for the app; the existing handshake answers it. `app_uninstalled` and `tokens_revoked` mark the workspace's connections expired.
 
 **Actions added:**
 
@@ -207,7 +207,7 @@ The normalised events `books.invoice.created`, `books.invoice.paid` and `books.p
 
   Both are slow, and applied for in K0 (§14).
 
-**Triggers** (app-level, `/hooks/apps/meta`, routed by the entry's Page or Instagram account id):
+**Triggers** (app-level, `/hooks/apps/messenger@1/messages` and `/hooks/apps/instagram@1/messages`, routed by the entry's Page or Instagram account id):
 
 | Trigger | Events |
 | --- | --- |
@@ -314,7 +314,7 @@ These are each a small connector on the same client, built when a template needs
 | `list_items`, `list_accounts`, `list_tax_codes` | Pickers |
 
 **Triggers:**
-- **Where they arrive:** QuickBooks sends change notifications to the one webhook URL of Taskiem's Intuit app. They come to `/hooks/apps/quickbooks`, are verified with the verifier token, and are routed by `realmId`.
+- **Where they arrive:** QuickBooks sends change notifications to the one webhook URL of Taskiem's Intuit app. They come to `/hooks/apps/quickbooks@1/changes`, are verified with the verifier token, and are routed by `realmId`.
 - **What they carry:** a notification names the entities that changed (Invoice, Payment, Customer…) and their ids; an enricher reads each entity before the run starts.
 - **Format:** Intuit is moving notifications to a CloudEvents format; K0 confirms which Taskiem receives and builds to the current one.
 - **Catching up:** after an outage, Taskiem reads what changed since the last notification (Intuit's change data capture) for each connected company.
@@ -387,9 +387,9 @@ The AI builder learns each connector from its manifest as it does today. The eva
 
 ### K1: platform apps, routing and refreshing (L)
 
-- **App-level webhooks** (§4.2, decision 0051): `/hooks/apps/{provider}`, verification by the platform secret, routing by account key in one audited function, the counted drop of unknown accounts, handshakes.
+- **App-level webhooks** (§4.2, decision 0051): `/hooks/apps/{connector}/{trigger}`, verification by the platform secret, routing by account key through one function that alone crosses tenants, the counted drop of unknown accounts, handshakes, uninstalls.
 - **Clients shared by several connectors** (§4.1).
-- **Refreshed credentials**, stored under a per-connection lock with an in-memory access-token cache (§4.3).
+- **Refreshed credentials**, refreshed and stored under a per-connection lock (§4.3).
 - **Per-account API hosts** (§4.4), with the egress allow-list following them.
 - **The `svix` verification scheme.**
 - **Remote registration's renewal** for subscriptions that expire.
@@ -401,37 +401,121 @@ The AI builder learns each connector from its manifest as it does today. The eva
 - ten workers refreshing one connection's token at once spend one refresh;
 - a rotated token survives a restart.
 
+**Built** (K1, 26 October 2026): one commit per piece on the K1 branch.
+- **Svix** (`svix` scheme), tested on Svix's published example and its refusals.
+- **Rotating refresh tokens:** `connector.Request.Rotate`/`RotateCredentials`, `secrets.Vault.RotateCredentials` (row lock, re-read, store, `connection.refresh`), wired into every connector call the worker makes; ten concurrent workers spend one refresh token, and the rotated tokens survive a fresh read.
+- **Platform apps** (connector/v1 rule 18; migration 00228): `auth.oauth2.client`, `account_field`, `fields_from_callback`; a connection made by OAuth records its account (`connection_app_accounts`); `delivery: app` triggers at `/hooks/apps/{connector}/{trigger}` verified with `TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET`, routed by `account_key` through `taskiem_app_route_event` into every active connection holding the account (two businesses each get only their own workspace's events; a workspace connected twice reaches both); unknown accounts answered 200 and counted (`app_event_drops`); `revokes` expires the account's connections; GET checks compare `_VERIFY_TOKEN`. The per-tenant, partner and app paths share the delivery's item evaluation and the target tenant's gate.
+- **Accounts on one server** (rule 19): `connection_hosts`; OAuth token and revoke URLs from `${connection.<field>}`, refused before the code exchange when the callback names a server outside the list; egress drops connection-named hosts outside it.
+- **Renewal** (migration 00229): `RemoteState.ExpiresAt`; due a day before expiry (halfway for under two days), applied again with `Update`; a health check reading no expiry keeps the last.
+- **Books capabilities** (decision 0051 point 8): nine capabilities and three events of `kind: product` in `capabilities-v1.json`; rule 16 checks kinds both ways; wd/v1, the SDK helpers and the catalogue's words take them; books events never reach the money log.
+
+Differences from the plan: the app URL is per trigger (`/hooks/apps/{connector}/{trigger}`), not per provider, since one app takes several (Slack's events and interactivity); refreshed credentials are refreshed under the lock rather than returned with the response, which would come too late to stop a second worker; the in-memory token cache is not needed, since the access token is stored with the credentials. Mailchimp's server prefix (a metadata call after connecting) comes with K8, and connector categories for accounting (QuickBooks, Zoho Books) with K3 (added there).
+
 ### K2: Slack (M; needs K1)
 
 §5: **Add to Slack**, platform routing, uninstall handling, the three actions, Slack as an approvals chat channel with member linking, alert channels from the connection, the templates.
+
+**Built** (K2, 26 October 2026), on the K1 pull request.
+- **Add to Slack:** `slack@1` 1.1.0 connects through Taskiem's Slack app (OAuth v2, `client: slack`, comma-separated scopes, `team.id` from the token answer as the account); `events` and `interactions` are `delivery: both` (an own app's URL, or the app's for every workspace, routed by `team_id`); `app_uninstalled` and a revoked bot token expire the workspace's connections. Generic: `auth.oauth2.scope_separator`, dotted `fields_from_token`, a 200 `{ok: false}` exchange reported as refused, `delivery: both`.
+- **Actions:** `list_users`, `open_conversation`, `schedule_message`.
+- **Approvals in Slack** (migration 00230): members link their Slack user in a business (`/v1/me/slack`, the passkey-strength proof, found by email, confirmed by a button in Slack); `slackChannel` is the third `chatChannel`, sending direct messages with the business's bot and the signed decision tokens as buttons; `/channels/slack/interactions` decides Taskiem's buttons through the shared path and passes every other click to the trigger; a decided message loses its buttons; school approvals come the same way.
+- **Alerts:** a Slack alert channel can be a channel of the connection, posted by its bot.
+- **Templates:** `slack-payment-alerts`, `slack-money-received`, `slack-paid-invoices`, `slack-school-daily-close`; the `slack_channel` picker (`GET /v1/slack/channels`); linking Slack on the Account page.
+
+Differences from §5: the daily money summary in Slack waits for a money-summary action (the daily chat summary already goes to WhatsApp and Telegram), and new storefront orders stay with `storefront-order` (a storefront form takes one workflow). The "First payment to this account" line is not in chat requests yet, on any channel; a request decided elsewhere is not updated in Slack (its buttons answer that it was already decided).
 
 ### K3: QuickBooks Online (L; needs K1, K0's sandbox)
 
 §8, on Intuit's sandbox companies: the connector, its books capability mappings, and the books templates of §10 written against the capabilities. K4 then only adds Zoho Books' mappings, and the same templates run on it.
 
+**Built** (K3, 26 October 2026), on the K1 pull request. Fixtures are shaped from Intuit's published examples; nothing has run against a sandbox company yet.
+- **Connecting:** `quickbooks@1` (`kind: product`, the new `accounting` category) through Taskiem's Intuit app, `realmId` from the callback as the account. Live and test are hosts with their own keys (connector/v1 rule 20; migration 00231): the person chooses before linking, the request keeps the mode, and the code is exchanged with that mode's app (`quickbooks`, `quickbooks_sandbox`). Generic: `client_auth: basic`, `revoke_encoding: json`, `oauth_modes` in the connector list, a mode chooser by the Connect button, and app deliveries verified with any of the connector's apps.
+- **Tokens:** refreshed under the connection's lock with `RotateCredentials`, the access token kept with its expiry; a refused access token is refreshed once, a refused refresh token expires the connection; eight concurrent workers refresh once.
+- **Actions:** the company, customers and suppliers (found before added), invoices (found by number), payments (found by reference among the customer's payments that day), sales receipts, purchases (VAT as its own line), bills (found by number for the supplier), the three pickers, any record, and change data capture. Every write sends `requestid`; numbers over 21 characters are shortened the same way every time.
+- **Books:** all nine capabilities mapped; `books.invoice.created` and `books.payment.recorded` from the `changes` trigger (CloudEvents, split per event, routed by `intuitaccountid`, nothing read before the three-second answer). The conformance kit's event check now follows a trigger's `split`.
+- **Templates:** `books-copy-invoice` (callable), `books-record-invoice-payments` (on the invoice trigger's `payment` event), `books-school-daily-takings`. The rail coverage tests count products that declare capabilities; the three run on QuickBooks only until K4.
+
+Differences from §8: there is no enricher, so a run reads the record it was told of (`get_entity`): an enricher would read before the three-second answer. QuickBooks gives no `books.invoice.paid` (a paid invoice is only an `invoice.updated`). Catching up after an outage is the `changes_since` action, not automatic yet. An invoice is copied with its total as one line, since `invoices@1` does not give its lines.
+
 ### K4: Zoho platform and Zoho Books (L; needs K1)
 
 The Zoho client with data centres (§7, §4.4), `zoho_books@1` (§7.1) with its books capability mappings, the organisation picker, and K3's books templates passing on Zoho Books in both editions.
+
+**Built** (K4, 26 October 2026), on the K1 pull request. Fixtures are shaped from Zoho's published examples; nothing has run against a Zoho organisation yet.
+- **Connecting:** `zoho_books@1` (`kind: product`, `accounting`) through the shared Zoho client (`client: zoho`): the accounts server from the callback and the API domain from the token, both held to Zoho's data centres (rule 19); `access_type=offline` and `prompt=consent`; comma-joined scopes.
+- **Tokens:** the access token kept with the credentials and refreshed under the connection's lock, since Zoho issues ten every ten minutes; Zoho's 200 `invalid_code` expires the connection; six concurrent workers get one token.
+- **The organisation:** the only one the user reaches, or Zoho's default, chosen on the first call and kept with the credentials.
+- **Actions:** contacts (customers and suppliers, found by email, phone, then name), invoices (found by `reference_number`, Taskiem's number), payments (found by reference), sales receipts (by number, the walk-in customer's without one), expenses (VAT as its own line), bills (by number for the supplier), the three pickers, and `changes_since`. Books has no idempotency key: each write finds by the business's own number first.
+- **Books:** all nine capabilities and all three events, `books.invoice.paid` included, from a polled `changes` trigger (every 15 minutes while a workflow listens).
+- **Templates:** K3's three books templates run on both books unchanged; the rail coverage tests now find two connectors for each.
+- **On the way:** the money log's poller no longer polls triggers whose events are not rail events (it would have spent a Zoho organisation's daily quota); QuickBooks uses the shared money package.
+
+Differences from §7.1: there is no organisation picker in the web app; the connection takes the only organisation, or the default, and says which. Zoho Books' webhooks are not used yet: its API does not document how they are signed (to confirm), so changes are polled.
 
 ### K5: Instagram and Facebook messages (L; needs K1, Meta's review)
 
 §6. It can be built and tested on Meta's test Page and accounts as soon as K1 lands. It goes to businesses only when Meta grants Advanced Access.
 
+**Built** (K5, 26 October 2026), on the K1 pull request. Fixtures are shaped from Meta's published examples; nothing has run against a Meta app yet.
+- **Connecting:** `messenger@1` and `instagram@1` (`connectors/meta`) on Facebook Login through one Meta app (`client: meta`). Connector/v1 rule 21: a connector's `Link` completes the grant before the connection is saved. For Meta it trades the user token for a long-lived one, takes the one Page's own token (which does not expire), records the Page (or its Instagram account) as the account, and subscribes the Page to the app. Several Pages granted is refused in the person's words. The user token is not kept. Generic: `token_method: get`, `linked_fields`, a linked connection's lifetime taken from what Link made.
+- **Actions:** `send_message` (text or an attachment, quick replies, `HUMAN_AGENT`), with the window read from the conversation before sending: outside it, or to someone who never wrote, it fails before sending. Also `send_typing`, `mark_seen`, `get_profile` (sealed), `get_conversation`, and the connection checks.
+- **Triggers:** `messages` at `/hooks/apps/messenger@1/messages` and `/hooks/apps/instagram@1/messages`, verified with the app secret, the GET challenge answered, batches split per event and routed by the entry's Page or account, correlated on the person. Generic: a trigger's `pii` seals the sender and the text in run history (a run's trigger), and its `example` feeds dry runs.
+- **Templates:** an away reply outside opening hours and a new-message alert, for each.
+
+Differences from §6: the daily re-check of each Page's subscription is not built (connecting again subscribes again); comments come later; there is no "order in a DM becomes a payment link" template yet, since Meta gives no email, which most rails' payment links need. A signal waking a run that waits on the person carries the message as delivered (as WhatsApp's do); only a started run's trigger is sealed.
+
 ### K6: Zoho Mail and Zoho CRM (M; needs K4)
 
 §7.2 and §7.3, with the watch renewal.
+
+**Built** (K6, 26 October 2026), on the K1 pull request. Fixtures are shaped from Zoho's published examples; nothing has run against a Zoho account yet.
+- **The Zoho client, shared:** `connectors/internal/zoho` keeps the tokens (refreshed under the connection's lock at the account's accounts server) and the data centre's servers for Books, Mail and CRM; Books now uses it.
+- **`zoho_mail@1`:** connecting finds the user's own mailbox at their data centre's Mail server before saving (rule 21's Link) and keeps the granted token. Actions: send and reply (unsafe writes), list, search, read (as HTML and text), mark, move and label, folders and labels. `new_mail` is polled every 5 minutes, its subject, addresses and summary sealed.
+- **`zoho_crm@1`:** upsert by the module's unique fields (a retry updates), update, read, search, notes found before added, modules. `record_changes` is CRM's notification watch: registered remotely with a token of Taskiem's, verified by the new `body_token` scheme, asked for six days and renewed before it lapses, split into one event per record. A watch found after a crash is stopped and made again.
+- **On the way:** a registrar's calls and a polled trigger's read get the vault's rotation (`RemoteCall.Rotate`, the poller's requests). Without it, Zoho Books' polling would have failed once its access token expired.
+- **Templates:** paid invoices as Zoho CRM contacts and won deals; a receipt from the business's Zoho mailbox.
+
+Differences from §7.2 and §7.3: the scopes are one set (reading and sending), not chosen by what a workflow does; the mailbox is the user's first Zoho mailbox, with no picker; supplier bills read from mail into the books wait for an `ai` step template; storefront orders as deals wait, since a storefront form takes one workflow.
 
 ### K7: Resend and Brevo (M; needs K1 for `svix`)
 
 §9: both connectors, their webhooks, the consent rule, the receipt and list templates.
 
+**Built** (K7, 26 October 2026), on the K1 pull request. Fixtures are shaped from Resend's and Brevo's published examples; nothing has run against either yet.
+- **`resend@1`:** `send_email` carries the step's key as Resend's `Idempotency-Key` (one send per key for 24 hours; a reused key with another body is fatal), refused before calling from a domain not verified in Resend; `get_email`, `list_domains`. `email_events` is registered remotely: Taskiem creates the webhook, keeps the Svix secret Resend returns (`svix` now allowed for remote triggers), turns a paused webhook back on, and makes again one found after a crash.
+- **`brevo@1`:** email (from an authenticated domain only) and SMS as unsafe writes; contacts upserted by email; lists; campaigns sent once. Consent: a list addition, or a marketing text, needs `consent.opted_in: true`, which the manifest allows only as true and the connector checks again. `transactional_events` and `marketing_events` are registered remotely with a bearer token of Taskiem's; Brevo's snake-case event names are mapped to the webhook's.
+- **Templates:** a receipt through Resend; opted-in customers onto a Brevo list (only those whose row says so); bounces, complaints and unsubscribes back onto the customers table.
+- **On the way:** a test compiles every built-in trigger's expressions, since a manifest does not check them when it loads (it caught one here).
+
+Differences from §9: there is no Brevo list picker yet (the list is its number); Resend's audiences and broadcasts come later.
+
 ### K8: Mailchimp (S; needs K1)
 
 §9, with OAuth and the server prefix.
 
+**Built** (K8, 26 October 2026), on the K1 pull request. Fixtures are shaped from Mailchimp's published examples; nothing has run against Mailchimp yet.
+- **Connecting:** `mailchimp@1` through Taskiem's Mailchimp app (no scopes: rule 21 now allows none), the server prefix read from Mailchimp's metadata before the connection is saved (`Link`); or a pasted API key, its server its ending. Egress allows `*.api.mailchimp.com`.
+- **Actions:** members upserted by the MD5 of the address, only with consent and never re-subscribing someone who unsubscribed; tags; campaigns made once by title and sent once; audiences.
+- **Triggers:** `audience_events`, a signed webhook Taskiem creates on the audience (`hmac_sha256_timestamped` with `t_v1`, Mailchimp's `X-Mailchimp-Signature`); Mailchimp's plain GET check is answered by the new `open` handshake.
+- **Pickers:** a connector's `pickers` and `picker: choice` with `GET /v1/connections/choices` (rule 21): the audience is chosen by name. Brevo's lists, Zoho's organisations and QuickBooks' accounts can use the same.
+- **Templates:** opted-in customers onto a Mailchimp audience; unsubscribes and cleaned addresses back onto the customers table.
+
+Differences from §9: the win-back campaign (customers who have not bought in 60 days) waits for a way to read purchase dates from the money log in a template.
+
 ### K9: AI and Start page (S)
 
 The eval cases and rules of §10, the Start page entries by connected service, and the website's connector pages.
+
+**Built** (K9, 26 October 2026), on the K1 pull request:
+- **Eval cases:** `evals/builder/connectors.jsonl`, 23 requests across Slack, Messenger, Instagram, the books, Zoho Mail and CRM, Resend, Brevo and Mailchimp.
+- **Eval rules** (`tools/aieval/rules.go`):
+  - `reply_in_window`: a Messenger or Instagram message answers the person who wrote, on that channel's trigger, after nothing that waits, without the tag a person replying by hand uses.
+  - `opted_in_only`: every step taking consent says the person opted in, behind a condition that checks it.
+  - `invoice_copied_once`: one `books_invoice` step, numbered with the invoice's own number.
+  - `books_by_capability`: books work through the capabilities, never a provider's action a capability maps; a case asking for one provider's own feature leaves it out.
+- **Retrieval:** the books templates `require` a books word (books, accounting, QuickBooks, Zoho Books…), so "invoice" alone no longer sends a goal about the books to `send-invoice`.
+- **Start page:** a template's `services` (the API computes them: an app, a connector Taskiem's platform app connects, or the books, which QuickBooks or Zoho Books serves) are offered, first, once each is connected. The gallery now counts a books template available when either is there; it counted only rails.
+- **Website:** a page for every service at `/integrations/<id>`, from its manifest: how it connects, what workflows can do with it, what starts one, the templates that use it and its docs page. The adapter grid links to them. Messenger and Instagram (`connectors/meta`) are now on the site, and a books template names "QuickBooks or Zoho Books".
 
 ## 12. Order and timing
 

@@ -60,6 +60,9 @@ func New(o Options) *connector.Connector {
 		"get_conversation":     connector.ActionFunc(c.getConversation),
 		"lookup_user_by_email": connector.ActionFunc(c.lookupUserByEmail),
 		"upload_file":          connector.ActionFunc(c.uploadFile),
+		"list_users":           connector.ActionFunc(c.listUsers),
+		"open_conversation":    connector.ActionFunc(c.openConversation),
+		"schedule_message":     connector.ActionFunc(c.scheduleMessage),
 	}}
 }
 
@@ -458,6 +461,113 @@ func (c *client) lookupUserByEmail(ctx context.Context, req connector.Request) (
 	}
 	return connector.Response{Output: map[string]any{"found": true, "id": u.ID, "team_id": u.TeamID, "name": u.Name,
 		"real_name": realName, "display_name": u.Profile.DisplayName, "tz": u.TZ, "is_bot": u.IsBot}}, nil
+}
+
+func (c *client) listUsers(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	v := url.Values{}
+	formStr(v, in, "cursor")
+	formInt(v, in, "limit")
+	if v.Get("limit") == "" {
+		v.Set("limit", "200")
+	}
+	var r struct {
+		Members []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			RealName string `json:"real_name"`
+			Deleted  bool   `json:"deleted"`
+			IsBot    bool   `json:"is_bot"`
+			Profile  struct {
+				DisplayName string `json:"display_name"`
+				RealName    string `json:"real_name"`
+				Email       string `json:"email"`
+			} `json:"profile"`
+		} `json:"members"`
+		Meta struct {
+			NextCursor string `json:"next_cursor"`
+		} `json:"response_metadata"`
+	}
+	if err := c.call(ctx, req, "users.list", v, &r); err != nil {
+		return connector.Response{}, err
+	}
+	bots, _ := in["include_bots"].(bool)
+	out := []any{}
+	for _, u := range r.Members {
+		// Slackbot is a bot by id, not by is_bot.
+		if !bots && (u.IsBot || u.Deleted || u.ID == "USLACKBOT") {
+			continue
+		}
+		realName := u.RealName
+		if realName == "" {
+			realName = u.Profile.RealName
+		}
+		out = append(out, map[string]any{"id": u.ID, "name": u.Name, "real_name": realName, "display_name": u.Profile.DisplayName,
+			"email": u.Profile.Email, "is_bot": u.IsBot, "deleted": u.Deleted})
+	}
+	return connector.Response{Output: map[string]any{"members": out, "next_cursor": r.Meta.NextCursor}}, nil
+}
+
+func (c *client) openConversation(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	if err := required("open_conversation", in, "users"); err != nil {
+		return connector.Response{}, err
+	}
+	var r struct {
+		Channel struct {
+			ID string `json:"id"`
+		} `json:"channel"`
+	}
+	if err := c.call(ctx, req, "conversations.open", url.Values{"users": {strings.ReplaceAll(str(in, "users"), " ", "")}}, &r); err != nil {
+		return connector.Response{}, err
+	}
+	return connector.Response{Output: map[string]any{"channel": r.Channel.ID}}, nil
+}
+
+// postAt reads a time as Unix seconds: RFC 3339, or the seconds themselves.
+func postAt(v any) (int64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return int64(t), t > 0
+	case int64:
+		return t, t > 0
+	case int:
+		return int64(t), t > 0
+	case string:
+		if n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64); err == nil {
+			return n, n > 0
+		}
+		if at, err := time.Parse(time.RFC3339, strings.TrimSpace(t)); err == nil {
+			return at.Unix(), true
+		}
+	}
+	return 0, false
+}
+
+func (c *client) scheduleMessage(ctx context.Context, req connector.Request) (connector.Response, error) {
+	in := req.Input
+	if err := required("schedule_message", in, "channel"); err != nil {
+		return connector.Response{}, err
+	}
+	if !hasContent(in) {
+		return connector.Response{}, fmt.Errorf("slack schedule_message: text or blocks is required: %w", effects.ErrFatal)
+	}
+	at, ok := postAt(in["post_at"])
+	if !ok {
+		return connector.Response{}, fmt.Errorf("slack schedule_message: post_at is not a time (RFC 3339 or Unix seconds): %w", effects.ErrFatal)
+	}
+	body := map[string]any{"post_at": at}
+	copyArgs(in, body, "channel", "text", "blocks", "thread_ts")
+	var r struct {
+		Channel     string          `json:"channel"`
+		ScheduledID string          `json:"scheduled_message_id"`
+		PostAt      json.RawMessage `json:"post_at"` // Slack's example answers a string
+	}
+	if err := c.call(ctx, req, "chat.scheduleMessage", body, &r); err != nil {
+		return connector.Response{}, err
+	}
+	when, _ := postAt(strings.Trim(string(r.PostAt), `"`))
+	return connector.Response{Output: map[string]any{"channel": r.Channel, "scheduled_message_id": r.ScheduledID, "post_at": when}}, nil
 }
 
 // notSent marks a failure in a step that shares nothing (upload_file before

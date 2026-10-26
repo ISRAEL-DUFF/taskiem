@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/Leads/5843104000000425001/Notes",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "data": [
+    {
+     "Note_Content": "40 cupcakes for Saturday",
+     "Note_Title": "Order"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "data": [
+    {
+     "code": "SUCCESS",
+     "details": {
+      "id": "5843104000000425300"
+     },
+     "message": "record added",
+     "status": "success"
+    }
+   ]
+  }
+ }
+}

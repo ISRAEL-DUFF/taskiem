@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/companyinfo/9341453050298730"
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "fault": {
+    "error": [
+     {
+      "message": "message=AuthenticationFailed; errorCode=003200; statusCode=401",
+      "detail": "Token revoked",
+      "code": "3200"
+     }
+    ],
+    "type": "AUTHENTICATION"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

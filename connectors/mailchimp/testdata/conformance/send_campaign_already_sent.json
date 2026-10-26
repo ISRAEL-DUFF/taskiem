@@ -1,0 +1,18 @@
+{
+ "action": "send_campaign",
+ "input": {
+  "campaign_id": "42694e9e57"
+ },
+ "credentials": {
+  "access_token": "mctestoauthtoken",
+  "account_name": "Ada Cakes"
+ },
+ "exchanges": [
+  "campaign_sent"
+ ],
+ "expect": {
+  "output": {
+   "status": "sent"
+  }
+ }
+}

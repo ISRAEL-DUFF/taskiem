@@ -1,0 +1,37 @@
+{
+ "action": "send_email",
+ "input": {
+  "from": "Ada Cakes <orders@adacakes.ng>",
+  "to": [
+   "ada@example.com"
+  ],
+  "subject": "Receipt for invoice INV-0042",
+  "html": "<p>Thank you</p>",
+  "tags": [
+   {
+    "name": "invoice",
+    "value": "INV-0042"
+   }
+  ],
+  "attachments": [
+   {
+    "filename": "receipt.pdf",
+    "content_base64": "JVBERi0xLjQK",
+    "content_type": "application/pdf"
+   }
+  ]
+ },
+ "credentials": {
+  "api_key": "re_test_123"
+ },
+ "exchanges": [
+  "domains",
+  "send_att"
+ ],
+ "expect": {
+  "output": {
+   "email_id": "59a3999c-0ce1-4ea6-ab68-afcd6dc2e794"
+  }
+ },
+ "idempotency_key": "tsk-receipt-inv-0042-0000000000"
+}

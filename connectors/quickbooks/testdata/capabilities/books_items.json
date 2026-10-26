@@ -1,0 +1,29 @@
+{
+ "capability": "books_items",
+ "input": {},
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "items"
+ ],
+ "expect": {
+  "items": [
+   {
+    "id": "1",
+    "name": "Services",
+    "amount_kobo": 0
+   },
+   {
+    "id": "5",
+    "name": "Bookkeeping (monthly)",
+    "amount_kobo": 2500000
+   }
+  ]
+ }
+}

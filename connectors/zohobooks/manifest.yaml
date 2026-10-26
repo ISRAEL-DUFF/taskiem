@@ -1,0 +1,615 @@
+# Zoho Books (API v3), connected through Taskiem's Zoho client (K4 of
+# docs/spec/business-connectors.md; decision 0051). One organisation per
+# connection, in either edition (global, or Nigeria's since 17 September
+# 2026: the same API, Nigerian VAT among its taxes). Built from Zoho's
+# public developer documentation, read 26 October 2026:
+#   https://www.zoho.com/books/api/v3/oauth/ (the flow, multi-DC, token limits)
+#   https://www.zoho.com/books/api/v3/introduction/ (data centres, limits)
+#   https://www.zoho.com/books/api/v3/errors/
+#   https://www.zoho.com/books/api/v3/organizations/
+#   https://www.zoho.com/books/api/v3/contacts/
+#   https://www.zoho.com/books/api/v3/invoices/
+#   https://www.zoho.com/books/api/v3/customer-payments/
+#   https://www.zoho.com/books/api/v3/sales-receipt/
+#   https://www.zoho.com/books/api/v3/expenses/
+#   https://www.zoho.com/books/api/v3/bills/
+#   https://www.zoho.com/books/api/v3/items/
+#   https://www.zoho.com/books/api/v3/chart-of-accounts/
+#   https://www.zoho.com/books/api/v3/taxes/
+#   https://www.zoho.com/books/api/v3/webhooks/
+# See docs/integrations/zoho-books.md.
+manifest: connector/v1
+id: zoho_books
+version: 1.0.0
+name: Zoho Books
+description: Keep your books in Zoho Books up to date from your workflows (customers, invoices, payments, a day's takings, expenses and supplier bills), and start workflows when invoices are made or paid there.
+category: accounting
+kind: product
+regions: [NG]
+auth:
+  type: oauth2
+  fields:
+    - { key: refresh_token, label: Refresh token, secret: true }
+    - { key: client_id, label: Zoho client id (Taskiem's) }
+    - { key: client_secret, label: Zoho client secret (Taskiem's), secret: true }
+    - { key: accounts_server, label: Zoho accounts server (filled when you connect) }
+    - { key: api_domain, label: Zoho API domain (filled when you connect) }
+    - { key: location, label: Zoho data centre, required: false }
+    # The organisation: the only one, or else Zoho's default, chosen on the
+    # first call and kept.
+    - { key: organization_id, label: Organisation ID, required: false }
+    - { key: organization_name, label: Organisation, required: false }
+    # Kept by the connector: the access token it last got and its expiry.
+    - { key: access_token, label: Access token (kept by Taskiem), secret: true, required: false }
+    - { key: access_expires_at, label: Access token expiry (kept by Taskiem), required: false }
+  # One click through Taskiem's Zoho client (shared by every Zoho
+  # connector: client zoho), with multi-DC on: Zoho sends the browser back
+  # naming the account's accounts server, where the code is exchanged and
+  # tokens refreshed and revoked, and the token answer names its API domain
+  # (rule 19). Zoho issues a refresh token only with access_type=offline;
+  # prompt=consent asks again, so a reconnect gets one too. Zoho joins
+  # scopes with commas.
+  oauth2:
+    authorize_url: https://accounts.zoho.com/oauth/v2/auth
+    token_url: "${connection.accounts_server}/oauth/v2/token"
+    revoke_url: "${connection.accounts_server}/oauth/v2/token/revoke"
+    scopes:
+      - ZohoBooks.contacts.ALL
+      - ZohoBooks.invoices.ALL
+      - ZohoBooks.customerpayments.ALL
+      - ZohoBooks.expenses.ALL
+      - ZohoBooks.bills.ALL
+      - ZohoBooks.settings.READ
+      - ZohoBooks.accountants.READ
+    scope_separator: ","
+    pkce: true
+    client: zoho
+    authorize_params: { access_type: offline, prompt: consent }
+    fields_from_callback: { accounts_server: accounts-server, location: location }
+    fields_from_token: { refresh_token: refresh_token, api_domain: api_domain }
+    platform_client_fields: { client_id: id, client_secret: secret }
+  test: { action: list_organizations }
+# Zoho's data centres: their accounts servers and API domains only.
+connection_hosts:
+  - "*.zoho.com"
+  - "*.zoho.eu"
+  - "*.zoho.in"
+  - "*.zoho.com.au"
+  - "*.zoho.jp"
+  - "*.zoho.ca"
+  - "*.zohocloud.ca"
+  - "*.zoho.com.cn"
+  - "*.zoho.sa"
+  - "*.zoho.ae"
+  - "*.zohoapis.com"
+  - "*.zohoapis.eu"
+  - "*.zohoapis.in"
+  - "*.zohoapis.com.au"
+  - "*.zohoapis.jp"
+  - "*.zohoapis.ca"
+  - "*.zohoapis.com.cn"
+  - "*.zohoapis.sa"
+  - "*.zohoapis.ae"
+egress_hosts: ["${connection.api_domain}", "${connection.accounts_server}"]
+# 100 requests a minute per organisation (and 1,000 to 10,000 a day by
+# plan).
+rate_limit: { requests: 100, per: 1m, scope: connection }
+base_url: https://www.zohoapis.com/books/v3
+actions:
+  list_organizations:
+    title: List organisations
+    description: The organisations the connected Zoho user can reach. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        organizations:
+          type: array
+          items:
+            type: object
+            properties:
+              organization_id: { type: string }
+              name:            { type: string }
+              currency_code:   { type: string }
+              country:         { type: string }
+              is_default_org:  { type: boolean }
+        current: { type: string, description: The organisation this connection uses }
+  find_contact:
+    title: Find a customer or supplier
+    description: By email, then phone, then display name. found is false when there is none.
+    class: read
+    input:
+      type: object
+      properties:
+        email:        { type: string }
+        phone:        { type: string }
+        contact_name: { type: string }
+        contact_type: { enum: [customer, vendor] }
+    output:
+      type: object
+      properties:
+        found:   { type: boolean }
+        contact: &contact
+          type: object
+          properties:
+            contact_id:       { type: string }
+            contact_name:     { type: string }
+            contact_type:     { type: string }
+            email:            { type: string }
+            phone:            { type: string }
+            outstanding_kobo: { type: integer, description: What they owe (customers) or are owed (suppliers) }
+    pii:
+      - { field: email, category: email }
+      - { field: phone, category: phone }
+      - { field: contact_name, category: name }
+  create_contact:
+    title: Add a customer or supplier
+    description: >-
+      Finds the contact by email, then phone, then display name, before
+      adding one, so a retry finds the one it made (created false). Zoho
+      Books has no idempotency key; request_key is the engine's and is not
+      sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [contact_name]
+      properties:
+        contact_name: { type: string, maxLength: 200 }
+        contact_type: { enum: [customer, vendor], default: customer }
+        company_name: { type: string, maxLength: 200 }
+        email:        { type: string }
+        phone:        { type: string }
+        notes:        { type: string }
+        request_key:  { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        contact_id: { type: string }
+        created:    { type: boolean }
+        contact:    *contact
+    pii:
+      - { field: contact_name, category: name }
+      - { field: email, category: email }
+      - { field: phone, category: phone }
+  create_invoice:
+    title: Record an invoice
+    description: >-
+      An invoice to a customer, with reference_number set to Taskiem's
+      invoice number: an invoice with that reference already in the books
+      is answered (created false) rather than made twice. Zoho numbers it
+      itself unless invoice_number is given. Amounts are in kobo, each line's
+      before tax unless is_inclusive_tax. Zoho Books has no idempotency key;
+      request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [reference_number, customer_id, lines]
+      properties:
+        reference_number: { type: string, minLength: 1, maxLength: 100 }
+        invoice_number:   { type: string, maxLength: 100, description: Zoho's own number; left out, Zoho numbers it }
+        customer_id:      { type: string }
+        date:             { type: string, format: date }
+        due_date:         { type: string, format: date }
+        lines:
+          type: array
+          minItems: 1
+          items: &sale_line
+            type: object
+            required: [description, amount_kobo]
+            properties:
+              description: { type: string }
+              quantity:    { type: number, exclusiveMinimum: 0, default: 1 }
+              amount_kobo: { type: integer, minimum: 0, description: Each, in kobo }
+              item_id:     { type: string }
+              tax_id:      { type: string, description: As list_taxes lists it (VAT at 7.5%) }
+        is_inclusive_tax: { type: boolean, default: false }
+        notes:            { type: string, description: Shown on the invoice }
+        request_key:      { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        invoice_id: { type: string }
+        created:    { type: boolean }
+        invoice: &invoice
+          type: object
+          properties:
+            invoice_id:       { type: string }
+            invoice_number:   { type: string }
+            reference_number: { type: string }
+            customer_id:      { type: string }
+            status:           { type: string, description: "draft, sent, overdue, paid, partially_paid, unpaid, void, viewed" }
+            date:             { type: string }
+            due_date:         { type: string }
+            currency:         { type: string }
+            total_kobo:       { type: integer, description: Tax included }
+            tax_kobo:         { type: integer }
+            balance_kobo:     { type: integer, description: Left to pay }
+            paid:             { type: boolean }
+            modified_at:      { type: string }
+  get_invoice:
+    title: Get an invoice
+    class: read
+    input:
+      type: object
+      required: [invoice_id]
+      properties:
+        invoice_id: { type: string }
+    output: *invoice
+  find_invoices:
+    title: Find invoices
+    description: By reference (Taskiem's number), Zoho's number, customer, status, or changed since; at most 200.
+    class: read
+    input:
+      type: object
+      properties:
+        reference_number: { type: string }
+        invoice_number:   { type: string }
+        customer_id:      { type: string }
+        status:           { enum: [draft, sent, overdue, paid, partially_paid, unpaid, void, viewed] }
+        changed_since:    { type: string, format: date-time }
+    output:
+      type: object
+      properties:
+        invoices: { type: array, items: *invoice }
+  record_payment:
+    title: Record a payment
+    description: >-
+      A payment received from a customer, applied to an invoice when
+      invoice_id is given (the customer is then the invoice's), with the
+      money log entry's reference as its reference number: a payment of the
+      customer's with that reference already recorded is answered (created
+      false) rather than made twice. Zoho Books has no idempotency key;
+      request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [amount_kobo, reference]
+      properties:
+        customer_id:  { type: string, description: Required without invoice_id }
+        invoice_id:   { type: string }
+        amount_kobo:  { type: integer, minimum: 1 }
+        date:         { type: string, format: date, description: Default today }
+        reference:    { type: string, minLength: 1, maxLength: 100 }
+        payment_mode: { enum: [cash, check, credit_card, bank_transfer, bank_remittance, others], default: bank_transfer }
+        account_id:   { type: string, description: The bank or cash account it went into }
+        description:  { type: string }
+        request_key:  { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        payment_id:  { type: string }
+        created:     { type: boolean }
+        customer_id: { type: string }
+        amount_kobo: { type: integer }
+  create_sales_receipt:
+    title: Record a sale
+    description: >-
+      A sales receipt: money taken at the time of the sale (a day's POS or
+      storefront takings), numbered receipt_number (the day and the source):
+      one with that number already in the books is answered rather than made
+      twice. Without a customer it is the walk-in customer's, found or added
+      as "Walk-in Customer". The Sales Receipts module must be on in Zoho
+      Books (Settings → General). Zoho Books has no idempotency key;
+      request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [receipt_number, lines]
+      properties:
+        receipt_number: { type: string, minLength: 1, maxLength: 100 }
+        date:           { type: string, format: date }
+        customer_id:    { type: string }
+        payment_mode:   { enum: [cash, check, credit_card, bank_transfer, bank_remittance, others], default: cash }
+        lines:          { type: array, minItems: 1, items: *sale_line }
+        notes:          { type: string }
+        request_key:    { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        sales_receipt_id: { type: string }
+        created:          { type: boolean }
+        receipt_number:   { type: string }
+        total_kobo:       { type: integer }
+  create_expense:
+    title: Record an expense
+    description: >-
+      An expense paid at once from a bank, cash or card account, to an
+      expense account, with reference_number (the receipt's or the money log
+      entry's): one with that reference already in the books is answered
+      rather than made twice. vat_kobo, included in the amount, is recorded
+      as its own line. Zoho Books has no idempotency key; request_key is the
+      engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [reference_number, account_id, paid_through_account_id, amount_kobo]
+      properties:
+        reference_number:        { type: string, minLength: 1, maxLength: 100 }
+        account_id:              { type: string, description: The expense account }
+        paid_through_account_id: { type: string, description: The bank, cash or card account it was paid from }
+        amount_kobo:             { type: integer, minimum: 1, description: The total paid }
+        vat_kobo:                { type: integer, minimum: 0, description: VAT included in amount_kobo }
+        tax_id:                  { type: string, description: Zoho works the tax out from it instead }
+        date:                    { type: string, format: date, description: Default today }
+        vendor_id:               { type: string }
+        description:             { type: string }
+        request_key:             { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        expense_id: { type: string }
+        created:    { type: boolean }
+        total_kobo: { type: integer }
+  create_bill:
+    title: Record a supplier's bill
+    description: >-
+      A bill to pay later, numbered by the supplier's bill number: one from
+      the same supplier with that number already in the books is answered
+      rather than made twice. Zoho Books has no idempotency key; request_key
+      is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [vendor_id, bill_number, lines]
+      properties:
+        vendor_id:   { type: string }
+        bill_number: { type: string, minLength: 1, maxLength: 100 }
+        date:        { type: string, format: date, description: Default today }
+        due_date:    { type: string, format: date }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [account_id, amount_kobo]
+            properties:
+              account_id:  { type: string, description: The expense account }
+              amount_kobo: { type: integer, minimum: 0 }
+              quantity:    { type: number, exclusiveMinimum: 0, default: 1 }
+              description: { type: string }
+              tax_id:      { type: string }
+        is_inclusive_tax: { type: boolean, default: false }
+        notes:            { type: string }
+        request_key:      { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        bill_id:      { type: string }
+        created:      { type: boolean }
+        total_kobo:   { type: integer }
+        balance_kobo: { type: integer }
+  list_items:
+    title: List items
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id:   { type: string }
+              name:      { type: string }
+              rate_kobo: { type: integer }
+              tax_id:    { type: string }
+  list_accounts:
+    title: List accounts
+    class: read
+    input:
+      type: object
+      properties:
+        type: { enum: [income, expense, bank, cash, credit_card, receivable, payable, other], description: Only accounts of this kind }
+    output:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id:   { type: string }
+              account_name: { type: string }
+              type:         { type: string, description: Taskiem's kind, as the type input }
+              account_type: { type: string, description: Zoho's own (bank, cash, expense, income…) }
+              currency:     { type: string }
+  list_taxes:
+    title: List taxes
+    description: The organisation's taxes, with their rates (the Nigeria edition's VAT at 7.5%).
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        taxes:
+          type: array
+          items:
+            type: object
+            properties:
+              tax_id:         { type: string }
+              tax_name:       { type: string }
+              tax_percentage: { type: number }
+              tax_type:       { type: string }
+  changes_since:
+    title: Read what changed
+    description: >-
+      Invoices changed and payments recorded since a time (at most 200 of
+      each, the latest first), each as the change it was: an invoice made,
+      changed or paid, a payment recorded. What the changes trigger polls.
+    class: read
+    input:
+      type: object
+      required: [since]
+      properties:
+        since: { type: string, format: date-time }
+    output:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              event:        { type: string, description: "invoice.created, invoice.updated, invoice.paid or payment.created" }
+              kind:         { enum: [invoice, payment] }
+              id:           { type: string, description: The invoice's or the payment's id }
+              number:       { type: string }
+              reference:    { type: string }
+              customer_id:  { type: string }
+              invoice_id:   { type: string, description: The invoice a payment is applied to, the first when several }
+              total_kobo:   { type: integer }
+              amount_kobo:  { type: integer }
+              currency:     { type: string }
+              status:       { type: string }
+              modified_at:  { type: string }
+triggers:
+  # Zoho Books calls webhooks only from workflow rules a person sets up,
+  # and its webhooks API does not document how deliveries are signed, so
+  # Taskiem asks Books itself every 15 minutes (changes_since): an invoice
+  # made, changed or paid, a payment recorded. Polled deliveries are signed
+  # with the connection's own refresh token, so the trigger's address takes
+  # nothing anyone else sends. Every 15 minutes is 96 polls (192 calls) a
+  # day, within the free plan's 1,000.
+  changes:
+    type: webhook
+    title: Invoices and payments in Zoho Books
+    verify: { scheme: hmac_sha256, header: X-Taskiem-Signature, secret_field: refresh_token }
+    events: [invoice.created, invoice.updated, invoice.paid, payment.created]
+    event_type: =body.event
+    # A change to an invoice is one per time it changed; made, paid and a
+    # payment happen once.
+    dedup: '=body.event == "invoice.updated" ? body.data.id + ":updated:" + body.data.modified_at : body.data.id + ":" + body.event'
+    # The invoice: a run waiting on it wakes when it is paid, or a payment
+    # is applied to it.
+    correlation: '=body.data.kind == "invoice" ? dyn(body.data.id) : has(body.data.invoice_id) ? dyn(body.data.invoice_id) : null'
+    poll: { action: changes_since, since: since, items: =output.changes, event: =item.event, every: 15m }
+capabilities:
+  books_customer:
+    action: create_contact
+    input:
+      contact_name: =input.name
+      contact_type: customer
+      email: =input.?email
+      phone: =input.?phone
+    output:
+      customer_id: =output.contact_id
+      created: =output.created
+  books_invoice:
+    action: create_invoice
+    input:
+      reference_number: =input.number
+      customer_id: =input.customer_id
+      date: =input.?issued_on
+      due_date: =input.?due_on
+      notes: =input.?notes
+      lines: >-
+        =input.lines.map(l, {'description': l.description, 'quantity': has(l.quantity) ? l.quantity : 1,
+          'amount_kobo': l.amount_kobo, 'item_id': l.?item_id, 'tax_id': l.?tax_id})
+    output:
+      invoice_id: =output.invoice_id
+      number: =output.invoice.reference_number
+      total_kobo: =output.invoice.total_kobo
+    # The organisation's base currency (NGN for the Nigeria edition).
+    ignores: [currency]
+  books_payment:
+    action: record_payment
+    input:
+      invoice_id: =input.invoice_id
+      amount_kobo: =input.amount_kobo
+      date: =input.?paid_on
+      reference: =input.reference
+      account_id: =input.?account_id
+      payment_mode: "=!has(input.method) ? 'bank_transfer' : input.method == 'cash' ? 'cash' : input.method == 'card' || input.method == 'pos' ? 'credit_card' : input.method == 'transfer' ? 'bank_transfer' : 'others'"
+    output:
+      payment_id: =output.payment_id
+    ignores: [currency]
+  books_sale:
+    action: create_sales_receipt
+    input:
+      receipt_number: =input.reference
+      date: =input.date
+      lines: "=input.takings.map(t, {'description': t.description, 'amount_kobo': t.amount_kobo})"
+    output:
+      sale_id: =output.sales_receipt_id
+    # Zoho's sales receipt takes no deposit account through the API: the
+    # takings go where Books sends sales receipts.
+    ignores: [currency, "takings.*.account_id"]
+  books_expense:
+    action: create_expense
+    input:
+      reference_number: =input.reference
+      account_id: =input.account_id
+      paid_through_account_id: =input.paid_from_id
+      amount_kobo: =input.amount_kobo
+      vat_kobo: =input.?vat_kobo
+      date: =input.?date
+      description: "=[input.?supplier.orValue(''), input.?description.orValue('')].filter(x, x != '').join(': ')"
+    output:
+      expense_id: =output.expense_id
+    requires: [paid_from_id]
+    ignores: [currency]
+  books_bill:
+    action: create_bill
+    input:
+      vendor_id: =input.supplier_id
+      bill_number: =input.number
+      date: =input.?issued_on
+      due_date: =input.?due_on
+      lines: "=input.lines.map(l, {'account_id': l.account_id, 'amount_kobo': l.amount_kobo, 'description': l.description, 'tax_id': l.?tax_id})"
+    output:
+      bill_id: =output.bill_id
+      total_kobo: =output.total_kobo
+    ignores: [currency]
+  books_accounts:
+    action: list_accounts
+    input: { type: "=input.?type" }
+    output: { accounts: "=output.accounts.map(a, {'id': a.account_id, 'name': a.account_name, 'type': a.type})" }
+  books_items:
+    action: list_items
+    input: {}
+    output: { items: "=output.items.map(i, has(i.rate_kobo) ? {'id': i.item_id, 'name': i.name, 'amount_kobo': i.rate_kobo} : {'id': i.item_id, 'name': i.name})" }
+  books_taxes:
+    action: list_taxes
+    input: {}
+    output: { taxes: "=output.taxes.map(t, has(t.tax_percentage) ? {'id': t.tax_id, 'name': t.tax_name, 'percent': t.tax_percentage} : {'id': t.tax_id, 'name': t.tax_name})" }
+events:
+  books.invoice.created:
+    trigger: changes
+    when: '=body.event == "invoice.created"'
+    fields:
+      invoice_id: =body.data.id
+      number: =body.data.?number
+      customer_id: =body.data.?customer_id
+      total_kobo: =body.data.?total_kobo
+      currency: =body.data.?currency
+  books.invoice.paid:
+    trigger: changes
+    when: '=body.event == "invoice.paid"'
+    fields:
+      invoice_id: =body.data.id
+      number: =body.data.?number
+      total_kobo: =body.data.?total_kobo
+      currency: =body.data.?currency
+  books.payment.recorded:
+    trigger: changes
+    when: '=body.event == "payment.created"'
+    fields:
+      payment_id: =body.data.id
+      invoice_id: =body.data.?invoice_id
+      amount_kobo: =body.data.?amount_kobo
+      currency: =body.data.?currency
+      reference: =body.data.?reference

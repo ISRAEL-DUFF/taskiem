@@ -56,6 +56,8 @@ type Connections interface {
 //	                                                        DELETE where the trigger takes them; OPTIONS for CORS)
 //	ANY  /hooks/{tenant}/_listen/{listen}/{token}           a test call, kept for the editor (listen.go)
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}   connector events
+//	POST /hooks/apps/{connector}/{trigger}                  events Taskiem's platform app receives for
+//	                                                        every business, routed by account (apps.go); GET checks
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}
 //	                                                        the same, for providers whose callback URLs may not carry a query string (path_secret)
 //	POST /hooks/{tenant}/callbacks/{run}/{token}/{step}     a call back to a run's callback step (wd-v1 callback steps)
@@ -81,7 +83,11 @@ type Handler struct {
 	// MoneyLog records every normalised money event heard in prod (decision
 	// 0045); nil records none.
 	MoneyLog *moneylog.Log
+	// Apps are Taskiem's platform apps by client name (decision 0051), for
+	// triggers delivered to /hooks/apps/{connector}/{trigger}.
+	Apps map[string]App
 
+	apps    appGate
 	once    sync.Once
 	router  http.Handler
 	tenants tenantGate
@@ -102,6 +108,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.exprs = expr.MustNewTriggerEngine("body", "headers", "query", "item")
 		h.wdExprs = expr.MustNew()
 		rt := chi.NewRouter()
+		rt.Post("/apps/{connector}/{trigger}", h.appEvent)
+		rt.Get("/apps/{connector}/{trigger}", h.appHandshake)
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
 		rt.Put("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
@@ -117,7 +125,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.router = rt
 	})
 	kind := "webhook"
-	if strings.Contains(r.URL.Path, "/connectors/") {
+	if strings.HasPrefix(r.URL.Path, "/apps/") {
+		kind = "app"
+	} else if strings.Contains(r.URL.Path, "/connectors/") {
 		kind = "connector"
 	} else if strings.Contains(r.URL.Path, "/callbacks/") {
 		kind = "callback"
@@ -897,55 +907,19 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	// (decision 0031). Not for a provider's test, nor a remote trigger.
 	route := spec.Route != nil && sub == nil && !test
 
-	// A provider that batches events gets one delivery per item.
-	items := []any{nil}
-	if spec.Split != "" {
-		v, err := h.exprs.Eval(spec.Split, act)
-		list, ok := v.([]any)
-		if err != nil || !ok {
-			replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
-			return
-		}
-		items = list
+	items, err := h.itemsOf(spec, name, act, body)
+	if err != nil {
+		replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
+		return
 	}
 	results := []map[string]any{}
-	for i, item := range items {
-		ia := act
-		if spec.Split != "" {
-			ia = map[string]any{"body": act["body"], "headers": act["headers"], "query": act["query"], "item": item}
-		}
-		// The default dedup key hashes the verified body, so a replayed
-		// delivery is recognised even when the manifest's key comes out empty.
-		event, dedup, correlation := name, "", ""
-		fallback := bodyHash(body)
-		if spec.Split != "" {
-			fallback += ":" + strconv.Itoa(i)
-		}
-		bad := false
-		for _, f := range []struct {
-			src string
-			dst *string
-		}{{spec.EventType, &event}, {spec.Dedup, &dedup}, {spec.Correlation, &correlation}} {
-			if f.src == "" {
-				continue
-			}
-			if *f.dst, err = evalString(h.exprs, f.src, ia); err != nil {
-				bad = true
-			}
-		}
-		if bad {
-			replyErr(w, http.StatusBadRequest, "unexpected payload for "+ref+" "+name)
-			return
-		}
-		if dedup == "" {
-			dedup = fallback
-		}
-		if len(spec.Events) > 0 && !slices.Contains(spec.Events, event) {
-			results = append(results, map[string]any{"ignored": event})
+	for _, it := range items {
+		if it.ignored {
+			results = append(results, map[string]any{"ignored": it.event})
 			continue
 		}
-		ev := eventItem{conn: conn, ref: ref, name: name, env: env, event: event, dedup: dedup, correlation: correlation,
-			body: p.body, item: item, split: spec.Split != "", test: test}
+		ev := eventItem{conn: conn, ref: ref, name: name, env: env, event: it.event, dedup: it.dedup, correlation: it.correlation,
+			body: p.body, item: it.item, split: spec.Split != "", test: test}
 		out, ok := h.deliverInto(ctx, w, r, here, ev)
 		if !ok {
 			return
@@ -953,7 +927,7 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 		if route {
 			// An event without the key (or whose key expression fails)
 			// matches no sub-tenant: it is recorded as unrouted.
-			key, _ := evalString(h.exprs, spec.Route.Key, ia)
+			key, _ := evalString(h.exprs, spec.Route.Key, it.act)
 			n, ok := h.routeEvent(ctx, w, r, tenant, spec.Route.Field, key, ev)
 			if !ok {
 				return
@@ -983,6 +957,63 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	reply(w, http.StatusAccepted, results[0])
 }
 
+// deliveryItem is one event of a verified delivery, as the trigger's
+// expressions read it.
+type deliveryItem struct {
+	item                      any
+	act                       map[string]any // body, headers, query, and item
+	event, dedup, correlation string
+	ignored                   bool // an event the trigger does not send
+}
+
+// itemsOf reads a verified delivery's events: one, or one per element of
+// the trigger's split, each with its event, dedup key and correlation. The
+// default dedup key hashes the verified body (and the item's place), so a
+// replayed delivery is recognised even when the manifest's key comes out
+// empty. An expression that fails is an error: the payload is not what the
+// trigger expects.
+func (h *Handler) itemsOf(spec connector.TriggerSpec, name string, act map[string]any, body []byte) ([]deliveryItem, error) {
+	items := []any{nil}
+	if spec.Split != "" {
+		v, err := h.exprs.Eval(spec.Split, act)
+		list, ok := v.([]any)
+		if err != nil || !ok {
+			return nil, fmt.Errorf("split: %w", err)
+		}
+		items = list
+	}
+	out := make([]deliveryItem, 0, len(items))
+	for i, item := range items {
+		it := deliveryItem{item: item, act: act, event: name}
+		if spec.Split != "" {
+			it.act = map[string]any{"body": act["body"], "headers": act["headers"], "query": act["query"], "item": item}
+		}
+		fallback := bodyHash(body)
+		if spec.Split != "" {
+			fallback += ":" + strconv.Itoa(i)
+		}
+		for _, f := range []struct {
+			src string
+			dst *string
+		}{{spec.EventType, &it.event}, {spec.Dedup, &it.dedup}, {spec.Correlation, &it.correlation}} {
+			if f.src == "" {
+				continue
+			}
+			v, err := evalString(h.exprs, f.src, it.act)
+			if err != nil {
+				return nil, err
+			}
+			*f.dst = v
+		}
+		if it.dedup == "" {
+			it.dedup = fallback
+		}
+		it.ignored = len(spec.Events) > 0 && !slices.Contains(spec.Events, it.event)
+		out = append(out, it)
+	}
+	return out, nil
+}
+
 // connectorHandshake answers a provider's GET endpoint check (Meta's
 // hub.challenge): the token it sends must equal the connection's secret.
 func (h *Handler) connectorHandshake(w http.ResponseWriter, r *http.Request) {
@@ -1006,6 +1037,12 @@ func (h *Handler) connectorHandshake(w http.ResponseWriter, r *http.Request) {
 	}
 	if hs == nil || hs.Method != "GET" {
 		replyErr(w, http.StatusNotFound, "no such connector trigger")
+		return
+	}
+	if hs.Open {
+		// Only whether the address answers: nothing is read or started.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	creds, err := h.Connections.Credentials(ctx, tenant, env, conn.Manifest.ID, r.URL.Query().Get("connection"))

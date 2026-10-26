@@ -1,0 +1,15 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/104123456789012",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "104123456789012"
+  }
+ }
+}

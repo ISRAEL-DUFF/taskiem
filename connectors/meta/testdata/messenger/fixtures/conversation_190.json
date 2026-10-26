@@ -1,0 +1,23 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/104123456789012/conversations",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "platform": "messenger"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "error": {
+    "message": "Error validating access token: The session has been invalidated.",
+    "type": "OAuthException",
+    "code": 190,
+    "fbtrace_id": "AbCdEfGh"
+   }
+  }
+ }
+}

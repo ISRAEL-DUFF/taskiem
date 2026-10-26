@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/api/accounts/2560636000000008002/messages",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "fromAddress": "orders@adacakes.ng",
+   "toAddress": "ada@example.com",
+   "subject": "Your order",
+   "content": "x",
+   "mailFormat": "plaintext"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": {
+    "code": 400,
+    "description": "Invalid Input"
+   },
+   "data": {
+    "errorCode": "INVALID_DATA",
+    "moreInfo": "fromAddress is not a valid address"
+   }
+  }
+ }
+}

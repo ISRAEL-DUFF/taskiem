@@ -428,6 +428,26 @@
       "text": "A n se ayewo ibeere yin {reference}. A o je ki e mo.",
       "reviewed": false
     },
+    "slack.link.button": {
+      "text": "Jẹ́rìí",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Ṣé àkáǹtì Slack yín nìyí? Ẹ tẹ Jẹ́rìí láti máa gba àwọn ìfọwọ́sí tí ẹ ń pinnu lórí Taskiem níbí, nínú Slack. Tí kì í ṣe ẹ̀yin lẹ béèrè, ẹ fi sílẹ̀.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "A ti so ó pọ̀. Àwọn ìfọwọ́sí tó ń dúró dè yín yóò máa wá síbí.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Ìsopọ̀ yìí kò wúlò mọ́. Ẹ béèrè tuntun lórí àkọsílẹ̀ Taskiem yín.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "A kò so àkáǹtì Slack yìí mọ́ yín lórí Taskiem, nítorí náà kò lè pinnu èyí. Ẹ so ó pọ̀ láti àkọsílẹ̀ Taskiem yín.",
+      "reviewed": false
+    },
     "tg.button_expired": {
       "text": "Bọ́tìnnì yẹn ti parí àkókò. Fi *approvals* ránṣẹ́ láti gba àwọn ìfọwọ́sí rẹ tí ó ṣí sílẹ̀ padà.",
       "reviewed": false

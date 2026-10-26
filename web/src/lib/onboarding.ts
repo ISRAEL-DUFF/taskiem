@@ -87,16 +87,18 @@ export const STARTERS = [
 ];
 
 export function starterTemplates(list: Template[], connected: string[] = []): Template[] {
-  // A template around a product (Payrolla) is for businesses that
-  // connected it, and comes first for them.
+  // A template around a product (Payrolla), or working with a service a
+  // business connects (Slack, QuickBooks or Zoho Books, Mailchimp), is
+  // for businesses that connected it, and comes first for them.
+  const services = (t: Template) => t.services ?? [];
   const rank = (t: Template) => {
-    if (t.product) return -1;
+    if (t.product || services(t).length > 0) return -1;
     const i = STARTERS.indexOf(t.id);
     if (i >= 0) return i;
     return STARTERS.length + t.connectors.length + (t.needs_developer ? 100 : 0);
   };
   return [...list]
-    .filter((t) => t.available && (!t.product || connected.includes(t.product)))
+    .filter((t) => t.available && (!t.product || connected.includes(t.product)) && services(t).every((s) => s.some((c) => connected.includes(c))))
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title));
 }
 

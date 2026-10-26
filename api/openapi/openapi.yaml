@@ -55,6 +55,9 @@ tags:
 - name: Telegram
   description: Linking people to the platform's Telegram bot.
   x-taskiem-guide: telegram
+- name: Slack
+  description: Linking members to their Slack user, for approvals in the business's workspace.
+  x-taskiem-guide: integrations/slack
 - name: Notifications
   description: What each person needs to know, for the web app's bell, and how they hear beyond it.
   x-taskiem-guide: alerts
@@ -10611,6 +10614,206 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/slack:
+    get:
+      operationId: getSlack
+      tags:
+      - Slack
+      summary: Get the caller's Slack link in this business
+      description: Approvals in Slack (decision 0051) come to a member's Slack user in the business's own workspace.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackLink'
+        '403':
+          description: An API key has no Slack account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startSlackLink
+      tags:
+      - Slack
+      summary: Link the caller's Slack user
+      description: Finds the caller in the business's connected Slack workspace by their email and sends them a Confirm button
+        there; the link holds once they press it. Takes the same proof as adding a passkey.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactorProof'
+        required: true
+      responses:
+        '201':
+          description: The Confirm button was sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackLink'
+        '403':
+          description: An API key, or the proof is missing or wrong (`reauth`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slack approvals are not set up, Slack is not connected, or no one in the workspace has the caller's email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many links asked for.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unlinkSlack
+      tags:
+      - Slack
+      summary: Unlink Slack in this business
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connections/choices:
+    get:
+      operationId: listConnectionChoices
+      tags:
+      - Connectors
+      summary: List what a connector's picker offers on a connection
+      description: |
+        For a template parameter with picker choice: runs the connector's picker (its manifest's pickers, a read action) on the
+        connection and answers each choice's id (the parameter's value) and label (what the person reads): a Mailchimp audience,
+        for example. 409 when there is no such active connection, or the provider did not answer.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connector
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The connector's id (mailchimp).
+      - name: picker
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The picker's name (audiences).
+      - name: connection
+        in: query
+        schema:
+          type: string
+        description: The connection's name; main when left out.
+      - name: environment
+        in: query
+        schema:
+          type: string
+        description: Defaults to prod.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - choices
+                properties:
+                  choices:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, label]
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/slack/channels:
+    get:
+      operationId: listSlackChannels
+      tags:
+      - Slack
+      summary: List a Slack connection's channels
+      description: The public and private channels a production Slack connection's bot can see, for choosing where a template
+        posts.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+        description: The Slack connection's name; main when left out.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - channels
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        is_private:
+                          type: boolean
+                        is_member:
+                          type: boolean
+        '409':
+          description: No such Slack connection, or Slack refused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/whatsapp:
@@ -22058,8 +22261,13 @@ components:
     AlertChannelConfig:
       type: object
       description: 'What the channel sends to: `to` for email; `url` for a webhook; `members` and `emails` for WhatsApp
-        and Telegram; nothing for Slack (its webhook URL is kept in the vault).'
+        and Telegram; for Slack, `connection` and `channel` when made from the Slack connection, else nothing (its webhook
+        URL is kept in the vault).'
       properties:
+        connection:
+          type: string
+        channel:
+          type: string
         to:
           type: array
           items:
@@ -23589,6 +23797,12 @@ components:
         url:
           type: string
           description: A Slack incoming webhook (`https://hooks.slack.com/services/…`), or an https webhook URL.
+        connection:
+          type: string
+          description: 'Slack, instead of `url`: the production Slack connection whose bot posts the alerts.'
+        channel:
+          type: string
+          description: 'Slack, with `connection`: the channel to post in (its id, `C…`).'
       additionalProperties: false
     AlertChannelCreated:
       type: object
@@ -25302,6 +25516,11 @@ components:
         oauth_linkable:
           type: boolean
           description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
+        oauth_modes:
+          type: array
+          items:
+            type: string
+          description: For a connector whose modes are hosts, the modes it can be connected in by OAuth on this platform.
         capabilities:
           type: array
           items:
@@ -25492,11 +25711,14 @@ components:
           description: For a connection parameter instead of connector, the capabilities its rail must have (pay_bank); any rail that can is offered, and an empty value is the only one that can.
         picker:
           type: string
-          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language]
+          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language, slack_channel, choice]
           description: How the value is chosen instead of typed.
         from:
           type: string
-          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template).
+          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template, a choice's connection).
+        choices:
+          type: string
+          description: With picker choice, the connector's picker it lists from (mailchimp:audiences), through GET /v1/connections/choices.
       additionalProperties: false
     TemplateNeed:
       type: object
@@ -25587,6 +25809,13 @@ components:
         product:
           type: string
           description: The product the template works around (payrolla); the Start page offers it to organisations that connected the product, and retrieval only for goals that name it.
+        services:
+          type: array
+          description: The services the template works with that an organisation connects, each the connectors that serve it, any one of which will do (the books are QuickBooks or Zoho Books); the Start page offers the template, first, once each is connected.
+          items:
+            type: array
+            items:
+              type: string
         callable:
           type: object
           description: For a template another workflow can use as a step (decision 0047), its interface.
@@ -26295,6 +26524,10 @@ components:
         name:
           type: string
           description: Defaults to `default`.
+        mode:
+          type: string
+          description: Live or test, for a connector whose modes are hosts (QuickBooks' sandbox companies; connector/v1 rule 20). The
+            connection is made in it, through that mode's OAuth client; one of the connector's `oauth_modes`.
       additionalProperties: false
     OAuthStarted:
       type: object
@@ -29199,6 +29432,28 @@ components:
         flows:
           type: boolean
           description: Whether WhatsApp forms are available.
+      additionalProperties: false
+    SlackLink:
+      type: object
+      required:
+      - enabled
+      - linked
+      - pending
+      properties:
+        enabled:
+          type: boolean
+          description: Taskiem's Slack app is set up here.
+        linked:
+          type: boolean
+        pending:
+          type: boolean
+          description: A Confirm button was sent and not pressed yet.
+        workspace:
+          type: string
+          description: The Slack workspace's id.
+        verified_at:
+          type: string
+          format: date-time
       additionalProperties: false
     TelegramLink:
       type: object

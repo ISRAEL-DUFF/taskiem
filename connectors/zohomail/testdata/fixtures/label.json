@@ -1,0 +1,27 @@
+{
+ "request": {
+  "method": "PUT",
+  "path": "/api/accounts/2560636000000008002/updatemessage",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "mode": "applyLabel",
+   "messageId": [
+    "1761480000000100001"
+   ],
+   "labelId": [
+    "2560636000000008200"
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   }
+  }
+ }
+}

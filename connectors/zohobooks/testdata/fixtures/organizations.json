@@ -1,0 +1,39 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/organizations",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "organizations": [
+    {
+     "organization_id": "10234695",
+     "name": "Ada Foods Ltd",
+     "currency_code": "NGN",
+     "country": "Nigeria",
+     "is_default_org": true,
+     "contact_name": "Ada",
+     "email": "ada@example.com"
+    },
+    {
+     "organization_id": "10234700",
+     "name": "Ada Catering",
+     "currency_code": "NGN",
+     "country": "Nigeria",
+     "is_default_org": false
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

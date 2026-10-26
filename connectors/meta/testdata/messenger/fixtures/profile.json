@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/6789012345678901",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "fields": "first_name,last_name,profile_pic"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "first_name": "Adaeze",
+   "last_name": "Okafor",
+   "profile_pic": "https://platform-lookaside.example/p.jpg",
+   "id": "6789012345678901"
+  }
+ }
+}

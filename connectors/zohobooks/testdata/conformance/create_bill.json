@@ -1,0 +1,38 @@
+{
+ "action": "create_bill",
+ "input": {
+  "vendor_id": "460000000026101",
+  "bill_number": "LPS-0918",
+  "date": "2026-10-25",
+  "due_date": "2026-11-25",
+  "lines": [
+   {
+    "account_id": "460000000000420",
+    "amount_kobo": 8600000,
+    "description": "A4 paper, 40 reams"
+   }
+  ]
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "bill_by_number_none",
+  "bill_create"
+ ],
+ "expect": {
+  "output": {
+   "bill_id": "460000000030001",
+   "created": true,
+   "total_kobo": 8600000,
+   "balance_kobo": 8600000
+  }
+ }
+}

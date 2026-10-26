@@ -1,0 +1,14 @@
+{
+ "action": "get_account",
+ "input": {},
+ "credentials": {
+  "access_token": "mctestoauthtoken",
+  "account_name": "Ada Cakes"
+ },
+ "exchanges": [
+  "root_401"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}

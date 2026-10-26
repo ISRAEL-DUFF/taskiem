@@ -1,0 +1,35 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM Bill WHERE DocNumber = 'LPS-0918'"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "Bill": [
+     {
+      "Id": "199",
+      "DocNumber": "LPS-0918",
+      "VendorRef": {
+       "value": "12"
+      },
+      "TotalAmt": 86000.0,
+      "Balance": 86000.0,
+      "DueDate": "2026-11-25"
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 1
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/104123456789012/conversations",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "platform": "messenger",
+   "user_id": "6789012345678901",
+   "fields": "messages.limit(20){id,created_time,from,message}"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": [
+    {
+     "id": "t_100",
+     "messages": {
+      "data": [
+       {
+        "id": "m_3",
+        "created_time": "2026-10-26T11:58:00+0000",
+        "from": {
+         "id": "104123456789012"
+        },
+        "message": "We have it in blue."
+       },
+       {
+        "id": "m_2",
+        "created_time": "2026-10-24T09:00:00+0000",
+        "from": {
+         "id": "6789012345678901"
+        },
+        "message": "Do you have it in blue?"
+       },
+       {
+        "id": "m_1",
+        "created_time": "2026-10-20T08:00:00+0000",
+        "from": {
+         "id": "6789012345678901"
+        },
+        "message": "Hello"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

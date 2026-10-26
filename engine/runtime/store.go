@@ -105,6 +105,10 @@ type StartRequest struct {
 	// Parent makes the run a child of a subflow step (subflows.go): it is
 	// started in the parent's transaction with the parent's seed.
 	Parent *ParentRun
+	// TriggerPII are personal fields of the trigger the workflow's inputs
+	// schema does not name, as paths under it (a connector trigger's
+	// declared pii: a message's sender and text), sealed with the rest.
+	TriggerPII []pii.Path
 }
 
 // ParentRun is the subflow step a child run was started by.
@@ -279,6 +283,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		paths := triggerPaths(def)
+		for _, p := range req.TriggerPII {
+			paths = append(paths, pii.Path{Segments: append([]string{"trigger"}, p.Segments...), Category: p.Category})
+		}
 		if def.HasCallbacks() {
 			// Callback steps' addresses: their key is sealed in history
 			// like personal data, so run.read never shows it.

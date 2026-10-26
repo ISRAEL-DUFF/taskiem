@@ -65,7 +65,7 @@ func railOf(c Connection, uses string, reg connector.Lookup) (Rail, bool) {
 	var best *connector.Connector
 	major := 0
 	for _, k := range reg.List() {
-		if k.Manifest.ID != c.Connector || k.Manifest.KindOf() != "rail" {
+		if k.Manifest.ID != c.Connector {
 			continue
 		}
 		if !declares(k.Manifest, uses) {
@@ -126,7 +126,7 @@ func cannot(c Connection, uses string, reg connector.Lookup) error {
 func suggest(uses string, reg connector.Lookup) string {
 	var names []string
 	for _, k := range reg.List() {
-		if k.Manifest.KindOf() == "rail" && declares(k.Manifest, uses) && !slices.Contains(names, k.Manifest.Name) {
+		if declares(k.Manifest, uses) && !slices.Contains(names, k.Manifest.Name) {
 			names = append(names, k.Manifest.Name)
 		}
 	}

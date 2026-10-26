@@ -1,0 +1,13 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/campaigns/42694e9e57/actions/send",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  }
+ },
+ "response": {
+  "status": 204,
+  "body": null
+ }
+}

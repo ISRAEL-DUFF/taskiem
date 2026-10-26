@@ -1,0 +1,17 @@
+{
+ "action": "create_or_update_contact",
+ "input": {
+  "email": "bola@example.com"
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "contact_plain"
+ ],
+ "expect": {
+  "output": {
+   "contact_id": "22"
+  }
+ }
+}

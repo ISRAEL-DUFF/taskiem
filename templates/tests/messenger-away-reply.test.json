@@ -1,0 +1,121 @@
+{
+  "schema": "wd-test/v1",
+  "template": "messenger-away-reply",
+  "params": {
+    "opens": "08:00",
+    "closes": "18:00",
+    "reply": "Thanks for your message! We are closed now and will reply when we open at 8am."
+  },
+  "cases": [
+    {
+      "name": "a message after closing is answered with the reply",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "account": "104123456789012",
+          "sender_id": "6789012345678901",
+          "event": {
+            "sender": {
+              "id": "6789012345678901"
+            },
+            "recipient": {
+              "id": "104123456789012"
+            },
+            "timestamp": 1793046600000,
+            "message": {
+              "mid": "m_1",
+              "text": "Do you deliver to Lekki?"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "reply": {
+          "output": {
+            "message_id": "m_r",
+            "recipient_id": "6789012345678901",
+            "window_ends_at": "2026-10-27T20:30:00Z"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "reply": "completed"
+        },
+        "inputs": {
+          "reply": {
+            "recipient_id": "6789012345678901",
+            "text": "Thanks for your message! We are closed now and will reply when we open at 8am."
+          }
+        }
+      }
+    },
+    {
+      "name": "a message before opening is answered too",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "account": "104123456789012",
+          "sender_id": "6789012345678901",
+          "event": {
+            "sender": {
+              "id": "6789012345678901"
+            },
+            "recipient": {
+              "id": "104123456789012"
+            },
+            "timestamp": 1793084340000,
+            "message": {
+              "mid": "m_1",
+              "text": "Do you deliver to Lekki?"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "reply": {
+          "output": {
+            "message_id": "m_r",
+            "recipient_id": "6789012345678901"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "reply": "completed"
+        }
+      }
+    },
+    {
+      "name": "inside opening hours nothing is sent",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "account": "104123456789012",
+          "sender_id": "6789012345678901",
+          "event": {
+            "sender": {
+              "id": "6789012345678901"
+            },
+            "recipient": {
+              "id": "104123456789012"
+            },
+            "timestamp": 1793012400000,
+            "message": {
+              "mid": "m_1",
+              "text": "Do you deliver to Lekki?"
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "reply": "skipped"
+        }
+      }
+    }
+  ]
+}

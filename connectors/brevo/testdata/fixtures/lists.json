@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/contacts/lists",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "query": {
+   "limit": "50",
+   "offset": "0"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "lists": [
+    {
+     "id": 3,
+     "name": "Newsletter",
+     "totalBlacklisted": 0,
+     "totalSubscribers": 120,
+     "uniqueSubscribers": 118,
+     "folderId": 1
+    }
+   ],
+   "count": 1
+  }
+ }
+}

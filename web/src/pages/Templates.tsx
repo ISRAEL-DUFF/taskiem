@@ -9,7 +9,7 @@ import { Icon } from "../icons";
 import { RolePicker } from "../forms/RolePicker";
 import { ConnectionPicker, RailPicker } from "../forms/ConnectionPicker";
 import { SheetChooser } from "../forms/SheetChooser";
-import { ColumnPicker, LanguagePicker, TabPicker, TablePicker, WhatsAppTemplatePicker } from "../forms/Pickers";
+import { ChoicePicker, ColumnPicker, LanguagePicker, SlackChannelPicker, TabPicker, TablePicker, WhatsAppTemplatePicker } from "../forms/Pickers";
 
 // The SME template library (docs/templates.md): browse ready workflows,
 // read their steps in plain words, and create a draft from one by filling
@@ -288,6 +288,10 @@ export function ParamField({
     }
     case "whatsapp_language":
       return picked(<LanguagePicker label={label} value={value} onChange={onChange} />);
+    case "slack_channel":
+      return picked(<SlackChannelPicker label={label} connection={from} value={value} onChange={onChange} />);
+    case "choice":
+      return picked(<ChoicePicker label={label} choices={p.choices ?? ""} connection={from} value={value} onChange={onChange} />);
   }
   // A spreadsheet is chosen by its link, never an id.
   if (p.picker === "sheet" || p.name === "spreadsheet_id" || p.name.endsWith("_spreadsheet_id")) {

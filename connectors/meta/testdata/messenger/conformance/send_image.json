@@ -1,0 +1,21 @@
+{
+ "action": "send_message",
+ "input": {
+  "recipient_id": "6789012345678901",
+  "attachment_url": "https://shop.example/blue.jpg"
+ },
+ "credentials": {
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "conversation_open",
+  "send_image"
+ ],
+ "expect": {
+  "output": {
+   "message_id": "m_img"
+  }
+ }
+}

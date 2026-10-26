@@ -1,0 +1,75 @@
+{
+  "id": "slack-paid-invoices",
+  "title": "Post paid invoices in Slack",
+  "summary": "When an invoice is paid in full, post its number and amount in a Slack channel.",
+  "description": "Whenever one of your invoices is paid in full, posts its number and amount in the Slack channel you choose, so whoever ships or delivers knows at once. The customer's own receipt is a separate template.",
+  "category": "invoices",
+  "tags": [
+    "invoices",
+    "slack"
+  ],
+  "keywords": [
+    "slack",
+    "channel",
+    "invoice",
+    "paid"
+  ],
+  "requires": [
+    "slack"
+  ],
+  "connectors": [
+    "slack@1"
+  ],
+  "params": [
+    {
+      "name": "slack_connection",
+      "type": "connection",
+      "connector": "slack",
+      "title": "Slack connection",
+      "description": "Your Slack workspace, connected with Add to Slack.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "title": "Slack channel",
+      "description": "Where the message is posted. For a private channel, invite the Taskiem app to it first.",
+      "required": true,
+      "example": "C0123456789",
+      "pattern": "^[CG][A-Z0-9]{2,24}$",
+      "picker": "slack_channel",
+      "from": "slack_connection"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_slackPaidInvoices",
+    "version": 1,
+    "name": "Post paid invoices in Slack",
+    "trigger": {
+      "type": "invoice",
+      "config": {
+        "event": "paid"
+      }
+    },
+    "steps": [
+      {
+        "id": "post",
+        "type": "connector",
+        "name": "Post it in Slack",
+        "connector": "slack@1",
+        "action": "post_message",
+        "connection": "{{slack_connection}}",
+        "input": {
+          "channel": "{{channel}}",
+          "text": "='Invoice ' + trigger.body.number + ' (' + trigger.body.amount + ') is paid in full.'"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

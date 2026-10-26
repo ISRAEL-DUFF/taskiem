@@ -1,0 +1,323 @@
+# Zoho Mail, connected through Taskiem's Zoho client (K6 of
+# docs/spec/business-connectors.md; decision 0051): one mailbox per
+# connection, in the account's own data centre. Built from Zoho's public
+# developer documentation, read 26 October 2026:
+#   https://www.zoho.com/mail/help/api/ (the index)
+#   https://www.zoho.com/mail/help/api/get-all-users-accounts.html
+#   https://www.zoho.com/mail/help/api/post-send-an-email.html (and
+#     post-reply-to-an-email.html)
+#   https://www.zoho.com/mail/help/api/get-emails-list.html (and
+#     get-search-emails.html, get-email-content.html, get-email-meta-data.html)
+#   https://www.zoho.com/mail/help/api/put-mark-email-as-read.html (and the
+#     other updatemessage modes)
+#   https://www.zoho.com/mail/help/api/get-all-folder-details.html
+#   https://www.zoho.com/mail/help/api/get-all-label-details.html
+# See docs/integrations/zoho-mail.md.
+manifest: connector/v1
+id: zoho_mail
+version: 1.0.0
+name: Zoho Mail
+description: Send, reply to, read, search, label and file email in a Zoho Mail mailbox, and start workflows when mail arrives.
+category: productivity
+auth:
+  type: oauth2
+  fields:
+    - { key: refresh_token, label: Refresh token, secret: true }
+    - { key: client_id, label: Zoho client id (Taskiem's) }
+    - { key: client_secret, label: Zoho client secret (Taskiem's), secret: true }
+    - { key: accounts_server, label: Zoho accounts server (filled when you connect) }
+    - { key: api_domain, label: Zoho API domain (filled when you connect), required: false }
+    - { key: location, label: Zoho data centre, required: false }
+    # The mailbox, chosen when connecting (Link): the user's Zoho account
+    # (not an IMAP account it reads), and where its data centre serves Mail.
+    - { key: account_id, label: Mail account ID }
+    - { key: email_address, label: Mailbox }
+    - { key: mail_server, label: Zoho Mail server }
+    - { key: access_token, label: Access token (kept by Taskiem), secret: true, required: false }
+    - { key: access_expires_at, label: Access token expiry (kept by Taskiem), required: false }
+  # One click through Taskiem's Zoho client (client zoho, shared with Books
+  # and CRM), in the account's data centre (rule 19). The mailbox is chosen
+  # before the connection is saved (rule 21).
+  oauth2:
+    authorize_url: https://accounts.zoho.com/oauth/v2/auth
+    token_url: "${connection.accounts_server}/oauth/v2/token"
+    revoke_url: "${connection.accounts_server}/oauth/v2/token/revoke"
+    scopes: [ZohoMail.accounts.READ, ZohoMail.messages.ALL, ZohoMail.folders.READ, ZohoMail.tags.READ]
+    scope_separator: ","
+    pkce: true
+    client: zoho
+    authorize_params: { access_type: offline, prompt: consent }
+    fields_from_callback: { accounts_server: accounts-server, location: location }
+    fields_from_token: { refresh_token: refresh_token, api_domain: api_domain }
+    platform_client_fields: { client_id: id, client_secret: secret }
+    linked_fields: [account_id, email_address, mail_server, access_token, access_expires_at]
+  test: { action: get_account }
+connection_hosts:
+  - "*.zoho.com"
+  - "*.zoho.eu"
+  - "*.zoho.in"
+  - "*.zoho.com.au"
+  - "*.zoho.jp"
+  - "*.zoho.ca"
+  - "*.zohocloud.ca"
+  - "*.zoho.com.cn"
+  - "*.zoho.sa"
+  - "*.zoho.ae"
+  - "*.zohoapis.com"
+  - "*.zohoapis.eu"
+  - "*.zohoapis.in"
+  - "*.zohoapis.com.au"
+  - "*.zohoapis.jp"
+  - "*.zohoapis.ca"
+  - "*.zohoapis.com.cn"
+  - "*.zohoapis.sa"
+  - "*.zohoapis.ae"
+egress_hosts: ["${connection.mail_server}", "${connection.accounts_server}"]
+base_url: https://mail.zoho.com
+actions:
+  get_account:
+    title: Get the mailbox
+    description: The connected mailbox. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        account_id:    { type: string }
+        email_address: { type: string }
+        display_name:  { type: string }
+  send_message:
+    title: Send an email
+    description: >-
+      From the mailbox (or one of its aliases). Zoho Mail has no idempotency
+      key, so a send whose outcome is unknown (a dropped connection, a 5xx)
+      is parked for a person rather than sent twice.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [to, subject]
+      properties:
+        to:      { type: array, minItems: 1, items: { type: string } }
+        cc:      { type: array, items: { type: string } }
+        bcc:     { type: array, items: { type: string } }
+        from:    { type: string, description: The mailbox (the default) or one of its aliases }
+        subject: { type: string }
+        text:    { type: string, description: Plain-text body }
+        html:    { type: string, description: HTML body; takes the place of text }
+    output:
+      type: object
+      properties:
+        message_id: { type: string }
+    pii:
+      - { field: to, category: email }
+      - { field: cc, category: email }
+      - { field: bcc, category: email }
+      - { field: from, category: email }
+      - { field: subject, category: other }
+      - { field: text, category: other }
+      - { field: html, category: other }
+  reply:
+    title: Reply to an email
+    description: >-
+      A reply (or reply to all) in the email's thread, from the mailbox. Not
+      idempotent: an unknown outcome is parked for a person.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [message_id, to]
+      properties:
+        message_id: { type: string, description: The email replied to }
+        to:         { type: array, minItems: 1, items: { type: string } }
+        cc:         { type: array, items: { type: string } }
+        subject:    { type: string, description: "Default: Re: and the email's subject" }
+        text:       { type: string }
+        html:       { type: string }
+        all:        { type: boolean, default: false, description: Reply to all }
+    output:
+      type: object
+      properties:
+        message_id: { type: string }
+    pii:
+      - { field: to, category: email }
+      - { field: cc, category: email }
+      - { field: subject, category: other }
+      - { field: text, category: other }
+      - { field: html, category: other }
+  list_messages:
+    title: List emails
+    description: The emails in a folder (the inbox by default), newest first, at most limit (200).
+    class: read
+    input:
+      type: object
+      properties:
+        folder_id: { type: string, description: As list_folders lists it; default the inbox }
+        status:    { enum: [all, read, unread], default: all }
+        label_id:  { type: string }
+        limit:     { type: integer, minimum: 1, maximum: 200, default: 50 }
+    output:
+      type: object
+      properties:
+        messages: &messages
+          type: array
+          items:
+            type: object
+            properties:
+              message_id:     { type: string }
+              folder_id:      { type: string }
+              thread_id:      { type: string }
+              subject:        { type: string }
+              from:           { type: string }
+              to:             { type: string }
+              summary:        { type: string }
+              received_at:    { type: string }
+              unread:         { type: boolean }
+              has_attachment: { type: boolean }
+    pii:
+      - { field: output.messages.*.subject, category: other }
+      - { field: output.messages.*.from, category: email }
+      - { field: output.messages.*.to, category: email }
+      - { field: output.messages.*.summary, category: other }
+  search_messages:
+    title: Search emails
+    description: "Zoho Mail's search (search_key, as in the web app: subject:invoice, sender:ada@example.com, has:attachment), newest first."
+    class: read
+    input:
+      type: object
+      required: [search_key]
+      properties:
+        search_key: { type: string, minLength: 1 }
+        limit:      { type: integer, minimum: 1, maximum: 200, default: 50 }
+    output:
+      type: object
+      properties:
+        messages: *messages
+    pii:
+      - { field: search_key, category: other }
+      - { field: output.messages.*.subject, category: other }
+      - { field: output.messages.*.from, category: email }
+      - { field: output.messages.*.to, category: email }
+      - { field: output.messages.*.summary, category: other }
+  get_message:
+    title: Read an email
+    description: An email's headers and its content (HTML as Zoho keeps it, and as text).
+    class: read
+    input:
+      type: object
+      required: [folder_id, message_id]
+      properties:
+        folder_id:  { type: string }
+        message_id: { type: string }
+    output:
+      type: object
+      properties:
+        message_id:  { type: string }
+        subject:     { type: string }
+        from:        { type: string }
+        to:          { type: string }
+        cc:          { type: string }
+        received_at: { type: string }
+        html:        { type: string }
+        text:        { type: string }
+    pii:
+      - { field: output.subject, category: other }
+      - { field: output.from, category: email }
+      - { field: output.to, category: email }
+      - { field: output.cc, category: email }
+      - { field: output.html, category: other }
+      - { field: output.text, category: other }
+  update_message:
+    title: Mark, file or label an email
+    description: >-
+      Marks emails read or unread, moves them to a folder, or adds or removes
+      a label. Doing it twice leaves them the same; request_key is the
+      engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [message_ids, change]
+      properties:
+        message_ids: { type: array, minItems: 1, items: { type: string } }
+        change:      { enum: [mark_read, mark_unread, move, add_label, remove_label] }
+        folder_id:   { type: string, description: "move: the folder" }
+        label_id:    { type: string, description: "add_label, remove_label: the label" }
+        request_key: { type: string, description: Set by the engine; not sent to Zoho }
+    output:
+      type: object
+      properties:
+        updated: { type: integer }
+  list_folders:
+    title: List folders
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        folders:
+          type: array
+          items:
+            type: object
+            properties:
+              folder_id: { type: string }
+              name:      { type: string }
+              path:      { type: string }
+              type:      { type: string, description: Inbox, Sent, Drafts, Spam, Trash, or the business's own }
+  list_labels:
+    title: List labels
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        labels:
+          type: array
+          items:
+            type: object
+            properties:
+              label_id: { type: string }
+              name:     { type: string }
+  new_messages:
+    title: Read new mail
+    description: Emails that arrived in the inbox since a time (at most 200, newest first). What the new_mail trigger polls.
+    class: read
+    input:
+      type: object
+      required: [since]
+      properties:
+        since: { type: string, format: date-time }
+    output:
+      type: object
+      properties:
+        messages: *messages
+    pii:
+      - { field: output.messages.*.subject, category: other }
+      - { field: output.messages.*.from, category: email }
+      - { field: output.messages.*.to, category: email }
+      - { field: output.messages.*.summary, category: other }
+triggers:
+  # Zoho Mail documents no webhook for new mail, so Taskiem asks the
+  # mailbox itself every 5 minutes while a workflow listens. Polled
+  # deliveries are signed with the connection's refresh token, so the
+  # trigger's address takes nothing anyone else sends.
+  new_mail:
+    type: webhook
+    title: New mail in your Zoho mailbox
+    verify: { scheme: hmac_sha256, header: X-Taskiem-Signature, secret_field: refresh_token }
+    events: [message.received]
+    event_type: =body.event
+    dedup: =body.data.message_id
+    # The thread: a run waiting on a reply wakes when one comes.
+    correlation: '=has(body.data.thread_id) && body.data.thread_id != "" ? dyn(body.data.thread_id) : dyn(body.data.message_id)'
+    poll: { action: new_messages, since: since, items: =output.messages, event: '="message.received"', every: 5m }
+    pii:
+      - { field: body.data.subject, category: other }
+      - { field: body.data.from, category: email }
+      - { field: body.data.to, category: email }
+      - { field: body.data.summary, category: other }
+    example:
+      body:
+        event: message.received
+        data: { message_id: "1761480000000100001", folder_id: "2560636000000008014", thread_id: "1761480000000100001", subject: Order for 40 cupcakes, from: ada@example.com, to: orders@adacakes.ng, summary: "Hello, I would like 40 cupcakes for Saturday", received_at: "2026-10-26T12:00:00Z", unread: true, has_attachment: false }

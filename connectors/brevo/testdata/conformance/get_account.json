@@ -1,0 +1,27 @@
+{
+ "action": "get_account",
+ "input": {},
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "account",
+  "domains"
+ ],
+ "expect": {
+  "output": {
+   "email": "owner@adacakes.ng",
+   "company_name": "Ada Cakes",
+   "domains": [
+    {
+     "domain": "adacakes.ng",
+     "authenticated": true
+    },
+    {
+     "domain": "example.ng",
+     "authenticated": false
+    }
+   ]
+  }
+ }
+}
