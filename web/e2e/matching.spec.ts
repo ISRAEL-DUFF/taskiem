@@ -276,6 +276,53 @@ test("money is matched to storefront orders from To match, and undone on the ord
   await expect(cards.filter({ hasText: `TRF ${suggested}` })).toHaveCount(1);
 });
 
+test("a payment with nothing suggested is split by hand across invoices, the rest left to match", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  const tenant = sql("SELECT id FROM tenants WHERE name = 'E2E'");
+  const a = await sentInvoice(page, "Chidi Okafor");
+  const b = await sentInvoice(page, "Chidi Okafor");
+  // ₦40,000 in with nothing to suggest.
+  const entry = randomUUID();
+  sql(
+    `INSERT INTO money_entries (id, tenant_id, entry_key, occurred_at, direction, kind, amount_kobo, status, channel, reference, source, mirrored_at)
+       VALUES ('${entry}', '${tenant}', 'paystack/main|e2e|E2E-HAND-1', now(), 'in', 'account_credit', 4000000, 'settled', 'paystack/main', 'E2E-HAND-1', 'event', now());
+     INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ('${entry}', '${tenant}', 'unmatched');`,
+  );
+
+  await page.goto("/invoices/match");
+  const card = page.getByTestId("waiting-payment").filter({ hasText: "E2E-HAND-1" });
+  await card.getByText(/^Match to another invoice/).click();
+  await card.getByText("Split by hand across several…").click();
+  const hand = card.getByTestId("hand-split");
+  await expect(hand.getByTestId("hand-rest")).toHaveText("₦40,000 left to match afterwards.");
+  // Nothing picked, then too much, are refused before anything is sent.
+  await hand.getByRole("button", { name: "Match these parts" }).click();
+  await expect(hand.getByRole("alert")).toHaveText("Tick the invoices or orders this payment is for.");
+  await hand.getByLabel(new RegExp(`^${a.number} `)).check();
+  await hand.getByLabel(new RegExp(`^${b.number} `)).check();
+  await hand.getByLabel(`Part for ${a.number}`).fill("25000");
+  await hand.getByLabel(`Part for ${b.number}`).fill("20000");
+  await expect(hand.getByTestId("hand-rest")).toHaveText("All of the payment counts towards these.");
+  await hand.getByRole("button", { name: "Match these parts" }).click();
+  await expect(hand.getByRole("alert")).toHaveText("The parts add up to ₦45,000, more than the ₦40,000 left of this payment.");
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    const vs = await axe(page);
+    expect(vs, describe(`/invoices/match splitting by hand (${scheme})`, vs)).toEqual([]);
+  }
+  await hand.getByLabel(`Part for ${b.number}`).fill("10000");
+  await expect(hand.getByTestId("hand-rest")).toHaveText("₦5,000 left to match afterwards.");
+  await hand.getByRole("button", { name: "Match these parts" }).click();
+  // The parts in the picker's order (newest invoice first), the rest left.
+  await expect(page.getByTestId("match-status")).toContainText(`Matched in parts: ${b.number} ₦10,000, ${a.number} ₦25,000. ₦5,000 is left to match.`);
+  // The rest waits on the same card; each part is on its invoice.
+  await expect(card.getByTestId("left-to-match")).toHaveText("₦5,000 of it is left to match; the rest counts towards other invoices or orders.");
+  expect(sql(`SELECT count(*) FROM customer_invoice_payments WHERE entry_id = '${entry}' AND undoes IS NULL`)).toBe("2");
+  expect(sql(`SELECT status || ' ' || paid_kobo FROM customer_invoices WHERE id = '${a.id}'`)).toBe("paid 2500000");
+  expect(sql(`SELECT status || ' ' || paid_kobo FROM customer_invoices WHERE id = '${b.id}'`)).toBe("part_paid 1000000");
+});
+
 test("a payment is split across a customer's invoices, held money says why, and a remembered payer is forgotten", async ({ page }) => {
   test.setTimeout(120_000);
   await signIn(page);
@@ -320,8 +367,9 @@ test("a payment is split across a customer's invoices, held money says why, and 
   await split.getByLabel(`${b.number} (₦25,000 due)`).fill("20000");
   await expect(split.getByLabel(/Keep the rest as the customer's credit/)).toBeChecked();
   await split.getByRole("button", { name: "Match in parts" }).click();
+  // The suggested invoice's part first, as offered.
   await expect(page.getByTestId("match-status")).toContainText(
-    `Matched in parts: ${a.number} ₦25,000, ${b.number} ₦20,000. ₦15,000 is the customer's credit, counted towards their next invoice.`,
+    `Matched in parts: ${b.number} ₦20,000, ${a.number} ₦25,000. ₦15,000 is the customer's credit, counted towards their next invoice.`,
   );
   await expect(card).toHaveCount(0);
 

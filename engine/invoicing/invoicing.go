@@ -191,6 +191,9 @@ type Invoices struct {
 	// Rails issues accounts and links and looks payments up (T4); nil:
 	// invoices take no payments on their page.
 	Rails Rails
+	// AccountRails issue customers' permanent account numbers
+	// (virtual_account, issue.go); nil: Rails, when it can.
+	AccountRails CapabilityRails
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)
@@ -961,13 +964,17 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 type PaymentIn struct {
 	AmountKobo int64
 	PaymentID  string // the rail's payment id, or the money log's entry
-	// EntryID is the money log entry the payment counts (T5): one entry
-	// counts towards one invoice at a time.
+	// EntryID is the money log entry the payment counts (T5): a part of
+	// it, counted towards the invoice once unless Add.
 	EntryID    *uuid.UUID
 	Connection string
 	How        string // exact, suggested, suggested_auto or manual
 	By         string
 	Reasons    []string
+	// Add is a further part of the entry towards an invoice it already
+	// counts towards (a person splitting again): added to the first, a
+	// row of its own (moneylog.Counting.Add).
+	Add bool
 }
 
 // Counted is what counting a payment towards an invoice did. Pass the
@@ -989,7 +996,8 @@ func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 }
 
 // CountPayment counts a payment towards an invoice, once: the same
-// payment again is a no-op. Matching (T5) and one-time accounts (T4) call
+// payment again is a no-op, unless a further part of its entry is meant
+// (Add). Matching (T5) and one-time accounts (T4) call
 // it; nothing else marks an invoice paid. A payment with a money log
 // entry is a part of it, counted along the path orders take too
 // (moneylog.Parts.Count). When the invoice becomes paid, the runs of the
@@ -1017,16 +1025,20 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	// each part once, the parts never more than the entry counts for:
 	// checked under the entry's lock, and by the database whoever writes
 	// (00210).
-	k, err := moneylog.InvoiceParts.Count(ctx, tx, moneylog.Counting{Tenant: tenant, Entry: p.EntryID, AmountKobo: p.AmountKobo, How: p.How, By: p.By, Reasons: p.Reasons,
+	add := p.Add && p.EntryID != nil
+	k, err := moneylog.InvoiceParts.Count(ctx, tx, moneylog.Counting{Tenant: tenant, Entry: p.EntryID, AmountKobo: p.AmountKobo, How: p.How, By: p.By, Reasons: p.Reasons, Add: add,
 		Open:    func() (uuid.UUID, error) { return cur.ID, nil },
 		Refused: func(why string) error { return fmt.Errorf("%w: %s", ErrState, why) },
 		Decide: func() (moneylog.Cols, bool, error) {
 			// The same payment counts towards an invoice once while it
-			// is not undone.
+			// is not undone; a further part of an entry adds to it.
 			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem invoice payment ' || $1::text || ' ' || $2, 0))`, cur.ID, p.PaymentID); err != nil {
 				return nil, false, err
 			}
 			var counted bool
+			if add {
+				return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
+			}
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
 				AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil || counted {
 				return nil, false, err

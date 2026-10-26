@@ -1,4 +1,4 @@
-package schools
+package invoicing
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 
 // The account name: the school's name shortens word by word, then is cut;
 // the child's never shortens unless it alone does not fit, and then it is
-// flagged (docs/spec/schools.md 6.3).
+// flagged (docs/spec/schools.md 6.3; lifted from engine/schools).
 func TestAccountName(t *testing.T) {
 	for _, c := range []struct {
 		school, child string

@@ -34,6 +34,8 @@ func (s *Server) matchingRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Delete("/money/payers/{id}", s.forgetPayer)
 	r.With(read).Get("/invoices/{id}/customer", s.getInvoiceCustomer)
 	r.With(manage, s.tenantWide).Post("/customer-accounts", s.registerCustomerAccount)
+	r.With(manage).Get("/customer-accounts/issuers", s.listAccountIssuers)
+	r.With(manage, s.tenantWide).Post("/invoices/{id}/customer-accounts", s.giveInvoiceCustomerAccount)
 }
 
 // matcher is Server.Matcher, or one made from Invoices and Orders, asking
@@ -91,7 +93,8 @@ func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {
 		}
 		// Who each is from: the invoice's or order's customer; and, for an
 		// invoice, how the payment could be split across its customer's
-		// open invoices when it is more than is due.
+		// open invoices (the suggested one first) when there is more than
+		// one, or it is more than is due.
 		m := s.matcher()
 		for i := range list {
 			switch {
@@ -101,7 +104,7 @@ func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 				list[i].Customer = x.Customer.Name
-				p, err := m.Propose(r.Context(), tx, tenant, list[i].ID)
+				p, err := m.Propose(r.Context(), tx, tenant, list[i].ID, true)
 				if err != nil {
 					return err
 				}
@@ -133,8 +136,9 @@ func (s *Server) listSuggestions(w http.ResponseWriter, r *http.Request) {
 }
 
 // matchBody is the optional body of confirm and match: the payment split
-// in parts (each an invoice or an order and its amount), what the parts do
-// not count left as the customer's credit (credit_rest), or split as
+// in parts (each an invoice or an order and its amount; a part towards an
+// invoice the payment already counts towards adds to it), what the parts
+// do not count left as the customer's credit (credit_rest), or split as
 // offered (split: the customer's open invoices oldest first).
 type matchBody struct {
 	Invoice    string          `json:"invoice"`

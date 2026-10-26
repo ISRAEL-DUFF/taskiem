@@ -8,6 +8,7 @@ An owner turns Schools on under **Secrets & settings** (or **Schools > Settings*
 
 When an owner turns it on, Taskiem can also add a **Bursar** role (below) for whoever runs the fees office, when the plan has custom roles and the business has no role named `bursar` yet.
 
+
 ## Who can do what
 
 | Permission | Lets a person | Built-in roles |

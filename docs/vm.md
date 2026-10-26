@@ -66,6 +66,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`; `taskiem-public`, `taskiem-mail` and `clamav` when on) |
 | `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
 
+
 ## Alerts
 
 `taskiem-vps check` runs every 5 minutes and sends an email (through Taskiem's SMTP) and a Slack-compatible webhook when the set of problems changes, and again when it clears:

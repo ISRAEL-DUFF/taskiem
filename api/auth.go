@@ -617,6 +617,38 @@ func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 	return tenant, user, err
 }
 
+// CreateMember creates a person with a password, their email taken as
+// verified, and gives them roles in a tenant, for operators' tools (the
+// demo school): the roles must be built-in or exist in the tenant. An
+// email registered already is a conflict.
+func CreateMember(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, email, name, password string, roles []string) (uuid.UUID, error) {
+	if !strings.Contains(email, "@") || len(password) < 12 || len(roles) == 0 {
+		return uuid.Nil, fmt.Errorf("%w: a valid email, a password of at least 12 characters and a role are required", errBadRequest)
+	}
+	user := uuid.Must(uuid.NewV7())
+	hash := hashPassword(password)
+	err := db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var exists bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_find_user($1))`, email).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("%w: email already registered", errConflict)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash, email_verified_at) VALUES ($1, $2, $3, $4, now())`, user, email, name, hash); err != nil {
+			return err
+		}
+		for _, role := range roles {
+			if _, err := tx.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)`, tenant, user, role); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'cli', 'member.grant', $2, $3)`, tenant, user.String(), `{"roles": ["`+strings.Join(roles, `", "`)+`"]}`)
+		return err
+	})
+	return user, err
+}
+
 // --- members and API keys ---
 
 type memberReq struct {

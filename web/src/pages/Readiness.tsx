@@ -79,6 +79,7 @@ function NeedItem({ need, onChanged }: { need: ReadyNeed; onChanged: () => void 
           </p>
         ))}
       {fix.kind === "give_role" && (can("member.manage") ? <RoleFix role={fix.role} onDone={onChanged} /> : <AskOwner />)}
+      {fix.kind === "ask_support" && <p className="hint">Nothing to set up here: once {fix.service} has turned it on and a customer has paid by transfer, this note goes away.</p>}
     </div>
   );
 }
