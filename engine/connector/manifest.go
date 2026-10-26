@@ -563,7 +563,7 @@ func (m *Manifest) check() []string {
 			case t.Verify == nil:
 			case t.Verify.SecretField != "":
 				add("/triggers/%s/verify/secret_field: a remote trigger is verified with the secret the provider returned", name)
-			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer", "body_token"}, t.Verify.Scheme):
+			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer", "body_token", "svix"}, t.Verify.Scheme):
 				add("/triggers/%s/verify/scheme: %s cannot verify a remotely registered trigger", name, t.Verify.Scheme)
 			}
 		}
