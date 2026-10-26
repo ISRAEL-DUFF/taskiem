@@ -25464,7 +25464,7 @@ components:
           description: For a connection parameter instead of connector, the capabilities its rail must have (pay_bank); any rail that can is offered, and an empty value is the only one that can.
         picker:
           type: string
-          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language]
+          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language, slack_channel]
           description: How the value is chosen instead of typed.
         from:
           type: string
