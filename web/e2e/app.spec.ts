@@ -61,10 +61,17 @@ test("the tab bar, tabs on one line and folded descriptions", async ({ page }) =
   // The open tab is scrolled into view.
   await tabs.getByRole("link", { name: "Fees" }).click();
   await expect(page).toHaveURL(/\/money\/fees$/);
+  // Measured once the Fees page has rendered and the bar has scrolled:
+  // until then the bar may be remounting or still moving.
+  await expect(page.getByRole("heading", { level: 1, name: "Fees" })).toBeVisible();
   const fees = page.getByRole("navigation", { name: "Money" }).getByRole("link", { name: "Fees" });
-  const box = await page.getByRole("navigation", { name: "Money" }).boundingBox();
-  const tab = await fees.boundingBox();
-  expect(tab && box && tab.x >= box.x - 1 && tab.x + tab.width <= box.x + box.width + 1).toBe(true);
+  await expect
+    .poll(async () => {
+      const box = await page.getByRole("navigation", { name: "Money" }).boundingBox();
+      const tab = await fees.boundingBox();
+      return !!(tab && box && tab.x >= box.x - 1 && tab.x + tab.width <= box.x + box.width + 1);
+    })
+    .toBe(true);
 
   // A page's description is behind "About this page".
   await quick.getByRole("link", { name: "Workflows" }).click();
