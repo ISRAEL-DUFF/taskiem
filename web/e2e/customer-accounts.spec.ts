@@ -32,6 +32,24 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 }
 
+/**
+ * Chooses to enter the account by hand once the form has looked for the
+ * connections that can issue one (it shows a skeleton while it looks).
+ * Another test may have connected a payments provider that can issue
+ * account numbers: then the form offers it first, and by hand is a choice.
+ */
+async function byHand(form: ReturnType<Page["getByRole"]>) {
+  await expect(form.getByRole("button", { name: /Register this account|Issue the account number/ })).toBeVisible();
+  const where = form.getByRole("combobox", { name: "Where from" });
+  if (await where.count()) {
+    await expect(form).toContainText("Issue one with");
+    await where.selectOption("by_hand");
+  } else {
+    await expect(form).toContainText("None of your connections can issue account numbers");
+  }
+  await expect(form.getByLabel("Connection")).toBeVisible();
+}
+
 /** An invoice for ₦25,000, made in the API and marked sent in the database. */
 async function sentInvoice(page: Page, customer: { name: string; phone: string }): Promise<{ id: string; number: string }> {
   const r = await page.request.post("/v1/invoices", {
@@ -57,16 +75,7 @@ test("a customer is given an account number from their invoice, and it shows on 
   await expect(money).toContainText("None. Money into an account number of the customer's own");
   await money.getByRole("button", { name: "Give this customer an account number" }).click();
   const form = money.getByRole("form", { name: "Give this customer an account number" });
-  await expect(form.getByRole("button", { name: /Register this account|Issue the account number/ })).toBeVisible();
-  // Another test may have connected a payments provider that can issue
-  // account numbers: then the form offers it first, and by hand is a choice.
-  const where = form.getByRole("combobox", { name: "Where from" });
-  if (await where.count()) {
-    await expect(form).toContainText("Issue one with");
-    await where.selectOption("by_hand");
-  } else {
-    await expect(form).toContainText("None of your connections can issue account numbers");
-  }
+  await byHand(form);
 
   // Nothing is sent without the connection, number and reference.
   await form.getByRole("button", { name: "Register this account" }).click();
@@ -102,8 +111,7 @@ test("a customer is given an account number from their invoice, and it shows on 
   const otherMoney = page.getByTestId("customer-money");
   await otherMoney.getByRole("button", { name: "Give this customer an account number" }).click();
   const otherForm = otherMoney.getByRole("form", { name: "Give this customer an account number" });
-  const otherWhere = otherForm.getByRole("combobox", { name: "Where from" });
-  if (await otherWhere.count()) await otherWhere.selectOption("by_hand");
+  await byHand(otherForm);
   await otherForm.getByLabel("Connection").fill("paystack/main");
   await otherForm.getByLabel("Account number").fill(number);
   await otherForm.getByLabel("Reference").fill(`CUS_e2e_${number}`);
