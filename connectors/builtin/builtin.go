@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
+	"github.com/israel-duff/taskiem/connectors/meta"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/moniepointpos"
 	"github.com/israel-duff/taskiem/connectors/mono"
@@ -74,6 +75,9 @@ type Options struct {
 	// accounts server for every connection, instead of each account's own
 	// data centre (TASKIEM_ZOHO_BOOKS_URL, TASKIEM_ZOHO_ACCOUNTS_URL; tests).
 	ZohoBooksURL, ZohoAccountsURL string
+	// MetaURL replaces the Graph API for Messenger and Instagram
+	// (TASKIEM_META_GRAPH_URL; tests).
+	MetaURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).
 	XenibaseURL string
@@ -130,6 +134,8 @@ func Register(r *connector.Registry, o Options) error {
 		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
 		quickbooks.New(quickbooks.Options{LiveURL: o.QuickBooksURL, TestURL: o.QuickBooksTestURL, TokenURL: o.QuickBooksTokenURL}),
 		zohobooks.New(zohobooks.Options{BaseURL: o.ZohoBooksURL, AccountsServer: o.ZohoAccountsURL}),
+		meta.Messenger(meta.Options{BaseURL: o.MetaURL}),
+		meta.Instagram(meta.Options{BaseURL: o.MetaURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),

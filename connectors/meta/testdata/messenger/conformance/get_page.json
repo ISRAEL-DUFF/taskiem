@@ -1,0 +1,18 @@
+{
+ "action": "get_page",
+ "input": {},
+ "credentials": {
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "page"
+ ],
+ "expect": {
+  "output": {
+   "page_id": "104123456789012",
+   "name": "Ada's Cakes"
+  }
+ }
+}

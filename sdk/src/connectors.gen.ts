@@ -496,6 +496,56 @@ export const googlesheets = {
   update_values: (input: GooglesheetsUpdateValuesInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "update_values", input, extra),
 };
 
+// Instagram (instagram@1)
+export interface InstagramGetAccountInput {
+  [key: string]: Value;
+}
+export interface InstagramGetConversationInput {
+  limit?: Val<number>;
+  person_id: Val<string>;
+}
+export interface InstagramGetProfileInput {
+  person_id: Val<string>;
+}
+export interface InstagramMarkSeenInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+}
+export interface InstagramSendMessageInput {
+  attachment_type?: Val<"image" | "video" | "audio">;
+  /** An https link to an image */
+  attachment_url?: Val<string>;
+  quick_replies?: Value;
+  /** The person (sender_id on the messages trigger) */
+  recipient_id: Val<string>;
+  /** The message id this replies to */
+  reply_to?: Val<string>;
+  /** Outside the 24 hours: a person replying by hand, within 7 days */
+  tag?: Val<"HUMAN_AGENT">;
+  text?: Val<string>;
+}
+export interface InstagramSendTypingInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+  true?: Val<boolean>;
+}
+export const instagram = {
+  /** Get the account (read) */
+  get_account: (input?: InstagramGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "get_account", input, extra),
+  /** Read the conversation (read) */
+  get_conversation: (input: InstagramGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "get_conversation", input, extra),
+  /** Get the person's name (read) */
+  get_profile: (input: InstagramGetProfileInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "get_profile", input, extra),
+  /** Mark as seen (idempotent_write) */
+  mark_seen: (input: InstagramMarkSeenInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "mark_seen", input, extra),
+  /** Send a message (unsafe_write) */
+  send_message: (input: InstagramSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "send_message", input, extra),
+  /** Show typing (idempotent_write) */
+  send_typing: (input: InstagramSendTypingInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "send_typing", input, extra),
+};
+
 // Interswitch (interswitch@1)
 export interface InterswitchGetPaymentInput {
   /** Kobo you expected */
@@ -746,6 +796,56 @@ export const lenco = {
   resolve_account: (input: LencoResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "resolve_account", input, extra),
   /** Transfer to a bank account (idempotent_write) */
   transfer: (input: LencoTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "transfer", input, extra),
+};
+
+// Facebook Messenger (messenger@1)
+export interface MessengerGetConversationInput {
+  limit?: Val<number>;
+  person_id: Val<string>;
+}
+export interface MessengerGetPageInput {
+  [key: string]: Value;
+}
+export interface MessengerGetProfileInput {
+  person_id: Val<string>;
+}
+export interface MessengerMarkSeenInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+}
+export interface MessengerSendMessageInput {
+  attachment_type?: Val<"image" | "video" | "audio" | "file">;
+  /** An https link to an image */
+  attachment_url?: Val<string>;
+  quick_replies?: Value;
+  /** The person (sender_id on the messages trigger) */
+  recipient_id: Val<string>;
+  /** The message id this replies to */
+  reply_to?: Val<string>;
+  /** Outside the 24 hours: a person replying by hand, within 7 days */
+  tag?: Val<"HUMAN_AGENT">;
+  text?: Val<string>;
+}
+export interface MessengerSendTypingInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+  true?: Val<boolean>;
+}
+export const messenger = {
+  /** Read the conversation (read) */
+  get_conversation: (input: MessengerGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "get_conversation", input, extra),
+  /** Get the Page (read) */
+  get_page: (input?: MessengerGetPageInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "get_page", input, extra),
+  /** Get the person's name (read) */
+  get_profile: (input: MessengerGetProfileInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "get_profile", input, extra),
+  /** Mark as seen (idempotent_write) */
+  mark_seen: (input: MessengerMarkSeenInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "mark_seen", input, extra),
+  /** Send a message (unsafe_write) */
+  send_message: (input: MessengerSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "send_message", input, extra),
+  /** Show typing (idempotent_write) */
+  send_typing: (input: MessengerSendTypingInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "send_typing", input, extra),
 };
 
 // Moniepoint (Monnify) (moniepoint@1)
@@ -3107,10 +3207,12 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "form@1": "form",
   "gmail@1": "gmail",
   "googlesheets@1": "googlesheets",
+  "instagram@1": "instagram",
   "interswitch@1": "interswitch",
   "invoices@1": "invoices",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
+  "messenger@1": "messenger",
   "moniepoint@1": "moniepoint",
   "moniepoint_pos@1": "moniepoint_pos",
   "mono@1": "mono",
@@ -3150,10 +3252,12 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
+  "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["get_balance", "get_payout", "issue_virtual_account", "list_banks", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
+  "messenger@1": ["get_conversation", "get_page", "get_profile", "mark_seen", "send_message", "send_typing"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
   "moniepoint_pos@1": ["check_access", "get_transaction", "request_payment"],
   "mono@1": ["cancel_mandate", "check_mandate_balance", "create_customer", "create_mandate", "debit_mandate", "exchange_token", "get_account", "get_balance", "get_debit", "get_identity", "get_income_records", "get_mandate", "get_statement", "get_statement_pdf", "initiate_account_linking", "initiate_mandate", "initiate_payment", "initiate_reauthorisation", "list_banks", "list_transactions", "pause_mandate", "reinstate_mandate", "request_creditworthiness", "request_income", "unlink_account", "verify_payment"],

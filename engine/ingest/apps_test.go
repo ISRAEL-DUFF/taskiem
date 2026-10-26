@@ -15,9 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/meta"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -274,5 +276,79 @@ func TestAppDeliveriesFromAModesOwnApp(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("the sandbox app's endpoint check: %d", resp.StatusCode)
+	}
+}
+
+// A Facebook Page's message through Taskiem's Meta app (K5) starts its
+// business's workflow with the sender and the text sealed in the run's
+// history (connector/v1 rule 21), and reaches no other business.
+func TestMessengerMessagesAreSealed(t *testing.T) {
+	w := newWorld(t)
+	if err := w.Registry.Register(meta.Messenger(meta.Options{})); err != nil {
+		t.Fatal(err)
+	}
+	w.h.Apps = map[string]ingest.App{"meta": {WebhookSecret: "app-secret", VerifyToken: "verify-me"}}
+	other := w.AddTenant(t)
+	connect := func(tenant uuid.UUID, page string) {
+		if err := db.InTenantTx(ctx, w.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, `INSERT INTO environments (tenant_id, name) VALUES ($1, 'prod') ON CONFLICT DO NOTHING`, tenant); err != nil {
+				return err
+			}
+			id, err := w.Vault.CreateOAuthConnectionTx(ctx, tx, tenant, "prod", "messenger", "main", map[string]string{"page_id": page, "page_token": "EAA" + page}, nil, "test")
+			if err != nil {
+				return err
+			}
+			return secrets.SetAppAccountTx(ctx, tx, tenant, id, "meta", page)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	connect(w.Tenant, "104123456789012")
+	connect(other, "204123456789012")
+	doc := `{"schema":"wd/v1","id":"wf_dm","version":1,"name":"dm","trigger":{"type":"connector_event","config":{"connector":"messenger@1","trigger":"messages","events":["message"]}},
+	  "steps":[{"id":"a","type":"transform","config":{"output":"=size(trigger.item.event.message.text)"}}]}`
+	subscribe := func(tenant uuid.UUID) uuid.UUID {
+		wf := w.PublishIn(t, tenant, doc)
+		def, err := wd.Load([]byte(doc))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.InTenantTx(ctx, w.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			return ingest.Sync(ctx, tx, tenant, wf, 1, def, w.Registry, time.Now())
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return wf
+	}
+	mine, theirs := subscribe(w.Tenant), subscribe(other)
+	body := []byte(`{"object":"page","entry":[{"id":"104123456789012","time":1761480000000,"messaging":[{"sender":{"id":"6789012345678901"},"recipient":{"id":"104123456789012"},"timestamp":1761480000000,"message":{"mid":"m_1","text":"My address is 12 Admiralty Way"}}]}]}`)
+	req, _ := http.NewRequest("POST", w.srv.URL+"/hooks/apps/messenger@1/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Hub-Signature-256", "sha256="+sign(sha256.New, "app-secret", body))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("delivery: %d", resp.StatusCode)
+	}
+	aw := appWorld{w}
+	if a, b := aw.runsIn(t, w.Tenant, mine), aw.runsIn(t, other, theirs); a != 1 || b != 0 {
+		t.Fatalf("runs: mine %d, theirs %d", a, b)
+	}
+	var run uuid.UUID
+	if err := db.InTenantTx(ctx, w.DB.App, []uuid.UUID{w.Tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id FROM runs WHERE workflow_id = $1`, mine).Scan(&run)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	evs, err := w.Store.RunHistory(ctx, runtime.RunRef{TenantID: w.Tenant, ID: run})
+	if err != nil || len(evs) == 0 {
+		t.Fatal(err)
+	}
+	raw := string(evs[0].Payload)
+	if strings.Contains(raw, "Admiralty") || strings.Contains(raw, "6789012345678901") || !strings.Contains(raw, `"$pii"`) {
+		t.Errorf("the message is in history in the clear: %s", raw)
 	}
 }
