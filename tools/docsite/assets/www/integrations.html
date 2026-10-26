@@ -303,13 +303,13 @@
 </div>
 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-space-md pt-space-xs">
 {{- range .Adapters}}
-<div class="flex items-center gap-space-xs p-space-sm bg-surface rounded-lg shadow-sm">
+<a class="flex items-center gap-space-xs p-space-sm bg-surface rounded-lg shadow-sm hover:bg-surface-container-low transition-colors" href="{{$.Base}}{{.Page}}">
 <span class="material-symbols-outlined text-primary text-xl">{{.Icon}}</span>
 <div class="flex flex-col">
 <span class="font-label-md text-label-md text-on-surface font-semibold">{{.Name}}</span>
 <span class="font-code-sm text-code-sm text-on-surface-variant">{{.Kind}}</span>
 </div>
-</div>
+</a>
 {{- end}}
 </div>
 </div>
