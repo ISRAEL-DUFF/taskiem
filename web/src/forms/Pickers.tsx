@@ -197,3 +197,32 @@ export function SlackChannelPicker({ label, connection, value, onChange }: { lab
   );
 }
 
+
+interface Choice {
+  id: string;
+  label: string;
+}
+
+/** One of a connector's pickers on a connection, by name (GET /v1/connections/choices): a Mailchimp audience, say. */
+export function ChoicePicker({ label, choices, connection, value, onChange }: { label: string; choices: string; connection: string; value: string; onChange: (v: string) => void }) {
+  const [connector = "", picker = ""] = choices.split(":");
+  const list = useLoad(
+    () =>
+      get<{ choices: Choice[] }>(
+        `/v1/connections/choices?connector=${encodeURIComponent(connector)}&picker=${encodeURIComponent(picker)}&connection=${encodeURIComponent(connection || "main")}`,
+      ).then((r) => r.choices),
+    [connector, picker, connection],
+  );
+  const items = list.data ?? [];
+  if (items.length === 0) return <Typed label={label} value={value} onChange={onChange} placeholder={list.error ? "Connect it first, then choose" : "Nothing to choose from yet"} />;
+  return (
+    <select aria-label={label} value={items.some((c) => c.id === value) ? value : ""} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Choose…</option>
+      {items.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.label}
+        </option>
+      ))}
+    </select>
+  );
+}

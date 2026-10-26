@@ -212,10 +212,13 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 	q := url.Values{
 		"client_id":             {prov.client.ID},
 		"redirect_uri":          {s.oauthRedirectURI()},
-		"scope":                 {strings.Join(c.Manifest.Auth.OAuth2.Scopes, c.Manifest.Auth.OAuth2.ScopeSeparator())},
 		"state":                 {state},
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
+	}
+	// A provider without scopes (Mailchimp) takes none.
+	if sc := c.Manifest.Auth.OAuth2.Scopes; len(sc) > 0 {
+		q.Set("scope", strings.Join(sc, c.Manifest.Auth.OAuth2.ScopeSeparator()))
 	}
 	for k, v := range c.Manifest.Auth.OAuth2.AuthorizeParams {
 		q.Set(k, v)

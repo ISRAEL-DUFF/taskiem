@@ -46,7 +46,12 @@ type Manifest struct {
 	// Capabilities and Events say what a rail can do in Taskiem's words
 	// (rule 16, engine/capability).
 	Capabilities map[string]CapabilityMap `json:"capabilities,omitempty"`
-	Events       map[string]EventMap      `json:"events,omitempty"`
+	// Pickers are lists a person chooses from instead of typing an id (a
+	// Mailchimp audience, a Brevo list), each a read action and how its
+	// output reads as choices: a template parameter names one (picker
+	// choice).
+	Pickers map[string]PickerSpec `json:"pickers,omitempty"`
+	Events  map[string]EventMap   `json:"events,omitempty"`
 }
 
 type Auth struct {
@@ -451,7 +456,7 @@ func (m *Manifest) check() []string {
 	for _, tname := range slices.Sorted(maps.Keys(m.Triggers)) {
 		t := m.Triggers[tname]
 		p := "/triggers/" + tname
-		if hs := t.Handshake; hs != nil && hs.Method == "GET" && hs.SecretField == "" && t.Delivery != "app" {
+		if hs := t.Handshake; hs != nil && hs.Method == "GET" && hs.SecretField == "" && !hs.Open && t.Delivery != "app" {
 			add("%s/handshake: a GET check needs secret_field, the connection's token it is compared with", p)
 		}
 		if !t.AppDelivered() {
@@ -603,9 +608,6 @@ func (m *Manifest) check() []string {
 				add("/auth/oauth2/%s: must be an https URL without a fragment", name)
 			}
 		}
-		if len(o.Scopes) == 0 {
-			add("/auth/oauth2/scopes: name at least one scope")
-		}
 		if !o.PKCE {
 			add("/auth/oauth2/pkce: Taskiem always sends a PKCE challenge; declare pkce: true")
 		}
@@ -640,6 +642,12 @@ func (m *Manifest) check() []string {
 			if !fromToken && !fromCallback && !fromClient && !fromLink && (f.Required == nil || *f.Required) {
 				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token or the callback; a linked connection would be missing it", f.Key)
 			}
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(m.Pickers)) {
+		pk := m.Pickers[name]
+		if a, ok := m.Actions[pk.Action]; !ok || a.Class.IsWrite() {
+			add("/pickers/%s/action: %q is not a read action", name, pk.Action)
 		}
 	}
 	for i, h := range m.Auth.HostModes {
@@ -850,4 +858,13 @@ func (m *Manifest) OverrideBaseURL(base string) {
 	if u, err := url.Parse(base); err == nil && u.Hostname() != "" {
 		m.Egress = []string{u.Hostname()}
 	}
+}
+
+// PickerSpec is one of a connector's pickers: a read action, and
+// expressions over its output (items) and each item (id, label).
+type PickerSpec struct {
+	Action string `json:"action"`
+	Items  string `json:"items"`
+	ID     string `json:"id"`
+	Label  string `json:"label"`
 }

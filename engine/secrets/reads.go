@@ -53,6 +53,9 @@ const (
 	// PurposeChatDeliver: sending approvals and replies through a
 	// business's own chat connection (Slack's bot token; decision 0051).
 	PurposeChatDeliver = "chat.deliver"
+	// PurposePickerList: listing a connection's choices for a template's
+	// picker (a Mailchimp audience), as its connector declares them.
+	PurposePickerList  = "picker.list"
 	PurposeUnspecified = "unspecified"
 )
 

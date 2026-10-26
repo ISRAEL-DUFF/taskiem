@@ -1039,6 +1039,12 @@ func (h *Handler) connectorHandshake(w http.ResponseWriter, r *http.Request) {
 		replyErr(w, http.StatusNotFound, "no such connector trigger")
 		return
 	}
+	if hs.Open {
+		// Only whether the address answers: nothing is read or started.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	creds, err := h.Connections.Credentials(ctx, tenant, env, conn.Manifest.ID, r.URL.Query().Get("connection"))
 	if err != nil && !errors.Is(err, secrets.ErrNotFound) && !errors.Is(err, secrets.ErrAmbiguous) {
 		h.unavailable(w, r, err)

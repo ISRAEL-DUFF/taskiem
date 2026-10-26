@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/mailchimp"
 	"github.com/israel-duff/taskiem/connectors/meta"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -350,5 +351,29 @@ func TestMessengerMessagesAreSealed(t *testing.T) {
 	raw := string(evs[0].Payload)
 	if strings.Contains(raw, "Admiralty") || strings.Contains(raw, "6789012345678901") || !strings.Contains(raw, `"$pii"`) {
 		t.Errorf("the message is in history in the clear: %s", raw)
+	}
+}
+
+// Mailchimp checks an address with a plain GET before it saves a webhook
+// (K8): an open handshake answers 200, reading and starting nothing; a
+// trigger without one still refuses.
+func TestOpenHandshake(t *testing.T) {
+	w := newWorld(t)
+	if err := w.Registry.Register(mailchimp.New(mailchimp.Options{})); err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) int {
+		resp, err := http.Get(w.srv.URL + "/hooks/" + w.Tenant.String() + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	if st := get("/connectors/mailchimp@1/audience_events?env=prod&subscription=1"); st != 200 {
+		t.Errorf("Mailchimp's check: %d", st)
+	}
+	if st := get("/connectors/workspace@1/events?env=prod"); st != 404 {
+		t.Errorf("a trigger with no GET check: %d", st)
 	}
 }

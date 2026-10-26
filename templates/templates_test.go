@@ -793,3 +793,31 @@ func TestProductTemplatesMoveNoMoney(t *testing.T) {
 		t.Errorf("%d templates around a product, want Payrolla's seven", n)
 	}
 }
+
+// A choice picker names a picker its connector declares, and the
+// parameter it depends on is a connection of that connector.
+func TestChoicePickersExist(t *testing.T) {
+	reg := registry(t)
+	for _, tpl := range templates.Default().List() {
+		for _, p := range tpl.Params {
+			if p.Picker != "choice" {
+				continue
+			}
+			id, picker, _ := strings.Cut(p.Choices, ":")
+			found := false
+			for _, c := range reg.List() {
+				if _, ok := c.Manifest.Pickers[picker]; ok && c.Manifest.ID == id {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("%s: %s names %s, which no connector declares", tpl.ID, p.Name, p.Choices)
+			}
+			for _, q := range tpl.Params {
+				if q.Name == p.From && (q.Type != "connection" || q.Connector != id) {
+					t.Errorf("%s: %s depends on %s, which is not a %s connection", tpl.ID, p.Name, p.From, id)
+				}
+			}
+		}
+	}
+}

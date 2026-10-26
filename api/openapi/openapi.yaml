@@ -10664,6 +10664,68 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connections/choices:
+    get:
+      operationId: listConnectionChoices
+      tags:
+      - Connectors
+      summary: List what a connector's picker offers on a connection
+      description: |
+        For a template parameter with picker choice: runs the connector's picker (its manifest's pickers, a read action) on the
+        connection and answers each choice's id (the parameter's value) and label (what the person reads): a Mailchimp audience,
+        for example. 409 when there is no such active connection, or the provider did not answer.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connector
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The connector's id (mailchimp).
+      - name: picker
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The picker's name (audiences).
+      - name: connection
+        in: query
+        schema:
+          type: string
+        description: The connection's name; main when left out.
+      - name: environment
+        in: query
+        schema:
+          type: string
+        description: Defaults to prod.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - choices
+                properties:
+                  choices:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, label]
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /v1/slack/channels:
     get:
       operationId: listSlackChannels
@@ -25464,11 +25526,14 @@ components:
           description: For a connection parameter instead of connector, the capabilities its rail must have (pay_bank); any rail that can is offered, and an empty value is the only one that can.
         picker:
           type: string
-          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language, slack_channel]
+          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language, slack_channel, choice]
           description: How the value is chosen instead of typed.
         from:
           type: string
-          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template).
+          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template, a choice's connection).
+        choices:
+          type: string
+          description: With picker choice, the connector's picker it lists from (mailchimp:audiences), through GET /v1/connections/choices.
       additionalProperties: false
     TemplateNeed:
       type: object

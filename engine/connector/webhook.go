@@ -164,6 +164,10 @@ type HandshakeSpec struct {
 	Respond     string `json:"respond"`
 	TokenQuery  string `json:"token_query"`
 	SecretField string `json:"secret_field"`
+	// Open: a GET check that only asks whether the address answers
+	// (Mailchimp's before it saves a webhook): 200, with no token, nothing
+	// read and nothing started.
+	Open bool `json:"open,omitempty"`
 }
 
 type VerifySpec struct {
