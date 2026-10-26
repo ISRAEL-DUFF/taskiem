@@ -1,0 +1,19 @@
+{
+ "action": "send_sms",
+ "input": {
+  "sender": "AdaCakes",
+  "recipient": "+2348030000000",
+  "content": "Your order is ready."
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "sms"
+ ],
+ "expect": {
+  "output": {
+   "message_id": "1511882900176220"
+  }
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/smtp/email",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "body": {
+   "sender": {
+    "email": "orders@adacakes.ng"
+   },
+   "to": [
+    {
+     "email": "ada@example.com"
+    }
+   ],
+   "templateId": 12,
+   "params": {
+    "INVOICE": "INV-0042"
+   }
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "messageId": "<t1@smtp-relay.mailin.fr>"
+  }
+ }
+}

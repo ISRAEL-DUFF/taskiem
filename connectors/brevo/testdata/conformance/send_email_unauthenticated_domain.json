@@ -1,0 +1,24 @@
+{
+ "action": "send_email",
+ "input": {
+  "sender_email": "orders@example.ng",
+  "sender_name": "Ada Cakes",
+  "to": [
+   "Adaeze Okafor <ada@example.com>"
+  ],
+  "subject": "Your receipt",
+  "html": "<p>Thank you</p>",
+  "tags": [
+   "receipt"
+  ]
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "domains"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}

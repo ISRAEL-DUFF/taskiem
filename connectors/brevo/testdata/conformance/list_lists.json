@@ -1,0 +1,21 @@
+{
+ "action": "list_lists",
+ "input": {},
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "lists"
+ ],
+ "expect": {
+  "output": {
+   "lists": [
+    {
+     "id": 3,
+     "name": "Newsletter",
+     "subscribers": 118
+    }
+   ]
+  }
+ }
+}

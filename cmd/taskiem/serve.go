@@ -343,7 +343,9 @@ func loadConfig() (config, error) {
 			ZohoMailURL:     os.Getenv("TASKIEM_ZOHO_MAIL_URL"),
 			ZohoCRMURL:      os.Getenv("TASKIEM_ZOHO_CRM_URL"),
 			// The Graph API for Messenger and Instagram (tests).
-			MetaURL: os.Getenv("TASKIEM_META_GRAPH_URL"),
+			MetaURL:   os.Getenv("TASKIEM_META_GRAPH_URL"),
+			ResendURL: os.Getenv("TASKIEM_RESEND_URL"),
+			BrevoURL:  os.Getenv("TASKIEM_BREVO_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),

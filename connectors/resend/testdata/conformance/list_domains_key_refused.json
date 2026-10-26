@@ -1,0 +1,13 @@
+{
+ "action": "list_domains",
+ "input": {},
+ "credentials": {
+  "api_key": "re_test_123"
+ },
+ "exchanges": [
+  "domains_401"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}

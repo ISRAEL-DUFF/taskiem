@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/contacts",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "body": {
+   "email": "bola@example.com",
+   "updateEnabled": true
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "id": 22
+  }
+ }
+}

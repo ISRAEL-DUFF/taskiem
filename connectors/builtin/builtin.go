@@ -6,6 +6,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/connectors/anchor"
 	"github.com/israel-duff/taskiem/connectors/breet"
+	"github.com/israel-duff/taskiem/connectors/brevo"
 	"github.com/israel-duff/taskiem/connectors/dojah"
 	"github.com/israel-duff/taskiem/connectors/email"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
@@ -32,6 +33,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/prembly"
 	"github.com/israel-duff/taskiem/connectors/quickbooks"
 	"github.com/israel-duff/taskiem/connectors/remita"
+	"github.com/israel-duff/taskiem/connectors/resend"
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
@@ -81,6 +83,9 @@ type Options struct {
 	// for every connection (TASKIEM_ZOHO_MAIL_URL, TASKIEM_ZOHO_CRM_URL;
 	// tests).
 	ZohoMailURL, ZohoCRMURL string
+	// ResendURL and BrevoURL replace Resend's and Brevo's APIs
+	// (TASKIEM_RESEND_URL, TASKIEM_BREVO_URL; tests).
+	ResendURL, BrevoURL string
 	// MetaURL replaces the Graph API for Messenger and Instagram
 	// (TASKIEM_META_GRAPH_URL; tests).
 	MetaURL string
@@ -143,6 +148,8 @@ func Register(r *connector.Registry, o Options) error {
 		zohomail.New(zohomail.Options{BaseURL: o.ZohoMailURL, AccountsServer: o.ZohoAccountsURL}),
 		zohocrm.New(zohocrm.Options{BaseURL: o.ZohoCRMURL, AccountsServer: o.ZohoAccountsURL}),
 		meta.Messenger(meta.Options{BaseURL: o.MetaURL}),
+		resend.New(resend.Options{BaseURL: o.ResendURL}),
+		brevo.New(brevo.Options{BaseURL: o.BrevoURL}),
 		meta.Instagram(meta.Options{BaseURL: o.MetaURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),

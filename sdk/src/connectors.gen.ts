@@ -188,6 +188,83 @@ export const breet = {
   withdraw_to_bank: (input: BreetWithdrawToBankInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "withdraw_to_bank", input, extra),
 };
 
+// Brevo (brevo@1)
+export interface BrevoAddToListInput {
+  consent: Value;
+  emails: Value;
+  list_id: Val<number>;
+  /** Set by the engine; not sent to Brevo */
+  request_key?: Val<string>;
+}
+export interface BrevoCreateOrUpdateContactInput {
+  /** Other contact attributes, by their Brevo names (upper case) */
+  attributes?: Value;
+  consent?: Value;
+  email: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  /** Lists to put them on; needs consent */
+  list_ids?: Value;
+  /** With the country code */
+  phone?: Val<string>;
+  /** Set by the engine; not sent to Brevo */
+  request_key?: Val<string>;
+}
+export interface BrevoGetAccountInput {
+  [key: string]: Value;
+}
+export interface BrevoListListsInput {
+  [key: string]: Value;
+}
+export interface BrevoSendCampaignInput {
+  campaign_id: Val<number>;
+  /** Set by the engine; not sent to Brevo */
+  request_key?: Val<string>;
+}
+export interface BrevoSendEmailInput {
+  attachments?: Value;
+  bcc?: Value;
+  cc?: Value;
+  html?: Val<string>;
+  /** The template's variables */
+  params?: Value;
+  reply_to?: Val<string>;
+  sender_email: Val<string>;
+  sender_name?: Val<string>;
+  /** Required without template_id */
+  subject?: Val<string>;
+  tags?: Value;
+  /** A Brevo template instead of subject and content */
+  template_id?: Val<number>;
+  text?: Val<string>;
+  to: Value;
+}
+export interface BrevoSendSmsInput {
+  consent?: Value;
+  content: Val<string>;
+  /** With the country code: +2348030000000 */
+  recipient: Val<string>;
+  sender: Val<string>;
+  tag?: Val<string>;
+  type?: Val<"transactional" | "marketing">;
+}
+export const brevo = {
+  /** Add contacts to a list (idempotent_write) */
+  add_to_list: (input: BrevoAddToListInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "add_to_list", input, extra),
+  /** Add or update a contact (idempotent_write) */
+  create_or_update_contact: (input: BrevoCreateOrUpdateContactInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "create_or_update_contact", input, extra),
+  /** Get the account (read) */
+  get_account: (input?: BrevoGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "get_account", input, extra),
+  /** List your contact lists (read) */
+  list_lists: (input?: BrevoListListsInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "list_lists", input, extra),
+  /** Send an email campaign (idempotent_write) */
+  send_campaign: (input: BrevoSendCampaignInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "send_campaign", input, extra),
+  /** Send an email (unsafe_write) */
+  send_email: (input: BrevoSendEmailInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "send_email", input, extra),
+  /** Send an SMS (unsafe_write) */
+  send_sms: (input: BrevoSendSmsInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "send_sms", input, extra),
+};
+
 // Dojah (dojah@1)
 export interface DojahCheckBalanceInput {
   [key: string]: Value;
@@ -2149,6 +2226,38 @@ export const remita = {
   transfer: (input: RemitaTransferInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "transfer", input, extra),
 };
 
+// Resend (resend@1)
+export interface ResendGetEmailInput {
+  email_id: Val<string>;
+}
+export interface ResendListDomainsInput {
+  [key: string]: Value;
+}
+export interface ResendSendEmailInput {
+  attachments?: Value;
+  bcc?: Value;
+  cc?: Value;
+  /** Ada Cakes <orders@adacakes.ng>: the domain must be verified in Resend */
+  from: Val<string>;
+  html?: Val<string>;
+  reply_to?: Value;
+  /** When to send (ISO 8601) */
+  scheduled_at?: Val<string>;
+  subject: Val<string>;
+  tags?: Value;
+  /** Plain text; made from the HTML when left out */
+  text?: Val<string>;
+  to: Value;
+}
+export const resend = {
+  /** Get an email (read) */
+  get_email: (input: ResendGetEmailInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "get_email", input, extra),
+  /** List your domains (read) */
+  list_domains: (input?: ResendListDomainsInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "list_domains", input, extra),
+  /** Send an email (idempotent_write) */
+  send_email: (input: ResendSendEmailInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "send_email", input, extra),
+};
+
 // Amazon S3 (s3@1)
 export interface S3CopyObjectInput {
   /** Destination; defaults to the connection's bucket */
@@ -3347,6 +3456,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
   "anchor@1": "anchor",
   "breet@1": "breet",
+  "brevo@1": "brevo",
   "dojah@1": "dojah",
   "email@1": "email",
   "flutterwave@1": "flutterwave",
@@ -3374,6 +3484,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "prembly@1": "prembly",
   "quickbooks@1": "quickbooks",
   "remita@1": "remita",
+  "resend@1": "resend",
   "s3@1": "s3",
   "schools@1": "schools",
   "sftp@1": "sftp",
@@ -3394,6 +3505,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
+  "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "email@1": ["file_url"],
   "flutterwave@1": ["create_dynamic_account", "create_static_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "list_transactions", "resolve_account", "transfer", "verify_payment"],
@@ -3421,6 +3533,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
   "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
+  "resend@1": ["get_email", "list_domains", "send_email"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
