@@ -224,3 +224,42 @@ func TestRegistrar(t *testing.T) {
 		t.Error("a subscription to ping alone was created")
 	}
 }
+
+func TestModesChooseTheDeployment(t *testing.T) {
+	var hits []string
+	serve := func(name string) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits = append(hits, name+" "+r.URL.Path)
+			_, _ = w.Write([]byte(`{"data":{"company":{"id":"co_1"}}}`))
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	live, test := serve("live"), serve("test")
+	ask := func(c *connector.Connector, mode string) error {
+		_, err := c.Actions["get_company"].Execute(context.Background(), connector.Request{Input: map[string]any{},
+			Credentials: map[string]string{"api_key": "pyk_live_x", connector.ModeKey: mode}, HTTP: http.DefaultClient})
+		return err
+	}
+	// The test company lives in production: both modes start there, and
+	// test follows live when only live is moved.
+	m := New(Options{}).Manifest
+	if l, _ := m.ModeURL("live"); l != "https://synledger.name.ng/payrolla/api/v1" {
+		t.Errorf("live: %q", l)
+	}
+	if tu, _ := m.ModeURL("test"); tu != "https://synledger.name.ng/payrolla/api/v1" {
+		t.Errorf("test: %q", tu)
+	}
+	if err := ask(New(Options{LiveURL: live.URL}), "test"); err != nil {
+		t.Fatal(err)
+	}
+	c := New(Options{LiveURL: live.URL, TestURL: test.URL})
+	for _, mode := range []string{"live", "test"} {
+		if err := ask(c, mode); err != nil {
+			t.Fatalf("%s: %v", mode, err)
+		}
+	}
+	if strings.Join(hits, ", ") != "live /connect/company, live /connect/company, test /connect/company" {
+		t.Errorf("deployments: %v", hits)
+	}
+}

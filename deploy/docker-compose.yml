@@ -25,9 +25,14 @@ x-taskiem-env: &taskiem-env
   # Plain HTTP on localhost; set true behind TLS.
   TASKIEM_SECURE_COOKIES: "false"
   # Provider endpoints (docs/operations.md); empty uses the connector's
-  # default. iswallet's default is its sandbox; Payrolla's is production.
+  # default. iswallet and Payrolla connections are live or test, chosen
+  # when made: the *_URL is live's (iswallet's is issued at go-live; until
+  # then only test connections can be made), *_TEST_URL test's (iswallet's
+  # sandbox; Payrolla's test company lives on its live address).
   TASKIEM_ISWALLET_URL: ${TASKIEM_ISWALLET_URL:-}
+  TASKIEM_ISWALLET_TEST_URL: ${TASKIEM_ISWALLET_TEST_URL:-}
   TASKIEM_PAYROLLA_URL: ${TASKIEM_PAYROLLA_URL:-}
+  TASKIEM_PAYROLLA_TEST_URL: ${TASKIEM_PAYROLLA_TEST_URL:-}
 
 services:
   postgres:

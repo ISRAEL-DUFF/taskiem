@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -343,4 +344,42 @@ func TestEventsRouteByWallet(t *testing.T) {
 
 func TestCapabilities(t *testing.T) {
 	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}
+
+func TestModesChooseTheHost(t *testing.T) {
+	var hits []string
+	serve := func(name string) *httptest.Server {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits = append(hits, name+" "+r.URL.Path)
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		}))
+		t.Cleanup(srv.Close)
+		return srv
+	}
+	live, test := serve("live"), serve("test")
+	ask := func(c *connector.Connector, mode string) error {
+		creds := map[string]string{"api_key": "isw_key"}
+		if mode != "" {
+			creds[connector.ModeKey] = mode
+		}
+		_, err := c.Actions["list_banks"].Execute(context.Background(), connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: http.DefaultClient})
+		return err
+	}
+	c := New(Options{LiveURL: live.URL, TestURL: test.URL, BaseURL: live.URL})
+	for _, mode := range []string{"live", "test", ""} {
+		if err := ask(c, mode); err != nil {
+			t.Fatalf("%q: %v", mode, err)
+		}
+	}
+	if strings.Join(hits, ", ") != "live /v1/banks, test /v1/banks, live /v1/banks" {
+		t.Errorf("hosts: %v", hits)
+	}
+	// Before go-live there is no live address: nothing is sent.
+	hits = nil
+	if err := ask(New(Options{}), "live"); !errors.Is(err, effects.ErrFatal) || len(hits) > 0 {
+		t.Errorf("live with no address: %v, %v", err, hits)
+	}
+	if _, ok := New(Options{}).Manifest.ModeURL("test"); !ok {
+		t.Error("the sandbox is not test's address by default")
+	}
 }

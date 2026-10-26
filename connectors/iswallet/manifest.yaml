@@ -8,7 +8,7 @@
 # transactions" (docs/spec/schools-rail-facts.md).
 manifest: connector/v1
 id: iswallet
-version: 1.3.0
+version: 1.4.0
 name: iswallet
 description: Wallet-to-wallet transfers, bank payouts, balances, customers' account numbers and wallet events on iswallet.
 category: payments
@@ -24,10 +24,17 @@ auth:
     # limits the connection to the customer's own wallets (decision 0031).
     - { key: wallet_ids, label: Wallets this connection may use (comma-separated wallet ids), required: false }
     - { key: shared_client, label: "Shared client: true when the key also reaches other customers' wallets (then wallet_ids is required)", required: false }
+  # Live and test are separate hosts with separate keys (rule 17). The
+  # production address is issued at go-live and set with
+  # TASKIEM_ISWALLET_URL; until then only test connections can be made.
+  modes:
+    - { mode: live, label: Live (real money) }
+    - { mode: test, label: Test (practice), base_url: https://synledger.name.ng/iwallet }
   test: { action: list_banks }
 # 100 requests a minute per API key (client scope).
 rate_limit: { requests: 100, per: 1m, scope: connection }
-# Sandbox; production is issued at go-live and set with TASKIEM_ISWALLET_URL.
+# Where connections made before modes go: the sandbox, or
+# TASKIEM_ISWALLET_URL when it is set.
 base_url: https://synledger.name.ng/iwallet
 actions:
   get_balance:

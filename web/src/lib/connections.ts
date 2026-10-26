@@ -38,12 +38,17 @@ export function connectorOf(connectors: ConnectorInfo[] | undefined, id: string)
   return connectors?.find((c) => c.id === id);
 }
 
-/** The choices a connector's keys offer (live, test), in order. */
-export function modesOf(c: ConnectorInfo | undefined): { mode: string; label: string }[] {
-  const out: { mode: string; label: string }[] = [];
+/**
+ * The choices a connector offers (live, test), in order: its modes when
+ * they are hosts (iswallet, Payrolla), else what its keys' starts say.
+ * A host mode this Taskiem has no address for is not available.
+ */
+export function modesOf(c: ConnectorInfo | undefined): { mode: string; label: string; available: boolean }[] {
+  if (c?.auth.modes?.length) return c.auth.modes.map((m) => ({ mode: m.mode, label: m.label, available: !!m.base_url }));
+  const out: { mode: string; label: string; available: boolean }[] = [];
   for (const f of c?.auth.fields ?? []) {
     for (const p of f.prefixes ?? []) {
-      if (p.mode && !out.some((m) => m.mode === p.mode)) out.push({ mode: p.mode, label: p.label ?? p.mode });
+      if (p.mode && !out.some((m) => m.mode === p.mode)) out.push({ mode: p.mode, label: p.label ?? p.mode, available: true });
     }
   }
   return out;

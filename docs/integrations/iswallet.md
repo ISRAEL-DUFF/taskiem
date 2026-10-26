@@ -17,6 +17,10 @@ iswallet is iSpend's wallet platform and a payment provider for the group's prod
 
 The idempotency key travels in the `Idempotency-Key` header (`tsk_` + 32 characters). Account numbers and names are sealed as personal data.
 
+## Live and test
+
+Connecting iswallet asks **Live (real money)** or **Test (practice)**, as Paystack's does; the connection keeps the choice, its calls go to that host, and a test connection is marked "Test: no real money" on Connections ([connector/v1](../contracts/connector-v1.md) rule 17). Test is iswallet's sandbox (`https://synledger.name.ng/iwallet`, or `TASKIEM_ISWALLET_TEST_URL`). Live is iswallet's production address, issued at go-live and set with `TASKIEM_ISWALLET_URL`: until it is set, live is shown as not set up and cannot be chosen. Live and sandbox keys are separate, so paste the key from the same environment. Connections made before modes keep going where they went: `TASKIEM_ISWALLET_URL` when set, else the sandbox.
+
 ## Connection fields
 
 | Field | Secret | Meaning |

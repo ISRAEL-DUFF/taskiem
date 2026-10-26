@@ -25,16 +25,27 @@ import (
 //go:embed manifest.yaml
 var manifest []byte
 
-// Options configure the connector; BaseURL overrides the manifest's
-// (TASKIEM_PAYROLLA_URL, tests).
+// Options configure the connector. LiveURL replaces Payrolla's production
+// address (TASKIEM_PAYROLLA_URL). TestURL is where test connections go
+// (TASKIEM_PAYROLLA_TEST_URL): the live address unless set, since
+// Payrolla's test company lives in production. BaseURL is where
+// connections made before modes go (tests, the conformance kit's replay
+// server).
 type Options struct {
-	BaseURL string
+	LiveURL, TestURL string
+	BaseURL          string
 }
 
 // New returns the Payrolla connector.
 func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
+	m.SetModeURL("live", o.LiveURL)
+	test := o.TestURL
+	if test == "" {
+		test = o.LiveURL // the test company is on the same deployment
+	}
+	m.SetModeURL("test", test)
 	c := &client{m: m}
 	regs := map[string]connector.Registrar{}
 	for name, t := range m.Triggers {
@@ -56,8 +67,6 @@ func New(o Options) *connector.Connector {
 // client reads the base URL from the manifest on each call, so an
 // override (the conformance kit's replay server) applies at once.
 type client struct{ m *connector.Manifest }
-
-func (c *client) base() string { return strings.TrimRight(c.m.BaseURL, "/") }
 
 // Error is a refusal Payrolla explained: its error envelope's code
 // (API_KEY_INVALID, SCOPE_REQUIRED, PAYSLIP_LINKS_DISABLED, …) and message.
@@ -100,7 +109,11 @@ func (c *client) do(ctx context.Context, creds map[string]string, hc *http.Clien
 	var env struct {
 		Data json.RawMessage `json:"data"`
 	}
-	err := connector.DoJSON(ctx, hc, method, c.base()+path, map[string]string{"Authorization": "Bearer " + key}, body, &env)
+	base, err := c.m.BaseFor(creds)
+	if err != nil {
+		return err
+	}
+	err = connector.DoJSON(ctx, hc, method, base+path, map[string]string{"Authorization": "Bearer " + key}, body, &env)
 	var he *connector.HTTPError
 	if errors.As(err, &he) {
 		var e struct {

@@ -53,6 +53,7 @@ func (v *Vault) CreateOAuthConnectionTx(ctx context.Context, tx pgx.Tx, tenant u
 func (v *Vault) createConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, name, authType string, creds map[string]string, by, provisionedBy string, expiresAt *time.Time, detail map[string]any) (uuid.UUID, error) {
 	id := uuid.Must(uuid.NewV7())
 	var secretRef *uuid.UUID
+	creds = stored(creds)
 	if len(creds) > 0 {
 		sid := uuid.Must(uuid.NewV7())
 		raw, _ := json.Marshal(creds)
@@ -87,13 +88,15 @@ func (v *Vault) ConnectionCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, 
 	out := map[string]string{}
 	var connector, name, env string
 	var ref *uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref FROM connections WHERE id = $1 AND tenant_id = $2`, conn, tenant).Scan(&connector, &name, &env, &ref)
+	var mode *string
+	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref, mode FROM connections WHERE id = $1 AND tenant_id = $2`, conn, tenant).Scan(&connector, &name, &env, &ref, &mode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
+	defer withMode(out, mode)
 	if ref == nil {
 		return out, nil
 	}
@@ -186,7 +189,7 @@ func (v *Vault) ReplaceCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, con
 	if err != nil {
 		return err
 	}
-	raw, _ := json.Marshal(creds)
+	raw, _ := json.Marshal(stored(creds))
 	sid := uuid.Must(uuid.NewV7())
 	if ref != nil {
 		sid = *ref
@@ -238,7 +241,7 @@ func SetRouteKeysTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID, keys
 func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connector, name string) (map[string]string, error) {
 	out := map[string]string{}
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		q := `SELECT c.id, c.name, c.secret_ref FROM connections c WHERE c.tenant_id = $1 AND c.environment = $2 AND c.connector = $3 AND c.status = 'active'`
+		q := `SELECT c.id, c.name, c.secret_ref, c.mode FROM connections c WHERE c.tenant_id = $1 AND c.environment = $2 AND c.connector = $3 AND c.status = 'active'`
 		args := []any{tenant, env, connector}
 		if name != "" {
 			q += ` AND c.name = $4`
@@ -252,11 +255,12 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 			id   uuid.UUID
 			name string
 			ref  *uuid.UUID
+			mode *string
 		}
 		var ms []match
 		for rows.Next() {
 			var m match
-			if err := rows.Scan(&m.id, &m.name, &m.ref); err != nil {
+			if err := rows.Scan(&m.id, &m.name, &m.ref, &m.mode); err != nil {
 				rows.Close()
 				return err
 			}
@@ -269,6 +273,7 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 		case len(ms) > 1:
 			return fmt.Errorf("%d active %s connections in %s; name one with the step's connection field: %w", len(ms), connector, env, ErrAmbiguous)
 		}
+		defer withMode(out, ms[0].mode)
 		if ms[0].ref == nil {
 			return nil
 		}
@@ -290,4 +295,30 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 		err = ErrNotFound
 	}
 	return out, err
+}
+
+// modeKey is connector.ModeKey: a connection's mode (live, test) handed
+// to its connector with the credentials, never stored with them.
+const modeKey = "$mode"
+
+// withMode adds a connection's mode to the credentials handed out.
+func withMode(creds map[string]string, mode *string) {
+	if mode != nil && *mode != "" && creds != nil {
+		creds[modeKey] = *mode
+	}
+}
+
+// stored is the credentials as they are encrypted: without the keys only
+// handed out ($mode), so a read and a write back never store them.
+func stored(creds map[string]string) map[string]string {
+	if _, ok := creds[modeKey]; !ok {
+		return creds
+	}
+	out := make(map[string]string, len(creds))
+	for k, v := range creds {
+		if k != modeKey {
+			out[k] = v
+		}
+	}
+	return out
 }

@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -35,9 +34,14 @@ var manifest []byte
 // answered from iswallet's replay cache (24 hours), less a safety margin.
 const ReplayWindow = 23 * time.Hour
 
-// Options configure the connector; BaseURL defaults to the manifest's (sandbox).
+// Options configure the connector. LiveURL is iswallet's production
+// address (TASKIEM_ISWALLET_URL), issued at go-live: until it is set, live
+// connections cannot be made. TestURL replaces the sandbox's
+// (TASKIEM_ISWALLET_TEST_URL, tests). BaseURL is where connections made
+// before modes go: the live address when there is one, else the sandbox.
 type Options struct {
-	BaseURL string
+	LiveURL, TestURL string
+	BaseURL          string
 	// Now is the clock; nil uses time.Now.
 	Now func() time.Time
 }
@@ -46,7 +50,9 @@ type Options struct {
 func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
-	c := &client{base: strings.TrimRight(m.BaseURL, "/"), now: o.Now}
+	m.SetModeURL("live", o.LiveURL)
+	m.SetModeURL("test", o.TestURL)
+	c := &client{m: m, now: o.Now}
 	if c.now == nil {
 		c.now = time.Now
 	}
@@ -107,8 +113,8 @@ func allowWallet(req connector.Request, field, wallet string) error {
 }
 
 type client struct {
-	base string
-	now  func() time.Time
+	m   *connector.Manifest // its modes' addresses, read on each call
+	now func() time.Time
 }
 
 // apiError is iswallet's error envelope.
@@ -130,7 +136,11 @@ func (c *client) do(ctx context.Context, req connector.Request, method, path str
 	if write {
 		headers["Idempotency-Key"] = req.IdempotencyKey
 	}
-	err := connector.DoJSON(ctx, req.HTTP, method, c.base+path, headers, body, out)
+	base, err := c.m.BaseFor(req.Credentials)
+	if err != nil {
+		return err
+	}
+	err = connector.DoJSON(ctx, req.HTTP, method, base+path, headers, body, out)
 	var he *connector.HTTPError
 	if err == nil || !errors.As(err, &he) {
 		return err // success, or a transport error DoJSON already classified

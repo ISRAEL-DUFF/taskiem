@@ -324,6 +324,10 @@ func loadConfig() (config, error) {
 			DojahURL:    os.Getenv("TASKIEM_DOJAH_URL"),
 			IswalletURL: os.Getenv("TASKIEM_ISWALLET_URL"),
 			PayrollaURL: os.Getenv("TASKIEM_PAYROLLA_URL"),
+			// The test modes' addresses (connector/v1 rule 17): iswallet's
+			// sandbox by default; Payrolla's none until it is set.
+			IswalletTestURL: os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
+			PayrollaTestURL: os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
@@ -680,12 +684,20 @@ func (e *engine) moneyLog() *moneylog.Log {
 func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]string {
 	var out map[string]string
 	for _, c := range reg.List() {
-		u, err := url.Parse(c.Manifest.BaseURL)
-		if err != nil {
-			continue
+		// The base URL, or else a mode's address (TASKIEM_ISWALLET_TEST_URL
+		// at a local fake): one loopback port per connector.
+		var u *url.URL
+		for _, raw := range append([]string{c.Manifest.BaseURL}, modeURLs(c.Manifest)...) {
+			p, err := url.Parse(raw)
+			if err != nil {
+				continue
+			}
+			if ip, err := netip.ParseAddr(p.Hostname()); err == nil && ip.IsLoopback() {
+				u = p
+				break
+			}
 		}
-		ip, err := netip.ParseAddr(u.Hostname())
-		if err != nil || !ip.IsLoopback() {
+		if u == nil {
 			continue
 		}
 		port := u.Port()
@@ -696,7 +708,15 @@ func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]str
 			out = map[string]string{}
 		}
 		out["connector:"+c.Manifest.ID] = port
-		log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", c.Manifest.BaseURL)
+		log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
+	}
+	return out
+}
+
+func modeURLs(m *connector.Manifest) []string {
+	var out []string
+	for _, h := range m.Auth.HostModes {
+		out = append(out, h.BaseURL)
 	}
 	return out
 }
