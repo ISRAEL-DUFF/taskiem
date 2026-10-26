@@ -290,7 +290,7 @@ func (g *gen) trigger() obj {
 	case 7:
 		return obj{{"type", "ussd"}, {"config", g.ussd()}}
 	case 0:
-		c := obj{{"path", "/" + g.word(6) + "/v1.events"}, {"auth", pick(g, "hmac", "bearer", "mtls", "none")}}
+		c := obj{{"path", "/" + g.word(6) + "/v1.events"}, {"auth", pick(g, "hmac", "bearer", "basic", "jwt", "mtls", "none")}}
 		if g.chance(0.5) {
 			c.set("dedup", "=trigger.headers['X-Event-Id']")
 		}

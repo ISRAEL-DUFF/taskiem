@@ -385,3 +385,21 @@ What is left:
 - The partner cannot remove a member or delete an installed workflow (the sub-tenant's admins can remove members; workflows are not deleted anywhere yet). A package is one workflow: no bundles of several workflows, connectors or approval policies.
 - Installing does not add the hosts an `http` step calls to the sub-tenant's egress allow-list; its people add them. A webhook signing secret can be made only once the webhook is deployed in that environment.
 - Without email, someone new cannot set up an account from an invitation (`delivery: none`); there is no operator command to hand them a link, by design.
+
+## Webhook trigger options
+
+Done 25 October 2026, after comparing the webhook trigger with n8n's Webhook node. Contract: [webhook triggers](contracts/wd-v1.md#webhook-triggers).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Methods | `methods` (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`; POST by default); another method gets 405 with `Allow`; a bodiless call's query is `trigger.body`, and the same query dedups; `trigger.method` | `engine/ingest/hooks.go`, `engine/ingest/listen.go` (`parseWebhookCall`) |
+| Basic and JWT | `auth: basic` (the secret is `user:password`, compared hashed, `WWW-Authenticate` on 401); `auth: jwt` (HS256/384/512 with a shared key, RS256/384/512 and ES256/384 with a PEM public key or certificate; `none` and key confusion refused; `exp` required, `nbf`, a minute's leeway; `issuer`, `audience`, `algorithms`); no JWT library | `engine/ingest/webhook.go` |
+| CORS | `cors.origins` (origins or `*`); preflight answered from the trigger's methods; listed origins read the answer, others get 403; servers (no `Origin`) unchanged; refused with `hmac`, `bearer` and `basic`, whose secrets a page cannot keep (rule H3) | `engine/ingest/webhook.go`, `engine/wd/webhook.go` |
+| Options stored | Methods, jwt settings and origins in `triggers.options`; `triggers.auth` takes `basic` and `jwt` | migration 00223, `engine/ingest/triggers.go` |
+| Signing secrets | "New signing secret" makes `taskiem:<password>` for basic and an HS256 key for jwt | `api/signingsecret.go` |
+| Test calls | `POST`, `GET /v1/workflows/{wf}/webhook-listens[/{listen}]`; `/hooks/{tenant}/_listen/{id}/{token}` keeps the first call within two minutes, sealed, with its method, origin and auth checks; starts nothing; deleted an hour after expiry. The editor's "Listen for a test call" shows the address, a curl example, the call and its checks, and makes the inputs schema from the body | `api/webhooklisten.go`, `engine/ingest/listen.go`, `web/src/canvas/WebhookTrigger.tsx` |
+| Editor and SDK | Methods, the new auths, JWT issuer and audience, origins; `webhook()` in `@taskiem/sdk` takes them | `web/src/canvas/WebhookTrigger.tsx`, `sdk/src/builder.ts` |
+| Tests | GET with query bodies and dedup, 405s, basic, JWT end to end and every refusal (wrong key, `none`, HS on a public key, disallowed algorithm, expired, leeway, no `exp`, `nbf`, issuer, audience, private key as secret), CORS preflights and calls, the save-time rules, test calls (wrong token, capture once, checks, no runs, expiry, reserved path) through the edge and the API | `engine/ingest/webhook_test.go`, `engine/ingest/webhookauth_test.go`, `api/webhooklisten_test.go`, `web/src/lib/webhook.test.ts` |
+
+What is left: path parameters (`/orders/:id`), binary bodies and the raw body, an IP allow-list, and JWT keys from a JWKS URL; a JWT's claims are not given to the run.
+

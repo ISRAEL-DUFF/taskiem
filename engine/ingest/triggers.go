@@ -42,6 +42,7 @@ func WebhookSecret(def *wd.Definition) string { return "webhook_" + def.ID }
 
 type webhookConfig struct {
 	path, auth, dedup string
+	options           webhookOptions
 }
 
 type eventConfig struct {
@@ -66,11 +67,15 @@ func parseWebhook(c map[string]any) (webhookConfig, error) {
 	w := webhookConfig{path: str(c, "path"), auth: str(c, "auth"), dedup: str(c, "dedup")}
 	switch {
 	case w.auth == "mtls":
-		return w, fmt.Errorf("mtls webhooks need the edge proxy, which is not available yet; use hmac or bearer")
+		return w, fmt.Errorf("mtls webhooks need the edge proxy, which is not available yet; use hmac, bearer, basic or jwt")
 	case strings.HasPrefix(w.path, "/connectors/") || w.path == "/connectors":
 		return w, fmt.Errorf("webhook paths under /connectors are reserved for connector events")
+	case strings.HasPrefix(w.path, listenPrefix+"/") || w.path == listenPrefix:
+		return w, fmt.Errorf("webhook paths under %s are reserved for test calls", listenPrefix)
 	}
-	return w, nil
+	var err error
+	w.options, err = parseWebhookOptions(c)
+	return w, err
 }
 
 func parseEvent(c map[string]any, reg connector.Lookup) (eventConfig, error) {
@@ -248,8 +253,8 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 		switch def.Trigger.Type {
 		case "webhook":
 			w, _ := parseWebhook(c)
-			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, path, auth, dedup, secret_name)
-				VALUES ($1, $2, $3, $4, $5, 'webhook', $6, $7, NULLIF($8, ''), $9)`, id, tenant, wf, version, env, w.path, w.auth, w.dedup, WebhookSecret(def))
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, path, auth, dedup, secret_name, options)
+				VALUES ($1, $2, $3, $4, $5, 'webhook', $6, $7, NULLIF($8, ''), $9, $10)`, id, tenant, wf, version, env, w.path, w.auth, w.dedup, WebhookSecret(def), w.options.stored())
 		case "connector_event":
 			e := ev
 			var opts []byte

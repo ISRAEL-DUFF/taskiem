@@ -52,7 +52,9 @@ type Connections interface {
 
 // Handler receives webhooks (role "edge"), mounted at /hooks:
 //
-//	POST /hooks/{tenant}/{path...}                          webhook triggers
+//	POST /hooks/{tenant}/{path...}                          webhook triggers (and GET, PUT, PATCH,
+//	                                                        DELETE where the trigger takes them; OPTIONS for CORS)
+//	ANY  /hooks/{tenant}/_listen/{listen}/{token}           a test call, kept for the editor (listen.go)
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}   connector events
 //	POST /hooks/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}
 //	                                                        the same, for providers whose callback URLs may not carry a query string (path_secret)
@@ -107,7 +109,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt.Get("/{tenant}/connectors/{connector}/{trigger}", h.connectorHandshake)
 		rt.Post("/{tenant}/callbacks/{run}/{token}/{inst}", h.callback)
 		rt.Put("/{tenant}/callbacks/{run}/{token}/{inst}", h.callback)
-		rt.Post("/{tenant}/*", h.webhook)
+		rt.HandleFunc("/{tenant}"+listenPrefix+"/{listen}/{token}", h.listen)
+		rt.Options("/{tenant}/*", h.webhookPreflight)
+		for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+			rt.Method(m, "/{tenant}/*", http.HandlerFunc(h.webhook))
+		}
 		h.router = rt
 	})
 	kind := "webhook"
@@ -440,6 +446,40 @@ type webhookTrigger struct {
 	version       int
 	auth          string
 	dedup, secret *string
+	options       webhookOptions
+}
+
+// lookupWebhook finds the webhook trigger at a path in an environment.
+func (h *Handler) lookupWebhook(ctx context.Context, tenant uuid.UUID, env, path string) (webhookTrigger, error) {
+	var t webhookTrigger
+	var opts []byte
+	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id, workflow_id, version, auth, dedup, secret_name, options FROM triggers WHERE type = 'webhook' AND environment = $1 AND path = $2`,
+			env, path).Scan(&t.id, &t.workflow, &t.version, &t.auth, &t.dedup, &t.secret, &opts)
+	})
+	t.options = loadWebhookOptions(opts)
+	return t, err
+}
+
+// webhookPreflight answers a browser's OPTIONS before calling a webhook
+// that allows web pages (cors).
+func (h *Handler) webhookPreflight(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), budget)
+	defer cancel()
+	d, ok := h.receive(w, r)
+	if !ok {
+		return
+	}
+	t, err := h.lookupWebhook(ctx, d.tenant, d.env, "/"+chi.URLParam(r, "*"))
+	if errors.Is(err, pgx.ErrNoRows) {
+		replyErr(w, http.StatusNotFound, "no webhook at this path")
+		return
+	}
+	if err != nil {
+		h.unavailable(w, r, err)
+		return
+	}
+	t.options.preflight(w, r)
 }
 
 // webhook handles a webhook trigger delivery.
@@ -452,11 +492,7 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 	}
 	tenant, env, body := d.tenant, d.env, d.body
 	path := "/" + chi.URLParam(r, "*")
-	var t webhookTrigger
-	err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT id, workflow_id, version, auth, dedup, secret_name FROM triggers WHERE type = 'webhook' AND environment = $1 AND path = $2`,
-			env, path).Scan(&t.id, &t.workflow, &t.version, &t.auth, &t.dedup, &t.secret)
-	})
+	t, err := h.lookupWebhook(ctx, tenant, env, path)
 	if errors.Is(err, pgx.ErrNoRows) {
 		replyErr(w, http.StatusNotFound, "no webhook at this path")
 		return
@@ -465,23 +501,27 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		h.unavailable(w, r, err)
 		return
 	}
-	if t.auth != "none" {
-		secret := ""
-		if t.secret != nil {
-			use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindWebhook, Purpose: secrets.PurposeIngestVerify})
-			secret, err = h.Secrets.Get(use, tenant, env, *t.secret)
-			if err != nil && !errors.Is(err, secrets.ErrNotFound) {
-				h.unavailable(w, r, err)
-				return
-			}
-		}
-		scheme := map[string]string{"hmac": "hmac_sha256", "bearer": "bearer"}[t.auth]
-		if err := connector.VerifyWebhook(&connector.VerifySpec{Scheme: scheme, Header: signatureHeader}, secret, r.Header, body); err != nil {
-			replyErr(w, http.StatusUnauthorized, "signature or token invalid")
+	if !slices.Contains(t.options.Methods, r.Method) {
+		w.Header().Set("Allow", strings.Join(t.options.Methods, ", "))
+		replyErr(w, http.StatusMethodNotAllowed, "this webhook takes "+strings.Join(t.options.Methods, ", "))
+		return
+	}
+	if !t.options.corsHeaders(w, r.Header.Get("Origin")) {
+		replyErr(w, http.StatusForbidden, "this webhook does not take calls from web pages at this origin")
+		return
+	}
+	if err := h.verifyCall(ctx, tenant, env, t.auth, t.secret, t.options, r.Header, body); err != nil {
+		if !errors.Is(err, errCallRefused) {
+			h.unavailable(w, r, err)
 			return
 		}
+		if t.auth == "basic" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="taskiem", charset="UTF-8"`)
+		}
+		replyErr(w, http.StatusUnauthorized, "signature or token invalid")
+		return
 	}
-	p := parse(r, body)
+	p := parseWebhookCall(r, body)
 	def, err := h.Store.Definition(ctx, tenant, t.workflow, t.version)
 	if err != nil {
 		h.unavailable(w, r, err)
@@ -492,8 +532,12 @@ func (h *Handler) webhook(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusUnprocessableEntity, map[string]any{"error": "body does not match the workflow's inputs schema", "problems": msgs})
 		return
 	}
-	trigger := map[string]any{"type": "webhook", "body": p.body, "headers": p.headers, "query": p.query}
+	trigger := map[string]any{"type": "webhook", "method": r.Method, "body": p.body, "headers": p.headers, "query": p.query}
 	dedup := bodyHash(body)
+	if len(body) == 0 && wd.Bodiless(r.Method) {
+		// The query is the body: the same query is the same delivery.
+		dedup = bodyHash([]byte(r.Method + " " + callQuery(r)))
+	}
 	if t.dedup != nil {
 		// A WD expression: it sees the run's trigger root, as steps do.
 		if dedup, err = evalString(h.wdExprs, *t.dedup, map[string]any{"trigger": trigger}); err != nil || dedup == "" {

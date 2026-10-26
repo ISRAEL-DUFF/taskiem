@@ -24,8 +24,9 @@ async function axeBoth(page: Page, where: string) {
 test("debtors are aged, reminded by the ladder, promises kept or missed, and a plan in arrears shown", async ({ page, browser }) => {
   test.setTimeout(300_000);
   await familySchool(page, "Chase Family Academy");
-  // The fees were due last month: the term's date and the invoices' follow,
-  // in Lagos days, as the server ages them (the test database runs in UTC).
+  // The fees were due last month: the term's date and the invoices' follow.
+  // Dates are Lagos's, as the school's days are: the database's current_date
+  // is UTC's, a day behind for the hour before midnight in Lagos.
   sql(`UPDATE school_terms SET fees_due_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 20 WHERE id IN (SELECT t.id FROM school_terms t JOIN tenants x ON x.id = t.tenant_id WHERE x.name = 'Chase Family Academy')`);
   sql(`UPDATE customer_invoices SET due_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 20, updated_at = now() WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Chase Family Academy')`);
 
@@ -80,7 +81,7 @@ test("debtors are aged, reminded by the ladder, promises kept or missed, and a p
 
   // The day after the promise's date, the check finds the balance unmoved:
   // promise missed, flagged on Debtors and on the student's page.
-  sql(`UPDATE school_promises SET promised_on = current_date - 1 WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Chase Family Academy')`);
+  sql(`UPDATE school_promises SET promised_on = (now() AT TIME ZONE 'Africa/Lagos')::date - 1 WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Chase Family Academy')`);
   await page.getByRole("button", { name: "Check promises and plans now" }).click();
   await expect(page.getByText("Checked: 1 promise missed, 0 kept, 0 instalments newly in arrears.")).toBeVisible();
   await expect(second).toContainText("Promise missed");
