@@ -3196,6 +3196,152 @@ export const zoho_books = {
   record_payment: (input: ZohoBooksRecordPaymentInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "record_payment", input, extra),
 };
 
+// Zoho CRM (zoho_crm@1)
+export interface ZohoCrmAddNoteInput {
+  content: Val<string>;
+  /** The record the note is on */
+  id: Val<string>;
+  module: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  title?: Val<string>;
+}
+export interface ZohoCrmGetRecordInput {
+  id: Val<string>;
+  module: Val<string>;
+}
+export interface ZohoCrmListModulesInput {
+  [key: string]: Value;
+}
+export interface ZohoCrmSearchRecordsInput {
+  criteria?: Val<string>;
+  email?: Val<string>;
+  limit?: Val<number>;
+  module: Val<string>;
+  phone?: Val<string>;
+  word?: Val<string>;
+}
+export interface ZohoCrmUpdateRecordInput {
+  id: Val<string>;
+  module: Val<string>;
+  /** The fields to set */
+  record: Value;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  run_workflows?: Val<boolean>;
+}
+export interface ZohoCrmUpsertRecordInput {
+  /** The unique fields to match by */
+  duplicate_check_fields?: Value;
+  /** The module's API name: Leads, Contacts, Deals… */
+  module: Val<string>;
+  /** Fields by their API names */
+  record: Value;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  /** Whether CRM's own workflow rules run for the change */
+  run_workflows?: Val<boolean>;
+}
+export const zoho_crm = {
+  /** Add a note (idempotent_write) */
+  add_note: (input: ZohoCrmAddNoteInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "add_note", input, extra),
+  /** Read a record (read) */
+  get_record: (input: ZohoCrmGetRecordInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "get_record", input, extra),
+  /** List modules (read) */
+  list_modules: (input?: ZohoCrmListModulesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "list_modules", input, extra),
+  /** Find records (read) */
+  search_records: (input: ZohoCrmSearchRecordsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "search_records", input, extra),
+  /** Update a record (idempotent_write) */
+  update_record: (input: ZohoCrmUpdateRecordInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "update_record", input, extra),
+  /** Add or update a record (idempotent_write) */
+  upsert_record: (input: ZohoCrmUpsertRecordInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "upsert_record", input, extra),
+};
+
+// Zoho Mail (zoho_mail@1)
+export interface ZohoMailGetAccountInput {
+  [key: string]: Value;
+}
+export interface ZohoMailGetMessageInput {
+  folder_id: Val<string>;
+  message_id: Val<string>;
+}
+export interface ZohoMailListFoldersInput {
+  [key: string]: Value;
+}
+export interface ZohoMailListLabelsInput {
+  [key: string]: Value;
+}
+export interface ZohoMailListMessagesInput {
+  /** As list_folders lists it; default the inbox */
+  folder_id?: Val<string>;
+  label_id?: Val<string>;
+  limit?: Val<number>;
+  status?: Val<"all" | "read" | "unread">;
+}
+export interface ZohoMailNewMessagesInput {
+  since: Val<string>;
+}
+export interface ZohoMailReplyInput {
+  /** Reply to all */
+  all?: Val<boolean>;
+  cc?: Value;
+  html?: Val<string>;
+  /** The email replied to */
+  message_id: Val<string>;
+  /** Default: Re: and the email's subject */
+  subject?: Val<string>;
+  text?: Val<string>;
+  to: Value;
+}
+export interface ZohoMailSearchMessagesInput {
+  limit?: Val<number>;
+  search_key: Val<string>;
+}
+export interface ZohoMailSendMessageInput {
+  bcc?: Value;
+  cc?: Value;
+  /** The mailbox (the default) or one of its aliases */
+  from?: Val<string>;
+  /** HTML body; takes the place of text */
+  html?: Val<string>;
+  subject: Val<string>;
+  /** Plain-text body */
+  text?: Val<string>;
+  to: Value;
+}
+export interface ZohoMailUpdateMessageInput {
+  change: Val<"mark_read" | "mark_unread" | "move" | "add_label" | "remove_label">;
+  /** move: the folder */
+  folder_id?: Val<string>;
+  /** add_label, remove_label: the label */
+  label_id?: Val<string>;
+  message_ids: Value;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export const zoho_mail = {
+  /** Get the mailbox (read) */
+  get_account: (input?: ZohoMailGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "get_account", input, extra),
+  /** Read an email (read) */
+  get_message: (input: ZohoMailGetMessageInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "get_message", input, extra),
+  /** List folders (read) */
+  list_folders: (input?: ZohoMailListFoldersInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "list_folders", input, extra),
+  /** List labels (read) */
+  list_labels: (input?: ZohoMailListLabelsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "list_labels", input, extra),
+  /** List emails (read) */
+  list_messages: (input?: ZohoMailListMessagesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "list_messages", input, extra),
+  /** Read new mail (read) */
+  new_messages: (input: ZohoMailNewMessagesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "new_messages", input, extra),
+  /** Reply to an email (unsafe_write) */
+  reply: (input: ZohoMailReplyInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "reply", input, extra),
+  /** Search emails (read) */
+  search_messages: (input: ZohoMailSearchMessagesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "search_messages", input, extra),
+  /** Send an email (unsafe_write) */
+  send_message: (input: ZohoMailSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "send_message", input, extra),
+  /** Mark, file or label an email (idempotent_write) */
+  update_message: (input: ZohoMailUpdateMessageInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "update_message", input, extra),
+};
+
 /** Connector refs with helpers here, for code generation. */
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
@@ -3239,6 +3385,8 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "xenibase@1": "xenibase",
   "youverify@1": "youverify",
   "zoho_books@1": "zoho_books",
+  "zoho_crm@1": "zoho_crm",
+  "zoho_mail@1": "zoho_mail",
 };
 
 /** The actions each helper has: any other action is generated as connector(...). */
@@ -3284,6 +3432,8 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
   "zoho_books@1": ["changes_since", "create_bill", "create_contact", "create_expense", "create_invoice", "create_sales_receipt", "find_contact", "find_invoices", "get_invoice", "list_accounts", "list_items", "list_organizations", "list_taxes", "record_payment"],
+  "zoho_crm@1": ["add_note", "get_record", "list_modules", "search_records", "update_record", "upsert_record"],
+  "zoho_mail@1": ["get_account", "get_message", "list_folders", "list_labels", "list_messages", "new_messages", "reply", "search_messages", "send_message", "update_message"],
 };
 
 // Capabilities (schemas/capabilities-v1.json): the same input and output on every rail.

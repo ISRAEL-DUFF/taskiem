@@ -43,6 +43,8 @@ import (
 	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/connectors/youverify"
 	"github.com/israel-duff/taskiem/connectors/zohobooks"
+	"github.com/israel-duff/taskiem/connectors/zohocrm"
+	"github.com/israel-duff/taskiem/connectors/zohomail"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -75,6 +77,10 @@ type Options struct {
 	// accounts server for every connection, instead of each account's own
 	// data centre (TASKIEM_ZOHO_BOOKS_URL, TASKIEM_ZOHO_ACCOUNTS_URL; tests).
 	ZohoBooksURL, ZohoAccountsURL string
+	// ZohoMailURL and ZohoCRMURL replace Zoho Mail's server and CRM's API
+	// for every connection (TASKIEM_ZOHO_MAIL_URL, TASKIEM_ZOHO_CRM_URL;
+	// tests).
+	ZohoMailURL, ZohoCRMURL string
 	// MetaURL replaces the Graph API for Messenger and Instagram
 	// (TASKIEM_META_GRAPH_URL; tests).
 	MetaURL string
@@ -134,6 +140,8 @@ func Register(r *connector.Registry, o Options) error {
 		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
 		quickbooks.New(quickbooks.Options{LiveURL: o.QuickBooksURL, TestURL: o.QuickBooksTestURL, TokenURL: o.QuickBooksTokenURL}),
 		zohobooks.New(zohobooks.Options{BaseURL: o.ZohoBooksURL, AccountsServer: o.ZohoAccountsURL}),
+		zohomail.New(zohomail.Options{BaseURL: o.ZohoMailURL, AccountsServer: o.ZohoAccountsURL}),
+		zohocrm.New(zohocrm.Options{BaseURL: o.ZohoCRMURL, AccountsServer: o.ZohoAccountsURL}),
 		meta.Messenger(meta.Options{BaseURL: o.MetaURL}),
 		meta.Instagram(meta.Options{BaseURL: o.MetaURL}),
 		postgres.New(),

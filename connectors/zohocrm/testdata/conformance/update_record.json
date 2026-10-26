@@ -1,0 +1,26 @@
+{
+ "action": "update_record",
+ "input": {
+  "module": "Deals",
+  "id": "5843104000000425101",
+  "record": {
+   "Stage": "Closed Won"
+  }
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "update"
+ ],
+ "expect": {
+  "output": {
+   "id": "5843104000000425101"
+  }
+ }
+}

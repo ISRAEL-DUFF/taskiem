@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "status": {
+    "code": 401,
+    "description": "Invalid OAuthtoken"
+   },
+   "data": {
+    "errorCode": "INVALID_OAUTHTOKEN",
+    "moreInfo": ""
+   }
+  }
+ }
+}

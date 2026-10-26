@@ -1,0 +1,21 @@
+{
+ "action": "get_record",
+ "input": {
+  "module": "Leads",
+  "id": "1"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "record_404"
+ ],
+ "expect": {
+  "error": "not_found"
+ }
+}

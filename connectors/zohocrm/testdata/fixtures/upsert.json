@@ -1,0 +1,42 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/Leads/upsert",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "data": [
+    {
+     "Last_Name": "Okafor",
+     "First_Name": "Adaeze",
+     "Email": "ada@example.com",
+     "Company": "Ada Cakes"
+    }
+   ],
+   "trigger": [
+    "workflow"
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": [
+    {
+     "code": "SUCCESS",
+     "duplicate_field": null,
+     "action": "insert",
+     "details": {
+      "id": "5843104000000425001",
+      "Created_By": {
+       "id": "1"
+      }
+     },
+     "message": "record added",
+     "status": "success"
+    }
+   ]
+  }
+ }
+}

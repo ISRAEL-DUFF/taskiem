@@ -1,0 +1,32 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002/folders",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": [
+    {
+     "folderId": "2560636000000008014",
+     "folderName": "Inbox",
+     "path": "/Inbox",
+     "folderType": "Inbox"
+    },
+    {
+     "folderId": "2560636000000008100",
+     "folderName": "Orders",
+     "path": "/Orders",
+     "folderType": "Normal"
+    }
+   ]
+  }
+ }
+}

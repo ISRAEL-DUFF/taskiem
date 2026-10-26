@@ -340,6 +340,8 @@ func loadConfig() (config, error) {
 			// connection, instead of each account's own (tests, a proxy).
 			ZohoBooksURL:    os.Getenv("TASKIEM_ZOHO_BOOKS_URL"),
 			ZohoAccountsURL: os.Getenv("TASKIEM_ZOHO_ACCOUNTS_URL"),
+			ZohoMailURL:     os.Getenv("TASKIEM_ZOHO_MAIL_URL"),
+			ZohoCRMURL:      os.Getenv("TASKIEM_ZOHO_CRM_URL"),
 			// The Graph API for Messenger and Instagram (tests).
 			MetaURL: os.Getenv("TASKIEM_META_GRAPH_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick

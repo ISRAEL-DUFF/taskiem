@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002/labels",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": [
+    {
+     "labelId": "2560636000000008200",
+     "displayName": "Paid",
+     "color": "#00ff00"
+    }
+   ]
+  }
+ }
+}
