@@ -1,0 +1,93 @@
+{
+  "id": "zoho-crm-paid-invoices",
+  "title": "Record paid invoices in Zoho CRM",
+  "summary": "When an invoice is paid in full, keep the customer as a Zoho CRM contact and the invoice as a won deal.",
+  "description": "Whenever one of your invoices is paid in full, Taskiem adds the customer to Zoho CRM as a contact (or updates the one with the same email), and records the invoice as a deal, closed won, for its amount, named by the invoice number, so your sales team sees who has paid. Running it again for the same invoice updates the same contact and deal rather than adding new ones.",
+  "category": "sales",
+  "tags": [
+    "zoho",
+    "crm"
+  ],
+  "keywords": [
+    "zoho",
+    "crm",
+    "deal",
+    "pipeline"
+  ],
+  "requires": [
+    "zoho"
+  ],
+  "connectors": [
+    "zoho_crm@1"
+  ],
+  "params": [
+    {
+      "name": "crm_connection",
+      "type": "connection",
+      "connector": "zoho_crm",
+      "title": "Zoho CRM connection",
+      "description": "Your Zoho CRM, connected with one click.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "stage",
+      "type": "string",
+      "title": "Deal stage",
+      "description": "The stage paid deals are put in, as your CRM names it.",
+      "required": false,
+      "default": "Closed Won",
+      "example": "Closed Won",
+      "max_length": 60
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_zohoCrmPaidInvoices",
+    "version": 1,
+    "name": "Record paid invoices in Zoho CRM",
+    "trigger": {
+      "type": "invoice",
+      "config": {
+        "event": "paid"
+      }
+    },
+    "steps": [
+      {
+        "id": "contact",
+        "type": "connector",
+        "name": "Add or update the customer",
+        "connector": "zoho_crm@1",
+        "action": "upsert_record",
+        "connection": "{{crm_connection}}",
+        "input": {
+          "module": "Contacts",
+          "record": "=has(trigger.body.customer.email) ? {'Last_Name': trigger.body.customer.name, 'Email': trigger.body.customer.email, 'Phone': trigger.body.customer.?phone.orValue('')} : {'Last_Name': trigger.body.customer.name, 'Phone': trigger.body.customer.?phone.orValue('')}",
+          "duplicate_check_fields": "=has(trigger.body.customer.email) ? ['Email'] : ['Phone']"
+        }
+      },
+      {
+        "id": "deal",
+        "type": "connector",
+        "name": "Record the paid invoice as a won deal",
+        "connector": "zoho_crm@1",
+        "action": "upsert_record",
+        "connection": "{{crm_connection}}",
+        "needs": [
+          "contact"
+        ],
+        "input": {
+          "module": "Deals",
+          "record": "={'Deal_Name': 'Invoice ' + trigger.body.number, 'Stage': {{stage}}, 'Amount': double(trigger.body.amount_kobo) / 100.0, 'Closing_Date': trigger.body.paid_at.substring(0, 10), 'Contact_Name': {'id': steps.contact.output.id}}",
+          "duplicate_check_fields": [
+            "Deal_Name"
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

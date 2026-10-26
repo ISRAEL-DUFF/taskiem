@@ -468,6 +468,15 @@ Differences from §6: the daily re-check of each Page's subscription is not buil
 
 §7.2 and §7.3, with the watch renewal.
 
+**Built** (K6, 26 October 2026), on the K1 pull request. Fixtures are shaped from Zoho's published examples; nothing has run against a Zoho account yet.
+- **The Zoho client, shared:** `connectors/internal/zoho` keeps the tokens (refreshed under the connection's lock at the account's accounts server) and the data centre's servers for Books, Mail and CRM; Books now uses it.
+- **`zoho_mail@1`:** connecting finds the user's own mailbox at their data centre's Mail server before saving (rule 21's Link) and keeps the granted token. Actions: send and reply (unsafe writes), list, search, read (as HTML and text), mark, move and label, folders and labels. `new_mail` is polled every 5 minutes, its subject, addresses and summary sealed.
+- **`zoho_crm@1`:** upsert by the module's unique fields (a retry updates), update, read, search, notes found before added, modules. `record_changes` is CRM's notification watch: registered remotely with a token of Taskiem's, verified by the new `body_token` scheme, asked for six days and renewed before it lapses, split into one event per record. A watch found after a crash is stopped and made again.
+- **On the way:** a registrar's calls and a polled trigger's read get the vault's rotation (`RemoteCall.Rotate`, the poller's requests). Without it, Zoho Books' polling would have failed once its access token expired.
+- **Templates:** paid invoices as Zoho CRM contacts and won deals; a receipt from the business's Zoho mailbox.
+
+Differences from §7.2 and §7.3: the scopes are one set (reading and sending), not chosen by what a workflow does; the mailbox is the user's first Zoho mailbox, with no picker; supplier bills read from mail into the books wait for an `ai` step template; storefront orders as deals wait, since a storefront form takes one workflow.
+
 ### K7: Resend and Brevo (M; needs K1 for `svix`)
 
 §9: both connectors, their webhooks, the consent rule, the receipt and list templates.
