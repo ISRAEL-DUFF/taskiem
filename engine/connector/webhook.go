@@ -176,6 +176,9 @@ type VerifySpec struct {
 	KeyDerivation   string `json:"key_derivation"` // none (default), sha256_hex
 	// Query names the URL parameter carrying the secret (query_secret).
 	Query string `json:"query"`
+	// Field names the JSON body's top-level field carrying the secret
+	// (body_token: Zoho CRM's channel token).
+	Field string `json:"field"`
 	// SignatureFormat t_v1 (hmac_sha256_timestamped): the header carries
 	// "t=<unix>,v1=<hex>[,v1=<hex>...]" instead of a timestamp header; any
 	// v1 value may match, so a provider can sign with an old and a new
@@ -289,6 +292,19 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		}
 		return nil
 	case "none":
+		return nil
+	case "body_token":
+		// The provider echoes the token it was given in the body (Zoho
+		// CRM's notifications): nothing is signed, so it is compared in
+		// constant time and only over a body that parses.
+		var b map[string]any
+		if secret == "" || v.Field == "" || json.Unmarshal(body, &b) != nil {
+			return ErrBadSignature
+		}
+		got, _ := b[v.Field].(string)
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
+			return ErrBadSignature
+		}
 		return nil
 	case "svix":
 		return verifySvix(v, secret, h, body)

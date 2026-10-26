@@ -201,7 +201,16 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 		g = &egress.Guard{Logger: p.Logger}
 	}
 	hc := g.Client(egress.Policy{Tenant: t.tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID}, 30*time.Second)
-	resp, err := action.Execute(ctx, connector.Request{Input: map[string]any{spec.Poll.Since: since.UTC().Format(time.RFC3339)}, Credentials: creds, HTTP: hc, Logger: p.Logger, Attempt: 1})
+	req := connector.Request{Input: map[string]any{spec.Poll.Since: since.UTC().Format(time.RFC3339)}, Credentials: creds, HTTP: hc, Logger: p.Logger, Attempt: 1}
+	// A connector that refreshes its own tokens (Zoho Books) stores them.
+	if r, ok := p.Connections.(interface {
+		RotateCredentials(ctx context.Context, tenant uuid.UUID, env, connector, name string, fn func(map[string]string) (map[string]string, error)) (map[string]string, error)
+	}); ok {
+		req.Rotate = func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+			return r.RotateCredentials(use, t.tenant, ScheduleEnvironment, conn.Manifest.ID, t.connection, fn)
+		}
+	}
+	resp, err := action.Execute(ctx, req)
 	if err != nil {
 		return 0, err
 	}

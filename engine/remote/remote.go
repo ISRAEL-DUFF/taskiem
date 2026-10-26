@@ -440,7 +440,10 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		timeout = 20 * time.Second
 	}
 	call := connector.RemoteCall{Credentials: creds,
-		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout)}
+		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout),
+		Rotate: func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+			return r.Vault.RotateCredentials(use, tenant, x.env, conn.Manifest.ID, x.connection, fn)
+		}}
 	name := Name(x.id)
 
 	if x.desired == "absent" {

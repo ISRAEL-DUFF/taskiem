@@ -888,9 +888,10 @@
                 "bearer",
                 "basic",
                 "svix",
+                "body_token",
                 "none"
               ],
-              "description": "svix: Svix's (Standard Webhooks) base64 HMAC-SHA256 of '<svix-id>.<svix-timestamp>.<raw body>' under the base64 key after the secret's whsec_, any of svix-signature's space-separated 'v1,<base64>' values matching; the timestamp within tolerance (default 5m). header_secret: the header carries the shared secret itself (compared in constant time). path_secret: the URL's path form /{env}/{connection}/{token} carries the shared secret (for providers whose callback URLs may not carry a query string). connector: the connector's own code verifies (for signatures no scheme describes). slack_v0: HMAC-SHA256 over 'v0:<timestamp>:<raw body>', the header carrying 'v0=<hex>'."
+              "description": "body_token: the JSON body's field (field) carries the shared secret itself, which the provider was given when the subscription was made (Zoho CRM's watch token; compared in constant time). svix: Svix's (Standard Webhooks) base64 HMAC-SHA256 of '<svix-id>.<svix-timestamp>.<raw body>' under the base64 key after the secret's whsec_, any of svix-signature's space-separated 'v1,<base64>' values matching; the timestamp within tolerance (default 5m). header_secret: the header carries the shared secret itself (compared in constant time). path_secret: the URL's path form /{env}/{connection}/{token} carries the shared secret (for providers whose callback URLs may not carry a query string). connector: the connector's own code verifies (for signatures no scheme describes). slack_v0: HMAC-SHA256 over 'v0:<timestamp>:<raw body>', the header carrying 'v0=<hex>'."
             },
             "encoding": {
               "enum": [
@@ -909,6 +910,10 @@
             },
             "header": {
               "type": "string"
+            },
+            "field": {
+              "type": "string",
+              "description": "body_token: the JSON body's top-level field carrying the shared secret."
             },
             "query": {
               "type": "string",

@@ -67,6 +67,16 @@ const (
 type RemoteCall struct {
 	Credentials map[string]string
 	HTTP        *http.Client
+	// Rotate stores credentials a connector refreshes (Zoho's access
+	// tokens), as Request.Rotate does for actions; nil where they cannot
+	// be stored.
+	Rotate func(ctx context.Context, fn RotateFunc) (map[string]string, error)
+}
+
+// Request is the call as an action's request, for registrars that share
+// an action's client.
+func (c RemoteCall) Request() Request {
+	return Request{Credentials: c.Credentials, HTTP: c.HTTP, Rotate: c.Rotate}
 }
 
 // Registrar manages a trigger's subscriptions at the provider. Errors wrap

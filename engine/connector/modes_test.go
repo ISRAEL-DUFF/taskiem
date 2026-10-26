@@ -188,3 +188,31 @@ func TestLinkedFields(t *testing.T) {
 		t.Errorf("an unknown linked field: %v", probs)
 	}
 }
+
+// body_token (Zoho CRM's watch token, echoed in the body) names its field,
+// and may verify a remotely registered trigger.
+func TestBodyToken(t *testing.T) {
+	src := `manifest: connector/v1
+id: watched
+version: 1.0.0
+name: Watched
+category: productivity
+auth:
+  type: api_key
+  fields: [{ key: token, label: Token, secret: true }]
+base_url: https://watched.example
+actions:
+  ping: { title: Ping, class: read, input: { type: object } }
+triggers:
+  changed:
+    type: webhook
+    registration: remote
+    verify: { scheme: body_token, field: token }
+`
+	if _, probs := Parse([]byte(src)); len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	if _, probs := Parse([]byte(strings.Replace(src, "body_token, field: token", "body_token", 1))); !strings.Contains(strings.Join(probs, "; "), "body_token names the body field") {
+		t.Errorf("without a field: %v", probs)
+	}
+}

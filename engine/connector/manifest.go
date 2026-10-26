@@ -545,6 +545,9 @@ func (m *Manifest) check() []string {
 				add("/triggers/%s/poll: only a trigger verified by plain HMAC can be polled", name)
 			}
 		}
+		if v := m.Triggers[name].Verify; v != nil && v.Scheme == "body_token" && v.Field == "" {
+			add("/triggers/%s/verify/field: body_token names the body field carrying the token", name)
+		}
 		// An ack is served from the hooks origin: never as a page.
 		if a := m.Triggers[name].Ack; a != nil && a.ContentType != "" {
 			if mt, _, err := mime.ParseMediaType(a.ContentType); err != nil || (mt != "text/plain" && mt != "application/json") {
@@ -560,7 +563,7 @@ func (m *Manifest) check() []string {
 			case t.Verify == nil:
 			case t.Verify.SecretField != "":
 				add("/triggers/%s/verify/secret_field: a remote trigger is verified with the secret the provider returned", name)
-			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer"}, t.Verify.Scheme):
+			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer", "body_token"}, t.Verify.Scheme):
 				add("/triggers/%s/verify/scheme: %s cannot verify a remotely registered trigger", name, t.Verify.Scheme)
 			}
 		}
