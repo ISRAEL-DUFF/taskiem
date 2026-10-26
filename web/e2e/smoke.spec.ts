@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { addStep, doneWithStep, newWorkflow } from "./builder";
 
 // SCREENSHOT_DIR=... saves screenshots of the main screens for review.
 const shot = async (page: Page, name: string) => {
@@ -14,15 +15,16 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
 
-  // Create a workflow; the editor opens on its first draft.
-  await page.getByRole("button", { name: "New workflow" }).click();
-  await page.getByLabel("Name").fill("Smoke flow");
-  await page.getByRole("button", { name: "Create" }).click();
-  await expect(page.getByTestId("node-start")).toBeVisible();
+  // Create a workflow: what starts it, then the builder with nothing else in it.
+  await newWorkflow(page, "Smoke flow");
+  await expect(page.getByTestId("node-trigger")).toContainText("When someone starts it");
+  await addStep(page, "change the data", "Change the data");
+  await doneWithStep(page);
+  await expect(page.getByTestId("node-change")).toBeVisible();
 
   // Add a code step after the first one, publish, start a run.
-  await page.getByTestId("node-start").click();
-  await page.getByRole("button", { name: "+ code" }).click();
+  await addStep(page, "run code", "Run code", "Change the data");
+  await doneWithStep(page);
   await expect(page.getByTestId("node-code")).toBeVisible();
 
   // The code view shows the workflow as TypeScript; an edit there applies.
@@ -33,11 +35,12 @@ test("sign in, build, publish, run, and verify the audit chain", async ({ page }
   await page.getByRole("button", { name: "Apply to workflow" }).click();
   await expect(page.getByRole("button", { name: "Apply to workflow" })).toBeDisabled();
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await page.getByRole("tab", { name: "Canvas" }).click();
+  await page.getByRole("tab", { name: "Build" }).click();
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText(/is published; new runs use it/)).toBeVisible();
   await page.getByTestId("node-code").click();
   await shot(page, "editor");
+  await doneWithStep(page);
 
   await page.getByRole("button", { name: "Start run" }).click();
   await page.getByRole("dialog").locator("textarea").fill('{"n": 2}');

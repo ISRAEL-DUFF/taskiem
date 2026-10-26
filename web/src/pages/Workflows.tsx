@@ -1,26 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import type { WorkflowDefinition } from "@sdk/wd";
-import { get, post, type WorkflowSummary } from "../api";
+import { get, type WorkflowSummary } from "../api";
 import { useAdvanced, useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, Item, Items, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton, fmtTime, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { AIBuilder } from "./AIBuild";
 import { filterWorkflows } from "../lib/lists";
-import { workflowID } from "../lib/aitables";
 import { triggerWords } from "../lib/home";
-
-/** A new workflow's first draft: a manual trigger and one step. */
-export function starter(name: string): WorkflowDefinition {
-  return {
-    schema: "wd/v1",
-    id: workflowID(name),
-    version: 1,
-    name,
-    trigger: { type: "manual" },
-    steps: [{ id: "start", type: "transform", config: { output: { received: "=trigger.body" } } }],
-  };
-}
 
 export function Workflows() {
   const { can } = useAuth();
@@ -36,11 +22,8 @@ export function Workflows() {
     else p.delete(k);
     setParams(p, { replace: true });
   };
-  const [creating, setCreating] = useState(false);
   const [ai, setAI] = useState(false);
-  const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
-  const act = useAction();
   const editable = can("workflow.edit");
   const shown = data ? filterWorkflows(data.workflows, q, state) : [];
   return (
@@ -49,27 +32,18 @@ export function Workflows() {
         title="Workflows"
         description="The jobs Taskiem does for you, on its own: on a schedule, when an order comes in, or when you start them."
         actions={
-          editable &&
-          (advanced ? (
-            <>
-              <button onClick={() => setAI(true)}>Build with AI</button>
-              <button className="primary" onClick={() => setCreating(true)}>
-                <Icon name="plus" />
-                New workflow
-              </button>
-            </>
-          ) : (
-            // The two ways to start (no-technical-steps N8); a blank canvas is under Advanced.
+          editable && (
+            // Three ways to start (docs/workflow-builder.md): choose what starts it and build, a template, or describe it.
             <>
               <Link className="button" to="/templates">
                 Start from a template
               </Link>
-              <button className="primary" onClick={() => setAI(true)}>
+              <Link className="button primary" to="/workflows/new">
                 <Icon name="plus" />
-                Describe it
-              </button>
+                New workflow
+              </Link>
             </>
-          ))
+          )
         }
       />
       <ErrorBox error={error} />
@@ -80,15 +54,10 @@ export function Workflows() {
           action={
             editable ? (
               <>
-                {advanced ? (
-                  <button className="primary" onClick={() => setCreating(true)}>
-                    Build your first workflow
-                  </button>
-                ) : (
-                  <button className="primary" onClick={() => setAI(true)}>
-                    Describe what it should do
-                  </button>
-                )}
+                <Link className="button primary" to="/workflows/new">
+                  Build your first workflow
+                </Link>
+                <button onClick={() => setAI(true)}>Describe what it should do</button>
                 <Link className="button" to="/templates">
                   Start from a template
                 </Link>
@@ -167,32 +136,6 @@ export function Workflows() {
         </>
       )}
       {ai && <AIBuilder goal={goal} onClose={() => setAI(false)} onSaved={(id, v) => nav(`/workflows/${id}?v=${v}`)} />}
-      {creating && (
-        <Modal title="New workflow" onClose={() => setCreating(false)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void act.run(async () => {
-                const r = await post<{ id: string }>("/v1/workflows", { name, definition: starter(name) });
-                nav(`/workflows/${r.id}`);
-              }, false);
-            }}
-          >
-            <Field label="Name">
-              <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
-            </Field>
-            <ErrorBox error={act.error} />
-            <div className="toolbar">
-              <button type="submit" className="primary" disabled={act.busy || !name}>
-                Create
-              </button>
-              <button type="button" onClick={() => setCreating(false)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </>
   );
 }

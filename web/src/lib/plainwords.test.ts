@@ -61,6 +61,13 @@ const OWNER_FILES = [
   "pages/Forms.tsx",
   "pages/StorefrontDomains.tsx",
   "pages/StorefrontEmbedSites.tsx",
+  "pages/NewWorkflow.tsx",
+  "builder/Canvas.tsx",
+  "builder/Picker.tsx",
+  "builder/StepWindow.tsx",
+  "builder/ContainerSettings.tsx",
+  "builder/PhoneSteps.tsx",
+  "forms/FieldText.tsx",
 ];
 
 const SHOWN_ATTRS = new Set(["label", "hint", "placeholder", "title", "aria-label", "description"]);
