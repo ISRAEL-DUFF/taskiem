@@ -1,0 +1,88 @@
+{
+  "id": "instagram-new-message-alert",
+  "title": "Tell me about new Instagram messages",
+  "summary": "When someone writes to your Instagram account, tell the owner or a team on WhatsApp, Telegram or email, once a day for each person.",
+  "description": "When someone writes to your Instagram account, Taskiem tells the owner (or the members with a role you choose) on the WhatsApp or Telegram they linked, or by email, so nobody is left waiting. It says once a day for each person that there is a new conversation, without the message itself: open Instagram or Meta Business Suite to read and reply.",
+  "category": "customers",
+  "tags": [
+    "instagram",
+    "messages",
+    "alerts"
+  ],
+  "keywords": [
+    "instagram",
+    "dm",
+    "message",
+    "new",
+    "alert",
+    "tell",
+    "notify"
+  ],
+  "requires": [
+    "instagram"
+  ],
+  "connectors": [
+    "instagram@1",
+    "notify@1"
+  ],
+  "params": [
+    {
+      "name": "conn",
+      "type": "connection",
+      "connector": "instagram",
+      "title": "Instagram connection",
+      "description": "Your Instagram professional account, connected with one click through its Facebook Page.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "role",
+      "type": "string",
+      "title": "Tell members with this role",
+      "description": "Leave it blank to tell the owner.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "picker": "role",
+      "max_length": 60
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_instagramNewMessageAlert",
+    "version": 1,
+    "name": "Tell me about new Instagram messages",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "instagram@1",
+        "trigger": "messages",
+        "events": [
+          "message"
+        ],
+        "connection": "{{conn}}"
+      }
+    },
+    "steps": [
+      {
+        "id": "tell",
+        "type": "connector",
+        "name": "Tell the team",
+        "connector": "notify@1",
+        "action": "tell",
+        "input": {
+          "to": "={{role}} == '' ? 'owner' : 'role'",
+          "role": "{{role}}",
+          "message": "Someone has written to your Instagram account. Open Instagram or Meta Business Suite to read it and reply within 24 hours."
+        },
+        "effect": {
+          "idempotency_seed": "='dm:' + trigger.item.sender_id + ':' + string((int(trigger.item.event.timestamp) + 3600000) / 86400000)"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

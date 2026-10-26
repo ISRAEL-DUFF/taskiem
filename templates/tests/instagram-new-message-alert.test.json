@@ -1,0 +1,45 @@
+{
+  "schema": "wd-test/v1",
+  "template": "instagram-new-message-alert",
+  "params": {},
+  "cases": [
+    {
+      "name": "the owner hears of a new conversation, without the message",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "account": "17841400000000001",
+          "sender_id": "5432109876543210",
+          "event": {
+            "sender": {
+              "id": "5432109876543210"
+            },
+            "recipient": {
+              "id": "17841400000000001"
+            },
+            "timestamp": 1793012400000,
+            "message": {
+              "mid": "m_1",
+              "text": "Do you deliver to Lekki?"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell": {
+            "to": "owner"
+          }
+        }
+      }
+    }
+  ]
+}

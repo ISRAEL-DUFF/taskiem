@@ -456,6 +456,14 @@ Differences from §7.1: there is no organisation picker in the web app; the conn
 
 §6. It can be built and tested on Meta's test Page and accounts as soon as K1 lands. It goes to businesses only when Meta grants Advanced Access.
 
+**Built** (K5, 26 October 2026), on the K1 pull request. Fixtures are shaped from Meta's published examples; nothing has run against a Meta app yet.
+- **Connecting:** `messenger@1` and `instagram@1` (`connectors/meta`) on Facebook Login through one Meta app (`client: meta`). Connector/v1 rule 21: a connector's `Link` completes the grant before the connection is saved. For Meta it trades the user token for a long-lived one, takes the one Page's own token (which does not expire), records the Page (or its Instagram account) as the account, and subscribes the Page to the app. Several Pages granted is refused in the person's words. The user token is not kept. Generic: `token_method: get`, `linked_fields`, a linked connection's lifetime taken from what Link made.
+- **Actions:** `send_message` (text or an attachment, quick replies, `HUMAN_AGENT`), with the window read from the conversation before sending: outside it, or to someone who never wrote, it fails before sending. Also `send_typing`, `mark_seen`, `get_profile` (sealed), `get_conversation`, and the connection checks.
+- **Triggers:** `messages` at `/hooks/apps/messenger@1/messages` and `/hooks/apps/instagram@1/messages`, verified with the app secret, the GET challenge answered, batches split per event and routed by the entry's Page or account, correlated on the person. Generic: a trigger's `pii` seals the sender and the text in run history (a run's trigger), and its `example` feeds dry runs.
+- **Templates:** an away reply outside opening hours and a new-message alert, for each.
+
+Differences from §6: the daily re-check of each Page's subscription is not built (connecting again subscribes again); comments come later; there is no "order in a DM becomes a payment link" template yet, since Meta gives no email, which most rails' payment links need. A signal waking a run that waits on the person carries the message as delivered (as WhatsApp's do); only a started run's trigger is sealed.
+
 ### K6: Zoho Mail and Zoho CRM (M; needs K4)
 
 §7.2 and §7.3, with the watch renewal.
