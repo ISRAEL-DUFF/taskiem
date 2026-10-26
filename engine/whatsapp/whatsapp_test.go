@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -136,6 +137,16 @@ func TestTemplates(t *testing.T) {
 			t.Errorf("duplicate %s", tpl.Name)
 		}
 		seen[tpl.Name] = true
+		if len(tpl.Examples) != len(tpl.Vars) {
+			t.Errorf("%s: %d examples for %d variables", tpl.Name, len(tpl.Examples), len(tpl.Vars))
+		}
+		if strings.Contains(tpl.Body, "\n") {
+			t.Errorf("%s: the body has a new line", tpl.Name)
+		}
+		if !strings.HasPrefix(tpl.Name, "taskiem_") || tpl.Category != "UTILITY" && tpl.Category != "AUTHENTICATION" {
+			t.Errorf("%s: name or category %q", tpl.Name, tpl.Category)
+		}
+		hosts := Hosts{App: "https://app.example.com/", Forms: "https://forms.example.com"}
 		vars := map[string]string{}
 		for _, v := range tpl.Vars {
 			vars[v] = "line one\nline two"
@@ -145,8 +156,11 @@ func TestTemplates(t *testing.T) {
 			if b.Type == "quick_reply" {
 				payloads = append(payloads, "p")
 			}
+			if b.Dynamic() {
+				vars[b.Var] = strings.TrimSuffix(b.URL(hosts), "{{1}}") + "tok123"
+			}
 		}
-		p, err := tpl.Payload("en", vars, payloads)
+		p, err := tpl.Payload("en", vars, payloads, hosts)
 		if err != nil {
 			t.Fatalf("%s: %v", tpl.Name, err)
 		}
@@ -157,8 +171,52 @@ func TestTemplates(t *testing.T) {
 		if strings.Contains(tpl.Render(vars), "{{") {
 			t.Errorf("%s renders with a placeholder left", tpl.Name)
 		}
+		// Every variable and button has its place in the submission.
+		sub, err := tpl.Submission("en", hosts)
+		if err != nil {
+			t.Fatalf("%s submission: %v", tpl.Name, err)
+		}
+		subRaw, _ := json.Marshal(sub)
+		for i := range tpl.Vars {
+			if tpl.Category != "AUTHENTICATION" && !strings.Contains(tpl.Body, "{{"+strconv.Itoa(i+1)+"}}") {
+				t.Errorf("%s: {{%d}} is not in the body", tpl.Name, i+1)
+			}
+		}
+		for _, b := range tpl.Buttons {
+			if b.Type == "url" && !strings.Contains(string(subRaw), `"url":"`+b.URL(hosts)+`"`) {
+				t.Errorf("%s: button %q is not submitted with its url: %s", tpl.Name, b.Text, subRaw)
+			}
+			if b.Dynamic() && (b.Var == "" || b.Example == "" || !strings.Contains(string(subRaw), `"example":["`+b.Example+`"]`)) {
+				t.Errorf("%s: dynamic button %q needs a var and an example: %s", tpl.Name, b.Text, subRaw)
+			}
+		}
+		if _, err := tpl.Submission("en", Hosts{}); err == nil && len(tpl.Buttons) > 0 && tpl.Buttons[0].Type == "url" {
+			t.Errorf("%s: submitted without a host for its url button", tpl.Name)
+		}
 	}
-	if _, err := TplApprovalRequest.Payload("en", map[string]string{"tenant": "a", "title": "b", "summary": "c", "environment": "d"}, nil); err == nil {
+	// A dynamic url button takes only a link under its host and path.
+	b := TplInvoice.Buttons[1]
+	hosts := Hosts{Forms: "https://forms.example.com"}
+	if s, err := b.Suffix(hosts, "https://forms.example.com/i/abc"); err != nil || s != "abc" {
+		t.Errorf("suffix %q %v", s, err)
+	}
+	for _, bad := range []string{"https://forms.example.com/s/abc", "https://evil.example.com/i/abc", "https://forms.example.com/i/", "https://forms.example.com/i/a/b", "https://forms.example.com/i/a?x=1"} {
+		if _, err := b.Suffix(hosts, bad); !errors.Is(err, ErrTemplateLink) {
+			t.Errorf("%s: %v", bad, err)
+		}
+	}
+	if _, err := TplInvoice.Payload("en", map[string]string{"tenant": "a", "number": "b", "amount": "c", "link": "https://forms.example.com/i/abc"}, []string{"p"}, Hosts{}); !errors.Is(err, ErrTemplateLink) {
+		t.Errorf("no host: %v", err)
+	}
+	if !TemplateUnusable(ErrTemplateNotApproved) || !TemplateUnusable(&GraphError{Code: 132001}) || TemplateUnusable(&GraphError{Code: 131047}) || TemplateUnusable(errors.New("x")) {
+		t.Error("TemplateUnusable")
+	}
+	// The authentication template goes in Meta's fixed format.
+	sub, _ := TplOTP.Submission("en", Hosts{})
+	if raw, _ := json.Marshal(sub); !strings.Contains(string(raw), `"add_security_recommendation":true`) || !strings.Contains(string(raw), `"code_expiration_minutes":10`) || !strings.Contains(string(raw), `"otp_type":"COPY_CODE"`) {
+		t.Errorf("otp submission: %s", raw)
+	}
+	if _, err := TplApprovalRequest.Payload("en", map[string]string{"tenant": "a", "title": "b", "summary": "c", "environment": "d"}, nil, Hosts{}); err == nil {
 		t.Error("approval template without payloads")
 	}
 }
