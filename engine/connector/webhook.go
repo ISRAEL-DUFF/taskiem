@@ -264,6 +264,8 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		return nil
 	case "none":
 		return nil
+	case "svix":
+		return verifySvix(v, secret, h, body)
 	case "basic":
 		// The secret is "user:password", sent as HTTP Basic credentials.
 		want := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret))
@@ -361,3 +363,45 @@ func verifyAny(secret string, signed []byte, sigs []string) error {
 	}
 	return nil
 }
+
+// verifySvix checks a delivery signed by Svix, as Resend's are (the
+// Standard Webhooks scheme): an HMAC-SHA256, base64-encoded, of
+// "<id>.<timestamp>.<raw body>" under the secret's key (the base64 after
+// "whsec_"). The id, timestamp and signatures come in svix-id,
+// svix-timestamp and svix-signature (or the webhook-* names); the last is
+// space-separated "v1,<base64>" values, any of which may match while the
+// sender rotates its secret.
+func verifySvix(v *VerifySpec, secret string, h http.Header, body []byte) error {
+	get := func(name string) string {
+		if s := strings.TrimSpace(h.Get("svix-" + name)); s != "" {
+			return s
+		}
+		return strings.TrimSpace(h.Get("webhook-" + name))
+	}
+	id, ts, sigs := get("id"), get("timestamp"), get("signature")
+	if id == "" || ts == "" || sigs == "" {
+		return fmt.Errorf("%w: missing svix-id, svix-timestamp or svix-signature", ErrBadSignature)
+	}
+	if err := checkTimestamp(v, ts); err != nil {
+		return err
+	}
+	key, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(secret, "whsec_"))
+	if secret == "" || err != nil || len(key) == 0 {
+		return fmt.Errorf("%w: the secret is not a whsec_ key", ErrBadSignature)
+	}
+	m := hmac.New(sha256.New, key)
+	m.Write([]byte(id + "." + ts + "."))
+	m.Write(body)
+	want := []byte(base64.StdEncoding.EncodeToString(m.Sum(nil)))
+	ok := 0
+	for _, part := range strings.Fields(sigs) {
+		if version, sig, found := strings.Cut(part, ","); found && version == "v1" {
+			ok |= subtle.ConstantTimeCompare([]byte(sig), want)
+		}
+	}
+	if ok != 1 {
+		return ErrBadSignature
+	}
+	return nil
+}
+
