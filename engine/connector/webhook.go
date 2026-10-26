@@ -412,4 +412,3 @@ func verifySvix(v *VerifySpec, secret string, h http.Header, body []byte) error 
 	}
 	return nil
 }
-

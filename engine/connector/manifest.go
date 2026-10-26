@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"mime"
 	"net/url"
-	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -32,17 +32,17 @@ type Manifest struct {
 	// Kind is rail, product or tool (decision 0044); empty is tool.
 	Kind string `json:"kind,omitempty"`
 	// Description is the manifest's own summary, shown to builders.
-	Description string                 `json:"description"`
-	Auth        Auth                   `json:"auth"`
-	BaseURL     string                 `json:"base_url"`
-	Egress      []string               `json:"egress_hosts"`
+	Description string   `json:"description"`
+	Auth        Auth     `json:"auth"`
+	BaseURL     string   `json:"base_url"`
+	Egress      []string `json:"egress_hosts"`
 	// ConnectionHosts are the hosts a connection's fields may name, where
 	// the provider keeps each account in one place (Zoho's data centres:
 	// *.zoho.com, *.zoho.eu…; rule 19): a ${connection.<field>} egress host
 	// or OAuth URL naming any other host is refused. Empty: any public host.
-	ConnectionHosts []string `json:"connection_hosts,omitempty"`
-	Actions     map[string]ActionSpec  `json:"actions"`
-	Triggers    map[string]TriggerSpec `json:"triggers"`
+	ConnectionHosts []string               `json:"connection_hosts,omitempty"`
+	Actions         map[string]ActionSpec  `json:"actions"`
+	Triggers        map[string]TriggerSpec `json:"triggers"`
 	// Capabilities and Events say what a rail can do in Taskiem's words
 	// (rule 16, engine/capability).
 	Capabilities map[string]CapabilityMap `json:"capabilities,omitempty"`

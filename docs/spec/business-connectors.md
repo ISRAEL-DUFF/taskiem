@@ -1,6 +1,6 @@
 # Business connectors: Slack, Instagram and Facebook, Zoho, QuickBooks, email
 
-Status: **Proposed** 2026-10-24 · Decision: [0051](../decisions/0051-platform-apps.md) (proposed) · Workstream **K0 to K9**, one pull request per milestone
+Status: **K1 built** 2026-10-26 (proposed 2026-10-24) · Decision: [0051](../decisions/0051-platform-apps.md) (accepted) · Workstream **K0 to K9**, one pull request per milestone
 
 The services small businesses already run their day on, connected so that a business clicks **Connect** and signs in, with no developer setup:
 
@@ -91,7 +91,7 @@ Connecting asks only for the scopes the connector needs. A business that connect
 
 ### 4.2 App-level webhooks (decision 0051)
 
-- **A platform URL per provider**: `POST /hooks/apps/{provider}` on the edge, and `GET` for handshakes (Meta's `hub.challenge`, Slack's `url_verification`).
+- **A platform URL per app-delivered trigger**: `POST /hooks/apps/{connector}/{trigger}` on the edge (Slack's app takes two: events and interactivity), and `GET` for handshakes (Meta's `hub.challenge`; Slack's `url_verification` comes by POST).
 - **Verified with the platform app's secret** from the environment:
   - Slack's signing secret, scheme `slack_v0`;
   - Meta's app secret, `X-Hub-Signature-256`, as for WhatsApp;
@@ -103,13 +103,13 @@ Connecting asks only for the scopes the connector needs. A business that connect
 
 ### 4.3 Refreshing tokens
 
-A connector may return credentials it refreshed (`Response.Credentials`, and the same from a refresh helper on every call). Taskiem then:
+A connector whose provider rotates refresh tokens refreshes through `req.RotateCredentials` (decision 0051 point 6, as built). Taskiem:
 
-- **Stores them before the step's result is recorded**, under a per-connection advisory lock: one refresh at a time per connection, across workers, so two workers never spend one QuickBooks refresh token. A worker that waited reads the stored token instead of refreshing again.
-- **Never logs them**, and records the write in the audit log as `connection.refresh` with no values.
+- **Refreshes once, and stores first**: the vault locks the connection's row, reads its credentials as stored now, and lets the connector refresh only if they are still stale; what it returns is stored before the lock goes. Ten workers that find the token expired at once spend one refresh token, and a worker that waited uses the new one.
+- **Never logs them**, and records the write in the audit log as `connection.refresh` with no values; the worker scrubs the new secret values from step records.
 - **Marks the connection expired** (the existing `ErrCredentialsRejected` path) when the provider says the refresh token is invalid, with the plain reason: "QuickBooks asks you to connect again".
 
-Access tokens are cached in memory per connection until shortly before they expire, so a busy workflow does not refresh on every step.
+The access token and its expiry are kept with the credentials, so the next step uses it without refreshing, whichever worker runs it.
 
 ### 4.4 Where an account lives
 
@@ -159,7 +159,7 @@ The normalised events `books.invoice.created`, `books.invoice.paid` and `books.p
 - The pasted-token connection stays, as an own app.
 - Slack's app must have public distribution turned on to be installed outside Taskiem's own workspace. A Marketplace listing is optional and comes later.
 
-**Events and interactivity** for platform connections come to `/hooks/apps/slack` and are routed by `team_id`. Slack sends `url_verification` once for the app; the existing handshake answers it. `app_uninstalled` and `tokens_revoked` mark the workspace's connections expired.
+**Events and interactivity** for platform connections come to `/hooks/apps/slack@1/events` (and `/interactions`) and are routed by `team_id`. Slack sends `url_verification` once for the app; the existing handshake answers it. `app_uninstalled` and `tokens_revoked` mark the workspace's connections expired.
 
 **Actions added:**
 
@@ -207,7 +207,7 @@ The normalised events `books.invoice.created`, `books.invoice.paid` and `books.p
 
   Both are slow, and applied for in K0 (§14).
 
-**Triggers** (app-level, `/hooks/apps/meta`, routed by the entry's Page or Instagram account id):
+**Triggers** (app-level, `/hooks/apps/messenger@1/messages` and `/hooks/apps/instagram@1/messages`, routed by the entry's Page or Instagram account id):
 
 | Trigger | Events |
 | --- | --- |
@@ -314,7 +314,7 @@ These are each a small connector on the same client, built when a template needs
 | `list_items`, `list_accounts`, `list_tax_codes` | Pickers |
 
 **Triggers:**
-- **Where they arrive:** QuickBooks sends change notifications to the one webhook URL of Taskiem's Intuit app. They come to `/hooks/apps/quickbooks`, are verified with the verifier token, and are routed by `realmId`.
+- **Where they arrive:** QuickBooks sends change notifications to the one webhook URL of Taskiem's Intuit app. They come to `/hooks/apps/quickbooks@1/changes`, are verified with the verifier token, and are routed by `realmId`.
 - **What they carry:** a notification names the entities that changed (Invoice, Payment, Customer…) and their ids; an enricher reads each entity before the run starts.
 - **Format:** Intuit is moving notifications to a CloudEvents format; K0 confirms which Taskiem receives and builds to the current one.
 - **Catching up:** after an outage, Taskiem reads what changed since the last notification (Intuit's change data capture) for each connected company.
@@ -387,9 +387,9 @@ The AI builder learns each connector from its manifest as it does today. The eva
 
 ### K1: platform apps, routing and refreshing (L)
 
-- **App-level webhooks** (§4.2, decision 0051): `/hooks/apps/{provider}`, verification by the platform secret, routing by account key in one audited function, the counted drop of unknown accounts, handshakes.
+- **App-level webhooks** (§4.2, decision 0051): `/hooks/apps/{connector}/{trigger}`, verification by the platform secret, routing by account key through one function that alone crosses tenants, the counted drop of unknown accounts, handshakes, uninstalls.
 - **Clients shared by several connectors** (§4.1).
-- **Refreshed credentials**, stored under a per-connection lock with an in-memory access-token cache (§4.3).
+- **Refreshed credentials**, refreshed and stored under a per-connection lock (§4.3).
 - **Per-account API hosts** (§4.4), with the egress allow-list following them.
 - **The `svix` verification scheme.**
 - **Remote registration's renewal** for subscriptions that expire.
@@ -400,6 +400,16 @@ The AI builder learns each connector from its manifest as it does today. The eva
 - an unknown account's event is dropped and counted;
 - ten workers refreshing one connection's token at once spend one refresh;
 - a rotated token survives a restart.
+
+**Built** (K1, 26 October 2026): one commit per piece on the K1 branch.
+- **Svix** (`svix` scheme), tested on Svix's published example and its refusals.
+- **Rotating refresh tokens:** `connector.Request.Rotate`/`RotateCredentials`, `secrets.Vault.RotateCredentials` (row lock, re-read, store, `connection.refresh`), wired into every connector call the worker makes; ten concurrent workers spend one refresh token, and the rotated tokens survive a fresh read.
+- **Platform apps** (connector/v1 rule 18; migration 00224): `auth.oauth2.client`, `account_field`, `fields_from_callback`; a connection made by OAuth records its account (`connection_app_accounts`); `delivery: app` triggers at `/hooks/apps/{connector}/{trigger}` verified with `TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET`, routed by `account_key` through `taskiem_app_route_event` into every active connection holding the account (two businesses each get only their own workspace's events; a workspace connected twice reaches both); unknown accounts answered 200 and counted (`app_event_drops`); `revokes` expires the account's connections; GET checks compare `_VERIFY_TOKEN`. The per-tenant, partner and app paths share the delivery's item evaluation and the target tenant's gate.
+- **Accounts on one server** (rule 19): `connection_hosts`; OAuth token and revoke URLs from `${connection.<field>}`, refused before the code exchange when the callback names a server outside the list; egress drops connection-named hosts outside it.
+- **Renewal** (migration 00225): `RemoteState.ExpiresAt`; due a day before expiry (halfway for under two days), applied again with `Update`; a health check reading no expiry keeps the last.
+- **Books capabilities** (decision 0051 point 8): nine capabilities and three events of `kind: product` in `capabilities-v1.json`; rule 16 checks kinds both ways; wd/v1, the SDK helpers and the catalogue's words take them; books events never reach the money log.
+
+Differences from the plan: the app URL is per trigger (`/hooks/apps/{connector}/{trigger}`), not per provider, since one app takes several (Slack's events and interactivity); refreshed credentials are refreshed under the lock rather than returned with the response, which would come too late to stop a second worker; the in-memory token cache is not needed, since the access token is stored with the credentials. Mailchimp's server prefix (a metadata call after connecting) comes with K8, and connector categories for accounting (QuickBooks, Zoho Books) with K3.
 
 ### K2: Slack (M; needs K1)
 

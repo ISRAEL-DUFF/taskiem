@@ -978,7 +978,7 @@ func (h *Handler) itemsOf(spec connector.TriggerSpec, name string, act map[strin
 		v, err := h.exprs.Eval(spec.Split, act)
 		list, ok := v.([]any)
 		if err != nil || !ok {
-			return nil, fmt.Errorf("split: %v", err)
+			return nil, fmt.Errorf("split: %w", err)
 		}
 		items = list
 	}
