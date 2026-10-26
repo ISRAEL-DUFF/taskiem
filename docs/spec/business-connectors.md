@@ -415,6 +415,15 @@ Differences from the plan: the app URL is per trigger (`/hooks/apps/{connector}/
 
 §5: **Add to Slack**, platform routing, uninstall handling, the three actions, Slack as an approvals chat channel with member linking, alert channels from the connection, the templates.
 
+**Built** (K2, 26 October 2026), on the K1 pull request.
+- **Add to Slack:** `slack@1` 1.1.0 connects through Taskiem's Slack app (OAuth v2, `client: slack`, comma-separated scopes, `team.id` from the token answer as the account); `events` and `interactions` are `delivery: both` (an own app's URL, or the app's for every workspace, routed by `team_id`); `app_uninstalled` and a revoked bot token expire the workspace's connections. Generic: `auth.oauth2.scope_separator`, dotted `fields_from_token`, a 200 `{ok: false}` exchange reported as refused, `delivery: both`.
+- **Actions:** `list_users`, `open_conversation`, `schedule_message`.
+- **Approvals in Slack** (migration 00226): members link their Slack user in a business (`/v1/me/slack`, the passkey-strength proof, found by email, confirmed by a button in Slack); `slackChannel` is the third `chatChannel`, sending direct messages with the business's bot and the signed decision tokens as buttons; `/channels/slack/interactions` decides Taskiem's buttons through the shared path and passes every other click to the trigger; a decided message loses its buttons; school approvals come the same way.
+- **Alerts:** a Slack alert channel can be a channel of the connection, posted by its bot.
+- **Templates:** `slack-payment-alerts`, `slack-money-received`, `slack-paid-invoices`, `slack-school-daily-close`; the `slack_channel` picker (`GET /v1/slack/channels`); linking Slack on the Account page.
+
+Differences from §5: the daily money summary in Slack waits for a money-summary action (the daily chat summary already goes to WhatsApp and Telegram), and new storefront orders stay with `storefront-order` (a storefront form takes one workflow). The "First payment to this account" line is not in chat requests yet, on any channel; a request decided elsewhere is not updated in Slack (its buttons answer that it was already decided).
+
 ### K3: QuickBooks Online (L; needs K1, K0's sandbox)
 
 §8, on Intuit's sandbox companies: the connector, its books capability mappings, and the books templates of §10 written against the capabilities. K4 then only adds Zoho Books' mappings, and the same templates run on it.
