@@ -44,6 +44,8 @@ type Ops interface {
 	SendRemindersOnce(ctx context.Context, tenant uuid.UUID, in schools.RemindIn, by string) (schools.Reminded, error)
 	ListPlanDecisions(ctx context.Context, tenant uuid.UUID, f schools.PlanDecisionFilter) ([]schools.PlanRequest, error)
 	TellPlan(ctx context.Context, tenant uuid.UUID, plan string) (schools.PlanTold, error)
+	SendReceiptOnce(ctx context.Context, tenant uuid.UUID, idOrNumber, by string) (schools.ReceiptSent, error)
+	SendAccountNumberOnce(ctx context.Context, tenant uuid.UUID, idOrNumber, key, by string) (schools.AccountSent, error)
 	ClearanceOf(ctx context.Context, tenant uuid.UUID, student string, term uuid.UUID) (schools.ClearanceRow, error)
 	ListClearance(ctx context.Context, tenant, term uuid.UUID, class *uuid.UUID) (schools.ClearanceList, error)
 	CloseFor(ctx context.Context, tenant uuid.UUID, day, by string) (schools.Close, error)
@@ -56,22 +58,24 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"list_students":      connector.ActionFunc(a.listStudents),
-		"get_student":        connector.ActionFunc(a.getStudent),
-		"list_classes":       connector.ActionFunc(a.listClasses),
-		"current_term":       connector.ActionFunc(a.currentTerm),
-		"list_fee_items":     connector.ActionFunc(a.listFeeItems),
-		"term_invoices":      connector.ActionFunc(a.termInvoices),
-		"invoice_term":       connector.ActionFunc(a.invoiceTerm),
-		"issue_account":      connector.ActionFunc(a.issueAccount),
-		"family_link":        connector.ActionFunc(a.familyLink),
-		"list_debtors":       connector.ActionFunc(a.listDebtors),
-		"send_reminders":     connector.ActionFunc(a.sendReminders),
-		"plan_decisions":     connector.ActionFunc(a.planDecisions),
-		"tell_plan_decision": connector.ActionFunc(a.tellPlanDecision),
-		"clearance":          connector.ActionFunc(a.clearance),
-		"clearance_list":     connector.ActionFunc(a.clearanceList),
-		"daily_close":        connector.ActionFunc(a.dailyClose),
+		"list_students":       connector.ActionFunc(a.listStudents),
+		"get_student":         connector.ActionFunc(a.getStudent),
+		"list_classes":        connector.ActionFunc(a.listClasses),
+		"current_term":        connector.ActionFunc(a.currentTerm),
+		"list_fee_items":      connector.ActionFunc(a.listFeeItems),
+		"term_invoices":       connector.ActionFunc(a.termInvoices),
+		"invoice_term":        connector.ActionFunc(a.invoiceTerm),
+		"issue_account":       connector.ActionFunc(a.issueAccount),
+		"family_link":         connector.ActionFunc(a.familyLink),
+		"list_debtors":        connector.ActionFunc(a.listDebtors),
+		"send_reminders":      connector.ActionFunc(a.sendReminders),
+		"plan_decisions":      connector.ActionFunc(a.planDecisions),
+		"tell_plan_decision":  connector.ActionFunc(a.tellPlanDecision),
+		"send_receipt":        connector.ActionFunc(a.sendReceipt),
+		"send_account_number": connector.ActionFunc(a.sendAccountNumber),
+		"clearance":           connector.ActionFunc(a.clearance),
+		"clearance_list":      connector.ActionFunc(a.clearanceList),
+		"daily_close":         connector.ActionFunc(a.dailyClose),
 	}}
 }
 
@@ -551,6 +555,24 @@ func (l *Late) TellPlan(ctx context.Context, t uuid.UUID, plan string) (schools.
 		return schools.PlanTold{}, err
 	}
 	return o.TellPlan(ctx, t, plan)
+}
+
+// SendReceiptOnce implements Ops.
+func (l *Late) SendReceiptOnce(ctx context.Context, t uuid.UUID, idOrNumber, by string) (schools.ReceiptSent, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.ReceiptSent{}, err
+	}
+	return o.SendReceiptOnce(ctx, t, idOrNumber, by)
+}
+
+// SendAccountNumberOnce implements Ops.
+func (l *Late) SendAccountNumberOnce(ctx context.Context, t uuid.UUID, idOrNumber, key, by string) (schools.AccountSent, error) {
+	o, err := l.get()
+	if err != nil {
+		return schools.AccountSent{}, err
+	}
+	return o.SendAccountNumberOnce(ctx, t, idOrNumber, key, by)
 }
 
 // InvoiceTermOnce implements Ops.

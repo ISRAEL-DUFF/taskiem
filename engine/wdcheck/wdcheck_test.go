@@ -58,3 +58,41 @@ func TestTemplateSteps(t *testing.T) {
 		}
 	}
 }
+
+// A connector's own check of a step's input runs at publish
+// (connector.CheckInput): notify@1 tell's template must be one a Tell me
+// message can carry, with exactly its variables.
+func TestConnectorInputChecks(t *testing.T) {
+	reg := registry(t)
+	tell := func(input string) []byte {
+		return doc(`{"type":"manual"}`, `[{"id":"x","type":"connector","connector":"schools@1","action":"daily_close","input":{}},
+			{"id":"tell","type":"connector","connector":"notify@1","action":"tell","needs":["x"],"input":`+input+`}]`)
+	}
+	for name, c := range map[string]struct {
+		doc  []byte
+		want string
+	}{
+		"no template":         {doc: tell(`{"message":"Hello"}`)},
+		"the close":           {doc: tell(`{"message":"=steps.x.output.text","template":"taskiem_daily_close","template_vars":{"day":"=steps.x.output.date","summary":"=steps.x.output.summary"}}`)},
+		"a family's template": {doc: tell(`{"message":"Hello","template":"taskiem_receipt","template_vars":{}}`), want: `template "taskiem_receipt" is not one a Tell me message can carry: taskiem_daily_summary, taskiem_daily_close`},
+		"a computed name":     {doc: tell(`{"message":"Hello","template":"=trigger.body.t"}`), want: "written out"},
+		"a variable missing":  {doc: tell(`{"message":"Hello","template":"taskiem_daily_close","template_vars":{"day":"x"}}`), want: "needs template_vars.summary"},
+		"a variable too many": {doc: tell(`{"message":"Hello","template":"taskiem_daily_close","template_vars":{"day":"x","summary":"y","link":"z"}}`), want: `has no variable "link"`},
+		"vars alone":          {doc: tell(`{"message":"Hello","template_vars":{"day":"x"}}`), want: "template_vars needs template"},
+	} {
+		probs := wdcheck.Check(c.doc, reg)
+		if c.want == "" {
+			if len(probs) > 0 {
+				t.Errorf("%s: %v", name, probs)
+			}
+			continue
+		}
+		found := false
+		for _, p := range probs {
+			found = found || p.Path == "/steps/tell/input" && strings.Contains(p.Message, c.want)
+		}
+		if !found {
+			t.Errorf("%s: %v, want %q", name, probs, c.want)
+		}
+	}
+}

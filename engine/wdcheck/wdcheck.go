@@ -104,6 +104,10 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 					out = append(out, pr(path, fmt.Sprintf("connector %q has no action %q", st.Connector, st.Action)))
 				case st.Compensate != nil && !hasAction(c, st.Compensate.Action):
 					out = append(out, pr(path+"/compensate", fmt.Sprintf("connector %q has no action %q", st.Connector, st.Compensate.Action)))
+				case c.CheckInput != nil:
+					for _, msg := range c.CheckInput(st.Action, st.Input) {
+						out = append(out, pr(path+"/input", msg))
+					}
 				}
 				if st.Capability != nil {
 					out = append(out, pr(path+"/capability", "set when a capability step is expanded; write a capability step instead"))

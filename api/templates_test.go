@@ -42,7 +42,9 @@ func TestTemplatesListAndInstantiate(t *testing.T) {
 	for _, x := range list {
 		m := x.(map[string]any)
 		byID[m["id"].(string)] = m
-		if len(m["steps"].([]any)) < 2 || len(m["params"].([]any)) == 0 || m["definition"] != nil {
+		// Every template reads as plain steps and lists its parameters
+		// (school-receipt has none: its receipt is sent as it is).
+		if _, ok := m["params"].([]any); !ok || len(m["steps"].([]any)) < 2 || m["definition"] != nil {
 			t.Errorf("%s: steps %v params %v", m["id"], m["steps"], m["params"])
 		}
 	}

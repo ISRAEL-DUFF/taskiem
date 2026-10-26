@@ -447,12 +447,17 @@ func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, l
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO school_family_messages (id, tenant_id, family_id, link_id, guardian_id, channel, purpose, text, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant.String()+":"+key)), tenant, family, link, guardian, channel, m.Purpose, sealed, by)
-		if code, _ := pgCode(err); code == "23505" {
+		// The message's id is its key: one sent already is left as it
+		// is (the insert must not fail, which would end the transaction).
+		tag, err := tx.Exec(ctx, `INSERT INTO school_family_messages (id, tenant_id, family_id, link_id, guardian_id, channel, purpose, text, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT (id) DO NOTHING`, uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant.String()+":"+key)), tenant, family, link, guardian, channel, m.Purpose, sealed, by)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
 			return errAlreadySent
 		}
-		return err
+		return nil
 	}
 	if s.Invoices != nil && s.Invoices.Reach.Ready() && len(s.Invoices.Chat) > 0 {
 		t, ok, err := s.Invoices.Reach.FindTx(ctx, tx, tenant, uuid.Nil, phone, s.Invoices.Chat)

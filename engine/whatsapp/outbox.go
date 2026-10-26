@@ -50,6 +50,12 @@ func OutboxBackoff(attempt int) time.Duration {
 // decided, the person unlinked their number): it is dropped, not retried.
 var ErrNothingToSend = errors.New("whatsapp: nothing to send any more")
 
+// ErrFellBack: the message was sent, but not as its own template (the
+// template is not approved in the number's account, or cannot carry the
+// link), so the sender did what it did before the template existed; the
+// message is marked sent and the reason recorded on it.
+var ErrFellBack = errors.New("whatsapp: sent another way")
+
 // OutboxItem is one queued message to one person.
 type OutboxItem struct {
 	ID     uuid.UUID
@@ -131,6 +137,8 @@ func FinishOutbox(ctx context.Context, pool *pgxpool.Pool, it OutboxItem, sendEr
 		switch {
 		case sendErr == nil:
 			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'sent', finished_at = now(), last_error = NULL WHERE id = $1`, it.ID)
+		case errors.Is(sendErr, ErrFellBack):
+			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'sent', finished_at = now(), last_error = $2 WHERE id = $1`, it.ID, clipErr(sendErr))
 		case errors.Is(sendErr, ErrNothingToSend):
 			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'dropped', finished_at = now(), last_error = $2 WHERE id = $1`, it.ID, clipErr(sendErr))
 		case errors.Is(sendErr, ErrTemplateBlocked), errors.Is(sendErr, ErrWindowClosed), it.Attempts >= OutboxMaxAttempts:

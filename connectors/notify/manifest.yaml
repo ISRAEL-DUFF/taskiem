@@ -34,6 +34,11 @@ actions:
         members: { type: array, items: { type: string }, description: "With to: members, their sign-in emails" }
         message: { type: string, minLength: 1, maxLength: 1500, description: The message, in plain words }
         title:   { type: string, maxLength: 120, description: "A first line, and an email's subject" }
+        template: { type: string, description: "Optional: the WhatsApp template that carries the message outside the 24-hour window instead of the generic alert, by name (taskiem_daily_close, taskiem_daily_summary: one of the registry's templates for the business's own people, with no link or button filled at each send); checked when the workflow is published" }
+        template_vars:
+          type: object
+          description: "With template: its variables (every one but the business's name, which Taskiem adds), each a line of text, such as day and summary for taskiem_daily_close"
+          additionalProperties: { type: string }
     output:
       type: object
       properties:

@@ -26,6 +26,11 @@ type Template struct {
 	Examples []string
 	// Purpose says when it is sent, for the submission list.
 	Purpose string
+	// Tell marks a template a workflow's Tell me step (notify@1 tell) may
+	// carry its message as outside the window, in place of taskiem_alert:
+	// one for the business's own people, filled from the step's one-line
+	// variables alone (TellTemplate).
+	Tell bool
 }
 
 // TemplateButton is a button defined on a template: a quick reply (its
@@ -209,6 +214,7 @@ var (
 		Examples: []string{"Ada Stores", "23 Oct 2026", "₦300,000 in — Paystack ₦250,000, POS ₦50,000; ₦12,000 out; 1 invoice paid; no leak opened."},
 		Buttons:  []TemplateButton{{Type: "url", Text: "Open", Host: HostApp, Path: "/money"}},
 		Purpose:  "An owner's daily money summary, outside the window (in place of taskiem_alert cut to one line).",
+		Tell:     true,
 	}
 	TplDailyClose = Template{
 		Name: "taskiem_daily_close", Category: "UTILITY",
@@ -216,7 +222,8 @@ var (
 		Vars:     []string{"tenant", "day", "summary"},
 		Examples: []string{"Bright Stars School", "23 Oct 2026", "₦450,000 in on students (12 payments); matched ₦450,000; not matched ₦0; everything reconciles."},
 		Buttons:  []TemplateButton{{Type: "url", Text: "Open", Host: HostApp, Path: "/schools/overview"}},
-		Purpose:  "A school's daily close to the proprietor, outside the window (the school-daily-close template sends it by notify@1 tell, which uses taskiem_alert until a direct path uses this one).",
+		Purpose:  "A school's daily close to the proprietor, outside the window (the school-daily-close template's notify@1 tell names it as its template).",
+		Tell:     true,
 	}
 )
 
@@ -376,6 +383,40 @@ func (t Template) Submission(lang string, hosts Hosts) (map[string]any, error) {
 		comps = append(comps, map[string]any{"type": "BUTTONS", "buttons": buttons})
 	}
 	return map[string]any{"name": t.Name, "language": lang, "category": t.Category, "components": comps}, nil
+}
+
+// TellTemplate is a template a workflow's Tell me step (notify@1 tell)
+// may carry its message as outside the window, by name: one marked Tell
+// (taskiem_daily_close, taskiem_daily_summary), a utility template for
+// the business's own people whose body is filled from one-line text
+// alone, the tenant's name by Taskiem and the rest by the step
+// (template_vars), and whose buttons need nothing at each send (no quick
+// reply, no dynamic link). An invoice's or a family's template, with its
+// signed buttons and page links, is not one, nor are the platform's own
+// (approvals, run outcomes).
+func TellTemplate(name string) (Template, bool) {
+	t, ok := TemplateNamed(name)
+	if !ok || !t.Tell || t.Category != "UTILITY" {
+		return Template{}, false
+	}
+	for _, b := range t.Buttons {
+		if b.Type != "url" || b.Dynamic() {
+			return Template{}, false
+		}
+	}
+	return t, true
+}
+
+// TellVars are the variables a Tell me step gives a template: its Vars
+// but the tenant's name, in order.
+func TellVars(t Template) []string {
+	var out []string
+	for _, v := range t.Vars {
+		if v != "tenant" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // TemplateNamed finds a template in the library.

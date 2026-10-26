@@ -9,12 +9,14 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 //go:embed manifest.yaml
@@ -80,10 +82,71 @@ type Teller interface {
 	Message(ctx context.Context, m Outside) (Delivery, error)
 }
 
+// CheckTell checks a tell step's template, if it names one: at publish
+// (the input as written, so the name must be written out, not computed)
+// and again when the step runs. The template must be one a Tell me
+// message may carry (whatsapp.TellTemplate) and template_vars must hold
+// exactly its variables; their values may be expressions.
+func CheckTell(input map[string]any) []string {
+	name, has := input["template"]
+	vars, hasVars := input["template_vars"]
+	if !has && !hasVars {
+		return nil
+	}
+	if !has {
+		return []string{"template_vars needs template, the template they fill"}
+	}
+	s, _ := name.(string)
+	if s == "" || strings.HasPrefix(s, "=") {
+		return []string{"template is a template's name, written out (taskiem_daily_close): not an expression"}
+	}
+	t, ok := whatsapp.TellTemplate(s)
+	if !ok {
+		return []string{fmt.Sprintf("template %q is not one a Tell me message can carry: %s", s, strings.Join(tellTemplateNames(), ", "))}
+	}
+	want := whatsapp.TellVars(t)
+	given, _ := vars.(map[string]any)
+	if len(want) > 0 && given == nil {
+		return []string{fmt.Sprintf("template %s needs template_vars with %s", s, strings.Join(want, ", "))}
+	}
+	var out []string
+	for _, v := range want {
+		if _, ok := given[v]; !ok {
+			out = append(out, fmt.Sprintf("template %s needs template_vars.%s", s, v))
+		}
+	}
+	for k := range given {
+		if !slices.Contains(want, k) {
+			out = append(out, fmt.Sprintf("template %s has no variable %q (its variables: %s)", s, k, strings.Join(want, ", ")))
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// tellTemplateNames are the templates a Tell me message may carry.
+func tellTemplateNames() []string {
+	var out []string
+	for _, t := range whatsapp.AllTemplates {
+		if _, ok := whatsapp.TellTemplate(t.Name); ok {
+			out = append(out, t.Name)
+		}
+	}
+	return out
+}
+
+// checkInput is the connector's publish-time check (connector.CheckInput).
+func checkInput(action string, input map[string]any) []string {
+	if action != "tell" {
+		return nil
+	}
+	return CheckTell(input)
+}
+
 // New returns the connector; t nil makes it fail plainly.
 func New(t Teller) *connector.Connector {
 	m := connector.MustParse(manifest)
-	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
+	return &connector.Connector{Manifest: m, CheckInput: checkInput, Actions: map[string]connector.Action{
 		"tell": connector.ActionFunc(func(ctx context.Context, req connector.Request) (connector.Response, error) {
 			c, ok := connector.CallerFrom(ctx)
 			if !ok {
@@ -114,6 +177,11 @@ func New(t Teller) *connector.Connector {
 				return connector.Response{}, fmt.Errorf("to: role needs the role: %w", effects.ErrFatal)
 			case msg.To == "members" && len(msg.Members) == 0:
 				return connector.Response{}, fmt.Errorf("to: members needs their emails: %w", effects.ErrFatal)
+			}
+			// The template, if any, was checked at publish; the step's
+			// values are checked now (the outbox renders from this input).
+			if msgs := CheckTell(req.Input); len(msgs) > 0 {
+				return connector.Response{}, fmt.Errorf("%s: %w", strings.Join(msgs, "; "), effects.ErrFatal)
 			}
 			res, err := t.Tell(ctx, msg)
 			if err != nil {
