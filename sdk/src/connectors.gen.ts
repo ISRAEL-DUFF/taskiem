@@ -2846,6 +2846,136 @@ export type CapabilityBalanceOutput = {
   available_kobo: number;
   currency: string;
 };
+/** List the books' accounts: input */
+export interface CapabilityBooksAccountsInput {
+  /** Only accounts of this type */
+  type?: Val<"income" | "expense" | "bank" | "cash" | "receivable" | "payable" | "other">;
+}
+/** List the books' accounts: output */
+export type CapabilityBooksAccountsOutput = {
+  accounts: Array<{
+    id: string;
+    name: string;
+    type?: string;
+  }>;
+};
+/** Record a supplier's bill in the books: input */
+export interface CapabilityBooksBillInput {
+  currency?: Val<string>;
+  due_on?: Val<string>;
+  issued_on?: Val<string>;
+  lines: Value;
+  /** The supplier's bill number: a retry finds the bill by it */
+  number: Val<string>;
+  supplier_id: Val<string>;
+}
+/** Record a supplier's bill in the books: output */
+export type CapabilityBooksBillOutput = {
+  bill_id: string;
+  total_kobo?: number;
+};
+/** Find or add a customer in the books: input */
+export interface CapabilityBooksCustomerInput {
+  /** Found by it before a customer is added, so a retry finds the one it made */
+  email?: Val<string>;
+  name: Val<string>;
+  /** Found by it when there is no email */
+  phone?: Val<string>;
+}
+/** Find or add a customer in the books: output */
+export type CapabilityBooksCustomerOutput = {
+  created?: boolean;
+  customer_id: string;
+};
+/** Record an expense in the books: input */
+export interface CapabilityBooksExpenseInput {
+  /** The expense account, as books_accounts lists it */
+  account_id: Val<string>;
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  date?: Val<string>;
+  description?: Val<string>;
+  /** The bank or cash account it was paid from */
+  paid_from_id?: Val<string>;
+  /** The receipt's or the money log entry's: a retry finds the expense by it */
+  reference: Val<string>;
+  supplier?: Val<string>;
+  vat_kobo?: Val<number>;
+}
+/** Record an expense in the books: output */
+export type CapabilityBooksExpenseOutput = {
+  expense_id: string;
+};
+/** Record an invoice in the books: input */
+export interface CapabilityBooksInvoiceInput {
+  currency?: Val<string>;
+  /** As books_customer answered it */
+  customer_id: Val<string>;
+  due_on?: Val<string>;
+  issued_on?: Val<string>;
+  lines: Value;
+  notes?: Val<string>;
+  /** Taskiem's invoice number, kept as the books' reference (reference_number, DocNumber): a retry finds the invoice instead of making a second */
+  number: Val<string>;
+}
+/** Record an invoice in the books: output */
+export type CapabilityBooksInvoiceOutput = {
+  invoice_id: string;
+  number?: string;
+  total_kobo?: number;
+};
+/** List the books' items: input */
+export interface CapabilityBooksItemsInput {
+  [key: string]: Value;
+}
+/** List the books' items: output */
+export type CapabilityBooksItemsOutput = {
+  items: Array<{
+    amount_kobo?: number;
+    id: string;
+    name: string;
+  }>;
+};
+/** Record a payment against an invoice in the books: input */
+export interface CapabilityBooksPaymentInput {
+  /** The bank or cash account it went into, as books_accounts lists it */
+  account_id?: Val<string>;
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  invoice_id: Val<string>;
+  method?: Val<"transfer" | "card" | "cash" | "pos" | "other">;
+  paid_on?: Val<string>;
+  /** The money log entry's reference: a retry finds the payment by it */
+  reference: Val<string>;
+}
+/** Record a payment against an invoice in the books: output */
+export type CapabilityBooksPaymentOutput = {
+  payment_id: string;
+};
+/** Record a day's takings in the books: input */
+export interface CapabilityBooksSaleInput {
+  currency?: Val<string>;
+  date: Val<string>;
+  /** The day and the source (pos-2026-10-24): a retry finds the receipt by it */
+  reference: Val<string>;
+  takings: Value;
+}
+/** Record a day's takings in the books: output */
+export type CapabilityBooksSaleOutput = {
+  sale_id: string;
+};
+/** List the books' taxes: input */
+export interface CapabilityBooksTaxesInput {
+  [key: string]: Value;
+}
+/** List the books' taxes: output */
+export type CapabilityBooksTaxesOutput = {
+  taxes: Array<{
+    id: string;
+    name: string;
+    percent?: number;
+  }>;
+};
 /** Make a payment page for a customer: input */
 export interface CapabilityCollectLinkInput {
   amount_kobo: Val<number>;
@@ -3096,6 +3226,24 @@ export const pay = {
 export const rail = {
   /** Check the balance */
   balance: (input: CapabilityBalanceInput, extra?: CapabilityExtra): StepSpec => capability("balance", input, extra),
+  /** List the books' accounts */
+  books_accounts: (input: CapabilityBooksAccountsInput, extra?: CapabilityExtra): StepSpec => capability("books_accounts", input, extra),
+  /** Record a supplier's bill in the books */
+  books_bill: (input: CapabilityBooksBillInput, extra?: CapabilityExtra): StepSpec => capability("books_bill", input, extra),
+  /** Find or add a customer in the books */
+  books_customer: (input: CapabilityBooksCustomerInput, extra?: CapabilityExtra): StepSpec => capability("books_customer", input, extra),
+  /** Record an expense in the books */
+  books_expense: (input: CapabilityBooksExpenseInput, extra?: CapabilityExtra): StepSpec => capability("books_expense", input, extra),
+  /** Record an invoice in the books */
+  books_invoice: (input: CapabilityBooksInvoiceInput, extra?: CapabilityExtra): StepSpec => capability("books_invoice", input, extra),
+  /** List the books' items */
+  books_items: (input: CapabilityBooksItemsInput, extra?: CapabilityExtra): StepSpec => capability("books_items", input, extra),
+  /** Record a payment against an invoice in the books */
+  books_payment: (input: CapabilityBooksPaymentInput, extra?: CapabilityExtra): StepSpec => capability("books_payment", input, extra),
+  /** Record a day's takings in the books */
+  books_sale: (input: CapabilityBooksSaleInput, extra?: CapabilityExtra): StepSpec => capability("books_sale", input, extra),
+  /** List the books' taxes */
+  books_taxes: (input: CapabilityBooksTaxesInput, extra?: CapabilityExtra): StepSpec => capability("books_taxes", input, extra),
   /** Look a payment up */
   get_payment: (input: CapabilityGetPaymentInput, extra?: CapabilityExtra): StepSpec => capability("get_payment", input, extra),
   /** Look a payout up */
@@ -3127,6 +3275,15 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   await_reversal: "waitFor.reversal",
   await_settlement: "waitFor.settlement",
   balance: "rail.balance",
+  books_accounts: "rail.books_accounts",
+  books_bill: "rail.books_bill",
+  books_customer: "rail.books_customer",
+  books_expense: "rail.books_expense",
+  books_invoice: "rail.books_invoice",
+  books_items: "rail.books_items",
+  books_payment: "rail.books_payment",
+  books_sale: "rail.books_sale",
+  books_taxes: "rail.books_taxes",
   collect_link: "collect.link",
   collect_push: "collect.push",
   collect_transfer: "collect.transfer",
@@ -3146,6 +3303,15 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
 /** The built-in rails that declare each capability. */
 export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   balance: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
+  books_accounts: [],
+  books_bill: [],
+  books_customer: [],
+  books_expense: [],
+  books_invoice: [],
+  books_items: [],
+  books_payment: [],
+  books_sale: [],
+  books_taxes: [],
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
   collect_transfer: ["flutterwave@1", "opay@1", "paystack@1"],

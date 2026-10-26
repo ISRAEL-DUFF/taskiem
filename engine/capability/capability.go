@@ -24,6 +24,10 @@ type Spec struct {
 	Name        string
 	Title       string
 	Description string
+	// Kind is the kind of connector that may declare it (connector/v1
+	// rule 16): rail for paying and collecting, product for the books
+	// capabilities (decision 0051).
+	Kind string
 	// Classes are the effect classes a rail's action may have to stand
 	// for the capability.
 	Classes []effects.Class
@@ -37,6 +41,9 @@ type Spec struct {
 type Event struct {
 	Name  string
 	Title string
+	// Kind is the kind of connector that may send it: rail for payment
+	// events, product for the books' (decision 0051).
+	Kind string
 	// Correlation is the field a workflow waits on: the payout_id a pay
 	// capability answered, the payment_id collect_link answered.
 	Correlation string
@@ -54,6 +61,7 @@ func init() {
 	var doc struct {
 		Capabilities map[string]struct {
 			Title       string          `json:"title"`
+			Kind        string          `json:"kind"`
 			Description string          `json:"description"`
 			Classes     []effects.Class `json:"classes"`
 			Input       json.RawMessage `json:"input"`
@@ -61,6 +69,7 @@ func init() {
 		} `json:"capabilities"`
 		Events map[string]struct {
 			Title       string          `json:"title"`
+			Kind        string          `json:"kind"`
 			Correlation string          `json:"correlation"`
 			Fields      json.RawMessage `json:"fields"`
 		} `json:"events"`
@@ -81,16 +90,23 @@ func init() {
 		return b
 	}
 	for name, c := range doc.Capabilities {
-		s := &Spec{Name: name, Title: c.Title, Description: c.Description, Classes: c.Classes, Input: inline(c.Input), Output: inline(c.Output)}
+		s := &Spec{Name: name, Title: c.Title, Description: c.Description, Kind: kindOr(c.Kind), Classes: c.Classes, Input: inline(c.Input), Output: inline(c.Output)}
 		s.input = schemacheck.New("https://schemas.taskiem.dev/capabilities/v1/"+name+"/input.json", s.Input)
 		s.output = schemacheck.New("https://schemas.taskiem.dev/capabilities/v1/"+name+"/output.json", s.Output)
 		specs[name] = s
 	}
 	for name, e := range doc.Events {
-		ev := &Event{Name: name, Title: e.Title, Correlation: e.Correlation, Fields: inline(e.Fields)}
+		ev := &Event{Name: name, Title: e.Title, Kind: kindOr(e.Kind), Correlation: e.Correlation, Fields: inline(e.Fields)}
 		ev.fields = schemacheck.New("https://schemas.taskiem.dev/capabilities/v1/events/"+name+".json", ev.Fields)
 		events[name] = ev
 	}
+}
+
+func kindOr(k string) string {
+	if k == "" {
+		return "rail"
+	}
+	return k
 }
 
 // resolve replaces {"$ref": "#/$defs/<name>"} with the definition, so each

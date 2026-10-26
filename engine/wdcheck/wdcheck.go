@@ -139,7 +139,7 @@ func hasAction(c *connector.Connector, action string) bool {
 // anyRail reports whether a rail the platform has declares the capability.
 func anyRail(reg connector.Lookup, uses string) bool {
 	for _, c := range reg.List() {
-		if _, ok := c.Manifest.Capabilities[uses]; ok && c.Manifest.KindOf() == "rail" {
+		if _, ok := c.Manifest.Capabilities[uses]; ok {
 			return true
 		}
 	}
