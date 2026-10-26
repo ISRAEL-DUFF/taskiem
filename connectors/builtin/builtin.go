@@ -60,9 +60,9 @@ type Options struct {
 	// production address by default).
 	PayrollaURL string
 	// IswalletTestURL and PayrollaTestURL are the test modes' addresses
-	// (TASKIEM_ISWALLET_TEST_URL: iswallet's sandbox by default;
-	// TASKIEM_PAYROLLA_TEST_URL: none by default). IswalletURL and
-	// PayrollaURL are the live modes'.
+	// (TASKIEM_ISWALLET_TEST_URL, TASKIEM_PAYROLLA_TEST_URL: each
+	// provider's sandbox by default). IswalletURL and PayrollaURL are the
+	// live modes' (iswallet's has none until go-live).
 	IswalletTestURL, PayrollaTestURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).

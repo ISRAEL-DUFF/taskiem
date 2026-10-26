@@ -236,7 +236,7 @@ cmd_setup() {
   fi
   # Provider endpoints (docs/operations.md): the live addresses. iswallet
   # and Payrolla connections are live or test, chosen when made; test goes
-  # to iswallet's sandbox and Payrolla's test company by default.
+  # to each provider's sandbox.
   ask ISWALLET_URL "iswallet live API URL (empty until go-live: only test connections)" "$(env_get "$KIT/taskiem.env" TASKIEM_ISWALLET_URL)"
   ask PAYROLLA_URL "Payrolla API URL (empty: Payrolla's production API)" "$(env_get "$KIT/taskiem.env" TASKIEM_PAYROLLA_URL)"
   local u

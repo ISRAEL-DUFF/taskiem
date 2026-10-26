@@ -43,8 +43,8 @@ config:
   # default. iswallet and Payrolla connections are live or test, chosen
   # when made. TASKIEM_ISWALLET_URL is iswallet's production URL (issued
   # at go-live): until it is set, only test (sandbox) iswallet connections
-  # can be made. Payrolla's default is its production Connect API, where
-  # its test company also lives.
+  # can be made. Payrolla's defaults are its production (live) and sandbox
+  # (test) Connect APIs.
   TASKIEM_ISWALLET_URL: ""
   TASKIEM_ISWALLET_TEST_URL: ""
   TASKIEM_PAYROLLA_URL: ""

@@ -26,10 +26,9 @@ import (
 var manifest []byte
 
 // Options configure the connector. LiveURL replaces Payrolla's production
-// address (TASKIEM_PAYROLLA_URL). TestURL is where test connections go
-// (TASKIEM_PAYROLLA_TEST_URL): the live address unless set, since
-// Payrolla's test company lives in production. BaseURL is where
-// connections made before modes go (tests, the conformance kit's replay
+// address (TASKIEM_PAYROLLA_URL), TestURL its sandbox's
+// (TASKIEM_PAYROLLA_TEST_URL). BaseURL is where connections made before
+// modes go (TASKIEM_PAYROLLA_URL, tests, the conformance kit's replay
 // server).
 type Options struct {
 	LiveURL, TestURL string
@@ -41,11 +40,7 @@ func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
 	m.SetModeURL("live", o.LiveURL)
-	test := o.TestURL
-	if test == "" {
-		test = o.LiveURL // the test company is on the same deployment
-	}
-	m.SetModeURL("test", test)
+	m.SetModeURL("test", o.TestURL)
 	c := &client{m: m}
 	regs := map[string]connector.Registrar{}
 	for name, t := range m.Triggers {

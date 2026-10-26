@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -41,7 +42,7 @@ func TestRegisters(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := reg.Get("payrolla@1")
-	if c.Manifest.KindOf() != "product" || len(c.Manifest.Capabilities) != 0 || c.Manifest.Hosts()[0] != "synledger.name.ng" {
+	if c.Manifest.KindOf() != "product" || len(c.Manifest.Capabilities) != 0 || !slices.Equal(c.Manifest.Hosts(), []string{"ispend.name.ng", "synledger.name.ng"}) {
 		t.Errorf("kind %s, capabilities %v, hosts %v", c.Manifest.KindOf(), c.Manifest.Capabilities, c.Manifest.Hosts())
 	}
 	for name := range c.Manifest.Triggers {
@@ -241,17 +242,16 @@ func TestModesChooseTheDeployment(t *testing.T) {
 			Credentials: map[string]string{"api_key": "pyk_live_x", connector.ModeKey: mode}, HTTP: http.DefaultClient})
 		return err
 	}
-	// The test company lives in production: both modes start there, and
-	// test follows live when only live is moved.
+	// Production and the sandbox are separate deployments.
 	m := New(Options{}).Manifest
-	if l, _ := m.ModeURL("live"); l != "https://synledger.name.ng/payrolla/api/v1" {
+	if l, _ := m.ModeURL("live"); l != "https://ispend.name.ng/payrolla/api/v1" {
 		t.Errorf("live: %q", l)
 	}
 	if tu, _ := m.ModeURL("test"); tu != "https://synledger.name.ng/payrolla/api/v1" {
 		t.Errorf("test: %q", tu)
 	}
-	if err := ask(New(Options{LiveURL: live.URL}), "test"); err != nil {
-		t.Fatal(err)
+	if h := m.Hosts(); len(h) != 2 {
+		t.Errorf("hosts: %v", h)
 	}
 	c := New(Options{LiveURL: live.URL, TestURL: test.URL})
 	for _, mode := range []string{"live", "test"} {
@@ -259,7 +259,7 @@ func TestModesChooseTheDeployment(t *testing.T) {
 			t.Fatalf("%s: %v", mode, err)
 		}
 	}
-	if strings.Join(hits, ", ") != "live /connect/company, live /connect/company, test /connect/company" {
+	if strings.Join(hits, ", ") != "live /connect/company, test /connect/company" {
 		t.Errorf("deployments: %v", hits)
 	}
 }

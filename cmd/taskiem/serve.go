@@ -324,8 +324,8 @@ func loadConfig() (config, error) {
 			DojahURL:    os.Getenv("TASKIEM_DOJAH_URL"),
 			IswalletURL: os.Getenv("TASKIEM_ISWALLET_URL"),
 			PayrollaURL: os.Getenv("TASKIEM_PAYROLLA_URL"),
-			// The test modes' addresses (connector/v1 rule 17): iswallet's
-			// sandbox by default; Payrolla's none until it is set.
+			// The test modes' addresses (connector/v1 rule 17): each
+			// provider's sandbox by default.
 			IswalletTestURL: os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
 			PayrollaTestURL: os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
