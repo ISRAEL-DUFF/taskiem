@@ -10,6 +10,7 @@ Written against `main` at `68b339a`.
 
 | | Today |
 | --- | --- |
+| Owner | **ISPEND DIGITAL SERVICES LTD**. Taskiem is its product, not a company: iSpend owns the trademark, the code (L2 assigns to it), the Paystack merchant account and the customer contracts, trading as Taskiem |
 | Product | Very broad and well tested: the engine, WhatsApp and Telegram chat, the AI builder, over 30 connectors, 58 templates, billing in naira, storefronts and field agents, forms, POS terminals, invoices and the money log, Schools |
 | Running | Staging only, at `staging.ispend.name.ng` (since 23 October). No production |
 | Customers | None. No design partner signed (X3), no tenant on a plan, no real request in the evaluation suite (AI2) |
@@ -75,7 +76,7 @@ The illustrative revenue at 5,000, with an assumed mix (2,000 on Shop at ₦5,00
 
 | Item | Register | Why it is on the critical path | Target |
 | --- | --- | --- | --- |
-| Trademark search for the name | L3 | We are about to print QR cards, agent shirts and a domain. If the name fails, all of it is wasted. Choose between the three brand directions in `docs/brand/` only after | This week |
+| Trademark search for the name, filed by ISPEND DIGITAL SERVICES LTD ([brief for the agent](trademark-brief.md)) | L3 | We are about to print QR cards, agent shirts and a domain. If the name fails, all of it is wasted. Choose between the three brand directions in `docs/brand/` only after | This week |
 | Meta business verification, the shared number, templates, Flows | W1, W2 | The product is WhatsApp-first and Meta takes weeks. Start today; pilot on Telegram and the web until it lands | Submit this week |
 | Terms of service, privacy policy, subscription agreement, DPA | P4-B4 | Cannot charge, and the website's legal links are empty | Counsel engaged this week; drafts by 20 Nov |
 | Paystack merchant account in the company's name; VAT registration | P4-B2, P4-B3 | Cannot charge | 20 Nov |
