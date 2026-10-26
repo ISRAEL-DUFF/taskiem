@@ -16023,6 +16023,48 @@ paths:
                 $ref: '#/components/schemas/TriggerList'
         default:
           $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/try:
+    post:
+      operationId: tryDraft
+      tags:
+      - Workflows
+      summary: Test a draft with sample data
+      description: Runs a definition once on the real orchestrator over an in-memory history, every service step answered with a sample of its output (or the output kept for it), every approval approved and every form answered. Nothing is sent and nothing is stored. The workflow builder's Test.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TryDraftRequest'
+      responses:
+        '200':
+          description: What each step did
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TryDraftResult'
+        '422':
+          description: The definition cannot be read or uses itself
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/email:
     get:
       operationId: getWorkflowEmail
@@ -25721,6 +25763,53 @@ components:
                 type: string
             additionalProperties: false
       additionalProperties: false
+    TryDraftRequest:
+      type: object
+      required:
+      - definition
+      properties:
+        definition:
+          $ref: '#/components/schemas/Definition'
+        trigger:
+          description: What starts the test run, as a trigger delivers it; a sample from the definition's inputs when absent.
+        kept:
+          type: object
+          description: Outputs the builder kept, by step id; they answer those steps instead of samples.
+          additionalProperties: true
+    TryDraftResult:
+      type: object
+      required:
+      - status
+      - steps
+      - inputs
+      - outputs
+      - errors
+      properties:
+        status:
+          type: string
+          description: How the run ended (completed, failed, waiting, ...).
+        trigger:
+          description: What started it.
+        steps:
+          type: object
+          description: Each step's state by id (completed, failed, skipped, ...).
+          additionalProperties:
+            type: string
+        inputs:
+          type: object
+          description: What each service step was given, by id.
+          additionalProperties: true
+        outputs:
+          type: object
+          description: What each completed step gave, by id.
+          additionalProperties: true
+        errors:
+          type: object
+          description: Why each failed step failed, by id.
+          additionalProperties:
+            type: string
+        run_error:
+          type: string
     Layout:
       type: object
       description: The canvas's positions for a version's steps; not part of the definition, stored as given.

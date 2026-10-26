@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "re
 import { AuthProvider, useAuth } from "./auth";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
+import { NewWorkflow } from "./pages/NewWorkflow";
 import { Editor } from "./pages/Editor";
 import { Runs } from "./pages/Runs";
 import { RunPage } from "./pages/Run";
@@ -287,8 +288,11 @@ function SignedIn() {
   ).filter(([, , , ok]) => ok);
   const name = me.user?.name || me.user?.email || "API key";
   const business = me.tenant_name || "Taskiem";
+  // The workflow builder fills the window: the menu shrinks to a rail of
+  // icons on a computer, and the top and tab bars give way on a phone.
+  const building = /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
   return (
-    <div className="shell">
+    <div className={building ? "shell builder-mode" : "shell"}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -352,13 +356,14 @@ function SignedIn() {
           </button>
         </div>
       </nav>
-      <main className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
+      <main className={building ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
           <Route path="/workflows" element={<Workflows />} />
+          <Route path="/workflows/new" element={<NewWorkflow />} />
           <Route path="/workflows/:id" element={<Editor />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/tables" element={<Tables />} />

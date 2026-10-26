@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -362,5 +363,47 @@ func TestComposedTemplatesBuild(t *testing.T) {
 	}
 	if !strings.Contains(f.Requests()[0].System[1].Text, "- pay-a-list (Pay a list of people after approval): params ") {
 		t.Errorf("the catalogue lacks the callable templates")
+	}
+}
+
+// The builder's Test runs a draft with sample data: a service step is
+// answered with a sample (or the output the builder kept for it), a
+// choice takes the path its condition picks on the trigger given, and
+// each step's output is reported.
+func TestTryDraft(t *testing.T) {
+	doc := `{"schema":"wd/v1","id":"wf_try","version":1,"name":"try","trigger":{"type":"manual"},
+	 "inputs":{"schema":{"type":"object","properties":{"total":{"type":"integer"}}}},
+	 "steps":[
+	  {"id":"bal","type":"connector","connector":"paystack@1","action":"check_balance"},
+	  {"id":"big","type":"branch","needs":["bal"],"config":{"paths":[{"name":"yes","when":"=trigger.body.total > 100","steps":[
+	    {"id":"thank","type":"transform","config":{"output":{"said":"thanks"}}}]}],
+	   "default":{"steps":[{"id":"small","type":"transform","config":{"output":{"said":"small"}}}]}}}]}`
+	reg := registry(t)
+	c, res, err := builder.TryDraft([]byte(doc), reg, nil, nil, map[string]any{"body": map[string]any{"total": 500}}, map[string]any{"bal": map[string]any{"kept": true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "completed" {
+		t.Fatalf("status %s: %v %v", res.Status, res.Failures, res.Trace)
+	}
+	if got := res.Outputs["bal"]; !reflect.DeepEqual(got, map[string]any{"kept": true}) {
+		t.Errorf("a kept output answers its step: %v", got)
+	}
+	if res.Steps["thank"] != "completed" || res.Outputs["thank"] == nil {
+		t.Errorf("the yes path ran: %v %v", res.Steps, res.Outputs)
+	}
+	if res.Steps["small"] == "completed" {
+		t.Errorf("the other path ran too: %v", res.Steps)
+	}
+	if body, _ := c.Trigger.(map[string]any)["body"].(map[string]any); body["total"] != 500 {
+		t.Errorf("the trigger given is used: %v", c.Trigger)
+	}
+	// Without a trigger, the sample from the inputs schema starts it.
+	c, res, _ = builder.TryDraft([]byte(doc), reg, nil, nil, nil, nil)
+	if res.Status != "completed" || c.Trigger == nil {
+		t.Errorf("sample run: %s %v", res.Status, c.Trigger)
+	}
+	if _, _, err := builder.TryDraft([]byte(`{"schema":"wd/v1"`), reg, nil, nil, nil, nil); err == nil {
+		t.Error("a broken definition is refused")
 	}
 }

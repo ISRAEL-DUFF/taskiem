@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
+import { newWorkflow } from "./builder";
 
 // axe is injected into the page, which the Content Security Policy would refuse.
 test.use({ bypassCSP: true });
@@ -15,13 +16,8 @@ const signIn = async (page: Page) => {
 test("a test call shows what a sender sends before publishing", async ({ page }) => {
   await signIn(page);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
-  await page.getByRole("button", { name: "New workflow" }).click();
-  await page.getByLabel("Name").fill("Shop orders by webhook");
-  await page.getByRole("button", { name: "Create" }).click();
-  await expect(page.getByTestId("node-start")).toBeVisible();
-
-  await page.getByRole("tab", { name: "Trigger & settings" }).click();
-  await page.getByRole("combobox", { name: "Type" }).first().selectOption("webhook");
+  await newWorkflow(page, "Shop orders by webhook", "Another app tells it");
+  await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("combobox", { name: "Authentication" }).selectOption("bearer");
   await page.getByRole("checkbox", { name: "PUT" }).check();
 

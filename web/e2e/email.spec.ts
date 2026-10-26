@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createConnection } from "node:net";
 import { axe, describe } from "./a11y";
+import { addStep, doneWithStep, newWorkflow } from "./builder";
 
 // axe is injected into the page, which the Content Security Policy would refuse.
 test.use({ bypassCSP: true });
@@ -59,13 +60,11 @@ const signIn = async (page: Page) => {
 test("an email starts a workflow at its own address", async ({ page }) => {
   await signIn(page);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
-  await page.getByRole("button", { name: "New workflow" }).click();
-  await page.getByLabel("Name").fill("Bank alerts by email");
-  await page.getByRole("button", { name: "Create" }).click();
-  await expect(page.getByTestId("node-start")).toBeVisible();
+  await newWorkflow(page, "Bank alerts by email", "An email comes in");
+  await addStep(page, "change the data", "Change the data");
+  await doneWithStep(page);
 
-  await page.getByRole("tab", { name: "Trigger & settings" }).click();
-  await page.getByRole("combobox", { name: "Type" }).first().selectOption("email");
+  await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByLabel("Only take mail from").fill("firstbank.example");
   await expect(page.getByText("Publish the workflow to get its email address.")).toBeVisible();
   await page.getByRole("button", { name: "Publish" }).click();
