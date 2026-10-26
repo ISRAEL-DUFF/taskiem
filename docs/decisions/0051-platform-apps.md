@@ -44,7 +44,7 @@ Two smaller gaps come with these apps:
 - Connector/v1 manifests gain `auth.oauth2.client`, `account_field` and `fields_from_callback`, a trigger's `delivery: app`, `account_key` and `revokes` (rule 18), and `connection_hosts` (rule 19); the `svix` verification scheme and the renewal of subscriptions that expire are added in the same work ([plan](../spec/business-connectors.md) K1).
 - `schemas/capabilities-v1.json` gains the books capabilities and events; rule 16 names which kinds may declare which.
 - `connector.Request` gains `Rotate` and `RotateCredentials`; `secrets.Vault` gains `RotateCredentials`.
-- The edge gains `/hooks/apps/{connector}/{trigger}` (migration 00224: `connection_app_accounts`, `app_event_drops`, `taskiem_app_route_event`). It is the one ingress path that writes into a tenant named by data rather than by the URL, so its routing function is the place to review and test cross-tenant isolation.
+- The edge gains `/hooks/apps/{connector}/{trigger}` (migration 00228: `connection_app_accounts`, `app_event_drops`, `taskiem_app_route_event`). It is the one ingress path that writes into a tenant named by data rather than by the URL, so its routing function is the place to review and test cross-tenant isolation.
 - Uninstall and revoke events (Slack's `app_uninstalled` and `tokens_revoked`, Meta's deauthorisation callback, Intuit's disconnect) mark the account's connections expired: a trigger's `revokes` expression says which events are.
 - Each platform app is an account Taskiem holds at the provider, with reviews and lead times ([plan](../spec/business-connectors.md#14-people-accounts-and-reviews), [needs people](../needs-people.md#business-connectors-k0)).
 
