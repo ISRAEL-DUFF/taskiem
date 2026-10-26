@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"net/http"
+	"time"
 )
 
 // Remote trigger registration (decision 0021). A trigger whose manifest
@@ -44,6 +45,11 @@ type RemoteState struct {
 	// RemoteFailing, RemotePaused or RemoteBroken; empty when unknown.
 	Status string
 	Reason string
+	// ExpiresAt is when the provider lets the subscription lapse unless it
+	// is renewed (Zoho CRM's watches); zero when it never does. Taskiem
+	// applies the subscription again (Update) before then, so Update must
+	// renew it.
+	ExpiresAt time.Time
 }
 
 // Remote statuses. RemoteMissing is Taskiem's: the provider no longer has
