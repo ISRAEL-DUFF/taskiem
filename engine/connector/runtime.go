@@ -130,6 +130,12 @@ type Connector struct {
 	// app). It fills the manifest's auth.oauth2.linked_fields (rule 21);
 	// an error wrapping ErrLinkRefused is shown to the person as it is.
 	Link func(ctx context.Context, c LinkCall) (map[string]string, error)
+	// CheckInput, when set, checks a workflow step's input for an action
+	// when the workflow is published (engine/wdcheck): what the manifest's
+	// schema cannot say, such as a value that must be chosen from a set
+	// the connector knows. The input is as written, expressions ("=...")
+	// unevaluated; each message names a problem.
+	CheckInput func(action string, input map[string]any) []string
 }
 
 // LinkCall is what Link gets: the fields made so far, the token the

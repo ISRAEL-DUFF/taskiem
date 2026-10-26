@@ -181,13 +181,20 @@ export function useScrollableTables(box: RefObject<HTMLElement | null>) {
         }
       });
     };
+    // A table widens when rows are added, when text in a cell changes in
+    // place (React updates text nodes without adding any), and when the
+    // page's font finishes loading: each is checked again.
     const watch = new MutationObserver(mark);
-    watch.observe(root, { childList: true, subtree: true });
+    watch.observe(root, { childList: true, characterData: true, subtree: true });
+    const sizes = typeof ResizeObserver === "function" ? new ResizeObserver(mark) : null;
+    sizes?.observe(root);
     window.addEventListener("resize", mark);
+    void document.fonts?.ready.then(mark);
     mark();
     return () => {
       cancelAnimationFrame(frame);
       watch.disconnect();
+      sizes?.disconnect();
       window.removeEventListener("resize", mark);
     };
   }, [box]);

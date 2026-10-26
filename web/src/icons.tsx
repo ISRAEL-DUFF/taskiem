@@ -42,6 +42,22 @@ const paths: Record<string, string> = {
   money: "M3 6h18v12H3zM12 9a3 3 0 100 6 3 3 0 000-6zM6.5 9.5v.01M17.5 14.5v.01",
   info: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.01",
   back: "M15 6l-6 6 6 6",
+  // The workflow builder's.
+  chat: "M21 12a8 8 0 01-11.6 7.1L4 20l1.1-4.4A8 8 0 1121 12z",
+  mail: "M3 5h18v14H3zM3 7l9 6 9-6",
+  card: "M2 5h20v14H2zM2 10h20M6 15h4",
+  split: "M4 12h6l4-6h6M10 12l4 6h6",
+  loop: "M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3",
+  code: "M8 7l-5 5 5 5M16 7l5 5-5 5",
+  play: "M7 5l12 7-12 7z",
+  undo: "M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3",
+  redo: "M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3",
+  fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  tidy: "M3 4h7v6H3zM14 4h7v6h-7zM8.5 14h7v6h-7z",
+  note: "M5 4h14v11l-5 5H5zM14 20v-5h5",
+  pencil: "M4 20h4L19 9l-4-4L4 16z",
+  check: "M5 12l5 5 9-10",
+  minus: "M5 12h14",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

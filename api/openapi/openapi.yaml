@@ -3452,6 +3452,44 @@ paths:
                 $ref: '#/components/schemas/SchoolStudentAccount'
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/account/send:
+    post:
+      operationId: sendSchoolStudentAccount
+      tags:
+      - Schools
+      summary: Send the student's account number to the family
+      description: 'Sends the student''s family their own account number (the number, the bank, the name to expect when they transfer) with a fresh family page link, to each guardian on WhatsApp or Telegram where they get the business''s updates there (as the taskiem_account_number template outside the 24-hour window once approved), otherwise by SMS: what the school-issue-accounts template sends when the number is issued. Each call sends afresh. 409 when the student has no account number yet. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Where the account number went
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/SchoolFamilySent'
+                - type: object
+                  required: [student_id, account_number]
+                  properties:
+                    student_id:
+                      type: string
+                      format: uuid
+                    account_number:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/accounts/issue:
     post:
       operationId: issueSchoolAccounts
@@ -15552,6 +15590,109 @@ paths:
           - sent
           - dropped
           default: dead
+  /v1/whatsapp/number/templates:
+    get:
+      operationId: getWhatsAppTemplates
+      tags:
+      - WhatsApp
+      summary: The own number's WhatsApp templates
+      description: Each library template's status in the own number's WhatsApp Business Account (not submitted, pending, approved, rejected with the reason, paused, disabled), and what cannot go outside the 24-hour window until approved.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppTemplates'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/whatsapp/number/templates/check:
+    post:
+      operationId: checkWhatsAppTemplates
+      tags:
+      - WhatsApp
+      summary: Check the templates' statuses with Meta now
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppTemplates'
+        '400':
+          description: Meta did not list the account's templates (the token lacks whatsapp_business_management).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No own number is connected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/whatsapp/number/templates/{name}/submit:
+    post:
+      operationId: submitWhatsAppTemplate
+      tags:
+      - WhatsApp
+      summary: Submit a template to Meta
+      description: Submits one library template to Meta for approval from the own number's WhatsApp Business Account. Audited as whatsapp.template.submit.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The template's name (taskiem_…)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppTemplateStatus'
+        '400':
+          description: Meta refused the submission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such template in the library.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No own number is connected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/whatsapp/outbox/{id}/retry:
     post:
       operationId: retryWhatsAppOutbox
@@ -16083,6 +16224,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TriggerList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/try:
+    post:
+      operationId: tryDraft
+      tags:
+      - Workflows
+      summary: Test a draft with sample data
+      description: Runs a definition once on the real orchestrator over an in-memory history, every service step answered with a sample of its output (or the output kept for it), every approval approved and every form answered. Nothing is sent and nothing is stored. The workflow builder's Test.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TryDraftRequest'
+      responses:
+        '200':
+          description: What each step did
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TryDraftResult'
+        '422':
+          description: The definition cannot be read or uses itself
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/email:
@@ -25809,6 +25992,53 @@ components:
                 type: string
             additionalProperties: false
       additionalProperties: false
+    TryDraftRequest:
+      type: object
+      required:
+      - definition
+      properties:
+        definition:
+          $ref: '#/components/schemas/Definition'
+        trigger:
+          description: What starts the test run, as a trigger delivers it; a sample from the definition's inputs when absent.
+        kept:
+          type: object
+          description: Outputs the builder kept, by step id; they answer those steps instead of samples.
+          additionalProperties: true
+    TryDraftResult:
+      type: object
+      required:
+      - status
+      - steps
+      - inputs
+      - outputs
+      - errors
+      properties:
+        status:
+          type: string
+          description: How the run ended (completed, failed, waiting, ...).
+        trigger:
+          description: What started it.
+        steps:
+          type: object
+          description: Each step's state by id (completed, failed, skipped, ...).
+          additionalProperties:
+            type: string
+        inputs:
+          type: object
+          description: What each service step was given, by id.
+          additionalProperties: true
+        outputs:
+          type: object
+          description: What each completed step gave, by id.
+          additionalProperties: true
+        errors:
+          type: object
+          description: Why each failed step failed, by id.
+          additionalProperties:
+            type: string
+        run_error:
+          type: string
     Layout:
       type: object
       description: The canvas's positions for a version's steps; not part of the definition, stored as given.
@@ -29339,6 +29569,65 @@ components:
           type: string
           description: The workflow's name (answers only).
       additionalProperties: false
+    WhatsAppTemplateStatus:
+      type: object
+      required:
+      - name
+      - category
+      - language
+      - status
+      - purpose
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum:
+          - authentication
+          - utility
+          - marketing
+        language:
+          type: string
+        status:
+          type: string
+          enum:
+          - not_submitted
+          - pending
+          - approved
+          - rejected
+          - paused
+          - disabled
+        reason:
+          type: string
+          description: Meta's reason for a rejection, pause or disabling.
+        meta_id:
+          type: string
+          description: The template's id in Meta's account once submitted.
+        submitted_at:
+          $ref: '#/components/schemas/Timestamp'
+        checked_at:
+          $ref: '#/components/schemas/Timestamp'
+        purpose:
+          type: string
+          description: When the template is sent.
+      additionalProperties: false
+    WhatsAppTemplates:
+      type: object
+      required:
+      - tracked
+      - templates
+      properties:
+        tracked:
+          type: boolean
+          description: An own number is connected, so the statuses are its account's.
+        templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/WhatsAppTemplateStatus'
+        note:
+          type: string
+          description: What cannot go outside the 24-hour window until the templates named are approved.
+      additionalProperties: false
     WhatsAppNumber:
       type: object
       required:
@@ -29466,6 +29755,8 @@ components:
                 - invoice
                 - match
                 - money_daily
+                - school_approval
+                - school_family
               status:
                 type: string
                 enum:

@@ -212,6 +212,13 @@ func (s *Server) putWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.WhatsApp.Forget()
+	// What Meta knows of the templates in the number's account, so the
+	// Channels page shows it at once (then hourly, and on Check now).
+	if own, err := s.WhatsApp.ForTenant(r.Context(), p.TenantID); err == nil && own.Own() {
+		if _, err := own.CheckTemplates(r.Context()); err != nil {
+			s.Logger.Warn("whatsapp: checking a new number's templates", "err", err)
+		}
+	}
 	v, err := s.waNumberView(r)
 	if err != nil {
 		s.fail(w, r, err)

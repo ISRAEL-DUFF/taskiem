@@ -302,9 +302,16 @@ func TestReminders(t *testing.T) {
 		if err := tx.QueryRow(ctx, `SELECT id FROM school_family_messages WHERE purpose = 'reminder'`).Scan(&id); err != nil {
 			return err
 		}
-		text, _, _, ok, err := w.s.FamilyMessageText(ctx, tx, tn, id)
+		ft, ok, err := w.s.FamilyMessageOpen(ctx, tx, tn, id)
+		text := ft.Text
 		if err != nil || !ok || !strings.Contains(text, "₦80,000") || !strings.Contains(text, "Ebube Eze and Chidi Eze") || !strings.Contains(text, "https://forms.test/s/") || !strings.Contains(text, "7 Sep 2026") {
 			t.Fatalf("text %q %v %v", text, ok, err)
+		}
+		// Outside WhatsApp's window the reminder template carries the same
+		// facts, with the rung and the link for its button.
+		if ft.Template == nil || ft.Template.Name != "taskiem_fee_reminder" || ft.Vars["balance"] != "₦80,000" || ft.Vars["child"] != "Ebube Eze and Chidi Eze" ||
+			ft.Vars["due_date"] != "7 Sep 2026" || ft.Vars["rung"] != "reminder 1 of 3" || !strings.HasPrefix(ft.Vars["link"], "https://forms.test/s/") {
+			t.Fatalf("template %+v", ft)
 		}
 		return nil
 	})

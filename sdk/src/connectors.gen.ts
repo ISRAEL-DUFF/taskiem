@@ -1541,6 +1541,10 @@ export interface NotifyTellInput {
   message: Val<string>;
   /** With to: role, the role */
   role?: Val<string>;
+  /** Optional: the WhatsApp template that carries the message outside the 24-hour window instead of the generic alert, by name (taskiem_daily_close, taskiem_daily_summary: one of the registry's templates for the business's own people, with no link or button filled at each send); checked when the workflow is published */
+  template?: Val<string>;
+  /** With template: its variables (every one but the business's name, which Taskiem adds), each a line of text, such as day and summary for taskiem_daily_close */
+  template_vars?: Value;
   /** A first line, and an email's subject */
   title?: Val<string>;
   /** Who hears it: the owners (the default), the members with a role, or named members */
@@ -2494,6 +2498,14 @@ export interface SchoolsPlanDecisionsInput {
   /** Only decisions the family was not told of yet (true by default) */
   untold?: Val<boolean>;
 }
+export interface SchoolsSendAccountNumberInput {
+  /** The student's id or admission number */
+  student: Val<string>;
+}
+export interface SchoolsSendReceiptInput {
+  /** The receipt's id or number (the invoice trigger's payment event carries it as receipt.id) */
+  receipt: Val<string>;
+}
 export interface SchoolsSendRemindersInput {
   /** Without students: only this class's debtors (id or label) */
   class?: Val<string>;
@@ -2544,6 +2556,10 @@ export const schools = {
   list_students: (input?: SchoolsListStudentsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_students", input, extra),
   /** List payment plan decisions (read) */
   plan_decisions: (input?: SchoolsPlanDecisionsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "plan_decisions", input, extra),
+  /** Send a family a student's account number (idempotent_write) */
+  send_account_number: (input: SchoolsSendAccountNumberInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_account_number", input, extra),
+  /** Send a family a receipt (idempotent_write) */
+  send_receipt: (input: SchoolsSendReceiptInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_receipt", input, extra),
   /** Send fee reminders (idempotent_write) */
   send_reminders: (input?: SchoolsSendRemindersInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_reminders", input, extra),
   /** Tell a family its plan's decision (idempotent_write) */
@@ -3601,7 +3617,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "resend@1": ["get_email", "list_domains", "send_email"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
-  "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
+  "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],

@@ -423,3 +423,30 @@ func parseCase(name, raw string) (wdtest.Case, error) {
 // Sample builds a value satisfying a JSON Schema (decoded), as the
 // generated happy path does: for fixtures and the evaluation's fake model.
 func Sample(schema any) any { return sample(schema, nil, nil, 0) }
+
+// TryDraft runs a draft once with sample data, for the workflow builder's
+// Test: the generated happy path (every service step answered with a
+// sample of its output, every approval approved, every form answered), so
+// nothing is sent anywhere. trigger, when given, is what starts it instead
+// of the sample; kept are outputs the builder kept for steps, which answer
+// those steps instead of the samples. The case is returned with the result
+// so the builder can show what each step was given.
+func TryDraft(doc []byte, reg connector.Lookup, policies map[string]json.RawMessage, find expansion.Templates, trigger any, kept map[string]any) (wdtest.Case, wdtest.Result, error) {
+	def, err := wd.Load(doc)
+	if err != nil {
+		return wdtest.Case{}, wdtest.Result{}, err
+	}
+	reg = ManifestOnly(reg)
+	c := HappyPathWith(def, reg, find)
+	c.Name = "test with sample data"
+	c.Expect = wdtest.Expect{}
+	if trigger != nil {
+		c.Trigger = trigger
+	}
+	for id, out := range kept {
+		if _, ok := c.Mocks[id]; ok {
+			c.Mocks[id] = wdtest.Mocks{{Output: out}}
+		}
+	}
+	return c, runCase(def, reg, usedPolicies(def, policies), find, c), nil
+}

@@ -27,6 +27,8 @@ Taskiem's icon, a lime "t" on dark green, is now on your home screen. You stay s
 
 **An invoice or an order** opens on a green card with what is still due (or its total), how much is paid, the customer and the date. **A run** opens on a card with its status and how its steps stand, such as "1 done · 1 waiting". The link at the top of each goes back to its list.
 
+**A workflow** opens as a list of its steps, after what starts it: tap one to change it full screen, or **Add a step here** to add one after it. **Test workflow** at the end tries it with sample data.
+
 **Get started** shows how much of your setup is done and the next step, with each step's button beside it.
 
 ## Approving from Home

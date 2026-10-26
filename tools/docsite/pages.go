@@ -26,7 +26,7 @@ var nav = []section{
 	{"For business owners", []string{"guide/index", "guide/start", "guide/templates", "guide/connections", "guide/paying-people", "guide/schools", "guide/tables", "guide/changing-a-workflow", "guide/settings", "guide/own-domain", "guide/your-website", "guide/own-whatsapp-number", "guide/on-your-phone"}},
 	{"Get started", []string{"onboarding", "templates", "schools", "data-tables", "dashboard", "environments", "cli"}},
 	{"Money", []string{"invoices", "money-log", "matching", "leaks", "money-reports"}},
-	{"Build workflows", []string{"sdk", "readiness", "code-steps", "container-steps", "ai", "alerts"}},
+	{"Build workflows", []string{"workflow-builder", "sdk", "readiness", "code-steps", "container-steps", "ai", "alerts"}},
 	{"Connectors", []string{"connector-sdk", "connector-submissions", "integrations/*"}},
 	{"Channels", []string{"whatsapp", "telegram", "updates", "ussd", "email", "languages"}},
 	{"Govern and secure", []string{"governance", "privacy", "compliance", "byok", "git"}},
@@ -64,6 +64,7 @@ var internal = []struct{ pattern, why string }{
 	{"agents", "field agents are built but idle until Phase 5 ships; publish them with storefronts"},
 	{"runbooks/*", "Taskiem's own runbooks for its environments, for the team"},
 	{"brand", "Taskiem's logo files and colour rules, for the team and its designers"},
+	{"brand/screens", "how the web app's screens use the brand, for the team and coding agents"},
 }
 
 // isInternal reports whether a docs page (path without ".md") stays out of the site.

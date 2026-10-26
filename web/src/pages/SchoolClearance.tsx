@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { get, getBlob, post } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Items, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { naira } from "../lib/invoices";
 import { dateLabel, plainMessage, type SchoolClass, type SchoolSession, type SchoolTerm } from "../lib/schools";
 import {
@@ -204,70 +204,68 @@ export function SchoolClearancePage() {
         )}
         {list.data && rows.length === 0 && <EmptyState icon="schools">No students are enrolled in this term{filter.class ? " in this class" : ""}.</EmptyState>}
         {rows.length > 0 && (
-          <table className="cards">
-            <thead>
-              <tr>
-                <th scope="col">Student</th>
-                <th scope="col">Class</th>
-                <th scope="col">Clearance</th>
-                <th scope="col">Why</th>
-                <th scope="col">Balance</th>
-                <th scope="col">Override</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.student_id} data-testid="clearance-row" data-status={r.status}>
-                  <td className="primary" data-label="Student">
-                    <Link to={`/schools/students/${encodeURIComponent(r.student_id)}`}>{r.admission_number}</Link>
-                    {r.name ? ` ${r.name}` : ""}
-                    {r.student_status !== "active" && <span className="hint"> ({r.student_status})</span>}
-                  </td>
-                  <td data-label="Class">{r.class}</td>
-                  <td data-label="Clearance">
-                    <StatusBadge status={r.status} />
-                  </td>
-                  <td data-label="Why">{reasonWords(r)}</td>
-                  <td data-label="Balance">{naira(r.balance_kobo)}</td>
-                  <td data-label="Override">
-                    {r.override && (
-                      <>
-                        <span data-testid="override-line">
-                          {r.override.reason} · until {dateLabel(r.override.ends_on)}
-                        </span>{" "}
-                        {approve && (
-                          <WithdrawButton
-                            id={r.override.id}
-                            onDone={() => {
-                              setSaid(`Override withdrawn for ${r.admission_number}.`);
-                              list.reload();
-                            }}
-                          />
-                        )}
-                      </>
-                    )}
-                    {!r.override && approve && r.status !== "cleared" && adding !== r.student_id && (
-                      <button type="button" className="secondary" onClick={() => setAdding(r.student_id)}>
-                        Clear by override
-                      </button>
-                    )}
-                    {adding === r.student_id && (
-                      <OverrideForm
-                        student={r.student_id}
-                        term={list.data?.term_id}
-                        onDone={(o) => {
-                          setAdding("");
-                          setSaid(`${r.admission_number} cleared by override until ${dateLabel(o.ends_on)}.`);
-                          list.reload();
-                        }}
-                        onCancel={() => setAdding("")}
-                      />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Items label="Students">
+            {rows.map((r) => {
+              const st = clearanceStatus(r.status);
+              return (
+                <Row
+                  key={r.student_id}
+                  testid="clearance-row"
+                  attrs={{ "data-status": r.status }}
+                  letter={r.name || r.admission_number}
+                  tone={st.tone === "ok" || st.tone === "warn" || st.tone === "danger" ? st.tone : "muted"}
+                  title={
+                    <>
+                      <Link to={`/schools/students/${encodeURIComponent(r.student_id)}`}>{r.admission_number}</Link>
+                      {r.name ? ` ${r.name}` : ""}
+                    </>
+                  }
+                  side={<StatusBadge status={r.status} />}
+                  sub={
+                    <span className="sub">
+                      {r.class} · balance {naira(r.balance_kobo)}
+                      {r.student_status !== "active" && ` · ${r.student_status}`}
+                      <span className="block">{reasonWords(r)}</span>
+                    </span>
+                  }
+                >
+                  {r.override && (
+                    <>
+                      <span className="sub" data-testid="override-line">
+                        Override: {r.override.reason} · until {dateLabel(r.override.ends_on)}
+                      </span>
+                      {approve && (
+                        <WithdrawButton
+                          id={r.override.id}
+                          onDone={() => {
+                            setSaid(`Override withdrawn for ${r.admission_number}.`);
+                            list.reload();
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                  {!r.override && approve && r.status !== "cleared" && adding !== r.student_id && (
+                    <button type="button" className="secondary" onClick={() => setAdding(r.student_id)}>
+                      Clear by override
+                    </button>
+                  )}
+                  {adding === r.student_id && (
+                    <OverrideForm
+                      student={r.student_id}
+                      term={list.data?.term_id}
+                      onDone={(o) => {
+                        setAdding("");
+                        setSaid(`${r.admission_number} cleared by override until ${dateLabel(o.ends_on)}.`);
+                        list.reload();
+                      }}
+                      onCancel={() => setAdding("")}
+                    />
+                  )}
+                </Row>
+              );
+            })}
+          </Items>
         )}
       </section>
       <OverridesCard term={list.data?.term_id} approve={approve} version={said} />
@@ -287,17 +285,28 @@ function OverridesCard({ term, approve, version }: { term?: string; approve: boo
       <ErrorBox error={list.error} />
       {list.data && list.data.overrides.length === 0 && <p className="hint">No override for this term.</p>}
       {list.data && list.data.overrides.length > 0 && (
-        <ul className="plain-list" data-testid="overrides">
-          {list.data.overrides.map((o) => (
-            <li key={o.id} data-testid="override" data-in-force={o.in_force}>
-              <div className="toolbar">
-                <span className="grow">
-                  <Link to={`/schools/students/${encodeURIComponent(o.student_id)}`}>{o.admission_number}</Link>: {o.reason}{" "}
-                  <span className={`badge sf-status ${o.withdrawn_at ? "muted" : o.in_force ? "ok" : "muted"}`}>{o.withdrawn_at ? "Withdrawn" : o.in_force ? "In force" : "Ended"}</span>
-                </span>
-                <span className="hint">
-                  {dateLabel(o.starts_on)} to {dateLabel(o.ends_on)} · by {o.created_by.replace(/^user:/, "")} {fmtTime(o.created_at)}
-                </span>
+        <ul className="items" data-testid="overrides" aria-label="Overrides">
+          {list.data.overrides.map((o) => {
+            const state = o.withdrawn_at ? "Withdrawn" : o.in_force ? "In force" : "Ended";
+            return (
+              <Row
+                key={o.id}
+                testid="override"
+                attrs={{ "data-in-force": String(o.in_force) }}
+                icon="lock"
+                tone={o.in_force && !o.withdrawn_at ? "ok" : "muted"}
+                title={
+                  <>
+                    <Link to={`/schools/students/${encodeURIComponent(o.student_id)}`}>{o.admission_number}</Link>: {o.reason}
+                  </>
+                }
+                side={<span className={`badge sf-status ${o.withdrawn_at ? "muted" : o.in_force ? "ok" : "muted"}`}>{state}</span>}
+                sub={
+                  <span className="sub">
+                    {dateLabel(o.starts_on)} to {dateLabel(o.ends_on)} · by {o.created_by.replace(/^user:/, "")} {fmtTime(o.created_at)}
+                  </span>
+                }
+              >
                 {approve && o.in_force && (
                   <WithdrawButton
                     id={o.id}
@@ -307,9 +316,9 @@ function OverridesCard({ term, approve, version }: { term?: string; approve: boo
                     }}
                   />
                 )}
-              </div>
-            </li>
-          ))}
+              </Row>
+            );
+          })}
         </ul>
       )}
     </section>

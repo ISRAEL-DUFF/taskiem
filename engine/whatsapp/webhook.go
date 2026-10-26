@@ -173,3 +173,58 @@ func Parse(body []byte) ([]Inbound, error) {
 	}
 	return out, nil
 }
+
+// ParseTemplateStatuses extracts the template status events of a webhook
+// delivery (field message_template_status_update, subscribed to beside
+// messages): the account (entry id), the event, Meta's template id, the
+// name and language, and the reason, with any rejection or pause details
+// in words. Other fields are ignored.
+func ParseTemplateStatuses(body []byte) ([]TemplateStatusUpdate, error) {
+	var d struct {
+		Entry []struct {
+			ID      string `json:"id"`
+			Changes []struct {
+				Field string `json:"field"`
+				Value struct {
+					Event     string          `json:"event"`
+					ID        json.RawMessage `json:"message_template_id"`
+					Name      string          `json:"message_template_name"`
+					Language  string          `json:"message_template_language"`
+					Reason    string          `json:"reason"`
+					Rejection struct {
+						Reason         string `json:"reason"`
+						Recommendation string `json:"recommendation"`
+					} `json:"rejection_info"`
+					Other struct {
+						Title       string `json:"title"`
+						Description string `json:"description"`
+					} `json:"other_info"`
+				} `json:"value"`
+			} `json:"changes"`
+		} `json:"entry"`
+	}
+	if err := json.Unmarshal(body, &d); err != nil {
+		return nil, err
+	}
+	var out []TemplateStatusUpdate
+	for _, e := range d.Entry {
+		for _, c := range e.Changes {
+			if c.Field != "message_template_status_update" {
+				continue
+			}
+			v := c.Value
+			var why []string
+			if v.Reason != "" && !strings.EqualFold(v.Reason, "NONE") && !strings.EqualFold(v.Reason, "null") {
+				why = append(why, v.Reason)
+			}
+			if v.Rejection.Reason != "" || v.Rejection.Recommendation != "" {
+				why = append(why, strings.TrimSpace(v.Rejection.Reason+": "+v.Rejection.Recommendation))
+			}
+			if v.Other.Title != "" || v.Other.Description != "" {
+				why = append(why, strings.TrimSpace(v.Other.Title+": "+v.Other.Description))
+			}
+			out = append(out, TemplateStatusUpdate{WABA: e.ID, Event: v.Event, MetaID: anyID(v.ID), Name: v.Name, Language: v.Language, Reason: strings.Join(why, "; ")})
+		}
+	}
+	return out, nil
+}

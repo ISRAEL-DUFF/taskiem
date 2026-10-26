@@ -127,6 +127,27 @@ func (s *Server) chatAddrOf(ctx context.Context, channel string, tenant, user uu
 	return ch, addr, nil
 }
 
+// sendOwnTemplate sends a member text, outside WhatsApp's window as its
+// own template tpl with vars (the tenant's name among them), and, when the
+// number's account does not hold the template approved or it cannot go
+// as one (whatsapp.TemplateUnusable), as the alert template with
+// alertVars instead, as before the template existed: the message is then
+// sent, and why it went that way is recorded on it (whatsapp.ErrFellBack).
+// The daily money summary and a Tell me message with a template of its
+// own go this way.
+func sendOwnTemplate(ctx context.Context, ch chatChannel, addr, text string, tenant uuid.UUID, tpl whatsapp.Template, vars, alertVars map[string]string) error {
+	_, err := ch.Send(ctx, addr, whatsapp.Message{Text: text, Template: &tpl, Vars: vars, Tenant: tenant})
+	if !whatsapp.TemplateUnusable(err) {
+		return err
+	}
+	why := err
+	alert := whatsapp.TplAlert
+	if _, err := ch.Send(ctx, addr, whatsapp.Message{Text: text, Template: &alert, Vars: alertVars, Tenant: tenant}); err != nil {
+		return err
+	}
+	return fmt.Errorf("%w: as %s, since %s could not go: %w", whatsapp.ErrFellBack, alert.Name, tpl.Name, why)
+}
+
 // outboxKey keeps one channel's queued messages apart from another's.
 // WhatsApp's keys are as they were before Telegram.
 func outboxKey(channel, key string) string {

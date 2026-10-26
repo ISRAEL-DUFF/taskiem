@@ -327,6 +327,34 @@ type FamilyMessage struct {
 	// Short, when set, is the text an SMS gets (at most three parts, and
 	// ₦ makes every character count double); Text otherwise.
 	Short func(link string) string
+	// Template, when set, is the WhatsApp template that carries the
+	// message outside the 24-hour window once Meta approves it
+	// (docs/whatsapp.md#templates), and Vars its variables given the
+	// fresh link (the business's name is added as "tenant"). Without
+	// one the generic update template carries the text.
+	Template *whatsapp.Template
+	Vars     func(link string) map[string]string
+}
+
+// FamilyText is a queued family message as the outbox sends it: the
+// text, its SMS form, the template and variables for outside the window.
+type FamilyText struct {
+	Text, Short string
+	Template    *whatsapp.Template
+	Vars        map[string]string
+	// Phone is the guardian's, for the SMS fallback.
+	Phone string
+}
+
+// FamilyLinkVars are the taskiem_family_link template's variables
+// (docs/whatsapp.md#templates): a short message, how many days the link
+// works, and the link for the button.
+func FamilyLinkVars(message string, days int, link string) map[string]string {
+	message = strings.Join(strings.Fields(message), " ")
+	if message == "" {
+		message = "Here is a new link to your family's fees page."
+	}
+	return map[string]string{"message": message, "days": fmt.Sprint(days), "link": link}
 }
 
 // FamilySent is what SendFamily did.
@@ -355,9 +383,12 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 		return out, err
 	}
 	out.Link, out.ExpiresAt = link, link.ExpiresAt
-	text, short := m.Text(link.URL), ""
+	ft := FamilyText{Text: m.Text(link.URL)}
 	if m.Short != nil {
-		short = m.Short(link.URL)
+		ft.Short = m.Short(link.URL)
+	}
+	if m.Template != nil && m.Vars != nil {
+		ft.Template, ft.Vars = m.Template, m.Vars(link.URL)
 	}
 	type guardian struct {
 		id  uuid.UUID
@@ -388,7 +419,7 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 			continue
 		}
 		subject, _ := g.env["subject"].(string)
-		channel, err := s.sendGuardian(ctx, tx, tenant, family, link.ID, g.id, subject, d.Phone, business, text, short, m, by)
+		channel, err := s.sendGuardian(ctx, tx, tenant, family, link.ID, g.id, subject, d.Phone, business, ft, m, by)
 		if err != nil {
 			return out, err
 		}
@@ -401,22 +432,32 @@ func (s *Schools) SendFamily(ctx context.Context, tx pgx.Tx, tenant, family uuid
 }
 
 // sendGuardian sends one guardian the message: the channel it went on.
-func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, link, guardian uuid.UUID, subject, phone, business, text, short string, m FamilyMessage, by string) (string, error) {
+func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, link, guardian uuid.UUID, subject, phone, business string, ft FamilyText, m FamilyMessage, by string) (string, error) {
 	key := "family:" + m.Key + ":" + guardian.String()
+	text, short := ft.Text, ft.Short
 	if short == "" {
 		short = text
 	}
 	record := func(channel string) error {
-		sealed, err := s.Vault.SealUnderTx(ctx, tx, tenant, subject, "other", map[string]string{"text": text, "short": short})
+		payload := map[string]any{"text": text, "short": short}
+		if ft.Template != nil {
+			payload["template"], payload["vars"] = ft.Template.Name, ft.Vars
+		}
+		sealed, err := s.Vault.SealUnderTx(ctx, tx, tenant, subject, "other", payload)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO school_family_messages (id, tenant_id, family_id, link_id, guardian_id, channel, purpose, text, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant.String()+":"+key)), tenant, family, link, guardian, channel, m.Purpose, sealed, by)
-		if code, _ := pgCode(err); code == "23505" {
+		// The message's id is its key: one sent already is left as it
+		// is (the insert must not fail, which would end the transaction).
+		tag, err := tx.Exec(ctx, `INSERT INTO school_family_messages (id, tenant_id, family_id, link_id, guardian_id, channel, purpose, text, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT (id) DO NOTHING`, uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenant.String()+":"+key)), tenant, family, link, guardian, channel, m.Purpose, sealed, by)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
 			return errAlreadySent
 		}
-		return err
+		return nil
 	}
 	if s.Invoices != nil && s.Invoices.Reach.Ready() && len(s.Invoices.Chat) > 0 {
 		t, ok, err := s.Invoices.Reach.FindTx(ctx, tx, tenant, uuid.Nil, phone, s.Invoices.Chat)
@@ -469,38 +510,53 @@ func (s *Schools) sendGuardian(ctx context.Context, tx pgx.Tx, tenant, family, l
 
 var errAlreadySent = errors.New("schools: already sent")
 
-// FamilyMessageText is a queued chat message's text (and its short form
-// for an SMS), opened for the outbox, with the guardian's phone for the
-// SMS fallback; ok is false when the guardian is gone or erased.
-func (s *Schools) FamilyMessageText(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) (text, short, phone string, ok bool, err error) {
+// FamilyMessageOpen is a queued chat message as the outbox sends it,
+// opened: the text (and its short form for an SMS), the template and
+// variables for outside the window, and the guardian's phone for the SMS
+// fallback; ok is false when the guardian is gone or erased.
+func (s *Schools) FamilyMessageOpen(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) (FamilyText, bool, error) {
+	var ft FamilyText
 	var env, details map[string]any
-	err = tx.QueryRow(ctx, `SELECT m.text, g.details FROM school_family_messages m LEFT JOIN school_guardians g ON g.id = m.guardian_id WHERE m.tenant_id = $1 AND m.id = $2`, tenant, id).Scan(&env, &details)
+	err := tx.QueryRow(ctx, `SELECT m.text, g.details FROM school_family_messages m LEFT JOIN school_guardians g ON g.id = m.guardian_id WHERE m.tenant_id = $1 AND m.id = $2`, tenant, id).Scan(&env, &details)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", "", false, nil
+		return ft, false, nil
 	}
 	if err != nil {
-		return "", "", "", false, err
+		return ft, false, err
 	}
 	v, err := s.Vault.OpenTx(ctx, tx, tenant, env)
 	if errors.Is(err, pii.ErrErased) {
-		return "", "", "", false, nil
+		return ft, false, nil
 	}
 	if err != nil {
-		return "", "", "", false, err
+		return ft, false, err
 	}
 	if m, ok := v.(map[string]any); ok {
-		text, _ = m["text"].(string)
-		short, _ = m["short"].(string)
+		ft.Text, _ = m["text"].(string)
+		ft.Short, _ = m["short"].(string)
+		if name, _ := m["template"].(string); name != "" {
+			if tpl, ok := whatsapp.TemplateNamed(name); ok {
+				ft.Template = &tpl
+				ft.Vars = map[string]string{}
+				if vars, _ := m["vars"].(map[string]any); vars != nil {
+					for k, x := range vars {
+						if str, ok := x.(string); ok {
+							ft.Vars[k] = str
+						}
+					}
+				}
+			}
+		}
 	}
-	if short == "" {
-		short = text
+	if ft.Short == "" {
+		ft.Short = ft.Text
 	}
 	if details != nil {
 		var d guardianSealed
 		if _, err := s.open(ctx, tx, tenant, details, &d); err != nil {
-			return "", "", "", false, err
+			return ft, false, err
 		}
-		phone = d.Phone
+		ft.Phone = d.Phone
 	}
-	return text, short, phone, text != "", nil
+	return ft, ft.Text != "", nil
 }

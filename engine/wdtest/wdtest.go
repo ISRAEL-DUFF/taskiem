@@ -170,6 +170,9 @@ type Result struct {
 	// the case asserts (the repair pipeline's shadow run).
 	Steps  map[string]string
 	Inputs map[string]any
+	// Outputs is each completed instance's output, for callers that show
+	// what each step gave (the builder's test with sample data).
+	Outputs map[string]any
 	// Errors is each failed or parked instance's failure message, and
 	// RunError the run's.
 	Errors   map[string]string
@@ -798,8 +801,12 @@ func (r *runner) check() {
 	byID, order := r.state()
 	r.res.Status = r.status(order)
 	r.res.Steps, r.res.Inputs, r.res.Errors, r.res.RunError = map[string]string{}, map[string]any{}, map[string]string{}, r.runError()
+	r.res.Outputs = map[string]any{}
 	for _, s := range order {
 		r.res.Steps[s.id] = stepStatus(s)
+		if s.completed {
+			r.res.Outputs[s.id] = s.output
+		}
 		if s.failure != nil && !s.completed {
 			r.res.Errors[s.id] = s.failure.Message
 		}

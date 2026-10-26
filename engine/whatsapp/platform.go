@@ -45,6 +45,19 @@ type Config struct {
 	// (TASKIEM_WHATSAPP_FLOWS_PRIVATE_KEY, PEM); nil turns Flows off and
 	// inputs and step-up stay in chat and the web app.
 	FlowKey *FlowKey
+	// WABAID is the platform number's WhatsApp Business Account
+	// (TASKIEM_WHATSAPP_WABA_ID): where its templates are submitted and
+	// their statuses tracked (docs/whatsapp.md#templates). Empty: the
+	// registry is off for the platform number and every template is sent,
+	// Meta refusing the unapproved.
+	WABAID string
+	// AssumeApproved treats every template as approved without asking Meta
+	// (TASKIEM_WHATSAPP_TEMPLATES_ASSUME_APPROVED): tests and the e2e
+	// stack only, against a fake Graph API.
+	AssumeApproved bool
+	// Hosts are the deployment's addresses the templates' url buttons
+	// open (the web app and the public form host), set by the process.
+	Hosts Hosts
 }
 
 // ConfigFromEnv reads the platform number's settings; nil when
@@ -59,6 +72,17 @@ func ConfigFromEnv(lookup func(string) (string, bool)) (*Config, error) {
 		AppSecret: get("TASKIEM_WHATSAPP_APP_SECRET"), VerifyToken: get("TASKIEM_WHATSAPP_VERIFY_TOKEN"),
 		GraphURL: get("TASKIEM_WHATSAPP_GRAPH_URL"), Language: get("TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE"),
 		DefaultCountry: get("TASKIEM_WHATSAPP_DEFAULT_COUNTRY"), DisplayNumber: get("TASKIEM_WHATSAPP_DISPLAY_NUMBER"),
+		WABAID: get("TASKIEM_WHATSAPP_WABA_ID"),
+	}
+	switch v := strings.ToLower(get("TASKIEM_WHATSAPP_TEMPLATES_ASSUME_APPROVED")); v {
+	case "", "false", "0", "no":
+	case "true", "1", "yes":
+		c.AssumeApproved = true
+	default:
+		return nil, fmt.Errorf("TASKIEM_WHATSAPP_TEMPLATES_ASSUME_APPROVED: %q is not true or false", v)
+	}
+	if c.WABAID != "" && !graphIDRe.MatchString(c.WABAID) {
+		return nil, errors.New("TASKIEM_WHATSAPP_WABA_ID must be the WhatsApp Business Account id (digits)")
 	}
 	if c.PhoneNumberID == "" {
 		return nil, nil
@@ -108,6 +132,10 @@ type Platform struct {
 	// OwnApp: the own number is on the tenant's own Meta app (its own app
 	// secret and webhook path), not on Taskiem's.
 	OwnApp bool
+	// WABA is the number's WhatsApp Business Account: Config.WABAID for
+	// the platform number, whatsapp_numbers.waba_id for an own number.
+	// Its templates are submitted and tracked there (registry.go).
+	WABA string
 
 	own lru.Cache[string, ownEntry] // own numbers by "t:<tenant>" and "n:<phone number id>"; bounded (S34)
 }
@@ -141,8 +169,8 @@ func New(pool *pgxpool.Pool, cfg Config, guard *egress.Guard, log *slog.Logger) 
 			guard = &egress.Guard{Logger: log, Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
 		}
 	}
-	return &Platform{Pool: pool, Config: cfg, Logger: log, Signer: Signer{Key: cfg.TokenKey},
-		Client: &Client{BaseURL: cfg.GraphURL, PhoneNumberID: cfg.PhoneNumberID, Token: cfg.AccessToken, Egress: guard}}
+	return &Platform{Pool: pool, Config: cfg, Logger: log, Signer: Signer{Key: cfg.TokenKey}, WABA: cfg.WABAID,
+		Client: &Client{BaseURL: cfg.GraphURL, PhoneNumberID: cfg.PhoneNumberID, Token: cfg.AccessToken, Egress: guard, Hosts: cfg.Hosts}}
 }
 
 func (p *Platform) now() time.Time {
@@ -203,8 +231,15 @@ func (p *Platform) Send(ctx context.Context, number string, m Message) (string, 
 
 // SendTemplate sends a template, counted against the tenant's allowance
 // (spec 16): a blockable one beyond it is not sent (ErrTemplateBlocked);
-// any other is sent and counted, beyond the allowance as overage.
+// any other is sent and counted, beyond the allowance as overage. A
+// template the registry does not hold as approved in this number's
+// WhatsApp Business Account is not sent (ErrTemplateNotApproved), so the
+// caller can fall back; a number with no account tracked sends it and
+// Meta decides.
 func (p *Platform) SendTemplate(ctx context.Context, tenant uuid.UUID, number string, t Template, vars map[string]string, payloads []string) (string, error) {
+	if err := p.TemplateUsable(ctx, t); err != nil {
+		return "", err
+	}
 	metered := tenant != uuid.Nil && p.Meter != nil
 	if metered {
 		ok, err := p.Meter.Allow(ctx, tenant, t)

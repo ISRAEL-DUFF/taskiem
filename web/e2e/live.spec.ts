@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { addStep, doneWithStep, newWorkflow } from "./builder";
 
 test("the run canvas lights up as the run goes", async ({ page }) => {
   await page.goto("/login");
@@ -8,11 +9,11 @@ test("the run canvas lights up as the run goes", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
 
-  await page.getByRole("button", { name: "New workflow" }).click();
-  await page.getByLabel("Name").fill("Live flow");
-  await page.getByRole("button", { name: "Create" }).click();
-  await page.getByTestId("node-start").click();
-  await page.getByRole("button", { name: "+ wait" }).click();
+  await newWorkflow(page, "Live flow");
+  await addStep(page, "change the data", "Change the data");
+  await doneWithStep(page);
+  await addStep(page, "wait", /^Wait An hour/, "Change the data");
+  await doneWithStep(page);
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText(/is published; new runs use it/)).toBeVisible();
   await page.getByRole("button", { name: "Start run" }).click();
@@ -21,7 +22,7 @@ test("the run canvas lights up as the run goes", async ({ page }) => {
 
   // Streamed: the first step completes and the wait lights up.
   const canvas = page.getByLabel("Run canvas");
-  await expect(canvas.getByTestId("node-start")).toHaveAttribute("data-status", "completed", { timeout: 30_000 });
+  await expect(canvas.getByTestId("node-change")).toHaveAttribute("data-status", "completed", { timeout: 30_000 });
   await expect(canvas.getByTestId("node-wait")).toHaveAttribute("data-status", "waiting");
   await expect(page.getByText("live", { exact: true })).toBeVisible();
 

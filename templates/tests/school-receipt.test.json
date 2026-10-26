@@ -1,12 +1,10 @@
 {
   "schema": "wd-test/v1",
   "template": "school-receipt",
-  "params": {
-    "about": "school fees receipt"
-  },
+  "params": {},
   "cases": [
     {
-      "name": "a payment counted towards a term invoice sends the family the receipt, its check link and the fees page",
+      "name": "a payment counted towards a term invoice sends the family the receipt, once per receipt",
       "trigger": {
         "type": "invoice",
         "event": "payment",
@@ -18,17 +16,14 @@
                  "family_link": "https://forms.example/s/fam"}
       },
       "mocks": {
-        "send": {"output": {"via": "whatsapp", "over_allowance": false}}
+        "send": {"output": {"receipt_id": "0192f0a8-0000-7000-8000-0000000000r1", "number": "RCT-2026T1-0007", "student_id": "0192e2e0-0000-7000-8000-0000000000a1", "admission_number": "GCA/001",
+                            "invoice_number": "INV-0007", "amount_kobo": 4000000, "channels": {"whatsapp": 1}, "nobody": false}}
       },
       "expect": {
         "status": "completed",
         "inputs": {
           "send": {
-            "phone": "+2348031234567",
-            "email": "ngozi@example.com",
-            "title": "Receipt RCT-2026T1-0007",
-            "about": "school fees receipt",
-            "message": "Receipt RCT-2026T1-0007: we received ₦40,000 towards INV-0007 (school fees). A balance is still left on it. Check the receipt: https://forms.example/r/tok Your fees page, with the receipt and its PDF: https://forms.example/s/fam"
+            "receipt": "0192f0a8-0000-7000-8000-0000000000r1"
           }
         },
         "steps": {
@@ -36,6 +31,32 @@
         },
         "calls": {
           "send": 1
+        }
+      }
+    },
+    {
+      "name": "a receipt that cannot be sent is noted with the reason",
+      "trigger": {
+        "type": "invoice",
+        "event": "payment",
+        "body": {"event": "payment", "id": "0192f0a8-0000-7000-8000-000000000009", "number": "INV-0009", "status": "part_paid", "amount_kobo": 11800000, "amount": "₦118,000",
+                 "paid_kobo": 4000000, "due_kobo": 7800000, "currency": "NGN", "customer": {"name": "Ngozi Eze", "phone": "+2348031234567"},
+                 "link": "https://forms.example/i/ghi",
+                 "payment": {"id": "0192f0a8-0000-7000-8000-0000000000p3", "amount_kobo": 4000000, "amount": "₦40,000", "how": "manual", "paid_at": "2026-10-23T08:10:00Z"},
+                 "receipt": {"id": "0192f0a8-0000-7000-8000-0000000000r3", "number": "RCT-2026T1-0009", "link": "https://forms.example/r/tok3"},
+                 "family_link": "https://forms.example/s/fam"}
+      },
+      "mocks": {
+        "send": {"error": {"kind": "fatal", "message": "receipt RCT-2026T1-0009 is voided: the payment was undone"}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "send": "failed",
+          "not_sent": "completed"
+        },
+        "outputs": {
+          "not_sent": {"receipt": "RCT-2026T1-0009", "reason": "receipt RCT-2026T1-0009 is voided: the payment was undone"}
         }
       }
     },
