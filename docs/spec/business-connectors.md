@@ -506,6 +506,17 @@ Differences from §9: the win-back campaign (customers who have not bought in 60
 
 The eval cases and rules of §10, the Start page entries by connected service, and the website's connector pages.
 
+**Built** (K9, 26 October 2026), on the K1 pull request:
+- **Eval cases:** `evals/builder/connectors.jsonl`, 23 requests across Slack, Messenger, Instagram, the books, Zoho Mail and CRM, Resend, Brevo and Mailchimp.
+- **Eval rules** (`tools/aieval/rules.go`):
+  - `reply_in_window`: a Messenger or Instagram message answers the person who wrote, on that channel's trigger, after nothing that waits, without the tag a person replying by hand uses.
+  - `opted_in_only`: every step taking consent says the person opted in, behind a condition that checks it.
+  - `invoice_copied_once`: one `books_invoice` step, numbered with the invoice's own number.
+  - `books_by_capability`: books work through the capabilities, never a provider's action a capability maps; a case asking for one provider's own feature leaves it out.
+- **Retrieval:** the books templates `require` a books word (books, accounting, QuickBooks, Zoho Books…), so "invoice" alone no longer sends a goal about the books to `send-invoice`.
+- **Start page:** a template's `services` (the API computes them: an app, a connector Taskiem's platform app connects, or the books, which QuickBooks or Zoho Books serves) are offered, first, once each is connected. The gallery now counts a books template available when either is there; it counted only rails.
+- **Website:** a page for every service at `/integrations/<id>`, from its manifest: how it connects, what workflows can do with it, what starts one, the templates that use it and its docs page. The adapter grid links to them. Messenger and Instagram (`connectors/meta`) are now on the site, and a books template names "QuickBooks or Zoho Books".
+
 ## 12. Order and timing
 
 | Order | Milestone | Why then |
