@@ -168,3 +168,32 @@ export function LanguagePicker({ label, value, onChange }: { label: string; valu
     </select>
   );
 }
+
+interface SlackChannel {
+  id: string;
+  name: string;
+  is_private?: boolean;
+  is_member?: boolean;
+}
+
+/** A channel of a Slack connection, by name (GET /v1/slack/channels). */
+export function SlackChannelPicker({ label, connection, value, onChange }: { label: string; connection: string; value: string; onChange: (v: string) => void }) {
+  const channels = useLoad(
+    () => get<{ channels: SlackChannel[] }>(`/v1/slack/channels?connection=${encodeURIComponent(connection || "main")}`).then((r) => r.channels),
+    [connection],
+  );
+  const list = channels.data ?? [];
+  if (list.length === 0) return <Typed label={label} value={value} onChange={onChange} placeholder={channels.error ? "Connect Slack first, then choose a channel" : "The channel's id (C…)"} />;
+  return (
+    <select aria-label={label} value={list.some((c) => c.id === value) ? value : ""} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Choose a channel…</option>
+      {list.map((c) => (
+        <option key={c.id} value={c.id}>
+          {(c.is_private ? "🔒 " : "#") + c.name}
+          {c.is_private && !c.is_member ? " (invite the Taskiem app first)" : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+

@@ -10664,6 +10664,56 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/slack/channels:
+    get:
+      operationId: listSlackChannels
+      tags:
+      - Slack
+      summary: List a Slack connection's channels
+      description: The public and private channels a production Slack connection's bot can see, for choosing where a template
+        posts.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+        description: The Slack connection's name; main when left out.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - channels
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        is_private:
+                          type: boolean
+                        is_member:
+                          type: boolean
+        '409':
+          description: No such Slack connection, or Slack refused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/whatsapp:
     get:
       operationId: getWhatsApp

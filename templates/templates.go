@@ -73,9 +73,9 @@ type Param struct {
 	Capability []string `json:"capability,omitempty"`
 	// Picker is how a person chooses the value instead of typing an id
 	// (no-technical-steps N8): sheet, sheet_tab, table, column, role,
-	// whatsapp_template or whatsapp_language. From names the parameter it
-	// depends on: a tab's spreadsheet, a column's table, a language's
-	// template.
+	// whatsapp_template, whatsapp_language or slack_channel. From names the
+	// parameter it depends on: a tab's spreadsheet, a column's table, a
+	// language's template, a channel's Slack connection.
 	Picker string `json:"picker,omitempty"`
 	From   string `json:"from,omitempty"`
 
@@ -203,7 +203,8 @@ var paramName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
 // pickers are the choosers a parameter may name, with whether it needs
 // From.
-var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false, "column": true, "role": false, "whatsapp_template": false, "whatsapp_language": true}
+var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false, "column": true, "role": false, "whatsapp_template": false, "whatsapp_language": true,
+	"slack_channel": true}
 
 var paramTypes = map[string]bool{"string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
 

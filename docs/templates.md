@@ -31,6 +31,10 @@ Ready workflows for small businesses (spec 11.1, SME tier): pick one, fill in a 
 | `new-order-alert-sms` | Tell the owner each new order from the online shop (needs a developer: it starts from a web address the shop calls) | Tell me |
 | `low-balance-alert` | Tell the owner when the payments account's balance drops below a level | Any rail with a balance (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Tell me |
 | `failed-transfer-alert` | Tell the owner and email the accountant when a payment sent fails or comes back | Any rail that reports payouts (Paystack, Moniepoint, iswallet, Flutterwave or Anchor), Tell me, Gmail |
+| `slack-payment-alerts` | Post failed and returned payments (sent or received) in a Slack channel, with the reason | Any rail that reports payouts or returned payments, Slack |
+| `slack-money-received` | Post each payment received (by link, transfer or a customer's account number) in a Slack channel, amount and reference only | Any rail that sends payment events, Slack |
+| `slack-paid-invoices` | Post each invoice paid in full in a Slack channel ([invoice trigger](invoices.md#starting-a-workflow-when-an-invoice-is-paid)) | Slack |
+| `slack-school-daily-close` | Every evening, post the [school's daily close](schools.md#the-daily-close) in a Slack channel, flagged when the day does not reconcile | Schools, Slack |
 | `stock-reorder-alert` | Every morning, tell the owner the items at or below their reorder level | Google Sheets, Tell me |
 | `payroll-reminder` | Before payday, remind the owner on WhatsApp or Telegram and the accountant by email | Tell me, Gmail |
 | `run-payroll` | On payday, check the staff table and every account's name with the bank, get the payroll approved, pay each person once through whichever payments account is connected, wait for the bank to confirm, record every payment and the payroll, tell each person and the owner, and watch each bank payment for 35 days in case it comes back ([rails and products](spec/rails-and-products.md#51-run-payroll)) | Any rail that can pay bank accounts (Paystack, Moniepoint, iswallet, Flutterwave, Anchor), Xenibase (the `data_tables` connection), Tell me |
@@ -89,6 +93,7 @@ Each template has named, typed and described parameters:
 | `table`, `column` | One of the business's tables, and a column of it | `column`: the `table` parameter |
 | `role` | One of the business's roles (`GET /v1/approver-roles`) | |
 | `whatsapp_template`, `whatsapp_language` | An approved WhatsApp template by what it says; its language is filled in (`GET /v1/whatsapp/templates`) | the language: the template parameter |
+| `slack_channel` | A channel of the business's Slack connection, by name (`GET /v1/slack/channels`) | the Slack connection parameter |
 
 A run form's field with `"format": "paystack-recipient"` asks for a bank and a 10-digit account number, shows the name on the account (`POST /v1/paystack/resolve`) and, once the person confirms it, saves the recipient (`POST /v1/paystack/recipients`); the field's value is Paystack's recipient code, never shown. Amounts are in naira; phone numbers are taken in any form. `TestEveryDetailIsOwnerShaped` keeps every template that does not need a developer free of ids, ranges, kobo and patterns to type.
 

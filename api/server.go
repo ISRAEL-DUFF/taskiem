@@ -323,6 +323,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/slack", s.getSlack)
 			r.Post("/me/slack", s.startSlackLink)
 			r.Delete("/me/slack", s.unlinkSlack)
+			r.With(s.need(PermWorkflowEdit)).Get("/slack/channels", s.listSlackChannels)
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number", s.getWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/whatsapp/number", s.putWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/whatsapp/number", s.deleteWhatsAppNumber)

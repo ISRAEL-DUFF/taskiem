@@ -559,3 +559,32 @@ func (a *SlackAlerts) PostAlert(ctx context.Context, tenant uuid.UUID, connectio
 	_, err := a.Server.slackCallWith(ctx, tenant, "prod", connection, "post_message", map[string]any{"channel": channel, "text": text})
 	return err
 }
+
+// listSlackChannels answers GET /v1/slack/channels?connection=: the
+// channels a production Slack connection's bot can post in, for the
+// templates' channel picker (no-technical-steps N8).
+func (s *Server) listSlackChannels(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	name := r.URL.Query().Get("connection")
+	if name == "" {
+		name = "main"
+	}
+	out, err := s.slackCallWith(r.Context(), p.TenantID, "prod", name, "list_conversations",
+		map[string]any{"types": "public_channel,private_channel", "exclude_archived": true, "limit": 1000})
+	if errors.Is(err, secrets.ErrNotFound) {
+		s.fail(w, r, fmt.Errorf("%w: there is no active Slack connection named %q in production", errConflict, name))
+		return
+	}
+	if err != nil {
+		s.fail(w, r, slackErr(err))
+		return
+	}
+	channels := []map[string]any{}
+	list, _ := out["channels"].([]any)
+	for _, c := range list {
+		m, _ := c.(map[string]any)
+		channels = append(channels, map[string]any{"id": m["id"], "name": m["name"], "is_private": m["is_private"], "is_member": m["is_member"]})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"channels": channels})
+}
+

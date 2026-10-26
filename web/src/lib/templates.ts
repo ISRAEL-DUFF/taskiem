@@ -18,7 +18,7 @@ export interface TemplateParam {
   /** For a connection: the capabilities its rail must have (pay_bank); any rail that can is offered. */
   capability?: string[];
   /** How the value is chosen instead of typed (no-technical-steps N8). */
-  picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language";
+  picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language" | "slack_channel";
   /** The parameter a picker depends on: a tab's sheet, a column's table, a language's template. */
   from?: string;
 }
