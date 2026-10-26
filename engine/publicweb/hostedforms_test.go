@@ -735,6 +735,8 @@ func TestHostedFormEmbed(t *testing.T) {
 	}
 }
 
+var hiddenPrefill = regexp.MustCompile(`(^|[^A-Za-z0-9_+/=-])L-1($|[^A-Za-z0-9_+/=-])`)
+
 func TestHostedFormRequest(t *testing.T) {
 	e := newFormHost(t)
 	id := uuid.New()
@@ -753,7 +755,9 @@ func TestHostedFormRequest(t *testing.T) {
 		t.Fatalf("a request's code: %+v %+v", cr, c)
 	}
 	body = must(t, e.next("/q/"+token, body, url.Values{"do": {"verify"}, "code": {cr.Code}}), 200, `value="Bola Ade"`, `name="a.bank"`)
-	if strings.Contains(body, "L-1") {
+	// As a value of its own: the page's random tokens are base64url, and
+	// one in a thousand or so holds "L-1" by chance.
+	if hiddenPrefill.MatchString(body) {
 		t.Fatal("a hidden prefill is shown")
 	}
 	e.tick(10 * time.Second)
