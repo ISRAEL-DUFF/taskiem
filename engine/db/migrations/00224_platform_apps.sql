@@ -48,6 +48,8 @@ CREATE TABLE app_event_drops (
 );
 ALTER TABLE app_event_drops ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_event_drops FORCE ROW LEVEL SECURITY;
+-- The edge counts through taskiem_app_event_dropped only.
+CREATE POLICY no_direct_access ON app_event_drops TO taskiem_app USING (false) WITH CHECK (false);
 CREATE POLICY dispatch ON app_event_drops TO taskiem_dispatch USING (true) WITH CHECK (true);
 GRANT SELECT, INSERT, UPDATE ON app_event_drops TO taskiem_dispatch;
 
