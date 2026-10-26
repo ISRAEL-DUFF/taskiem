@@ -58,6 +58,10 @@ export interface Template {
   superseded_by?: string;
   /** The product it works around (payrolla): offered to businesses that connected it. */
   product?: string;
+  /** The services it works with that a business connects, each the
+   * connectors that serve it, any one of which will do (the books:
+   * QuickBooks or Zoho Books): offered once each is connected. */
+  services?: string[][];
   /** For a template another workflow can use as a step (decision 0047): its interface. */
   callable?: CallableInterface;
 }

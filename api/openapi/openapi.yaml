@@ -25626,6 +25626,13 @@ components:
         product:
           type: string
           description: The product the template works around (payrolla); the Start page offers it to organisations that connected the product, and retrieval only for goals that name it.
+        services:
+          type: array
+          description: The services the template works with that an organisation connects, each the connectors that serve it, any one of which will do (the books are QuickBooks or Zoho Books); the Start page offers the template, first, once each is connected.
+          items:
+            type: array
+            items:
+              type: string
         callable:
           type: object
           description: For a template another workflow can use as a step (decision 0047), its interface.
