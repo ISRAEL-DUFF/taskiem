@@ -19,7 +19,7 @@ The idempotency key travels in the `Idempotency-Key` header (`tsk_` + 32 charact
 
 ## Live and test
 
-Connecting iswallet asks **Live (real money)** or **Test (practice)**, as Paystack's does; the connection keeps the choice, its calls go to that host, and a test connection is marked "Test: no real money" on Connections ([connector/v1](../contracts/connector-v1.md) rule 17). Test is iswallet's sandbox (`https://synledger.name.ng/iwallet`, or `TASKIEM_ISWALLET_TEST_URL`). Live is iswallet's production address, issued at go-live and set with `TASKIEM_ISWALLET_URL`: until it is set, live is shown as not set up and cannot be chosen. Live and sandbox keys are separate, so paste the key from the same environment. Connections made before modes keep going where they went: `TASKIEM_ISWALLET_URL` when set, else the sandbox.
+Connecting iswallet asks **Live (real money)** or **Test (practice)**, as Paystack's does; the connection keeps the choice, its calls go to that host, and a test connection is marked "Test: no real money" on Connections ([connector/v1](../contracts/connector-v1.md) rule 17). Live is iswallet's production, `https://ispend.name.ng/iwallet` (`TASKIEM_ISWALLET_URL` moves it); test is its sandbox, `https://synledger.name.ng/iwallet` (`TASKIEM_ISWALLET_TEST_URL`). Both serve the `/v1/…` API under that address (iswallet, 26 October 2026). Live and sandbox keys are separate, so paste the key from the same environment. Connections made before modes keep going where they went: `TASKIEM_ISWALLET_URL` when set, else the sandbox.
 
 ## Connection fields
 

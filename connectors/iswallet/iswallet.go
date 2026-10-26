@@ -34,11 +34,10 @@ var manifest []byte
 // answered from iswallet's replay cache (24 hours), less a safety margin.
 const ReplayWindow = 23 * time.Hour
 
-// Options configure the connector. LiveURL is iswallet's production
-// address (TASKIEM_ISWALLET_URL), issued at go-live: until it is set, live
-// connections cannot be made. TestURL replaces the sandbox's
+// Options configure the connector. LiveURL replaces iswallet's production
+// address (TASKIEM_ISWALLET_URL), TestURL its sandbox's
 // (TASKIEM_ISWALLET_TEST_URL, tests). BaseURL is where connections made
-// before modes go: the live address when there is one, else the sandbox.
+// before modes go: TASKIEM_ISWALLET_URL when set, else the sandbox.
 type Options struct {
 	LiveURL, TestURL string
 	BaseURL          string

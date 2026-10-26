@@ -26,9 +26,8 @@ x-taskiem-env: &taskiem-env
   TASKIEM_SECURE_COOKIES: "false"
   # Provider endpoints (docs/operations.md); empty uses the connector's
   # default. iswallet and Payrolla connections are live or test, chosen
-  # when made: the *_URL is live's (iswallet's is issued at go-live; until
-  # then only test connections can be made), *_TEST_URL test's (each
-  # provider's sandbox by default).
+  # when made: the *_URL is live's (each provider's production by
+  # default), *_TEST_URL test's (each provider's sandbox by default).
   TASKIEM_ISWALLET_URL: ${TASKIEM_ISWALLET_URL:-}
   TASKIEM_ISWALLET_TEST_URL: ${TASKIEM_ISWALLET_TEST_URL:-}
   TASKIEM_PAYROLLA_URL: ${TASKIEM_PAYROLLA_URL:-}

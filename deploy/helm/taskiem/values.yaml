@@ -41,10 +41,8 @@ config:
   OTEL_EXPORTER_OTLP_ENDPOINT: ""
   # Provider endpoints (docs/operations.md); empty uses the connector's
   # default. iswallet and Payrolla connections are live or test, chosen
-  # when made. TASKIEM_ISWALLET_URL is iswallet's production URL (issued
-  # at go-live): until it is set, only test (sandbox) iswallet connections
-  # can be made. Payrolla's defaults are its production (live) and sandbox
-  # (test) Connect APIs.
+  # when made; the defaults are each provider's production (live) and
+  # sandbox (test). Set these only to point somewhere else.
   TASKIEM_ISWALLET_URL: ""
   TASKIEM_ISWALLET_TEST_URL: ""
   TASKIEM_PAYROLLA_URL: ""

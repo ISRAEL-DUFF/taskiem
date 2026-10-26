@@ -24,11 +24,12 @@ auth:
     # limits the connection to the customer's own wallets (decision 0031).
     - { key: wallet_ids, label: Wallets this connection may use (comma-separated wallet ids), required: false }
     - { key: shared_client, label: "Shared client: true when the key also reaches other customers' wallets (then wallet_ids is required)", required: false }
-  # Live and test are separate hosts with separate keys (rule 17). The
-  # production address is issued at go-live and set with
-  # TASKIEM_ISWALLET_URL; until then only test connections can be made.
+  # Live and test are separate hosts with separate keys (rule 17):
+  # production at ispend.name.ng, the sandbox at synledger.name.ng (iswallet,
+  # 26 October 2026); both serve /v1/... under /iwallet.
+  # TASKIEM_ISWALLET_URL and TASKIEM_ISWALLET_TEST_URL move them.
   modes:
-    - { mode: live, label: Live (real money) }
+    - { mode: live, label: Live (real money), base_url: https://ispend.name.ng/iwallet }
     - { mode: test, label: Test (practice), base_url: https://synledger.name.ng/iwallet }
   test: { action: list_banks }
 # 100 requests a minute per API key (client scope).

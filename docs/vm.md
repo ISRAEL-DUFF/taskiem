@@ -25,7 +25,7 @@ On the VPS:
 curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/install.sh | sudo bash
 ```
 
-It asks for the host name, the owner's email, the organisation's name, the database URL, SMTP, a [Telegram](telegram.md) bot token if you want the chat channel (it generates the webhook secret and signing key itself), the iswallet and Payrolla live API URLs (empty keeps each connector's default; **until you give iswallet's production URL, only test iswallet connections can be made**, and setup warns on the production channel; connections are live or test, chosen when made), the release channel (staging or production), the upgrade window, where to send alerts, and the backup bucket. Then, without further questions, it:
+It asks for the host name, the owner's email, the organisation's name, the database URL, SMTP, a [Telegram](telegram.md) bot token if you want the chat channel (it generates the webhook secret and signing key itself), the iswallet and Payrolla live API URLs (empty keeps each provider's production address; connections are live or test, chosen when made), the release channel (staging or production), the upgrade window, where to send alerts, and the backup bucket. Then, without further questions, it:
 
 1. installs Docker, cosign and the firewall rules (SSH, HTTP and HTTPS in; nothing else);
 2. picks the newest release on the channel and checks its signature: only images signed by this repository's CI are accepted;

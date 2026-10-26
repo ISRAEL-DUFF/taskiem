@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -374,12 +375,15 @@ func TestModesChooseTheHost(t *testing.T) {
 	if strings.Join(hits, ", ") != "live /v1/banks, test /v1/banks, live /v1/banks" {
 		t.Errorf("hosts: %v", hits)
 	}
-	// Before go-live there is no live address: nothing is sent.
-	hits = nil
-	if err := ask(New(Options{}), "live"); !errors.Is(err, effects.ErrFatal) || len(hits) > 0 {
-		t.Errorf("live with no address: %v, %v", err, hits)
+	// Production and the sandbox are separate hosts, both by default.
+	m := New(Options{}).Manifest
+	if l, _ := m.ModeURL("live"); l != "https://ispend.name.ng/iwallet" {
+		t.Errorf("live: %q", l)
 	}
-	if _, ok := New(Options{}).Manifest.ModeURL("test"); !ok {
-		t.Error("the sandbox is not test's address by default")
+	if tu, _ := m.ModeURL("test"); tu != "https://synledger.name.ng/iwallet" {
+		t.Errorf("test: %q", tu)
+	}
+	if h := m.Hosts(); !slices.Equal(h, []string{"synledger.name.ng", "ispend.name.ng"}) {
+		t.Errorf("hosts: %v", h)
 	}
 }

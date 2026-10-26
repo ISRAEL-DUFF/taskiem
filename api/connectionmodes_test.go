@@ -27,8 +27,11 @@ func TestConnectionHostModes(t *testing.T) {
 		_, _ = rw.Write([]byte(`{"data":[]}`))
 	}))
 	t.Cleanup(test.Close)
-	// Before go-live: no live iswallet address; the test one is a fake.
-	if err := w.env.Registry.Register(iswallet.New(iswallet.Options{TestURL: test.URL})); err != nil {
+	// The test address is a fake; live is cleared, as for a provider whose
+	// production address only the deployment knows.
+	isw := iswallet.New(iswallet.Options{TestURL: test.URL})
+	isw.Manifest.Auth.HostModes[0].BaseURL = ""
+	if err := w.env.Registry.Register(isw); err != nil {
 		t.Fatal(err)
 	}
 	owner := w.tenant(t, "Acme", "owner@acme.test")
@@ -41,7 +44,7 @@ func TestConnectionHostModes(t *testing.T) {
 
 	_, out := owner.do("POST", "/v1/connections", map[string]any{"connector": "iswallet@1", "environment": "prod", "credentials": map[string]string{"api_key": "isw_k"}, "mode": "live"})
 	if !strings.Contains(toJSON(out), "iswallet live (real money) is not set up on this Taskiem yet") {
-		t.Errorf("live before go-live: %v", out)
+		t.Errorf("live with no address: %v", out)
 	}
 	owner.must(400, "POST", "/v1/connections", map[string]any{"connector": "iswallet@1", "environment": "prod", "credentials": map[string]string{"api_key": "isw_k"}, "mode": "staging"})
 
