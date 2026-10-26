@@ -587,4 +587,3 @@ func (s *Server) listSlackChannels(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"channels": channels})
 }
-

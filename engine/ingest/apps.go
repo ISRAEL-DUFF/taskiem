@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 
@@ -55,19 +56,26 @@ func (g *appGate) allow(client string) bool {
 	return l.Allow()
 }
 
-// appTrigger finds an app-delivered trigger and its app's registration.
-func (h *Handler) appTrigger(r *http.Request) (*connector.Connector, connector.TriggerSpec, App, bool) {
+// appTrigger finds an app-delivered trigger and its apps' registrations:
+// the connector's, then any mode's own (Intuit's development app for
+// sandbox companies: rule 20), each that takes deliveries.
+func (h *Handler) appTrigger(r *http.Request) (*connector.Connector, connector.TriggerSpec, []App, bool) {
 	ref, name := chi.URLParam(r, "connector"), chi.URLParam(r, "trigger")
 	conn, ok := h.Registry.Get(ref)
 	if !ok {
-		return nil, connector.TriggerSpec{}, App{}, false
+		return nil, connector.TriggerSpec{}, nil, false
 	}
 	spec, ok := conn.Manifest.Triggers[name]
 	if !ok || !spec.AppDelivered() {
-		return nil, connector.TriggerSpec{}, App{}, false
+		return nil, connector.TriggerSpec{}, nil, false
 	}
-	app, ok := h.Apps[conn.Manifest.ClientName()]
-	return conn, spec, app, ok && app.WebhookSecret != ""
+	var apps []App
+	for _, client := range conn.Manifest.Clients() {
+		if app, ok := h.Apps[client]; ok && app.WebhookSecret != "" {
+			apps = append(apps, app)
+		}
+	}
+	return conn, spec, apps, len(apps) > 0
 }
 
 // appEvent takes a delivery to Taskiem's platform app for a provider
@@ -81,7 +89,7 @@ func (h *Handler) appTrigger(r *http.Request) (*connector.Connector, connector.T
 func (h *Handler) appEvent(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), budget)
 	defer cancel()
-	conn, spec, app, ok := h.appTrigger(r)
+	conn, spec, apps, ok := h.appTrigger(r)
 	if !ok {
 		replyErr(w, http.StatusNotFound, "no such app trigger")
 		return
@@ -97,17 +105,23 @@ func (h *Handler) appEvent(w http.ResponseWriter, r *http.Request) {
 		replyErr(w, http.StatusRequestEntityTooLarge, "body too large")
 		return
 	}
-	verify := func() error { return connector.VerifyWebhook(spec.Verify, app.WebhookSecret, r.Header, body) }
+	verify := func(secret string) error { return connector.VerifyWebhook(spec.Verify, secret, r.Header, body) }
 	if spec.Verify.Scheme == "connector" {
-		verify = func() error {
+		verify = func(secret string) error {
 			v := conn.Verifiers[name]
 			if v == nil {
 				return connector.ErrBadSignature
 			}
-			return v(app.WebhookSecret, r.Header, body)
+			return v(secret, r.Header, body)
 		}
 	}
-	if err := verify(); err != nil {
+	err = connector.ErrBadSignature
+	for _, app := range apps {
+		if err = verify(app.WebhookSecret); err == nil {
+			break
+		}
+	}
+	if err != nil {
 		replyErr(w, http.StatusUnauthorized, "signature invalid")
 		return
 	}
@@ -221,14 +235,16 @@ func (h *Handler) appEvent(w http.ResponseWriter, r *http.Request) {
 // appHandshake answers a provider's GET endpoint check for its app
 // (Meta's hub.challenge): the token it sends must equal the app's.
 func (h *Handler) appHandshake(w http.ResponseWriter, r *http.Request) {
-	conn, spec, app, ok := h.appTrigger(r)
+	conn, spec, apps, ok := h.appTrigger(r)
 	hs := spec.Handshake
 	if !ok || hs == nil || hs.Method != "GET" {
 		replyErr(w, http.StatusNotFound, "no such app trigger")
 		return
 	}
 	got := r.URL.Query().Get(hs.TokenQuery)
-	if app.VerifyToken == "" || subtle.ConstantTimeCompare([]byte(got), []byte(app.VerifyToken)) != 1 {
+	if !slices.ContainsFunc(apps, func(a App) bool {
+		return a.VerifyToken != "" && subtle.ConstantTimeCompare([]byte(got), []byte(a.VerifyToken)) == 1
+	}) {
 		replyErr(w, http.StatusForbidden, "verification token does not match")
 		return
 	}

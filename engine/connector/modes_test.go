@@ -72,6 +72,8 @@ func TestHostModesRules(t *testing.T) {
 		"with prefixes": {"fields: [{ key: api_key, label: API key, secret: true }]",
 			"fields: [{ key: api_key, label: API key, secret: true, prefixes: [{ prefix: sk_live_, mode: live }] }]", "hosts or key prefixes, not both"},
 		"http": {"base_url: https://sandbox.wallet.example/v1 }", "base_url: http://sandbox.wallet.example/v1 }", "modes"},
+		// A mode's own platform app (rule 20) is for linking by OAuth.
+		"a client without oauth": {"base_url: https://sandbox.wallet.example/v1 }", "base_url: https://sandbox.wallet.example/v1, client: walletsandbox }", "a mode's platform app needs auth.oauth2"},
 	} {
 		src := strings.Replace(modesManifest, c.from, c.to, 1)
 		_, probs := Parse([]byte(src))
@@ -133,5 +135,30 @@ func TestConnectionHosts(t *testing.T) {
 	src := strings.Replace(zohoLike, `connection_hosts: ["*.books.example", "*.books.eu"]`+"\n", "", 1)
 	if _, probs := Parse([]byte(src)); !strings.Contains(strings.Join(probs, ";"), "connection_hosts must list") {
 		t.Errorf("no connection_hosts: %v", probs)
+	}
+}
+
+// Each mode may be linked with its own platform app (rule 20); the
+// connector's is the default.
+func TestModeClients(t *testing.T) {
+	src := strings.Replace(zohoLike, "  oauth2:\n", `  modes:
+    - { mode: live, label: Live, base_url: https://www.books.example }
+    - { mode: test, label: Test, base_url: https://sandbox.books.example, client: bookssandbox }
+  oauth2:
+    client_auth: basic
+    revoke_encoding: json
+`, 1)
+	m, probs := Parse([]byte(src))
+	if len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	if m.ClientFor("test") != "bookssandbox" || m.ClientFor("live") != "books" || m.ClientFor("") != "books" || !slices.Equal(m.Clients(), []string{"books", "bookssandbox"}) {
+		t.Errorf("clients: test %s, live %s, all %v", m.ClientFor("test"), m.ClientFor("live"), m.Clients())
+	}
+	if m.Auth.OAuth2.ClientAuth != "basic" || m.Auth.OAuth2.RevokeEncoding != "json" {
+		t.Errorf("oauth2 %+v", m.Auth.OAuth2)
+	}
+	if _, probs := Parse([]byte(strings.Replace(src, "client_auth: basic", "client_auth: header", 1))); len(probs) == 0 {
+		t.Error("an unknown client_auth was taken")
 	}
 }

@@ -101,6 +101,13 @@ type OAuth2 struct {
 	// ScopeSeparator joins the scopes on the consent URL: a space by
 	// default (RFC 6749), a comma for Slack.
 	ScopeSeparatorChar string `json:"scope_separator,omitempty"`
+	// ClientAuth is how Taskiem's client proves itself at the token URL:
+	// "body" (default: client_id and client_secret in the form) or "basic"
+	// (HTTP Basic, as Intuit requires; RFC 6749 section 2.3.1).
+	ClientAuth string `json:"client_auth,omitempty"`
+	// RevokeEncoding is the revoke request's body: "form" (default, RFC
+	// 7009) or "json" ({"token": …}, Intuit's).
+	RevokeEncoding string `json:"revoke_encoding,omitempty"`
 }
 
 // ScopeSeparator is what joins the scopes on the consent URL.
@@ -118,6 +125,30 @@ func (m *Manifest) ClientName() string {
 		return m.Auth.OAuth2.Client
 	}
 	return m.ID
+}
+
+// ClientFor is the platform app for connections in a mode: the mode's own
+// (Intuit's development keys reach only sandbox companies: rule 20), or
+// ClientName.
+func (m *Manifest) ClientFor(mode string) string {
+	for _, h := range m.Auth.HostModes {
+		if h.Mode == mode && h.Client != "" {
+			return h.Client
+		}
+	}
+	return m.ClientName()
+}
+
+// Clients is every platform app a connector's OAuth may use: ClientName,
+// then the modes' own.
+func (m *Manifest) Clients() []string {
+	out := []string{m.ClientName()}
+	for _, h := range m.Auth.HostModes {
+		if h.Client != "" && !slices.Contains(out, h.Client) {
+			out = append(out, h.Client)
+		}
+	}
+	return out
 }
 
 // ServerPlaceholder starts an OAuth URL resolved from the connector's base
@@ -196,6 +227,9 @@ type HostMode struct {
 	Mode    string `json:"mode"`
 	Label   string `json:"label"`
 	BaseURL string `json:"base_url,omitempty"`
+	// Client is the platform app connections in this mode are linked with
+	// by OAuth, where it is not the connector's (rule 20).
+	Client string `json:"client,omitempty"`
 }
 
 // ModeKey is where a connection's mode reaches its connector: the vault
@@ -591,6 +625,11 @@ func (m *Manifest) check() []string {
 			if !fromToken && !fromCallback && !fromClient && (f.Required == nil || *f.Required) {
 				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token or the callback; a linked connection would be missing it", f.Key)
 			}
+		}
+	}
+	for i, h := range m.Auth.HostModes {
+		if h.Client != "" && m.Auth.OAuth2 == nil {
+			add("/auth/modes/%d/client: a mode's platform app needs auth.oauth2", i)
 		}
 	}
 	return out

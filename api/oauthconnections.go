@@ -64,16 +64,18 @@ type oauthProvider struct {
 	client                   OAuthClient
 }
 
-// oauthFor says how connector c is linked here, or why it cannot be.
-func (s *Server) oauthFor(c *connector.Connector) (oauthProvider, error) {
+// oauthFor says how connector c is linked here for connections in a mode
+// ("" for none), or why it cannot be.
+func (s *Server) oauthFor(c *connector.Connector, mode string) (oauthProvider, error) {
 	o := c.Manifest.Auth.OAuth2
 	if o == nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s does not connect by OAuth; add a connection with its credentials", errBadRequest, c.Manifest.Name)
 	}
-	client, ok := s.OAuthClients[c.Manifest.ClientName()]
+	name := c.Manifest.ClientFor(mode)
+	client, ok := s.OAuthClients[name]
 	if !ok || client.ID == "" {
 		return oauthProvider{}, fmt.Errorf("%w: Taskiem is not registered as an OAuth client with %s on this platform (TASKIEM_OAUTH_%s_CLIENT_ID); add a connection with its credentials instead",
-			errOAuthUnavailable, c.Manifest.Name, strings.ToUpper(c.Manifest.ClientName()))
+			errOAuthUnavailable, c.Manifest.Name, strings.ToUpper(name))
 	}
 	if s.PublicURL == "" {
 		return oauthProvider{}, fmt.Errorf("%w: connecting by OAuth needs TASKIEM_PUBLIC_URL, which is not set", errOAuthUnavailable)
@@ -100,14 +102,29 @@ func (p oauthProvider) forAccount(m *connector.Manifest, fields map[string]strin
 }
 
 // oauthLinkable is listConnectors' answer to whether a connector can be
-// linked here: nil for a connector without OAuth.
+// linked here, in some mode: nil for a connector without OAuth.
 func (s *Server) oauthLinkable(c *connector.Connector) *bool {
 	if c.Manifest.Auth.OAuth2 == nil {
 		return nil
 	}
-	_, err := s.oauthFor(c)
-	ok := err == nil
+	_, err := s.oauthFor(c, "")
+	ok := err == nil || len(s.oauthModes(c)) > 0
 	return &ok
+}
+
+// oauthModes are the modes a connector with modes can be linked in here:
+// those this platform has an address and an OAuth client for.
+func (s *Server) oauthModes(c *connector.Connector) []string {
+	var out []string
+	for _, h := range c.Manifest.Auth.HostModes {
+		if _, ok := c.Manifest.ModeURL(h.Mode); !ok || c.Manifest.Auth.OAuth2 == nil {
+			continue
+		}
+		if _, err := s.oauthFor(c, h.Mode); err == nil {
+			out = append(out, h.Mode)
+		}
+	}
+	return out
 }
 
 func (s *Server) oauthRedirectURI() string { return s.PublicURL + oauthCallbackPath }
@@ -127,6 +144,9 @@ type oauthStartReq struct {
 	Connector   string `json:"connector"` // "xenibase@1"
 	Environment string `json:"environment"`
 	Name        string `json:"name"`
+	// Mode is live or test, for a connector whose modes are hosts
+	// (QuickBooks' sandbox companies): the connection is made in it.
+	Mode string `json:"mode,omitempty"`
 }
 
 // startOAuthConnection records the request and answers the provider's
@@ -153,7 +173,12 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
 		return
 	}
-	prov, err := s.oauthFor(c)
+	mode, err := connectionMode(c, nil, req.Mode)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	prov, err := s.oauthFor(c, mode)
 	if err != nil {
 		s.failOAuth(w, r, err)
 		return
@@ -176,7 +201,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		if exists {
 			return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, req.Name, env)
 		}
-		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, p.Actor())
+		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, mode, p.Actor())
 		return err
 	})
 	if err != nil {
@@ -252,7 +277,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", fmt.Errorf("%w: %s sent the browser back without a code", errOAuthProvider, c.Manifest.Name))
 		return
 	}
-	prov, err := s.oauthFor(c)
+	prov, err := s.oauthFor(c, req.Mode)
 	if err != nil {
 		s.oauthDone(w, r, "", err)
 		return
@@ -297,10 +322,13 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		if id, err = s.Vault.CreateOAuthConnectionTx(ctx, tx, req.Tenant, req.Environment, c.Manifest.ID, req.Name, creds, expiresAt, req.Person); err != nil {
 			return err
 		}
+		if err := setConnectionMode(ctx, tx, id, req.Mode); err != nil {
+			return err
+		}
 		// Made through Taskiem's app: its events for this account come here
 		// (decision 0051).
 		if f := c.Manifest.Auth.OAuth2.AccountField; f != "" {
-			if err := secrets.SetAppAccountTx(ctx, tx, req.Tenant, id, c.Manifest.ClientName(), creds[f]); err != nil {
+			if err := secrets.SetAppAccountTx(ctx, tx, req.Tenant, id, c.Manifest.ClientFor(req.Mode), creds[f]); err != nil {
 				return err
 			}
 		}
@@ -369,8 +397,9 @@ func (s *Server) oauthHTTP(tenant uuid.UUID, c *connector.Connector, target stri
 }
 
 // oauthExchange trades the code for a token at the provider (RFC 6749
-// section 4.1.3, form-encoded, the client secret in the body) and returns
-// the answer's fields.
+// section 4.1.3, form-encoded, the client secret in the body or, where
+// the manifest says client_auth: basic, in HTTP Basic) and returns the
+// answer's fields.
 func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connector.Connector, prov oauthProvider, code, verifier string) (map[string]any, error) {
 	hc, err := s.oauthHTTP(tenant, c, prov.token)
 	if err != nil {
@@ -384,9 +413,17 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 		"client_secret": {prov.client.Secret},
 		"code_verifier": {verifier},
 	}
+	basic := c.Manifest.Auth.OAuth2.ClientAuth == "basic"
+	if basic {
+		form.Del("client_id")
+		form.Del("client_secret")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.token, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
+	}
+	if basic {
+		req.SetBasicAuth(prov.client.ID, prov.client.Secret)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -546,11 +583,17 @@ func (s *Server) oauthRevoke(ctx context.Context, tenant uuid.UUID, c *connector
 		s.Logger.Warn("oauth: token not revoked", "connector", c.Manifest.ID, "err", err)
 		return
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.revoke, strings.NewReader(url.Values{"token": {token}}.Encode()))
+	body, ct := url.Values{"token": {token}}.Encode(), "application/x-www-form-urlencoded"
+	if c.Manifest.Auth.OAuth2.RevokeEncoding == "json" {
+		raw, _ := json.Marshal(map[string]string{"token": token})
+		body, ct = string(raw), "application/json"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.revoke, strings.NewReader(body))
 	if err != nil {
 		return
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", ct)
+	req.Header.Set("Accept", "application/json")
 	req.SetBasicAuth(prov.client.ID, prov.client.Secret)
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -713,12 +756,12 @@ func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
 			return errConnectionInUse
 		}
 		if authType == "oauth2" {
-			if c, ok := connectorByID(reg, connID); ok && c.Manifest.Auth.OAuth2 != nil {
-				if prov, err := s.oauthFor(c); err == nil && prov.revoke != "" {
-					creds, err := s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id)
-					if err != nil {
-						return err
-					}
+			if c, ok := connectorByID(reg, connID); ok && c.Manifest.Auth.OAuth2 != nil && c.Manifest.Auth.OAuth2.RevokeURL != "" {
+				creds, err := s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id)
+				if err != nil {
+					return err
+				}
+				if prov, err := s.oauthFor(c, creds[connector.ModeKey]); err == nil && prov.revoke != "" {
 					if prov, err := prov.forAccount(c.Manifest, creds); err == nil {
 						tenant := p.TenantID
 						revoke = func() { s.oauthRevoke(context.WithoutCancel(ctx), tenant, c, prov, oauthToken(c, creds)) }

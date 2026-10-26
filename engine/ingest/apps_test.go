@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -232,5 +234,45 @@ func TestAppTriggerRules(t *testing.T) {
 		if !bytes.Contains([]byte(joined), []byte(c.want)) {
 			t.Errorf("%s: %v, want %q", name, probs, c.want)
 		}
+	}
+}
+
+// A mode with its own app (QuickBooks' development app for sandbox
+// companies; connector/v1 rule 20) sends to the same URL, signed with its
+// own secret: either app's deliveries are taken, nobody else's.
+func TestAppDeliveriesFromAModesOwnApp(t *testing.T) {
+	w := newWorld(t)
+	src := strings.Replace(workspaceManifest, "  type: oauth2\n", `  type: oauth2
+  modes:
+    - { mode: live, label: Live, base_url: https://workspace.example/api }
+    - { mode: test, label: Test, base_url: https://sandbox.workspace.example/api, client: workspacesandbox }
+`, 1)
+	m := connector.MustParse([]byte(src))
+	ping := connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) { return connector.Response{}, nil })
+	if err := w.Registry.Register(&connector.Connector{Manifest: m, Actions: map[string]connector.Action{"ping": ping}}); err != nil {
+		t.Fatal(err)
+	}
+	w.h.Apps = map[string]ingest.App{"workspaceapp": {WebhookSecret: appSecret}, "workspacesandbox": {WebhookSecret: "sandbox-secret", VerifyToken: "sandbox-verify"}}
+	aw := appWorld{w}
+	aw.connect(t, w.Tenant, "prod", "main", "T-SANDBOX")
+	wf := aw.subscribe(t, w.Tenant)
+	for i, secret := range []string{appSecret, "sandbox-secret"} {
+		if st, out := aw.send(t, secret, map[string]any{"type": "message", "event_id": fmt.Sprint("E", i), "team_id": "T-SANDBOX"}); st != 200 || out["routed"] != float64(1) {
+			t.Fatalf("signed by app %d: %d %v", i, st, out)
+		}
+	}
+	if st, _ := aw.send(t, "neither", map[string]any{"type": "message", "event_id": "E9", "team_id": "T-SANDBOX"}); st != 401 {
+		t.Errorf("signed by neither: %d", st)
+	}
+	if n := aw.runsIn(t, w.Tenant, wf); n != 2 {
+		t.Errorf("%d runs, want 2", n)
+	}
+	resp, err := http.Get(w.srv.URL + "/hooks/apps/workspace@1/events?hub.verify_token=sandbox-verify&hub.challenge=7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Errorf("the sandbox app's endpoint check: %d", resp.StatusCode)
 	}
 }

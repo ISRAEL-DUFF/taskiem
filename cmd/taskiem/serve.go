@@ -331,6 +331,11 @@ func loadConfig() (config, error) {
 			// provider's sandbox by default.
 			IswalletTestURL: os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
 			PayrollaTestURL: os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
+			// QuickBooks' production and sandbox hosts and Intuit's token
+			// endpoint (tests, a proxy).
+			QuickBooksURL:      os.Getenv("TASKIEM_QUICKBOOKS_URL"),
+			QuickBooksTestURL:  os.Getenv("TASKIEM_QUICKBOOKS_TEST_URL"),
+			QuickBooksTokenURL: os.Getenv("TASKIEM_QUICKBOOKS_TOKEN_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
@@ -744,9 +749,13 @@ func platformApps(reg *connector.Registry) map[string]ingest.App {
 			if !t.AppDelivered() {
 				continue
 			}
-			key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ClientName())
-			if s := strings.TrimSpace(os.Getenv(key + "_WEBHOOK_SECRET")); s != "" {
-				out[c.Manifest.ClientName()] = ingest.App{WebhookSecret: s, VerifyToken: strings.TrimSpace(os.Getenv(key + "_VERIFY_TOKEN"))}
+			// Each mode's own app too (Intuit's development app signs the
+			// sandbox companies' notifications: rule 20).
+			for _, client := range c.Manifest.Clients() {
+				key := "TASKIEM_OAUTH_" + strings.ToUpper(client)
+				if s := strings.TrimSpace(os.Getenv(key + "_WEBHOOK_SECRET")); s != "" {
+					out[client] = ingest.App{WebhookSecret: s, VerifyToken: strings.TrimSpace(os.Getenv(key + "_VERIFY_TOKEN"))}
+				}
 			}
 		}
 	}
@@ -1315,18 +1324,21 @@ func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAu
 		if c.Manifest.Auth.OAuth2 == nil {
 			continue
 		}
-		if _, done := out[c.Manifest.ClientName()]; done {
-			continue // one app serving several connectors (decision 0051)
-		}
-		key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ClientName())
-		id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
-		switch {
-		case id == "" && secret == "":
-			log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
-		case id == "" || secret == "":
-			return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
-		default:
-			out[c.Manifest.ClientName()] = api.OAuthClient{ID: id, Secret: secret}
+		// The connector's app, and any mode's own (rule 20).
+		for _, client := range c.Manifest.Clients() {
+			if _, done := out[client]; done {
+				continue // one app serving several connectors (decision 0051)
+			}
+			key := "TASKIEM_OAUTH_" + strings.ToUpper(client)
+			id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
+			switch {
+			case id == "" && secret == "":
+				log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
+			case id == "" || secret == "":
+				return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
+			default:
+				out[client] = api.OAuthClient{ID: id, Secret: secret}
+			}
 		}
 	}
 	return out, nil

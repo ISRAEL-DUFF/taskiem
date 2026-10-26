@@ -25269,6 +25269,11 @@ components:
         oauth_linkable:
           type: boolean
           description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
+        oauth_modes:
+          type: array
+          items:
+            type: string
+          description: For a connector whose modes are hosts, the modes it can be connected in by OAuth on this platform.
         capabilities:
           type: array
           items:
@@ -26215,6 +26220,10 @@ components:
         name:
           type: string
           description: Defaults to `default`.
+        mode:
+          type: string
+          description: Live or test, for a connector whose modes are hosts (QuickBooks' sandbox companies; connector/v1 rule 20). The
+            connection is made in it, through that mode's OAuth client; one of the connector's `oauth_modes`.
       additionalProperties: false
     OAuthStarted:
       type: object

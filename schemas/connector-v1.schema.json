@@ -48,6 +48,7 @@
         "ussd",
         "mobile_money",
         "tax",
+        "accounting",
         "database",
         "productivity",
         "storage",
@@ -147,7 +148,7 @@
       "type": "object",
       "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z_]+\\.[a-z_]+$"
+        "pattern": "^[a-z_]+(\\.[a-z_]+){1,2}$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/capabilityEvent"
@@ -504,6 +505,10 @@
                 "type": "string",
                 "pattern": "^https://",
                 "description": "The mode's host; left out when only the deployment knows it (a production address issued at go-live), so the mode is offered only once it is set."
+              },
+              "client": {
+                "$ref": "#/$defs/name",
+                "description": "The platform app connections in this mode are linked with by OAuth (rule 20), where it is not auth.oauth2.client: Intuit's development keys reach only sandbox companies."
               }
             }
           }
@@ -596,6 +601,14 @@
             "scope_separator": {
               "enum": [" ", ","],
               "description": "What joins the scopes on the consent URL: a space (default, RFC 6749) or a comma (Slack)."
+            },
+            "client_auth": {
+              "enum": ["body", "basic"],
+              "description": "How Taskiem's client proves itself at the token URL (rule 20): body (default; client_id and client_secret in the form) or basic (HTTP Basic, RFC 6749 section 2.3.1; Intuit's)."
+            },
+            "revoke_encoding": {
+              "enum": ["form", "json"],
+              "description": "The revoke request's body (rule 20): form (default, RFC 7009) or json ({\"token\": ...}; Intuit's)."
             }
           }
         },

@@ -246,14 +246,17 @@ function forgetReturn() {
   }
 }
 
-export async function startLink(c: ConnectorInfo, environment = "prod", name = "") {
+export async function startLink(c: ConnectorInfo, environment = "prod", name = "", mode = "") {
   try {
     if (!window.location.pathname.startsWith("/connections")) sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search);
     else sessionStorage.removeItem(RETURN_KEY);
   } catch {
     // storage refused: the person comes back to Connections
   }
-  const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name });
+  // A connector with modes is linked in the one chosen, else the first this
+  // Taskiem can link (QuickBooks: live, or only the sandbox on a test server).
+  const m = mode || c.oauth_modes?.[0] || undefined;
+  const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name, mode: m });
   window.location.assign(out.url);
 }
 
@@ -549,7 +552,7 @@ export function NewConnection({
   connectors: ConnectorInfo[];
   onClose: () => void;
   onDone: () => void;
-  onLink: (c: ConnectorInfo, environment: string, name: string) => Promise<void>;
+  onLink: (c: ConnectorInfo, environment: string, name: string, mode?: string) => Promise<void>;
   preset?: { connector: string; environment: string; name: string };
 }) {
   const [ref, setRef] = useState((preset && connectors.find((x) => x.id === preset.connector)?.ref) ?? connectors[0]?.ref ?? "");
@@ -568,6 +571,9 @@ export function NewConnection({
   const act = useAction();
   const { main, more } = splitFields(c);
   const linkable = !!c?.auth.oauth2 && !!c.oauth_linkable;
+  // Linking in a mode needs this Taskiem's OAuth client for it.
+  const linkModes = modes.filter((m) => c?.oauth_modes?.includes(m.mode));
+  const linkMode = (linkModes.some((m) => m.mode === mode) ? mode : "") || linkModes[0]?.mode || "";
   const problems = Object.fromEntries((c?.auth.fields ?? []).map((f) => [f.key, keyProblem(f, creds[f.key] ?? "", chosen)]));
   const blocked = Object.values(problems).some(Boolean);
   const field = (f: AuthField) => (
@@ -691,7 +697,19 @@ export function NewConnection({
             {linkable ? (
               <>
                 <p style={{ marginTop: 0 }}>Connect {c.name} with one click: you sign in there and approve, and nothing is copied.</p>
-                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name), false)}>
+                {!paste && modes.length > 1 && linkModes.length > 0 && (
+                  <fieldset className="choice">
+                    <legend>Which kind?</legend>
+                    {modes.map((m) => (
+                      <label key={m.mode} className="inline">
+                        <input type="radio" name="link-mode" checked={linkMode === m.mode} disabled={!linkModes.includes(m)} onChange={() => setMode(m.mode)} />
+                        {m.label}
+                        {!linkModes.includes(m) && <span className="hint"> (not set up on this Taskiem yet)</span>}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name, linkMode), false)}>
                   Connect {c.name}
                 </button>{" "}
                 {!paste && main.length + more.length > 0 && (
