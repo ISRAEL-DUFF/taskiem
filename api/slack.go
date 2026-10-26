@@ -176,6 +176,11 @@ func (s *Server) slackCall(ctx context.Context, tenant uuid.UUID, team, action s
 	if err != nil {
 		return nil, err
 	}
+	return s.slackCallWith(ctx, tenant, env, name, action, input)
+}
+
+// slackCallWith runs a slack@1 action with a named connection.
+func (s *Server) slackCallWith(ctx context.Context, tenant uuid.UUID, env, name, action string, input map[string]any) (map[string]any, error) {
 	reg, err := s.Registry.For(ctx, tenant.String())
 	if err != nil {
 		return nil, err
@@ -542,4 +547,15 @@ func slackAddrsTx(ctx context.Context, tx pgx.Tx, users []uuid.UUID) (map[uuid.U
 	}
 	rows.Close()
 	return out, rows.Err()
+}
+
+// SlackAlerts posts alerts through a business's Slack connection (alert
+// channels made from it; engine/alerts.Slack).
+type SlackAlerts struct{ Server *Server }
+
+// PostAlert posts text to channel with the production connection named
+// connection.
+func (a *SlackAlerts) PostAlert(ctx context.Context, tenant uuid.UUID, connection, channel, text string) error {
+	_, err := a.Server.slackCallWith(ctx, tenant, "prod", connection, "post_message", map[string]any{"channel": channel, "text": text})
+	return err
 }

@@ -24,6 +24,9 @@ import (
 
 var slackHookRe = regexp.MustCompile(`^https://hooks\.slack\.com/services/[A-Za-z0-9/_-]+$`)
 
+// slackChannelRe is a Slack conversation id a connection's bot posts in.
+var slackChannelRe = regexp.MustCompile(`^[CG][A-Z0-9]{2,24}$`)
+
 // Test messages: 10 at once per tenant, then one every 6 minutes.
 const (
 	alertTestEvery = 6 * time.Minute
@@ -65,6 +68,10 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 		Name string   `json:"name"`
 		To   []string `json:"to,omitempty"`
 		URL  string   `json:"url,omitempty"`
+		// Connection and Channel make a Slack channel from the business's
+		// Slack connection (its bot posts), instead of a webhook URL.
+		Connection string `json:"connection,omitempty"`
+		Channel    string `json:"channel,omitempty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -97,8 +104,28 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 		}
 		cfg["to"] = req.To
 	case "slack":
+		if req.Connection != "" {
+			if !slackChannelRe.MatchString(req.Channel) {
+				s.fail(w, r, fmt.Errorf("%w: pick the Slack channel to post in (its id, C…)", errBadRequest))
+				return
+			}
+			var ok bool
+			if err := s.tx(r, func(tx pgx.Tx) error {
+				return tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM connections WHERE connector = 'slack' AND environment = 'prod' AND name = $1 AND status = 'active')`,
+					req.Connection).Scan(&ok)
+			}); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if !ok {
+				s.fail(w, r, fmt.Errorf("%w: there is no active Slack connection named %q in production", errBadRequest, req.Connection))
+				return
+			}
+			cfg["connection"], cfg["channel"] = req.Connection, req.Channel
+			break
+		}
 		if !slackHookRe.MatchString(req.URL) {
-			s.fail(w, r, fmt.Errorf("%w: a Slack incoming webhook URL starts https://hooks.slack.com/services/", errBadRequest))
+			s.fail(w, r, fmt.Errorf("%w: a Slack incoming webhook URL starts https://hooks.slack.com/services/, or pick a channel of your Slack connection", errBadRequest))
 			return
 		}
 		secret = req.URL

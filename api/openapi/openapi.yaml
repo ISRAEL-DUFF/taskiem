@@ -21964,8 +21964,13 @@ components:
     AlertChannelConfig:
       type: object
       description: 'What the channel sends to: `to` for email; `url` for a webhook; `members` and `emails` for WhatsApp
-        and Telegram; nothing for Slack (its webhook URL is kept in the vault).'
+        and Telegram; for Slack, `connection` and `channel` when made from the Slack connection, else nothing (its webhook
+        URL is kept in the vault).'
       properties:
+        connection:
+          type: string
+        channel:
+          type: string
         to:
           type: array
           items:
@@ -23495,6 +23500,12 @@ components:
         url:
           type: string
           description: A Slack incoming webhook (`https://hooks.slack.com/services/…`), or an https webhook URL.
+        connection:
+          type: string
+          description: 'Slack, instead of `url`: the production Slack connection whose bot posts the alerts.'
+        channel:
+          type: string
+          description: 'Slack, with `connection`: the channel to post in (its id, `C…`).'
       additionalProperties: false
     AlertChannelCreated:
       type: object

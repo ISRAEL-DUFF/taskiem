@@ -1272,6 +1272,8 @@ func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	if e.tg != nil {
 		a.Telegram = &api.TelegramAlerts{Pool: e.pool, Telegram: e.tg}
 	}
+	// Slack channels made from a business's Slack connection.
+	a.Slack = &api.SlackAlerts{Server: &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Egress: &egress.Guard{Logger: log}, Logger: log}}
 	if c.SMTPURL != "" {
 		m, err := alerts.NewSMTPMailer(c.SMTPURL)
 		if err != nil {

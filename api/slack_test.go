@@ -18,6 +18,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/slack"
+	"github.com/israel-duff/taskiem/engine/alerts"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -264,5 +265,26 @@ func TestSlackClicksForWorkflowsGoOnToTheTrigger(t *testing.T) {
 	}
 	if got.path != "/apps/slack@1/interactions" || !strings.HasPrefix(got.sig, "v0=") || !strings.Contains(string(got.body), "taskiem-corr%3Aorder-42") {
 		t.Errorf("forwarded: %q %q %q", got.path, got.sig, got.body)
+	}
+}
+
+// An alert channel made from the Slack connection: its bot posts in the
+// channel picked, with nothing pasted (K2).
+func TestSlackAlertChannelFromTheConnection(t *testing.T) {
+	w := newSlackWorld(t)
+	w.srv.Alerts = &alerts.Alerter{Pool: w.env.Store.Pool, Secrets: w.env.Vault, Egress: w.env.Egress, PublicURL: "https://taskiem.test",
+		Slack: &api.SlackAlerts{Server: w.srv}}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(400, "POST", "/v1/alerts/channels", map[string]any{"kind": "slack", "name": "#payments", "connection": "main", "channel": "C0PAY"})
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	owner.must(400, "POST", "/v1/alerts/channels", map[string]any{"kind": "slack", "name": "#payments", "connection": "main", "channel": "#payments"})
+	ch := owner.must(201, "POST", "/v1/alerts/channels", map[string]any{"kind": "slack", "name": "#payments", "connection": "main", "channel": "C0PAY"})
+	if cfg := ch["config"].(map[string]any); cfg["connection"] != "main" || cfg["channel"] != "C0PAY" {
+		t.Errorf("config %v", cfg)
+	}
+	owner.must(200, "POST", "/v1/alerts/channels/"+ch["id"].(string)+"/test", nil)
+	got := w.fake.to("C0PAY")
+	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Test alert from Taskiem") {
+		t.Fatalf("posted: %v", got)
 	}
 }
