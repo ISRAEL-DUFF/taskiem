@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
+import { addStep, doneWithStep, newWorkflow } from "./builder";
 
 // SCREENSHOT_DIR=... saves screenshots of the form screens for review.
 const shot = async (page: Page, name: string) => {
@@ -17,14 +18,11 @@ test("an owner builds a members form in the canvas, finds it on Forms and fills 
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
 
-  await page.getByRole("button", { name: "New workflow" }).click();
-  await page.getByLabel("Name").fill("Leave request");
-  await page.getByRole("button", { name: "Create" }).click();
-  await expect(page.getByTestId("node-start")).toBeVisible();
-
-  // The trigger becomes a form: the panel turns into the form editor.
-  await page.getByRole("tab", { name: "Trigger & settings" }).click();
-  await page.getByRole("combobox", { name: "Type" }).first().selectOption("form");
+  // It starts with a form; one step after it, then the form editor under Settings.
+  await newWorkflow(page, "Leave request", "Someone fills in a form");
+  await addStep(page, "change the data", "Change the data");
+  await doneWithStep(page);
+  await page.getByRole("tab", { name: "Settings" }).click();
   const editor = page.getByRole("region", { name: "Form", exact: true });
   await expect(editor.getByLabel("Form title")).toHaveValue("Leave request");
   await editor.getByRole("radio", { name: /Members of your organisation/ }).check();

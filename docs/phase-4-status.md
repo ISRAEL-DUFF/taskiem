@@ -405,3 +405,21 @@ Done 25 October 2026, after comparing the webhook trigger with n8n's Webhook nod
 
 What is left: path parameters (`/orders/:id`), binary bodies and the raw body, an IP allow-list, and JWT keys from a JWKS URL; a JWT's claims are not given to the run.
 
+
+## The workflow builder
+
+Done 26 October 2026, after comparing the editor with n8n's. Described in [the workflow builder](workflow-builder.md).
+
+| Piece | What exists | Code |
+| --- | --- | --- |
+| Starting | **New workflow** for everyone: **When should it run?** with eight trigger cards, a template or **Describe it**; a new workflow is version 1 with no steps | `web/src/pages/NewWorkflow.tsx`, `web/src/builder/triggers.ts`, `web/src/pages/Workflows.tsx` |
+| Shell | Full window: the menu as a rail of icons, its own bar (back, name, Build, Runs and Settings tabs, Code and JSON with Advanced, undo and redo, Save draft, Test workflow, Start run, Publish); web addresses under Settings | `web/src/pages/Editor.tsx`, `web/src/App.tsx`, `web/src/styles.css` |
+| Canvas | Cards with an icon and plain words, a pine trigger card, a + on every arrow and after a path's end, an If's Yes and No, paths at any depth, notes, zoom, fit, Tidy up, a map; places saved without a new version | `web/src/builder/Canvas.tsx`, `web/src/lib/flow.ts` |
+| What happens next? | Search, three suggestions, ten groups; payments by what they do; short ids for new steps | `web/src/builder/Picker.tsx`, `web/src/builder/catalog.ts` |
+| A step's window | What came in, with samples, dragged into settings; settings, with text and fields together; what came out; keep a result; previous and next | `web/src/builder/StepWindow.tsx`, `web/src/forms/FieldText.tsx`, `web/src/lib/fieldtext.ts`, `web/src/builder/sources.ts` |
+| Test with sample data | `POST /v1/workflows/{wf}/try` runs the unsaved draft in wd-test with samples from output schemas and kept outputs; nothing is sent or stored; ticks, marks and "Did not need to run" on the canvas | `api/workflows.go`, `engine/ai/builder/dryrun.go`, `engine/wdtest/wdtest.go` |
+| An If's empty No | Left out (`default`) when saved or tested, still drawn; an empty Yes is named before a test | `web/src/lib/flow.ts` (`forSaving`, `emptyPaths`) |
+| Phone | The steps as a list with Yes and No indented; a step's window full screen | `web/src/builder/PhoneSteps.tsx` |
+| Tests | The canvas model, the catalog, sources, text with fields; the try endpoint and `TryDraft`; Playwright: blank start to a tested If, undo and redo, the saved If, the phone list, axe on every view; the older specs moved to the builder | `web/src/lib/flow.test.ts`, `web/src/builder/*.test.ts`, `web/src/lib/fieldtext.test.ts`, `api/try_test.go`, `engine/ai/builder/builder_test.go`, `web/e2e/builder.spec.ts` |
+
+What is left: pinning a test's output as a step's sample across sessions (kept outputs last until the page closes); running a single step on its own (Test this step runs the whole draft); copying and pasting steps; and reordering a choice's paths.

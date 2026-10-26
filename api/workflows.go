@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/embed"
@@ -732,6 +733,79 @@ func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 	}
 	probs := s.checkFor(r, req.Definition)
 	writeJSON(w, http.StatusOK, map[string]any{"valid": len(probs) == 0, "problems": nonNil(probs)})
+}
+
+// tryDraft runs a draft once with sample data: the workflow builder's
+// Test (docs/workflow-builder.md#test-with-sample-data). It is the AI
+// builder's dry run: the real orchestrator over an in-memory history,
+// every service step answered with a sample of its output, every approval
+// approved and every form answered, so nothing is sent and nothing is
+// stored. The builder may give what starts it and outputs it kept for
+// steps; the answer is each step's state, what it was given and gave.
+func (s *Server) tryDraft(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Definition json.RawMessage `json:"definition"`
+		Trigger    any             `json:"trigger,omitempty"`
+		Kept       map[string]any  `json:"kept,omitempty"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	ctx := r.Context()
+	tenant := principalFrom(ctx).TenantID
+	if wf, err := uuid.Parse(chi.URLParam(r, "wf")); err == nil {
+		if p := usesItself(wf, req.Definition); p != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "invalid_definition", "error": p.Message, "problems": []problem{*p}})
+			return
+		}
+	}
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	policies := map[string]json.RawMessage{}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT name, document FROM approval_policies WHERE state = 'active'`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			var doc json.RawMessage
+			if err := rows.Scan(&name, &doc); err != nil {
+				return err
+			}
+			policies[name] = doc
+		}
+		return rows.Err()
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	c, res, err := builder.TryDraft(req.Definition, reg, policies, s.callables(ctx, tenant), req.Trigger, req.Kept)
+	if err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "invalid_definition", "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    res.Status,
+		"trigger":   c.Trigger,
+		"steps":     nonNilMap(res.Steps),
+		"inputs":    nonNilMap(res.Inputs),
+		"outputs":   nonNilMap(res.Outputs),
+		"errors":    nonNilMap(res.Errors),
+		"run_error": res.RunError,
+	})
+}
+
+func nonNilMap[V any](m map[string]V) map[string]V {
+	if m == nil {
+		return map[string]V{}
+	}
+	return m
 }
 
 type connectorInfo struct {

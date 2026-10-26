@@ -444,6 +444,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/validate", s.validate)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows/{wf}/try", s.tryDraft)
 			r.With(s.need(PermWorkflowRead)).Post("/readiness", s.draftReadiness)
 			r.With(s.need(PermWorkflowRead)).Get("/approver-roles", s.listApproverRoles)
 			r.With(s.feature(billing.FeatureAI, true)).Route("/ai", s.aiRoutes)

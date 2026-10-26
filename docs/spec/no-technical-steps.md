@@ -158,6 +158,8 @@ Sizes: **S** a few days, **M** one to two weeks, **L** three weeks or more, for 
 
   Expressions, JSON, cron and CEL under **Advanced** (N0-5).
 - **Starting:** **Describe it** (the AI builder) and **Start from a template** are the main ways to start; a blank canvas is under **Advanced**. The Forms page has **New form**, which makes the workflow behind it.
+
+  *Changed 26 October 2026:* **New workflow** is for everyone again, as **When should it run?** (plain cards for what starts it) and a builder in plain words ([the workflow builder](../workflow-builder.md)). The canvas no longer shows expressions or JSON without Advanced, so a blank start no longer needs hiding.
 - **The checklist** is reordered: pick a template or describe a goal, then connect what that needs; its help points at a guide for owners (a new `docs/guide/` of plain how-tos, not the developer docs).
 
 **Accept:** every template's details can be filled in by the gate's owners; a workflow with a schedule, a value from an earlier step and a condition made without typing an expression.

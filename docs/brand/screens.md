@@ -89,6 +89,8 @@ From top to bottom, leave out what a page does not need:
 
 On a phone the side navigation becomes the bottom tab bar (Home, Money, Orders, Workflows, Menu); leave room under the page for it (the shell does). Breakpoints in use: 860 px (phone layout), 640 px and 480 px for small adjustments, 900 px for the wide signed-out layout.
 
+**The workflow builder is the one exception** ([the workflow builder](../workflow-builder.md)). It fills the window: the shell's `builder-mode` shrinks the menu to a rail of icons on a computer and hides the top and tab bars on a phone. The builder has its own bar (back, name, tabs, Save draft, Test workflow, Publish). On its canvas, what starts the workflow is the one pine card, with a lime icon; step cards are white with a tinted icon tile (`.bcard-icon.tone-*`). Don't add another full-window page; a page that needs more room uses `main wide`.
+
 ## Components
 
 All of these exist; use them rather than building new ones. Their code is in `web/src/ui.tsx` and the classes in `web/src/styles.css`.

@@ -7,6 +7,7 @@ import { ValuePicker } from "../canvas/PlainPickers";
 import { coerce, isExpression, kindOf, setKey } from "../lib/schema";
 import { JsonInput } from "../ui";
 import { RecipientField } from "./RecipientField";
+import { FieldText } from "./FieldText";
 
 interface Props {
   schema: JSONSchema | undefined;
@@ -48,11 +49,15 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
   const kind = kindOf(schema);
   const expr = isExpression(value);
   // Without expressions, a field takes a value from an earlier step by its words.
-  const fromSource = !expressions && !!sources?.length && kind !== "object";
+  // Text takes fields among its words, as chips (the builder's message boxes).
+  const textWithFields = !expressions && !!sources?.length && kind === "string" && !schema.format;
+  const fromSource = !expressions && !!sources?.length && kind !== "object" && !textWithFields;
   const [picking, setPicking] = useState(() => fromSource && !!sourceOf(sources ?? [], value));
+  // Without expressions (plain words), a field with no title reads as words.
+  const title = schema.title ?? (expressions ? name : (name.charAt(0).toUpperCase() + name.slice(1)).replaceAll("_", " "));
   const label = (
     <span>
-      {schema.title ?? name}
+      {title}
       {required && " *"}
       {expressions && (
         <button
@@ -67,10 +72,12 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
     </span>
   );
   let input;
-  if (fromSource && (picking || sourceOf(sources ?? [], value))) {
+  if (textWithFields) {
+    input = <FieldText label={String(title)} value={value} onChange={(v) => onChange(v)} sources={sources ?? []} multiline={/message|body|text|note|description|content/i.test(name)} />;
+  } else if (fromSource && (picking || sourceOf(sources ?? [], value))) {
     input = (
       <span className="toolbar">
-        <ValuePicker label={String(schema.title ?? name)} sources={sources ?? []} value={typeof value === "string" ? value : ""} onChange={(v) => onChange(v || undefined)} />
+        <ValuePicker label={String(title)} sources={sources ?? []} value={typeof value === "string" ? value : ""} onChange={(v) => onChange(v || undefined)} />
         <button type="button" className="link" onClick={() => (setPicking(false), onChange(undefined))}>
           Type it instead
         </button>
@@ -82,7 +89,7 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
     input = <input className="mono" value={String(value)} placeholder="=trigger.body.field" onChange={(e) => onChange(e.target.value || undefined)} />;
   } else if (schema.format === "paystack-recipient") {
     // Someone to pay: their bank and account number, the name confirmed.
-    input = <RecipientField label={schema.title ?? name} value={typeof value === "string" ? value : ""} onChange={(v) => onChange(v || undefined)} />;
+    input = <RecipientField label={title} value={typeof value === "string" ? value : ""} onChange={(v) => onChange(v || undefined)} />;
   } else if (kind === "boolean") {
     input = <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
   } else if (kind === "enum") {
