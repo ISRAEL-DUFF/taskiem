@@ -1,0 +1,27 @@
+{
+ "action": "create_campaign",
+ "input": {
+  "audience_id": "a6b5da1054",
+  "title": "Win-back 2026-10",
+  "subject": "We miss you",
+  "from_name": "Ada Cakes",
+  "reply_to": "hello@adacakes.ng",
+  "html": "<p>20% off this week</p>"
+ },
+ "credentials": {
+  "access_token": "mctestoauthtoken",
+  "account_name": "Ada Cakes"
+ },
+ "exchanges": [
+  "campaigns_none",
+  "campaign_create",
+  "campaign_content"
+ ],
+ "expect": {
+  "output": {
+   "campaign_id": "42694e9e57",
+   "created": true,
+   "status": "save"
+  }
+ }
+}

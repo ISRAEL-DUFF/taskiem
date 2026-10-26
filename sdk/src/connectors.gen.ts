@@ -875,6 +875,70 @@ export const lenco = {
   transfer: (input: LencoTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "transfer", input, extra),
 };
 
+// Mailchimp (mailchimp@1)
+export interface MailchimpAddOrUpdateMemberInput {
+  audience_id: Val<string>;
+  consent: Value;
+  email: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  /** Other merge fields, by their tags (BIRTHDAY, COMPANY) */
+  merge_fields?: Value;
+  phone?: Val<string>;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+  /** Tags added when they are added */
+  tags?: Value;
+}
+export interface MailchimpCreateCampaignInput {
+  audience_id: Val<string>;
+  from_name: Val<string>;
+  html: Val<string>;
+  preview_text?: Val<string>;
+  /** An address on a verified domain */
+  reply_to: Val<string>;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+  subject: Val<string>;
+  /** Only the members with this tag (a static segment) */
+  tag_id?: Val<number>;
+  /** The campaign's name in Mailchimp; unique for each campaign this makes */
+  title: Val<string>;
+}
+export interface MailchimpGetAccountInput {
+  [key: string]: Value;
+}
+export interface MailchimpListAudiencesInput {
+  [key: string]: Value;
+}
+export interface MailchimpSendCampaignInput {
+  campaign_id: Val<string>;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+}
+export interface MailchimpTagMemberInput {
+  add?: Value;
+  audience_id: Val<string>;
+  email: Val<string>;
+  remove?: Value;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+}
+export const mailchimp = {
+  /** Add or update a member (idempotent_write) */
+  add_or_update_member: (input: MailchimpAddOrUpdateMemberInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "add_or_update_member", input, extra),
+  /** Create a campaign (idempotent_write) */
+  create_campaign: (input: MailchimpCreateCampaignInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "create_campaign", input, extra),
+  /** Get the account (read) */
+  get_account: (input?: MailchimpGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "get_account", input, extra),
+  /** List audiences (read) */
+  list_audiences: (input?: MailchimpListAudiencesInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "list_audiences", input, extra),
+  /** Send a campaign (idempotent_write) */
+  send_campaign: (input: MailchimpSendCampaignInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "send_campaign", input, extra),
+  /** Tag a member (idempotent_write) */
+  tag_member: (input: MailchimpTagMemberInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "tag_member", input, extra),
+};
+
 // Facebook Messenger (messenger@1)
 export interface MessengerGetConversationInput {
   limit?: Val<number>;
@@ -3468,6 +3532,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "invoices@1": "invoices",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
+  "mailchimp@1": "mailchimp",
   "messenger@1": "messenger",
   "moniepoint@1": "moniepoint",
   "moniepoint_pos@1": "moniepoint_pos",
@@ -3517,6 +3582,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["get_balance", "get_payout", "issue_virtual_account", "list_banks", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
+  "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],
   "messenger@1": ["get_conversation", "get_page", "get_profile", "mark_seen", "send_message", "send_typing"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
   "moniepoint_pos@1": ["check_access", "get_transaction", "request_payment"],

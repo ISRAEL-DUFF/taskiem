@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
+	"github.com/israel-duff/taskiem/connectors/mailchimp"
 	"github.com/israel-duff/taskiem/connectors/meta"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/moniepointpos"
@@ -86,6 +87,10 @@ type Options struct {
 	// ResendURL and BrevoURL replace Resend's and Brevo's APIs
 	// (TASKIEM_RESEND_URL, TASKIEM_BREVO_URL; tests).
 	ResendURL, BrevoURL string
+	// MailchimpURL and MailchimpMetadataURL replace every account's
+	// Mailchimp server and Mailchimp's OAuth metadata
+	// (TASKIEM_MAILCHIMP_URL, TASKIEM_MAILCHIMP_METADATA_URL; tests).
+	MailchimpURL, MailchimpMetadataURL string
 	// MetaURL replaces the Graph API for Messenger and Instagram
 	// (TASKIEM_META_GRAPH_URL; tests).
 	MetaURL string
@@ -150,6 +155,7 @@ func Register(r *connector.Registry, o Options) error {
 		meta.Messenger(meta.Options{BaseURL: o.MetaURL}),
 		resend.New(resend.Options{BaseURL: o.ResendURL}),
 		brevo.New(brevo.Options{BaseURL: o.BrevoURL}),
+		mailchimp.New(mailchimp.Options{BaseURL: o.MailchimpURL, MetadataURL: o.MailchimpMetadataURL}),
 		meta.Instagram(meta.Options{BaseURL: o.MetaURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),

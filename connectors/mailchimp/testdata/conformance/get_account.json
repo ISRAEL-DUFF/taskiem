@@ -1,0 +1,17 @@
+{
+ "action": "get_account",
+ "input": {},
+ "credentials": {
+  "access_token": "mctestoauthtoken",
+  "account_name": "Ada Cakes"
+ },
+ "exchanges": [
+  "root"
+ ],
+ "expect": {
+  "output": {
+   "account_id": "8d3a3db4d97663a9074efcc16",
+   "account_name": "Ada Cakes"
+  }
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "action": "add_or_update_member",
+ "input": {
+  "audience_id": "a6b5da1054",
+  "email": "Ada@Example.com",
+  "first_name": "Adaeze",
+  "last_name": "Okafor",
+  "tags": [
+   "customer"
+  ],
+  "consent": {
+   "opted_in": true,
+   "source": "checkout",
+   "at": "2026-10-26T12:00:00+01:00"
+  }
+ },
+ "credentials": {
+  "access_token": "mctestoauthtoken",
+  "account_name": "Ada Cakes"
+ },
+ "exchanges": [
+  "member"
+ ],
+ "expect": {
+  "output": {
+   "member_id": "3e3417d7ef77d5932a6734b916515ed5",
+   "status": "subscribed"
+  }
+ }
+}
