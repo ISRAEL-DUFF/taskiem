@@ -1,0 +1,159 @@
+{
+  "id": "books-copy-invoice",
+  "title": "Copy an invoice to the books",
+  "summary": "Record one of your invoices in QuickBooks, with its customer, once however often it runs.",
+  "description": "Finds the customer in your books by email (or adds them), then records the invoice under its Taskiem number, so your accountant sees every invoice you send. Running it again for the same invoice finds the one it made rather than making another. Works with whichever books you connected (QuickBooks today); the other books templates use it.",
+  "category": "bookkeeping",
+  "tags": [
+    "bookkeeping",
+    "invoices",
+    "accounting",
+    "quickbooks"
+  ],
+  "keywords": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "ledger",
+    "invoice",
+    "record"
+  ],
+  "connectors": [
+    "capability:books_customer",
+    "capability:books_invoice"
+  ],
+  "params": [
+    {
+      "name": "books_connection",
+      "type": "connection",
+      "capability": [
+        "books_invoice"
+      ],
+      "title": "Your books",
+      "description": "The accounting software the invoices go to: QuickBooks (and, soon, Zoho Books), connected with one click.",
+      "required": false,
+      "default": "",
+      "example": ""
+    }
+  ],
+  "callable": true,
+  "outputs": [
+    {
+      "name": "invoice_id",
+      "type": "string",
+      "title": "Invoice in the books",
+      "description": "The books' own id for the invoice.",
+      "value": "=steps.invoice.output.invoice_id"
+    },
+    {
+      "name": "customer_id",
+      "type": "string",
+      "title": "Customer in the books",
+      "description": "The books' own id for the customer.",
+      "value": "=steps.customer.output.customer_id"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_booksCopyInvoice",
+    "version": 1,
+    "name": "Copy an invoice to the books",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "number",
+          "name",
+          "amount_kobo"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "number": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Invoice number"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "title": "Customer's name",
+            "x-pii": "name"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Customer's email",
+            "x-pii": "email"
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Customer's phone",
+            "x-pii": "phone"
+          },
+          "amount_kobo": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Total (kobo)"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "What it is for"
+          },
+          "issued_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Issued on"
+          },
+          "due_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Due on"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "customer",
+        "type": "capability",
+        "uses": "books_customer",
+        "name": "Find or add the customer",
+        "connection": "{{books_connection}}",
+        "input": {
+          "name": "=trigger.body.name",
+          "email": "=trigger.body.?email",
+          "phone": "=trigger.body.?phone"
+        }
+      },
+      {
+        "id": "invoice",
+        "type": "capability",
+        "uses": "books_invoice",
+        "name": "Record the invoice",
+        "connection": "{{books_connection}}",
+        "needs": [
+          "customer"
+        ],
+        "input": {
+          "number": "=trigger.body.number",
+          "customer_id": "=steps.customer.output.customer_id",
+          "issued_on": "=trigger.body.?issued_on",
+          "due_on": "=trigger.body.?due_on",
+          "lines": "=[{'description': trigger.body.?description.orValue('Invoice ' + trigger.body.number), 'amount_kobo': trigger.body.amount_kobo}]"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

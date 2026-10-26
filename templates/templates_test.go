@@ -647,6 +647,11 @@ func TestTemplateWorkflowTests(t *testing.T) {
 // (decision 0044): no other rail declares what they need yet.
 var oneRail = map[string]string{
 	"refund-with-approval": "only Paystack refunds (OPay's refund is not declared yet)",
+	// The books capabilities are a product's (connector/v1 rule 16):
+	// QuickBooks for now, Zoho Books with K4 of business connectors.
+	"books-copy-invoice":            "only QuickBooks keeps books until Zoho Books (K4)",
+	"books-record-invoice-payments": "only QuickBooks keeps books until Zoho Books (K4)",
+	"books-school-daily-takings":    "only QuickBooks keeps books until Zoho Books (K4)",
 }
 
 // Every template on rails expands, as a run would, on each built-in rail
@@ -697,7 +702,8 @@ func TestTemplatesOnEveryCapableRail(t *testing.T) {
 			var rails []string
 			for _, c := range reg.List() {
 				m := c.Manifest
-				if m.KindOf() != "rail" || contains(rails, m.ID) {
+				// Rails, and products that declare capabilities (the books').
+				if len(m.Capabilities) == 0 || contains(rails, m.ID) {
 					continue
 				}
 				can := true

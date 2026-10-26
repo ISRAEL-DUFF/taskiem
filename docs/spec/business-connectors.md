@@ -409,7 +409,7 @@ The AI builder learns each connector from its manifest as it does today. The eva
 - **Renewal** (migration 00225): `RemoteState.ExpiresAt`; due a day before expiry (halfway for under two days), applied again with `Update`; a health check reading no expiry keeps the last.
 - **Books capabilities** (decision 0051 point 8): nine capabilities and three events of `kind: product` in `capabilities-v1.json`; rule 16 checks kinds both ways; wd/v1, the SDK helpers and the catalogue's words take them; books events never reach the money log.
 
-Differences from the plan: the app URL is per trigger (`/hooks/apps/{connector}/{trigger}`), not per provider, since one app takes several (Slack's events and interactivity); refreshed credentials are refreshed under the lock rather than returned with the response, which would come too late to stop a second worker; the in-memory token cache is not needed, since the access token is stored with the credentials. Mailchimp's server prefix (a metadata call after connecting) comes with K8, and connector categories for accounting (QuickBooks, Zoho Books) with K3.
+Differences from the plan: the app URL is per trigger (`/hooks/apps/{connector}/{trigger}`), not per provider, since one app takes several (Slack's events and interactivity); refreshed credentials are refreshed under the lock rather than returned with the response, which would come too late to stop a second worker; the in-memory token cache is not needed, since the access token is stored with the credentials. Mailchimp's server prefix (a metadata call after connecting) comes with K8, and connector categories for accounting (QuickBooks, Zoho Books) with K3 (added there).
 
 ### K2: Slack (M; needs K1)
 
@@ -427,6 +427,15 @@ Differences from §5: the daily money summary in Slack waits for a money-summary
 ### K3: QuickBooks Online (L; needs K1, K0's sandbox)
 
 §8, on Intuit's sandbox companies: the connector, its books capability mappings, and the books templates of §10 written against the capabilities. K4 then only adds Zoho Books' mappings, and the same templates run on it.
+
+**Built** (K3, 26 October 2026), on the K1 pull request. Fixtures are shaped from Intuit's published examples; nothing has run against a sandbox company yet.
+- **Connecting:** `quickbooks@1` (`kind: product`, the new `accounting` category) through Taskiem's Intuit app, `realmId` from the callback as the account. Live and test are hosts with their own keys (connector/v1 rule 20; migration 00227): the person chooses before linking, the request keeps the mode, and the code is exchanged with that mode's app (`quickbooks`, `quickbooks_sandbox`). Generic: `client_auth: basic`, `revoke_encoding: json`, `oauth_modes` in the connector list, a mode chooser by the Connect button, and app deliveries verified with any of the connector's apps.
+- **Tokens:** refreshed under the connection's lock with `RotateCredentials`, the access token kept with its expiry; a refused access token is refreshed once, a refused refresh token expires the connection; eight concurrent workers refresh once.
+- **Actions:** the company, customers and suppliers (found before added), invoices (found by number), payments (found by reference among the customer's payments that day), sales receipts, purchases (VAT as its own line), bills (found by number for the supplier), the three pickers, any record, and change data capture. Every write sends `requestid`; numbers over 21 characters are shortened the same way every time.
+- **Books:** all nine capabilities mapped; `books.invoice.created` and `books.payment.recorded` from the `changes` trigger (CloudEvents, split per event, routed by `intuitaccountid`, nothing read before the three-second answer). The conformance kit's event check now follows a trigger's `split`.
+- **Templates:** `books-copy-invoice` (callable), `books-record-invoice-payments` (on the invoice trigger's `payment` event), `books-school-daily-takings`. The rail coverage tests count products that declare capabilities; the three run on QuickBooks only until K4.
+
+Differences from §8: there is no enricher, so a run reads the record it was told of (`get_entity`): an enricher would read before the three-second answer. QuickBooks gives no `books.invoice.paid` (a paid invoice is only an `invoice.updated`). Catching up after an outage is the `changes_since` action, not automatic yet. An invoice is copied with its total as one line, since `invoices@1` does not give its lines.
 
 ### K4: Zoho platform and Zoho Books (L; needs K1)
 
