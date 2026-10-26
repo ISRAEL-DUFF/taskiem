@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"mime"
 	"net/url"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -35,6 +36,11 @@ type Manifest struct {
 	Auth        Auth                   `json:"auth"`
 	BaseURL     string                 `json:"base_url"`
 	Egress      []string               `json:"egress_hosts"`
+	// ConnectionHosts are the hosts a connection's fields may name, where
+	// the provider keeps each account in one place (Zoho's data centres:
+	// *.zoho.com, *.zoho.eu…; rule 19): a ${connection.<field>} egress host
+	// or OAuth URL naming any other host is refused. Empty: any public host.
+	ConnectionHosts []string `json:"connection_hosts,omitempty"`
 	Actions     map[string]ActionSpec  `json:"actions"`
 	Triggers    map[string]TriggerSpec `json:"triggers"`
 	// Capabilities and Events say what a rail can do in Taskiem's words
@@ -81,6 +87,26 @@ type OAuth2 struct {
 	// with the provider ("id" or "secret"), for connectors that refresh
 	// their own tokens with the client that was granted them.
 	PlatformClientFields map[string]string `json:"platform_client_fields,omitempty"`
+	// Client is the platform app Taskiem registered with the provider
+	// (TASKIEM_OAUTH_<CLIENT>_*; rule 18): one app may serve several
+	// connectors. Empty: the connector's id.
+	Client string `json:"client,omitempty"`
+	// AccountField is the auth field holding the provider account a
+	// connection is for (Slack's team id): the app's events for that
+	// account go to the connections that hold it.
+	AccountField string `json:"account_field,omitempty"`
+	// FieldsFromCallback fills auth fields from the query parameters the
+	// provider sends the browser back with (QuickBooks' realmId).
+	FieldsFromCallback map[string]string `json:"fields_from_callback,omitempty"`
+}
+
+// ClientName is the platform app a connector's OAuth uses: Client, or the
+// connector's id.
+func (m *Manifest) ClientName() string {
+	if m.Auth.OAuth2 != nil && m.Auth.OAuth2.Client != "" {
+		return m.Auth.OAuth2.Client
+	}
+	return m.ID
 }
 
 // ServerPlaceholder starts an OAuth URL resolved from the connector's base
@@ -361,6 +387,39 @@ func (m *Manifest) check() []string {
 	var out []string
 	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
 
+	if o := m.Auth.OAuth2; o != nil {
+		for _, u := range []string{o.AuthorizeURL, o.TokenURL, o.RevokeURL} {
+			if strings.HasPrefix(u, connectionPlaceholder) && len(m.ConnectionHosts) == 0 {
+				add("/auth/oauth2: %s takes its server from a connection field, so connection_hosts must list the provider's servers", u)
+			}
+		}
+		if strings.HasPrefix(o.AuthorizeURL, connectionPlaceholder) {
+			add("/auth/oauth2/authorize_url: the consent page is reached before the connection has fields")
+		}
+	}
+	for _, tname := range slices.Sorted(maps.Keys(m.Triggers)) {
+		t := m.Triggers[tname]
+		p := "/triggers/" + tname
+		if hs := t.Handshake; hs != nil && hs.Method == "GET" && hs.SecretField == "" && t.Delivery != "app" {
+			add("%s/handshake: a GET check needs secret_field, the connection's token it is compared with", p)
+		}
+		if t.Delivery != "app" {
+			if t.AccountKey != "" || t.Revokes != "" {
+				add("%s: account_key and revokes are for delivery: app", p)
+			}
+			continue
+		}
+		switch {
+		case m.Auth.OAuth2 == nil || m.Auth.OAuth2.AccountField == "":
+			add("%s: delivery app needs auth.oauth2.account_field, the account a connection is for", p)
+		case t.AccountKey == "":
+			add("%s: delivery app needs account_key, the account an event is for", p)
+		case t.Registration == "remote" || t.Route != nil || t.Poll != nil:
+			add("%s: delivery app takes no remote registration, route or poll", p)
+		case t.Verify == nil || slices.Contains([]string{"query_secret", "path_secret", "none"}, t.Verify.Scheme):
+			add("%s: delivery app is verified with the app's secret: a signature scheme, not %v", p, t.Verify)
+		}
+	}
 	for i, h := range m.Auth.HostModes {
 		if slices.ContainsFunc(m.Auth.HostModes[:i], func(x HostMode) bool { return x.Mode == h.Mode }) {
 			add("/auth/modes/%d: mode %q is named twice", i, h.Mode)
@@ -483,7 +542,7 @@ func (m *Manifest) check() []string {
 			}
 			if _, _, _, err := o.Resolve("https://provider.example"); err != nil {
 				add("/auth/oauth2/%s: %v", name, err)
-			} else if p, err := url.Parse(strings.Replace(u, ServerPlaceholder, "https://provider.example", 1)); err != nil || p.Scheme != "https" || p.Hostname() == "" || p.Fragment != "" {
+			} else if p, err := url.Parse(exampleOAuthURL(u)); err != nil || p.Scheme != "https" || p.Hostname() == "" || p.Fragment != "" {
 				add("/auth/oauth2/%s: must be an https URL without a fragment", name)
 			}
 		}
@@ -503,9 +562,20 @@ func (m *Manifest) check() []string {
 				add("/auth/oauth2/fields_from_token/%s: not an auth field", k)
 			}
 		}
+		for _, k := range slices.Sorted(maps.Keys(o.FieldsFromCallback)) {
+			if !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == k }) {
+				add("/auth/oauth2/fields_from_callback/%s: not an auth field", k)
+			}
+		}
+		if o.AccountField != "" && !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == o.AccountField }) {
+			add("/auth/oauth2/account_field: %q is not an auth field", o.AccountField)
+		}
 		for _, f := range m.Auth.Fields {
-			if _, ok := o.FieldsFromToken[f.Key]; !ok && (f.Required == nil || *f.Required) {
-				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token; a linked connection would be missing it", f.Key)
+			_, fromToken := o.FieldsFromToken[f.Key]
+			_, fromCallback := o.FieldsFromCallback[f.Key]
+			_, fromClient := o.PlatformClientFields[f.Key]
+			if !fromToken && !fromCallback && !fromClient && (f.Required == nil || *f.Required) {
+				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token or the callback; a linked connection would be missing it", f.Key)
 			}
 		}
 	}
@@ -618,6 +688,66 @@ func (m *Manifest) Hosts() []string {
 	return out
 }
 
+// ConnectionHostAllowed reports whether a host a connection's fields name
+// is one the connector allows: an exact entry, or a subdomain of a *.
+// entry. A connector that lists none allows any.
+func (m *Manifest) ConnectionHostAllowed(host string) bool {
+	if len(m.ConnectionHosts) == 0 {
+		return true
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, p := range m.ConnectionHosts {
+		if sfx, ok := strings.CutPrefix(p, "*."); ok {
+			if strings.HasSuffix(host, "."+sfx) {
+				return true
+			}
+		} else if host == p {
+			return true
+		}
+	}
+	return false
+}
+
+// exampleOAuthURL is an OAuth URL with its placeholders filled, to check
+// its shape.
+func exampleOAuthURL(u string) string {
+	u = strings.Replace(u, ServerPlaceholder, "https://provider.example", 1)
+	if rest, ok := strings.CutPrefix(u, connectionPlaceholder); ok {
+		if _, path, ok := strings.Cut(rest, "}"); ok {
+			u = "https://account.provider.example" + path
+		}
+	}
+	return u
+}
+
+// connectionPlaceholder starts an OAuth URL taken from a connection's
+// field: ${connection.accounts_server}/oauth/v2/token.
+const connectionPlaceholder = "${connection."
+
+// OAuthURL resolves an OAuth URL that starts with ${connection.<field>}
+// from fields (Zoho's accounts server, which the callback names): the
+// field must be an https URL on a host connection_hosts allows. Other URLs
+// are returned as they are.
+func (m *Manifest) OAuthURL(u string, fields map[string]string) (string, error) {
+	rest, ok := strings.CutPrefix(u, connectionPlaceholder)
+	if !ok {
+		return u, nil
+	}
+	field, path, ok := strings.Cut(rest, "}")
+	if !ok {
+		return "", fmt.Errorf("%s: no closing }", u)
+	}
+	base := strings.TrimRight(strings.TrimSpace(fields[field]), "/")
+	p, err := url.Parse(base)
+	if base == "" || err != nil || p.Scheme != "https" || p.Hostname() == "" || (p.Path != "" && p.Path != "/") {
+		return "", fmt.Errorf("%s: %q is not an https server address", field, base)
+	}
+	if len(m.ConnectionHosts) == 0 || !m.ConnectionHostAllowed(p.Hostname()) {
+		return "", fmt.Errorf("%s: %s is not one of %s's servers", field, p.Hostname(), m.Name)
+	}
+	return base + path, nil
+}
+
 // HostsFor are the hosts this connector may reach for a connection: Hosts,
 // with "${connection.<field>}" standing for the connection's field (a
 // database host, or the host of a server URL the tenant configured, such
@@ -629,6 +759,9 @@ func (m *Manifest) HostsFor(creds map[string]string) []string {
 			h = strings.TrimSpace(creds[strings.TrimSuffix(f, "}")])
 			if u, err := url.Parse(h); err == nil && u.Hostname() != "" && strings.Contains(h, "://") {
 				h = u.Hostname()
+			}
+			if !m.ConnectionHostAllowed(h) {
+				continue // a field naming a host the connector does not allow
 			}
 		}
 		if h != "" && !slices.Contains(out, h) {

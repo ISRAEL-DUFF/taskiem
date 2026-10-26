@@ -423,3 +423,16 @@ func (v *Vault) RotateCredentials(ctx context.Context, tenant uuid.UUID, env, co
 	}
 	return out, err
 }
+
+// SetAppAccountTx records the provider account a connection made through
+// Taskiem's platform app is for (Slack's team id; decision 0051), in a
+// transaction scoped to tenant, so the app's events for that account reach
+// it. An empty account removes the record.
+func SetAppAccountTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID, client, account string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM connection_app_accounts WHERE tenant_id = $1 AND connection_id = $2`, tenant, conn); err != nil || account == "" {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO connection_app_accounts (connection_id, tenant_id, environment, connector, connection, client, account_key)
+		SELECT id, tenant_id, environment, connector, name, $3, $4 FROM connections WHERE tenant_id = $1 AND id = $2`, tenant, conn, client, account)
+	return err
+}

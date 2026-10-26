@@ -216,26 +216,12 @@ func (h *Handler) routeEvent(ctx context.Context, w http.ResponseWriter, r *http
 			continue
 		}
 		// The sub-tenant's own gate, as at its own URL.
-		g, err := h.gate(ctx, *t.sub)
-		switch {
-		case errors.Is(err, errBusy):
-			w.Header().Set("Retry-After", "1")
-			replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
-			return 0, false
-		case err != nil:
-			h.unavailable(w, r, err)
-			return 0, false
-		case g.hard == nil:
-			continue // deleted since it was routed
-		case g.suspended:
-			h.suspended(w, r, *t.sub)
+		throttled, exists, ok := h.admit(ctx, w, r, *t.sub)
+		if !ok {
 			return 0, false
 		}
-		if !g.hard.Allow() {
-			h.Store.LimitHit(ctx, *t.sub, "ingest_ceiling")
-			w.Header().Set("Retry-After", "1")
-			reply(w, http.StatusTooManyRequests, map[string]string{"error": "ingest rate exceeded", "code": "rate_limited"})
-			return 0, false
+		if !exists {
+			continue // deleted since it was routed
 		}
 		var subs []subscriber
 		if err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{*t.sub}, func(tx pgx.Tx) error {
@@ -250,12 +236,43 @@ func (h *Handler) routeEvent(ctx context.Context, w http.ResponseWriter, r *http
 		if t.connection != nil {
 			conn = *t.connection
 		}
-		if _, ok := h.deliverInto(ctx, w, r, target{tenant: *t.sub, connection: conn, throttled: !g.soft.Allow(), subs: subs}, ev); !ok {
+		if _, ok := h.deliverInto(ctx, w, r, target{tenant: *t.sub, connection: conn, throttled: throttled, subs: subs}, ev); !ok {
 			return 0, false
 		}
 		n++
 	}
 	return n, true
+}
+
+// admit applies a tenant's own ingest gate to an event delivered into it
+// from elsewhere (a partner's subscription, Taskiem's platform app), as
+// at its own URL: its ceiling (429), its suspension (423) and its soft
+// rate (throttled: the runs it starts wait as queued). exists is false for
+// a tenant that no longer exists; ok false means the delivery has been
+// answered with an error.
+func (h *Handler) admit(ctx context.Context, w http.ResponseWriter, r *http.Request, tenant uuid.UUID) (throttled, exists, ok bool) {
+	g, err := h.gate(ctx, tenant)
+	switch {
+	case errors.Is(err, errBusy):
+		w.Header().Set("Retry-After", "1")
+		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
+		return false, false, false
+	case err != nil:
+		h.unavailable(w, r, err)
+		return false, false, false
+	case g.hard == nil:
+		return false, false, true
+	case g.suspended:
+		h.suspended(w, r, tenant)
+		return false, false, false
+	}
+	if !g.hard.Allow() {
+		h.Store.LimitHit(ctx, tenant, "ingest_ceiling")
+		w.Header().Set("Retry-After", "1")
+		reply(w, http.StatusTooManyRequests, map[string]string{"error": "ingest rate exceeded", "code": "rate_limited"})
+		return false, false, false
+	}
+	return !g.soft.Allow(), true, true
 }
 
 // deliverNormalised delivers the rail's normalised event for a delivery

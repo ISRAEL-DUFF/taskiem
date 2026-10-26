@@ -104,6 +104,15 @@
         "type": "string"
       }
     },
+    "connection_hosts": {
+      "description": "The hosts a connection's fields may name (rule 19), where the provider keeps each account in one place (Zoho's data centres): exact hosts, or *.<domain> for its subdomains. A ${connection.<field>} egress host or OAuth URL naming any other is refused. Required for OAuth URLs that start with ${connection.<field>}.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(\\*\\.)?[a-z0-9.-]+$"
+      }
+    },
     "actions": {
       "type": "object",
       "minProperties": 1,
@@ -516,11 +525,11 @@
             },
             "token_url": {
               "type": "string",
-              "pattern": "^(https://|\\$\\{server\\}/)"
+              "pattern": "^(https://|\\$\\{server\\}/|\\$\\{connection\\.[a-z][a-z0-9_]*\\}/)"
             },
             "revoke_url": {
               "type": "string",
-              "pattern": "^(https://|\\$\\{server\\}/)"
+              "pattern": "^(https://|\\$\\{server\\}/|\\$\\{connection\\.[a-z][a-z0-9_]*\\}/)"
             },
             "scopes": {
               "type": "array",
@@ -552,6 +561,25 @@
                   "id",
                   "secret"
                 ]
+              }
+            },
+            "client": {
+              "$ref": "#/$defs/name",
+              "description": "The platform app Taskiem registered with the provider (rule 18; decision 0051): TASKIEM_OAUTH_<CLIENT>_* in the environment. Several connectors may share one (zoho for Books, Mail and CRM). Default: the connector's id."
+            },
+            "account_field": {
+              "$ref": "#/$defs/name",
+              "description": "The auth field holding the provider account a connection is for (Slack's team id, a QuickBooks realm id): events Taskiem's app receives for that account are delivered to the connections that hold it (triggers with delivery: app)."
+            },
+            "fields_from_callback": {
+              "description": "Auth fields filled from the query parameters the provider sends the browser back with (QuickBooks' realmId; Zoho's location and accounts-server).",
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
               }
             },
             "fields_from_token": {
@@ -944,7 +972,7 @@
         "handshake": {
           "type": "object",
           "additionalProperties": false,
-          "description": "How the provider proves the endpoint before (or while) delivering. GET: the provider sends token_query equal to the connection's secret_field and expects respond back as text (Meta). POST: a verified delivery for which when holds is answered with respond, not delivered (Slack url_verification).",
+          "description": "How the provider proves the endpoint before (or while) delivering. GET: the provider sends token_query equal to the connection's secret_field (for delivery: app, the app's verify token) and expects respond back as text (Meta). POST: a verified delivery for which when holds is answered with respond, not delivered (Slack url_verification).",
           "properties": {
             "method": {
               "enum": [
@@ -980,8 +1008,7 @@
               },
               "then": {
                 "required": [
-                  "token_query",
-                  "secret_field"
+                  "token_query"
                 ]
               }
             },
@@ -1019,6 +1046,21 @@
         },
         "correlation": {
           "$ref": "#/$defs/expr"
+        },
+        "delivery": {
+          "enum": [
+            "connection",
+            "app"
+          ],
+          "description": "connection (default): deliveries come to each connection's own URL under a tenant's hooks. app: the provider sends every business's events to the one URL of Taskiem's platform app, /hooks/apps/<connector>/<trigger>; they are verified with the app's secret (TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET) and delivered to the connections whose account_field holds account_key (rule 18)."
+        },
+        "account_key": {
+          "$ref": "#/$defs/expr",
+          "description": "delivery app: the provider account an event is for (=body.team_id; =item.realmId with split)."
+        },
+        "revokes": {
+          "$ref": "#/$defs/expr",
+          "description": "delivery app: true for an event saying the business took Taskiem's app away (Slack's app_uninstalled): the account's connections are marked expired, and the event is delivered."
         },
         "registration": {
           "enum": [

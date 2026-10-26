@@ -70,10 +70,10 @@ func (s *Server) oauthFor(c *connector.Connector) (oauthProvider, error) {
 	if o == nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s does not connect by OAuth; add a connection with its credentials", errBadRequest, c.Manifest.Name)
 	}
-	client, ok := s.OAuthClients[c.Manifest.ID]
+	client, ok := s.OAuthClients[c.Manifest.ClientName()]
 	if !ok || client.ID == "" {
 		return oauthProvider{}, fmt.Errorf("%w: Taskiem is not registered as an OAuth client with %s on this platform (TASKIEM_OAUTH_%s_CLIENT_ID); add a connection with its credentials instead",
-			errOAuthUnavailable, c.Manifest.Name, strings.ToUpper(c.Manifest.ID))
+			errOAuthUnavailable, c.Manifest.Name, strings.ToUpper(c.Manifest.ClientName()))
 	}
 	if s.PublicURL == "" {
 		return oauthProvider{}, fmt.Errorf("%w: connecting by OAuth needs TASKIEM_PUBLIC_URL, which is not set", errOAuthUnavailable)
@@ -83,6 +83,20 @@ func (s *Server) oauthFor(c *connector.Connector) (oauthProvider, error) {
 		return oauthProvider{}, fmt.Errorf("%w: %s cannot be linked on this platform: %w", errOAuthUnavailable, c.Manifest.Name, err)
 	}
 	return oauthProvider{authorize: authorize, token: token, revoke: revoke, server: strings.TrimRight(c.Manifest.BaseURL, "/"), client: client}, nil
+}
+
+// forAccount resolves the endpoints that live where the account does
+// (Zoho's accounts server, named on the callback and kept on the
+// connection: connector/v1 rule 19) from the connection's fields.
+func (p oauthProvider) forAccount(m *connector.Manifest, fields map[string]string) (oauthProvider, error) {
+	var err error
+	if p.token, err = m.OAuthURL(p.token, fields); err != nil {
+		return p, err
+	}
+	if p.revoke != "" {
+		p.revoke, err = m.OAuthURL(p.revoke, fields)
+	}
+	return p, err
 }
 
 // oauthLinkable is listConnectors' answer to whether a connector can be
@@ -243,6 +257,12 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", err)
 		return
 	}
+	fromCallback := map[string]string{}
+	applyCallbackFields(c.Manifest, fromCallback, q)
+	if prov, err = prov.forAccount(c.Manifest, fromCallback); err != nil {
+		s.oauthDone(w, r, "", fmt.Errorf("%w: %s sent the browser back naming a server Taskiem does not use: %w", errOAuthProvider, c.Manifest.Name, err))
+		return
+	}
 	var verifier string
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error {
 		verifier, err = s.Vault.OAuthVerifierTx(ctx, tx, req)
@@ -260,6 +280,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	token := asString(answer["access_token"])
 	creds, expiresAt, err := oauthCredentials(c.Manifest, answer, prov.server)
 	applyPlatformClient(c.Manifest, creds, prov.client)
+	applyCallbackFields(c.Manifest, creds, q)
 	if err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
 		s.oauthDone(w, r, "", err)
@@ -275,6 +296,13 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		var err error
 		if id, err = s.Vault.CreateOAuthConnectionTx(ctx, tx, req.Tenant, req.Environment, c.Manifest.ID, req.Name, creds, expiresAt, req.Person); err != nil {
 			return err
+		}
+		// Made through Taskiem's app: its events for this account come here
+		// (decision 0051).
+		if f := c.Manifest.Auth.OAuth2.AccountField; f != "" {
+			if err := secrets.SetAppAccountTx(ctx, tx, req.Tenant, id, c.Manifest.ClientName(), creds[f]); err != nil {
+				return err
+			}
 		}
 		return secrets.SetRouteKeysTx(ctx, tx, req.Tenant, id, c.Manifest.RouteKeys(creds))
 	})
@@ -439,6 +467,19 @@ func applyPlatformClient(m *connector.Manifest, creds map[string]string, client 
 			creds[field] = client.ID
 		case "secret":
 			creds[field] = client.Secret
+		}
+	}
+}
+
+// applyCallbackFields fills the fields a provider names in the query it
+// sends the browser back with (QuickBooks' realmId, Zoho's location).
+func applyCallbackFields(m *connector.Manifest, creds map[string]string, q url.Values) {
+	if creds == nil || m.Auth.OAuth2 == nil {
+		return
+	}
+	for field, param := range m.Auth.OAuth2.FieldsFromCallback {
+		if v := strings.TrimSpace(q.Get(param)); v != "" {
+			creds[field] = v
 		}
 	}
 }
@@ -657,8 +698,10 @@ func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
 					if err != nil {
 						return err
 					}
-					tenant := p.TenantID
-					revoke = func() { s.oauthRevoke(context.WithoutCancel(ctx), tenant, c, prov, oauthToken(c, creds)) }
+					if prov, err := prov.forAccount(c.Manifest, creds); err == nil {
+						tenant := p.TenantID
+						revoke = func() { s.oauthRevoke(context.WithoutCancel(ctx), tenant, c, prov, oauthToken(c, creds)) }
+					}
 				}
 			}
 		}

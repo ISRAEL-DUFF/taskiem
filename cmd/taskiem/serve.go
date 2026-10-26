@@ -723,7 +723,28 @@ func modeURLs(m *connector.Manifest) []string {
 
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
-		Egress: &egress.Guard{Logger: e.log}}
+		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry)}
+}
+
+// platformApps reads the secrets of Taskiem's platform apps whose
+// connectors have app-delivered triggers (decision 0051):
+// TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET, the secret the provider signs
+// with, and _VERIFY_TOKEN for an endpoint check (Meta's). An app without
+// a webhook secret takes no deliveries: its URL answers 404.
+func platformApps(reg *connector.Registry) map[string]ingest.App {
+	out := map[string]ingest.App{}
+	for _, c := range reg.List() {
+		for _, t := range c.Manifest.Triggers {
+			if t.Delivery != "app" {
+				continue
+			}
+			key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ClientName())
+			if s := strings.TrimSpace(os.Getenv(key + "_WEBHOOK_SECRET")); s != "" {
+				out[c.Manifest.ClientName()] = ingest.App{WebhookSecret: s, VerifyToken: strings.TrimSpace(os.Getenv(key + "_VERIFY_TOKEN"))}
+			}
+		}
+	}
+	return out
 }
 
 // remote keeps providers' subscriptions for remotely registered triggers
@@ -1280,7 +1301,10 @@ func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAu
 		if c.Manifest.Auth.OAuth2 == nil {
 			continue
 		}
-		key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ID)
+		if _, done := out[c.Manifest.ClientName()]; done {
+			continue // one app serving several connectors (decision 0051)
+		}
+		key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ClientName())
 		id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
 		switch {
 		case id == "" && secret == "":
@@ -1288,7 +1312,7 @@ func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAu
 		case id == "" || secret == "":
 			return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
 		default:
-			out[c.Manifest.ID] = api.OAuthClient{ID: id, Secret: secret}
+			out[c.Manifest.ClientName()] = api.OAuthClient{ID: id, Secret: secret}
 		}
 	}
 	return out, nil

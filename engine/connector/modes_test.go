@@ -80,3 +80,58 @@ func TestHostModesRules(t *testing.T) {
 		}
 	}
 }
+
+const zohoLike = `manifest: connector/v1
+id: books
+version: 1.0.0
+name: Books
+category: productivity
+auth:
+  type: oauth2
+  fields:
+    - { key: access_token, label: Access token, secret: true }
+    - { key: accounts_server, label: Accounts server }
+    - { key: api_domain, label: API domain }
+  oauth2:
+    authorize_url: https://accounts.books.example/oauth/v2/auth
+    token_url: "${connection.accounts_server}/oauth/v2/token"
+    scopes: [books]
+    pkce: true
+    fields_from_callback: { accounts_server: accounts-server }
+    fields_from_token: { access_token: access_token, api_domain: api_domain }
+connection_hosts: ["*.books.example", "*.books.eu"]
+egress_hosts: ["${connection.api_domain}", "${connection.accounts_server}"]
+base_url: https://www.books.example
+actions:
+  ping: { title: Ping, class: read, input: { type: object } }
+`
+
+func TestConnectionHosts(t *testing.T) {
+	m, probs := Parse([]byte(zohoLike))
+	if len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	for host, ok := range map[string]bool{"accounts.books.eu": true, "www.books.example": true, "books.example": false, "evilbooks.example": false, "books.example.evil.net": false} {
+		if m.ConnectionHostAllowed(host) != ok {
+			t.Errorf("%s: allowed %v", host, !ok)
+		}
+	}
+	if u, err := m.OAuthURL(m.Auth.OAuth2.TokenURL, map[string]string{"accounts_server": "https://accounts.books.eu"}); err != nil || u != "https://accounts.books.eu/oauth/v2/token" {
+		t.Errorf("the account's token URL: %q %v", u, err)
+	}
+	for _, bad := range []string{"https://accounts.evil.example", "http://accounts.books.eu", "https://accounts.books.eu/steal?x=", "", "accounts.books.eu"} {
+		if _, err := m.OAuthURL(m.Auth.OAuth2.TokenURL, map[string]string{"accounts_server": bad}); err == nil {
+			t.Errorf("%q accepted as the accounts server", bad)
+		}
+	}
+	// The egress allow-list takes a connection's hosts only where allowed.
+	got := m.HostsFor(map[string]string{"api_domain": "https://www.books.eu", "accounts_server": "https://accounts.evil.example"})
+	if !slices.Equal(got, []string{"www.books.eu"}) {
+		t.Errorf("hosts for the connection: %v", got)
+	}
+	// A server from a connection field needs the list of the provider's.
+	src := strings.Replace(zohoLike, `connection_hosts: ["*.books.example", "*.books.eu"]`+"\n", "", 1)
+	if _, probs := Parse([]byte(src)); !strings.Contains(strings.Join(probs, ";"), "connection_hosts must list") {
+		t.Errorf("no connection_hosts: %v", probs)
+	}
+}

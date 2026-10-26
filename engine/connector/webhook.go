@@ -63,6 +63,14 @@ type TriggerSpec struct {
 	// dashboard the business pastes it.
 	Title string `json:"title,omitempty"`
 	Where string `json:"where,omitempty"`
+	// Delivery app: the provider sends every business's events to the one
+	// URL of Taskiem's platform app (rule 18; decision 0051); AccountKey
+	// says which account each is for, and the connections holding it get
+	// it. Revokes marks an event that takes the app away (Slack's
+	// app_uninstalled): those connections are marked expired.
+	Delivery   string `json:"delivery,omitempty"`
+	AccountKey string `json:"account_key,omitempty"`
+	Revokes    string `json:"revokes,omitempty"`
 }
 
 // PollSpec is how a webhook trigger's events are also polled: Action, a
