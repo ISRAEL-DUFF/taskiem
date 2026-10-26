@@ -40,3 +40,30 @@ for (const scheme of ["light", "dark"] as const) {
     expect(vs, describe("/connections", vs)).toEqual([]);
   });
 }
+
+// iswallet's live and test are separate hosts (connector/v1 rule 17): its
+// form asks which, as Paystack's does, and a test connection says so in
+// the list. The e2e server sets iswallet's live address (a fake), so both
+// are offered.
+test("iswallet asks live or test, and a test connection says no real money", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/connections");
+  await page.getByRole("button", { name: "New connection" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Service" }).selectOption({ label: "iswallet" });
+  const kind = dialog.getByRole("group", { name: "Which kind?" });
+  await expect(kind.getByRole("radio", { name: "Live (real money)" })).toBeChecked();
+  await expect(kind.getByRole("radio", { name: "Test (practice)" })).toBeEnabled();
+  const vs = await axe(page);
+  expect(vs, describe("iswallet's connection form", vs)).toEqual([]);
+  await page.keyboard.press("Escape");
+
+  const r = await page.request.post("/v1/connections", {
+    data: { environment: "prod", connector: "iswallet@1", name: "practice_e2e", mode: "test", credentials: { api_key: "isw_e2e_never_shown" } },
+    headers: { "X-Taskiem-Request": "1" },
+  });
+  expect(r.ok() || r.status() === 409, `add connection: ${r.status()} ${await r.text()}`).toBeTruthy();
+  await page.reload();
+  const row = page.getByTestId("connection").filter({ hasText: "practice_e2e" });
+  await expect(row.getByText("Test: no real money")).toBeVisible();
+});

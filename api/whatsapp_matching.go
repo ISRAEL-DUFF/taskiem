@@ -253,10 +253,10 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 			number, due = x.Number, x.DueKobo
 			// More than is due: offered split across the customer's open
 			// invoices, oldest first.
-			if split, err = s.matcher().Propose(ctx, tx, tenant, id); err != nil {
+			if split, err = s.matcher().Propose(ctx, tx, tenant, id, false); err != nil {
 				return err
 			}
-			if len(split.Parts) > 0 {
+			if split.Over {
 				ask = "wa.match.ask_split"
 			}
 		}
@@ -280,7 +280,7 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 	yes := matchButton{Action: matchYes, Tenant: tenant, Suggestion: id, User: user}
 	no := yes
 	no.Action = matchNo
-	if len(split.Parts) > 0 {
+	if split.Over {
 		yes.Action = matchSplit
 	}
 	buttons := []whatsapp.Button{{ID: signMatchButton(key, yes), Title: tr(l, "button.match_yes")}, {ID: signMatchButton(key, no), Title: tr(l, "button.match_no")}}
@@ -292,7 +292,9 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 func proposedParts(l lang.Tag, p matching.Proposal) string {
 	list := make([]string, 0, len(p.Parts)+1)
 	for _, x := range p.Parts {
-		list = append(list, x.Number+" "+invoicing.Naira(x.AmountKobo))
+		if x.AmountKobo > 0 {
+			list = append(list, x.Number+" "+invoicing.Naira(x.AmountKobo))
+		}
 	}
 	if p.CreditKobo > 0 {
 		list = append(list, tr(l, "wa.match.split_credit", "credit", invoicing.Naira(p.CreditKobo)))

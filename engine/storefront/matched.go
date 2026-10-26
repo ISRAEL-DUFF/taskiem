@@ -32,6 +32,10 @@ type PaymentIn struct {
 	How        string // exact, suggested, suggested_auto or manual
 	By         string
 	Reasons    []string
+	// Add is a further part of the entry towards an order it already
+	// counts towards (moneylog.Counting.Add): the order's own rule then
+	// decides (one payment, so it is refused while that one stands).
+	Add bool
 }
 
 // Counted is what counting a payment towards an order did. Pass it to
@@ -84,7 +88,8 @@ const matchableSQL = `paid_at IS NULL AND kind IN ('order', 'booking') AND COALE
 // yet: an order paid at once (or not yet accepted) is received and its run
 // starts; one accepted is paid and its waiting run is woken. A payment
 // with a money log entry is a part of it, counted along the path invoices
-// take too (moneylog.Parts.Count). The same entry again is a no-op.
+// take too (moneylog.Parts.Count). The same entry again is a no-op
+// (unless Add, when the order's one-payment rule refuses it).
 // Refused (ErrDecision) for an entry counted elsewhere, an order paid by
 // another payment, cancelled, expired or decided against, or less money
 // than is due.
@@ -98,7 +103,7 @@ func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		return Counted{}, fmt.Errorf("%w: a payment needs an amount", ErrInvalid)
 	}
 	var c Counted
-	k, err := moneylog.OrderParts.Count(ctx, tx, moneylog.Counting{Tenant: tenant, Entry: p.EntryID, AmountKobo: p.AmountKobo, How: p.How, By: p.By, Reasons: p.Reasons,
+	k, err := moneylog.OrderParts.Count(ctx, tx, moneylog.Counting{Tenant: tenant, Entry: p.EntryID, AmountKobo: p.AmountKobo, How: p.How, By: p.By, Reasons: p.Reasons, Add: p.Add,
 		Open: func() (uuid.UUID, error) {
 			ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
 			c.Order = ord
@@ -131,6 +136,14 @@ func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *C
 			return nil, err
 		}
 		if paidBy {
+			var same bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
+				AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id))`, ord.ID, *p.EntryID).Scan(&same); err != nil {
+				return nil, err
+			}
+			if same {
+				return nil, fmt.Errorf("%w: %s is already paid by this payment; an order takes one payment", ErrDecision, ord.Reference)
+			}
 			return nil, fmt.Errorf("%w: %s is already paid by another payment", ErrDecision, ord.Reference)
 		}
 	}

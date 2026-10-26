@@ -471,6 +471,34 @@
             }
           }
         },
+        "modes": {
+          "description": "Live and test as separate hosts (rule 17): the person chooses one when connecting, the connection keeps it, and its calls go to that mode's base_url. For providers whose keys say the mode, use prefixes instead.",
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mode",
+              "label"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "base_url": {
+                "type": "string",
+                "pattern": "^https://",
+                "description": "The mode's host; left out when only the deployment knows it (a production address issued at go-live), so the mode is offered only once it is set."
+              }
+            }
+          }
+        },
         "oauth2": {
           "description": "How a connection is made by OAuth 2.0 authorization code grant with PKCE (docs/connector-sdk.md). A URL may start with ${server}/ to be resolved from the connector's base_url at runtime.",
           "type": "object",

@@ -21,13 +21,14 @@ import (
 
 // Storefront orders over the matching API: suggested with the customer
 // masked (revealed with pii.reveal), confirmed, listed on the order,
-// undone, offered to match by hand, and matched by hand.
+// undone, offered to match by hand, and matched by hand; the payer is
+// remembered for the order's customer and forgotten.
 func TestMatchingOrdersAPI(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
 	viewer := addMember(t, w, owner, "vic", "viewer")
-	log, tenant, ref := orderToMatch(t, w, owner)
+	log, tenant, ref, another := orderToMatch(t, w, owner)
 
 	m := &matching.Matcher{Invoices: w.srv.Invoices, Orders: w.srv.Orders, PII: w.env.Vault}
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
@@ -82,12 +83,49 @@ func TestMatchingOrdersAPI(t *testing.T) {
 	if l := owner.must(200, "GET", "/v1/money/unmatched", nil); len(l["payments"].([]any)) != 0 || len(l["orders"].([]any)) != 0 {
 		t.Errorf("left %v", l)
 	}
+
+	// The payer is remembered for the order's customer: their next
+	// payment suggests the customer's next order first, and can be
+	// forgotten.
+	var payer, customer string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id::text, customer_id FROM money_payers WHERE tenant_id = $1 AND kind = 'name'`, tenant).Scan(&payer, &customer); err != nil {
+		t.Fatalf("remembered: %v", err)
+	}
+	var subject string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT subject_id FROM storefront_orders WHERE tenant_id = $1 AND reference = $2`, tenant, ref).Scan(&subject); err != nil || subject != customer {
+		t.Errorf("remembered for %q, want the order's customer %q (%v)", customer, subject, err)
+	}
+	next := another("Bola Ade", "+2348031234567", 500000)
+	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
+		map[string]any{"reference": "TRF-AGAIN", "amount_kobo": int64(500000), "payer_name": "ADE BOLA"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	list = viewer.must(200, "GET", "/v1/money/suggestions", nil)["suggestions"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("suggestions %v", list)
+	}
+	s = list[0].(map[string]any)
+	reasons := s["reasons"].([]any)
+	var remembered bool
+	for _, r := range reasons {
+		remembered = remembered || r == "this payer paid for this customer before"
+	}
+	if s["number"] != next || !remembered || s["score"].(float64) < 85 {
+		t.Fatalf("the next order %v", s)
+	}
+	viewer.must(403, "DELETE", "/v1/money/payers/"+payer, nil)
+	owner.must(200, "DELETE", "/v1/money/payers/"+payer, nil)
+	owner.must(404, "DELETE", "/v1/money/payers/"+payer, nil)
 }
 
 // orderToMatch gives the owner's business invoices, a storefront whose
 // orders are taken without online payment, and one order of ₦3,000 from
-// Bola Ade; it returns the money log, the business and the order.
-func orderToMatch(t *testing.T, w *world, owner *client) (*moneylog.Log, uuid.UUID, string) {
+// Bola Ade; it returns the money log, the business, the order, and a way
+// to place another order (its reference).
+func orderToMatch(t *testing.T, w *world, owner *client) (*moneylog.Log, uuid.UUID, string, func(name, phone string, kobo int64) string) {
 	t.Helper()
 	ctx := context.Background()
 	w.srv.PublicHosts = []string{"shops.taskiem.test"}
@@ -113,20 +151,26 @@ func orderToMatch(t *testing.T, w *world, owner *client) (*moneylog.Log, uuid.UU
 	sfID := uuid.MustParse(pub["id"].(string))
 	tenant := tenantIDNamed(t, w, "Ada's Kitchen")
 
-	ref := storefront.NewReference("ada-kitchen")
-	_, hash := storefront.NewStatusKey()
-	ct, _ := storefront.SealSubmission(key, sfID, ref, storefront.Submission{Kind: "order", Payment: "none", Channel: "direct", Submitted: time.Now(),
-		Customer: storefront.Customer{Name: "Bola Ade", Phone: "+2348031234567"}, TotalKobo: 300000, Fulfilment: "pickup",
-		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: 150000, LineKobo: 300000}}})
-	var got *string
-	if err := w.env.DB.PublicPool(t, 1).QueryRow(ctx, `SELECT taskiem_public_submit($1, 'order', $2, $3, $4, $5)`,
-		sfID, ref, bytes.Repeat([]byte{7}, 32), hash, ct).Scan(&got); err != nil || got == nil {
-		t.Fatalf("submit: %v %v", got, err)
+	var n byte = 7
+	another := func(name, phone string, kobo int64) string {
+		t.Helper()
+		ref := storefront.NewReference("ada-kitchen")
+		_, hash := storefront.NewStatusKey()
+		ct, _ := storefront.SealSubmission(key, sfID, ref, storefront.Submission{Kind: "order", Payment: "none", Channel: "direct", Submitted: time.Now(),
+			Customer: storefront.Customer{Name: name, Phone: phone}, TotalKobo: kobo, Fulfilment: "pickup",
+			Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 1, PriceKobo: kobo, LineKobo: kobo}}})
+		var got *string
+		if err := w.env.DB.PublicPool(t, 1).QueryRow(ctx, `SELECT taskiem_public_submit($1, 'order', $2, $3, $4, $5)`,
+			sfID, ref, bytes.Repeat([]byte{n}, 32), hash, ct).Scan(&got); err != nil || got == nil {
+			t.Fatalf("submit: %v %v", got, err)
+		}
+		n++
+		if err := w.srv.Orders.Drain(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return ref
 	}
-	if err := w.srv.Orders.Drain(ctx); err != nil {
-		t.Fatal(err)
-	}
-	return log, tenant, ref
+	return log, tenant, another("Bola Ade", "+2348031234567", 300000), another
 }
 
 // In chat, an order suggestion is worded as an order, and Yes, match
@@ -138,7 +182,7 @@ func TestWhatsAppMatchingOrder(t *testing.T) {
 	const on = "+2348010000051"
 	w.bind(t, owner, on)
 	w.say(t, on, "help")
-	log, tenant, ref := orderToMatch(t, w.world, owner)
+	log, tenant, ref, _ := orderToMatch(t, w.world, owner)
 	m := &matching.Matcher{Invoices: w.srv.Invoices, Orders: w.srv.Orders, PII: w.env.Vault, Suggested: w.srv.MatchSuggested}
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
 		map[string]any{"reference": "TRF " + ref, "amount_kobo": int64(300000)}); err != nil {

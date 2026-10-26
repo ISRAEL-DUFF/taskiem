@@ -220,7 +220,7 @@ cmd_setup() {
 
   # ALERT_EMAIL and ALERT_WEBHOOK are read indirectly (${!f}) when saved below.
   # shellcheck disable=SC2034
-  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN
+  local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN ISWALLET_URL PAYROLLA_URL
   echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
   ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
@@ -234,6 +234,15 @@ cmd_setup() {
     TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME#@}
     [ -n "$TELEGRAM_BOT_USERNAME" ] || die "the bot's username is required with its token"
   fi
+  # Provider endpoints (docs/operations.md): the live addresses. iswallet
+  # and Payrolla connections are live or test, chosen when made; test goes
+  # to each provider's sandbox.
+  ask ISWALLET_URL "iswallet API URL (empty: iswallet's production API)" "$(env_get "$KIT/taskiem.env" TASKIEM_ISWALLET_URL)"
+  ask PAYROLLA_URL "Payrolla API URL (empty: Payrolla's production API)" "$(env_get "$KIT/taskiem.env" TASKIEM_PAYROLLA_URL)"
+  local u
+  for u in "$ISWALLET_URL" "$PAYROLLA_URL"; do
+    [ -z "$u" ] || [[ $u =~ ^https://[^[:space:]]+$ ]] || die "provider URLs must start with https:// ($u)"
+  done
   # Storefronts and hosted forms (Phase 5): off until they ship.
   ask PUBLIC "Public pages for storefronts and forms (yes or no)" "$(conf PUBLIC || true)"
   PUBLIC=${PUBLIC:-no}
@@ -323,6 +332,8 @@ cmd_setup() {
   env_set "$t" TASKIEM_SMTP_URL "$SMTP_URL"
   env_set "$t" TASKIEM_ALERT_FROM "$MAIL_FROM"
   env_set "$t" TASKIEM_ALLOW_SIGNUP false
+  env_set "$t" TASKIEM_ISWALLET_URL "$ISWALLET_URL"
+  env_set "$t" TASKIEM_PAYROLLA_URL "$PAYROLLA_URL"
   # Telegram (docs/telegram.md): Taskiem registers its webhook at start.
   env_set "$t" TASKIEM_TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN"
   env_set "$t" TASKIEM_TELEGRAM_BOT_USERNAME "${TELEGRAM_BOT_USERNAME:-}"

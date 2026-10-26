@@ -959,28 +959,10 @@ func (s *Schools) issue(ctx context.Context, tenant uuid.UUID, r invoicing.Rail,
 	case skipped != "":
 		return StudentAccount{}, fmt.Errorf("%w: %s", errIssue, skipped) // recorded on the row
 	}
-	customer := map[string]any{"name": t.student.Name}
-	if t.email != "" {
-		customer["email"] = t.email
-	}
-	if t.phone != "" {
-		customer["phone"] = t.phone
-	}
-	if o.bvn != "" {
-		customer["bvn"] = o.bvn
-	}
-	if o.nin != "" {
-		customer["nin"] = o.nin
-	}
-	in := map[string]any{"customer": customer}
+	// The one path every customer's account number is issued on.
 	nameAsked := r.Takes("virtual_account", "account_name")
-	if nameAsked {
-		in["account_name"] = asked
-	}
-	if account != "" && r.Takes("virtual_account", "account") {
-		in["account"] = account
-	}
-	out, callErr := s.Rails.Call(ctx, tenant, r, "virtual_account", in, AccountKey(tenant, student, channel))
+	issued, callErr := invoicing.IssueOnRail(ctx, s.Rails, tenant, r, invoicing.IssueIn{Customer: invoicing.Customer{Name: t.student.Name, Email: t.email, Phone: t.phone},
+		AccountName: asked, Account: account, BVN: o.bvn, NIN: o.nin}, AccountKey(tenant, student, channel))
 	var result StudentAccount
 	err = s.In(ctx, tenant, func(tx pgx.Tx) error {
 		if callErr != nil {
@@ -997,9 +979,8 @@ func (s *Schools) issue(ctx context.Context, tenant uuid.UUID, r invoicing.Rail,
 			}
 			return setAccountRow(ctx, tx, tenant, student, channel, state, railReason(callErr), retry, o.job, o.by)
 		}
-		str := func(k string) string { v, _ := out[k].(string); return strings.TrimSpace(v) }
 		reg, err := s.Invoices.RegisterAccount(ctx, tx, tenant, invoicing.AccountIn{Customer: invoicing.Customer{Name: t.student.Name, Key: StudentKey(student)},
-			Channel: channel, AccountNumber: str("account_number"), Reference: str("reference"), BankName: str("bank_name")}, o.by)
+			Channel: channel, AccountNumber: issued.AccountNumber, Reference: issued.Reference, BankName: issued.BankName}, o.by)
 		if err != nil {
 			if errors.Is(err, invoicing.ErrInvalid) || errors.Is(err, invoicing.ErrState) {
 				callErr = err
@@ -1007,7 +988,7 @@ func (s *Schools) issue(ctx context.Context, tenant uuid.UUID, r invoicing.Rail,
 			}
 			return err
 		}
-		d := accountSealed{Named: str("account_name")}
+		d := accountSealed{Named: issued.AccountName}
 		if nameAsked {
 			d.Asked = asked
 		}

@@ -656,25 +656,50 @@ func capabilityNeeds(ctx context.Context, tx pgx.Tx, l lang.Tag, env string, ste
 	}
 	resolve := expansion.ResolverFor(conns, reg)
 	for _, st := range steps {
-		if _, err := resolve(st.Connection, st.Uses); err != nil {
-			uses := st.Uses
-			problem, msg := "cannot", err.Error()
-			switch {
-			case errors.Is(err, expansion.ErrNoConnection):
-				problem = "missing"
-				msg = tr(l, "ready.connection_missing", "service", railService(uses))
-			case strings.HasPrefix(msg, "several connections"):
-				problem = "ambiguous"
+		rail, err := resolve(st.Connection, st.Uses)
+		if err == nil {
+			// Paystack's Pay with Transfer is turned on per business by its
+			// support: worth saying until a transfer has been collected.
+			if st.Uses == "collect_transfer" && strings.HasPrefix(rail.Ref, "paystack@") {
+				seen, err := transfersSeen(ctx, tx, "paystack", rail.Connection)
+				if err != nil {
+					return err
+				}
+				if !seen {
+					add(readyKey{"connection", rail.Connection, "paystack", env},
+						readyNeed{Service: rail.Name, Problem: "support", Message: tr(l, "ready.paystack_transfer"), Capability: st.Uses}, st)
+				}
 			}
-			msg = strings.TrimPrefix(msg, expansion.ErrNoConnection.Error()+": ")
-			if msg != "" {
-				msg = strings.ToUpper(msg[:1]) + msg[1:]
-			}
-			add(readyKey{"connection", st.Connection, "capability:" + uses, env},
-				readyNeed{Service: railService(uses), Problem: problem, Blocking: true, Message: msg, Capability: uses, Rails: railsFor(reg, uses)}, st)
+			continue
 		}
+		uses := st.Uses
+		problem, msg := "cannot", err.Error()
+		switch {
+		case errors.Is(err, expansion.ErrNoConnection):
+			problem = "missing"
+			msg = tr(l, "ready.connection_missing", "service", railService(uses))
+		case strings.HasPrefix(msg, "several connections"):
+			problem = "ambiguous"
+		}
+		msg = strings.TrimPrefix(msg, expansion.ErrNoConnection.Error()+": ")
+		if msg != "" {
+			msg = strings.ToUpper(msg[:1]) + msg[1:]
+		}
+		add(readyKey{"connection", st.Connection, "capability:" + uses, env},
+			readyNeed{Service: railService(uses), Problem: problem, Blocking: true, Message: msg, Capability: uses, Rails: railsFor(reg, uses)}, st)
 	}
 	return nil
+}
+
+// transfersSeen reports whether a connection has collected a payment by
+// transfer: a one-time account it opened for an invoice (status open or
+// later), the sign that the rail has turned the feature on for the
+// business.
+func transfersSeen(ctx context.Context, tx pgx.Tx, connector, name string) (bool, error) {
+	var seen bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_accounts WHERE connector = $1 AND connection = $2 AND kind = 'transfer' AND status IN ('open', 'paid', 'returned'))`,
+		connector, name).Scan(&seen)
+	return seen, err
 }
 
 // eventNeeds finds what a capability_event trigger needs in env: for each

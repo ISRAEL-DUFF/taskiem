@@ -81,11 +81,32 @@ describe("guided keys", () => {
   it("offers live and test as choices, and keeps optional fields aside", () => {
     const c = { auth: { type: "api_key", fields: [secretKey, { key: "hash", label: "Hash", required: false }] } } as unknown as ConnectorInfo;
     expect(modesOf(c)).toEqual([
-      { mode: "live", label: "Live (real money)" },
-      { mode: "test", label: "Test (practice)" },
+      { mode: "live", label: "Live (real money)", available: true },
+      { mode: "test", label: "Test (practice)", available: true },
     ]);
     expect(splitFields(c).main.map((f) => f.key)).toEqual(["secret_key"]);
     expect(splitFields(c).more.map((f) => f.key)).toEqual(["hash"]);
+  });
+
+  it("offers host modes, the ones without an address here as not set up", () => {
+    const iswallet: ConnectorInfo = {
+      ...xenibase,
+      ref: "iswallet@1",
+      id: "iswallet",
+      name: "iswallet",
+      auth: {
+        type: "api_key",
+        fields: [{ key: "api_key", label: "API key", secret: true }],
+        modes: [
+          { mode: "live", label: "Live (real money)" },
+          { mode: "test", label: "Test (practice)", base_url: "https://synledger.name.ng/iwallet" },
+        ],
+      },
+    };
+    expect(modesOf(iswallet)).toEqual([
+      { mode: "live", label: "Live (real money)", available: false },
+      { mode: "test", label: "Test (practice)", available: true },
+    ]);
   });
 });
 

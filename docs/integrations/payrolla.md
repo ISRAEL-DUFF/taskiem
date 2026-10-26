@@ -10,6 +10,8 @@ Each Payrolla company that uses Taskiem connects with **its own key**: a company
 | --- | --- |
 | `api_key` | The company key (`pyk_live_…`). Sent as `Authorization: Bearer <key>` |
 
+**Live or test.** Connecting Payrolla asks **Live (real money)** or **Test (practice)** ([connector/v1](../contracts/connector-v1.md) rule 17), as Paystack's does; the connection keeps the choice and a test one is marked "Test: no real money" on Connections. Live is Payrolla's production deployment, `https://ispend.name.ng/payrolla/api/v1` (`TASKIEM_PAYROLLA_URL` moves it); test is its sandbox, `https://synledger.name.ng/payrolla/api/v1` (`TASKIEM_PAYROLLA_TEST_URL`), where the test company is. Keys from one never work in the other, so paste a key made in the same deployment. Connections made before modes keep going to the sandbox, or to `TASKIEM_PAYROLLA_URL` when it is set.
+
 The scopes the owner ticks decide what the connection can do:
 
 | Scope | Unlocks |

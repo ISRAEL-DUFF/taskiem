@@ -39,6 +39,14 @@ config:
   TASKIEM_ALLOW_SIGNUP: "false"
   TASKIEM_ALERT_FROM: ""
   OTEL_EXPORTER_OTLP_ENDPOINT: ""
+  # Provider endpoints (docs/operations.md); empty uses the connector's
+  # default. iswallet and Payrolla connections are live or test, chosen
+  # when made; the defaults are each provider's production (live) and
+  # sandbox (test). Set these only to point somewhere else.
+  TASKIEM_ISWALLET_URL: ""
+  TASKIEM_ISWALLET_TEST_URL: ""
+  TASKIEM_PAYROLLA_URL: ""
+  TASKIEM_PAYROLLA_TEST_URL: ""
 
 # Extra environment variables for every pod: [{name, value}] or valueFrom.
 extraEnv: []

@@ -50,7 +50,11 @@ type Auth struct {
 	// authorization code grant with PKCE instead of pasted credentials
 	// (docs/connector-sdk.md, decision 0034). The pasted fields stay.
 	OAuth2 *OAuth2 `json:"oauth2,omitempty"`
-	Test   *struct {
+	// HostModes are live and test as separate hosts (rule 17): the person
+	// chooses one when connecting, the connection keeps it, and its calls go
+	// to that mode's base URL. Keys that say their mode use prefixes.
+	HostModes []HostMode `json:"modes,omitempty"`
+	Test      *struct {
 		Action string `json:"action"`
 	} `json:"test"`
 }
@@ -148,6 +152,60 @@ type AuthField struct {
 }
 
 // KeyPrefix is a start a right value has, for one mode.
+// HostMode is one of a connector's modes and where its calls go. An empty
+// BaseURL is a mode only the deployment can point somewhere (a production
+// address issued at go-live): it is offered once SetModeURL gives it one.
+type HostMode struct {
+	Mode    string `json:"mode"`
+	Label   string `json:"label"`
+	BaseURL string `json:"base_url,omitempty"`
+}
+
+// ModeKey is where a connection's mode reaches its connector: the vault
+// adds it to the credentials it hands out (it is never stored with them).
+const ModeKey = "$mode"
+
+// Mode is the mode of the connection the request is for: live, test, or
+// "" for a connection made before its connector had modes.
+func (r Request) Mode() string { return r.Credentials[ModeKey] }
+
+// ModeURL is where a mode's calls go, and whether this deployment offers
+// the mode (it has an address).
+func (m *Manifest) ModeURL(mode string) (string, bool) {
+	for _, h := range m.Auth.HostModes {
+		if h.Mode == mode {
+			return h.BaseURL, h.BaseURL != ""
+		}
+	}
+	return "", false
+}
+
+// BaseFor is where a connection's calls go: its mode's address, or the
+// base URL for a connection made before its connector had modes. A mode
+// this deployment has no address for is fatal: nothing is sent.
+func (m *Manifest) BaseFor(creds map[string]string) (string, error) {
+	mode := creds[ModeKey]
+	if mode == "" || len(m.Auth.HostModes) == 0 {
+		return strings.TrimRight(m.BaseURL, "/"), nil
+	}
+	base, ok := m.ModeURL(mode)
+	if !ok {
+		return "", fmt.Errorf("%s: this connection is in %s mode, which this Taskiem has no address for: %w", m.Name, mode, effects.ErrFatal)
+	}
+	return strings.TrimRight(base, "/"), nil
+}
+
+// SetModeURL points a mode at another address (the production address
+// issued at go-live, a test server). It is platform configuration, never
+// tenant input; an empty base leaves the mode as it is.
+func (m *Manifest) SetModeURL(mode, base string) {
+	for i := range m.Auth.HostModes {
+		if m.Auth.HostModes[i].Mode == mode && base != "" {
+			m.Auth.HostModes[i].BaseURL = base
+		}
+	}
+}
+
 type KeyPrefix struct {
 	Prefix string `json:"prefix"`
 	Mode   string `json:"mode,omitempty"`
@@ -228,6 +286,9 @@ func (a Auth) ModeOf(creds map[string]string) string {
 // with their labels.
 func (a Auth) Modes() []KeyPrefix {
 	var out []KeyPrefix
+	for _, h := range a.HostModes {
+		out = append(out, KeyPrefix{Mode: h.Mode, Label: h.Label})
+	}
 	for _, f := range a.Fields {
 		for _, p := range f.Prefixes {
 			if p.Mode != "" && !slices.ContainsFunc(out, func(x KeyPrefix) bool { return x.Mode == p.Mode }) {
@@ -299,6 +360,19 @@ func (m *Manifest) KindOf() string {
 func (m *Manifest) check() []string {
 	var out []string
 	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
+
+	for i, h := range m.Auth.HostModes {
+		if slices.ContainsFunc(m.Auth.HostModes[:i], func(x HostMode) bool { return x.Mode == h.Mode }) {
+			add("/auth/modes/%d: mode %q is named twice", i, h.Mode)
+		}
+	}
+	if len(m.Auth.HostModes) > 0 {
+		for _, f := range m.Auth.Fields {
+			if slices.ContainsFunc(f.Prefixes, func(p KeyPrefix) bool { return p.Mode != "" }) {
+				add("/auth/modes: a connector's modes are hosts or key prefixes, not both (field %s)", f.Key)
+			}
+		}
+	}
 
 	names := make([]string, 0, len(m.Actions))
 	for n := range m.Actions {
@@ -529,13 +603,19 @@ func MustParse(src []byte) *Manifest {
 // Hosts are the hosts this connector may reach: egress_hosts, or else the
 // base_url host.
 func (m *Manifest) Hosts() []string {
+	var out []string
 	if len(m.Egress) > 0 {
-		return m.Egress
+		out = slices.Clone(m.Egress)
+	} else if u, err := url.Parse(m.BaseURL); err == nil && u.Hostname() != "" {
+		out = []string{u.Hostname()}
 	}
-	if u, err := url.Parse(m.BaseURL); err == nil && u.Hostname() != "" {
-		return []string{u.Hostname()}
+	// Each mode's host, so a connection reaches the one it chose.
+	for _, h := range m.Auth.HostModes {
+		if u, err := url.Parse(h.BaseURL); err == nil && u.Hostname() != "" && !slices.Contains(out, u.Hostname()) {
+			out = append(out, u.Hostname())
+		}
 	}
-	return nil
+	return out
 }
 
 // HostsFor are the hosts this connector may reach for a connection: Hosts,

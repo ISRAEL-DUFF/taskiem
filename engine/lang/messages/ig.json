@@ -376,6 +376,10 @@
       "text": "Jikọọ {service}.",
       "reviewed": false
     },
+    "ready.paystack_transfer": {
+      "text": "Paystack ga-agbanye Pay with Transfer maka azụmahịa a: jụọ ndị enyemaka Paystack. Ruo mgbe ahụ, ndị ahịa enweghị ike ịkwụ ụgwọ site na mbufe n'ime nọmba akaụntụ ọ na-emepe.",
+      "reviewed": false
+    },
     "ready.role": {
       "text": "Ọ dịbeghị onye nwere ọrụ {role}, ya mere a ga-ajụ ndị nwe ya; nye ya mmadụ ma ọ bụrụ na ha kwesịrị ikpebi.",
       "reviewed": false

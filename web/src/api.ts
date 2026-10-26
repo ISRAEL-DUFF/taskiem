@@ -361,6 +361,8 @@ export interface ConnectorInfo {
   auth: {
     type: string;
     fields: AuthField[] | null;
+    /** Live and test as separate hosts (connector/v1 rule 17); a mode without base_url is not set up on this Taskiem. */
+    modes?: { mode: string; label: string; base_url?: string }[];
     /** Declared by a connector that connects by OAuth (docs/connector-sdk.md). */
     oauth2?: {
       authorize_url: string;
