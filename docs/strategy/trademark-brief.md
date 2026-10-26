@@ -10,7 +10,7 @@ Date: 2026-10-26 · Status: ready to send to an accredited Nigerian trademark ag
 
 **TASKIEM**, as a word mark. A logo mark follows once the brand is chosen; the word mark comes first.
 
-Backup names, searched in the same request so a refusal does not cost another week: *to be added by the founder (two)*.
+No backup names: the founder decided on 26 October 2026 to keep Taskiem. If the search finds a conflict, we want your advice on clearing it (a narrower specification of goods and services, or coexistence with the earlier owner) before any change of name.
 
 ## What Taskiem is
 
