@@ -231,6 +231,11 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
+	mode, err := connectionMode(c, req.Credentials, req.Mode)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var allowed bool
 		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM embed_apps WHERE status = 'active' AND $1 = ANY (allowed_connectors))`, c.Manifest.ID).Scan(&allowed); err != nil {
@@ -257,6 +262,9 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		}
 		id = created
 		if err != nil {
+			return err
+		}
+		if err := setConnectionMode(r.Context(), tx, id, mode); err != nil {
 			return err
 		}
 		return secrets.SetRouteKeysTx(r.Context(), tx, sub, id, c.Manifest.RouteKeys(req.Credentials))

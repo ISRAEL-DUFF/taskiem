@@ -158,8 +158,10 @@ type connectionReq struct {
 	Connector   string            `json:"connector"` // "paystack@1"
 	Name        string            `json:"name"`
 	Credentials map[string]string `json:"credentials"`
-	// Mode is the choice the person made (live or test) when the
-	// connector's keys say which they are; a key for the other is refused.
+	// Mode is the choice the person made (live or test): when the
+	// connector's keys say which they are, a key for the other is refused;
+	// when its modes are hosts (iswallet, Payrolla), it is where the
+	// connection's calls go.
 	Mode string `json:"mode,omitempty"`
 	// Check asks the provider first (the connector's test action): a key
 	// it refuses is not saved.
@@ -198,8 +200,13 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	mode, err := connectionMode(c, req.Credentials, req.Mode)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if req.Check {
-		if err := s.testCredentials(r.Context(), p.TenantID, c, req.Credentials); err != nil {
+		if err := s.testCredentials(r.Context(), p.TenantID, c, withMode(req.Credentials, mode)); err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -219,10 +226,8 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		if id, err = s.Vault.CreateConnectionTx(r.Context(), tx, p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor(), ""); err != nil {
 			return err
 		}
-		if mode := c.Manifest.Auth.ModeOf(req.Credentials); mode != "" {
-			if _, err := tx.Exec(r.Context(), `UPDATE connections SET mode = $2 WHERE id = $1`, id, mode); err != nil {
-				return err
-			}
+		if err := setConnectionMode(r.Context(), tx, id, mode); err != nil {
+			return err
 		}
 		return secrets.SetRouteKeysTx(r.Context(), tx, p.TenantID, id, c.Manifest.RouteKeys(req.Credentials))
 	})
@@ -575,6 +580,52 @@ func checkKeys(c *connector.Connector, creds map[string]string, mode string) err
 	return nil
 }
 
+// connectionMode is the mode a new connection is in. Where the
+// connector's keys say it (sk_test_), the keys decide. Where its modes are
+// hosts (iswallet, Payrolla: connector/v1 rule 17), it is the mode chosen,
+// one this deployment has an address for; left out, the connection is
+// made as before modes, and its calls go to the connector's base URL.
+func connectionMode(c *connector.Connector, creds map[string]string, chosen string) (string, error) {
+	if len(c.Manifest.Auth.HostModes) == 0 {
+		return c.Manifest.Auth.ModeOf(creds), nil
+	}
+	if chosen == "" {
+		return "", nil
+	}
+	for _, h := range c.Manifest.Auth.HostModes {
+		if h.Mode != chosen {
+			continue
+		}
+		if _, ok := c.Manifest.ModeURL(chosen); !ok {
+			return "", fmt.Errorf("%w: %s %s is not set up on this Taskiem yet: whoever runs it gives it the address first", errBadRequest, c.Manifest.Name, strings.ToLower(h.Label))
+		}
+		return chosen, nil
+	}
+	return "", fmt.Errorf("%w: %s has no mode %q", errBadRequest, c.Manifest.Name, chosen)
+}
+
+// withMode is credentials with the mode a connection would have, as the
+// vault hands them out, so a check before saving reaches that mode's host.
+func withMode(creds map[string]string, mode string) map[string]string {
+	if mode == "" {
+		return creds
+	}
+	out := make(map[string]string, len(creds)+1)
+	for k, v := range creds {
+		out[k] = v
+	}
+	out[connector.ModeKey] = mode
+	return out
+}
+
+func setConnectionMode(ctx context.Context, tx pgx.Tx, id uuid.UUID, mode string) error {
+	if mode == "" {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE connections SET mode = $2 WHERE id = $1`, id, mode)
+	return err
+}
+
 // testCredentials runs the connector's test action with credentials not
 // saved yet, through the egress guard: a key the provider refuses is
 // answered in plain words.
@@ -626,7 +677,12 @@ func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.testCredentials(r.Context(), p.TenantID, c, req.Credentials); err != nil {
+	mode, err := connectionMode(c, req.Credentials, req.Mode)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.testCredentials(r.Context(), p.TenantID, c, withMode(req.Credentials, mode)); err != nil {
 		s.fail(w, r, err)
 		return
 	}

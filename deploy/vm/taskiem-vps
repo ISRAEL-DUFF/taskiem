@@ -234,9 +234,10 @@ cmd_setup() {
     TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME#@}
     [ -n "$TELEGRAM_BOT_USERNAME" ] || die "the bot's username is required with its token"
   fi
-  # Provider endpoints (docs/operations.md): empty keeps the connector's
-  # default. iswallet's default is its sandbox, where no real money moves.
-  ask ISWALLET_URL "iswallet API URL (empty: iswallet's sandbox)" "$(env_get "$KIT/taskiem.env" TASKIEM_ISWALLET_URL)"
+  # Provider endpoints (docs/operations.md): the live addresses. iswallet
+  # and Payrolla connections are live or test, chosen when made; test goes
+  # to each provider's sandbox.
+  ask ISWALLET_URL "iswallet API URL (empty: iswallet's production API)" "$(env_get "$KIT/taskiem.env" TASKIEM_ISWALLET_URL)"
   ask PAYROLLA_URL "Payrolla API URL (empty: Payrolla's production API)" "$(env_get "$KIT/taskiem.env" TASKIEM_PAYROLLA_URL)"
   local u
   for u in "$ISWALLET_URL" "$PAYROLLA_URL"; do
@@ -290,7 +291,6 @@ cmd_setup() {
   [ -n "$SMTP_URL" ] || log "WARNING: no SMTP: no password emails, invitations or alert emails"
   [ -z "$SMTP_URL" ] || [ -n "$MAIL_FROM" ] || die "a sender address is required with SMTP"
   [ -n "$BACKUP_REPO" ] || log "WARNING: no backup destination: OpenBao's storage is not backed up off this server"
-  [ "$CHANNEL" != production ] || [ -n "$ISWALLET_URL" ] || log "WARNING: no iswallet URL on the production channel: iswallet payments go to its sandbox, and no real money moves"
 
   local f
   [ "$PUBLIC" != yes ] || [ "$PREVIEW_DOMAIN" != "${DOMAIN,,}" ] || die "the preview domain must differ from the app's host name"

@@ -405,7 +405,7 @@ Manifests gain `kind: rail | product | tool` (default `tool`), used by the catal
 | Part | Confirmed |
 | --- | --- |
 | Auth | `api_key`: one key per company, made by its owner with chosen scopes (`payroll:read`, `employees:read`, `webhooks:manage`, `payslips:links`, `embed:launch`); no OAuth |
-| Base URL | `https://synledger.name.ng/payrolla/api/v1`, overridden by `TASKIEM_PAYROLLA_URL`. Payrolla's test company lives in production, with an unfunded wallet |
+| Base URL | Production `https://ispend.name.ng/payrolla/api/v1` (`TASKIEM_PAYROLLA_URL`) and the sandbox `https://synledger.name.ng/payrolla/api/v1` (`TASKIEM_PAYROLLA_TEST_URL`), chosen per connection as live or test ([connector/v1](../contracts/connector-v1.md) rule 17; Payrolla, 26 October). The test company Payrolla set up on 23 October, with an unfunded wallet, is on the synledger address |
 | Triggers | Other names than the draft's: `run_event` (`run.computed` carrying `approval_url`, `run.approved`, `run.rejected`, `run.locked`, `run.cancelled`, `run.disbursement_started`, `run.completed`, `run.partially_completed`), `payout_event` (`payout.succeeded`, `payout.failed`, `payout.reversed`), `employee_event` (`employee.created`, `employee.updated`, `employee.terminated`), `payslip_event` (`payslip.issued`); `ping` on request |
 | Verification | `hmac_sha256_timestamped` with `signature_format: t_v1` on `Payrolla-Signature`, 5 minutes' tolerance |
 | Routing | Per company: the subscriptions are REST hooks made with each company's key, so Taskiem registers them remotely (decision 0021), one per deployed trigger; no partner routing |

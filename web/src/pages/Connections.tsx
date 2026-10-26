@@ -33,6 +33,8 @@ interface Conn {
   last_used_at: string | null;
   /** What made the connection when it was not a person: taskiem:data_tables for the data tables project's. */
   provisioned_by: string | null;
+  /** live or test, when the connector has modes (a Paystack key's start, iswallet's host). */
+  mode?: string | null;
   /** Subscriptions Taskiem keeps at the provider through this connection (a Xenibase webhook per workflow). */
   remote?: {
     subscriptions: number;
@@ -158,6 +160,7 @@ export function Connections() {
                   <div className="item-top">
                     <span className="title">{info?.name ?? c.connector}</span>
                     <Badge value={c.status === "active" ? "ok" : c.status} />
+                    {c.mode === "test" && <span className="chip">Test: no real money</span>}
                   </div>
                   <span className="sub">
                     {c.provisioned_by === "taskiem:data_tables" ? (
@@ -557,7 +560,7 @@ export function NewConnection({
   const c = connectors.find((x) => x.ref === ref);
   const modes = modesOf(c);
   const [mode, setMode] = useState("");
-  const chosen = mode || modes[0]?.mode || "";
+  const chosen = mode || modes.find((m) => m.available)?.mode || "";
   const [paste, setPaste] = useState(false);
   // Public keys of the key pairs made here, by field, to show once.
   const [generated, setGenerated] = useState<Record<string, string>>({});
@@ -709,8 +712,9 @@ export function NewConnection({
                 <legend>Which kind?</legend>
                 {modes.map((m) => (
                   <label key={m.mode} className="inline">
-                    <input type="radio" name="mode" checked={chosen === m.mode} onChange={() => setMode(m.mode)} />
+                    <input type="radio" name="mode" checked={chosen === m.mode} disabled={!m.available} onChange={() => setMode(m.mode)} />
                     {m.label}
+                    {!m.available && <span className="hint"> (not set up on this Taskiem yet)</span>}
                   </label>
                 ))}
               </fieldset>

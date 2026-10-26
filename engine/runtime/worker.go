@@ -1269,6 +1269,7 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 		}
 		declared[f.Key] = !f.Secret
 	}
+	declared[connector.ModeKey] = true // live or test: not a secret
 	for k, v := range creds {
 		if public, ok := declared[k]; !ok || !public {
 			p.scrub = append(p.scrub, v) // secret fields, and tokens the manifest does not list

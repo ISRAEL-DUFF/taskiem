@@ -15,7 +15,7 @@
 # capabilities. See docs/integrations/payrolla.md.
 manifest: connector/v1
 id: payrolla
-version: 1.0.0
+version: 1.1.0
 name: Payrolla
 description: Start workflows when a payroll is ready for approval, approved, paid or returned, or when employees change; read runs, each employee's pay status and the team; send an approval link or a payslip link. Payrolla pays and approves; Taskiem never does.
 category: productivity
@@ -24,10 +24,19 @@ regions: [NG]
 auth:
   type: api_key
   fields:
-    - { key: api_key, label: "API key (pyk_live_…), from Payrolla → Settings → Connected apps", secret: true }
+    - { key: api_key, label: "API key (pyk_live_… for live), from Payrolla → Settings → Connected apps", secret: true }
+  # Live and test are separate Payrolla deployments whose keys never work
+  # in each other (rule 17): production at ispend.name.ng, the sandbox at
+  # synledger.name.ng (Payrolla, 26 October 2026). TASKIEM_PAYROLLA_URL and
+  # TASKIEM_PAYROLLA_TEST_URL move them.
+  modes:
+    - { mode: live, label: Live (real money), base_url: https://ispend.name.ng/payrolla/api/v1 }
+    - { mode: test, label: Test (practice), base_url: https://synledger.name.ng/payrolla/api/v1 }
   test: { action: get_company }
+# Where connections made before modes go: the sandbox, where they always
+# went, or TASKIEM_PAYROLLA_URL when it is set.
 base_url: https://synledger.name.ng/payrolla/api/v1
-egress_hosts: [synledger.name.ng]
+egress_hosts: [ispend.name.ng, synledger.name.ng]
 actions:
   get_company:
     title: Check the connection

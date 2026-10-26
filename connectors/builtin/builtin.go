@@ -59,6 +59,11 @@ type Options struct {
 	// PayrollaURL is Payrolla's Connect API (TASKIEM_PAYROLLA_URL; its
 	// production address by default).
 	PayrollaURL string
+	// IswalletTestURL and PayrollaTestURL are the test modes' addresses
+	// (TASKIEM_ISWALLET_TEST_URL, TASKIEM_PAYROLLA_TEST_URL: each
+	// provider's sandbox by default). IswalletURL and PayrollaURL are the
+	// live modes' (each provider's production by default).
+	IswalletTestURL, PayrollaTestURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).
 	XenibaseURL string
@@ -90,7 +95,7 @@ func Register(r *connector.Registry, o Options) error {
 		paystack.New(paystack.Options{BaseURL: o.PaystackURL}),
 		termii.New(termii.Options{BaseURL: o.TermiiURL}),
 		dojah.New(dojah.Options{BaseURL: o.DojahURL}),
-		iswallet.New(iswallet.Options{BaseURL: o.IswalletURL}),
+		iswallet.New(iswallet.Options{BaseURL: o.IswalletURL, LiveURL: o.IswalletURL, TestURL: o.IswalletTestURL}),
 		flutterwave.New(flutterwave.Options{BaseURL: o.FlutterwaveURL}),
 		anchor.New(anchor.Options{BaseURL: o.AnchorURL}),
 		lenco.New(lenco.Options{BaseURL: o.LencoURL}),
@@ -112,7 +117,7 @@ func Register(r *connector.Registry, o Options) error {
 		youverify.New(youverify.Options{BaseURL: o.YouverifyURL}),
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
-		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL}),
+		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),
