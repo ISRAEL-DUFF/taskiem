@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Receipts (docs/spec/schools.md 9, B5; docs/schools.md#receipts): one
@@ -283,6 +284,111 @@ func (s *Schools) ReceiptByID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		return Receipt{}, ErrNotFound
 	}
 	return list[0], nil
+}
+
+// --- sending a receipt to the family ---
+
+// ReceiptWhat is what a receipt paid, for the family: the invoice's
+// number and what it is for.
+func ReceiptWhat(r Receipt) string { return r.InvoiceNumber + " (school fees)" }
+
+// ReceiptRest is what is left on the invoice after the receipt, in one
+// sentence.
+func ReceiptRest(r Receipt) string {
+	if r.BalanceAfterKobo > 0 {
+		return invoicing.Naira(r.BalanceAfterKobo) + " is still left on it."
+	}
+	return "The invoice is paid in full."
+}
+
+// ReceiptWho is whom the receipt's payment was for, as its message names
+// them: the student, or their admission number once their name is erased.
+func ReceiptWho(r Receipt) string {
+	if r.Name == "" || r.Name == Erased {
+		return r.AdmissionNumber
+	}
+	return r.Name
+}
+
+// ReceiptVars are the taskiem_receipt template's variables
+// (docs/whatsapp.md#templates): the number, the amount, who it is for,
+// what it paid and what is left, with the receipt's own check link for
+// the button (the family page's link is not what the button opens).
+func ReceiptVars(r Receipt) map[string]string {
+	return map[string]string{"number": r.Number, "amount": invoicing.Naira(r.AmountKobo), "who": ReceiptWho(r), "what": ReceiptWhat(r), "rest": ReceiptRest(r), "link": r.Link}
+}
+
+// ReceiptText is the message a family gets for a receipt, inside the
+// window: the number, the amount and the invoice, what is left, the check
+// link, and the family page's link, where the receipt and its PDF are.
+func ReceiptText(r Receipt, familyLink string) string {
+	s := fmt.Sprintf("Receipt %s: we received %s towards %s. %s", r.Number, invoicing.Naira(r.AmountKobo), ReceiptWhat(r), ReceiptRest(r))
+	if r.Link != "" {
+		s += " Check the receipt: " + r.Link
+	}
+	if familyLink != "" {
+		s += " Your fees page, with the receipt and its PDF: " + familyLink
+	}
+	return s
+}
+
+// ReceiptShort is the SMS: the same facts with the naira written NGN, so
+// the message stays in the SMS alphabet (docs/messages.md), and the two
+// links.
+func ReceiptShort(r Receipt, familyLink string) string {
+	s := fmt.Sprintf("Receipt %s: %s towards %s. %s", r.Number, invoicing.Naira(r.AmountKobo), r.InvoiceNumber, ReceiptRest(r))
+	if r.Link != "" {
+		s += " Check it: " + r.Link
+	}
+	if familyLink != "" {
+		s += " Fees page: " + familyLink
+	}
+	return strings.ReplaceAll(s, "₦", "NGN")
+}
+
+// ReceiptSent is what sending a receipt did.
+type ReceiptSent struct {
+	Receipt Receipt    `json:"receipt"`
+	Sent    FamilySent `json:"sent"`
+}
+
+// SendReceipt sends the student's family a receipt, in tx: on each
+// guardian's chat app (as taskiem_receipt outside WhatsApp's window, the
+// check link on its button) or by SMS, with a fresh family page link,
+// exactly once per receipt whoever asks (the receipt is the key), so the
+// school-receipt template's retry sends nothing twice. A voided receipt
+// is refused, and a student in no family reaches nobody.
+func (s *Schools) SendReceipt(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r Receipt, by string) (FamilySent, error) {
+	if r.Voided {
+		return FamilySent{}, refused("receipt %s is voided: %s", r.Number, r.VoidReason)
+	}
+	var family *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT family_id FROM school_students WHERE tenant_id = $1 AND id = $2`, tenant, r.StudentID).Scan(&family); err != nil {
+		return FamilySent{}, err
+	}
+	if family == nil {
+		return FamilySent{Channels: map[string]int{}, Nobody: true}, nil
+	}
+	return s.SendFamily(ctx, tx, tenant, *family, FamilyMessage{Purpose: "receipt", Key: "receipt:" + r.ID.String(),
+		Text:     func(link string) string { return ReceiptText(r, link) },
+		Short:    func(link string) string { return ReceiptShort(r, link) },
+		Template: &whatsapp.TplReceipt,
+		Vars:     func(string) map[string]string { return ReceiptVars(r) }}, by)
+}
+
+// SendReceiptOnce sends a receipt (by id or number) to the family in a
+// transaction of its own (SendReceipt).
+func (s Service) SendReceiptOnce(ctx context.Context, tenant uuid.UUID, idOrNumber, by string) (ReceiptSent, error) {
+	var out ReceiptSent
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		if out.Receipt, err = s.ReceiptByID(ctx, tx, tenant, idOrNumber); err != nil {
+			return err
+		}
+		out.Sent, err = s.SendReceipt(ctx, tx, tenant, out.Receipt, by)
+		return err
+	})
+	return out, err
 }
 
 // HowWords is how a receipt's payment was counted, for people.

@@ -14,10 +14,12 @@
 | `message` | What to say, in plain words (up to 1,500 characters) |
 | `title` | Optional first line, and an email's subject |
 | `to` | `owner` (the default), `role` with `role`, or `members` with `members` (their sign-in emails) |
+| `template` | Optional: the WhatsApp [template](../whatsapp.md#templates) that carries the message outside the 24-hour window in place of `taskiem_alert`, by name, written out: one of the registry's templates for the business's own people, filled from text alone (`taskiem_daily_close`, `taskiem_daily_summary`) |
+| `template_vars` | With `template`: its variables, every one but the business's name (which Taskiem adds), each a line of text or an expression; `day` and `summary` for `taskiem_daily_close` |
 
 Each person gets it on the first chat channel they linked to Taskiem, WhatsApp then Telegram, and by email when they linked neither. A role nobody holds goes to the owners, so someone always hears. It only ever reaches the business's own active members. A retry reaches nobody twice.
 
-The message goes through the chat [outbox](../whatsapp.md#delivery-and-retries) like approval requests (`kind` `notice`). It is rendered when it is sent, from the step's input in the run's history, opened then, so the outbox holds no text. Outside WhatsApp's 24-hour window it goes as the `taskiem_alert` template, its title and message on the template's one line. The output says how many people it went to, how many by chat and by email, and `nobody` when there was no one to tell.
+The message goes through the chat [outbox](../whatsapp.md#delivery-and-retries) like approval requests (`kind` `notice`). It is rendered when it is sent, from the step's input in the run's history, opened then, so the outbox holds no text. Outside WhatsApp's 24-hour window it goes as the `taskiem_alert` template, its title and message on the template's one line; a step that names a `template` goes as that template, its variables from `template_vars`, once Meta approved it in the number's account ([the registry](../whatsapp.md#the-template-registry)), and as `taskiem_alert` until then, the message marked sent with why. Publishing checks the template: it must be one a Tell me message can carry, and `template_vars` must hold exactly its variables (the `school-daily-close` template shows it). The output says how many people it went to, how many by chat and by email, and `nobody` when there was no one to tell.
 
 ## Messaging someone outside the business (`message`)
 

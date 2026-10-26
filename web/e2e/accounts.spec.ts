@@ -154,6 +154,12 @@ test("students are issued their own account numbers once, and a payment into one
   await expect(panel.getByRole("button", { name: `Copy the account number ${number}` })).toBeVisible();
   await expect(panel).toContainText("names the account itself");
   await expect(panel).toContainText("O•••");
+  // The bursar sends the family the number from here: the message goes
+  // the family's one way (chat or SMS), with a fresh fees page link.
+  await panel.getByRole("button", { name: "Send the account number to the family" }).click();
+  const told = panel.getByTestId("student-account-sent");
+  await expect(told).toBeVisible();
+  await expect(told).toContainText(/^(Sent .* to 1 guardian\.|Nobody could be reached)/);
   await axeBoth(page, "/schools/students/:id (an account number)");
 
   // An invoice of hers, sent; a payment into her number, which only the

@@ -92,6 +92,12 @@ type Connector struct {
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
 	CheckCredentials func(creds map[string]string) error
+	// CheckInput, when set, checks a workflow step's input for an action
+	// when the workflow is published (engine/wdcheck): what the manifest's
+	// schema cannot say, such as a value that must be chosen from a set
+	// the connector knows. The input is as written, expressions ("=...")
+	// unevaluated; each message names a problem.
+	CheckInput func(action string, input map[string]any) []string
 }
 
 // WebhookVerifier checks one delivery; secret is the connection credential

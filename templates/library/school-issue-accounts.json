@@ -2,7 +2,7 @@
   "id": "school-issue-accounts",
   "title": "Give each new student their own account number",
   "summary": "Every 15 minutes, find the students who have no account number yet, issue each one their own number on the school's issuing connection, and send the family the number, the bank and a link to their fees page. Run it by hand for everyone when you first turn it on.",
-  "description": "Every 15 minutes, finds the active students with no account number on the school's issuing connection (Schools > Settings) and issues each one their own permanent account number, named for the school and the child where the rail lets the school name it, at most the number you choose per run. A student is issued one account per connection, ever: a student who has one is never asked for again, and running the same run twice issues nobody twice. The family's first guardian then gets one message, on the WhatsApp or Telegram they get the school's updates on, otherwise by SMS: the child's account number and bank, the name they should see when they transfer, and a fresh link to the family's fees page. A student the rail would not issue (a missing guardian email, a parent's BVN or NIN needed on Flutterwave) is left for the student's page, where the rail's reason shows, and tried again next time. A new student is enrolled on the Students page or by import; this is how they get their number within the quarter hour. Run it by hand from the workflow's page to issue a whole school when you first turn it on. Each run that did anything tells the bursar how many.",
+  "description": "Every 15 minutes, finds the active students with no account number on the school's issuing connection (Schools > Settings) and issues each one their own permanent account number, named for the school and the child where the rail lets the school name it, at most the number you choose per run. A student is issued one account per connection, ever: a student who has one is never asked for again, and running the same run twice issues nobody twice. Each of the family's guardians then gets one message, on the WhatsApp or Telegram they get the school's updates on (outside WhatsApp's 24-hour window as the account number template, with an Open fees page button), otherwise by SMS: the child's account number and bank, the name they should see when they transfer, and a fresh link to the family's fees page. A student the rail would not issue (a missing guardian email, a parent's BVN or NIN needed on Flutterwave) is left for the student's page, where the rail's reason shows, and tried again next time. A new student is enrolled on the Students page or by import; this is how they get their number within the quarter hour. Run it by hand from the workflow's page to issue a whole school when you first turn it on. Each run that did anything tells the bursar how many.",
   "category": "collections",
   "tags": [
     "schools",
@@ -109,47 +109,16 @@
               }
             },
             {
-              "id": "family",
-              "type": "connector",
-              "name": "Read the family's guardians",
-              "connector": "schools@1",
-              "action": "get_student",
-              "needs": [
-                "issue"
-              ],
-              "input": {
-                "student": "=item.id"
-              }
-            },
-            {
-              "id": "link",
-              "type": "connector",
-              "name": "A fresh link to the fees page",
-              "connector": "schools@1",
-              "action": "family_link",
-              "needs": [
-                "issue"
-              ],
-              "input": {
-                "student": "=item.id"
-              }
-            },
-            {
               "id": "tell_family",
               "type": "connector",
               "name": "Send the family the account number",
-              "connector": "notify@1",
-              "action": "message",
+              "connector": "schools@1",
+              "action": "send_account_number",
               "needs": [
-                "family",
-                "link"
+                "issue"
               ],
-              "when": "=size(steps.family.output.guardians) > 0",
               "input": {
-                "phone": "=steps.family.output.guardians[0].phone",
-                "title": "=item.name + \"'s school fees account number\"",
-                "about": "=item.name + \"'s account number\"",
-                "message": "='Dear parent, ' + item.name + \"'s own account number for school fees is \" + steps.issue.output.account_number + ' (' + steps.issue.output.bank_name + (has(steps.issue.output.account_name) ? ', in the name ' + steps.issue.output.account_name : '') + '). Pay the fees by transfer to it: the money lands on ' + item.name + \"'s fees by itself, and a receipt follows. Your fees page: \" + steps.link.output.link"
+                "student": "=item.id"
               },
               "effect": {
                 "idempotency_seed": "='issue-account-tell:' + item.id"

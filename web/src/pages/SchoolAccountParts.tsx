@@ -17,6 +17,7 @@ import {
   type SchoolIssuing,
   type StudentAccount,
 } from "../lib/schoolAccounts";
+import { sentLine, type FamilySent } from "../lib/schoolFamily";
 import { Copy } from "./Forms";
 
 // Students' account numbers (docs/spec/schools.md 6, B4;
@@ -148,7 +149,9 @@ export function StudentAccountPanel({ studentID }: { studentID: string }) {
   );
   const [bvn, setBvn] = useState("");
   const [nin, setNin] = useState("");
+  const [sent, setSent] = useState<FamilySent>();
   const act = useAction();
+  const send = useAction();
   const data = accounts.data;
   const issuing = data?.issuing_connection ?? "";
   const mine = data?.accounts.find((a) => a.connection === issuing) ?? data?.accounts[0];
@@ -203,6 +206,30 @@ export function StudentAccountPanel({ studentID }: { studentID: string }) {
         <button type="button" onClick={() => setReveal(true)}>
           Show the account's name
         </button>
+      )}
+      {data && issued.length > 0 && may.manage && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={send.busy}
+            onClick={() =>
+              void send.run(async () => {
+                setSent(await plainly(post<FamilySent>(`/v1/schools/students/${encodeURIComponent(studentID)}/account/send`, {})));
+              }, false)
+            }
+          >
+            Send the account number to the family
+          </button>
+          <div role="status">
+            {sent && (
+              <div className="notice" data-testid="student-account-sent">
+                {sentLine(sent).replace(" Copy the link below to pass it on.", "")}
+              </div>
+            )}
+          </div>
+          <ErrorBox error={send.error} />
+        </div>
       )}
       {mine && mine.status !== "issued" && (
         <div className="notice" data-testid="student-account-problem">

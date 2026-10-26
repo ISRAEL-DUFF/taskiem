@@ -252,7 +252,7 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}
-		if sendErr != nil && !errors.Is(sendErr, whatsapp.ErrNothingToSend) {
+		if sendErr != nil && !errors.Is(sendErr, whatsapp.ErrNothingToSend) && !errors.Is(sendErr, whatsapp.ErrFellBack) {
 			s.Logger.Warn("whatsapp: send failed", "tenant", tenant, "kind", it.Kind, "message", it.ID, "attempt", it.Attempts, "err", sendErr)
 		}
 		if err := whatsapp.FinishOutbox(ctx, s.Store.Pool, it, sendErr, time.Now()); err != nil {

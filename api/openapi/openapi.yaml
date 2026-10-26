@@ -3449,6 +3449,44 @@ paths:
                 $ref: '#/components/schemas/SchoolStudentAccount'
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/account/send:
+    post:
+      operationId: sendSchoolStudentAccount
+      tags:
+      - Schools
+      summary: Send the student's account number to the family
+      description: 'Sends the student''s family their own account number (the number, the bank, the name to expect when they transfer) with a fresh family page link, to each guardian on WhatsApp or Telegram where they get the business''s updates there (as the taskiem_account_number template outside the 24-hour window once approved), otherwise by SMS: what the school-issue-accounts template sends when the number is issued. Each call sends afresh. 409 when the student has no account number yet. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Where the account number went
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/SchoolFamilySent'
+                - type: object
+                  required: [student_id, account_number]
+                  properties:
+                    student_id:
+                      type: string
+                      format: uuid
+                    account_number:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/accounts/issue:
     post:
       operationId: issueSchoolAccounts

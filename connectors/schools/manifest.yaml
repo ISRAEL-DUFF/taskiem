@@ -418,6 +418,67 @@ actions:
           description: Guardians reached by channel (whatsapp, telegram, sms)
           additionalProperties: { type: integer }
         nobody:           { type: boolean, description: No guardian could be reached }
+  send_receipt:
+    title: Send a family a receipt
+    description: "Sends the student's family a receipt (its id or number): the receipt number, the amount, the invoice it paid and what is left on it, the link that checks it is valid, and a fresh family page link, on each guardian's chat app (as the receipt template outside WhatsApp's 24-hour window) or by SMS. Exactly once per receipt, whoever asks: running the step again sends nothing. A voided receipt fails the step; a student in no family reaches nobody."
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [receipt]
+      properties:
+        receipt: { type: string, description: "The receipt's id or number (the invoice trigger's payment event carries it as receipt.id)" }
+    output:
+      type: object
+      properties:
+        receipt_id:       { type: string }
+        number:           { type: string }
+        student_id:       { type: string }
+        admission_number: { type: string }
+        invoice_number:   { type: string }
+        amount_kobo:      { type: integer }
+        channels:
+          type: object
+          description: Guardians reached by channel (whatsapp, telegram, sms)
+          additionalProperties: { type: integer }
+        nobody:           { type: boolean, description: No guardian could be reached }
+  send_account_number:
+    title: Send a family a student's account number
+    description: "Sends a student's (id or admission number) family their own account number: the number, the bank, the name to expect when they transfer, and a fresh family page link, on each guardian's chat app (as the account number template outside WhatsApp's 24-hour window) or by SMS. Exactly once for the step, so a retry sends nothing twice. A student with no account number yet fails the step (issue_account first); one in no family reaches nobody, with the reason."
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [student]
+      properties:
+        student: { type: string, description: The student's id or admission number }
+    output:
+      type: object
+      properties:
+        student_id:       { type: string }
+        admission_number: { type: string }
+        connection:       { type: string, description: "The connection the account is on, such as iswallet/main" }
+        account_number:   { type: string }
+        bank_name:        { type: string }
+        account_name:     { type: string }
+        channels:
+          type: object
+          description: Guardians reached by channel (whatsapp, telegram, sms)
+          additionalProperties: { type: integer }
+        nobody:           { type: boolean, description: No guardian could be reached }
+        reason:           { type: string, description: Why nobody was reached, when the student is in no family }
+    pii:
+      - { field: output.account_name, category: name }
   clearance:
     title: A student's clearance
     description: "Where a student stands for a term (the current one by default) by the clearance rule: cleared when the term's invoices are paid in full, an approved payment plan is in good standing, or an override is in force; partly_paid when some money was counted but a balance is left (never cleared); not_paid otherwise. Give a student (id or admission number) for one, or a class for every student of it, with the balances. Computed as it is read; nothing is stored."
@@ -541,3 +602,5 @@ actions:
         claim_list:     { type: array, items: { type: object, properties: { kind: { type: string }, message: { type: string }, path: { type: string }, amount_kobo: { type: integer }, ref: { type: string } } } }
         unmatched_list: { type: array, items: { type: object, properties: { kind: { type: string }, message: { type: string }, path: { type: string }, amount_kobo: { type: integer }, ref: { type: string } } } }
         text:           { type: string, description: "The close in words, up to 1,400 characters, no names" }
+        date:           { type: string, description: "The day in words (24 Oct 2026): the taskiem_daily_close template's day" }
+        summary:        { type: string, description: "The close in one line, for the taskiem_daily_close template outside WhatsApp's window (notify@1 tell with template)" }
