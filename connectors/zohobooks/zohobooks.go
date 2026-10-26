@@ -28,13 +28,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/israel-duff/taskiem/connectors/internal/money"
+	"github.com/israel-duff/taskiem/connectors/internal/zoho"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 )
@@ -53,16 +53,17 @@ type Options struct {
 // New returns the Zoho Books connector.
 func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
-	c := &client{m: m, accounts: strings.TrimRight(o.AccountsServer, "/"), now: time.Now}
+	c := &client{m: m, now: time.Now}
+	if o.Now != nil {
+		c.now = o.Now
+	}
+	c.zoho = &zoho.Client{Manifest: m, Name: "Zoho Books", AccountsServer: o.AccountsServer, Now: c.now}
 	if o.BaseURL != "" {
 		m.OverrideBaseURL(o.BaseURL)
 		c.fixed = true
 	}
 	if p, err := url.Parse(o.AccountsServer); err == nil && p.Hostname() != "" {
 		m.Egress = append(m.Egress, p.Hostname())
-	}
-	if o.Now != nil {
-		c.now = o.Now
 	}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"list_organizations":   connector.ActionFunc(c.listOrganizations),
@@ -83,8 +84,8 @@ func New(o Options) *connector.Connector {
 }
 
 type client struct {
-	m        *connector.Manifest
-	accounts string
+	m    *connector.Manifest
+	zoho *zoho.Client
 	// fixed: every call goes to the manifest's base URL (Options.BaseURL).
 	fixed bool
 	now   func() time.Time
@@ -137,138 +138,26 @@ func fatalf(format string, a ...any) error {
 
 // --- the session: tokens and the organisation ---
 
+// session is one action's use of the connection: Zoho's tokens, and the
+// organisation.
 type session struct {
-	c     *client
-	req   connector.Request
-	creds map[string]string
+	*zoho.Session
+	c *client
 }
 
 func (c *client) open(req connector.Request) *session {
-	return &session{c: c, req: req, creds: req.Credentials}
+	return &session{Session: c.zoho.Open(req), c: c}
 }
 
 // apiBase is where the connection's calls go: its account's API domain,
 // or the base URL where the deployment fixes one or the connection names
 // none.
 func (s *session) apiBase() (string, error) {
-	d := strings.TrimRight(strings.TrimSpace(s.creds["api_domain"]), "/")
-	if s.c.fixed || d == "" {
+	if s.c.fixed || strings.TrimSpace(s.Creds["api_domain"]) == "" {
 		return strings.TrimRight(s.c.m.BaseURL, "/"), nil
 	}
-	u, err := url.Parse(d)
-	if err != nil || u.Scheme != "https" || !s.c.m.ConnectionHostAllowed(u.Hostname()) {
-		return "", fatalf("the connection's API domain %q is not Zoho's: connect Zoho Books again", d)
-	}
-	return d + "/books/v3", nil
-}
-
-func (s *session) accountsServer() (string, error) {
-	if s.c.accounts != "" {
-		return s.c.accounts, nil
-	}
-	d := strings.TrimRight(strings.TrimSpace(s.creds["accounts_server"]), "/")
-	u, err := url.Parse(d)
-	if err != nil || u.Scheme != "https" || !s.c.m.ConnectionHostAllowed(u.Hostname()) {
-		return "", fatalf("the connection's accounts server %q is not Zoho's: connect Zoho Books again", d)
-	}
-	return d, nil
-}
-
-func (c *client) fresh(creds map[string]string, stale string) bool {
-	tok := creds["access_token"]
-	if tok == "" || tok == stale {
-		return false
-	}
-	exp, err := time.Parse(time.RFC3339, creds["access_expires_at"])
-	return err == nil && c.now().Add(time.Minute).Before(exp)
-}
-
-// rotate stores what fn makes of the connection's credentials, once
-// across workers; with credentials that are not a stored connection's, it
-// is refused rather than spend an access token from Zoho's small budget
-// unseen.
-func (s *session) rotate(ctx context.Context, fn connector.RotateFunc) error {
-	creds, err := s.req.RotateCredentials(ctx, fn)
-	if errors.Is(err, connector.ErrNoRotate) {
-		return fatalf("Zoho Books tokens are refreshed and kept by Taskiem: connect Zoho Books with the Connect button rather than pasting its details")
-	}
-	if err != nil {
-		return err
-	}
-	s.creds = creds
-	return nil
-}
-
-func (s *session) token(ctx context.Context, stale string) (string, error) {
-	if s.c.fresh(s.creds, stale) {
-		return s.creds["access_token"], nil
-	}
-	err := s.rotate(ctx, func(cur map[string]string) (map[string]string, error) {
-		if s.c.fresh(cur, stale) {
-			return cur, nil // another worker refreshed it
-		}
-		return s.refresh(ctx, cur)
-	})
-	return s.creds["access_token"], err
-}
-
-// refresh gets a new access token at the account's accounts server.
-func (s *session) refresh(ctx context.Context, cur map[string]string) (map[string]string, error) {
-	id, secret, rt := cur["client_id"], cur["client_secret"], cur["refresh_token"]
-	if id == "" || secret == "" || rt == "" {
-		return nil, fmt.Errorf("zoho books: the connection is missing its client or refresh token: connect Zoho Books again: %w: %w", connector.ErrCredentialsRejected, effects.ErrFatal)
-	}
-	server, err := s.accountsServer()
-	if err != nil {
-		return nil, err
-	}
-	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {rt}, "client_id": {id}, "client_secret": {secret}}
-	r, err := http.NewRequestWithContext(ctx, http.MethodPost, server+"/oauth/v2/token", strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("zoho books: %w: %w", err, effects.ErrFatal)
-	}
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.Header.Set("Accept", "application/json")
-	resp, err := s.req.HTTP.Do(r)
-	if err != nil {
-		return nil, fmt.Errorf("zoho books: refreshing the token: %w: %w", connector.RedactURLError(err), effects.ErrRetryable)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, fmt.Errorf("zoho books: reading the token answer: %w: %w", err, effects.ErrRetryable)
-	}
-	var t struct {
-		AccessToken string  `json:"access_token"`
-		ExpiresIn   float64 `json:"expires_in"`
-		APIDomain   string  `json:"api_domain"`
-		Error       string  `json:"error"`
-	}
-	_ = json.Unmarshal(body, &t)
-	switch {
-	case resp.StatusCode == http.StatusOK && t.AccessToken != "":
-	case t.Error == "invalid_code" || t.Error == "invalid_token":
-		// Zoho answers a revoked or unknown refresh token with 200 and
-		// {"error": "invalid_code"}.
-		return nil, fmt.Errorf("zoho books: Zoho refused the refresh token (%s): connect Zoho Books again: %w: %w", t.Error, connector.ErrCredentialsRejected, effects.ErrFatal)
-	case t.Error == "Access Denied" || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
-		// Too many access tokens asked for in ten minutes, or Zoho's side.
-		return nil, fmt.Errorf("zoho books: refreshing the token: http %d %s: %w", resp.StatusCode, t.Error, effects.ErrRetryable)
-	default:
-		// invalid_client and the like: Taskiem's Zoho client, not the
-		// business's connection.
-		return nil, fatalf("Zoho refused the token refresh: http %d %s", resp.StatusCode, t.Error)
-	}
-	out := make(map[string]string, len(cur)+2)
-	for k, v := range cur {
-		out[k] = v
-	}
-	if t.ExpiresIn <= 0 {
-		t.ExpiresIn = 3600
-	}
-	out["access_token"] = t.AccessToken
-	out["access_expires_at"] = s.c.now().UTC().Add(time.Duration(t.ExpiresIn) * time.Second).Format(time.RFC3339)
-	return out, nil
+	d, err := s.Server("api_domain")
+	return d + "/books/v3", err
 }
 
 // do calls Books, refreshing the token once when it is refused. org says
@@ -292,37 +181,27 @@ func (s *session) do(ctx context.Context, op, method, path string, q url.Values,
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
-	tok, err := s.token(ctx, "")
-	if err != nil {
-		return err
-	}
-	for try := 0; ; try++ {
-		var raw json.RawMessage
-		err = connector.DoJSON(ctx, s.req.HTTP, method, u, map[string]string{"Authorization": "Zoho-oauthtoken " + tok}, body, &raw)
+	var raw json.RawMessage
+	if err := s.Do(ctx, method, u, body, &raw); err != nil {
 		var he *connector.HTTPError
-		if try == 0 && errors.As(err, &he) && he.Status == http.StatusUnauthorized {
-			if tok, err = s.token(ctx, tok); err != nil {
-				return err
-			}
-			continue
-		}
-		if err != nil {
+		if errors.As(err, &he) {
 			return classify(op, err)
 		}
-		var env struct {
-			Code    *int   `json:"code"`
-			Message string `json:"message"`
-		}
-		if json.Unmarshal(raw, &env) == nil && env.Code != nil && *env.Code != 0 {
-			return classify(op, &connector.HTTPError{Status: http.StatusBadRequest, Body: raw})
-		}
-		if out != nil {
-			if err := json.Unmarshal(raw, out); err != nil {
-				return fmt.Errorf("zoho books %s: decoding the answer: %w: %w", op, err, effects.ErrUnknownOutcome)
-			}
-		}
-		return nil
+		return err
 	}
+	var env struct {
+		Code    *int   `json:"code"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &env) == nil && env.Code != nil && *env.Code != 0 {
+		return classify(op, &connector.HTTPError{Status: http.StatusBadRequest, Body: raw})
+	}
+	if out != nil {
+		if err := json.Unmarshal(raw, out); err != nil {
+			return fmt.Errorf("zoho books %s: decoding the answer: %w: %w", op, err, effects.ErrUnknownOutcome)
+		}
+	}
+	return nil
 }
 
 type organization struct {
@@ -344,7 +223,7 @@ func (s *session) organizations(ctx context.Context) ([]organization, error) {
 // organization is the one this connection keeps: the only one the user
 // reaches, or else Zoho's default, chosen on the first call and stored.
 func (s *session) organization(ctx context.Context) (string, error) {
-	if id := s.creds["organization_id"]; id != "" {
+	if id := s.Creds["organization_id"]; id != "" {
 		return id, nil
 	}
 	orgs, err := s.organizations(ctx)
@@ -361,43 +240,16 @@ func (s *session) organization(ctx context.Context) (string, error) {
 	if pick == nil {
 		return "", fatalf("the Zoho user reaches %d organisations and none is the default: make one the default in Zoho Books, or connect as a user of one", len(orgs))
 	}
-	id, name := string(pick.ID), pick.Name
-	err = s.rotate(ctx, func(cur map[string]string) (map[string]string, error) {
-		if cur["organization_id"] != "" {
-			return cur, nil
-		}
-		out := make(map[string]string, len(cur)+2)
-		for k, v := range cur {
-			out[k] = v
-		}
-		out["organization_id"], out["organization_name"] = id, name
-		return out, nil
-	})
-	if err != nil {
+	if err := s.Keep(ctx, map[string]string{"organization_id": string(pick.ID), "organization_name": pick.Name}); err != nil {
 		return "", err
 	}
-	return s.creds["organization_id"], nil
+	return s.Creds["organization_id"], nil
 }
 
 // --- values ---
 
-// zid is a Zoho id, which the API gives as a string or, in some answers, a
-// number.
-type zid string
-
-func (z *zid) UnmarshalJSON(b []byte) error {
-	var s string
-	if json.Unmarshal(b, &s) == nil {
-		*z = zid(s)
-		return nil
-	}
-	var n json.Number
-	if err := json.Unmarshal(b, &n); err != nil {
-		return err
-	}
-	*z = zid(n.String())
-	return nil
-}
+// zid is a Zoho id.
+type zid = zoho.ID
 
 func amount(kobo int64) json.Number { return money.Number(kobo, 2) }
 
@@ -462,15 +314,8 @@ func boolean(m map[string]any, k string) bool {
 
 func (c *client) today() string { return c.now().UTC().Format(time.DateOnly) }
 
-// zohoTime is a time as Books' filters take it (2026-10-26T10:00:00+0000).
-func zohoTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05-0700") }
+// zohoTime is a time as Books' filters take it.
+func zohoTime(t time.Time) string { return zoho.Time(t) }
 
-// parseZohoTime reads Books' times (2026-10-26T10:00:00+0100).
-func parseZohoTime(s string) (time.Time, bool) {
-	for _, layout := range []string{"2006-01-02T15:04:05-0700", time.RFC3339} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
-		}
-	}
-	return time.Time{}, false
-}
+// parseZohoTime reads Books' times.
+func parseZohoTime(s string) (time.Time, bool) { return zoho.ParseTime(s) }

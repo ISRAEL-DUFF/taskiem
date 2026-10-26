@@ -100,7 +100,7 @@ func (c *client) listOrganizations(ctx context.Context, req connector.Request) (
 		out = append(out, map[string]any{"organization_id": string(o.ID), "name": o.Name, "currency_code": o.Currency, "country": o.Country, "is_default_org": o.Default})
 	}
 	res := map[string]any{"organizations": out}
-	if id := s.creds["organization_id"]; id != "" {
+	if id := s.Creds["organization_id"]; id != "" {
 		res["current"] = id
 	}
 	return connector.Response{Output: res}, nil
