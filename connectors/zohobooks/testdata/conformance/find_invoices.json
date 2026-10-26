@@ -1,0 +1,29 @@
+{
+ "action": "find_invoices",
+ "input": {
+  "customer_id": "460000000026049",
+  "status": "unpaid"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoices_unpaid"
+ ],
+ "expect": {
+  "output": {
+   "invoices": [
+    {
+     "invoice_id": "460000000027017"
+    }
+   ]
+  }
+ }
+}

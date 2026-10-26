@@ -1,0 +1,40 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/contacts",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695"
+  },
+  "body": {
+   "contact_name": "Adaeze Okafor",
+   "contact_type": "customer",
+   "contact_persons": [
+    {
+     "is_primary_contact": true,
+     "email": "ada@example.com",
+     "phone": "+2348030000000"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "code": 0,
+   "message": "The contact has been added.",
+   "contact": {
+    "contact_id": "460000000026049",
+    "contact_name": "Adaeze Okafor",
+    "contact_type": "customer",
+    "status": "active",
+    "email": "ada@example.com",
+    "phone": "+2348030000000",
+    "outstanding_receivable_amount": 15000.5,
+    "outstanding_payable_amount": 0
+   }
+  }
+ }
+}

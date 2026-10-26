@@ -1,0 +1,31 @@
+{
+ "capability": "books_taxes",
+ "input": {},
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "taxes"
+ ],
+ "expect": {
+  "taxes": [
+   {
+    "id": "460000000024001",
+    "name": "VAT",
+    "percent": 7.5
+   },
+   {
+    "id": "460000000024002",
+    "name": "Exempt",
+    "percent": 0
+   }
+  ]
+ }
+}

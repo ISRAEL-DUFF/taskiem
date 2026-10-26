@@ -1,0 +1,37 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/invoices",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695"
+  },
+  "body": {
+   "customer_id": "460000000026049",
+   "reference_number": "INV-2026-0042",
+   "date": "2026-10-26",
+   "due_date": "2026-11-09",
+   "notes": "Thank you",
+   "is_inclusive_tax": false,
+   "line_items": [
+    {
+     "name": "Bookkeeping, October",
+     "description": "Bookkeeping, October",
+     "rate": 25000.0,
+     "quantity": 2,
+     "item_id": "460000000020071",
+     "tax_id": "460000000024001"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "code": 1000,
+   "message": "Internal error"
+  }
+ }
+}

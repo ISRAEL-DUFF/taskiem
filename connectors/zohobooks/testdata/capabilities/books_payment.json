@@ -1,0 +1,29 @@
+{
+ "capability": "books_payment",
+ "input": {
+  "invoice_id": "460000000027017",
+  "amount_kobo": 5375000,
+  "paid_on": "2026-10-26",
+  "reference": "ml_01JB8Z3K4M5N6P7Q8R9S0T",
+  "account_id": "460000000000361",
+  "method": "transfer"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice",
+  "payments_by_reference_none",
+  "payment_create"
+ ],
+ "expect": {
+  "payment_id": "460000000027101"
+ }
+}

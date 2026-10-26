@@ -1,0 +1,39 @@
+{
+ "action": "create_sales_receipt",
+ "input": {
+  "receipt_number": "pos-2026-10-25",
+  "date": "2026-10-25",
+  "lines": [
+   {
+    "description": "Card",
+    "amount_kobo": 30000000
+   },
+   {
+    "description": "Transfer",
+    "amount_kobo": 11250000
+   }
+  ]
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "receipt_by_number_none",
+  "walk_in",
+  "receipt_create"
+ ],
+ "expect": {
+  "output": {
+   "sales_receipt_id": "460000000028001",
+   "created": true,
+   "total_kobo": 41250000
+  }
+ }
+}

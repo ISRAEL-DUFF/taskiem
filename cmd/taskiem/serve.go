@@ -336,6 +336,10 @@ func loadConfig() (config, error) {
 			QuickBooksURL:      os.Getenv("TASKIEM_QUICKBOOKS_URL"),
 			QuickBooksTestURL:  os.Getenv("TASKIEM_QUICKBOOKS_TEST_URL"),
 			QuickBooksTokenURL: os.Getenv("TASKIEM_QUICKBOOKS_TOKEN_URL"),
+			// Zoho Books' API and Zoho's accounts server for every
+			// connection, instead of each account's own (tests, a proxy).
+			ZohoBooksURL:    os.Getenv("TASKIEM_ZOHO_BOOKS_URL"),
+			ZohoAccountsURL: os.Getenv("TASKIEM_ZOHO_ACCOUNTS_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),

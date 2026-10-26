@@ -1,0 +1,44 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/expenses",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695"
+  },
+  "body": {
+   "account_id": "460000000000415",
+   "paid_through_account_id": "460000000000358",
+   "date": "2026-10-24",
+   "amount": 21500.0,
+   "reference_number": "RCPT-7781",
+   "description": "Diesel for the generator",
+   "line_items": [
+    {
+     "account_id": "460000000000415",
+     "amount": 20000.0,
+     "description": "Diesel for the generator"
+    },
+    {
+     "account_id": "460000000000415",
+     "amount": 1500.0,
+     "description": "VAT"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "expense": {
+    "expense_id": "460000000029001",
+    "reference_number": "RCPT-7781",
+    "total": 21500.0
+   }
+  }
+ }
+}

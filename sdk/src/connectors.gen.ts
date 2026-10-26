@@ -2952,6 +2952,150 @@ export const youverify = {
   verify_phone: (input: YouverifyVerifyPhoneInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_phone", input, extra),
 };
 
+// Zoho Books (zoho_books@1)
+export interface ZohoBooksChangesSinceInput {
+  since: Val<string>;
+}
+export interface ZohoBooksCreateBillInput {
+  bill_number: Val<string>;
+  /** Default today */
+  date?: Val<string>;
+  due_date?: Val<string>;
+  is_inclusive_tax?: Val<boolean>;
+  lines: Value;
+  notes?: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  vendor_id: Val<string>;
+}
+export interface ZohoBooksCreateContactInput {
+  company_name?: Val<string>;
+  contact_name: Val<string>;
+  contact_type?: Val<"customer" | "vendor">;
+  email?: Val<string>;
+  notes?: Val<string>;
+  phone?: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export interface ZohoBooksCreateExpenseInput {
+  /** The expense account */
+  account_id: Val<string>;
+  /** The total paid */
+  amount_kobo: Val<number>;
+  /** Default today */
+  date?: Val<string>;
+  description?: Val<string>;
+  /** The bank */
+  paid_through_account_id: Val<string>;
+  reference_number: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  /** Zoho works the tax out from it instead */
+  tax_id?: Val<string>;
+  /** VAT included in amount_kobo */
+  vat_kobo?: Val<number>;
+  vendor_id?: Val<string>;
+}
+export interface ZohoBooksCreateInvoiceInput {
+  customer_id: Val<string>;
+  date?: Val<string>;
+  due_date?: Val<string>;
+  /** Zoho's own number; left out */
+  invoice_number?: Val<string>;
+  is_inclusive_tax?: Val<boolean>;
+  lines: Value;
+  /** Shown on the invoice */
+  notes?: Val<string>;
+  reference_number: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export interface ZohoBooksCreateSalesReceiptInput {
+  customer_id?: Val<string>;
+  date?: Val<string>;
+  lines: Value;
+  notes?: Val<string>;
+  payment_mode?: Val<"cash" | "check" | "credit_card" | "bank_transfer" | "bank_remittance" | "others">;
+  receipt_number: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export interface ZohoBooksFindContactInput {
+  contact_name?: Val<string>;
+  contact_type?: Val<"customer" | "vendor">;
+  email?: Val<string>;
+  phone?: Val<string>;
+}
+export interface ZohoBooksFindInvoicesInput {
+  changed_since?: Val<string>;
+  customer_id?: Val<string>;
+  invoice_number?: Val<string>;
+  reference_number?: Val<string>;
+  status?: Val<"draft" | "sent" | "overdue" | "paid" | "partially_paid" | "unpaid" | "void" | "viewed">;
+}
+export interface ZohoBooksGetInvoiceInput {
+  invoice_id: Val<string>;
+}
+export interface ZohoBooksListAccountsInput {
+  /** Only accounts of this kind */
+  type?: Val<"income" | "expense" | "bank" | "cash" | "credit_card" | "receivable" | "payable" | "other">;
+}
+export interface ZohoBooksListItemsInput {
+  [key: string]: Value;
+}
+export interface ZohoBooksListOrganizationsInput {
+  [key: string]: Value;
+}
+export interface ZohoBooksListTaxesInput {
+  [key: string]: Value;
+}
+export interface ZohoBooksRecordPaymentInput {
+  /** The bank or cash account it went into */
+  account_id?: Val<string>;
+  amount_kobo: Val<number>;
+  /** Required without invoice_id */
+  customer_id?: Val<string>;
+  /** Default today */
+  date?: Val<string>;
+  description?: Val<string>;
+  invoice_id?: Val<string>;
+  payment_mode?: Val<"cash" | "check" | "credit_card" | "bank_transfer" | "bank_remittance" | "others">;
+  reference: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export const zoho_books = {
+  /** Read what changed (read) */
+  changes_since: (input: ZohoBooksChangesSinceInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "changes_since", input, extra),
+  /** Record a supplier's bill (idempotent_write) */
+  create_bill: (input: ZohoBooksCreateBillInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_bill", input, extra),
+  /** Add a customer or supplier (idempotent_write) */
+  create_contact: (input: ZohoBooksCreateContactInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_contact", input, extra),
+  /** Record an expense (idempotent_write) */
+  create_expense: (input: ZohoBooksCreateExpenseInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_expense", input, extra),
+  /** Record an invoice (idempotent_write) */
+  create_invoice: (input: ZohoBooksCreateInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_invoice", input, extra),
+  /** Record a sale (idempotent_write) */
+  create_sales_receipt: (input: ZohoBooksCreateSalesReceiptInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_sales_receipt", input, extra),
+  /** Find a customer or supplier (read) */
+  find_contact: (input?: ZohoBooksFindContactInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "find_contact", input, extra),
+  /** Find invoices (read) */
+  find_invoices: (input?: ZohoBooksFindInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "find_invoices", input, extra),
+  /** Get an invoice (read) */
+  get_invoice: (input: ZohoBooksGetInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "get_invoice", input, extra),
+  /** List accounts (read) */
+  list_accounts: (input?: ZohoBooksListAccountsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_accounts", input, extra),
+  /** List items (read) */
+  list_items: (input?: ZohoBooksListItemsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_items", input, extra),
+  /** List organisations (read) */
+  list_organizations: (input?: ZohoBooksListOrganizationsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_organizations", input, extra),
+  /** List taxes (read) */
+  list_taxes: (input?: ZohoBooksListTaxesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_taxes", input, extra),
+  /** Record a payment (idempotent_write) */
+  record_payment: (input: ZohoBooksRecordPaymentInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "record_payment", input, extra),
+};
+
 /** Connector refs with helpers here, for code generation. */
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
@@ -2992,6 +3136,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "whatsapp@1": "whatsapp",
   "xenibase@1": "xenibase",
   "youverify@1": "youverify",
+  "zoho_books@1": "zoho_books",
 };
 
 /** The actions each helper has: any other action is generated as connector(...). */
@@ -3034,6 +3179,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
+  "zoho_books@1": ["changes_since", "create_bill", "create_contact", "create_expense", "create_invoice", "create_sales_receipt", "find_contact", "find_invoices", "get_invoice", "list_accounts", "list_items", "list_organizations", "list_taxes", "record_payment"],
 };
 
 // Capabilities (schemas/capabilities-v1.json): the same input and output on every rail.
@@ -3505,15 +3651,15 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
 /** The built-in rails that declare each capability. */
 export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   balance: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
-  books_accounts: ["quickbooks@1"],
-  books_bill: ["quickbooks@1"],
-  books_customer: ["quickbooks@1"],
-  books_expense: ["quickbooks@1"],
-  books_invoice: ["quickbooks@1"],
-  books_items: ["quickbooks@1"],
-  books_payment: ["quickbooks@1"],
-  books_sale: ["quickbooks@1"],
-  books_taxes: ["quickbooks@1"],
+  books_accounts: ["quickbooks@1", "zoho_books@1"],
+  books_bill: ["quickbooks@1", "zoho_books@1"],
+  books_customer: ["quickbooks@1", "zoho_books@1"],
+  books_expense: ["quickbooks@1", "zoho_books@1"],
+  books_invoice: ["quickbooks@1", "zoho_books@1"],
+  books_items: ["quickbooks@1", "zoho_books@1"],
+  books_payment: ["quickbooks@1", "zoho_books@1"],
+  books_sale: ["quickbooks@1", "zoho_books@1"],
+  books_taxes: ["quickbooks@1", "zoho_books@1"],
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
   collect_transfer: ["flutterwave@1", "opay@1", "paystack@1"],

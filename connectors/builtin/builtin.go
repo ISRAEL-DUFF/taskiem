@@ -41,6 +41,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
 	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/connectors/youverify"
+	"github.com/israel-duff/taskiem/connectors/zohobooks"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -69,6 +70,10 @@ type Options struct {
 	// and sandbox hosts, QuickBooksTokenURL Intuit's token endpoint
 	// (TASKIEM_QUICKBOOKS_URL, _TEST_URL, _TOKEN_URL; tests, a proxy).
 	QuickBooksURL, QuickBooksTestURL, QuickBooksTokenURL string
+	// ZohoBooksURL and ZohoAccountsURL replace Zoho Books' API and Zoho's
+	// accounts server for every connection, instead of each account's own
+	// data centre (TASKIEM_ZOHO_BOOKS_URL, TASKIEM_ZOHO_ACCOUNTS_URL; tests).
+	ZohoBooksURL, ZohoAccountsURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).
 	XenibaseURL string
@@ -124,6 +129,7 @@ func Register(r *connector.Registry, o Options) error {
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
 		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
 		quickbooks.New(quickbooks.Options{LiveURL: o.QuickBooksURL, TestURL: o.QuickBooksTestURL, TokenURL: o.QuickBooksTokenURL}),
+		zohobooks.New(zohobooks.Options{BaseURL: o.ZohoBooksURL, AccountsServer: o.ZohoAccountsURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),
