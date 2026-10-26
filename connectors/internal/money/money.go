@@ -163,6 +163,29 @@ func (r *Reader) Floor(v any, scale int) int64 {
 	return q
 }
 
+// Round reads an amount rounded half up to the minor unit, for books that
+// keep amounts worked out from quantities and rates (an invoice's total):
+// what the books show, never an error for a long fraction. An amount that
+// is no number reads as zero.
+func Round(v any, scale int) int64 {
+	if v == nil {
+		return 0
+	}
+	n, err := Parse(v, scale+6)
+	if err != nil {
+		return 0
+	}
+	const unit, half = 1_000_000, 500_000
+	q, rem := n/unit, n%unit
+	switch {
+	case rem >= half:
+		q++
+	case rem <= -half:
+		q--
+	}
+	return q
+}
+
 // Decimal renders a provider's number as exact decimal text ("0.00025406"),
 // for crypto quantities and rates that have no minor unit.
 func Decimal(v any) string {

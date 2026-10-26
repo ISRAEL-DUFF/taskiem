@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -278,7 +279,13 @@ func (p *Poller) moneyTargets(ctx context.Context, targets []pollTarget) ([]poll
 		if best == nil {
 			continue
 		}
-		for _, ev := range best.Manifest.Events {
+		for name, ev := range best.Manifest.Events {
+			// Money events only: the books' events are records of money,
+			// which the money log does not hear, and polling them would
+			// spend the business's API quota (Zoho Books: 1,000 a day free).
+			if c, ok := capability.GetEvent(name); !ok || c.Kind != "rail" {
+				continue
+			}
 			spec, ok := best.Manifest.Triggers[ev.Trigger]
 			if !ok || spec.Poll == nil {
 				continue

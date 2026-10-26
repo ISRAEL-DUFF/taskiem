@@ -35,10 +35,10 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/israel-duff/taskiem/connectors/internal/money"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 )
@@ -422,34 +422,14 @@ func docNumber(s string) string {
 // --- money ---
 
 // amount is kobo as Intuit's decimal amount.
-func amount(kobo int64) json.Number {
-	sign := ""
-	if kobo < 0 {
-		sign, kobo = "-", -kobo
-	}
-	return json.Number(fmt.Sprintf("%s%d.%02d", sign, kobo/100, kobo%100))
-}
+func amount(kobo int64) json.Number { return money.Number(kobo, 2) }
 
 // kobo is an Intuit decimal amount in kobo, rounded half up.
 func kobo(n json.Number) int64 {
-	s := strings.TrimSpace(n.String())
-	if s == "" {
+	if n == "" {
 		return 0
 	}
-	neg := strings.HasPrefix(s, "-")
-	s = strings.TrimLeft(s, "+-")
-	whole, frac, _ := strings.Cut(s, ".")
-	frac += "000"
-	w, _ := strconv.ParseInt(whole, 10, 64)
-	f, _ := strconv.ParseInt(frac[:2], 10, 64)
-	v := w*100 + f
-	if frac[2] >= '5' {
-		v++
-	}
-	if neg {
-		v = -v
-	}
-	return v
+	return money.Round(n, 2)
 }
 
 // --- input helpers ---
