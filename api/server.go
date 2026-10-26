@@ -170,6 +170,9 @@ type Server struct {
 	WhatsAppPublic WhatsAppPublic
 	// Telegram is the platform bot (decision 0035); nil turns the channel off.
 	Telegram *telegram.Platform
+	// Slack is Taskiem's Slack app, for approvals in a business's workspace
+	// (decision 0051, slack.go); nil turns the channel off.
+	Slack *SlackApp
 	// Reach are the people outside each business who asked for updates on
 	// WhatsApp or Telegram (N11, decision 0039); ReachKeys open what a
 	// thank-you page's code carries, ReachHost is the form host their
@@ -255,6 +258,9 @@ func (s *Server) Handler() http.Handler {
 		if s.Telegram != nil {
 			r.Post("/channels/telegram", s.tgReceive)
 		}
+		if s.Slack != nil {
+			r.Post("/channels/slack/interactions", s.slackInteractions)
+		}
 		r.Mount("/channels/ussd", s.USSDHooks())
 	}
 	r.Route("/v1", func(r chi.Router) {
@@ -314,6 +320,9 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)
 			r.Delete("/me/telegram", s.unlinkTelegram)
+			r.Get("/me/slack", s.getSlack)
+			r.Post("/me/slack", s.startSlackLink)
+			r.Delete("/me/slack", s.unlinkSlack)
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number", s.getWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/whatsapp/number", s.putWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/whatsapp/number", s.deleteWhatsAppNumber)

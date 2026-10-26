@@ -428,6 +428,26 @@
       "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
       "reviewed": false
     },
+    "slack.link.button": {
+      "text": "Tabbatar",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Wannan asusun Slack naku ne? Danna Tabbatar don samun amincewar da kuke yankewa a Taskiem a nan, a Slack. Idan ba ku nemi wannan ba, ku yi watsi da shi.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "An haɗa. Amincewar da ke jiran ku za ta zo nan.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Wannan haɗin ba ya aiki kuma. Ku nemi sabo a shafin bayanan ku na Taskiem.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "Wannan asusun Slack ba a haɗa shi da ku a Taskiem ba, don haka ba zai iya yanke wannan ba. Ku haɗa shi daga shafin bayanan ku na Taskiem.",
+      "reviewed": false
+    },
     "tg.button_expired": {
       "text": "Wannan maɓallin ya ƙare. Aika *approvals* don sake samun amincewarka da ke buɗe.",
       "reviewed": false

@@ -50,7 +50,10 @@ const (
 	// PurposeIngestEnrich: completing a verified delivery at the provider
 	// before its runs start (a truncated event's row).
 	PurposeIngestEnrich = "ingest.enrich"
-	PurposeUnspecified  = "unspecified"
+	// PurposeChatDeliver: sending approvals and replies through a
+	// business's own chat connection (Slack's bot token; decision 0051).
+	PurposeChatDeliver = "chat.deliver"
+	PurposeUnspecified = "unspecified"
 )
 
 // Use says why a secret is decrypted; the vault records it with the read.

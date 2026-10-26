@@ -55,6 +55,9 @@ tags:
 - name: Telegram
   description: Linking people to the platform's Telegram bot.
   x-taskiem-guide: telegram
+- name: Slack
+  description: Linking members to their Slack user, for approvals in the business's workspace.
+  x-taskiem-guide: integrations/slack
 - name: Notifications
   description: What each person needs to know, for the web app's bell, and how they hear beyond it.
   x-taskiem-guide: alerts
@@ -10565,6 +10568,92 @@ paths:
       tags:
       - Telegram
       summary: Unlink Telegram
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/slack:
+    get:
+      operationId: getSlack
+      tags:
+      - Slack
+      summary: Get the caller's Slack link in this business
+      description: Approvals in Slack (decision 0051) come to a member's Slack user in the business's own workspace.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackLink'
+        '403':
+          description: An API key has no Slack account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startSlackLink
+      tags:
+      - Slack
+      summary: Link the caller's Slack user
+      description: Finds the caller in the business's connected Slack workspace by their email and sends them a Confirm button
+        there; the link holds once they press it. Takes the same proof as adding a passkey.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactorProof'
+        required: true
+      responses:
+        '201':
+          description: The Confirm button was sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackLink'
+        '403':
+          description: An API key, or the proof is missing or wrong (`reauth`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slack approvals are not set up, Slack is not connected, or no one in the workspace has the caller's email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many links asked for.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unlinkSlack
+      tags:
+      - Slack
+      summary: Unlink Slack in this business
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -28969,6 +29058,28 @@ components:
         flows:
           type: boolean
           description: Whether WhatsApp forms are available.
+      additionalProperties: false
+    SlackLink:
+      type: object
+      required:
+      - enabled
+      - linked
+      - pending
+      properties:
+        enabled:
+          type: boolean
+          description: Taskiem's Slack app is set up here.
+        linked:
+          type: boolean
+        pending:
+          type: boolean
+          description: A Confirm button was sent and not pressed yet.
+        workspace:
+          type: string
+          description: The Slack workspace's id.
+        verified_at:
+          type: string
+          format: date-time
       additionalProperties: false
     TelegramLink:
       type: object

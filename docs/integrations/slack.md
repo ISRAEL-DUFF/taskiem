@@ -12,9 +12,20 @@ Taskiem's Slack app (once, by Taskiem's operators):
 
 1. Create the app at <https://api.slack.com/apps>, with the bot scopes `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `chat:write.public`, `files:write`, `groups:read`, `im:history`, `im:write`, `reactions:write`, `users:read` and `users:read.email`, and the redirect URL `<TASKIEM_PUBLIC_URL>/v1/connections/oauth/callback`.
 2. **Event Subscriptions** → Request URL `<TASKIEM_HOOKS_URL>/apps/slack@1/events`; subscribe the bot to the events workflows use, and to `app_uninstalled` and `tokens_revoked`.
-3. **Interactivity** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/interactions`: approval buttons are decided there, and every other click goes on to `/hooks/apps/slack@1/interactions`.
+3. **Interactivity** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/interactions`: approval buttons are decided there, and every other click goes on to `/hooks/apps/slack@1/interactions` (see [approvals in Slack](#approvals-in-slack)).
 4. **Manage Distribution** → turn on public distribution, so workspaces other than Taskiem's can install it.
 5. Put the client id, client secret and signing secret in the environment.
+
+## Approvals in Slack
+
+Approval requests can come to a member in Slack, as they do on WhatsApp and Telegram, through the business's own workspace (decision 0051; the same notices, decision tokens and deciding as [governance](../governance.md) describes for chat).
+
+- **Linking.** On their profile, a member links Slack in the business they are in (`POST /v1/me/slack`, with the same proof as adding a passkey). Taskiem finds them in the business's connected workspace by their email (`users.lookupByEmail`) and sends them, from the bot, a **Confirm** button; pressing it links that Slack user to them in this business (`slack_bindings`). Someone not in the workspace, or with another email there, is told so. A link is one business's, unlike a WhatsApp number or Telegram account. Unlink with `DELETE /v1/me/slack`.
+- **Requests.** An approval step waiting for a role reaches each linked approver who holds it as a direct message from the bot: the request in plain text (personal data masked, as on every chat channel) with **Approve** and **Reject** buttons carrying the signed decision tokens. School approvals come the same way to holders of `school.approve`.
+- **Deciding.** A button decides only for the member it was sent to, linked in that business; another person's click, an unlinked one, or the second button of a pair decides nothing. The answer comes as a reply, and the clicked message loses its buttons. An approval that asks for a passkey or code is handed to the web app, as on WhatsApp.
+- **Where clicks go.** Taskiem's Slack app has one interactivity URL, `/channels/slack/interactions`, verified with the app's signing secret: Taskiem's own buttons (approvals, Confirm) are handled there, and every other click goes on, unchanged, to `/hooks/apps/slack@1/interactions`, the `interactions` trigger.
+
+Not yet: the "First payment to this account" warning in chat requests (WhatsApp's and Telegram's do not show it either), and updating a request in Slack when it is decided somewhere else (its buttons then answer that it was already decided).
 
 ## Your own Slack app
 

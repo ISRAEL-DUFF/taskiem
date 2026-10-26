@@ -61,7 +61,7 @@ func (s *Server) RunWhatsApp(ctx context.Context) error {
 // bound number who have not had them, and how runs started from WhatsApp
 // ended.
 func (s *Server) WhatsAppTick(ctx context.Context) error {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants()`)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants() UNION SELECT tenant_id FROM taskiem_slack_tenants()`)
 	if err != nil {
 		return err
 	}

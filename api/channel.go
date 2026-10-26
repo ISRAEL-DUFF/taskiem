@@ -12,13 +12,14 @@ import (
 )
 
 // chatChannel is a chat app people use Taskiem from (spec 11): WhatsApp,
-// on the platform number or a tenant's own, or Telegram, on the platform
-// bot (decision 0035). The conversation (commands, inputs, builds, data
+// on the platform number or a tenant's own, Telegram, on the platform bot
+// (decision 0035), or Slack, for approvals, on a business's own workspace
+// (decision 0051, slack.go). The conversation (commands, inputs, builds, data
 // tables, approvals, run outcomes) is the same on each; only how a message
 // travels differs. An address is a WhatsApp number (+E.164) or a Telegram
 // account (tg:<id>), and the two never collide.
 type chatChannel interface {
-	// Name is "whatsapp" or "telegram".
+	// Name is "whatsapp", "telegram" or "slack".
 	Name() string
 	// OwnTenant is the tenant a channel speaks for alone (a tenant's own
 	// WhatsApp number), uuid.Nil for a shared one.
@@ -46,6 +47,9 @@ func (s *Server) chatChannelsOn() []string {
 	if s.Telegram != nil {
 		on = append(on, "telegram")
 	}
+	if s.Slack != nil {
+		on = append(on, "slack")
+	}
 	return on
 }
 
@@ -67,6 +71,9 @@ func (s *Server) chatChannelFor(ctx context.Context, channel string, tenant uuid
 		return s.Telegram, nil
 	case channel == "whatsapp" && s.WhatsApp != nil:
 		return s.WhatsApp.ForTenant(ctx, tenant)
+	case channel == "slack" && s.Slack != nil:
+		// The business's own workspace, through its Slack connection.
+		return &slackChannel{s: s, tenant: tenant}, nil
 	}
 	return nil, fmt.Errorf("%w: the %s channel is off", whatsapp.ErrNothingToSend, channel)
 }
@@ -74,6 +81,9 @@ func (s *Server) chatChannelFor(ctx context.Context, channel string, tenant uuid
 // chatAddrsTx are the addresses on a channel of those of users who have
 // linked it and are members of a tenant in tx's scope.
 func chatAddrsTx(ctx context.Context, tx pgx.Tx, channel string, users []uuid.UUID) (map[uuid.UUID]string, error) {
+	if channel == "slack" {
+		return slackAddrsTx(ctx, tx, users)
+	}
 	q := `SELECT user_id, number FROM taskiem_wa_numbers($1)`
 	if channel == "telegram" {
 		q = `SELECT user_id, 'tg:' || telegram_id FROM taskiem_tg_accounts($1)`

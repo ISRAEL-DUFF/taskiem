@@ -534,6 +534,31 @@
       "reviewed": true,
       "context": "SMS after a USSD run that needs reconciliation (ASCII)"
     },
+    "slack.link.button": {
+      "text": "Confirm",
+      "reviewed": true,
+      "context": "The button under slack.link.confirm (20 characters at most)"
+    },
+    "slack.link.confirm": {
+      "text": "Is this your Slack account? Press Confirm to get the approvals you decide on Taskiem here, in Slack. If you did not ask for this, ignore it.",
+      "reviewed": true,
+      "context": "Sent in Slack when a member asks to link their Slack account; a Confirm button follows"
+    },
+    "slack.link.done": {
+      "text": "Linked. Approvals waiting for you will come here.",
+      "reviewed": true,
+      "context": "After Confirm was pressed and the Slack account is linked"
+    },
+    "slack.link.stale": {
+      "text": "This link is not valid any more. Ask for a new one on your Taskiem profile.",
+      "reviewed": true,
+      "context": "Confirm was pressed too late, twice, or by someone else"
+    },
+    "slack.not_linked": {
+      "text": "This Slack account is not linked to you on Taskiem, so it cannot decide this. Link it from your Taskiem profile.",
+      "reviewed": true,
+      "context": "An approval button pressed from a Slack account not linked in that business"
+    },
     "tg.button_expired": {
       "text": "That button has expired. Send *approvals* to get your open approvals again.",
       "reviewed": true,

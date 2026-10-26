@@ -119,6 +119,9 @@ type config struct {
 	// ChatTokenKey signs approval tokens when WhatsApp is off
 	// (TASKIEM_CHAT_TOKEN_KEY; with WhatsApp on, its token key is used).
 	ChatTokenKey []byte
+	// SlackSigningSecret is Taskiem's Slack app's (TASKIEM_OAUTH_SLACK_WEBHOOK_SECRET):
+	// with it, approvals go to members' linked Slack (decision 0051).
+	SlackSigningSecret string
 	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
 	AI ai.Config
 	// Languages are languages beyond English and voice notes on WhatsApp,
@@ -393,10 +396,13 @@ func loadConfig() (config, error) {
 	if c.Telegram, err = telegram.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
-	if c.Telegram != nil && c.WhatsApp == nil {
+	// Approvals in Slack (decision 0051): Taskiem's Slack app's signing
+	// secret verifies their clicks.
+	c.SlackSigningSecret = strings.TrimSpace(os.Getenv("TASKIEM_OAUTH_SLACK_WEBHOOK_SECRET"))
+	if (c.Telegram != nil || c.SlackSigningSecret != "") && c.WhatsApp == nil {
 		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(os.Getenv("TASKIEM_CHAT_TOKEN_KEY")))
 		if err != nil || len(key) < 32 {
-			return c, errors.New("TASKIEM_TELEGRAM_BOT_TOKEN is set without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
+			return c, errors.New("the Telegram bot or Taskiem's Slack app is set up without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
 		}
 		c.ChatTokenKey = key
 	}
@@ -993,6 +999,12 @@ func serve(ctx context.Context, args []string) error {
 			// The platform bot's webhook (docs/telegram.md).
 			mux.HandleFunc("/channels/telegram", git.TelegramHooks().ServeHTTP)
 		}
+		if git.Slack != nil {
+			// Taskiem's Slack app's clicks: approvals here, the rest on to
+			// /hooks/apps/slack@1/interactions (docs/integrations/slack.md).
+			git.Ingest = e.hooks()
+			mux.HandleFunc("/channels/slack/interactions", git.SlackHooks().ServeHTTP)
+		}
 		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
 		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))
 		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
@@ -1341,6 +1353,9 @@ func (c config) relyingParty() (webauthn.Config, error) {
 // that signs approval buttons when WhatsApp is off.
 func (e *engine) chat(srv *api.Server) {
 	srv.Telegram = e.tg
+	if e.cfg.SlackSigningSecret != "" {
+		srv.Slack = &api.SlackApp{SigningSecret: e.cfg.SlackSigningSecret}
+	}
 	if e.wa == nil && len(e.cfg.ChatTokenKey) > 0 {
 		srv.ChatSigner = whatsapp.Signer{Key: e.cfg.ChatTokenKey}
 	}
