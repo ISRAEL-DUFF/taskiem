@@ -481,6 +481,14 @@ Differences from §7.2 and §7.3: the scopes are one set (reading and sending), 
 
 §9: both connectors, their webhooks, the consent rule, the receipt and list templates.
 
+**Built** (K7, 26 October 2026), on the K1 pull request. Fixtures are shaped from Resend's and Brevo's published examples; nothing has run against either yet.
+- **`resend@1`:** `send_email` carries the step's key as Resend's `Idempotency-Key` (one send per key for 24 hours; a reused key with another body is fatal), refused before calling from a domain not verified in Resend; `get_email`, `list_domains`. `email_events` is registered remotely: Taskiem creates the webhook, keeps the Svix secret Resend returns (`svix` now allowed for remote triggers), turns a paused webhook back on, and makes again one found after a crash.
+- **`brevo@1`:** email (from an authenticated domain only) and SMS as unsafe writes; contacts upserted by email; lists; campaigns sent once. Consent: a list addition, or a marketing text, needs `consent.opted_in: true`, which the manifest allows only as true and the connector checks again. `transactional_events` and `marketing_events` are registered remotely with a bearer token of Taskiem's; Brevo's snake-case event names are mapped to the webhook's.
+- **Templates:** a receipt through Resend; opted-in customers onto a Brevo list (only those whose row says so); bounces, complaints and unsubscribes back onto the customers table.
+- **On the way:** a test compiles every built-in trigger's expressions, since a manifest does not check them when it loads (it caught one here).
+
+Differences from §9: there is no Brevo list picker yet (the list is its number); Resend's audiences and broadcasts come later.
+
 ### K8: Mailchimp (S; needs K1)
 
 §9, with OAuth and the server prefix.

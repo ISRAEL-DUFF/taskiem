@@ -1,0 +1,177 @@
+{
+  "id": "brevo-opted-in-customers",
+  "title": "Put people who opted in on a Brevo list",
+  "summary": "When a customer in your customers table agrees to marketing, add them to your Brevo newsletter list, once.",
+  "description": "Whenever a customer is added to your customers table, or changed there, and their marketing_opt_in is true, Taskiem adds them to the Brevo list you choose (or updates them there), with their name and phone. Nobody whose row does not say they agreed is ever added, as the Nigeria Data Protection Act asks. Adding someone already on the list changes nothing.",
+  "category": "customers",
+  "tags": [
+    "brevo",
+    "newsletter",
+    "consent"
+  ],
+  "keywords": [
+    "brevo",
+    "newsletter",
+    "marketing",
+    "list",
+    "opt",
+    "subscribe"
+  ],
+  "requires": [
+    "brevo"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "brevo@1"
+  ],
+  "params": [
+    {
+      "name": "brevo_connection",
+      "type": "connection",
+      "connector": "brevo",
+      "title": "Brevo connection",
+      "description": "Your Brevo account, by its API key.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "list_id",
+      "type": "integer",
+      "title": "Brevo list",
+      "description": "The list's number in Brevo (Contacts → Lists).",
+      "required": true,
+      "example": 3,
+      "minimum": 1,
+      "maximum": 100000000
+    },
+    {
+      "name": "customers_table",
+      "type": "string",
+      "title": "Customers table",
+      "description": "Your customers: name, email, phone, whether they agreed to marketing, and how their email is doing. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{customers_table}}",
+      "title": "Customers",
+      "description": "Your customers. marketing_opt_in is true only when the customer said yes to your newsletter; email_status says when their address bounced or they unsubscribed or complained.",
+      "columns": [
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "text",
+          "required": true,
+          "personal": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "phone",
+          "title": "Phone",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "marketing_opt_in",
+          "title": "Agreed to marketing",
+          "type": "boolean"
+        },
+        {
+          "name": "email_status",
+          "title": "Email status",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_brevoOptedInCustomers",
+    "version": 1,
+    "name": "Put customers who opted in on a Brevo list",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "xenibase@1",
+        "trigger": "row_changed",
+        "connection": "data_tables",
+        "events": [
+          "INSERT",
+          "UPDATE"
+        ],
+        "options": {
+          "tables": [
+            "{{customers_table}}"
+          ]
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "x-pii": "email"
+              },
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              },
+              "marketing_opt_in": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "add",
+        "type": "connector",
+        "name": "Add them to the list",
+        "connector": "brevo@1",
+        "action": "create_or_update_contact",
+        "connection": "{{brevo_connection}}",
+        "when": "=has(trigger.body.record.marketing_opt_in) && trigger.body.record.marketing_opt_in == true && has(trigger.body.record.email) && trigger.body.record.email != ''",
+        "input": {
+          "email": "=trigger.body.record.email",
+          "first_name": "=trigger.body.record.?name.orValue('')",
+          "phone": "=trigger.body.record.?phone.orValue('')",
+          "list_ids": [
+            "{{list_id}}"
+          ],
+          "consent": {
+            "opted_in": true,
+            "source": "the customers table"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}
