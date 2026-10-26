@@ -1,18 +1,47 @@
 {{define "content"}}
-<div class="legacy">
-<section class="page-head">
-  <h1>Taskiem inside your product.</h1>
-  <p class="lead">Lenders, payroll companies and banks embed Taskiem so their customers get approvals, payouts and reminders under their own brand. Your users never see Taskiem; you keep the relationship.</p>
+<section class="band glow page-hero">
+  <div class="wrap head">
+    <p class="eyebrow">For fintechs and partners</p>
+    <h1>Taskiem inside your product, under your brand.</h1>
+    <p class="lead">Lenders, payroll companies and banks embed Taskiem so their customers get approvals, payouts and reminders. Your users never see Taskiem; you keep the relationship.</p>
+  </div>
 </section>
-<section class="tight"><div class="cards three">
-  <article class="card"><span class="tile">{{template "icon-plug"}}</span><h3>Embedded, white-labelled.</h3><p>Sub-tenants, embed apps, your own domain, and a partner API for routing events and runs. Your users sign in with you; Taskiem mints short-lived tokens server-side.</p><p><a class="more" href="{{.Docs}}embedding">Embedding {{template "icon-arrow"}}</a></p></article>
-  <article class="card"><span class="tile">{{template "icon-shield"}}</span><h3>Built for regulated money movement.</h3><p>Durable, replayable runs with exactly-once external effects, approval policies with step-up, a tamper-evident audit chain, and personal data sealed by default.</p><p><a class="more" href="{{.Docs}}compliance">Compliance {{template "icon-arrow"}}</a></p></article>
-  <article class="card"><span class="tile">{{template "icon-server"}}</span><h3>Run it where you must.</h3><p>Hosted, or self-hosted on one VM or Kubernetes with a Helm chart, bring your own key, SSO and SCIM.</p><p><a class="more" href="{{.Docs}}operations">Operations {{template "icon-arrow"}}</a></p></article>
-</div></section>
-<section class="tight">
-  <h2>Talk to us</h2>
-  <p>Partner plans are priced by contract. <a href="{{.Base}}contact">Get in touch</a> with what you are building and how many businesses it serves.</p>
+
+<section class="section">
+  <div class="wrap grid g3">
+    <article class="card">{{template "i-plug"}}<h3>Embedded, white-labelled</h3><p>Sub-accounts for each of your customers, the builder inside your product on your own domain, and a partner API for events and runs. Your users sign in with you.</p><p><a class="more" href="{{.Docs}}embedding">Embedding {{template "i-arrow"}}</a></p></article>
+    <article class="card pine">{{template "i-shield"}}<h3>Built for regulated money movement</h3><p>Durable, replayable runs with exactly-once external effects, approval policies with step-up, a tamper-evident audit chain, and personal data sealed by default.</p><p><a class="more" href="{{.Docs}}compliance">Compliance {{template "i-arrow"}}</a></p></article>
+    <article class="card">{{template "i-server"}}<h3>Run it where you must</h3><p>Hosted, or self-hosted on one VM or Kubernetes with a Helm chart. Bring your own key, single sign-on and SCIM.</p><p><a class="more" href="{{.Docs}}operations">Operations {{template "i-arrow"}}</a></p></article>
+  </div>
 </section>
-<section class="closing"></section>
-</div>
+
+<section class="section paper">
+  <div class="wrap stack-lg">
+    <div class="head"><p class="eyebrow">What you get</p><h2>Everything a regulated product needs.</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>You need to</th><th class="us">Taskiem gives you</th></tr></thead>
+        <tbody>
+          <tr><td>Embed it</td><td>The builder as a web component, white-label themes, custom domains</td></tr>
+          <tr><td>Run it for many customers</td><td>Sub-accounts per customer, a partner API, an audit trail for you and for them</td></tr>
+          <tr><td>Build in code</td><td>A TypeScript SDK, a command-line tool, workflows in Git, staging environments</td></tr>
+          <tr><td>Govern it</td><td>Single sign-on (OIDC and SAML), SCIM, custom roles, passkeys</td></tr>
+          <tr><td>Host it</td><td>Our cloud, a dedicated stack, or your own infrastructure</td></tr>
+          <tr><td>Extend it</td><td>A public connector SDK and a review process for new services</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="band section closing">
+  <div class="wrap">
+    <div class="head">
+      {{template "mark-reversed"}}
+      <h2 class="h1">Talk to us.</h2>
+      <p class="lead">Partner plans are priced by contract. Tell us what you are building and how many businesses it serves.</p>
+      <div class="actions"><a class="btn" href="{{.Base}}contact">Get in touch</a><a class="btn ghost" href="{{.Docs}}">Read the documentation</a></div>
+    </div>
+  </div>
+</section>
 {{end}}

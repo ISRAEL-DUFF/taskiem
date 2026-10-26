@@ -1,14 +1,24 @@
 {{define "content"}}
-<div class="legacy">
-<section class="page-head">
-  <h1>About Taskiem</h1>
-  <p class="lead">Taskiem is made in Nigeria by the team behind Xenibase, a managed database used by Nigerian developers.</p>
+<section class="page-hero">
+  <div class="wrap head">
+    <p class="eyebrow">About</p>
+    <h1>Made in Lagos, for businesses that run on WhatsApp.</h1>
+    <p class="lead">Taskiem is made in Nigeria by the team behind Xenibase, a managed database used by Nigerian developers.</p>
+  </div>
 </section>
-<section class="tight">
-  <p>We built Taskiem because every small business owner we know runs their business from WhatsApp and a notebook, and the tools built for them were built for someone else: for people with laptops, email and an hour to learn a dashboard.</p>
-  <p>So Taskiem starts in the chat you already have open. It speaks plainly, tells you what it will do before it does it, and treats your customers' details and your money with the care a bank would expect. The same engine serves lenders and payroll companies, which is why a shop gets protections that are usually reserved for them.</p>
-  <p>Taskiem bills in naira, runs on infrastructure built for Nigerian conditions, and connects to the services businesses here already use.</p>
+<section class="section tight">
+  <div class="wrap split">
+    <div class="prose">
+      <p>We built Taskiem because every small business owner we know runs their business from WhatsApp and a notebook, and the tools built for them were built for someone else: for people with laptops, email and an hour to learn a dashboard.</p>
+      <p>So Taskiem starts in the chat you already have open. It speaks plainly, tells you what it will do before it does it, and treats your customers’ details and your money with the care a bank would expect. The same engine serves lenders and payroll companies, which is why a shop gets protections that are usually reserved for them.</p>
+      <p>Taskiem bills in naira and connects to the services businesses here already use.</p>
+    </div>
+    <div class="grid">
+      <article class="card pine"><h3>Plain words</h3><p>One idea at a time, in the language you use.</p></article>
+      <article class="card"><h3>Your yes first</h3><p>Taskiem reads back what it will do. Nothing happens until you agree.</p></article>
+      <article class="card"><h3>Careful with money</h3><p>Every payment once, every action on record.</p></article>
+    </div>
+  </div>
 </section>
-{{template "banner" .}}
-</div>
+{{template "closing" .}}
 {{end}}

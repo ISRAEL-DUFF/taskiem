@@ -188,7 +188,7 @@ func TestBuild(t *testing.T) {
 				t.Errorf("%s: no www.css", cfg.Base)
 			}
 			home := string(files["index.html"])
-			for _, want := range []string{"Tell Taskiem what to do in your own words", cfg.Base + "docs/", "Paystack", cfg.Base + "img/logo.png", "material-symbols-outlined"} {
+			for _, want := range []string{"Run your business from WhatsApp", "Tell Taskiem what to do in your own words", cfg.Base + "docs/", "Paystack", cfg.Base + "img/mark-small.svg", cfg.Base + "www.css"} {
 				if !strings.Contains(home, want) {
 					t.Errorf("%s: home page lacks %q", cfg.Base, want)
 				}

@@ -39,29 +39,19 @@ type wwwPage struct {
 }
 
 var wwwPages = []wwwPage{
-	// The four pages the designer drew carry the sample's titles.
-	{"index", "Taskiem | Enterprise WhatsApp Financial & Ledger Infrastructure", "Tell Taskiem what to do in your own words: remind the customers who owe you, thank each one who pays, pay your staff after you approve. It runs every day without being reminded."},
-	{"integrations", "Taskiem | Integrations & Connectors", "Taskiem connects to Paystack, Moniepoint, OPay, Flutterwave, Termii, WhatsApp, Google Sheets and the other services Nigerian businesses rely on every day."},
-	{"pricing", "Taskiem | Pricing in Naira", "Simple, honest pricing in naira. Run 10 or 10,000 tasks without paying extra."},
-	{"security", "Taskiem | Bank-Grade Security Architecture", "Payments never move without explicit owner authorization, nothing is charged twice, customer data is shielded from the AI, and every action is on a tamper-evident audit trail."},
+	{"index", "Taskiem · Run your business from WhatsApp", "Tell Taskiem what to do in your own words: remind the customers who owe you, thank each one who pays, pay your staff after you approve. It runs every day without being reminded."},
 	{"how-it-works", "How it works · Taskiem", "You talk to Taskiem the way you talk to a manager. It tells you what it understood before it does anything, and does it every day after that."},
 	{"templates", "What you can automate · Taskiem", "Ready-made workflows for Nigerian businesses: reminders to debtors, receipts when customers pay, salaries after approval, stock alerts, and more."},
+	{"integrations", "Works with · Taskiem", "Taskiem connects to Paystack, Moniepoint, OPay, Flutterwave, Termii, WhatsApp, Google Sheets and the other services Nigerian businesses rely on every day."},
+	{"pricing", "Pricing · Taskiem", "Flat monthly prices in naira, with VAT shown separately and no charge per run."},
+	{"security", "Trust · Taskiem", "Payments wait for your approval and are never sent twice, customers' details stay private, and every action is on a tamper-evident record."},
 	{"tables", "Your records · Taskiem", "Keep your debtors, customers, stock and staff in Taskiem instead of a spreadsheet, and let your workflows read and write them."},
 	{"storefront", "Your page · Taskiem", "A one-page shop for your business from one message: your products or services, a Pay button, a QR code, and orders that come to you in chat."},
-	{"partners", "Developers & White-label · Taskiem", "Lenders, payroll companies and banks embed Taskiem so their customers get approvals, payouts and reminders under their own brand."},
+	{"partners", "For fintechs and partners · Taskiem", "Lenders, payroll companies and banks embed Taskiem so their customers get approvals, payouts and reminders under their own brand."},
 	{"about", "About · Taskiem", "Taskiem is made in Nigeria for the businesses that run on WhatsApp and a notebook."},
 	{"contact", "Contact · Taskiem", "How to reach the people behind Taskiem."},
 	{"404", "Not found · Taskiem", ""},
 }
-
-// The integrations page's six featured cards are the designer's, verbatim;
-// every other connector appears in the adapter grid below them.
-var featuredCards = map[string]bool{"paystack": true, "moniepoint": true, "opay": true, "flutterwave": true, "termii": true, "googlesheets": true}
-
-// adapterIcons are the Material Symbols the adapter grid shows, by category.
-var adapterIcons = map[string]string{"payments": "account_balance", "messaging": "sms", "identity": "fingerprint", "open_banking": "account_balance_wallet", "productivity": "table_chart", "database": "database", "storage": "cloud_sync"}
-
-var adapterKinds = map[string]string{"payments": "Payments & Banking", "messaging": "Messaging", "identity": "Identity Checks", "open_banking": "Open Banking", "productivity": "Spreadsheets & Email", "database": "Database", "storage": "File Storage"}
 
 // The home page's picks: the templates it shows as cards, and the
 // services it names, by id. A build fails if one goes missing.
@@ -85,7 +75,7 @@ var templateGroups = []struct{ category, title string }{
 }
 
 // Connector groups, in page order, by the manifest's category. Taskiem's
-// own connectors (notify, form, storefront) are described in prose, not
+// own connectors (notify, form, storefront, invoices, schools) are described in prose, not
 // listed as services.
 var connectorGroups = []struct {
 	title      string
@@ -99,7 +89,7 @@ var connectorGroups = []struct {
 	{"Files", []string{"storage"}},
 }
 
-var ownConnectors = map[string]bool{"notify": true, "form": true, "storefront": true}
+var ownConnectors = map[string]bool{"notify": true, "form": true, "storefront": true, "invoices": true, "schools": true}
 
 // wwwTemplate is a template as the site shows it.
 type wwwTemplate struct {
@@ -116,7 +106,6 @@ type wwwTemplateGroup struct {
 type wwwConnector struct {
 	ID, Name, Category, Description string
 	DocURL                          string // the connector's docs page, when it has one
-	Icon, Kind                      string // the adapter grid's icon and category label
 	// Can are a rail's capabilities and the payment events it sends
 	// (connector/v1 rule 16), for naming the rails a template runs on.
 	Can map[string]bool
@@ -164,8 +153,7 @@ type wwwData struct {
 	FeaturedServices []string
 	Templates        []wwwTemplateGroup
 	Connectors       []wwwConnectorGroup
-	ConnectorCount   int            // every service connector (Taskiem's own left out)
-	Adapters         []wwwConnector // the connectors outside the six featured cards
+	ConnectorCount   int // every service connector (Taskiem's own left out)
 	Pricing          wwwPricing
 	Prices           map[string]string // monthly price by plan id, "" while placeholders
 }
@@ -214,13 +202,6 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 			continue
 		}
 		data.ConnectorCount++
-		if !featuredCards[c.ID] {
-			c.Icon, c.Kind = adapterIcons[c.Category], adapterKinds[c.Category]
-			if c.Icon == "" {
-				c.Icon, c.Kind = "hub", "Integration"
-			}
-			data.Adapters = append(data.Adapters, c)
-		}
 	}
 	for _, id := range featuredConnectors {
 		n, ok := names[id]
@@ -250,7 +231,7 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 		return err
 	}
 	files["www.css"] = css
-	// The typeface, self-hosted (Plus Jakarta Sans, SIL OFL: assets/fonts/LICENSE-PlusJakartaSans.txt).
+	// The typefaces, self-hosted (Plus Jakarta Sans and JetBrains Mono, SIL OFL: assets/fonts).
 	fonts, err := fs.ReadDir(assets, "assets/fonts")
 	if err != nil {
 		return err
@@ -262,7 +243,7 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 		}
 		files["fonts/"+f.Name()] = b
 	}
-	// The designer's photos and the logo (assets/www/img).
+	// The brand's mark and share picture (docs/brand/relay, copied to assets/www/img).
 	imgs, err := fs.ReadDir(assets, "assets/www/img")
 	if err != nil {
 		return err
@@ -275,7 +256,7 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 		files["img/"+f.Name()] = b
 	}
 	for _, p := range wwwPages {
-		t, err := template.New("layout.html").Funcs(wwwFuncs).ParseFS(assets, "assets/www/layout.html", "assets/www/legacy.html", "assets/www/visuals.html", "assets/www/"+p.Name+".html")
+		t, err := template.New("layout.html").Funcs(wwwFuncs).ParseFS(assets, "assets/www/layout.html", "assets/www/parts.html", "assets/www/"+p.Name+".html")
 		if err != nil {
 			return fmt.Errorf("website: %s: %w", p.Name, err)
 		}
