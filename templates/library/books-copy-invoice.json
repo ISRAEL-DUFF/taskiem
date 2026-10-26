@@ -20,6 +20,15 @@
     "invoice",
     "record"
   ],
+  "requires": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "zoho books",
+    "ledger"
+  ],
   "connectors": [
     "capability:books_customer",
     "capability:books_invoice"

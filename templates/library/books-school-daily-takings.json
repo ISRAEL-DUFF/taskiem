@@ -23,6 +23,15 @@
     "daily",
     "close"
   ],
+  "requires": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "zoho books",
+    "ledger"
+  ],
   "connectors": [
     "schools@1",
     "capability:books_sale"

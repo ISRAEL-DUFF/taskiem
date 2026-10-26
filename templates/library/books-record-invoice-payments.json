@@ -22,6 +22,15 @@
     "paid",
     "record"
   ],
+  "requires": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "zoho books",
+    "ledger"
+  ],
   "connectors": [
     "capability:books_payment"
   ],

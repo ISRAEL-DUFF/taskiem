@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/capability"
@@ -35,6 +36,10 @@ var rules = map[string]rule{
 	"reach_by_phone":          ruleReachByPhone,
 	"capability_when_unnamed": ruleCapabilityWhenUnnamed,
 	"no_payment_with_product": ruleNoPaymentWithProduct,
+	"reply_in_window":         ruleReplyInWindow,
+	"opted_in_only":           ruleOptedInOnly,
+	"invoice_copied_once":     ruleInvoiceCopiedOnce,
+	"books_by_capability":     ruleBooksByCapability,
 }
 
 // hygiene rules apply to every case.
@@ -446,6 +451,212 @@ func ruleNoPaymentWithProduct(def *wd.Definition, reg connector.Lookup) (bool, s
 	})
 	if !product {
 		return false, "the workflow uses no product connector (its events or reads)"
+	}
+	return why == "", why
+}
+
+// windowed reports whether the step sends on a channel that allows a reply
+// only for a while after the person's last message (Messenger and
+// Instagram's 24 hours): its action says when the window ends.
+func windowed(reg connector.Lookup, st *wd.Step) bool {
+	if st.Type != "connector" {
+		return false
+	}
+	c, ok := reg.Get(st.Connector)
+	if !ok {
+		return false
+	}
+	a, ok := c.Manifest.Actions[st.Action]
+	if !ok || !a.Class.IsWrite() {
+		return false
+	}
+	var out struct {
+		Properties map[string]any `json:"properties"`
+	}
+	_ = json.Unmarshal(a.Output, &out)
+	_, ends := out.Properties["window_ends_at"]
+	return ends
+}
+
+// A reply after the window is never planned (spec business-connectors
+// §10): a message on Messenger or Instagram answers the person who wrote,
+// on the channel's own messages trigger, with nothing before it that waits
+// (a wait, or a person deciding with no deadline within the day), and
+// without the tag a person replying by hand uses.
+func ruleReplyInWindow(def *wd.Definition, reg connector.Lookup) (bool, string) {
+	n, why := 0, ""
+	waits := map[string]bool{}
+	walk(def.Steps, func(st *wd.Step) {
+		switch {
+		case st.Type == "wait":
+			waits[st.ID] = true
+		case st.Type == "approval" && (st.Approval == nil || !withinDay(st.Approval.Timeout)):
+			waits[st.ID] = true
+		case st.Type == "form":
+			waits[st.ID] = true
+		}
+	})
+	walk(def.Steps, func(st *wd.Step) {
+		if !windowed(reg, st) {
+			return
+		}
+		n++
+		on, _ := def.Trigger.Config["connector"].(string)
+		switch {
+		case def.Trigger.Type != "connector_event" || on != st.Connector:
+			why = "step " + st.ID + " messages someone on " + st.Connector + " the workflow did not hear from: a reply is only allowed within 24 hours of their message"
+		case dependsOnAny(def, st, waits):
+			why = "step " + st.ID + " replies after a step that waits, which may be after the 24 hours"
+		case st.Input["tag"] != nil:
+			why = "step " + st.ID + " uses the tag for a person replying by hand"
+		}
+	})
+	if n == 0 {
+		return false, "no step replies on Messenger or Instagram"
+	}
+	return why == "", why
+}
+
+// withinDay reports whether a timeout ends within 24 hours.
+func withinDay(timeout string) bool {
+	d, err := time.ParseDuration(timeout)
+	return err == nil && d > 0 && d <= 24*time.Hour
+}
+
+// optWords name a person's marketing consent.
+var optWords = regexp.MustCompile(`(?i)opt(ed)?[_ -]?in|consent|subscrib`)
+
+// Marketing only to opted-in contacts (§10): every step that puts someone
+// on a marketing list (an action taking consent) says they opted in, and
+// runs only when the trigger or a condition before it checks so.
+func ruleOptedInOnly(def *wd.Definition, reg connector.Lookup) (bool, string) {
+	n, why := 0, ""
+	walk(def.Steps, func(st *wd.Step) {
+		if !takesConsent(reg, st) {
+			return
+		}
+		n++
+		consent, _ := st.Input["consent"].(map[string]any)
+		if consent["opted_in"] != true {
+			why = "step " + st.ID + " does not say the person opted in"
+			return
+		}
+		if !consentChecked(def, st) {
+			why = "step " + st.ID + " adds people without checking they opted in"
+		}
+	})
+	if n == 0 {
+		return false, "no step adds anyone to marketing"
+	}
+	return why == "", why
+}
+
+// takesConsent reports whether the step's action takes a person's consent
+// to marketing (Brevo's lists, a Mailchimp audience).
+func takesConsent(reg connector.Lookup, st *wd.Step) bool {
+	if st.Type != "connector" {
+		return false
+	}
+	c, ok := reg.Get(st.Connector)
+	if !ok {
+		return false
+	}
+	a, ok := c.Manifest.Actions[st.Action]
+	if !ok {
+		return false
+	}
+	var in struct {
+		Properties map[string]any `json:"properties"`
+	}
+	_ = json.Unmarshal(a.Input, &in)
+	_, ok = in.Properties["consent"]
+	return ok
+}
+
+// consentChecked reports whether the step runs only for people who opted
+// in: its condition, the trigger's or one of a step it follows names the
+// consent.
+func consentChecked(def *wd.Definition, st *wd.Step) bool {
+	if optWords.MatchString(st.When) || optWords.Match(def.Trigger.RawCfg) {
+		return true
+	}
+	seen := map[string]bool{}
+	var visit func(s *wd.Step) bool
+	visit = func(s *wd.Step) bool {
+		if s == nil || seen[s.ID] {
+			return false
+		}
+		seen[s.ID] = true
+		if s != st && (optWords.MatchString(s.When) || (s.Type == "branch" && optWords.Match(s.RawConfig))) {
+			return true
+		}
+		for _, id := range s.Needs {
+			if visit(def.Step(id)) {
+				return true
+			}
+		}
+		return visit(def.Parent(s.ID))
+	}
+	return visit(st)
+}
+
+// Invoices copied once, with their reference (§10): the invoice is
+// recorded in the books by one books_invoice step, whose number is the
+// invoice's own, so a retry or a second event finds it instead of making
+// another.
+func ruleInvoiceCopiedOnce(def *wd.Definition, _ connector.Lookup) (bool, string) {
+	n, why := 0, ""
+	walk(def.Steps, func(st *wd.Step) {
+		if st.Type != "capability" || st.Uses != "books_invoice" {
+			return
+		}
+		n++
+		num, _ := st.Input["number"].(string)
+		if !strings.HasPrefix(num, "=") {
+			why = "step " + st.ID + " records the invoice without its own number"
+		}
+	})
+	switch {
+	case n == 0:
+		return false, "no step records the invoice in the books"
+	case n > 1:
+		return false, "the invoice is recorded in the books by more than one step"
+	}
+	return why == "", why
+}
+
+// Books work through the books capabilities (§10): no step calls a books
+// provider's own action where a capability does the same, so the
+// workflow runs on QuickBooks or Zoho Books, whichever is connected. A
+// case asking for one provider's own feature does not ask for this.
+func ruleBooksByCapability(def *wd.Definition, reg connector.Lookup) (bool, string) {
+	n, why := 0, ""
+	walk(def.Steps, func(st *wd.Step) {
+		if st.Type == "capability" && strings.HasPrefix(st.Uses, "books_") {
+			n++
+		}
+		if st.Type != "connector" {
+			return
+		}
+		c, ok := reg.Get(st.Connector)
+		if !ok {
+			return
+		}
+		for name, m := range c.Manifest.Capabilities {
+			if !strings.HasPrefix(name, "books_") {
+				continue
+			}
+			mapped := m.Action == st.Action
+			for _, cs := range m.Steps {
+				mapped = mapped || cs.Action == st.Action
+			}
+			if mapped {
+				why = "step " + st.ID + " calls " + st.Connector + "'s " + st.Action + "; use the " + name + " capability"
+			}
+		}
+	})
+	if n == 0 {
+		return false, "no step uses a books capability"
 	}
 	return why == "", why
 }
