@@ -735,7 +735,7 @@ func platformApps(reg *connector.Registry) map[string]ingest.App {
 	out := map[string]ingest.App{}
 	for _, c := range reg.List() {
 		for _, t := range c.Manifest.Triggers {
-			if t.Delivery != "app" {
+			if !t.AppDelivered() {
 				continue
 			}
 			key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ClientName())

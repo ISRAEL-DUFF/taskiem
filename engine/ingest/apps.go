@@ -63,7 +63,7 @@ func (h *Handler) appTrigger(r *http.Request) (*connector.Connector, connector.T
 		return nil, connector.TriggerSpec{}, App{}, false
 	}
 	spec, ok := conn.Manifest.Triggers[name]
-	if !ok || spec.Delivery != "app" {
+	if !ok || !spec.AppDelivered() {
 		return nil, connector.TriggerSpec{}, App{}, false
 	}
 	app, ok := h.Apps[conn.Manifest.ClientName()]

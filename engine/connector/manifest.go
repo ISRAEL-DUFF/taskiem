@@ -98,6 +98,17 @@ type OAuth2 struct {
 	// FieldsFromCallback fills auth fields from the query parameters the
 	// provider sends the browser back with (QuickBooks' realmId).
 	FieldsFromCallback map[string]string `json:"fields_from_callback,omitempty"`
+	// ScopeSeparator joins the scopes on the consent URL: a space by
+	// default (RFC 6749), a comma for Slack.
+	ScopeSeparatorChar string `json:"scope_separator,omitempty"`
+}
+
+// ScopeSeparator is what joins the scopes on the consent URL.
+func (o *OAuth2) ScopeSeparator() string {
+	if o.ScopeSeparatorChar == "" {
+		return " "
+	}
+	return o.ScopeSeparatorChar
 }
 
 // ClientName is the platform app a connector's OAuth uses: Client, or the
@@ -403,11 +414,14 @@ func (m *Manifest) check() []string {
 		if hs := t.Handshake; hs != nil && hs.Method == "GET" && hs.SecretField == "" && t.Delivery != "app" {
 			add("%s/handshake: a GET check needs secret_field, the connection's token it is compared with", p)
 		}
-		if t.Delivery != "app" {
+		if !t.AppDelivered() {
 			if t.AccountKey != "" || t.Revokes != "" {
-				add("%s: account_key and revokes are for delivery: app", p)
+				add("%s: account_key and revokes are for delivery: app or both", p)
 			}
 			continue
+		}
+		if t.Delivery == "both" && (t.Verify == nil || t.Verify.SecretField == "") {
+			add("%s: delivery both is also verified with the connection's secret: verify needs secret_field", p)
 		}
 		switch {
 		case m.Auth.OAuth2 == nil || m.Auth.OAuth2.AccountField == "":

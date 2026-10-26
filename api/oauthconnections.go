@@ -187,7 +187,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 	q := url.Values{
 		"client_id":             {prov.client.ID},
 		"redirect_uri":          {s.oauthRedirectURI()},
-		"scope":                 {strings.Join(c.Manifest.Auth.OAuth2.Scopes, " ")},
+		"scope":                 {strings.Join(c.Manifest.Auth.OAuth2.Scopes, c.Manifest.Auth.OAuth2.ScopeSeparator())},
 		"state":                 {state},
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
@@ -411,7 +411,14 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 		return nil, fmt.Errorf("%w: %s refused the token exchange: %s", errOAuthProvider, c.Manifest.Name, strings.TrimSpace(e.Error+" "+e.Description))
 	}
 	var answer map[string]any
-	if err := json.Unmarshal(body, &answer); err != nil || answer["access_token"] == nil {
+	if err := json.Unmarshal(body, &answer); err != nil {
+		return nil, fmt.Errorf("%w: %s's token answer is not the published shape", errOAuthProvider, c.Manifest.Name)
+	}
+	// Slack answers a refused exchange with 200 and {"ok": false, "error": …}.
+	if ok, said := answer["ok"].(bool); said && !ok {
+		return nil, fmt.Errorf("%w: %s refused the token exchange: %s", errOAuthProvider, c.Manifest.Name, asString(answer["error"]))
+	}
+	if answer["access_token"] == nil {
 		return nil, fmt.Errorf("%w: %s's token answer is not the published shape", errOAuthProvider, c.Manifest.Name)
 	}
 	return answer, nil
@@ -427,7 +434,7 @@ func oauthCredentials(m *connector.Manifest, answer map[string]any, server strin
 			continue
 		}
 		name, one := connector.TokenField(from)
-		v := answer[name]
+		v := tokenValue(answer, name)
 		if !one {
 			if s := asString(v); s != "" {
 				creds[field] = s
@@ -469,6 +476,20 @@ func applyPlatformClient(m *connector.Manifest, creds map[string]string, client 
 			creds[field] = client.Secret
 		}
 	}
+}
+
+// tokenValue is a field of the token answer, or of an object in it by a
+// dotted path (Slack's team.id).
+func tokenValue(answer map[string]any, path string) any {
+	var v any = answer
+	for _, part := range strings.Split(path, ".") {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil
+		}
+		v = m[part]
+	}
+	return v
 }
 
 // applyCallbackFields fills the fields a provider names in the query it

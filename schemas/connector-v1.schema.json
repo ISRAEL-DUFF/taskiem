@@ -583,15 +583,19 @@
               }
             },
             "fields_from_token": {
-              "description": "Auth fields filled from the token answer: a field of the answer, one element of a list field (project_ids[0]), or ${server}.",
+              "description": "Auth fields filled from the token answer: a field of the answer, a field of an object in it (team.id), one element of a list field (project_ids[0]), or ${server}.",
               "type": "object",
               "propertyNames": {
                 "$ref": "#/$defs/name"
               },
               "additionalProperties": {
                 "type": "string",
-                "pattern": "^([a-z][a-z0-9_]*(\\[0\\])?|\\$\\{server\\})$"
+                "pattern": "^([a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*(\\[0\\])?|\\$\\{server\\})$"
               }
+            },
+            "scope_separator": {
+              "enum": [" ", ","],
+              "description": "What joins the scopes on the consent URL: a space (default, RFC 6749) or a comma (Slack)."
             }
           }
         },
@@ -1050,9 +1054,10 @@
         "delivery": {
           "enum": [
             "connection",
-            "app"
+            "app",
+            "both"
           ],
-          "description": "connection (default): deliveries come to each connection's own URL under a tenant's hooks. app: the provider sends every business's events to the one URL of Taskiem's platform app, /hooks/apps/<connector>/<trigger>; they are verified with the app's secret (TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET) and delivered to the connections whose account_field holds account_key (rule 18)."
+          "description": "connection (default): deliveries come to each connection's own URL under a tenant's hooks. both: either, so a business may bring its own app (its connection's secret_field verifies) or connect through Taskiem's (Slack). app: the provider sends every business's events to the one URL of Taskiem's platform app, /hooks/apps/<connector>/<trigger>; they are verified with the app's secret (TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET) and delivered to the connections whose account_field holds account_key (rule 18)."
         },
         "account_key": {
           "$ref": "#/$defs/expr",

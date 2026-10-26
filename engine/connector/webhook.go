@@ -73,6 +73,10 @@ type TriggerSpec struct {
 	Revokes    string `json:"revokes,omitempty"`
 }
 
+// AppDelivered reports whether the trigger's deliveries come (also) to
+// Taskiem's platform app URL: delivery app, or both.
+func (t TriggerSpec) AppDelivered() bool { return t.Delivery == "app" || t.Delivery == "both" }
+
 // PollSpec is how a webhook trigger's events are also polled: Action, a
 // read action, takes Since (an input field) set to a time and answers
 // records; Items (over output) lists them; Event (over item) names each
