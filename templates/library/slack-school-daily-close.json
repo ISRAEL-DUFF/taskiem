@@ -6,18 +6,16 @@
   "category": "schools",
   "tags": [
     "schools",
-    "reports",
     "slack"
   ],
   "keywords": [
     "slack",
+    "channel",
     "school",
-    "daily",
-    "close",
-    "fees",
-    "reconcile",
-    "report",
-    "channel"
+    "close"
+  ],
+  "requires": [
+    "slack"
   ],
   "connectors": [
     "slack@1",

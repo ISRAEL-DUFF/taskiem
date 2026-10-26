@@ -6,15 +6,16 @@
   "category": "invoices",
   "tags": [
     "invoices",
-    "payments",
     "slack"
   ],
   "keywords": [
     "slack",
+    "channel",
     "invoice",
-    "paid",
-    "payment",
-    "channel"
+    "paid"
+  ],
+  "requires": [
+    "slack"
   ],
   "connectors": [
     "slack@1"

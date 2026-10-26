@@ -6,19 +6,17 @@
   "category": "alerts",
   "tags": [
     "alerts",
-    "payments",
-    "slack",
-    "failures"
+    "slack"
   ],
   "keywords": [
     "slack",
+    "channel",
     "failed",
     "reversed",
-    "returned",
-    "payout",
-    "transfer",
-    "alert",
-    "channel"
+    "returned"
+  ],
+  "requires": [
+    "slack"
   ],
   "connectors": [
     "slack@1",

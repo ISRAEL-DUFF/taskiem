@@ -6,19 +6,16 @@
   "category": "alerts",
   "tags": [
     "alerts",
-    "payments",
-    "slack",
-    "sales"
+    "slack"
   ],
   "keywords": [
     "slack",
-    "payment",
+    "channel",
     "received",
-    "money",
-    "in",
-    "credit",
-    "sale",
-    "channel"
+    "sales"
+  ],
+  "requires": [
+    "slack"
   ],
   "connectors": [
     "slack@1",

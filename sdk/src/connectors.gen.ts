@@ -2200,8 +2200,19 @@ export interface SlackListConversationsInput {
   /** Comma-separated: public_channel (default), private_channel, mpim, im */
   types?: Val<string>;
 }
+export interface SlackListUsersInput {
+  cursor?: Val<string>;
+  /** Bots and deactivated people are left out unless true */
+  include_bots?: Val<boolean>;
+  /** Default 200 */
+  limit?: Val<number>;
+}
 export interface SlackLookupUserByEmailInput {
   email: Val<string>;
+}
+export interface SlackOpenConversationInput {
+  /** User ids, comma-separated (U123 or U123,U456) */
+  users: Val<string>;
 }
 export interface SlackPostEphemeralInput {
   blocks?: Value;
@@ -2232,6 +2243,14 @@ export interface SlackPostMessageInput {
   unfurl_media?: Val<boolean>;
   /** Needs chat:write.customize */
   username?: Val<string>;
+}
+export interface SlackScheduleMessageInput {
+  blocks?: Value;
+  channel: Val<string>;
+  /** When, RFC 3339 (2026-10-27T09:00:00+01:00), or Unix seconds */
+  post_at: Val<string>;
+  text?: Val<string>;
+  thread_ts?: Val<string>;
 }
 export interface SlackUpdateMessageInput {
   /** Replaces the blocks; [] removes them */
@@ -2268,12 +2287,18 @@ export const slack = {
   get_conversation: (input: SlackGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_conversation", input, extra),
   /** List channels (read) */
   list_conversations: (input?: SlackListConversationsInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_conversations", input, extra),
+  /** List the workspace's people (read) */
+  list_users: (input?: SlackListUsersInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_users", input, extra),
   /** Find a user by email (read) */
   lookup_user_by_email: (input: SlackLookupUserByEmailInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "lookup_user_by_email", input, extra),
+  /** Open a direct message (read) */
+  open_conversation: (input: SlackOpenConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "open_conversation", input, extra),
   /** Post an ephemeral message (unsafe_write) */
   post_ephemeral: (input: SlackPostEphemeralInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "post_ephemeral", input, extra),
   /** Post a message (unsafe_write) */
   post_message: (input: SlackPostMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "post_message", input, extra),
+  /** Schedule a message (unsafe_write) */
+  schedule_message: (input: SlackScheduleMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "schedule_message", input, extra),
   /** Update a message (idempotent_write) */
   update_message: (input: SlackUpdateMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "update_message", input, extra),
   /** Upload a file (unsafe_write) */
@@ -2825,7 +2850,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
-  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
+  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
