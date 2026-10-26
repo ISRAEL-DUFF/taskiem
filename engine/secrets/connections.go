@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -321,4 +322,104 @@ func stored(creds map[string]string) map[string]string {
 		}
 	}
 	return out
+}
+
+// RotateCredentials refreshes a connection's credentials once across every
+// worker and process (connector.Request.Rotate; decision 0051): the
+// connection's row is locked, its credentials read as they are stored now,
+// fn given them, and what fn returns stored before the lock goes, in one
+// transaction. A worker that waited sees the credentials the first one
+// stored, so a provider that rotates refresh tokens (QuickBooks) never
+// receives a spent one. Returning the same map stores nothing. The write
+// is audited as connection.refresh, with no values. An empty name selects
+// the only active connection for the connector.
+func (v *Vault) RotateCredentials(ctx context.Context, tenant uuid.UUID, env, connector, name string, fn func(map[string]string) (map[string]string, error)) (map[string]string, error) {
+	var out map[string]string
+	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		q := `SELECT id, name, secret_ref, mode FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active'`
+		args := []any{tenant, env, connector}
+		if name != "" {
+			q += ` AND name = $4`
+			args = append(args, name)
+		}
+		rows, err := tx.Query(ctx, q+` FOR UPDATE`, args...)
+		if err != nil {
+			return err
+		}
+		type match struct {
+			id   uuid.UUID
+			name string
+			ref  *uuid.UUID
+			mode *string
+		}
+		ms, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (match, error) {
+			var m match
+			return m, row.Scan(&m.id, &m.name, &m.ref, &m.mode)
+		})
+		if err != nil {
+			return err
+		}
+		switch {
+		case len(ms) == 0:
+			return fmt.Errorf("no active %s connection in %s: %w", connector, env, ErrNotFound)
+		case len(ms) > 1:
+			return fmt.Errorf("%d active %s connections in %s; name one with the step's connection field: %w", len(ms), connector, env, ErrAmbiguous)
+		}
+		m := ms[0]
+		current := map[string]string{}
+		if m.ref != nil {
+			var ct, wdek []byte
+			var ver, aad int
+			if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *m.ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
+				return err
+			}
+			raw, err := v.decrypt(ctx, tx, tenant, *m.ref, env, connectionBinding(m.id), aad, ct, wdek, ver)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(raw, &current); err != nil {
+				return err
+			}
+			if err := record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, m.name, &m.id, connector); err != nil {
+				return err
+			}
+		}
+		withMode(current, m.mode)
+		next, err := fn(maps.Clone(current))
+		if err != nil {
+			return err
+		}
+		if maps.Equal(stored(next), stored(current)) {
+			out = current
+			return nil
+		}
+		raw, _ := json.Marshal(stored(next))
+		sid := uuid.Must(uuid.NewV7())
+		if m.ref != nil {
+			sid = *m.ref
+		}
+		ct, wdek, ver, err := v.encrypt(ctx, tx, tenant, sid, env, connectionBinding(m.id), raw)
+		if err != nil {
+			return err
+		}
+		if m.ref != nil {
+			_, err = tx.Exec(ctx, `UPDATE secrets SET ciphertext = $2, wrapped_key = $3, kek_version = $4, aad_version = 2, updated_at = now() WHERE id = $1`, sid, ct, wdek, ver)
+		} else {
+			_, err = tx.Exec(ctx, `INSERT INTO secrets (id, tenant_id, environment, ciphertext, wrapped_key, kek_version, aad_version, created_by) VALUES ($1, $2, $3, $4, $5, $6, 2, 'system')`,
+				sid, tenant, env, ct, wdek, ver)
+			if err == nil {
+				_, err = tx.Exec(ctx, `UPDATE connections SET secret_ref = $2 WHERE id = $1`, m.id, sid)
+			}
+		}
+		if err != nil {
+			return err
+		}
+		out = maps.Clone(next)
+		withMode(out, m.mode)
+		return audit(ctx, tx, tenant, "system", "connection.refresh", connector+"/"+m.name, map[string]any{"connection_id": m.id, "environment": env})
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return out, err
 }

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/israel-duff/taskiem/engine/effects"
 )
 
 // Request is what an action handler receives (spec 6.3).
@@ -28,6 +30,36 @@ type Request struct {
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Rotate replaces credentials a provider rotates (QuickBooks issues a
+	// new refresh token on every refresh and revokes the chain when an old
+	// one is used again): see RotateCredentials. Nil where the request's
+	// credentials are not a stored connection's.
+	Rotate func(ctx context.Context, fn RotateFunc) (map[string]string, error)
+}
+
+// RotateFunc refreshes credentials. It is given the connection's stored
+// credentials as they are now, read under a lock no other worker can hold
+// at the same time, and returns them as they should be stored: the same
+// map when another worker already refreshed them (its access token is
+// still good), or the fields the provider handed back merged in. An error
+// stores nothing; wrap ErrCredentialsRejected when the provider refused
+// the refresh token, so the connection is marked expired.
+type RotateFunc func(current map[string]string) (map[string]string, error)
+
+// ErrNoRotate is a refresh asked for where the credentials cannot be
+// stored back: refreshing anyway would spend a refresh token for good.
+var ErrNoRotate = errors.New("these credentials cannot be refreshed and stored here")
+
+// RotateCredentials refreshes the request's connection's credentials once
+// across every worker: fn runs with the stored credentials under the
+// connection's lock, and what it returns is stored before the lock is let
+// go, so the next worker sees the new refresh token, never the spent one.
+// It returns the credentials to use, which the caller keeps for the call.
+func (r Request) RotateCredentials(ctx context.Context, fn RotateFunc) (map[string]string, error) {
+	if r.Rotate == nil {
+		return nil, fmt.Errorf("%w: %w", ErrNoRotate, effects.ErrFatal)
+	}
+	return r.Rotate(ctx, fn)
 }
 
 // Response is a handler's result.
