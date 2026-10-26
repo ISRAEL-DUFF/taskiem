@@ -441,6 +441,17 @@ Differences from §8: there is no enricher, so a run reads the record it was tol
 
 The Zoho client with data centres (§7, §4.4), `zoho_books@1` (§7.1) with its books capability mappings, the organisation picker, and K3's books templates passing on Zoho Books in both editions.
 
+**Built** (K4, 26 October 2026), on the K1 pull request. Fixtures are shaped from Zoho's published examples; nothing has run against a Zoho organisation yet.
+- **Connecting:** `zoho_books@1` (`kind: product`, `accounting`) through the shared Zoho client (`client: zoho`): the accounts server from the callback and the API domain from the token, both held to Zoho's data centres (rule 19); `access_type=offline` and `prompt=consent`; comma-joined scopes.
+- **Tokens:** the access token kept with the credentials and refreshed under the connection's lock, since Zoho issues ten every ten minutes; Zoho's 200 `invalid_code` expires the connection; six concurrent workers get one token.
+- **The organisation:** the only one the user reaches, or Zoho's default, chosen on the first call and kept with the credentials.
+- **Actions:** contacts (customers and suppliers, found by email, phone, then name), invoices (found by `reference_number`, Taskiem's number), payments (found by reference), sales receipts (by number, the walk-in customer's without one), expenses (VAT as its own line), bills (by number for the supplier), the three pickers, and `changes_since`. Books has no idempotency key: each write finds by the business's own number first.
+- **Books:** all nine capabilities and all three events, `books.invoice.paid` included, from a polled `changes` trigger (every 15 minutes while a workflow listens).
+- **Templates:** K3's three books templates run on both books unchanged; the rail coverage tests now find two connectors for each.
+- **On the way:** the money log's poller no longer polls triggers whose events are not rail events (it would have spent a Zoho organisation's daily quota); QuickBooks uses the shared money package.
+
+Differences from §7.1: there is no organisation picker in the web app; the connection takes the only organisation, or the default, and says which. Zoho Books' webhooks are not used yet: its API does not document how they are signed (to confirm), so changes are polled.
+
 ### K5: Instagram and Facebook messages (L; needs K1, Meta's review)
 
 §6. It can be built and tested on Meta's test Page and accounts as soon as K1 lands. It goes to businesses only when Meta grants Advanced Access.

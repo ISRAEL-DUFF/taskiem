@@ -1,8 +1,8 @@
 {
   "id": "books-copy-invoice",
   "title": "Copy an invoice to the books",
-  "summary": "Record one of your invoices in QuickBooks, with its customer, once however often it runs.",
-  "description": "Finds the customer in your books by email (or adds them), then records the invoice under its Taskiem number, so your accountant sees every invoice you send. Running it again for the same invoice finds the one it made rather than making another. Works with whichever books you connected (QuickBooks today); the other books templates use it.",
+  "summary": "Record one of your invoices in your books (QuickBooks or Zoho Books), with its customer, once however often it runs.",
+  "description": "Finds the customer in your books by email (or adds them), then records the invoice under its Taskiem number, so your accountant sees every invoice you send. Running it again for the same invoice finds the one it made rather than making another. Works with whichever books you connected (QuickBooks or Zoho Books); the other books templates use it.",
   "category": "bookkeeping",
   "tags": [
     "bookkeeping",
@@ -32,7 +32,7 @@
         "books_invoice"
       ],
       "title": "Your books",
-      "description": "The accounting software the invoices go to: QuickBooks (and, soon, Zoho Books), connected with one click.",
+      "description": "The accounting software the invoices go to: QuickBooks or Zoho Books, connected with one click.",
       "required": false,
       "default": "",
       "example": ""

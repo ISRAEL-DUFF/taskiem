@@ -1,8 +1,8 @@
 {
   "id": "books-record-invoice-payments",
   "title": "Record invoice payments in the books",
-  "summary": "Each time money is counted towards one of your invoices, record the invoice and the payment in QuickBooks.",
-  "description": "Whenever a payment is counted towards one of your invoices (a transfer to its account number, its link, or cash posted at the desk), copies the invoice to your books if it is not there yet and records the payment against it, with the money log's reference, so your books match what came in. A payment reported twice is recorded once. Works with whichever books you connected (QuickBooks today).",
+  "summary": "Each time money is counted towards one of your invoices, record the invoice and the payment in your books (QuickBooks or Zoho Books).",
+  "description": "Whenever a payment is counted towards one of your invoices (a transfer to its account number, its link, or cash posted at the desk), copies the invoice to your books if it is not there yet and records the payment against it, with the money log's reference, so your books match what came in. A payment reported twice is recorded once. Works with whichever books you connected (QuickBooks or Zoho Books).",
   "category": "bookkeeping",
   "tags": [
     "bookkeeping",
@@ -33,7 +33,7 @@
         "books_payment"
       ],
       "title": "Your books",
-      "description": "The accounting software the invoices go to: QuickBooks (and, soon, Zoho Books), connected with one click.",
+      "description": "The accounting software the invoices go to: QuickBooks or Zoho Books, connected with one click.",
       "required": false,
       "default": "",
       "example": ""
@@ -42,7 +42,7 @@
       "name": "deposit_account",
       "type": "string",
       "title": "Account the money goes into",
-      "description": "The bank account in your books the payments are recorded into. Leave it blank for QuickBooks' Undeposited Funds.",
+      "description": "The bank account in your books the payments are recorded into. Leave it blank for the books' own default (QuickBooks: Undeposited Funds).",
       "required": false,
       "default": "",
       "example": "",

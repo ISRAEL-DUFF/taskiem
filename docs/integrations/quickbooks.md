@@ -82,6 +82,8 @@ QuickBooks sends every connected company's changes to the one webhook URL of Tas
 
 ## Templates
 
+They are written against the books capabilities, so they run on [Zoho Books](zoho-books.md) too.
+
 - **Copy an invoice to the books** (`books-copy-invoice`, callable): finds or adds the customer, then records the invoice under its Taskiem number, with its total as one line.
 - **Record invoice payments in the books** (`books-record-invoice-payments`): each payment counted towards an invoice copies the invoice (if it is not there yet) and records the payment against it with the money log's reference.
 - **Record the school's daily takings in the books** (`books-school-daily-takings`): each evening, the daily close's money in as one sales receipt, its lines into account numbers and at the desk. For books that keep takings rather than each family's invoices.
