@@ -493,6 +493,15 @@ Differences from §9: there is no Brevo list picker yet (the list is its number)
 
 §9, with OAuth and the server prefix.
 
+**Built** (K8, 26 October 2026), on the K1 pull request. Fixtures are shaped from Mailchimp's published examples; nothing has run against Mailchimp yet.
+- **Connecting:** `mailchimp@1` through Taskiem's Mailchimp app (no scopes: rule 21 now allows none), the server prefix read from Mailchimp's metadata before the connection is saved (`Link`); or a pasted API key, its server its ending. Egress allows `*.api.mailchimp.com`.
+- **Actions:** members upserted by the MD5 of the address, only with consent and never re-subscribing someone who unsubscribed; tags; campaigns made once by title and sent once; audiences.
+- **Triggers:** `audience_events`, a signed webhook Taskiem creates on the audience (`hmac_sha256_timestamped` with `t_v1`, Mailchimp's `X-Mailchimp-Signature`); Mailchimp's plain GET check is answered by the new `open` handshake.
+- **Pickers:** a connector's `pickers` and `picker: choice` with `GET /v1/connections/choices` (rule 21): the audience is chosen by name. Brevo's lists, Zoho's organisations and QuickBooks' accounts can use the same.
+- **Templates:** opted-in customers onto a Mailchimp audience; unsubscribes and cleaned addresses back onto the customers table.
+
+Differences from §9: the win-back campaign (customers who have not bought in 60 days) waits for a way to read purchase dates from the money log in a template.
+
 ### K9: AI and Start page (S)
 
 The eval cases and rules of §10, the Start page entries by connected service, and the website's connector pages.
