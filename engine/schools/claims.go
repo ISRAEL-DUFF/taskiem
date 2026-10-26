@@ -549,6 +549,31 @@ func PlanDecisionShort(p PlanRequest, link string) string {
 	return s
 }
 
+// PlanDecisionVars are the taskiem_plan_decision template's variables
+// (docs/whatsapp.md#templates): the child by admission number, the
+// decision, and the instalments in one line (or the note), with the link
+// for the button.
+func PlanDecisionVars(p PlanRequest, link string) map[string]string {
+	decision, detail := "not approved", ""
+	if p.Status == "approved" {
+		decision = "approved"
+		var parts []string
+		for _, in := range p.DecidedInstalments {
+			if d, err := time.Parse(time.DateOnly, in.DueOn); err == nil {
+				parts = append(parts, invoicing.Naira(in.AmountKobo)+" by "+d.Format("2 Jan 2006"))
+			}
+		}
+		detail = fmt.Sprintf("%d instalment(s): %s.", len(p.DecidedInstalments), strings.Join(parts, "; "))
+	}
+	if p.DecisionNote != "" {
+		detail = strings.TrimSpace(detail + " " + strings.TrimRight(p.DecisionNote, ".") + ".")
+	}
+	if detail == "" {
+		detail = "-"
+	}
+	return map[string]string{"child": p.AdmissionNumber, "decision": decision, "detail": detail, "link": link}
+}
+
 // PlanDecisionText is the message a family gets about a decided plan.
 func PlanDecisionText(business string, p PlanRequest, link string) string {
 	var b strings.Builder

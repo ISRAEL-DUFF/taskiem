@@ -88,7 +88,7 @@ If no account number can be had (the payments connection cannot open one, or the
 
 These buttons are the only thing the customer can do in the chat besides STOP and START ([decision 0045](decisions/0045-tally-in-taskiem.md), point 7). Each button is signed for the business, the invoice and the contact it was sent to: it works only from that contact's own WhatsApp number or Telegram account (while they have not sent STOP), only for an invoice sent to that contact's phone, and only while the invoice is open. Anyone else pressing it is told the button no longer works. The messages hold no customer details beyond what the invoice was sent with, and nothing about the customer is logged.
 
-**Limit.** WhatsApp lets a business message someone only within 24 hours of their last message unless it uses a template Meta has approved, and the template for an invoice with buttons is not approved yet. Outside that window the invoice goes by SMS and email only; on Telegram there is no window.
+**Outside the 24-hour window.** WhatsApp lets a business message someone only within 24 hours of their last message unless it uses a template Meta has approved. Outside that window the invoice goes as the `taskiem_invoice` [template](whatsapp.md#templates) once Meta has approved it in the number's WhatsApp Business Account: the same words, **Pay by transfer** as a quick reply carrying the same signed button (an account number follows in the chat as above), and **Open invoice** opening the invoice's page. Until it is approved the invoice goes by SMS and email only, and the chat message says so ([the template registry](whatsapp.md#the-template-registry)); on Telegram there is no window.
 
 ## From chat
 

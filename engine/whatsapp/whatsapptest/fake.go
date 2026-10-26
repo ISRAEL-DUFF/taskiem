@@ -29,6 +29,9 @@ type Sent struct {
 	Template string
 	Buttons  []whatsapp.Button // interactive reply buttons
 	Payloads []string          // template quick-reply payloads
+	// URLParams are the suffixes sent for a template's dynamic url buttons
+	// (and the code of an authentication template's copy button).
+	URLParams []string
 	// A Flow (interactive type "flow").
 	Flow       string
 	FlowToken  string
@@ -54,6 +57,21 @@ type Graph struct {
 	// media are uploaded recordings people "sent", by media id.
 	media     map[string]fakeMedia
 	downloads int
+	// templates are each WhatsApp Business Account's templates by name,
+	// as the Business Management API would list them. An account not
+	// marked strict lists every library template as APPROVED unless a
+	// test sets otherwise (as a deployment whose templates Meta approved).
+	templates map[string]map[string]fakeTemplate
+	strict    map[string]bool
+	tplSeq    int
+	// SubmitStatus is the status a submission answers (PENDING unless set).
+	SubmitStatus string
+}
+
+// fakeTemplate is a template as the fake account holds it.
+type fakeTemplate struct {
+	ID, Language, Status, Category, Reason string
+	Def                                    map[string]any // the submission, when submitted through the fake
 }
 
 type fakeMedia struct {
@@ -122,6 +140,178 @@ func (g *Graph) serveMedia(w http.ResponseWriter, r *http.Request, parts []strin
 	return true
 }
 
+// --- the Business Management API: templates ---
+
+// SetTemplateStatus makes an account hold a library template with a
+// status (APPROVED, PENDING, REJECTED, PAUSED, DISABLED) and a reason, as
+// a poll would list it; "" forgets it (the account does not have it).
+func (g *Graph) SetTemplateStatus(waba, name, status, reason string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	acct := g.account(waba)
+	if status == "" {
+		delete(acct, name)
+		return
+	}
+	t := acct[name]
+	if t.ID == "" {
+		g.tplSeq++
+		t.ID = fmt.Sprintf("%d", 900000000000000+g.tplSeq)
+	}
+	t.Language, t.Status, t.Reason = "en", status, reason
+	if tpl, ok := whatsapp.TemplateNamed(name); ok {
+		t.Category = tpl.Category
+	}
+	acct[name] = t
+}
+
+// StrictTemplates makes an account list only the templates set or
+// submitted on it, instead of every library template as approved.
+func (g *Graph) StrictTemplates(waba string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.account(waba)
+	g.strict[waba] = true
+}
+
+// Template is a template's status and id in an account ("" when not held).
+func (g *Graph) Template(waba, name string) (status, id string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	t, ok := g.account(waba)[name]
+	if !ok {
+		return "", ""
+	}
+	return t.Status, t.ID
+}
+
+// Submitted lists the submissions an account received through the fake,
+// by template name.
+func (g *Graph) Submitted(waba string) map[string]map[string]any {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := map[string]map[string]any{}
+	for name, t := range g.account(waba) {
+		if t.Def != nil {
+			out[name] = t.Def
+		}
+	}
+	return out
+}
+
+// account is an account's templates (held under g.mu).
+func (g *Graph) account(waba string) map[string]fakeTemplate {
+	if g.templates == nil {
+		g.templates, g.strict = map[string]map[string]fakeTemplate{}, map[string]bool{}
+	}
+	acct, ok := g.templates[waba]
+	if !ok {
+		acct = map[string]fakeTemplate{}
+		g.templates[waba] = acct
+	}
+	return acct
+}
+
+// serveTemplates answers GET and POST /{waba}/message_templates.
+func (g *Graph) serveTemplates(w http.ResponseWriter, r *http.Request, waba string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	acct := g.account(waba)
+	w.Header().Set("Content-Type", "application/json")
+	switch r.Method {
+	case http.MethodGet:
+		if !g.strict[waba] {
+			for _, tpl := range whatsapp.AllTemplates {
+				if _, ok := acct[tpl.Name]; !ok {
+					g.tplSeq++
+					acct[tpl.Name] = fakeTemplate{ID: fmt.Sprintf("%d", 900000000000000+g.tplSeq), Language: "en", Status: "APPROVED", Category: tpl.Category}
+				}
+			}
+		}
+		var data []map[string]any
+		for name, t := range acct {
+			row := map[string]any{"id": t.ID, "name": name, "language": t.Language, "status": t.Status, "category": t.Category}
+			if t.Reason != "" {
+				row["rejected_reason"] = t.Reason
+			}
+			data = append(data, row)
+		}
+		if data == nil {
+			data = []map[string]any{}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data, "paging": map[string]any{"cursors": map[string]any{"before": "a", "after": "b"}}})
+	case http.MethodPost:
+		var def map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&def); err != nil {
+			refuse(w, http.StatusBadRequest, 100, "Invalid parameter")
+			return
+		}
+		name, _ := def["name"].(string)
+		lang, _ := def["language"].(string)
+		cat, _ := def["category"].(string)
+		comps, _ := def["components"].([]any)
+		if name == "" || lang == "" || cat == "" || len(comps) == 0 {
+			refuse(w, http.StatusBadRequest, 100, "Invalid parameter: name, language, category and components are required")
+			return
+		}
+		if t, ok := acct[name]; ok && t.Status != "" {
+			refuse(w, http.StatusBadRequest, 100, "Invalid parameter: a template with that name and language exists")
+			return
+		}
+		for _, c := range comps {
+			m, _ := c.(map[string]any)
+			if m["type"] == "BODY" {
+				text, _ := m["text"].(string)
+				if n := strings.Count(text, "{{"); n > 0 {
+					ex, _ := m["example"].(map[string]any)
+					bt, _ := ex["body_text"].([]any)
+					if len(bt) != 1 {
+						refuse(w, http.StatusBadRequest, 100, "Invalid parameter: body variables need examples")
+						return
+					}
+					if vals, _ := bt[0].([]any); len(vals) != n {
+						refuse(w, http.StatusBadRequest, 100, "Invalid parameter: one example per body variable")
+						return
+					}
+				}
+			}
+			if m["type"] == "BUTTONS" {
+				bs, _ := m["buttons"].([]any)
+				for _, b := range bs {
+					bm, _ := b.(map[string]any)
+					u, _ := bm["url"].(string)
+					if bm["type"] == "URL" && (!strings.HasPrefix(u, "https://") || strings.HasSuffix(u, "{{1}}") && bm["example"] == nil) {
+						refuse(w, http.StatusBadRequest, 100, "Invalid parameter: a url button needs an https url and, when dynamic, an example")
+						return
+					}
+				}
+			}
+		}
+		g.tplSeq++
+		status := g.SubmitStatus
+		if status == "" {
+			status = "PENDING"
+		}
+		t := fakeTemplate{ID: fmt.Sprintf("%d", 900000000000000+g.tplSeq), Language: lang, Status: status, Category: cat, Def: def}
+		acct[name] = t
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": t.ID, "status": t.Status, "category": cat})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// TemplateStatusDelivery builds a message_template_status_update webhook
+// body for an account's template, as Meta would send it.
+func TemplateStatusDelivery(waba, name, lang, id, event, reason string) []byte {
+	value := map[string]any{"event": event, "message_template_id": id, "message_template_name": name, "message_template_language": lang, "reason": reason}
+	if reason == "" {
+		value["reason"] = "NONE"
+	}
+	body, _ := json.Marshal(map[string]any{"object": "whatsapp_business_account", "entry": []any{map[string]any{
+		"id": waba, "time": 1759800000, "changes": []any{map[string]any{"field": "message_template_status_update", "value": value}}}}})
+	return body
+}
+
 // SetFailTo makes sends to one number fail with a Graph error code (0:
 // succeed), whatever the message.
 func (g *Graph) SetFailTo(number string, code int) {
@@ -171,7 +361,15 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	g.mu.Lock()
 	token, known := g.numbers[parts[0]]
+	anyToken := false
+	for _, tok := range g.numbers {
+		anyToken = anyToken || r.Header.Get("Authorization") == "Bearer "+tok
+	}
 	g.mu.Unlock()
+	if len(parts) == 2 && parts[1] == "message_templates" && anyToken {
+		g.serveTemplates(w, r, parts[0])
+		return
+	}
 	if !known || r.Header.Get("Authorization") != "Bearer "+token {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"message":"Invalid OAuth access token.","type":"OAuthException","code":190}}`))
@@ -307,6 +505,14 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 			case c.Type == "button" && c.SubType == "quick_reply":
 				for _, p := range c.Parameters {
 					s.Payloads = append(s.Payloads, p.Payload)
+				}
+			case c.Type == "button" && c.SubType == "url":
+				for _, p := range c.Parameters {
+					if strings.ContainsAny(p.Text, "/?#") {
+						refuse(w, http.StatusBadRequest, 131009, "Parameter value is not valid")
+						return
+					}
+					s.URLParams = append(s.URLParams, p.Text)
 				}
 			}
 		}

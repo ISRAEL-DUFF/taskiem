@@ -66,6 +66,9 @@ type Client struct {
 	// replaces the guarded client.
 	Egress *egress.Guard
 	HTTP   *http.Client
+	// Hosts are the deployment's addresses the templates' url buttons
+	// were submitted with (Template.Payload).
+	Hosts Hosts
 }
 
 func (c *Client) base() string {
@@ -130,7 +133,7 @@ func (c *Client) SendImage(ctx context.Context, to, link, caption string) (strin
 // SendTemplate sends an approved template with its body variables and,
 // for quick-reply buttons, their payloads in order.
 func (c *Client) SendTemplate(ctx context.Context, to string, t Template, lang string, vars map[string]string, payloads []string) (string, error) {
-	tpl, err := t.Payload(lang, vars, payloads)
+	tpl, err := t.Payload(lang, vars, payloads, c.Hosts)
 	if err != nil {
 		return "", err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -270,8 +271,17 @@ func (s *Server) sendSchoolFamilyLink(w http.ResponseWriter, r *http.Request) {
 			}
 			return business + ": your family's school fees page, with each child's fees, payments and account number: " + link
 		}
-		var err error
-		if sent, err = s.schoolsSvc().SendFamily(r.Context(), tx, p.TenantID, id, schools.FamilyMessage{Purpose: "link", Key: "staff:" + id.String() + ":" + time.Now().UTC().Format(time.RFC3339Nano), Text: text}, p.Actor()); err != nil {
+		days, err := schools.FamilyLinkDays(r.Context(), tx, p.TenantID)
+		if err != nil {
+			return err
+		}
+		// Outside WhatsApp's window the link template carries the staff's
+		// message (or the standing words) with the link on its button.
+		vars := func(link string) map[string]string {
+			return schools.FamilyLinkVars(req.Message, days, link)
+		}
+		if sent, err = s.schoolsSvc().SendFamily(r.Context(), tx, p.TenantID, id, schools.FamilyMessage{Purpose: "link", Key: "staff:" + id.String() + ":" + time.Now().UTC().Format(time.RFC3339Nano),
+			Text: text, Template: &whatsapp.TplFamilyLink, Vars: vars}, p.Actor()); err != nil {
 			return schoolErr(err)
 		}
 		return auditTx(r, tx, "school.family.link", id.String(), map[string]any{"channels": sent.Channels, "expires_at": sent.ExpiresAt})
@@ -289,8 +299,10 @@ func (s *Server) schoolClaims() matching.ClaimSource { return s.schoolsSvc() }
 // --- the chat outbox: a message to a family's guardian ---
 
 // sendSchoolFamilyItem sends a queued family message to the guardian's
-// chat app; one that cannot go there goes by SMS to the guardian's phone
-// instead, once.
+// chat app: as text inside WhatsApp's window; outside it as the message's
+// own template (a reminder, a plan decision, a link) once Meta approved
+// it in the number's account, else the generic update template; one that
+// cannot go there goes by SMS to the guardian's phone instead, once.
 func (s *Server) sendSchoolFamilyItem(ctx context.Context, it whatsapp.OutboxItem) error {
 	if !s.Reach.Ready() {
 		return fmt.Errorf("%w: updates are off", whatsapp.ErrNothingToSend)
@@ -298,14 +310,15 @@ func (s *Server) sendSchoolFamilyItem(ctx context.Context, it whatsapp.OutboxIte
 	if it.Run == nil || it.Contact == nil {
 		return fmt.Errorf("%w: incomplete", whatsapp.ErrNothingToSend)
 	}
-	var business, text, short, phone string
+	var business string
+	var ft schools.FamilyText
 	var ok bool
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, it.Tenant).Scan(&business); err != nil {
 			return err
 		}
 		var err error
-		text, short, phone, ok, err = s.schoolsSvc().FamilyMessageText(ctx, tx, it.Tenant, *it.Run)
+		ft, ok, err = s.schoolsSvc().FamilyMessageOpen(ctx, tx, it.Tenant, *it.Run)
 		return err
 	}); err != nil {
 		return err
@@ -313,6 +326,7 @@ func (s *Server) sendSchoolFamilyItem(ctx context.Context, it whatsapp.OutboxIte
 	if !ok {
 		return fmt.Errorf("%w: the message or its guardian is gone", whatsapp.ErrNothingToSend)
 	}
+	text, short, phone := ft.Text, ft.Short, ft.Phone
 	fallback := func(why error) error {
 		if s.Messages == nil || phone == "" {
 			return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, why)
@@ -346,10 +360,14 @@ func (s *Server) sendSchoolFamilyItem(ctx context.Context, it whatsapp.OutboxIte
 		head = string(r[:500]) + "…"
 	}
 	tpl := whatsapp.TplUpdate
-	m := whatsapp.Message{Text: ch.Prefix(business) + text, Tenant: it.Tenant, Template: &tpl,
-		Vars: map[string]string{"tenant": business, "about": "school fees", "message": head}}
+	vars := map[string]string{"tenant": business, "about": "school fees", "message": head}
+	if ft.Template != nil {
+		tpl = *ft.Template
+		vars = map[string]string{"tenant": business}
+		maps.Copy(vars, ft.Vars)
+	}
+	m := whatsapp.Message{Text: ch.Prefix(business) + text, Tenant: it.Tenant, Template: &tpl, Vars: vars}
 	_, err = ch.Send(ctx, addr, m)
-	var waErr *whatsapp.GraphError
 	switch {
 	case err == nil:
 		return nil
@@ -358,7 +376,9 @@ func (s *Server) sendSchoolFamilyItem(ctx context.Context, it whatsapp.OutboxIte
 			return berr
 		}
 		return fallback(err)
-	case errors.Is(err, whatsapp.ErrWindowClosed), errors.As(err, &waErr) && waErr.Code >= 132000 && waErr.Code <= 132016:
+	case errors.Is(err, whatsapp.ErrWindowClosed), whatsapp.TemplateUnusable(err):
+		// Outside the window with the template not approved (or missing,
+		// paused, or unable to carry the link): by SMS instead.
 		return fallback(err)
 	}
 	return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
