@@ -344,6 +344,17 @@ func runEvent(m *connector.Manifest, cs CapabilityCase) Result {
 		headers[strings.ToLower(k)] = v
 	}
 	act := map[string]any{"body": body, "headers": headers, "query": map[string]any{}, "item": nil}
+	// A trigger that splits a delivery (QuickBooks' batches) maps each
+	// item: the case's delivery is its first.
+	if t.Split != "" {
+		v, err := triggerExprs.Eval(t.Split, act)
+		items, ok := v.([]any)
+		if err != nil || !ok || len(items) == 0 {
+			fail("the trigger's split gives no items: %v", err)
+			return res
+		}
+		act["item"] = items[0]
+	}
 	name, fields, err := m.EventOf(cs.Trigger, act)
 	switch {
 	case errors.Is(err, connector.ErrNoEvent):

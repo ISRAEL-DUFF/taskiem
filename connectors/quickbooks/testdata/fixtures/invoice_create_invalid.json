@@ -1,0 +1,58 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/company/9341453050298730/invoice",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  },
+  "body": {
+   "DocNumber": "INV-2026-0042",
+   "CustomerRef": {
+    "value": "58"
+   },
+   "TxnDate": "2026-10-26",
+   "DueDate": "2026-11-09",
+   "GlobalTaxCalculation": "TaxExcluded",
+   "CustomerMemo": {
+    "value": "Thank you"
+   },
+   "Line": [
+    {
+     "DetailType": "SalesItemLineDetail",
+     "Amount": 50000.0,
+     "Description": "Bookkeeping, October",
+     "SalesItemLineDetail": {
+      "Qty": 2,
+      "UnitPrice": 25000.0,
+      "ItemRef": {
+       "value": "1"
+      },
+      "TaxCodeRef": {
+       "value": "6"
+      }
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "Fault": {
+    "Error": [
+     {
+      "Message": "Invalid Reference Id",
+      "Detail": "Invalid Reference Id : Something you're trying to use has been made inactive. Check the fields with accounts, customers, items, vendors or employees.",
+      "code": "2500",
+      "element": ""
+     }
+    ],
+    "type": "ValidationFault"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

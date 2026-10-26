@@ -1,0 +1,71 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM Invoice WHERE CustomerRef = '58' AND Balance > '0' ORDERBY MetaData.LastUpdatedTime DESC MAXRESULTS 10"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "Invoice": [
+     {
+      "Id": "130",
+      "DocNumber": "INV-2026-0042",
+      "SyncToken": "0",
+      "TxnDate": "2026-10-26",
+      "DueDate": "2026-11-09",
+      "CurrencyRef": {
+       "value": "NGN",
+       "name": "Nigerian Naira"
+      },
+      "CustomerRef": {
+       "value": "58",
+       "name": "Adaeze Okafor"
+      },
+      "TotalAmt": 53750.0,
+      "Balance": 53750.0,
+      "TxnTaxDetail": {
+       "TotalTax": 3750.0
+      },
+      "EmailStatus": "NotSet",
+      "Line": [
+       {
+        "Id": "1",
+        "LineNum": 1,
+        "Amount": 50000.0,
+        "DetailType": "SalesItemLineDetail",
+        "Description": "Bookkeeping, October",
+        "SalesItemLineDetail": {
+         "ItemRef": {
+          "value": "1",
+          "name": "Services"
+         },
+         "Qty": 2,
+         "UnitPrice": 25000,
+         "TaxCodeRef": {
+          "value": "6"
+         }
+        }
+       },
+       {
+        "Amount": 50000.0,
+        "DetailType": "SubTotalLineDetail",
+        "SubTotalLineDetail": {}
+       }
+      ]
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 1
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

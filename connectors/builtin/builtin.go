@@ -29,6 +29,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
+	"github.com/israel-duff/taskiem/connectors/quickbooks"
 	"github.com/israel-duff/taskiem/connectors/remita"
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/schools"
@@ -64,6 +65,10 @@ type Options struct {
 	// provider's sandbox by default). IswalletURL and PayrollaURL are the
 	// live modes' (each provider's production by default).
 	IswalletTestURL, PayrollaTestURL string
+	// QuickBooksURL and QuickBooksTestURL replace QuickBooks' production
+	// and sandbox hosts, QuickBooksTokenURL Intuit's token endpoint
+	// (TASKIEM_QUICKBOOKS_URL, _TEST_URL, _TOKEN_URL; tests, a proxy).
+	QuickBooksURL, QuickBooksTestURL, QuickBooksTokenURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).
 	XenibaseURL string
@@ -118,6 +123,7 @@ func Register(r *connector.Registry, o Options) error {
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
 		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
+		quickbooks.New(quickbooks.Options{LiveURL: o.QuickBooksURL, TestURL: o.QuickBooksTestURL, TokenURL: o.QuickBooksTokenURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),

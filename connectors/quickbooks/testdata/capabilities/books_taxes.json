@@ -1,0 +1,29 @@
+{
+ "capability": "books_taxes",
+ "input": {},
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "tax_codes",
+  "tax_rates"
+ ],
+ "expect": {
+  "taxes": [
+   {
+    "id": "6",
+    "name": "VAT 7.5%",
+    "percent": 7.5
+   },
+   {
+    "id": "4",
+    "name": "Exempt"
+   }
+  ]
+ }
+}

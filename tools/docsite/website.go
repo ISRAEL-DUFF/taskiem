@@ -59,9 +59,9 @@ var wwwPages = []wwwPage{
 var featuredCards = map[string]bool{"paystack": true, "moniepoint": true, "opay": true, "flutterwave": true, "termii": true, "googlesheets": true}
 
 // adapterIcons are the Material Symbols the adapter grid shows, by category.
-var adapterIcons = map[string]string{"payments": "account_balance", "messaging": "sms", "identity": "fingerprint", "open_banking": "account_balance_wallet", "productivity": "table_chart", "database": "database", "storage": "cloud_sync"}
+var adapterIcons = map[string]string{"payments": "account_balance", "messaging": "sms", "identity": "fingerprint", "open_banking": "account_balance_wallet", "productivity": "table_chart", "accounting": "menu_book", "database": "database", "storage": "cloud_sync"}
 
-var adapterKinds = map[string]string{"payments": "Payments & Banking", "messaging": "Messaging", "identity": "Identity Checks", "open_banking": "Open Banking", "productivity": "Spreadsheets & Email", "database": "Database", "storage": "File Storage"}
+var adapterKinds = map[string]string{"payments": "Payments & Banking", "messaging": "Messaging", "identity": "Identity Checks", "open_banking": "Open Banking", "productivity": "Spreadsheets & Email", "accounting": "Accounting", "database": "Database", "storage": "File Storage"}
 
 // The home page's picks: the templates it shows as cards, and the
 // services it names, by id. A build fails if one goes missing.
@@ -95,6 +95,7 @@ var connectorGroups = []struct {
 	{"Messages", []string{"messaging"}},
 	{"Identity and bank checks", []string{"identity", "open_banking"}},
 	{"Sheets and email", []string{"productivity"}},
+	{"Accounting", []string{"accounting"}},
 	{"Your data", []string{"database"}},
 	{"Files", []string{"storage"}},
 }

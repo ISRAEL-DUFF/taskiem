@@ -1,0 +1,17 @@
+{
+ "trigger": "changes",
+ "body": [
+  {
+   "specversion": "1.0",
+   "id": "aa11bb22-cc33-4d44-8e55-ff6677889900",
+   "source": "intuit.dsnBgbseACLLRZNxo2dfc4evmEJdxde58xeeYcZliOU=",
+   "type": "qbo.customer.updated.v1",
+   "datacontenttype": "application/json",
+   "time": "2026-10-26T16:01:22.000Z",
+   "intuitentityid": "58",
+   "intuitaccountid": "9341453050298730",
+   "data": {}
+  }
+ ],
+ "event": ""
+}

@@ -1,0 +1,27 @@
+{
+ "action": "get_entity",
+ "input": {
+  "entity": "payment",
+  "id": "171"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "payment"
+ ],
+ "expect": {
+  "output": {
+   "entity": "payment",
+   "record": {
+    "Id": "171",
+    "PaymentRefNum": "ml_01JB8Z3K4M5N6P7Q8R"
+   }
+  }
+ }
+}

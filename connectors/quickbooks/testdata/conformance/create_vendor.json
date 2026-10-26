@@ -1,0 +1,25 @@
+{
+ "action": "create_vendor",
+ "input": {
+  "display_name": "Lagos Paper Supplies",
+  "email": "sales@paper.example"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "vendor_by_name_none",
+  "vendor_create"
+ ],
+ "expect": {
+  "output": {
+   "vendor_id": "41",
+   "created": true
+  }
+ }
+}

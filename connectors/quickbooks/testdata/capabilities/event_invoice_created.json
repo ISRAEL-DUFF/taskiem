@@ -1,0 +1,20 @@
+{
+ "trigger": "changes",
+ "body": [
+  {
+   "specversion": "1.0",
+   "id": "88b8f5e0-1c5d-4e0b-9d9f-2a4c1f0e7a11",
+   "source": "intuit.dsnBgbseACLLRZNxo2dfc4evmEJdxde58xeeYcZliOU=",
+   "type": "qbo.invoice.created.v1",
+   "datacontenttype": "application/json",
+   "time": "2026-10-26T16:01:22.000Z",
+   "intuitentityid": "130",
+   "intuitaccountid": "9341453050298730",
+   "data": {}
+  }
+ ],
+ "event": "books.invoice.created",
+ "expect": {
+  "invoice_id": "130"
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "action": "create_payment",
+ "input": {
+  "invoice_id": "130",
+  "amount_kobo": 5375000,
+  "txn_date": "2026-10-26",
+  "reference": "ml_01JB8Z3K4M5N6P7Q8R9S0T",
+  "deposit_account_id": "35"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice",
+  "payments_that_day_none",
+  "payment_create"
+ ],
+ "expect": {
+  "output": {
+   "payment_id": "171",
+   "created": true,
+   "amount_kobo": 5375000,
+   "unapplied_kobo": 0
+  }
+ }
+}

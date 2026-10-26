@@ -1,0 +1,20 @@
+{
+ "trigger": "changes",
+ "body": [
+  {
+   "specversion": "1.0",
+   "id": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+   "source": "intuit.dsnBgbseACLLRZNxo2dfc4evmEJdxde58xeeYcZliOU=",
+   "type": "qbo.payment.created.v1",
+   "datacontenttype": "application/json",
+   "time": "2026-10-26T16:01:22.000Z",
+   "intuitentityid": "171",
+   "intuitaccountid": "9341453050298730",
+   "data": {}
+  }
+ ],
+ "event": "books.payment.recorded",
+ "expect": {
+  "payment_id": "171"
+ }
+}

@@ -1791,6 +1791,181 @@ export const prembly = {
   verify_voters_card: (input: PremblyVerifyVotersCardInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_voters_card", input, extra),
 };
 
+// QuickBooks (quickbooks@1)
+export interface QuickbooksChangesSinceInput {
+  entities: Value;
+  since: Val<string>;
+}
+export interface QuickbooksCreateBillInput {
+  currency?: Val<string>;
+  doc_number: Val<string>;
+  due_date?: Val<string>;
+  lines: Value;
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+  vendor_id: Val<string>;
+}
+export interface QuickbooksCreateCustomerInput {
+  company_name?: Val<string>;
+  display_name: Val<string>;
+  email?: Val<string>;
+  family_name?: Val<string>;
+  given_name?: Val<string>;
+  notes?: Val<string>;
+  phone?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+}
+export interface QuickbooksCreateInvoiceInput {
+  /** Only for a company with multicurrency on; otherwise the company's home currency */
+  currency?: Val<string>;
+  customer_id: Val<string>;
+  /** Shown on the invoice */
+  customer_memo?: Val<string>;
+  doc_number: Val<string>;
+  due_date?: Val<string>;
+  /** Where QuickBooks sends it */
+  email?: Val<string>;
+  lines: Value;
+  /** Kept in the books only */
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  /** Whether line amounts include tax (outside the US). Default: excluded when a line names a tax code */
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+}
+export interface QuickbooksCreatePaymentInput {
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  /** Required without invoice_id */
+  customer_id?: Val<string>;
+  /** The bank or cash account it went into; default: Undeposited Funds */
+  deposit_account_id?: Val<string>;
+  invoice_id?: Val<string>;
+  memo?: Val<string>;
+  payment_method_id?: Val<string>;
+  reference: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  /** Default today */
+  txn_date?: Val<string>;
+}
+export interface QuickbooksCreatePurchaseInput {
+  currency?: Val<string>;
+  doc_number: Val<string>;
+  lines: Value;
+  /** The bank */
+  paid_from_account_id: Val<string>;
+  /** cash covers transfers; credit_card needs a card account */
+  payment_type?: Val<"cash" | "check" | "credit_card">;
+  /** Kept in the books; also a line's description when it has none */
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+  /** VAT included in the first line's amount, recorded as its own line on that line's account */
+  vat_kobo?: Val<number>;
+  vendor_id?: Val<string>;
+}
+export interface QuickbooksCreateSalesReceiptInput {
+  currency?: Val<string>;
+  customer_id?: Val<string>;
+  /** The bank or cash account the takings went into; default: Undeposited Funds */
+  deposit_account_id?: Val<string>;
+  doc_number: Val<string>;
+  lines: Value;
+  payment_method_id?: Val<string>;
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+}
+export interface QuickbooksCreateVendorInput {
+  company_name?: Val<string>;
+  display_name: Val<string>;
+  email?: Val<string>;
+  phone?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+}
+export interface QuickbooksFindCustomerInput {
+  display_name?: Val<string>;
+  email?: Val<string>;
+}
+export interface QuickbooksFindVendorInput {
+  display_name: Val<string>;
+}
+export interface QuickbooksGetCompanyInput {
+  [key: string]: Value;
+}
+export interface QuickbooksGetEntityInput {
+  entity: Val<"invoice" | "payment" | "customer" | "vendor" | "salesreceipt" | "purchase" | "bill" | "billpayment" | "item" | "account" | "estimate" | "creditmemo" | "refundreceipt" | "deposit" | "journalentry" | "taxcode">;
+  id: Val<string>;
+}
+export interface QuickbooksGetInvoiceInput {
+  invoice_id: Val<string>;
+}
+export interface QuickbooksListAccountsInput {
+  /** Only accounts of this kind (cash: QuickBooks keeps cash in Bank accounts) */
+  type?: Val<"income" | "expense" | "bank" | "cash" | "credit_card" | "receivable" | "payable" | "other">;
+}
+export interface QuickbooksListItemsInput {
+  [key: string]: Value;
+}
+export interface QuickbooksListTaxCodesInput {
+  [key: string]: Value;
+}
+export interface QuickbooksQueryInvoicesInput {
+  changed_since?: Val<string>;
+  customer_id?: Val<string>;
+  doc_number?: Val<string>;
+  max?: Val<number>;
+  /** Only those with something left to pay */
+  unpaid?: Val<boolean>;
+}
+export const quickbooks = {
+  /** Read what changed (read) */
+  changes_since: (input: QuickbooksChangesSinceInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "changes_since", input, extra),
+  /** Record a supplier's bill (idempotent_write) */
+  create_bill: (input: QuickbooksCreateBillInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_bill", input, extra),
+  /** Add a customer (idempotent_write) */
+  create_customer: (input: QuickbooksCreateCustomerInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_customer", input, extra),
+  /** Record an invoice (idempotent_write) */
+  create_invoice: (input: QuickbooksCreateInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_invoice", input, extra),
+  /** Record a payment (idempotent_write) */
+  create_payment: (input: QuickbooksCreatePaymentInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_payment", input, extra),
+  /** Record an expense (idempotent_write) */
+  create_purchase: (input: QuickbooksCreatePurchaseInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_purchase", input, extra),
+  /** Record a sale (idempotent_write) */
+  create_sales_receipt: (input: QuickbooksCreateSalesReceiptInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_sales_receipt", input, extra),
+  /** Add a supplier (idempotent_write) */
+  create_vendor: (input: QuickbooksCreateVendorInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_vendor", input, extra),
+  /** Find a customer (read) */
+  find_customer: (input?: QuickbooksFindCustomerInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "find_customer", input, extra),
+  /** Find a supplier (read) */
+  find_vendor: (input: QuickbooksFindVendorInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "find_vendor", input, extra),
+  /** Get the company (read) */
+  get_company: (input?: QuickbooksGetCompanyInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "get_company", input, extra),
+  /** Read a record (read) */
+  get_entity: (input: QuickbooksGetEntityInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "get_entity", input, extra),
+  /** Get an invoice (read) */
+  get_invoice: (input: QuickbooksGetInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "get_invoice", input, extra),
+  /** List accounts (read) */
+  list_accounts: (input?: QuickbooksListAccountsInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "list_accounts", input, extra),
+  /** List products and services (read) */
+  list_items: (input?: QuickbooksListItemsInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "list_items", input, extra),
+  /** List tax codes (read) */
+  list_tax_codes: (input?: QuickbooksListTaxCodesInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "list_tax_codes", input, extra),
+  /** Find invoices (read) */
+  query_invoices: (input?: QuickbooksQueryInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "query_invoices", input, extra),
+};
+
 // Remita (remita@1)
 export interface RemitaBulkTransferInput {
   batch_payment_identifier?: Val<string>;
@@ -2805,6 +2980,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
+  "quickbooks@1": "quickbooks",
   "remita@1": "remita",
   "s3@1": "s3",
   "schools@1": "schools",
@@ -2846,6 +3022,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
+  "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
@@ -3328,15 +3505,15 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
 /** The built-in rails that declare each capability. */
 export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   balance: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
-  books_accounts: [],
-  books_bill: [],
-  books_customer: [],
-  books_expense: [],
-  books_invoice: [],
-  books_items: [],
-  books_payment: [],
-  books_sale: [],
-  books_taxes: [],
+  books_accounts: ["quickbooks@1"],
+  books_bill: ["quickbooks@1"],
+  books_customer: ["quickbooks@1"],
+  books_expense: ["quickbooks@1"],
+  books_invoice: ["quickbooks@1"],
+  books_items: ["quickbooks@1"],
+  books_payment: ["quickbooks@1"],
+  books_sale: ["quickbooks@1"],
+  books_taxes: ["quickbooks@1"],
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
   collect_transfer: ["flutterwave@1", "opay@1", "paystack@1"],
