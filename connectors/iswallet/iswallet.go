@@ -608,8 +608,12 @@ func (c *client) createWallet(ctx context.Context, req connector.Request) (conne
 	if req.IdempotencyKey == "" {
 		return connector.Response{}, fmt.Errorf("iswallet: create_wallet needs the engine's key: %w", effects.ErrFatal)
 	}
-	if err := allowWallet(req, "wallet_id", ""); errors.Is(err, ErrAllowListMissing) {
-		return connector.Response{}, err
+	// A shared client's key reaches other customers' wallets: a business
+	// holding one (a partner's, or Taskiem's own, decision 0052) makes no
+	// wallets with it. Taskiem makes a business's wallet under its own
+	// client itself, without the shared mark.
+	if req.Credentials["shared_client"] == "true" {
+		return connector.Response{}, fmt.Errorf("iswallet: this connection is a shared client's, which cannot create wallets; nothing was sent: %w", effects.ErrFatal)
 	}
 	switch t := str(in, "owner_type"); t {
 	case "client_end_user", "client_end_user_business", "client_end_business":

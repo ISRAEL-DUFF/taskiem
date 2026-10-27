@@ -250,6 +250,10 @@ func (s *Server) createSubTenantConnection(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
+	if req.Name == secrets.PlatformName {
+		s.fail(w, r, fmt.Errorf("%w: %q is kept for the account Taskiem holds for a business: choose another name", errBadRequest, req.Name))
+		return
+	}
 	by := partnerActor(p)
 	var id uuid.UUID
 	err = s.partnerTx(r, sub, "partner.connection.create", map[string]any{"connector": c.Manifest.ID, "environment": env, "name": req.Name}, func(tx pgx.Tx) error {
@@ -288,7 +292,7 @@ func connParam(r *http.Request) (uuid.UUID, error) {
 // partner manages only those), returning its connector id.
 func subTenantConnection(r *http.Request, tx pgx.Tx, conn uuid.UUID) (string, error) {
 	var connector string
-	err := tx.QueryRow(r.Context(), `SELECT connector FROM connections WHERE id = $1 AND provisioned_by IS NOT NULL`, conn).Scan(&connector)
+	err := tx.QueryRow(r.Context(), `SELECT connector FROM connections WHERE id = $1 AND provisioned_by IS NOT NULL AND platform IS NULL`, conn).Scan(&connector)
 	return connector, err
 }
 

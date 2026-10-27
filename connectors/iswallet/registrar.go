@@ -81,8 +81,11 @@ func (r registrar) eventTypes(spec connector.RemoteSpec) []string {
 }
 
 func (r registrar) Create(ctx context.Context, c connector.RemoteCall, spec connector.RemoteSpec) (connector.RemoteState, error) {
-	if err := allowWallet(c.Request(), "wallet_id", ""); errors.Is(err, ErrAllowListMissing) {
-		return connector.RemoteState{}, err
+	// A subscription hears every wallet under the key: a shared client's
+	// connection (a partner's sub-tenant, a business under Taskiem's own
+	// client) never makes one; its events come through the holder's.
+	if c.Credentials["shared_client"] == "true" {
+		return connector.RemoteState{}, fmt.Errorf("iswallet: a shared client's connection makes no subscription of its own: %w", effects.ErrFatal)
 	}
 	var s subscription
 	body := map[string]any{"endpoint_url": spec.URL, "event_types": r.eventTypes(spec)}

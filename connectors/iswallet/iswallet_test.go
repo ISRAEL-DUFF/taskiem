@@ -596,3 +596,25 @@ func TestKYCRefusalSaysWhatIsMissing(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 }
+
+// A shared client's key reaches other customers' wallets: its connection
+// (a partner's sub-tenant, a business under Taskiem's own client) makes
+// no wallet and no subscription; nothing is sent.
+func TestSharedClientMakesNoWalletOrSubscription(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("a request was sent: %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	c := New(Options{BaseURL: srv.URL})
+	creds := map[string]string{"api_key": "isw_platform", "shared_client": "true", "wallet_ids": "w_1"}
+	_, err := c.Actions["create_wallet"].Execute(context.Background(), connector.Request{Credentials: creds, HTTP: srv.Client(), IdempotencyKey: "k1",
+		Input: map[string]any{"owner_type": "client_end_business", "owner_ref": "tenant:victim", "business_email": "x@y.z", "bvn": "22212345678"}})
+	if effects.Classify(err) != effects.KindFatal {
+		t.Errorf("create_wallet on a shared client: %v", err)
+	}
+	_, err = c.Registrars["credit_event"].Create(context.Background(), connector.RemoteCall{Credentials: creds, HTTP: srv.Client()},
+		connector.RemoteSpec{Name: "x", URL: "https://hooks.example/x"})
+	if effects.Classify(err) != effects.KindFatal {
+		t.Errorf("a subscription on a shared client: %v", err)
+	}
+}

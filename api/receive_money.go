@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -56,12 +58,14 @@ const (
 )
 
 func (s *Server) receiveMoneyRoutes(r chi.Router) {
-	r.Get("/settings/receive-money", s.getReceiveMoney)
+	// All of it is the business's prod wallet: a key limited to another
+	// environment reaches none of it.
+	r.With(s.need(PermInvoiceRead), s.tenantWide).Get("/settings/receive-money", s.getReceiveMoney)
 	r.With(s.tenantWide, s.feature(billing.FeatureReceiveMoney, false)).Post("/settings/receive-money", s.turnOnReceiveMoney)
 	r.With(s.tenantWide).Put("/settings/receive-money/withdrawals", s.putWithdrawals)
-	r.With(s.need(PermInvoiceRead)).Get("/receive-money/balance", s.receiveMoneyBalance)
-	r.With(s.need(PermInvoiceRead)).Get("/receive-money/banks", s.receiveMoneyBanks)
-	r.With(s.need(PermRunStart)).Post("/receive-money/withdraw", s.withdrawToBank)
+	r.With(s.need(PermInvoiceRead), s.tenantWide).Get("/receive-money/balance", s.receiveMoneyBalance)
+	r.With(s.need(PermInvoiceRead), s.tenantWide).Get("/receive-money/banks", s.receiveMoneyBanks)
+	r.With(s.need(PermRunStart), s.tenantWide).Post("/receive-money/withdraw", s.withdrawToBank)
 }
 
 // receiveMoney is a business's row (receive_money).
@@ -142,6 +146,9 @@ type receiveMoneyView struct {
 	WithdrawTo       *withdrawTo     `json:"withdraw_to,omitempty"`
 	TwoAboveKobo     int64           `json:"two_approvers_above_kobo"`
 	WithdrawWorkflow *uuid.UUID      `json:"withdraw_workflow_id,omitempty"`
+	// WithdrawWaiting says what a change to withdrawals waits for (a
+	// second person, a promotion), in plain words; "" when none.
+	WithdrawWaiting string `json:"withdraw_waiting,omitempty"`
 }
 
 func (s *Server) receiveMoneyView(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (receiveMoneyView, error) {
@@ -166,7 +173,8 @@ func (s *Server) receiveMoneyView(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 		out.WithdrawTo = &withdrawTo{BankCode: deref(m.PayoutBankCode), BankName: deref(m.PayoutBankName), AccountNumber: *m.PayoutAccount, AccountName: deref(m.PayoutName)}
 	}
 	out.TwoAboveKobo, out.WithdrawWorkflow = m.TwoAboveKobo, m.WithdrawWorkflow
-	return out, nil
+	out.WithdrawWaiting, err = withdrawWaiting(ctx, tx, m.WithdrawWorkflow)
+	return out, err
 }
 
 func (s *Server) getReceiveMoney(w http.ResponseWriter, r *http.Request) {
@@ -301,7 +309,11 @@ func (s *Server) makeReceiveWallet(r *http.Request, c *connector.Connector, mode
 	if spec.Idempotency != nil {
 		keySpec = *spec.Idempotency
 	}
-	key, err := keySpec.Key(effects.KeyInput{TenantID: p.TenantID.String(), Seed: "receive-money:" + p.TenantID.String(), StepID: "create_wallet"})
+	// The key is the tenant's and what was asked: a retry of the same
+	// request (a lost answer) is the same wallet, a corrected email or BVN
+	// a new request (iswallet keeps one wallet per owner_ref regardless).
+	asked := sha256.Sum256([]byte(req.OwnerType + "\x00" + strings.ToLower(req.BusinessEmail) + "\x00" + req.BVN))
+	key, err := keySpec.Key(effects.KeyInput{TenantID: p.TenantID.String(), Seed: "receive-money:" + p.TenantID.String() + ":" + hex.EncodeToString(asked[:8]), StepID: "create_wallet"})
 	if err != nil {
 		return err
 	}
@@ -322,39 +334,62 @@ func (s *Server) makeReceiveWallet(r *http.Request, c *connector.Connector, mode
 		if effects.Classify(err) == effects.KindFatal {
 			return fmt.Errorf("%w: iswallet did not create the wallet: %s", errBadRequest, plainConnectorError(err))
 		}
-		return fmt.Errorf("iswallet did not answer whether it created the wallet; asking again is safe: %s", plainConnectorError(err))
+		return fmt.Errorf("%w: iswallet did not answer whether it created the wallet; asking again is safe: %s", errUpstream, plainConnectorError(err))
 	}
 	wallet, _ := out["wallet_id"].(string)
 	if wallet == "" {
-		return errors.New("iswallet answered without a wallet")
+		return fmt.Errorf("%w: iswallet answered without a wallet; asking again is safe", errUpstream)
+	}
+	// Invoices are paid on it unless they already name a rail that can
+	// take payments.
+	var settings invoicing.Settings
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		settings, err = invoicing.GetSettings(r.Context(), tx, p.TenantID)
+		return err
+	}); err != nil {
+		return err
+	}
+	pointInvoices := true
+	if s.Invoices != nil && s.Invoices.Rails != nil {
+		if _, err := s.Invoices.Rails.Resolve(r.Context(), p.TenantID, settings.Connection); err == nil {
+			pointInvoices = false
+		}
 	}
 	return s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
+		// Two presses at once: the second finds the first's wallet.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('receive-money:' || $1::text))`, p.TenantID); err != nil {
+			return err
+		}
+		var done bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM receive_money WHERE tenant_id = $1)`, p.TenantID).Scan(&done); err != nil || done {
+			return err
+		}
 		id, err := s.Vault.CreatePlatformConnectionTx(ctx, tx, p.TenantID, "prod", receiveConnector, secrets.PlatformName, mode, wallet,
 			map[string]string{"wallet_ids": wallet}, p.Actor())
 		if err != nil {
 			return err
 		}
-		ref := "biz_" + hex.EncodeToString(p.TenantID[:])
+		// Random, so nobody can guess it and claim it first.
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			return err
+		}
+		ref := "biz_" + hex.EncodeToString(b)
 		if _, err := tx.Exec(ctx, `INSERT INTO receive_money (tenant_id, connection_id, mode, wallet_id, owner_type, account_reference, created_by)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)`, p.TenantID, id, mode, wallet, req.OwnerType, ref, p.Actor()); err != nil {
 			return err
 		}
-		// Invoices are paid on it unless they already name a rail that
-		// can take payments.
-		st, err := invoicing.GetSettings(ctx, tx, p.TenantID)
-		if err != nil {
+		// Its credits are read back (the look-back) if a webhook is lost.
+		if _, err := tx.Exec(ctx, `INSERT INTO money_lookbacks (tenant_id, channel, account) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, p.TenantID, receiveChannel, wallet); err != nil {
 			return err
 		}
-		_, name, found := strings.Cut(st.Connection, "/")
-		if !found {
-			name = st.Connection
-		}
-		var has bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = 'prod' AND status = 'active' AND name = $1 AND platform IS NULL)`, name).Scan(&has); err != nil {
-			return err
-		}
-		if !has {
+		if pointInvoices {
+			st, err := invoicing.GetSettings(ctx, tx, p.TenantID)
+			if err != nil {
+				return err
+			}
 			st.Connection = receiveChannel
 			if _, err := invoicing.SaveSettings(ctx, tx, p.TenantID, st); err != nil {
 				return err
@@ -374,7 +409,7 @@ func (s *Server) makeReceiveWallet(r *http.Request, c *connector.Connector, mode
 			}
 		}
 		return auditTx(r, tx, "settings.receive_money.on", receiveChannel, map[string]any{"mode": mode, "owner_type": req.OwnerType,
-			"wallet_id": wallet, "request_id": out["request_id"], "invoices": !has})
+			"wallet_id": wallet, "request_id": out["request_id"], "invoices": pointInvoices})
 	})
 }
 
@@ -390,15 +425,15 @@ func (s *Server) issueBusinessNumber(ctx context.Context, tenant uuid.UUID, c *c
 		return err
 	}
 	name := business
-	if len(name) > 31 {
-		name = strings.TrimSpace(name[:31])
+	if r := []rune(name); len(r) > 31 {
+		name = strings.TrimSpace(string(r[:31]))
 	}
 	out, err := s.connectionAction(ctx, tenant, c, "issue_virtual_account", "receive_money.issue",
 		map[string]any{"wallet_id": m.WalletID, "reference": m.Reference, "account_name": name}, m.Reference)
 	return s.tenantTx(ctx, tenant, func(tx pgx.Tx) error {
 		if err != nil {
 			if effects.Classify(err) != effects.KindFatal {
-				return fmt.Errorf("iswallet did not answer with your account number; asking again is safe: %s", plainConnectorError(err))
+				return fmt.Errorf("%w: iswallet did not answer with your account number; asking again is safe: %s", errUpstream, plainConnectorError(err))
 			}
 			_, e := tx.Exec(ctx, `UPDATE receive_money SET account_problem = $2, updated_at = now() WHERE tenant_id = $1`, tenant, plainConnectorError(err))
 			return e
@@ -407,7 +442,7 @@ func (s *Server) issueBusinessNumber(ctx context.Context, tenant uuid.UUID, c *c
 		bank, _ := out["bank_name"].(string)
 		acct, _ := out["account_name"].(string)
 		if num == "" {
-			return errors.New("iswallet answered without an account number")
+			return fmt.Errorf("%w: iswallet answered without an account number; asking again is safe", errUpstream)
 		}
 		_, e := tx.Exec(ctx, `UPDATE receive_money SET account_number = $2, bank_name = NULLIF($3, ''), account_name = NULLIF($4, ''), account_problem = NULL, updated_at = now()
 			WHERE tenant_id = $1`, tenant, num, bank, acct)
@@ -440,6 +475,11 @@ func (s *Server) runAction(ctx context.Context, tenant uuid.UUID, c *connector.C
 // connectionAction runs an action on the business's iswallet/taskiem
 // connection: the platform's key, kept to the business's own wallet.
 func (s *Server) connectionAction(ctx context.Context, tenant uuid.UUID, c *connector.Connector, action, purpose string, in map[string]any, key string) (map[string]any, error) {
+	// Every business shares Taskiem's key and its limit at iswallet: one
+	// business's pages and chats take no more than their share.
+	if !s.limiter("receive-money:"+tenant.String(), time.Minute/receiveCallsPerMinute, receiveCallsPerMinute).Allow() {
+		return nil, fmt.Errorf("too many requests for your wallet just now; try again in a minute: %w", effects.ErrRetryable)
+	}
 	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: purpose})
 	creds, err := s.Vault.Credentials(use, tenant, "prod", receiveConnector, secrets.PlatformName)
 	if err != nil {
@@ -447,6 +487,14 @@ func (s *Server) connectionAction(ctx context.Context, tenant uuid.UUID, c *conn
 	}
 	return s.runAction(ctx, tenant, c, creds, action, purpose, in, key)
 }
+
+// errUpstream is iswallet not answering, or answering what Taskiem
+// cannot read: 502, and asking again is safe.
+var errUpstream = errors.New("upstream")
+
+// receiveCallsPerMinute is one business's share of Taskiem's key at
+// iswallet (100 a minute for every business) for its own pages and chats.
+const receiveCallsPerMinute = 20
 
 // receiveOn is the business's row and its connector, or a refusal when it
 // has not turned receiving money with Taskiem on.
@@ -495,7 +543,7 @@ func (s *Server) receiveMoneyBalance(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		available += kobo(b["available"])
-		ledger += kobo(b["ledger"])
+		ledger += kobo(b["total"])
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"available_kobo": available, "ledger_kobo": ledger, "currency": "NGN", "at": time.Now().UTC()})
 }
@@ -539,15 +587,21 @@ type withdrawalsReq struct {
 	BankCode      string `json:"bank_code"`
 	BankName      string `json:"bank_name"`
 	AccountNumber string `json:"account_number"`
-	// TwoAboveKobo: withdrawals of this much or more take two people (0:
-	// one, the owner).
+	// TwoAboveKobo: withdrawals of this much or more take two owners (0:
+	// one).
 	TwoAboveKobo int64 `json:"two_approvers_above_kobo"`
 }
 
 // putWithdrawals answers PUT /v1/settings/receive-money/withdrawals
 // (owners): the bank account withdrawals go to, its name found by name
-// enquiry and kept, and the approval rule; the workflow that withdraws is
-// made and published the first time.
+// enquiry, and the approval rule. The account is written into the
+// withdrawal workflow itself (made from the withdraw-to-bank template the
+// first time, a new version after), so a run's starter cannot send the
+// money elsewhere and its approver sees where it goes. The business's
+// governance holds: with four-eyes on approval rules the rule waits for a
+// second person, with four-eyes on publishing so does the new account, and
+// a gated prod takes it only when promoted. Until then the account in
+// force is the one before.
 func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	if !slices.Contains(p.Roles, "owner") {
@@ -561,20 +615,33 @@ func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 	}
 	req.BankCode, req.AccountNumber = strings.TrimSpace(req.BankCode), strings.TrimSpace(req.AccountNumber)
 	switch {
-	case len(req.BankCode) < 3 || len(req.BankCode) > 6:
+	case len(req.BankCode) < 3 || len(req.BankCode) > 6 || strings.Trim(req.BankCode, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") != "":
 		s.fail(w, r, fmt.Errorf("%w: choose your bank", errBadRequest))
 		return
 	case len(req.AccountNumber) != 10 || strings.Trim(req.AccountNumber, "0123456789") != "":
 		s.fail(w, r, fmt.Errorf("%w: an account number is 10 digits", errBadRequest))
 		return
 	case req.TwoAboveKobo < 0:
-		s.fail(w, r, fmt.Errorf("%w: the amount for two approvers cannot be below zero", errBadRequest))
+		s.fail(w, r, fmt.Errorf("%w: the amount for two owners cannot be below zero", errBadRequest))
 		return
 	}
-	m, c, err := s.receiveOn(r)
+	_, c, err := s.receiveOn(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if req.TwoAboveKobo > 0 {
+		var owners int
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			return tx.QueryRow(r.Context(), `SELECT count(DISTINCT user_id) FROM memberships WHERE role = 'owner'`).Scan(&owners)
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if owners < 2 {
+			s.fail(w, r, fmt.Errorf("%w: your business has one owner, so two owners cannot approve: invite a second owner first, or leave the amount empty", errBadRequest))
+			return
+		}
 	}
 	out, err := s.connectionAction(r.Context(), p.TenantID, c, "name_enquiry", "receive_money.name_enquiry",
 		map[string]any{"bank_code": req.BankCode, "account_number": req.AccountNumber}, "")
@@ -599,27 +666,32 @@ func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 	var view receiveMoneyView
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		if err := writeWithdrawPolicyTx(r, tx, p.TenantID, req.TwoAboveKobo, p.Actor()); err != nil {
+		// One change at a time: two owners saving at once make one workflow.
+		var m receiveMoney
+		if err := tx.QueryRow(ctx, `SELECT wallet_id, withdraw_workflow_id FROM receive_money WHERE tenant_id = $1 FOR UPDATE`, p.TenantID).
+			Scan(&m.WalletID, &m.WithdrawWorkflow); err != nil {
 			return err
 		}
-		wf := m.WithdrawWorkflow
-		if wf == nil {
-			id, err := s.makeWithdrawWorkflowTx(r, tx, tpl, m.WalletID)
-			if err != nil {
-				return err
-			}
-			wf = &id
+		g, err := governanceTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := writeWithdrawPolicyTx(r, tx, p.TenantID, req.TwoAboveKobo, g.FourEyesPolicies, p.Actor()); err != nil {
+			return err
+		}
+		wf, v, err := s.withdrawWorkflowTx(r, tx, tpl, m.WalletID, m.WithdrawWorkflow, withdrawTo{BankCode: req.BankCode, AccountNumber: req.AccountNumber, AccountName: name}, g.FourEyesPublish)
+		if err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE receive_money SET payout_bank_code = $2, payout_bank_name = NULLIF($3, ''), payout_account_number = $4, payout_account_name = $5,
 			two_approvers_above_kobo = $6, withdraw_workflow_id = $7, updated_at = now() WHERE tenant_id = $1`,
-			p.TenantID, req.BankCode, strings.TrimSpace(req.BankName), req.AccountNumber, name, req.TwoAboveKobo, *wf); err != nil {
+			p.TenantID, req.BankCode, strings.TrimSpace(req.BankName), req.AccountNumber, name, req.TwoAboveKobo, wf); err != nil {
 			return err
 		}
 		if err := auditTx(r, tx, "settings.receive_money.withdrawals", receiveChannel, map[string]any{"bank_code": req.BankCode,
-			"account_number": req.AccountNumber, "account_name": name, "two_approvers_above_kobo": req.TwoAboveKobo, "workflow_id": *wf}); err != nil {
+			"account_number": req.AccountNumber, "account_name": name, "two_approvers_above_kobo": req.TwoAboveKobo, "workflow_id": wf, "version": v}); err != nil {
 			return err
 		}
-		var err error
 		view, err = s.receiveMoneyView(ctx, tx, p.TenantID)
 		return err
 	})
@@ -633,8 +705,9 @@ func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 // writeWithdrawPolicyTx keeps the approval rule withdrawals use: an owner
 // approves; at or above twoAbove kobo, two different owners do. The maker
 // may approve their own withdrawal (a one-owner business could not
-// otherwise withdraw at all).
-func writeWithdrawPolicyTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, twoAbove int64, by string) error {
+// otherwise withdraw at all). With four-eyes on approval rules, a changed
+// rule waits for a second person, as one written by hand does.
+func writeWithdrawPolicyTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, twoAbove int64, fourEyes bool, by string) error {
 	ctx := r.Context()
 	no, yes := false, true
 	pol := policy.Policy{Constraints: policy.Constraints{ForbidSelfApproval: &no, DistinctApprovers: &yes}, Timeout: "48h", OnTimeout: "reject",
@@ -643,57 +716,76 @@ func writeWithdrawPolicyTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, twoAbov
 		pol.Rules = append(pol.Rules, policy.Rule{When: fmt.Sprintf("=subject.amount_kobo >= %d", twoAbove), Levels: []policy.Level{{Role: "owner"}, {Role: "owner"}}})
 	}
 	pol.Rules = append(pol.Rules, policy.Rule{Levels: []policy.Level{{Role: "owner"}}})
-	doc, err := json.Marshal(pol)
+	raw, err := json.Marshal(pol)
 	if err != nil {
 		return err
 	}
-	if _, err := policy.Parse(doc); err != nil {
+	if _, err := policy.Parse(raw); err != nil {
 		return err
 	}
-	var current []byte
-	err = tx.QueryRow(ctx, `SELECT document FROM approval_policies WHERE name = $1 AND state = 'active'`, withdrawPolicy).Scan(&current)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	doc, err := canonical(raw)
+	if err != nil {
 		return err
-	}
-	if current != nil {
-		var a, b any
-		_ = json.Unmarshal(current, &a)
-		_ = json.Unmarshal(doc, &b)
-		if same, _ := json.Marshal(a); string(same) == func() string { x, _ := json.Marshal(b); return string(x) }() {
-			return nil
-		}
 	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('policy:' || $1))`, withdrawPolicy); err != nil {
+		return err
+	}
+	// The same rule as in force (or already waiting) is not written again.
+	var same bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM approval_policies WHERE name = $1 AND state IN ('active', 'pending') AND document = $2::jsonb
+		AND version = (SELECT max(version) FROM approval_policies WHERE name = $1))`, withdrawPolicy, doc).Scan(&same); err != nil || same {
 		return err
 	}
 	var v int
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM approval_policies WHERE name = $1`, withdrawPolicy).Scan(&v); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE approval_policies SET state = 'superseded' WHERE name = $1 AND state = 'active'`, withdrawPolicy); err != nil {
+	state := "active"
+	if fourEyes {
+		state = "pending"
+	} else if _, err := tx.Exec(ctx, `UPDATE approval_policies SET state = 'superseded' WHERE name = $1 AND state = 'active'`, withdrawPolicy); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO approval_policies (tenant_id, name, version, document, state, created_by) VALUES ($1, $2, $3, $4, 'active', $5)`,
-		tenant, withdrawPolicy, v, doc, by); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO approval_policies (tenant_id, name, version, document, state, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
+		tenant, withdrawPolicy, v, doc, state, by); err != nil {
 		return err
 	}
-	return auditTx(r, tx, "policy.write", fmt.Sprintf("%s/%d", withdrawPolicy, v), map[string]any{"state": "active", "via": "receive_money"})
+	return auditTx(r, tx, "policy.write", fmt.Sprintf("%s/%d", withdrawPolicy, v), map[string]any{"state": state, "via": "receive_money"})
 }
 
-// makeWithdrawWorkflowTx makes the workflow that withdraws, from the
-// withdraw-to-bank template on the business's connection and wallet, with
-// its approval under the approval rule, and publishes it.
-func (s *Server) makeWithdrawWorkflowTx(r *http.Request, tx pgx.Tx, tpl *templates.Template, wallet string) (uuid.UUID, error) {
-	ctx := r.Context()
-	p := principalFrom(ctx)
+// withdrawDefinition is the withdraw-to-bank template made for the
+// business: on its Taskiem connection and wallet, its approval under the
+// approval rule, and the bank account written in, so a run takes only an
+// amount and a reference and its approver sees the account.
+func withdrawDefinition(tpl *templates.Template, wallet string, to withdrawTo) ([]byte, error) {
 	raw, err := tpl.Instantiate(map[string]any{"approver_role": "owner", "rail_connection": secrets.PlatformName, "funding_account": wallet}, "Withdraw to my bank")
 	if err != nil {
-		return uuid.Nil, err
+		return nil, err
 	}
 	var def map[string]any
 	if err := json.Unmarshal(raw, &def); err != nil {
-		return uuid.Nil, err
+		return nil, err
 	}
+	fixed := map[string]any{"=trigger.body.bank_code": to.BankCode, "=trigger.body.account_number": to.AccountNumber}
+	var walk func(any) any
+	walk = func(v any) any {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, e := range x {
+				x[k] = walk(e)
+			}
+		case []any:
+			for i, e := range x {
+				x[i] = walk(e)
+			}
+		case string:
+			if f, ok := fixed[x]; ok {
+				return f
+			}
+		}
+		return v
+	}
+	walk(def["steps"])
 	steps, _ := def["steps"].([]any)
 	for _, x := range steps {
 		if st, _ := x.(map[string]any); st["type"] == "approval" {
@@ -702,54 +794,133 @@ func (s *Server) makeWithdrawWorkflowTx(r *http.Request, tx pgx.Tx, tpl *templat
 			}
 		}
 	}
+	// The run's input is the amount and its reference only.
+	if in, ok := def["inputs"].(map[string]any); ok {
+		if sc, ok := in["schema"].(map[string]any); ok {
+			sc["required"] = []any{"amount_naira", "request_id"}
+			if props, ok := sc["properties"].(map[string]any); ok {
+				delete(props, "bank_code")
+				delete(props, "account_number")
+			}
+		}
+	}
 	patched, err := json.Marshal(def)
 	if err != nil {
-		return uuid.Nil, err
+		return nil, err
 	}
-	doc, err := canonical(patched)
+	return canonical(patched)
+}
+
+// withdrawWorkflowTx makes the workflow that withdraws (or its next
+// version, for a new account) and publishes it: or, with four-eyes on
+// publishing, asks for it to be published, which a second person approves.
+func (s *Server) withdrawWorkflowTx(r *http.Request, tx pgx.Tx, tpl *templates.Template, wallet string, have *uuid.UUID, to withdrawTo, fourEyes bool) (uuid.UUID, int, error) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	doc, err := withdrawDefinition(tpl, wallet, to)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, 0, err
 	}
-	wf, err := s.createWorkflowTx(ctx, tx, p, "Withdraw to my bank")
-	if err != nil {
-		return uuid.Nil, err
+	var wf uuid.UUID
+	v := 1
+	if have != nil {
+		wf = *have
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&v); err != nil {
+			return uuid.Nil, 0, err
+		}
+	} else if wf, err = s.createWorkflowTx(ctx, tx, p, "Withdraw to my bank"); err != nil {
+		return uuid.Nil, 0, err
 	}
-	if err := insertVersionTx(ctx, tx, p.TenantID, wf, 1, doc, nil, p.Actor(), ""); err != nil {
-		return uuid.Nil, err
+	if err := insertVersionTx(ctx, tx, p.TenantID, wf, v, doc, nil, p.Actor(), ""); err != nil {
+		return uuid.Nil, 0, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET template_id = $2 WHERE workflow_id = $1 AND version = 1`, wf, tpl.ID); err != nil {
-		return uuid.Nil, err
+	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET template_id = $3 WHERE workflow_id = $1 AND version = $2`, wf, v, tpl.ID); err != nil {
+		return uuid.Nil, 0, err
 	}
-	if err := auditTx(r, tx, "workflow.create", wf.String(), map[string]any{"name": "Withdraw to my bank", "template": tpl.ID, "state": "draft", "via": "receive_money"}); err != nil {
-		return uuid.Nil, err
+	if err := auditTx(r, tx, "workflow.create", wf.String(), map[string]any{"name": "Withdraw to my bank", "template": tpl.ID, "version": v, "state": "draft", "via": "receive_money"}); err != nil {
+		return uuid.Nil, 0, err
+	}
+	if fourEyes {
+		if p.UserID == uuid.Nil {
+			return uuid.Nil, 0, fmt.Errorf("%w: with four-eyes publishing, a person changes where withdrawals go and another approves", errForbidden)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO publish_requests (tenant_id, workflow_id, version, requested_by) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (workflow_id, version) DO UPDATE SET requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL`,
+			p.TenantID, wf, v, p.Human()); err != nil {
+			return uuid.Nil, 0, err
+		}
+		return wf, v, auditTx(r, tx, "publish_request.create", fmt.Sprintf("%s/%d", wf, v), map[string]any{"via": "receive_money"})
 	}
 	var by *uuid.UUID
 	if p.UserID != uuid.Nil {
 		by = &p.UserID
 	}
-	probs, _, _, err := s.publishTx(ctx, tx, p.TenantID, wf, 1, by, "")
+	probs, _, _, err := s.publishTx(ctx, tx, p.TenantID, wf, v, by, "")
 	if len(probs) > 0 {
 		msgs := make([]string, len(probs))
 		for i, pr := range probs {
 			msgs[i] = pr.Message
 		}
-		return uuid.Nil, fmt.Errorf("%w: the withdrawal workflow could not be published: %s", errConflict, strings.Join(msgs, "; "))
+		return uuid.Nil, 0, fmt.Errorf("%w: the withdrawal workflow could not be published: %s", errConflict, strings.Join(msgs, "; "))
 	}
-	if err != nil {
-		return uuid.Nil, err
+	return wf, v, err
+}
+
+// withdrawWaiting says what a change to withdrawals still waits for, or
+// "": the approval rule or the new account waiting for a second person,
+// or a gated prod waiting for the version to be promoted.
+func withdrawWaiting(ctx context.Context, tx pgx.Tx, wf *uuid.UUID) (string, error) {
+	var waits []string
+	var rule bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM approval_policies WHERE name = $1 AND state = 'pending')`, withdrawPolicy).Scan(&rule); err != nil {
+		return "", err
 	}
-	return wf, nil
+	if rule {
+		waits = append(waits, "the new approval rule waits for a second person to approve it (Approval policies)")
+	}
+	if wf != nil {
+		var latest int
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) FROM workflow_versions WHERE workflow_id = $1`, *wf).Scan(&latest); err != nil {
+			return "", err
+		}
+		deployed, err := deployedVersion(ctx, tx, *wf, "prod")
+		if err != nil {
+			return "", err
+		}
+		if deployed != latest {
+			var asked bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM publish_requests WHERE workflow_id = $1 AND version = $2 AND status = 'pending')`, *wf, latest).Scan(&asked); err != nil {
+				return "", err
+			}
+			switch {
+			case asked:
+				waits = append(waits, "the new bank account waits for a second person to approve publishing it (Approvals)")
+			case deployed == 0:
+				waits = append(waits, "your prod environment takes only what is promoted to it: promote Withdraw to my bank there")
+			default:
+				waits = append(waits, "the new bank account is not in prod yet: promote Withdraw to my bank there")
+			}
+		}
+	}
+	if len(waits) == 0 {
+		return "", nil
+	}
+	return strings.Join(waits, "; ") + ". Until then the account and rule before stay in force.", nil
 }
 
 type withdrawReq struct {
 	AmountKobo int64 `json:"amount_kobo"`
 }
 
+// maxWithdrawKobo is the most one withdrawal moves: the template's
+// maximum, ₦1,000,000,000.
+const maxWithdrawKobo = 100_000_000_000
+
 // withdrawToBank answers POST /v1/receive-money/withdraw: a run of the
-// withdrawal workflow for the amount, to the kept bank account. It waits
-// for the approval rule's approvers before anything is paid. The request's
-// Idempotency-Key (or one made here) is the payment's key: asking again
-// with it never pays twice.
+// withdrawal workflow as published in prod, for the amount, to the bank
+// account written in it. It waits for the approval rule's approvers
+// before anything is paid. The request's Idempotency-Key (or one made
+// here) is the payment's key: asking again with it never pays twice.
 func (s *Server) withdrawToBank(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var req withdrawReq
@@ -757,8 +928,8 @@ func (s *Server) withdrawToBank(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if req.AmountKobo < 100 {
-		s.fail(w, r, fmt.Errorf("%w: withdraw at least NGN 1", errBadRequest))
+	if req.AmountKobo < 100 || req.AmountKobo > maxWithdrawKobo {
+		s.fail(w, r, fmt.Errorf("%w: withdraw between NGN 1 and NGN 1,000,000,000", errBadRequest))
 		return
 	}
 	m, _, err := s.receiveOn(r)
@@ -788,10 +959,10 @@ func (s *Server) withdrawToBank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if version == 0 {
-		s.fail(w, r, fmt.Errorf("%w: the withdrawal workflow is not published", errConflict))
+		s.fail(w, r, fmt.Errorf("%w: withdrawals are not ready yet: the change to them waits for approval or promotion", errConflict))
 		return
 	}
-	input := map[string]any{"amount_naira": float64(req.AmountKobo) / 100, "bank_code": deref(m.PayoutBankCode), "account_number": *m.PayoutAccount, "request_id": key}
+	input := map[string]any{"amount_naira": float64(req.AmountKobo) / 100, "request_id": key}
 	ref, created, err := s.Store.StartRun(r.Context(), runtime.StartRequest{
 		TenantID: p.TenantID, WorkflowID: *m.WithdrawWorkflow, Version: version, Environment: "prod",
 		Trigger:   map[string]any{"type": "manual", "body": input},
@@ -885,7 +1056,8 @@ func (s *Server) receiveBalance(ctx context.Context, tenant uuid.UUID) (int64, b
 	var available int64
 	list, _ := out["balances"].([]any)
 	for _, x := range list {
-		if b, _ := x.(map[string]any); b["currency"] == nil || b["currency"] == "NGN" {
+		b, _ := x.(map[string]any)
+		if cur, _ := b["currency"].(string); cur == "" || cur == "NGN" {
 			available += kobo(b["available"])
 		}
 	}

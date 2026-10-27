@@ -235,7 +235,7 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 		default:
 			// A customer with a number of their own pays into it (W3).
 			if x.CustomerID() != "" {
-				err = tx.QueryRow(ctx, `SELECT account_number, COALESCE(bank_name, '') FROM customer_accounts WHERE customer_id = $1 ORDER BY id DESC LIMIT 1`,
+				err = tx.QueryRow(ctx, `SELECT account_number, COALESCE(bank_name, '') FROM customer_accounts WHERE customer_id = $1 ORDER BY created_at DESC, id LIMIT 1`,
 					x.CustomerID()).Scan(&own, &ownBank)
 				if err == nil {
 					return nil

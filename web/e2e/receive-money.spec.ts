@@ -105,12 +105,16 @@ test("a business with no payments account receives money with Taskiem and withdr
   const form = w.getByTestId("withdraw-to-form");
   await form.getByRole("combobox", { name: /^Your bank/ }).selectOption({ label: "GTBank" });
   await form.getByLabel("Your account number").fill("0123456789");
+  // Two owners need two owners: this business has one.
   await form.getByLabel("Two owners approve from (₦, optional)").fill("500000");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(form.getByRole("alert")).toContainText("one owner");
+  await form.getByLabel("Two owners approve from (₦, optional)").fill("");
   await form.getByRole("button", { name: "Save" }).click();
   const to = w.getByTestId("withdraw-to");
   await expect(to).toContainText("ADA OBI STORES");
   await expect(to).toContainText("GTBank · 0123 456 789");
-  await expect(to).toContainText("two owners approve ₦500,000 or more");
+  await expect(to).toContainText("An owner approves each withdrawal.");
   await axeBoth(page, "/settings/payments (on)");
 
   // A withdrawal waits for approval.

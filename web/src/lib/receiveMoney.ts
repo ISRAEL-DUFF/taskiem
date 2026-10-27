@@ -24,6 +24,8 @@ export interface ReceiveMoney {
   withdraw_to?: { bank_code: string; bank_name?: string; account_number: string; account_name: string };
   two_approvers_above_kobo: number;
   withdraw_workflow_id?: string;
+  /** What a change to withdrawals still waits for (a second person, a promotion). */
+  withdraw_waiting?: string;
 }
 
 export interface Balance {

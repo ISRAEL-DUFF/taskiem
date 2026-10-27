@@ -19,9 +19,9 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 ## Getting paid
 
 - **Your own number.** Share it with anyone who pays you: on your receipts, your shop's page, your WhatsApp status. Each payment into it shows under **Invoices > To match**, where you say who it was from. On WhatsApp, send *my account number* to get it again.
-- **Invoices.** An invoice you send gets a number of its own for that one payment, shown on the invoice's page and when the customer presses *Pay by transfer* on WhatsApp. It is counted to the invoice by itself.
-- **Customers you bill often.** Give a customer a number of their own from their invoice (**Give an account number**): it never expires, and every payment into it counts to their invoices. A school's students each get one.
-- **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt says what the parent sent and what reached the school.
+- **Invoices.** An invoice you send gets a number of its own for that one payment, shown on the invoice's page and when the customer presses *Pay by transfer* on WhatsApp. It is counted to the invoice by itself. A customer who has a number of their own (below) is shown that one instead; the invoice's page still offers a one-time number too.
+- **Customers you bill often.** Give a customer a number of their own from their invoice (**Give this customer an account number**, then issue it with Taskiem): it never expires, and every payment into it counts to their invoices. A school's students each get one, issued on your wallet with nothing to choose.
+- **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt message says what the parent sent and what reached the school, when the transfer was for that receipt alone.
 
 ## Your balance
 
@@ -29,8 +29,8 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 
 ## Withdrawing to your bank
 
-1. Under **Withdraw to your bank**, choose your bank and type your 10-digit account number. The bank finds the name on it; check it is yours, then **Save**. You can also say from which amount **two owners** must approve a withdrawal; below it, one owner approves.
-2. Type the amount and press **Withdraw**. Nothing is paid until it is approved: the owner sees it in **Approvals** (and on WhatsApp, if you use it). Once approved, the money is paid once, and Taskiem tells the owner when the bank confirms.
+1. Under **Withdraw to your bank**, choose your bank, type your 10-digit account number and press **Save**. The bank finds the name on it and the page shows it: check it is yours. If your business has two owners or more, you can also say from which amount **two owners** must approve a withdrawal; below it, one owner approves. The account is written into the withdrawal itself: nobody can send a withdrawal anywhere else. If your business has four-eyes on (Settings > Four-eyes), a change waits for a second person, and the account before stays in use until it is approved.
+2. Type the amount and press **Withdraw**, leaving room for the bank's fee on the transfer. Nothing is paid until it is approved: the owner sees it, with the account it goes to, in **Approvals** (and on WhatsApp, if you use it). Once approved, the money is paid once, and Taskiem tells the owner when the bank confirms, or that it could not be paid.
 
 Every withdrawal and its outcome is in the money log, like any other payment.
 

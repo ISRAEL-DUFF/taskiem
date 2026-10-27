@@ -385,8 +385,9 @@ func (s *Invoices) check(ctx context.Context, tenant uuid.UUID, w watched) error
 	}
 	if rail.Caps != nil && !rail.Maps("get_payment") {
 		// A rail that cannot be asked (iswallet) says so by its webhook
-		// alone: payment.received counts the payment.
-		return nil
+		// alone: payment.received counts the payment. Marked checked, so
+		// the other rails' accounts are polled in their turn.
+		return s.setAccount(ctx, tenant, w.ID, map[string]any{"checked_at": s.now()})
 	}
 	out, err := s.Rails.Call(ctx, tenant, rail, "get_payment", map[string]any{"payment_id": w.PaymentID}, effects.KeyInput{})
 	_ = s.setAccount(ctx, tenant, w.ID, map[string]any{"checked_at": s.now()})

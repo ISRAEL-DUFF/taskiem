@@ -20621,6 +20621,9 @@ components:
         withdraw_workflow_id:
           type: string
           format: uuid
+        withdraw_waiting:
+          type: string
+          description: What a change to withdrawals still waits for (a second person under four-eyes, a promotion to a gated prod); the account and rule before stay in force until then.
     Withdrawal:
       type: object
       required: [run_id, workflow_id, request_id, created]

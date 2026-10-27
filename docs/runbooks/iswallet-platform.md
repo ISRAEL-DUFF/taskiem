@@ -42,10 +42,12 @@ Without a mode's key, receiving money with Taskiem is not offered in that mode, 
 
 ## Events for a wallet no business holds
 
-An event whose wallet no business's Taskiem connection holds in that mode is acknowledged (200), counted in `app_event_drops` (connector `iswallet@1`) and logged at error level ("a platform client's event names an account no business holds", with the wallet). Causes: a wallet made outside Taskiem under the client; a business whose connection was removed by hand; the wrong mode's subscription pointing here. Look up the wallet in `receive_money` and with iswallet. The event is not stored; the 48-hour look-back reads a business's credits again once its connection is right.
+An event whose wallet no business's Taskiem connection holds in that mode is acknowledged (200), counted in `app_event_drops` (connector `iswallet@1`) and logged at error level ("a platform client's event names an account no business holds", with the wallet). Causes: a wallet made outside Taskiem under the client; a business whose connection was removed by hand; the wrong mode's subscription pointing here. Look up the wallet in `receive_money` and with iswallet. The event is not stored; for a business's own wallet, the look-back (every 15 minutes over 48 hours, `money_lookbacks`) reads its credits again, so a credit whose event went astray is still recorded once.
 
 ## Money and plans
 
 - Billing's daily usage snapshot counts each business's credits and payouts on the rail (`usage_snapshots.rail_credits`, `rail_payouts` and their sums), from its money log.
 - The plan feature `receive_money` (`deploy/plans.yaml`) gates turning it on. Which plans include it, and any margin over iswallet's fee, are the founder's to set; every plan has it for now.
+- **Limits.** Every business shares the client's key and iswallet's limit on it (100 requests a minute). Taskiem's own calls for a business (its Payments page, chat answers) take at most 20 a minute; a business's own workflows that call iswallet are not limited beyond iswallet's answer (`RATE_LIMITED` is retried). Watch for 429s from iswallet in the logs.
+- **Turning it on again later.** The wallet is keyed by the business and what it sent. iswallet keeps one wallet per `owner_ref` (`tenant:<id>`): a business whose first attempt went unanswered and who asks again more than a day later is answered by iswallet's rule for that owner; if iswallet refuses, find the wallet by its `owner_ref` with iswallet and record it by hand.
 - A business closing its wallet: withdraw its balance first (Settings > Payments), then remove the `receive_money` row and the connection as an operator; iswallet closes the wallet on request.

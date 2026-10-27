@@ -201,6 +201,17 @@ func (s *Schools) CheckIssuing(ctx context.Context, tenant uuid.UUID, in Issuing
 	if err != nil {
 		return in, err
 	}
+	// Taskiem's own wallet for the school is the one its numbers pay into,
+	// whatever was sent (decision 0052).
+	if s.Invoices != nil {
+		w, err := s.Invoices.PlatformWalletOf(ctx, tenant, r.Channel())
+		if err != nil {
+			return in, err
+		}
+		if w != "" {
+			in.Account = w
+		}
+	}
 	switch {
 	case r.Needs("virtual_account", "account") && in.Account == "":
 		return in, invalid("%s needs the wallet the numbers pay into", r.Name)

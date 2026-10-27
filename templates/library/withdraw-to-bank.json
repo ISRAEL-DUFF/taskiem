@@ -138,6 +138,8 @@
           "on_timeout": "reject",
           "subject": {
             "account_name": "=steps.check_name.output.account_name",
+            "bank_code": "=trigger.body.bank_code",
+            "account_number": "=trigger.body.account_number",
             "amount_naira": "=trigger.body.amount_naira",
             "amount_kobo": "=int(math.round(double(trigger.body.amount_naira) * 100.0))"
           }
@@ -171,6 +173,20 @@
           "initial": "5s",
           "max_delay": "10m",
           "max_duration": "6h"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_failed",
+              "type": "connector",
+              "name": "Tell the owner the withdrawal failed",
+              "connector": "notify@1",
+              "action": "tell",
+              "input": {
+                "message": "='The withdrawal of NGN ' + string(trigger.body.amount_naira) + ' could not be paid; nothing left your wallet. Check the balance (the bank fee comes on top) and try again.'"
+              }
+            }
+          ]
         }
       },
       {

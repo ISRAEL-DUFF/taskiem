@@ -60,11 +60,6 @@ func (h *Handler) platformEvent(w http.ResponseWriter, r *http.Request) {
 		replyErr(w, http.StatusNotFound, "no such platform client")
 		return
 	}
-	if !h.apps.allow("platform:" + ref) {
-		w.Header().Set("Retry-After", "1")
-		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
-		return
-	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, appMaxBody))
 	if err != nil {
 		replyErr(w, http.StatusRequestEntityTooLarge, "body too large")
@@ -86,6 +81,13 @@ func (h *Handler) platformEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := connector.VerifyWebhook(spec.Verify, secret, r.Header, body); err != nil {
 		replyErr(w, http.StatusUnauthorized, "signature invalid")
+		return
+	}
+	// Counted once verified: unsigned requests cannot spend the rate the
+	// provider's own deliveries need.
+	if !h.apps.allow("platform:" + ref) {
+		w.Header().Set("Retry-After", "1")
+		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
 		return
 	}
 	p := parse(r, body, strings.ToLower(spec.Verify.Header))

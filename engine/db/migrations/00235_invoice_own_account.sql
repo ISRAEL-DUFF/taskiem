@@ -6,6 +6,7 @@
 -- The definer reads the columns 00216 already grants the dispatch role.
 
 -- +goose Up
+GRANT SELECT (created_at) ON customer_accounts TO taskiem_dispatch;
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_public_invoice_own_account(p_token_hash bytea)
 RETURNS TABLE (account_number text, bank_name text)
@@ -15,7 +16,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     JOIN tenants t ON t.id = i.tenant_id AND t.status = 'active'
     JOIN customer_accounts a ON a.tenant_id = i.tenant_id AND a.customer_id = i.customer_id
    WHERE i.page_token_hash = p_token_hash AND i.sent_at IS NOT NULL AND i.customer_id IS NOT NULL
-   ORDER BY a.id DESC
+   ORDER BY a.created_at DESC, a.id
    LIMIT 1
 $$;
 -- +goose StatementEnd
@@ -25,3 +26,4 @@ GRANT EXECUTE ON FUNCTION taskiem_public_invoice_own_account(bytea) TO taskiem_p
 
 -- +goose Down
 DROP FUNCTION taskiem_public_invoice_own_account(bytea);
+REVOKE SELECT (created_at) ON customer_accounts FROM taskiem_dispatch;

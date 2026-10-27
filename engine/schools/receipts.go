@@ -51,9 +51,11 @@ type Receipt struct {
 	PartID           uuid.UUID `json:"part_id"`
 	AmountKobo       int64     `json:"amount_kobo"`
 	BalanceAfterKobo int64     `json:"balance_after_kobo"`
-	// FeeKobo is the bank's fee on a transfer, when the rail reported one:
-	// the payer sent AmountKobo and the school received that less the fee
-	// (decision 0052: the partner's fee is passed to the payer).
+	// FeeKobo is the bank's fee on a transfer, when the rail reported one
+	// and the whole transfer is this receipt's: the payer sent AmountKobo
+	// and the school received that less the fee (decision 0052: the
+	// partner's fee is passed to the payer). A transfer split over several
+	// receipts (brothers and sisters) shows none.
 	FeeKobo    int64      `json:"fee_kobo,omitempty"`
 	How        string     `json:"how"`
 	PaidAt     time.Time  `json:"paid_at"`
@@ -178,7 +180,7 @@ func voidReceipts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, parts []uuid
 const receiptCols = `r.id, r.number, r.term_id, t.name || ' ' || ss.label, r.student_id, s.admission_number, s.details,
 	r.class_id, c.name || CASE WHEN c.arm = '' THEN '' ELSE ' ' || c.arm END, r.invoice_id, i.number, r.part_id, r.amount_kobo, r.balance_after_kobo, r.how, r.paid_at,
 	r.issued_by, r.issued_at, r.voided_at, COALESCE(r.void_reason, ''), r.token,
-	COALESCE((SELECT e.fee_kobo FROM customer_invoice_payments cp JOIN money_entries e ON e.id = cp.entry_id WHERE cp.id = r.part_id), 0)
+	COALESCE((SELECT e.fee_kobo FROM customer_invoice_payments cp JOIN money_entries e ON e.id = cp.entry_id WHERE cp.id = r.part_id AND cp.amount_kobo = e.amount_kobo), 0)
 	FROM school_receipts r JOIN school_terms t ON t.id = r.term_id JOIN school_sessions ss ON ss.id = t.session_id JOIN school_students s ON s.id = r.student_id
 	JOIN school_classes c ON c.id = r.class_id JOIN customer_invoices i ON i.id = r.invoice_id`
 

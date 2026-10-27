@@ -719,6 +719,9 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, "not found")
 	case errors.Is(err, runtime.ErrTenantSuspended):
 		writeErr(w, http.StatusLocked, err.Error())
+	case errors.Is(err, errUpstream):
+		// A provider that did not answer, or answered what cannot be read.
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": strings.TrimPrefix(err.Error(), "upstream: "), "code": "provider"})
 	case errors.Is(err, secrets.ErrPlatformConnection), errors.Is(err, secrets.ErrPlatformClient):
 		// Taskiem's own client (decision 0052): its details are Taskiem's,
 		// or this Taskiem does not hold it.

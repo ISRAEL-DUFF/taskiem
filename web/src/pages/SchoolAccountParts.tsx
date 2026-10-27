@@ -90,7 +90,7 @@ export function IssuingSettings() {
           }}
         >
           <Field label="Issuing connection">
-            <select value={value.connection} onChange={(e) => setForm({ ...value, connection: e.target.value })}>
+            <select value={value.connection} onChange={(e) => setForm({ ...value, connection: e.target.value, account: "" })}>
               <option value="">None chosen</option>
               {issuers.map((i) => (
                 <option key={i.connection} value={i.connection}>

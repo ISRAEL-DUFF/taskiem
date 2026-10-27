@@ -175,6 +175,11 @@ function Withdrawals({ r, owner, onDone }: { r: ReceiveMoney; owner: boolean; on
   return (
     <section className="card" aria-labelledby="withdraw-h" id="withdraw" data-testid="withdrawals">
       <h2 id="withdraw-h">Withdraw to your bank</h2>
+      {r.withdraw_waiting && (
+        <div className="warning" role="note" data-testid="withdraw-waiting">
+          {r.withdraw_waiting}
+        </div>
+      )}
       {r.withdraw_to && !editing && (
         <Items label="Where withdrawals go">
           <Row
@@ -266,8 +271,20 @@ function Withdraw() {
   const check = amount ? withdrawAmount(amount, balance.data?.available_kobo) : {};
   return (
     <div data-testid="withdraw">
-      <Field label="Amount to withdraw (₦)" hint={check.problem || (balance.data ? `Your wallet holds ${naira(balance.data.available_kobo)}.` : undefined)}>
-        <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" autoComplete="off" />
+      <Field
+        label="Amount to withdraw (₦)"
+        hint={check.problem || (balance.data ? `Your wallet holds ${naira(balance.data.available_kobo)}; leave room for the bank's fee on the transfer.` : undefined)}
+      >
+        <input
+          value={amount}
+          onChange={(e) => {
+            // Another amount is another withdrawal: never the last one's key.
+            setAmount(e.target.value);
+            setKey(crypto.randomUUID());
+          }}
+          inputMode="decimal"
+          autoComplete="off"
+        />
       </Field>
       <ErrorBox error={act.error} />
       <div className="toolbar">
@@ -327,7 +344,10 @@ export function ReceiveMoneyOffer() {
   ).data;
   if (!data) return null;
   const [r, names, connectors] = data;
-  const rails = new Set(connectors.connectors.filter((c) => c.kind === "rail").map((c) => c.id));
+  // A payments account the business can be paid through (not one that only pays out or reads).
+  const rails = new Set(
+    connectors.connectors.filter((c) => (c.capabilities ?? []).some((x) => x === "collect_transfer" || x === "collect_link")).map((c) => c.id),
+  );
   const hasRail = names.connections.some((n) => n.environment === "prod" && n.status === "active" && rails.has(n.connector));
   if (r.on || hasRail || !r.available) return null;
   const blocker = turnOnBlocker(r, !!me?.roles.includes("owner"));

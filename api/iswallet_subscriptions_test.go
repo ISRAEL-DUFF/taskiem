@@ -219,6 +219,14 @@ func TestISWalletConnectionSubscribesItself(t *testing.T) {
 		t.Fatalf("failing %v", r)
 	}
 
+	// A key limited to another environment removes nothing, not even the
+	// subscriptions.
+	dev := keyFor(t, owner, "dev", "connection.manage")
+	dev.must(403, "DELETE", "/v1/connections/"+conn["id"].(string)+"?force=true", nil)
+	if left := f.list(); len(left) != 3 {
+		t.Errorf("a refused delete released the subscriptions: %v", left)
+	}
+
 	// Removed with the connection.
 	owner.must(204, "DELETE", "/v1/connections/"+conn["id"].(string), nil)
 	if left := f.list(); len(left) != 0 {

@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -252,9 +253,10 @@ func TestReceiveMoneyCreditReachesTheBusiness(t *testing.T) {
 	}
 }
 
-// Withdrawals go to a bank account the bank named, under the approval
-// rule; a withdrawal is a run waiting for an owner, and asking again with
-// its key is the same withdrawal.
+// Withdrawals go to a bank account the bank named, written into the
+// withdrawal workflow itself, under the approval rule; a withdrawal is a
+// run waiting for an owner, asking again with its key is the same one, and
+// nobody starting the workflow another way can send the money elsewhere.
 func TestReceiveMoneyWithdraws(t *testing.T) {
 	w, _ := receiveWorld(t)
 	owner := w.tenant(t, "Ada Obi Stores", "ada@obi.test")
@@ -265,32 +267,110 @@ func TestReceiveMoneyWithdraws(t *testing.T) {
 		t.Errorf("banks: %v", b)
 	}
 	owner.must(400, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0000000000"})
+	// Two owners from an amount needs two owners.
+	if st, out := owner.do("PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0123456789", "two_approvers_above_kobo": 50000000}); st != 400 ||
+		!strings.Contains(fmt.Sprint(out["error"]), "one owner") {
+		t.Errorf("two approvers with one owner: %d %v", st, out)
+	}
+	addMember(t, w, owner, "bola", "owner")
 	st := owner.must(200, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "bank_name": "GTBank", "account_number": "0123456789",
 		"two_approvers_above_kobo": 50000000})
 	to, _ := st["withdraw_to"].(map[string]any)
-	if to == nil || to["account_name"] != "ADA OBI STORES" || st["two_approvers_above_kobo"] != float64(50000000) || st["withdraw_workflow_id"] == nil {
+	if to == nil || to["account_name"] != "ADA OBI STORES" || st["two_approvers_above_kobo"] != float64(50000000) || st["withdraw_workflow_id"] == nil || st["withdraw_waiting"] != nil {
 		t.Fatalf("withdrawals: %v", st)
 	}
+	wf := st["withdraw_workflow_id"].(string)
 	var doc string
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT document::text FROM approval_policies WHERE name = 'taskiem_withdrawals' AND state = 'active'`).Scan(&doc); err != nil ||
 		!strings.Contains(doc, "subject.amount_kobo >= 50000000") {
 		t.Errorf("the approval rule: %s %v", doc, err)
 	}
-	// Changing the account keeps the one workflow.
-	st2 := owner.must(200, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0123456789"})
-	if st2["withdraw_workflow_id"] != st["withdraw_workflow_id"] {
-		t.Errorf("a second workflow: %v %v", st2["withdraw_workflow_id"], st["withdraw_workflow_id"])
+	deployed := func() string {
+		t.Helper()
+		var def string
+		if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT v.definition::text FROM deployments d JOIN workflow_versions v ON v.workflow_id = d.workflow_id AND v.version = d.version
+			WHERE d.workflow_id = $1 AND d.environment = 'prod'`, wf).Scan(&def); err != nil {
+			t.Fatal(err)
+		}
+		return def
+	}
+	if def := deployed(); !strings.Contains(def, `"0123456789"`) || !strings.Contains(def, `"taskiem_withdrawals"`) || strings.Contains(def, "trigger.body.account_number") {
+		t.Errorf("the account is not written into the workflow: %s", def)
+	}
+	// A new account is a new version of the one workflow.
+	st2 := owner.must(200, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0123456780", "two_approvers_above_kobo": 50000000})
+	if st2["withdraw_workflow_id"] != wf || !strings.Contains(deployed(), `"0123456780"`) {
+		t.Errorf("a new account: %v", st2)
 	}
 	run := owner.must(201, "POST", "/v1/receive-money/withdraw", map[string]any{"amount_kobo": 1500000}, "Idempotency-Key", "wd-1")
 	same := owner.must(200, "POST", "/v1/receive-money/withdraw", map[string]any{"amount_kobo": 1500000}, "Idempotency-Key", "wd-1")
-	if run["run_id"] != same["run_id"] || run["workflow_id"] != st["withdraw_workflow_id"] {
+	if run["run_id"] != same["run_id"] || run["workflow_id"] != wf {
 		t.Errorf("withdrawals: %v %v", run, same)
 	}
 	var input string
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT payload::text FROM run_events WHERE run_id = $1 AND type = 'RunStarted'`, run["run_id"]).Scan(&input); err != nil ||
-		!strings.Contains(input, `"amount_naira": 15000`) || !strings.Contains(input, `"request_id": "wd-1"`) || strings.Contains(input, "0123456789") {
+		!strings.Contains(input, `"amount_naira": 15000`) || !strings.Contains(input, `"request_id": "wd-1"`) {
 		t.Errorf("the run's input: %s %v", input, err)
 	}
+	// Started another way, the workflow takes no account of the starter's.
+	owner.must(422, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"environment": "prod",
+		"input": map[string]any{"amount_naira": 100, "request_id": "x", "bank_code": "044", "account_number": "9999999999"}})
+	// A key limited to another environment reaches none of it.
+	dev := keyFor(t, owner, "dev", "run.start", "invoice.read")
+	dev.must(403, "POST", "/v1/receive-money/withdraw", map[string]any{"amount_kobo": 100000})
+	dev.must(403, "GET", "/v1/receive-money/balance", nil)
+
+	// Four-eyes: a change waits for a second person, the account before
+	// stays in force.
+	owner.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish": true, "four_eyes_policies": true})
+	st3 := owner.must(200, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0123456781"})
+	if waiting, _ := st3["withdraw_waiting"].(string); !strings.Contains(waiting, "second person") || !strings.Contains(deployed(), `"0123456780"`) {
+		t.Errorf("under four-eyes: %v", st3)
+	}
+	var pending int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM approval_policies WHERE name = 'taskiem_withdrawals' AND state = 'pending'`).Scan(&pending); err != nil || pending != 1 {
+		t.Errorf("the rule under four-eyes: %d %v", pending, err)
+	}
+}
+
+// Students' and customers' numbers on Taskiem's wallet pay into it with
+// nothing chosen by hand, whatever is sent.
+func TestReceiveMoneyIssuesOnTheWallet(t *testing.T) {
+	w, f := receiveWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, Rails: &invoicing.RegistryRails{Pool: w.env.DB.App, Registry: w.env.Registry, Vault: w.env.Vault, Guard: w.env.Egress}}
+	owner := w.tenant(t, "Okafor Academy", "bursar@okafor.test")
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": true})
+	on := owner.must(201, "POST", "/v1/settings/receive-money", map[string]any{"business_email": "bursar@okafor.test", "bvn": "22212345678"})
+	if on["owner_type"] != "client_end_user_business" {
+		t.Errorf("a school's default: %v", on)
+	}
+	var wallet string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT wallet_id FROM receive_money`).Scan(&wallet); err != nil {
+		t.Fatal(err)
+	}
+	var lookbacks int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM money_lookbacks WHERE channel = 'iswallet/taskiem' AND account = $1`, wallet).Scan(&lookbacks); err != nil || lookbacks != 1 {
+		t.Errorf("the look-back reads the wallet: %d %v", lookbacks, err)
+	}
+	found := false
+	for _, i := range owner.must(200, "GET", "/v1/customer-accounts/issuers", nil)["issuers"].([]any) {
+		if m := i.(map[string]any); m["connection"] == "iswallet/taskiem" {
+			found = true
+			if m["needs_account"] != false {
+				t.Errorf("Taskiem's wallet asks for a wallet: %v", m)
+			}
+		}
+	}
+	if !found {
+		t.Error("Taskiem's wallet is not offered for customers' numbers")
+	}
+	// Choosing it in Schools settings, with another wallet sent, keeps the
+	// business's own.
+	set := owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": true, "issuing": map[string]any{"connection": "iswallet/taskiem", "account": "wal_other"}})
+	if is, _ := set["issuing"].(map[string]any); is == nil || is["account"] != wallet {
+		t.Errorf("the issuing setting: %v", set["issuing"])
+	}
+	_ = f
 }
 
 // A Taskiem without its own client, or a member who is not an owner,
