@@ -14676,6 +14676,8 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      x-taskiem-permission: invoice.read
+      x-taskiem-all-environments: true
       responses:
         '200':
           description: The setting.
@@ -14793,6 +14795,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      x-taskiem-all-environments: true
       x-taskiem-permission: invoice.read
       responses:
         '200':
@@ -14826,6 +14829,7 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      x-taskiem-all-environments: true
       x-taskiem-permission: invoice.read
       responses:
         '200':
@@ -14858,6 +14862,7 @@ paths:
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
+      x-taskiem-all-environments: true
       x-taskiem-permission: run.start
       parameters:
       - name: Idempotency-Key

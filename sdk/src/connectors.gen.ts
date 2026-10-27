@@ -3910,6 +3910,7 @@ export type CapabilityListCreditsOutput = {
     amount_kobo: number;
     credit_id: string;
     currency?: string;
+    event?: "payment.received";
     fee_kobo?: number;
     narration?: string;
     occurred_at?: string;
