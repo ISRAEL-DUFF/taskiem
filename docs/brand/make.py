@@ -38,10 +38,16 @@ def word(text, track):
     return " ".join(paths), round(x - track * upm), idot
 
 
-def wordmark(text, track, fill, dotfill=None):
+def wordmark(text, track, fill, dotfill=None, round_dot=False):
     letters, width, idot = word(text, track)
     top = -cap - 30 if idot is None else idot[1] - 10
-    dot = "" if idot is None else f'<rect x="{idot[0]}" y="{idot[1]}" width="{idot[2]}" height="{idot[2]}" fill="{dotfill or fill}"/>'
+    if idot is None:
+        dot = ""
+    elif round_dot:
+        r = idot[2] / 2
+        dot = f'<circle cx="{idot[0] + r:g}" cy="{idot[1] + r:g}" r="{r:g}" fill="{dotfill or fill}"/>'
+    else:
+        dot = f'<rect x="{idot[0]}" y="{idot[1]}" width="{idot[2]}" height="{idot[2]}" fill="{dotfill or fill}"/>'
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 {top} {width} {-top + 24}" role="img" aria-label="Taskiem">'
             f'<path fill="{fill}" d="{letters}"/>{dot}</svg>\n')
 
@@ -50,24 +56,27 @@ def svg(body):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Taskiem">{body}</svg>\n'
 
 
-# --- B, relay (the default): a "t" whose foot hands on to a dot, in pine and lime.
+# --- B, relay (the default): a "t" with a round dot at its top right, as
+# signal's square is, in pine and lime; the i's dot is a round one too.
 def relay():
     pine, lime = "#0d3b2e", "#c8f169"
     t = ('<path d="M27 40H61" stroke="{t}" stroke-width="11" stroke-linecap="round"/>'
          '<path d="M42 22V58Q42 74 58 74H64" stroke="{t}" stroke-width="11" stroke-linecap="round" fill="none"/>'
-         '<circle cx="78" cy="74" r="7" fill="{d}"/>')
-    small = '<path d="M24 40H64M42 18V60Q42 78 60 78H70" stroke="{t}" stroke-width="16" stroke-linecap="round" fill="none"/>'
+         '<circle cx="74" cy="24" r="7.5" fill="{d}"/>')
+    small = ('<path d="M24 40H64M42 18V60Q42 78 60 78H70" stroke="{t}" stroke-width="16" stroke-linecap="round" fill="none"/>'
+             '<circle cx="78" cy="20" r="10" fill="{d}"/>')
+    # For a round crop: the dot stays inside the middle 80% a phone keeps.
     round_ = ('<path d="M30 41H60" stroke="{t}" stroke-width="10" stroke-linecap="round"/>'
               '<path d="M43 25V57Q43 71 57 71H62" stroke="{t}" stroke-width="10" stroke-linecap="round" fill="none"/>'
-              '<circle cx="74" cy="71" r="6" fill="{d}"/>')
+              '<circle cx="71" cy="27" r="6.5" fill="{d}"/>')
     return {
-        "wordmark.svg": wordmark("taskiem", -0.035, pine),
-        "wordmark-reversed.svg": wordmark("taskiem", -0.035, WHITE),
-        "wordmark-mono.svg": wordmark("taskiem", -0.035, BLACK),
+        "wordmark.svg": wordmark("taskıem", -0.035, pine, round_dot=True),
+        "wordmark-reversed.svg": wordmark("taskıem", -0.035, WHITE, lime, round_dot=True),
+        "wordmark-mono.svg": wordmark("taskıem", -0.035, BLACK, round_dot=True),
         "mark.svg": svg(f'<rect width="100" height="100" rx="26" fill="{pine}"/>' + t.format(t=lime, d=WHITE)),
         "mark-reversed.svg": svg(f'<rect width="100" height="100" rx="26" fill="{lime}"/>' + t.format(t=pine, d=pine)),
         "mark-mono.svg": svg(f'<rect width="100" height="100" rx="26" fill="{BLACK}"/>' + t.format(t=WHITE, d=WHITE)),
-        "mark-small.svg": svg(f'<rect width="100" height="100" rx="24" fill="{pine}"/>' + small.format(t=lime)),
+        "mark-small.svg": svg(f'<rect width="100" height="100" rx="24" fill="{pine}"/>' + small.format(t=lime, d=WHITE)),
         "avatar.svg": svg(f'<rect width="100" height="100" fill="{pine}"/>' + round_.format(t=lime, d=WHITE)),
     }
 
