@@ -4,28 +4,92 @@
   "title": "Workflow definitions",
   "part": "B",
   "order": 1,
-  "status": "planned",
-  "summary": "The wd/v1 format, step types, CEL expressions, versioning, and the round trip between canvas, code and Git.",
-  "scope": [
-    "The <code>wd/v1</code> structure and its JSON Schema",
-    "Every step type and what <code>decide</code> does with it",
-    "CEL expressions: roots, cost bounds, and secrets-only expressions (decision 0010)",
-    "Versions, publish states, environments and promotion",
-    "Workflow code (<code>*.flow.ts</code>) compiled inside the binary with esbuild and QuickJS",
-    "Three-way merge of concurrent edits",
-    "Workflow tests (<code>wd-test/v1</code>)",
-    "Capability steps and their expansion into rails; templates and callable workflows"
-  ],
+  "summary": "The wd/v1 document every editor produces: its structure and step types, CEL expressions, the three layers of validation, versions and environments, and the round trip between canvas, code and Git.",
+  "verified": "9cb086e6ba6096962dff16feeca45f6d7fbfb6df",
   "sources": [
-    "engine/wd/",
-    "engine/expr/",
-    "engine/flowcode/",
-    "engine/wdcheck/",
-    "engine/wdmerge/",
-    "engine/wdtest/",
-    "engine/expansion/",
-    "schemas/wd-v1.schema.json",
-    "docs/contracts/wd-v1.md"
+    "engine/wd/", "engine/expr/", "engine/wdcheck/", "engine/wdmerge/", "engine/wdtest/", "engine/flowcode/", "engine/expansion/",
+    "engine/runtime/templatepins.go", "engine/runtime/capability.go", "engine/decide/decide.go",
+    "schemas/wd-v1.schema.json", "docs/contracts/wd-v1.md", "api/workflows.go", "api/git.go", "sdk/src/builder.ts", "templates/templates.go",
+    "engine/db/migrations/00003_definitions.sql", "engine/db/migrations/00024_deployments.sql", "docs/spec/architecture.md"
   ]
 }
 -->
+<h2>One document, many editors</h2>
+<p>A workflow is one JSON document in the <code>wd/v1</code> format. The canvas, TypeScript workflow code, the AI builder, the WhatsApp builder, the template gallery and Git sync are all editors of that document. None of them keeps a format of its own. The runtime reads only this document, so whatever produced a workflow, it runs the same way.</p>
+<p>The contract is <x-ref path="docs/contracts/wd-v1.md"><code>docs/contracts/wd-v1.md</code></x-ref> plus the JSON Schema <x-ref path="schemas/wd-v1.schema.json"><code>schemas/wd-v1.schema.json</code></x-ref>. The Go model is in <x-ref path="engine/wd/model.go"><code>engine/wd/model.go</code></x-ref>:</p>
+<x-code path="engine/wd/model.go" start="type Definition struct" max="30"/>
+<p>Run-level settings are short: <code>timeout</code>, <code>concurrency_key</code>, <code>max_concurrency</code> and <code>retention</code>. Canvas positions are not part of the definition. They live in a separate <code>layout</code> column that can change without making a new version, so moving boxes around never needs a publish approval.</p>
+
+<h2>Step types</h2>
+<p>The schema allows <x-stat name="step-types"/> step types: <x-stat name="step-type-list"/>. They differ in who carries them out:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Type</th><th>Carried out by</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>connector</code>, <code>http</code></td><td>Worker, <code>connector</code> queue</td><td>An <code>http</code> step must declare an action class unless it is GET or HEAD</td></tr>
+    <tr><td><code>code</code></td><td>Worker, <code>sandbox</code> queue</td><td>JavaScript or TypeScript in QuickJS, Python in CPython, both on WebAssembly. TypeScript is stripped when saved</td></tr>
+    <tr><td><code>container</code></td><td>Worker, <code>container</code> queue</td><td>A pinned image per attempt. <code>unsafe_write</code> unless declared otherwise</td></tr>
+    <tr><td><code>ai</code></td><td>Worker, <code>ai</code> queue</td><td>A model call with a typed output schema. Personal data is masked by default</td></tr>
+    <tr><td><code>transform</code>, <code>respond</code></td><td><code>decide</code> itself</td><td>Pure mappings, completed inside the decision with no task</td></tr>
+    <tr><td><code>branch</code>, <code>parallel</code>, <code>foreach</code></td><td><code>decide</code></td><td>Nested sub-flows (decision 0008), not graph cycles, which keeps replay deterministic</td></tr>
+    <tr><td><code>wait</code></td><td>A timer</td><td>A duration or a timestamp</td></tr>
+    <tr><td><code>signal</code>, <code>callback</code>, <code>form</code></td><td>A signal wait</td><td>An outside event, a call to the run's callback URL, or a submitted form</td></tr>
+    <tr><td><code>approval</code></td><td>An approvals row</td><td>A policy chooses approvers. Times out into fail, reject or escalate</td></tr>
+    <tr><td><code>subflow</code></td><td>A child run</td><td>Another workflow of the business, at most five deep</td></tr>
+    <tr><td><code>capability</code></td><td>Expanded before the run</td><td>"Pay a bank account", turned into the actions of whichever payment rail the environment's connection is (decision 0044)</td></tr>
+    <tr><td><code>template</code></td><td>Expanded before the run</td><td>A library template or a callable workflow of the business, pinned when the version is saved (decisions 0047, 0048)</td></tr>
+  </tbody>
+</table></div>
+<p>Every step can have <code>needs</code> (steps it waits for), <code>when</code> (a condition), <code>retry</code>, <code>timeout</code>, <code>on_error</code> (steps to run if it fails), <code>effect</code> (the idempotency seed) and <code>compensate</code> (the action that undoes it).</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec lists 15 step types and marks <code>form</code> as proposed (<x-ref path="docs/spec/architecture.md" symbol="### 3.2 Step types">spec 3.2</x-ref>). The code has <code>form</code> built and adds <code>container</code>, <code>capability</code> and <code>template</code>. Capability and template steps change what "the definition" means at run time: the version that is published is not the exact graph that runs. The run pins its expansion (<code>runs.expansion</code>), and the run inspector has to show the expanded steps.</p>
+</div>
+
+<h2>Expressions</h2>
+<p>A string that starts with <code>=</code> is a CEL expression. CEL has no side effects, cannot loop forever, and has a bounded cost, so it can run inside <code>decide</code> without breaking determinism. Each evaluation is capped at a cost of <x-ref path="engine/expr/expr.go" symbol="const DefaultCostLimit">1,000,000</x-ref>, and compiled programs are cached per process in a bounded cache.</p>
+<x-code path="engine/expr/expr.go" start="var Roots = " lines="1" caption="what an expression can read"/>
+<p>The rules that publishing enforces (<x-ref path="engine/wd/exprcheck.go" symbol="// checkExpressions enforces"><code>checkExpressions</code></x-ref>):</p>
+<ul>
+  <li>Every expression compiles.</li>
+  <li><code>steps.&lt;id&gt;</code> may only name steps that are certain to have finished first (rule 5). You cannot read a step in a parallel branch you are not waiting for.</li>
+  <li><code>item</code> and <code>index</code> exist only inside a <code>foreach</code>.</li>
+  <li><strong>An expression that reads <code>secrets</code> reads nothing else</strong> (rule 10, decision 0010). Secrets are resolved by the worker at execution time, so their values never enter history. Mixing them with data would force them into the decision.</li>
+</ul>
+
+<h2>Three layers of validation</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Layer</th><th>Checks</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>Schema</td><td>Shape and types against the JSON Schema. If this fails, nothing else runs</td><td><x-ref path="engine/wd/wd.go" symbol="func Validate(doc []byte)"><code>wd.Validate</code></x-ref></td></tr>
+    <tr><td>Contract</td><td>Unique step ids across all scopes, <code>needs</code> in scope and without cycles, expression rules, and per-type rules for USSD menus, forms, capabilities, templates, callbacks, webhooks, subflows, AI steps and outputs</td><td><code>wd.Validate</code>, after the schema</td></tr>
+    <tr><td>Platform</td><td>The connectors and actions exist for this tenant, code compiles, and the trigger is one this deployment can serve</td><td><x-ref path="engine/wdcheck/wdcheck.go" symbol="func CheckWith("><code>wdcheck.CheckWith</code></x-ref></td></tr>
+  </tbody>
+</table></div>
+<p><code>taskiem validate</code> runs all three offline, against the connectors built into the binary. The API runs them on every save, but a save with problems is still stored as a draft, and the problems are returned with it. Publishing refuses any problem, and also checks readiness: that nothing a run would fail on at once is missing, such as a connection not made yet.</p>
+
+<h2>Versions, environments and publishing</h2>
+<p>Every save makes a new immutable version. A database trigger refuses changes to <code>definition</code> or <code>digest</code> once a version exists (<x-ref path="engine/db/migrations/00003_definitions.sql" symbol="CREATE FUNCTION taskiem_workflow_versions_immutable()">00003</x-ref>). The digest is a SHA-256 of the canonical JSON (<x-ref path="api/workflows.go" symbol="func canonical("><code>canonical</code></x-ref>). Runs pin the version they started on, so editing a workflow never changes a run in flight.</p>
+<p>Versions move through <code>draft</code>, <code>published</code>, <code>deprecated</code> and <code>archived</code>. Each environment (<code>dev</code>, <code>staging</code>, <code>prod</code>, or the tenant's own) runs its own version, recorded in <code>deployments</code>. Publishing deploys to every environment not gated on another. A gated environment only takes a version by promotion from the environment it names. Promotion copies the version and never edits it (<x-ref path="engine/db/migrations/00024_deployments.sql" symbol="CREATE TABLE deployments">00024</x-ref>).</p>
+<p>When a tenant turns on four-eyes publishing, a person asks to publish and a different person approves. API keys cannot ask. Every path that publishes checks the setting: the web app, chat, Git sync, AI repair, partner packages and receive-money (<x-ref path="api/workflows.go" symbol="func (s *Server) publish("><code>publish</code></x-ref>).</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec makes publish approval "configurable per environment" (<x-ref path="docs/spec/architecture.md" symbol="Publishing can require approval">spec 3.4</x-ref>). In the code it is one tenant-wide switch, <code>governance_settings.four_eyes_publish</code>. A tenant cannot require approval for <code>prod</code> while letting <code>dev</code> publish freely. Gating <code>prod</code> behind promotion from <code>staging</code> gets close, but promotion itself is not four-eyes.</p>
+</div>
+
+<h2>Code, canvas and Git</h2>
+<h3>Workflow code</h3>
+<p>A <code>*.flow.ts</code> file describes the same document with a builder. Arrow functions over the expression context compile to CEL, so authors get TypeScript's checking without the engine running TypeScript at run time:</p>
+<x-code path="sdk/src/builder.ts" start="// The code SDK (spec 10.1)" end="// functions over the expression context, compiled to CEL by build()."/>
+<p><code>taskiem build</code> compiles code to definitions and <code>taskiem codegen</code> goes the other way. Both run inside the Go binary: the SDK is embedded, bundled by esbuild and executed in the QuickJS sandbox, so neither the CLI nor the API needs Node (<x-ref path="engine/flowcode/flowcode.go"><code>engine/flowcode</code></x-ref>). The repository's example and dogfood workflows are kept as both files, and CI validates the definitions.</p>
+<h3>Concurrent edits</h3>
+<p>Each save names the version it was based on. If someone else saved in between, <x-ref path="engine/wdmerge/wdmerge.go"><code>wdmerge</code></x-ref> merges the two three ways against that base. The unit is a top-level field or a top-level step with everything nested in it. Two edits to different steps merge cleanly. Two different edits to the same step are a conflict for a person, never a guess.</p>
+<h3>Git</h3>
+<p>Each environment can be connected to one repository on GitHub, GitLab or Bitbucket (<x-ref path="engine/gitprovider/"><code>engine/gitprovider</code></x-ref>), in one of two modes (<x-ref path="docs/git.md" symbol="| Mode | Source of truth |">docs/git.md</x-ref>):</p>
+<ul>
+  <li><strong>Platform-led:</strong> Taskiem is the source of truth. Publishing a version also opens a pull request with the definition and its generated <code>.flow.ts</code>, so the repository keeps a reviewed history. Publishing does not wait for the merge.</li>
+  <li><strong>Git-led:</strong> the repository is the source of truth. A push to the connected branch, received on the edge's <code>/git-hooks</code>, saves and publishes the changed definitions to that environment and loads approval policies kept in the repository. Those workflows are read-only in Taskiem.</li>
+</ul>
+<p>Making an environment Git-led hands its deploys to whoever can push to the branch. So when a tenant's governance is strict (four-eyes publishing or policies, or a gated environment), setting up or changing a Git-led connection needs one person to ask and another to approve, and an API key cannot do it. After that, pushes deploy without a second approval in Taskiem. Review happens in the repository. Git credentials are tenant secrets in a reserved environment that workflows cannot read (<x-ref path="api/git.go" symbol="// Git integration (spec 10.3)."><code>api/git.go</code></x-ref>).</p>
+<h2>Testing workflows</h2>
+<p>A workflow test (<code>*.test.json</code>, the <code>wd-test/v1</code> contract) gives a trigger, mocked step outcomes, signals, approval decisions and form answers, and asserts the path the run took and its outputs. Tests run the real <code>decide</code> over an in-memory history on a virtual clock, so a test of a 72-hour signal timeout takes milliseconds and never calls a provider (<x-ref path="engine/wdtest/wdtest.go"><code>engine/wdtest</code></x-ref>). <code>taskiem test</code> runs them offline, and the AI repair pipeline uses the same machinery for its shadow runs.</p>
+
+<h2>Templates</h2>
+<p>The template library holds <x-stat name="templates"/> ready workflows for small businesses ("every Friday, text my customers who owe me"). Each is a <code>wd/v1</code> definition with typed parameters, embedded in the binary (<x-ref path="templates/templates.go"><code>templates</code></x-ref>). Parameter substitution is injection-safe: inside an expression a value becomes a quoted CEL literal, and no value may start with <code>=</code>, so a parameter is always data, never code. Personal data such as an owner's phone number is never a parameter. Templates read it from tenant variables, so no definition carries it.</p>

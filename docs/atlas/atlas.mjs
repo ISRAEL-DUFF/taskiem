@@ -193,7 +193,55 @@ const stats = {
   decisions: () => readdirSync(join(root, "docs/decisions")).filter((f) => /^\d{4}-.*\.md$/.test(f)).length,
   "go-version": () => readFileSync(join(root, "go.mod"), "utf8").match(/^go (\S+)/m)?.[1] ?? "",
   "web-pages": () => readdirSync(join(root, "web/src/pages")).filter((f) => f.endsWith(".tsx") && !f.includes(".test.")).length,
+  tables: () => schema().tables,
+  "sql-functions": () => schema().functions,
+  "definer-functions": () => schema().definers,
+  "step-types": () => stepTypes().length,
+  "step-type-list": () => stepTypes().join(", "),
+  templates: () => readdirSync(join(root, "templates/library")).filter((f) => f.endsWith(".json")).length,
+  "actions-read": () => actionClasses().read ?? 0,
+  "actions-idempotent_write": () => actionClasses().idempotent_write ?? 0,
+  "actions-reconcilable_write": () => actionClasses().reconcilable_write ?? 0,
+  "actions-unsafe_write": () => actionClasses().unsafe_write ?? 0,
 };
+
+// actionClasses counts the first-party connectors' actions by class.
+function actionClasses() {
+  const out = {};
+  for (const d of readdirSync(join(root, "connectors"))) {
+    const m = join(root, "connectors", d, "manifest.yaml");
+    if (!existsSync(m)) continue;
+    for (const [, c] of readFileSync(m, "utf8").matchAll(/^\s+class:\s*(\w+)/gm)) out[c] = (out[c] ?? 0) + 1;
+  }
+  return out;
+}
+
+// schema replays the migrations' Up sections in order and counts what is
+// left: tables created and not dropped, and functions by their last
+// definition (SECURITY DEFINER or not).
+function schema() {
+  const dir = join(root, "engine/db/migrations");
+  const tables = new Set();
+  const fns = new Map();
+  for (const f of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+    const up = readFileSync(join(dir, f), "utf8").split("-- +goose Down")[0];
+    for (const m of up.matchAll(/(CREATE TABLE(?: IF NOT EXISTS)?|DROP TABLE(?: IF EXISTS)?|ALTER TABLE (\w+) RENAME TO)\s+(\w+)/g)) {
+      if (m[1].startsWith("CREATE")) tables.add(m[3]);
+      else if (m[1].startsWith("DROP")) tables.delete(m[3]);
+      else {
+        tables.delete(m[2]);
+        tables.add(m[3]);
+      }
+    }
+    for (const m of up.matchAll(/CREATE (?:OR REPLACE )?FUNCTION (\w+)\s*\(([\s\S]*?)\$\$/g)) fns.set(m[1], m[2].includes("SECURITY DEFINER"));
+  }
+  return { tables: tables.size, functions: fns.size, definers: [...fns.values()].filter(Boolean).length };
+}
+
+function stepTypes() {
+  const s = JSON.parse(readFileSync(join(root, "schemas/wd-v1.schema.json"), "utf8"));
+  return s.$defs?.stepCommon?.properties?.type?.enum ?? [];
+}
 
 function stat(name) {
   if (!statCache.has(name)) statCache.set(name, stats[name] ? stats[name]() : null);
