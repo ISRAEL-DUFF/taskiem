@@ -80,11 +80,14 @@ type Facts struct {
 	// NeedsBVN: the rail needs a BVN or NIN for each account (Flutterwave):
 	// typed in for each student, never kept, so not in a batch.
 	NeedsBVN bool `json:"needs_bvn,omitempty"`
+	// CreatesWallet: Taskiem can create the school's wallet on the rail
+	// (iswallet), instead of an owner pasting its id.
+	CreatesWallet bool `json:"creates_wallet,omitempty"`
 }
 
 var railFacts = map[string]Facts{
-	"iswallet": {Requirement: "iswallet issues numbers only once it holds the wallet's business director's BVN. Choose the wallet the numbers pay into. Its partner bank names each account itself.",
-		Fee: "No fee per account is documented; iswallet's partner takes 1.4% of each payment (at most ₦2,000).", NamesItself: true},
+	"iswallet": {Requirement: "iswallet issues numbers only once the wallet has an email and, for a school's wallet, its director's BVN. Choose the wallet the numbers pay into, or create the school's wallet here. Payers see the name Taskiem gives: the school's and the child's.",
+		Fee: "No fee per account is documented; iswallet's partner takes 1.4% of each payment (at most ₦2,000), added to what the payer sends.", CreatesWallet: true},
 	"paystack": {Requirement: "Paystack needs an email for each account and opens one account per email, so each student needs a guardian email no brother or sister shares. Paystack names each account \"your business name / the child's name\" itself, and only registered Nigerian businesses that have gone live can issue them (at most 1,000 unless Paystack raises it).",
 		Fee: "No fee per account is documented; Paystack takes 1% of each payment (at most ₦300).", NamesItself: true, OneAccountPerEmail: true},
 	"flutterwave": {Requirement: "Flutterwave needs a parent's BVN or NIN for each account, so its accounts are issued one at a time on each student's page, with the number typed in (Taskiem does not keep it). It also needs a guardian email.",
@@ -197,6 +200,17 @@ func (s *Schools) CheckIssuing(ctx context.Context, tenant uuid.UUID, in Issuing
 	}
 	if err != nil {
 		return in, err
+	}
+	// Taskiem's own wallet for the school is the one its numbers pay into,
+	// whatever was sent (decision 0052).
+	if s.Invoices != nil {
+		w, err := s.Invoices.PlatformWalletOf(ctx, tenant, r.Channel())
+		if err != nil {
+			return in, err
+		}
+		if w != "" {
+			in.Account = w
+		}
 	}
 	switch {
 	case r.Needs("virtual_account", "account") && in.Account == "":

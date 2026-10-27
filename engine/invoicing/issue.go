@@ -132,9 +132,47 @@ func (s *Invoices) Issuers(ctx context.Context, tenant uuid.UUID) ([]Issuer, err
 	}
 	list, err := rails.Capable(ctx, tenant, "virtual_account")
 	for _, r := range list {
-		out = append(out, issuerOf(r))
+		i := issuerOf(r)
+		// Taskiem's own wallet for the business is the one it pays into.
+		if i.NeedsAccount {
+			w, err := s.PlatformWalletOf(ctx, tenant, i.Connection)
+			if err != nil {
+				return nil, err
+			}
+			i.NeedsAccount = w == ""
+		}
+		out = append(out, i)
 	}
 	return out, err
+}
+
+// PlatformWallet is the one wallet of a connection Taskiem holds for the
+// business under its own client (decision 0052; connections.platform),
+// as connector/name: the wallet its numbers pay into, never chosen by
+// hand. "" for any other connection.
+func PlatformWallet(ctx context.Context, tx pgx.Tx, channel string) (string, error) {
+	connector, name, ok := strings.Cut(channel, "/")
+	if !ok {
+		return "", nil
+	}
+	var w string
+	err := tx.QueryRow(ctx, `SELECT r.wallet_id FROM receive_money r JOIN connections c ON c.id = r.connection_id
+		WHERE c.environment = 'prod' AND c.connector = $1 AND c.name = $2 AND c.platform IS NOT NULL`, connector, name).Scan(&w)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return w, err
+}
+
+// PlatformWalletOf is PlatformWallet in a transaction of its own.
+func (s *Invoices) PlatformWalletOf(ctx context.Context, tenant uuid.UUID, channel string) (string, error) {
+	var w string
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		w, err = PlatformWallet(ctx, tx, channel)
+		return err
+	})
+	return w, err
 }
 
 // AccountRequest is a customer's permanent account to give them: one the
@@ -207,6 +245,13 @@ func (s *Invoices) IssueAccount(ctx context.Context, tenant uuid.UUID, in Accoun
 		if v != "" && !elevenDigits(v) {
 			return CustomerAccount{}, invalid("a BVN or NIN has 11 digits")
 		}
+	}
+	// On Taskiem's own wallet for the business, the number pays into that
+	// wallet whatever was sent.
+	if w, err := s.PlatformWalletOf(ctx, tenant, r.Channel()); err != nil {
+		return CustomerAccount{}, err
+	} else if w != "" {
+		in.Account = w
 	}
 	switch {
 	case r.Needs("virtual_account", "customer.email") && in.Customer.Email == "":

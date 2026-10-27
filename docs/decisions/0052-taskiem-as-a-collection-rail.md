@@ -1,6 +1,6 @@
 # 0052 — Taskiem receives money for any business through iswallet: a platform client, a wallet per business, segregated or pooled by the business's choice
 
-Date: 2026-10-27 · Status: **Proposed** · Plan: [iswallet account numbers](../spec/iswallet-account-numbers.md), workstream W
+Date: 2026-10-27 · Status: **Accepted** (built 27 October 2026, workstream W; [runbook](../runbooks/iswallet-platform.md), [owner's guide](../guide/receiving-money.md)) · Plan: [iswallet account numbers](../spec/iswallet-account-numbers.md), workstream W
 
 ## Context
 
@@ -36,3 +36,15 @@ iswallet, Payrolla and Taskiem are products of one company (iSpend). iswallet is
 ## Provenance
 
 From the founder on 27 October 2026, after iswallet's guide and its answers: Taskiem is a client of iswallet and can create a wallet for any business and account numbers for it or its customers, so a business with no payments account receives money from day one; one client may hold wallets for many unrelated businesses; segregated or pooled is the business's choice, as Payrolla chose segregated; iswallet, Payrolla and Taskiem are one company.
+
+## As built
+
+Everything above holds, with these differences:
+
+- **The BVN is kept nowhere**, not sealed (point 4): it goes to iswallet once, when the wallet is made, and a retry after an unanswered call asks the owner for it again. Nothing in Taskiem's database or audit log holds it or the business email.
+- **The platform's subscription** is made by an operator (`taskiem iswallet subscribe`), which prints its secret once for the process configuration (`TASKIEM_ISWALLET_WEBHOOK_SECRET`, `_TEST_WEBHOOK_SECRET`); one subscription per mode carries every routed event to `/hooks/platform/iswallet@1?mode=`.
+- **The connection holds no key** (`connections.platform`): the vault hands it the platform's for its mode, as a shared client kept to its one wallet, and refuses to replace its credentials; it cannot be deleted through the API.
+- **The business's own number** is a permanent account on its wallet with a reference that names no customer, so its credits reach To match through `virtual_account.credited`.
+- **Withdrawals** run the `withdraw-to-bank` template, made and published for the business with its bank account written in (a new version for a new account, under the business's four-eyes rules), under the approval rule `taskiem_withdrawals` (an owner; two owners from an amount the owner sets). The rule covers withdrawals; someone who may publish workflows can still publish one that pays out from the wallet without it, as on any rail the business connects.
+- **Not built**: pay-by-transfer on the storefront (storefronts take payment through Paystack only, so a business's number is shared by hand there for now); a scheduled sweep of the balance to the bank (the template runs on demand).
+

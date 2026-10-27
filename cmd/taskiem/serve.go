@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,6 +134,10 @@ type config struct {
 	// Xenibase is the platform's Xenibase for data tables
 	// (TASKIEM_XENIBASE_*, decision 0033); unset, tables answer 503.
 	Xenibase datatables.Platform
+	// ISWallet is Taskiem's own iswallet client (TASKIEM_ISWALLET_*,
+	// decision 0052): with a mode's key, any business can receive money
+	// with Taskiem in that mode.
+	ISWallet platformClient
 	// Keys tunes customer keys and the key job (TASKIEM_BYOK_*,
 	// TASKIEM_KEY_*; docs/byok.md).
 	Keys KeysConfig
@@ -378,6 +383,7 @@ func loadConfig() (config, error) {
 	}
 	// The platform's Xenibase is also the connector's default server.
 	c.Connectors.XenibaseURL = c.Xenibase.URL
+	c.ISWallet = platformClientFrom("ISWALLET")
 	// Administrators are held to passkeys wherever passkeys can work.
 	if c.HooksURL == "" && c.PublicURL != "" {
 		c.HooksURL = c.PublicURL + "/hooks"
@@ -607,7 +613,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	reg.SetTenantSource(src.Connectors)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey,
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
-		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter}
+		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
+		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
@@ -710,31 +717,33 @@ func (e *engine) moneyLog() *moneylog.Log {
 func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]string {
 	var out map[string]string
 	for _, c := range reg.List() {
-		// The base URL, or else a mode's address (TASKIEM_ISWALLET_TEST_URL
-		// at a local fake): one loopback port per connector.
-		var u *url.URL
+		// The base URL and the modes' addresses (TASKIEM_ISWALLET_TEST_URL
+		// at a local fake): each loopback port a connector points at.
+		var ports []string
 		for _, raw := range append([]string{c.Manifest.BaseURL}, modeURLs(c.Manifest)...) {
-			p, err := url.Parse(raw)
+			u, err := url.Parse(raw)
 			if err != nil {
 				continue
 			}
-			if ip, err := netip.ParseAddr(p.Hostname()); err == nil && ip.IsLoopback() {
-				u = p
-				break
+			if ip, err := netip.ParseAddr(u.Hostname()); err != nil || !ip.IsLoopback() {
+				continue
+			}
+			port := u.Port()
+			if port == "" {
+				port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+			}
+			if !slices.Contains(ports, port) {
+				ports = append(ports, port)
+				log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
 			}
 		}
-		if u == nil {
+		if len(ports) == 0 {
 			continue
-		}
-		port := u.Port()
-		if port == "" {
-			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
 		}
 		if out == nil {
 			out = map[string]string{}
 		}
-		out["connector:"+c.Manifest.ID] = port
-		log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
+		out["connector:"+c.Manifest.ID] = strings.Join(ports, ",")
 	}
 	return out
 }
@@ -749,7 +758,42 @@ func modeURLs(m *connector.Manifest) []string {
 
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
-		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry)}
+		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry),
+		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}}}
+}
+
+// platformClient is Taskiem's own client at a provider (decision 0052),
+// by mode (live, test): its API key, and the signing secret of the
+// subscription `taskiem iswallet subscribe` made for the mode.
+type platformClient struct {
+	Keys           map[string]string
+	WebhookSecrets map[string]string
+}
+
+// platformClientFrom reads TASKIEM_<NAME>_CLIENT_KEY and _WEBHOOK_SECRET
+// (live) and TASKIEM_<NAME>_TEST_CLIENT_KEY and _TEST_WEBHOOK_SECRET.
+func platformClientFrom(name string) platformClient {
+	p := platformClient{Keys: map[string]string{}, WebhookSecrets: map[string]string{}}
+	for mode, infix := range map[string]string{"live": "", "test": "_TEST"} {
+		if k := strings.TrimSpace(os.Getenv("TASKIEM_" + name + infix + "_CLIENT_KEY")); k != "" {
+			p.Keys[mode] = k
+		}
+		if s := strings.TrimSpace(os.Getenv("TASKIEM_" + name + infix + "_WEBHOOK_SECRET")); s != "" {
+			p.WebhookSecrets[mode] = s
+		}
+	}
+	return p
+}
+
+// credentials are what a connection under the client is handed for each
+// mode: the key, as a shared client's, so its connector keeps to the
+// connection's own wallet (decision 0031).
+func (p platformClient) credentials() map[string]map[string]string {
+	out := map[string]map[string]string{}
+	for mode, k := range p.Keys {
+		out[mode] = map[string]string{"api_key": k, "shared_client": "true"}
+	}
+	return out
 }
 
 // platformApps reads the secrets of Taskiem's platform apps whose

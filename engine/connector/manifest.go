@@ -473,7 +473,7 @@ func (m *Manifest) check() []string {
 			add("%s: delivery app needs auth.oauth2.account_field, the account a connection is for", p)
 		case t.AccountKey == "":
 			add("%s: delivery app needs account_key, the account an event is for", p)
-		case t.Registration == "remote" || t.Route != nil || t.Poll != nil:
+		case t.Registered() || t.Route != nil || t.Poll != nil:
 			add("%s: delivery app takes no remote registration, route or poll", p)
 		case t.Verify == nil || slices.Contains([]string{"query_secret", "path_secret", "none"}, t.Verify.Scheme):
 			add("%s: delivery app is verified with the app's secret: a signature scheme, not %v", p, t.Verify)
@@ -561,12 +561,16 @@ func (m *Manifest) check() []string {
 		}
 		// A remote trigger is verified with the secret the provider returned
 		// when Taskiem created the subscription, never a connection field.
-		if t := m.Triggers[name]; t.Remote() {
+		// A connection's subscription is too, and a subscription made by
+		// hand with the connection's secret_field.
+		if t := m.Triggers[name]; t.Registered() {
 			switch {
 			case t.Type != "webhook":
 				add("/triggers/%s/registration: only webhook triggers are registered remotely", name)
+			case t.PerConnection() && (t.Verify == nil || t.Verify.SecretField == ""):
+				add("/triggers/%s/verify/secret_field: a connection's subscription may also be made by hand, verified with this connection field", name)
 			case t.Verify == nil:
-			case t.Verify.SecretField != "":
+			case t.Remote() && t.Verify.SecretField != "":
 				add("/triggers/%s/verify/secret_field: a remote trigger is verified with the secret the provider returned", name)
 			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer", "body_token", "svix"}, t.Verify.Scheme):
 				add("/triggers/%s/verify/scheme: %s cannot verify a remotely registered trigger", name, t.Verify.Scheme)

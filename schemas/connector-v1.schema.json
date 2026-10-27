@@ -1141,9 +1141,10 @@
         "registration": {
           "enum": [
             "manual",
-            "remote"
+            "remote",
+            "connection"
           ],
-          "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar."
+          "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar. connection: Taskiem holds one subscription per connection, made when the connection is and removed with it, for every event the trigger sends; its deliveries reach every workflow subscribed and the money log, as a pasted webhook's do. A delivery that names no subscription is verified with the connection's secret_field (a subscription made by hand), so verify needs one; the connector supplies a registrar."
         },
         "options": {
           "$ref": "#/$defs/jsonSchema",

@@ -217,7 +217,7 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 	if err != nil || (ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != b.Tenant) {
 		return invalid()
 	}
-	var business, link string
+	var business, link, own, ownBank string
 	var x invoicing.Invoice
 	var ok bool
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{b.Tenant}, func(tx pgx.Tx) error {
@@ -233,6 +233,17 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 		case b.Action == invoiceOpen:
 			link, err = s.Invoices.PageLink(ctx, tx, b.Tenant, x)
 		default:
+			// A customer with a number of their own pays into it (W3).
+			if x.CustomerID() != "" {
+				err = tx.QueryRow(ctx, `SELECT account_number, COALESCE(bank_name, '') FROM customer_accounts WHERE customer_id = $1 ORDER BY created_at DESC, id LIMIT 1`,
+					x.CustomerID()).Scan(&own, &ownBank)
+				if err == nil {
+					return nil
+				}
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+			}
 			// The reply goes to the contact's channel: no address is kept.
 			reply, _ := json.Marshal(map[string]any{"contact": b.Contact.String()})
 			var id *uuid.UUID
@@ -256,6 +267,9 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 		return true, s.waSay(ctx, ch, addr, business, tr(l, "invoice.chat.link", "number", x.Number, "link", link))
 	case b.Action == invoiceOpen:
 		return invalid()
+	case own != "":
+		return true, s.waSay(ctx, ch, addr, business, tr(l, "invoice.chat.own_account", "number", x.Number, "amount", invoicing.Naira(x.TotalKobo-x.PaidKobo),
+			"account", own, "bank", ownBank))
 	}
 	// The account number follows within seconds (InvoiceAnswered).
 	return true, nil

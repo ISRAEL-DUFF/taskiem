@@ -779,6 +779,35 @@ func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "connection.revoke", Actor: p.Actor()})
+	// Whether it may be deleted at all comes first: a key limited to
+	// another environment, or a connection Taskiem keeps, releases nothing.
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var env string
+		var managed *string
+		err := tx.QueryRow(ctx, `SELECT environment, provisioned_by FROM connections WHERE id = $1`, id).Scan(&env, &managed)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return secrets.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := envParam(r, env); err != nil {
+			return err
+		}
+		if managed != nil {
+			return fmt.Errorf("%w: this connection is kept by Taskiem (%s) and cannot be deleted", errConflict, *managed)
+		}
+		return nil
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// The connection's own subscriptions go first, while its credentials
+	// can still reach the provider (connector/v1 registration: connection).
+	if err := s.releaseConnectionSubscriptions(r, reg, id, force); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var uses []connectionUse
 	var revoke func()
 	err = s.tx(r, func(tx pgx.Tx) error {

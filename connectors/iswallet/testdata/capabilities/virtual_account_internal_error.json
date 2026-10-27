@@ -1,0 +1,38 @@
+{
+  "capability": "virtual_account",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "keys": {
+    "issue_virtual_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "input": {
+    "customer": {
+      "name": "Ebube Eze"
+    },
+    "account": "6f1e"
+  },
+  "exchanges": [
+    {
+      "name": "issue_unknown",
+      "request": {
+        "method": "POST",
+        "path": "/v1/wallets/6f1e/virtual-account"
+      },
+      "response": {
+        "status": 500,
+        "headers": {
+          "X-Request-ID": "req_500"
+        },
+        "body": {
+          "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "internal error",
+            "request_id": "req_500"
+          }
+        }
+      }
+    }
+  ],
+  "error": "unknown_outcome"
+}

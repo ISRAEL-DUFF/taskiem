@@ -94,6 +94,8 @@ Usage:
                                      send one test message through the platform's SMS or mail (docs/messages.md)
   taskiem whatsapp templates [list | submit NAME|all | check]
                                      the platform number's WhatsApp templates: their statuses, submit them to Meta, check now (docs/whatsapp.md)
+  taskiem iswallet subscribe|status|unsubscribe [-mode live|test] [ID]
+                                     Taskiem's own iswallet client's subscription: make it and print its secret, read its health, remove it (docs/runbooks/iswallet-platform.md)
   taskiem canary setup|probe|run     set up and run the synthetic end-to-end probe (docs/reliability.md)
   taskiem media check TENANT_ID      round trip through a tenant's Xenibase storage (docs/media.md)
   taskiem healthcheck [ADDR]         probe the local API, or ADDR's /readyz (container health checks)
@@ -173,6 +175,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return messagesCmd(context.Background(), args[1:], stdout)
 	case "whatsapp":
 		return whatsappCmd(context.Background(), args[1:], stdout)
+	case "iswallet":
+		return iswalletCmd(context.Background(), args[1:], stdout)
 	case "canary":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()

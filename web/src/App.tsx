@@ -54,6 +54,7 @@ import { Home } from "./pages/Home";
 import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
+import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
 import { standalone, useInstall } from "./install";
 import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
@@ -259,6 +260,7 @@ function SignedIn() {
     ["/templates", "Templates", "templates", true],
     ["/members", "Members & keys", "members", can("member.manage")],
     ["/settings/billing", "Billing", "billing", can("billing.manage")],
+    ["/settings/payments", "Payments", "money", can("invoice.read") || me.roles.includes("owner")],
     ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
     ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
@@ -417,6 +419,7 @@ function SignedIn() {
           <Route path="/catalogue" element={<Catalogue />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/billing" element={<Billing />} />
+          <Route path="/settings/payments" element={<PaymentsSettings />} />
           <Route path="/settings/keys" element={<Keys />} />
           <Route path="/settings/notifications" element={<NotificationSettings />} />
           <Route path="/alerts" element={<Alerts />} />

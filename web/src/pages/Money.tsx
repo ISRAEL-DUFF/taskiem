@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from "react";
+import { ReceiveMoneyCard } from "./ReceiveMoney";
 import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
@@ -168,6 +169,7 @@ export function MoneyOverview() {
     <>
       <PageHeader title="Money" description="Your business's money for a period: what came in and went out, settled and pending, the fees taken, invoices paid and leaks." />
       <MoneyTabs />
+      <ReceiveMoneyCard />
       <div className="period-bar">
         <div className="segmented" role="group" aria-label="Period">
           {QUICK_PERIODS.map((c) => (

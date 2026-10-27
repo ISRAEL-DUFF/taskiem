@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -80,6 +81,10 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	full := moneydigest.DailyHead(l, sum)
 	if line := moneydigest.SchoolLine(l, school); line != "" {
 		full += " " + line
+	}
+	// What the business's Taskiem wallet holds, when it has one (W4).
+	if bal, ok := s.receiveBalance(ctx, it.Tenant); ok {
+		full += " " + tr(l, "wa.receive.balance", "amount", invoicing.Naira(bal))
 	}
 	head := full
 	if r := []rune(head); len(r) > 200 {

@@ -35,11 +35,13 @@ interface Conn {
   provisioned_by: string | null;
   /** live or test, when the connector has modes (a Paystack key's start, iswallet's host). */
   mode?: string | null;
+  /** "taskiem" for the wallet Taskiem holds for the business (decision 0052): no key of its own. */
+  platform?: string;
   /** Subscriptions Taskiem keeps at the provider through this connection (a Xenibase webhook per workflow). */
   remote?: {
     subscriptions: number;
     health: string;
-    problems: { workflow_id: string; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
+    problems: { workflow_id: string | null; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
   };
   /** Addresses to set in the rail's dashboard so the money log hears this prod connection, workflow or not. */
   money_log_webhooks?: MoneyLogWebhook[];
@@ -51,10 +53,18 @@ interface Conn {
 function Remote({ remote }: { remote: Conn["remote"] }) {
   if (!remote) return <span className="hint">—</span>;
   const why = remote.problems.map((p) => `${p.environment}: ${p.health}${p.status_reason ? ` (${p.status_reason})` : ""}${p.last_error ? ` (${p.last_error})` : ""}`).join("\n");
+  // A connection's own subscriptions (Taskiem subscribes it, as for
+  // iswallet) are repaired by checking the connection; a workflow's by
+  // publishing it again.
+  const own = remote.problems.some((p) => p.workflow_id === null);
+  const first = remote.problems.find((p) => p.status_reason || p.last_error);
   return (
     <span title={why || undefined}>
       <Badge value={remote.health} /> <span className="hint">{remote.subscriptions === 1 ? "1 webhook" : `${remote.subscriptions} webhooks`}</span>
-      {remote.health !== "ok" && remote.health !== "pending" && <div className="hint">Publish the workflow again to repair it.</div>}
+      {first && <div className="hint">{first.status_reason ?? first.last_error}</div>}
+      {remote.health !== "ok" && remote.health !== "pending" && (
+        <div className="hint">{own ? "Press Check to repair it." : "Publish the workflow again to repair it."}</div>
+      )}
     </span>
   );
 }
@@ -167,6 +177,10 @@ export function Connections() {
                       <>
                         <Link to="/tables">Data tables</Link> ({c.name}, kept by Taskiem)
                       </>
+                    ) : c.platform === "taskiem" ? (
+                      <>
+                        <Link to="/settings/payments">Your wallet with Taskiem</Link> ({c.name}, kept by Taskiem)
+                      </>
                     ) : (
                       c.name
                     )}{" "}
@@ -185,6 +199,7 @@ export function Connections() {
                   {!c.provisioned_by && (
                     <span className="conn-actions">
                       {fields && <button onClick={() => setCompleting(c)}>Add fields</button>}
+                      {c.status === "active" && <CheckConnection id={c.id} />}
                       <button onClick={() => setRemoving(c)}>Disconnect</button>
                     </span>
                   )}
@@ -291,6 +306,27 @@ function CompleteConnection({ conn, fields, onClose, onDone }: { conn: Conn; fie
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Asks the service whether this connection's saved details still work,
+ * and, for a rail that issues account numbers through partners, which can. */
+function CheckConnection({ id }: { id: string }) {
+  const act = useAction();
+  const [said, setSaid] = useState<{ ok: boolean; message?: string; partners?: string[] }>();
+  return (
+    <>
+      <button onClick={() => void act.run(async () => setSaid(await post(`/v1/connections/${id}/check`)), false)} disabled={act.busy}>
+        {act.busy ? "Checking…" : "Check"}
+      </button>
+      <ErrorBox error={act.error} />
+      {said && (
+        <span className={said.ok ? "sub" : "sub warn"} role="status" data-testid="connection-check">
+          {said.message}
+          {said.partners && (said.partners.length > 0 ? ` Can issue account numbers through ${said.partners.join(", ")}.` : " No partner can issue account numbers in naira yet.")}
+        </span>
+      )}
+    </>
   );
 }
 

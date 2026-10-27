@@ -144,12 +144,16 @@ An owner chooses, under **Schools > Settings > Students' account numbers**, the 
 
 | Rail | What it needs | Who names the account |
 | --- | --- | --- |
-| iswallet | The wallet the numbers pay into, chosen here; iswallet issues numbers only once it holds the wallet's business director's BVN | iswallet's partner bank, whatever Taskiem asks |
+| iswallet | The wallet the numbers pay into, chosen here or **created here** (below); iswallet issues numbers only once the wallet has an email and its director's BVN | Taskiem: the school's and the child's names |
 | Paystack | An email for each account, **one account per email**: each student needs a guardian email no brother or sister shares; a registered Nigerian business that has gone live (at most 1,000 accounts unless Paystack raises it) | Paystack: "your business name / the child's name" |
 | Flutterwave | A parent's **BVN or NIN** for each account, typed in on the student's page and sent to Flutterwave, never kept; and a guardian email | Not documented |
 | Moniepoint | An email for each account (the guardian's) | Taskiem: the school's and the child's names |
 
 No rail documents a fee per account issued; each charges for payments into the accounts (iswallet's partner 1.4%, at most ₦2,000; Paystack 1%, at most ₦300; Flutterwave 2% plus VAT), which the plan repeats. The rail's own checks of the business (its BVN, director and registration) are done with the rail when the business connects it. Changing the setting is in the audit log.
+
+**A school with no payments account** receives money with Taskiem instead ([receiving money](guide/receiving-money.md), [decision 0052](decisions/0052-taskiem-as-a-collection-rail.md)): turning it on under **Settings > Payments** opens the school's wallet under Taskiem's own iswallet client, held in the school's own account by default, and makes it the issuing connection (**Taskiem (your wallet with Taskiem)**, `iswallet/taskiem`) when none was chosen. Students' numbers are then issued on it as on any iswallet connection; nothing is pasted, and there is no wallet to create here.
+
+**Creating the school's wallet (iswallet).** Instead of pasting a wallet's id, an owner presses **Create the school's wallet**: it asks whether the wallet holds parents' fees (the default: kept in the school's own account at iswallet's bank; a payment shows in the balance at once and the money itself reaches that account within minutes) or only the school's own money (kept with iswallet's and counted as the school's), the school's business email, and the director's BVN. They go to iswallet once, to open the wallet; Taskiem keeps neither. The wallet becomes the one the numbers pay into. Pressing again (a lost answer) asks iswallet with the same key and never makes a second wallet; iswallet's own handle for the wallet, which nobody can pay into, is never shown. The choice of fees or own money is not easily changed later, so settle it with iswallet first if unsure. In the audit log as `settings.schools.wallet_created`, without the BVN or email.
 
 ### Issuing
 
@@ -184,7 +188,7 @@ Each account's reference is derived from the business, the student and the conne
 
 ### The look-back
 
-Some payments never arrive as a webhook: iswallet's credit notice is not mapped yet (which of its fields names the account is not documented), and any rail's webhook may not be set up. So for each connection that issued students' accounts and can list its payments (iswallet, Paystack, Flutterwave), Taskiem **reads back the last 48 hours every 15 minutes**. Each payment it finds is recorded in the [money log](money-log.md) as the rail's notice of it would be, with the same key (the account's reference and the rail's own id for the payment), so a payment seen by both is one entry, and matched like any other. A window with more payments than one read holds is read again in quarters.
+Some payments never arrive as a webhook: a rail's webhook may not be set up, or a delivery may be lost. So for each connection that issued students' accounts and can list its payments (iswallet, Paystack, Flutterwave), Taskiem **reads back the last 48 hours every 15 minutes**. Each payment it finds is recorded in the [money log](money-log.md) as the rail's notice of it would be, with the same key (the account's reference and the rail's own id for the payment), so a payment seen by both is one entry, and matched like any other. A window with more payments than one read holds is read again in quarters.
 
 When the look-back finds a payment the webhook should have brought (on a rail whose webhook is mapped, a payment more than half an hour old the log did not have), the owners are told once a day per connection that its webhook may not be set up, with where to set it. When the look-back of a connection fails three times in a row, an alert says so (once a day while it fails): payments its webhook does not bring wait until it works again.
 

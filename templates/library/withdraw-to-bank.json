@@ -1,0 +1,291 @@
+{
+  "id": "withdraw-to-bank",
+  "title": "Withdraw to my bank",
+  "summary": "Move money from your Taskiem wallet to your own bank account, after an approval, and tell the owner when the bank confirms.",
+  "description": "Start it with the amount in naira and your bank account. Taskiem checks the name on the account, someone with the approver role approves the withdrawal, then pays it once to your bank and waits for the bank to confirm. The payment and its outcome are in the money log like any other. When you receive money with Taskiem, it is made for you with your bank account and an approval rule: the owner approves, and two people above the amount you choose. It works with any payments account that can pay a bank account.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "withdraw",
+    "approval",
+    "bank"
+  ],
+  "keywords": [
+    "withdraw",
+    "withdrawal",
+    "cash out",
+    "move money",
+    "my bank",
+    "bank account",
+    "wallet",
+    "balance",
+    "payout",
+    "sweep"
+  ],
+  "connectors": [
+    "notify@1",
+    "capability:pay_bank",
+    "capability:resolve_account"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves withdrawals.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank",
+        "resolve_account"
+      ],
+      "title": "Withdraw from",
+      "description": "The payments account the money is in: your Taskiem wallet, or any you connected that can pay a bank account.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one the money comes out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_withdrawToBank",
+    "version": 1,
+    "name": "Withdraw to my bank",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "amount_naira",
+          "bank_code",
+          "account_number",
+          "request_id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "amount_naira": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000000,
+            "title": "Amount (naira)"
+          },
+          "bank_code": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 6,
+            "title": "Bank",
+            "description": "Your bank, such as 058 for GTBank."
+          },
+          "account_number": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 10,
+            "title": "Account number"
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "title": "Withdrawal reference",
+            "description": "Unique to this withdrawal: asking again with it never pays twice."
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "check_name",
+        "type": "capability",
+        "uses": "resolve_account",
+        "name": "Find the name on your bank account",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number"
+        }
+      },
+      {
+        "id": "approve_withdrawal",
+        "type": "approval",
+        "name": "Get the withdrawal approved",
+        "needs": [
+          "check_name"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "48h",
+          "on_timeout": "reject",
+          "subject": {
+            "account_name": "=steps.check_name.output.account_name",
+            "bank_code": "=trigger.body.bank_code",
+            "account_number": "=trigger.body.account_number",
+            "amount_naira": "=trigger.body.amount_naira",
+            "amount_kobo": "=int(math.round(double(trigger.body.amount_naira) * 100.0))"
+          }
+        }
+      },
+      {
+        "id": "withdraw",
+        "type": "capability",
+        "uses": "pay_bank",
+        "name": "Pay it to your bank",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "check_name",
+          "approve_withdrawal"
+        ],
+        "when": "=steps.approve_withdrawal.output.decision == 'approved'",
+        "input": {
+          "amount_kobo": "=int(math.round(double(trigger.body.amount_naira) * 100.0))",
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number",
+          "account_name": "=steps.check_name.output.account_name",
+          "narration": "='Withdrawal ' + trigger.body.request_id",
+          "source": "{{funding_account}}"
+        },
+        "effect": {
+          "idempotency_seed": "='withdraw:' + trigger.body.request_id"
+        },
+        "retry": {
+          "max": 8,
+          "backoff": "exponential",
+          "initial": "5s",
+          "max_delay": "10m",
+          "max_duration": "6h"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_failed",
+              "type": "connector",
+              "name": "Tell the owner the withdrawal failed",
+              "connector": "notify@1",
+              "action": "tell",
+              "input": {
+                "message": "='The withdrawal of NGN ' + string(trigger.body.amount_naira) + ' could not be paid; nothing left your wallet. Check the balance (the bank fee comes on top) and try again.'"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "settle",
+        "type": "capability",
+        "uses": "await_settlement",
+        "name": "Wait for the bank to confirm",
+        "needs": [
+          "withdraw"
+        ],
+        "timeout": "72h",
+        "when": "=steps.withdraw.output.status == 'pending'",
+        "input": {
+          "payout_id": "=steps.withdraw.output.payout_id"
+        }
+      },
+      {
+        "id": "tell_done",
+        "type": "connector",
+        "name": "Tell the owner how the withdrawal went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "withdraw"
+        ],
+        "when": "=steps.withdraw.output.status != 'pending'",
+        "input": {
+          "message": "='Withdrawal of NGN ' + string(trigger.body.amount_naira) + ' to ' + steps.check_name.output.account_name + ': ' + (steps.withdraw.output.status == 'settled' ? 'paid' : 'failed')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_done_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_settled",
+        "type": "connector",
+        "name": "Tell the owner how the withdrawal went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settle"
+        ],
+        "input": {
+          "message": "='Withdrawal of NGN ' + string(trigger.body.amount_naira) + ' to ' + steps.check_name.output.account_name + ': ' + (steps.settle.output.status == 'settled' ? 'paid' : steps.settle.output.status)"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_settled_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_rejected",
+        "type": "connector",
+        "name": "Tell the owner that nothing was withdrawn",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "approve_withdrawal"
+        ],
+        "when": "=steps.approve_withdrawal.output.decision != 'approved'",
+        "input": {
+          "message": "='The withdrawal of NGN ' + string(trigger.body.amount_naira) + ' was not approved; nothing was paid.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_rejected_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "7d"
+    }
+  }
+}

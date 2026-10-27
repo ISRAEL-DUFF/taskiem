@@ -3,6 +3,7 @@ package publicweb
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -49,6 +50,9 @@ type InvoicePay interface {
 	// the invoice refuses it (not open, an amount it does not take, or
 	// past the limits).
 	Request(ctx context.Context, tokenHash []byte, kind string, amountKobo int64) (ok bool, err error)
+	// OwnAccount is the customer's own permanent account number, when the
+	// business registered one for them (W3): number "" when none.
+	OwnAccount(ctx context.Context, tokenHash []byte) (number, bank string, err error)
 }
 
 // DBInvoicePay is InvoicePay over the public role's functions.
@@ -70,6 +74,16 @@ func (d DBInvoicePay) Options(ctx context.Context, tokenHash []byte) ([]PayOptio
 	})
 }
 
+// OwnAccount implements InvoicePay.
+func (d DBInvoicePay) OwnAccount(ctx context.Context, tokenHash []byte) (string, string, error) {
+	var number, bank string
+	err := d.Pool.QueryRow(ctx, `SELECT account_number, bank_name FROM taskiem_public_invoice_own_account($1)`, tokenHash).Scan(&number, &bank)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", nil
+	}
+	return number, bank, err
+}
+
 // Request implements InvoicePay.
 func (d DBInvoicePay) Request(ctx context.Context, tokenHash []byte, kind string, amountKobo int64) (bool, error) {
 	var id *string
@@ -89,6 +103,8 @@ var lagos = func() *time.Location {
 
 // payView is what the page shows of the ways to pay.
 type payView struct {
+	// Own: the customer's own account number, always open.
+	Own *accountView
 	// Transfer: the account to pay into, while it is open.
 	Account *accountView
 	// Waiting: an account or link is being made; the page refreshes.
@@ -163,6 +179,16 @@ func (s *Server) payOptions(ctx context.Context, token string, p InvoicePage) (*
 	}
 	if v.PartPayments {
 		v.MinPart = invoicing.Naira(min(invoicing.MinPartKobo, due))
+	}
+	// A customer with a number of their own pays into it; a one-time number
+	// stays on offer.
+	if num, bank, err := s.InvoicePay.OwnAccount(ctx, invoicing.TokenHash(token)); err != nil {
+		return nil, 0, err
+	} else if num != "" {
+		v.Own = &accountView{Number: num, Bank: bank, Amount: v.Due}
+		if v.TransferLabel == "Pay by bank transfer" {
+			v.TransferLabel = "Get a one-time account number instead"
+		}
 	}
 	return v, refresh, nil
 }

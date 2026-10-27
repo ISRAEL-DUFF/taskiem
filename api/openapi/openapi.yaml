@@ -8150,6 +8150,48 @@ paths:
                 $ref: '#/components/schemas/ConnectionInUse'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connections/{id}/check:
+    post:
+      operationId: checkSavedConnection
+      tags:
+      - Connectors
+      summary: Check a saved connection
+      description: |
+        Runs the service's own check with the connection's saved credentials and says in plain words whether it accepts them
+        (`ok` false with the service's reason otherwise; still 200). For a rail that lists the partners issuing account numbers
+        (iswallet's `list_providers`), `partners` are those that can issue permanent ones in naira.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: What the service said.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+                  partners:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/connections/{id}/credentials:
     put:
       operationId: mergeConnectionCredentials
@@ -14563,6 +14605,299 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/schools/wallet:
+    post:
+      operationId: createSchoolWallet
+      tags:
+      - Schools
+      summary: Create the school's wallet on the issuing connection
+      description: |
+        Owners only (403 otherwise). Creates the school's wallet on a connection whose service can (iswallet's `create_wallet`), and makes it the wallet
+        students' account numbers pay into (the issuing setting). The director's BVN and the business email go to the service once
+        and are kept nowhere in Taskiem. At most one wallet is made per business and connection: asking again (a lost answer) answers
+        the same wallet. The wallet-level number the service answers is its own handle, which nobody can pay into, and is never shown.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [connection, business_email, bvn]
+              properties:
+                connection:
+                  type: string
+                  description: The issuing connection as service/name, such as iswallet/main.
+                owner_type:
+                  type: string
+                  enum: [client_end_user_business, client_end_business]
+                  default: client_end_user_business
+                  description: Holding other people's money (fees) in the school's own account, or only its own money, pooled.
+                business_email:
+                  type: string
+                bvn:
+                  type: string
+                  description: The director's BVN, 11 digits.
+                business_name:
+                  type: string
+                  description: The business's name at the service; the business's own name when left out.
+      responses:
+        '201':
+          description: The wallet, and the issuing setting now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wallet_id, issuing]
+                properties:
+                  wallet_id:
+                    type: string
+                  issuing:
+                    $ref: '#/components/schemas/SchoolIssuing'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/receive-money:
+    get:
+      operationId: getReceiveMoney
+      tags:
+      - Invoices
+      summary: Receiving money with Taskiem
+      description: |
+        Whether this Taskiem offers a wallet under its own iswallet client (decision 0052), whether the business's plan includes it,
+        and, once it is on, the business's wallet as Taskiem shows it: where the money is held, the business's own account number
+        (or why iswallet has not issued it yet), and where withdrawals go.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: turnOnReceiveMoney
+      tags:
+      - Invoices
+      summary: Turn on receiving money with Taskiem
+      description: |
+        Owners only (403 otherwise); 402 when the plan does not include it; 409 when this Taskiem does not hold its own iswallet
+        client. Creates the business's wallet under Taskiem's client (at most once: asking again answers the same wallet), as the
+        connection iswallet/taskiem, which holds no key, and asks iswallet for the business's own account number. The director's BVN
+        and the business email go to iswallet once and are kept nowhere in Taskiem. Invoices are paid on it unless they already name
+        a payments connection; a school issues its students' numbers on it unless it already issues on another.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-plan-feature: [receive_money]
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                owner_type:
+                  type: string
+                  enum: [client_end_user_business, client_end_business]
+                  description: Holding other people's money (fees) in the business's own account (segregated), or only its own money, pooled. Segregated for a school by default, pooled otherwise; chosen once.
+                business_email:
+                  type: string
+                bvn:
+                  type: string
+                  description: The director's BVN, 11 digits.
+                business_name:
+                  type: string
+      responses:
+        '201':
+          description: Turned on.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        '200':
+          description: Already on (the account number asked for again when it was missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/receive-money/withdrawals:
+    put:
+      operationId: putReceiveMoneyWithdrawals
+      tags:
+      - Invoices
+      summary: Where withdrawals go, and who approves them
+      description: |
+        Owners only. The bank account withdrawals go to, its name found by the bank and kept; and the amount at which a withdrawal
+        takes two owners instead of one (the approval rule taskiem_withdrawals). The first time, the workflow that withdraws is made
+        from the withdraw-to-bank template and published.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [bank_code, account_number]
+              properties:
+                bank_code:
+                  type: string
+                bank_name:
+                  type: string
+                account_number:
+                  type: string
+                two_approvers_above_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  description: Withdrawals of this much or more take two owners; 0 for one.
+      responses:
+        '200':
+          description: The setting now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/receive-money/balance:
+    get:
+      operationId: getReceiveMoneyBalance
+      tags:
+      - Invoices
+      summary: What the business's Taskiem wallet holds now
+      description: Asked of iswallet each time; 502 when it does not answer.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The balance.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available_kobo, ledger_kobo, currency, at]
+                properties:
+                  available_kobo:
+                    type: integer
+                    format: int64
+                  ledger_kobo:
+                    type: integer
+                    format: int64
+                  currency:
+                    type: string
+                  at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/receive-money/banks:
+    get:
+      operationId: listReceiveMoneyBanks
+      tags:
+      - Invoices
+      summary: The banks a withdrawal can go to
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The banks, as iswallet lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [banks]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/receive-money/withdraw:
+    post:
+      operationId: withdrawToBank
+      tags:
+      - Invoices
+      summary: Withdraw to the business's bank
+      description: |
+        Starts a run of the withdrawal workflow for the amount, to the kept bank account; nothing is paid until the approval rule's
+        approvers approve. The Idempotency-Key (one is made when it is left out) is the payment's key: asking again with it answers
+        the same run and never pays twice.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: run.start
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo]
+              properties:
+                amount_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 100
+      responses:
+        '201':
+          description: The withdrawal's run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+        '200':
+          description: The same withdrawal, asked for again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools:
     get:
       operationId: getSchoolSettings
@@ -20208,6 +20543,9 @@ components:
           type: integer
         balance_after_kobo:
           type: integer
+        fee_kobo:
+          type: integer
+          description: The bank's fee on the transfer, when the payments service reported one; the school received amount_kobo less it.
         how:
           type: string
           enum: [exact, suggested, suggested_auto, manual]
@@ -20229,6 +20567,82 @@ components:
         link:
           type: string
           description: The public verification page, /r/<token> on the form host
+    ReceiveMoney:
+      type: object
+      description: Receiving money with Taskiem (decision 0052).
+      required: [available, plan, "on", default_owner_type, two_approvers_above_kobo]
+      properties:
+        available:
+          type: boolean
+          description: This Taskiem holds its own iswallet client.
+        plan:
+          type: boolean
+          description: The business's plan includes it.
+        plan_note:
+          type: string
+        "on":
+          type: boolean
+        default_owner_type:
+          type: string
+          enum: [client_end_user_business, client_end_business]
+        mode:
+          type: string
+          enum: [live, test]
+        owner_type:
+          type: string
+          enum: [client_end_user_business, client_end_business]
+        connection:
+          type: string
+          description: iswallet/taskiem.
+        account:
+          type: object
+          description: The business's own account number; transfers to it reach To match.
+          required: [account_number]
+          properties:
+            account_number:
+              type: string
+            bank_name:
+              type: string
+            account_name:
+              type: string
+        account_problem:
+          type: string
+          description: Why iswallet has not issued the number yet, in its words.
+        withdraw_to:
+          type: object
+          required: [bank_code, account_number, account_name]
+          properties:
+            bank_code:
+              type: string
+            bank_name:
+              type: string
+            account_number:
+              type: string
+            account_name:
+              type: string
+        two_approvers_above_kobo:
+          type: integer
+          format: int64
+        withdraw_workflow_id:
+          type: string
+          format: uuid
+        withdraw_waiting:
+          type: string
+          description: What a change to withdrawals still waits for (a second person under four-eyes, a promotion to a gated prod); the account and rule before stay in force until then.
+    Withdrawal:
+      type: object
+      required: [run_id, workflow_id, request_id, created]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        workflow_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+        created:
+          type: boolean
     SchoolIssuing:
       type: object
       description: The connection that issues students' account numbers (and its wallet, on rails that hold several), and whether siblings share family credit.
@@ -20265,6 +20679,9 @@ components:
           type: boolean
         needs_bvn:
           type: boolean
+        creates_wallet:
+          type: boolean
+          description: Taskiem can create the school's wallet on this rail (POST /v1/settings/schools/wallet)
         needs_account:
           type: boolean
           description: The wallet the numbers pay into must be chosen
@@ -24605,6 +25022,16 @@ components:
           type: integer
         ai_tokens:
           type: integer
+        rail_credits:
+          type: integer
+          description: Payments received that day on the business's Taskiem wallet (decision 0052).
+        rail_credit_kobo:
+          type: integer
+        rail_payouts:
+          type: integer
+          description: Withdrawals and payouts that day from the business's Taskiem wallet.
+        rail_payout_kobo:
+          type: integer
         limits:
           type: object
       additionalProperties: false
@@ -26260,7 +26687,7 @@ components:
       additionalProperties: false
     RemoteSubscription:
       type: object
-      description: A subscription Taskiem keeps at a provider for a remotely registered trigger (decision 0021).
+      description: A subscription Taskiem keeps at a provider for a remotely registered trigger (decision 0021), for a workflow or, with no workflow, for a connection (registration connection).
       required:
       - id
       - workflow_id
@@ -26284,8 +26711,11 @@ components:
           type: string
           format: uuid
         workflow_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
+          description: Null for a connection's own subscription, whose events reach every workflow subscribed.
         environment:
           type: string
         connector:
@@ -26390,6 +26820,10 @@ components:
           - string
           - 'null'
           description: '`live` or `test`, when the key says which.'
+        platform:
+          type: string
+          enum: [taskiem]
+          description: "A connection under Taskiem's own client (decision 0052): the business's wallet with Taskiem, holding no key of its own."
         remote:
           type: object
           description: Its subscriptions at the provider, when it has any.

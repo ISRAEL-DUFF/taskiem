@@ -86,6 +86,9 @@ type Handler struct {
 	// Apps are Taskiem's platform apps by client name (decision 0051), for
 	// triggers delivered to /hooks/apps/{connector}/{trigger}.
 	Apps map[string]App
+	// Platform is Taskiem's own clients by connector id (decision 0052),
+	// for deliveries to /hooks/platform/{connector}.
+	Platform map[string]Platform
 
 	apps    appGate
 	once    sync.Once
@@ -110,6 +113,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt := chi.NewRouter()
 		rt.Post("/apps/{connector}/{trigger}", h.appEvent)
 		rt.Get("/apps/{connector}/{trigger}", h.appHandshake)
+		rt.Post("/platform/{connector}", h.platformEvent)
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
 		rt.Put("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
@@ -127,6 +131,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	kind := "webhook"
 	if strings.HasPrefix(r.URL.Path, "/apps/") {
 		kind = "app"
+	} else if strings.HasPrefix(r.URL.Path, "/platform/") {
+		kind = "platform"
 	} else if strings.Contains(r.URL.Path, "/connectors/") {
 		kind = "connector"
 	} else if strings.Contains(r.URL.Path, "/callbacks/") {
@@ -784,10 +790,13 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	// A remotely registered trigger (decision 0021) is delivered to the
 	// subscription Taskiem created, named in the URL it registered; it is
 	// verified with the secret the provider returned for it, and starts
-	// only the workflow that owns it.
+	// only the workflow that owns it. A connection's own subscription
+	// (registration: connection) is verified the same way and starts every
+	// workflow subscribed; a delivery naming none was set up by hand and is
+	// verified with the connection's secret.
 	var sub *remote.Subscription
 	secret := ""
-	if spec.Remote() {
+	if spec.Remote() || spec.PerConnection() && r.URL.Query().Has("subscription") {
 		id, err := uuid.Parse(r.URL.Query().Get("subscription"))
 		if err == nil {
 			err = db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -904,8 +913,9 @@ func (h *Handler) connectorEvent(w http.ResponseWriter, r *http.Request) {
 	here := target{tenant: tenant, connection: connection, throttled: d.throttled, subs: subs}
 	// A partner holding a provider's one subscription for all its
 	// customers routes each event on to the sub-tenants it is about
-	// (decision 0031). Not for a provider's test, nor a remote trigger.
-	route := spec.Route != nil && sub == nil && !test
+	// (decision 0031). Not for a provider's test, nor a workflow's own
+	// remote subscription.
+	route := spec.Route != nil && (sub == nil || sub.WorkflowID == uuid.Nil) && !test
 
 	items, err := h.itemsOf(spec, name, act, body)
 	if err != nil {

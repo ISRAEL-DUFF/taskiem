@@ -552,6 +552,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
 			return err
 		}
+		if done, err := s.waReceiveCommand(ctx, c, cmd); done || err != nil {
+			return err
+		}
 		// The same in the person's language (English's are read above).
 		if matched && m.Language != lang.EN {
 			switch m.Intent {

@@ -51,17 +51,26 @@ func (e *HTTPError) RetryAfterDelay() time.Duration { return e.RetryAfter }
 // writes retry while unsafe writes park); other 4xx fatal (callers may
 // inspect *HTTPError, e.g. to map 404 to ErrNotFound).
 func DoJSON(ctx context.Context, client *http.Client, method, url string, headers map[string]string, body, out any) error {
+	_, err := DoJSONHeader(ctx, client, method, url, headers, body, out)
+	return err
+}
+
+// DoJSONHeader is DoJSON that also returns a successful response's
+// headers, for providers that identify each request in one (a request id
+// to quote when reporting a problem). A failure's headers are on its
+// *HTTPError.
+func DoJSONHeader(ctx context.Context, client *http.Client, method, url string, headers map[string]string, body, out any) (http.Header, error) {
 	var rd io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("encode request: %w: %w", err, effects.ErrFatal)
+			return nil, fmt.Errorf("encode request: %w: %w", err, effects.ErrFatal)
 		}
 		rd = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, rd)
 	if err != nil {
-		return fmt.Errorf("%w: %w", RedactURLError(err), effects.ErrFatal)
+		return nil, fmt.Errorf("%w: %w", RedactURLError(err), effects.ErrFatal)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -72,12 +81,12 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, header
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return ClassifyTransport(err)
+		return nil, ClassifyTransport(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return fmt.Errorf("read response: %w: %w", err, effects.ErrUnknownOutcome)
+		return nil, fmt.Errorf("read response: %w: %w", err, effects.ErrUnknownOutcome)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		he := &HTTPError{Status: resp.StatusCode, Body: raw, Header: resp.Header, kind: effects.ErrFatal}
@@ -94,15 +103,15 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, header
 				he.RetryAfter = time.Duration(s) * time.Second
 			}
 		}
-		return he
+		return nil, he
 	}
 	if out != nil && len(bytes.TrimSpace(raw)) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
 			// The provider acted but we cannot read what it said.
-			return fmt.Errorf("decode response: %w: %w", err, effects.ErrUnknownOutcome)
+			return resp.Header, fmt.Errorf("decode response: %w: %w", err, effects.ErrUnknownOutcome)
 		}
 	}
-	return nil
+	return resp.Header, nil
 }
 
 // RedactURL drops what a URL may carry besides where it goes: user info,

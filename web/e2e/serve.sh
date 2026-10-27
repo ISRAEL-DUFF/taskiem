@@ -57,6 +57,9 @@ export TASKIEM_SIGNUP_PER_ADDRESS=100
 # Students' account numbers (accounts.spec.ts) are issued by a fake iswallet
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828
+# Receive money with Taskiem (receive-money.spec.ts): Taskiem's own iswallet
+# client in test mode, at a second fake.
+export TASKIEM_ISWALLET_TEST_CLIENT_KEY=isw_platform_e2e TASKIEM_ISWALLET_TEST_URL=http://127.0.0.1:12829
 # Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
 export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
 # The public host itself (family.spec.ts): school families' pages on the

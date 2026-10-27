@@ -488,13 +488,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
 			r.With(s.need(PermConnectionManage)).Post("/connections/check", s.checkConnection)
+			r.With(s.need(PermConnectionManage)).Post("/connections/{id}/check", s.checkSavedConnection)
 			r.With(s.need(PermWorkflowRead)).Get("/connection-names", s.listConnectionNames)
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
-			r.Get("/settings/brand", s.getBrand) // how public pages look (brand.go)
+			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)
+			r.Group(s.receiveMoneyRoutes)                                               // receive money with Taskiem (receive_money.go)
+			r.Get("/settings/brand", s.getBrand)                                        // how public pages look (brand.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)
 			r.With(s.need(PermWorkflowRead)).Get("/paystack/banks", s.listBanks) // pickers (lookups.go)
@@ -716,6 +719,17 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, "not found")
 	case errors.Is(err, runtime.ErrTenantSuspended):
 		writeErr(w, http.StatusLocked, err.Error())
+	case errors.Is(err, errUpstream):
+		// A provider that did not answer, or answered what cannot be read.
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": strings.TrimPrefix(err.Error(), "upstream: "), "code": "provider"})
+	case errors.Is(err, secrets.ErrPlatformConnection), errors.Is(err, secrets.ErrPlatformClient):
+		// Taskiem's own client (decision 0052): its details are Taskiem's,
+		// or this Taskiem does not hold it.
+		msg := err.Error()
+		if i := strings.LastIndex(msg, ": "); i > 0 {
+			msg = msg[:i]
+		}
+		writeErr(w, http.StatusConflict, msg)
 	case errors.Is(err, secrets.ErrKeyUnavailable):
 		// The tenant's customer key is revoked, disabled or unreachable (or
 		// the KMS is down): nothing can be encrypted or decrypted for it.

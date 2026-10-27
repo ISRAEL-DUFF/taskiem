@@ -6,8 +6,7 @@
 // money log's writer as the rail's virtual_account.credited event would
 // be, with the same key (connection, event, the account's reference and
 // credit_id), so a credit heard by webhook and read back is one entry, and
-// matching takes it like any other. iswallet, whose credit webhook is not
-// mapped, relies on it entirely.
+// matching takes it like any other.
 //
 // When the look-back finds a credit the webhook should have brought (a
 // rail with the event mapped, a credit more than Late old that the log did

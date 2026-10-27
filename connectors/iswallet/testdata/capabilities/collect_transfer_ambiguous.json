@@ -1,0 +1,37 @@
+{
+  "capability": "collect_transfer",
+  "credentials": {
+    "api_key": "isw_test_key",
+    "wallet_ids": "6f1e"
+  },
+  "keys": {
+    "create_dynamic_account": "tot_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "input": {
+    "amount_kobo": 2500000,
+    "customer": {
+      "name": "Ada Obi"
+    },
+    "description": "Invoice INV-0042"
+  },
+  "exchanges": [
+    {
+      "name": "one_time_unknown",
+      "request": {
+        "method": "POST",
+        "path": "/v1/wallets/6f1e/virtual-account"
+      },
+      "response": {
+        "status": 500,
+        "body": {
+          "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "internal error",
+            "request_id": "req_dyn_500"
+          }
+        }
+      }
+    }
+  ],
+  "error": "unknown_outcome"
+}

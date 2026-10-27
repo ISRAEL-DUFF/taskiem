@@ -89,31 +89,33 @@ func (v *Vault) ConnectionCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, 
 	out := map[string]string{}
 	var connector, name, env string
 	var ref *uuid.UUID
-	var mode *string
-	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref, mode FROM connections WHERE id = $1 AND tenant_id = $2`, conn, tenant).Scan(&connector, &name, &env, &ref, &mode)
+	var mode, platform *string
+	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref, mode, platform FROM connections WHERE id = $1 AND tenant_id = $2`, conn, tenant).
+		Scan(&connector, &name, &env, &ref, &mode, &platform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	defer withMode(out, mode)
-	if ref == nil {
-		return out, nil
+	if ref != nil {
+		var ct, wdek []byte
+		var ver, aad int
+		if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
+			return nil, err
+		}
+		raw, err := v.decrypt(ctx, tx, tenant, *ref, env, connectionBinding(conn), aad, ct, wdek, ver)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, err
+		}
+		if err := record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, name, &conn, connector); err != nil {
+			return nil, err
+		}
 	}
-	var ct, wdek []byte
-	var ver, aad int
-	if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
-		return nil, err
-	}
-	raw, err := v.decrypt(ctx, tx, tenant, *ref, env, connectionBinding(conn), aad, ct, wdek, ver)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
-	}
-	return out, record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, name, &conn, connector)
+	return out, v.handOut(out, connector, mode, platform)
 }
 
 // DeleteConnectionTx removes a connection and its credentials, in a
@@ -182,13 +184,17 @@ func (v *Vault) ExpireConnection(ctx context.Context, tenant uuid.UUID, env, con
 func (v *Vault) ReplaceCredentialsTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID, creds map[string]string, by string) error {
 	var connector, name, env string
 	var ref *uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref FROM connections WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, conn, tenant).
-		Scan(&connector, &name, &env, &ref)
+	var platform *string
+	err := tx.QueryRow(ctx, `SELECT connector, name, environment, secret_ref, platform FROM connections WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, conn, tenant).
+		Scan(&connector, &name, &env, &ref, &platform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
 	if err != nil {
 		return err
+	}
+	if platform != nil {
+		return fmt.Errorf("%s/%s is Taskiem's own account for this business: its details are Taskiem's to change: %w", connector, name, ErrPlatformConnection)
 	}
 	raw, _ := json.Marshal(stored(creds))
 	sid := uuid.Must(uuid.NewV7())
@@ -242,7 +248,7 @@ func SetRouteKeysTx(ctx context.Context, tx pgx.Tx, tenant, conn uuid.UUID, keys
 func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connector, name string) (map[string]string, error) {
 	out := map[string]string{}
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		q := `SELECT c.id, c.name, c.secret_ref, c.mode FROM connections c WHERE c.tenant_id = $1 AND c.environment = $2 AND c.connector = $3 AND c.status = 'active'`
+		q := `SELECT c.id, c.name, c.secret_ref, c.mode, c.platform FROM connections c WHERE c.tenant_id = $1 AND c.environment = $2 AND c.connector = $3 AND c.status = 'active'`
 		args := []any{tenant, env, connector}
 		if name != "" {
 			q += ` AND c.name = $4`
@@ -253,15 +259,15 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 			return err
 		}
 		type match struct {
-			id   uuid.UUID
-			name string
-			ref  *uuid.UUID
-			mode *string
+			id             uuid.UUID
+			name           string
+			ref            *uuid.UUID
+			mode, platform *string
 		}
 		var ms []match
 		for rows.Next() {
 			var m match
-			if err := rows.Scan(&m.id, &m.name, &m.ref, &m.mode); err != nil {
+			if err := rows.Scan(&m.id, &m.name, &m.ref, &m.mode, &m.platform); err != nil {
 				rows.Close()
 				return err
 			}
@@ -274,23 +280,25 @@ func (v *Vault) Credentials(ctx context.Context, tenant uuid.UUID, env, connecto
 		case len(ms) > 1:
 			return fmt.Errorf("%d active %s connections in %s; name one with the step's connection field: %w", len(ms), connector, env, ErrAmbiguous)
 		}
-		defer withMode(out, ms[0].mode)
-		if ms[0].ref == nil {
-			return nil
+		m := ms[0]
+		if m.ref != nil {
+			var ct, wdek []byte
+			var ver, aad int
+			if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *m.ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
+				return err
+			}
+			raw, err := v.decrypt(ctx, tx, tenant, *m.ref, env, connectionBinding(m.id), aad, ct, wdek, ver)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(raw, &out); err != nil {
+				return err
+			}
+			if err := record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, m.name, &m.id, connector); err != nil {
+				return err
+			}
 		}
-		var ct, wdek []byte
-		var ver, aad int
-		if err := tx.QueryRow(ctx, `SELECT ciphertext, wrapped_key, kek_version, aad_version FROM secrets WHERE id = $1`, *ms[0].ref).Scan(&ct, &wdek, &ver, &aad); err != nil {
-			return err
-		}
-		raw, err := v.decrypt(ctx, tx, tenant, *ms[0].ref, env, connectionBinding(ms[0].id), aad, ct, wdek, ver)
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			return err
-		}
-		return record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, ms[0].name, &ms[0].id, connector)
+		return v.handOut(out, connector, m.mode, m.platform)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
@@ -307,6 +315,67 @@ func withMode(creds map[string]string, mode *string) {
 	if mode != nil && *mode != "" && creds != nil {
 		creds[modeKey] = *mode
 	}
+}
+
+// PlatformClients are the credentials of Taskiem's own provider clients
+// (decision 0052), by connector id and then mode (live, test): what a
+// connection Taskiem made under its own client (connections.platform) is
+// handed in place of a key of its own. Process configuration
+// (TASKIEM_ISWALLET_CLIENT_KEY, …), never stored.
+type PlatformClients map[string]map[string]map[string]string
+
+// For is the platform's credentials for a connector in a mode.
+func (p PlatformClients) For(connector, mode string) (map[string]string, bool) {
+	c, ok := p[connector][mode]
+	return c, ok && len(c) > 0
+}
+
+// PlatformName is the one platform client a connection may be made under,
+// and the name of the connection Taskiem makes under it.
+const PlatformName = "taskiem"
+
+// PlatformProvisioner is what made a connection under Taskiem's own
+// client (connections.provisioned_by): kept by Taskiem, so nobody deletes
+// it while its wallet may hold money.
+const PlatformProvisioner = "taskiem:receive_money"
+
+// handOut adds what a connection is handed but never stores: its mode,
+// and for a connection under Taskiem's own client, that client's
+// credentials for the mode (which win over anything stored).
+func (v *Vault) handOut(creds map[string]string, connector string, mode, platform *string) error {
+	withMode(creds, mode)
+	if platform == nil {
+		return nil
+	}
+	m := ""
+	if mode != nil {
+		m = *mode
+	}
+	keys, ok := v.Platform.For(connector, m)
+	if !ok {
+		return fmt.Errorf("this Taskiem holds no %s client of its own for %s: %w", connector, m, ErrPlatformClient)
+	}
+	maps.Copy(creds, keys)
+	return nil
+}
+
+// CreatePlatformConnectionTx records a connection under Taskiem's own
+// client (decision 0052) in a transaction scoped to tenant: its mode, the
+// non-secret fields it keeps (the wallet it is for), and the provider
+// account its events are routed by (connection_app_accounts, client
+// taskiem). Its connector is handed the platform's key for the mode.
+func (v *Vault) CreatePlatformConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, name, mode, account string, fields map[string]string, by string) (uuid.UUID, error) {
+	if _, ok := v.Platform.For(connector, mode); !ok {
+		return uuid.Nil, fmt.Errorf("this Taskiem holds no %s client of its own for %s: %w", connector, mode, ErrPlatformClient)
+	}
+	id, err := v.createConnectionTx(ctx, tx, tenant, env, connector, name, "api_key", fields, by, PlatformProvisioner, nil, map[string]any{"via": "platform", "mode": mode})
+	if err != nil {
+		return id, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE connections SET platform = $2, mode = $3 WHERE id = $1`, id, PlatformName, mode); err != nil {
+		return id, err
+	}
+	return id, SetAppAccountTx(ctx, tx, tenant, id, PlatformName, account)
 }
 
 // stored is the credentials as they are encrypted: without the keys only
@@ -336,7 +405,7 @@ func stored(creds map[string]string) map[string]string {
 func (v *Vault) RotateCredentials(ctx context.Context, tenant uuid.UUID, env, connector, name string, fn func(map[string]string) (map[string]string, error)) (map[string]string, error) {
 	var out map[string]string
 	err := db.InTenantTx(ctx, v.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		q := `SELECT id, name, secret_ref, mode FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active'`
+		q := `SELECT id, name, secret_ref, mode, platform FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active'`
 		args := []any{tenant, env, connector}
 		if name != "" {
 			q += ` AND name = $4`
@@ -347,14 +416,14 @@ func (v *Vault) RotateCredentials(ctx context.Context, tenant uuid.UUID, env, co
 			return err
 		}
 		type match struct {
-			id   uuid.UUID
-			name string
-			ref  *uuid.UUID
-			mode *string
+			id             uuid.UUID
+			name           string
+			ref            *uuid.UUID
+			mode, platform *string
 		}
 		ms, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (match, error) {
 			var m match
-			return m, row.Scan(&m.id, &m.name, &m.ref, &m.mode)
+			return m, row.Scan(&m.id, &m.name, &m.ref, &m.mode, &m.platform)
 		})
 		if err != nil {
 			return err
@@ -383,6 +452,12 @@ func (v *Vault) RotateCredentials(ctx context.Context, tenant uuid.UUID, env, co
 			if err := record(ctx, tx, tenant, useFrom(ctx, KindConnection), env, m.name, &m.id, connector); err != nil {
 				return err
 			}
+		}
+		if m.platform != nil {
+			// Taskiem's own client: nothing of it is the connection's to
+			// refresh or store.
+			out = current
+			return v.handOut(out, connector, m.mode, m.platform)
 		}
 		withMode(current, m.mode)
 		next, err := fn(maps.Clone(current))

@@ -16,7 +16,6 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/connector"
-	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -183,30 +182,11 @@ func (h *Handler) appEvent(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		n := 0
-		for _, t := range targets {
-			throttled, exists, ok := h.admit(ctx, w, r, t.tenant)
-			if !ok {
-				return
-			}
-			if !exists {
-				continue
-			}
-			var subs []subscriber
-			if err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
-				var err error
-				subs, err = loadSubscribers(ctx, tx, t.env, ref, name, uuid.Nil)
-				return err
-			}); err != nil {
-				h.unavailable(w, r, err)
-				return
-			}
-			ev := eventItem{conn: conn, ref: ref, name: name, env: t.env, event: it.event, dedup: it.dedup, correlation: it.correlation,
-				body: p.body, item: it.item, split: spec.Split != "", test: test}
-			if _, ok := h.deliverInto(ctx, w, r, target{tenant: t.tenant, connection: t.connection, throttled: throttled, subs: subs}, ev); !ok {
-				return
-			}
-			n++
+		ev := eventItem{conn: conn, ref: ref, name: name, event: it.event, dedup: it.dedup, correlation: it.correlation,
+			body: p.body, item: it.item, split: spec.Split != "", test: test}
+		n, ok := h.deliverToConnections(ctx, w, r, targets, ev)
+		if !ok {
+			return
 		}
 		results = append(results, map[string]any{"event": it.event, "routed": n})
 	}

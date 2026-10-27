@@ -151,8 +151,17 @@ type RouteSpec struct {
 	Field string `json:"field"`
 }
 
-// Remote reports whether Taskiem registers this trigger at the provider.
+// Remote reports whether Taskiem registers this trigger at the provider
+// for each workflow deployed with it.
 func (t TriggerSpec) Remote() bool { return t.Registration == "remote" }
+
+// PerConnection reports whether Taskiem registers this trigger at the
+// provider once for each connection, whichever workflows use it.
+func (t TriggerSpec) PerConnection() bool { return t.Registration == "connection" }
+
+// Registered reports whether Taskiem registers this trigger at the
+// provider at all, so the connector supplies a registrar for it.
+func (t TriggerSpec) Registered() bool { return t.Remote() || t.PerConnection() }
 
 // HandshakeSpec is a trigger's endpoint check. GET: the query parameter
 // TokenQuery must equal the connection's SecretField, and Respond (over

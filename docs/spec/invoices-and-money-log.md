@@ -359,7 +359,7 @@ The capability and the `payment.returned` event in `schemas/capabilities-v1.json
 
 Differences from the plan above:
 
-- **iswallet is not mapped**: the request fields for a temporary account are not documented (§4.3).
+- **iswallet was not mapped** until its guide of 27 October documented one-time accounts (`type: dynamic`); they are now `collect_transfer` (unsafe: not idempotent; on late: credited; Taskiem's window, 1 to 1,440 minutes, default 60; `payment.received` by its `tot_` reference), in [iswallet account numbers](iswallet-account-numbers.md) I2.
 - **OPay's payment callback is not mapped** to `payment.received`: its amount's unit is unconfirmed, so a payment is confirmed with `get_payment` and `await_payment` does not run on OPay.
 - **Paystack's `bank.transfer.rejected` has no documented example body**: it is read like Paystack's other charge events (`data.reference`, `data.amount`) with reason `other`, to confirm in sandbox. Whether Paystack sends an event when it refunds a late transfer is not documented.
 - **Flutterwave's expiry** is counted from when the request was sent, since its `expiry_date` carries no time zone; amounts are sent in naira, as its examples show.
