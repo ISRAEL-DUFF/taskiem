@@ -748,6 +748,28 @@ export const invoices = {
 };
 
 // iswallet (iswallet@1)
+export interface IswalletCreateDynamicAccountInput {
+  /** What a payer's bank shows when it resolves the number */
+  account_name?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  expires_minutes?: Val<number>;
+  reference?: Val<string>;
+}
+export interface IswalletCreateWalletInput {
+  business_email?: Val<string>;
+  business_name?: Val<string>;
+  /** The director's BVN */
+  bvn?: Val<string>;
+  currency?: Val<string>;
+  email?: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  /** Taskiem's key for the owner (tenant:<id> for a business's own wallet) */
+  owner_ref: Val<string>;
+  /** An individual; a business holding other people's money (a school's fees), its own segregated account; a business holding only its own money, pooled */
+  owner_type: Val<"client_end_user" | "client_end_user_business" | "client_end_business">;
+}
 export interface IswalletGetBalanceInput {
   wallet_id: Val<string>;
 }
@@ -755,13 +777,22 @@ export interface IswalletGetPayoutInput {
   outflow_id: Val<string>;
 }
 export interface IswalletIssueVirtualAccountInput {
-  /** Asked for; iswallet says the name and bank are its partner's, so the number may show another */
+  /** What a payer's bank shows when it resolves the number */
   account_name?: Val<string>;
+  /** A partner from list_providers; iswallet chooses when it is left out */
+  provider?: Val<string>;
   reference?: Val<string>;
   /** The wallet the number pays into */
   wallet_id: Val<string>;
 }
+export interface IswalletIssueVirtualAccountsInput {
+  accounts: Value;
+  wallet_id: Val<string>;
+}
 export interface IswalletListBanksInput {
+  [key: string]: Value;
+}
+export interface IswalletListProvidersInput {
   [key: string]: Value;
 }
 export interface IswalletListTransactionsInput {
@@ -795,14 +826,22 @@ export interface IswalletTransferInput {
   to_wallet_id: Val<string>;
 }
 export const iswallet = {
+  /** Open an account number for one payment (unsafe_write) */
+  create_dynamic_account: (input: IswalletCreateDynamicAccountInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "create_dynamic_account", input, extra),
+  /** Create a wallet (idempotent_write) */
+  create_wallet: (input: IswalletCreateWalletInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "create_wallet", input, extra),
   /** Get wallet balance (read) */
   get_balance: (input: IswalletGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "get_balance", input, extra),
   /** Get payout status (read) */
   get_payout: (input: IswalletGetPayoutInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "get_payout", input, extra),
   /** Issue a customer's account number (idempotent_write) */
   issue_virtual_account: (input: IswalletIssueVirtualAccountInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "issue_virtual_account", input, extra),
+  /** Issue many customers' account numbers (idempotent_write) */
+  issue_virtual_accounts: (input: IswalletIssueVirtualAccountsInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "issue_virtual_accounts", input, extra),
   /** List banks (read) */
   list_banks: (input?: IswalletListBanksInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_banks", input, extra),
+  /** List the partners that issue account numbers (read) */
+  list_providers: (input?: IswalletListProvidersInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_providers", input, extra),
   /** List a wallet's transactions (read) */
   list_transactions: (input: IswalletListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_transactions", input, extra),
   /** Resolve account name (read) */
@@ -3596,7 +3635,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
-  "iswallet@1": ["get_balance", "get_payout", "issue_virtual_account", "list_banks", "list_transactions", "name_enquiry", "payout", "transfer"],
+  "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],
   "messenger@1": ["get_conversation", "get_page", "get_profile", "mark_seen", "send_message", "send_typing"],
@@ -4111,7 +4150,7 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   books_taxes: ["quickbooks@1", "zoho_books@1"],
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
-  collect_transfer: ["flutterwave@1", "opay@1", "paystack@1"],
+  collect_transfer: ["flutterwave@1", "iswallet@1", "opay@1", "paystack@1"],
   get_payment: ["flutterwave@1", "moniepoint@1", "opay@1", "paystack@1"],
   get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],

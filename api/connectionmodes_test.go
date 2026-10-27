@@ -50,7 +50,7 @@ func TestConnectionHostModes(t *testing.T) {
 
 	// Test, checked first against the test host.
 	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "iswallet@1", "environment": "prod", "credentials": map[string]string{"api_key": "isw_k"}, "mode": "test", "check": true})
-	if strings.Join(hits, ",") != "/v1/banks" {
+	if strings.Join(hits, ",") != "/v1/providers" {
 		t.Errorf("the check before saving reached %v", hits)
 	}
 	list := owner.must(200, "GET", "/v1/connections", nil)

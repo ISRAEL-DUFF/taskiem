@@ -367,8 +367,8 @@ func TestTemplateRails(t *testing.T) {
 		"pay_bank,balance,resolve_account":          "Paystack, Moniepoint (Monnify), iswallet, Flutterwave or Anchor",
 		"refund,get_payment":                        "Paystack",
 		"virtual_account":                           "Paystack, Moniepoint (Monnify), iswallet or Flutterwave",
-		"virtual_account.credited":                  "Paystack, Moniepoint (Monnify) or Flutterwave",
-		"payment.received,virtual_account.credited": "Paystack, Moniepoint (Monnify) or Flutterwave",
+		"virtual_account.credited":                  "Paystack, Moniepoint (Monnify), iswallet or Flutterwave",
+		"payment.received,virtual_account.credited": "Paystack, Moniepoint (Monnify), iswallet or Flutterwave",
 	} {
 		if got := railsFor(strings.Split(uses, ","), conns); got != want {
 			t.Errorf("%s: %q, want %q", uses, got, want)

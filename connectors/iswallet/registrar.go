@@ -211,7 +211,11 @@ func (r registrar) Find(ctx context.Context, c connector.RemoteCall, name string
 		Subscriptions []subscription `json:"subscriptions"`
 		Data          []subscription `json:"data"`
 	}
-	if _, err := r.c.doID(ctx, c.Request(), http.MethodGet, subscriptionsPath, nil, &out); err != nil {
+	_, err := r.c.doID(ctx, c.Request(), http.MethodGet, subscriptionsPath, nil, &out)
+	if errors.Is(err, connector.ErrNotFound) {
+		return connector.RemoteState{}, false, nil // none yet
+	}
+	if err != nil {
 		return connector.RemoteState{}, false, err
 	}
 	list := out.Subscriptions
