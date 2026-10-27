@@ -289,6 +289,11 @@
       "reviewed": true,
       "context": "A customer tapped Open invoice: the invoice's page"
     },
+    "invoice.chat.own_account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "reviewed": true,
+      "context": "Pay by transfer, for a customer the business gave an account number of their own (it does not expire)"
+    },
     "invoice.chat.paid": {
       "text": "Invoice {number} is paid. Thank you!",
       "reviewed": true,
@@ -529,11 +534,6 @@
       "reviewed": true,
       "context": "A run's status"
     },
-    "sms.reconcile": {
-      "text": "Your request {reference} is being checked. We will let you know.",
-      "reviewed": true,
-      "context": "SMS after a USSD run that needs reconciliation (ASCII)"
-    },
     "slack.link.button": {
       "text": "Confirm",
       "reviewed": true,
@@ -558,6 +558,11 @@
       "text": "This Slack account is not linked to you on Taskiem, so it cannot decide this. Link it from your Taskiem profile.",
       "reviewed": true,
       "context": "An approval button pressed from a Slack account not linked in that business"
+    },
+    "sms.reconcile": {
+      "text": "Your request {reference} is being checked. We will let you know.",
+      "reviewed": true,
+      "context": "SMS after a USSD run that needs reconciliation (ASCII)"
     },
     "tg.button_expired": {
       "text": "That button has expired. Send *approvals* to get your open approvals again.",
@@ -1693,6 +1698,31 @@
       "text": "*{name}* waits for a second person to publish it: they decide under Approvals in Taskiem.",
       "reviewed": true,
       "context": "Four-eyes publishing: a request was made"
+    },
+    "wa.receive.account": {
+      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "reviewed": true,
+      "context": "The business's own account number, for its owner to share"
+    },
+    "wa.receive.balance": {
+      "text": "Your Taskiem wallet holds {amount} now.",
+      "reviewed": true,
+      "context": "The business's wallet balance with Taskiem"
+    },
+    "wa.receive.balance_unknown": {
+      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "reviewed": true,
+      "context": "The wallet balance could not be read from the payments service"
+    },
+    "wa.receive.no_number": {
+      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "reviewed": true,
+      "context": "The business's own account number has not been issued yet"
+    },
+    "wa.receive.off": {
+      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": true,
+      "context": "The owner asked for their account number or balance, but receiving money with Taskiem is off"
     },
     "wa.run.bad_inputs": {
       "text": "The inputs do not fit {workflow}: {problems}. Send *run* again.",

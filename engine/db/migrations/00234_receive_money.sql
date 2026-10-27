@@ -43,5 +43,13 @@ CREATE POLICY tenant_isolation ON receive_money TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON receive_money TO taskiem_app;
 
+-- Billing meters the rail (W5): each day's credits and payouts on a
+-- business's Taskiem wallet, counted from its money log.
+ALTER TABLE usage_snapshots ADD COLUMN rail_credits bigint NOT NULL DEFAULT 0,
+  ADD COLUMN rail_credit_kobo bigint NOT NULL DEFAULT 0,
+  ADD COLUMN rail_payouts bigint NOT NULL DEFAULT 0,
+  ADD COLUMN rail_payout_kobo bigint NOT NULL DEFAULT 0;
+
 -- +goose Down
+ALTER TABLE usage_snapshots DROP COLUMN rail_credits, DROP COLUMN rail_credit_kobo, DROP COLUMN rail_payouts, DROP COLUMN rail_payout_kobo;
 DROP TABLE receive_money;

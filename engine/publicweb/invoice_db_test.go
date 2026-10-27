@@ -244,4 +244,30 @@ func TestInvoicePayThroughTheDatabase(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT taskiem_public_invoice_request($1, 'transfer', 0)`, invoicing.TokenHash(tok)).Scan(&sixth); err != nil || sixth != nil {
 		t.Errorf("a sixth request: %v %v", err, sixth)
 	}
+
+	// A customer with a number of their own sees it on every invoice's
+	// page (W3); another customer's invoice does not.
+	w.in(func(tx pgx.Tx) error {
+		_, err := w.inv.RegisterAccount(ctx, tx, env.Tenant, invoicing.AccountIn{Customer: invoiceCustomer, Channel: "iswallet/taskiem",
+			AccountNumber: "8800000042", Reference: "tsk_chiamaka", BankName: "Wema Bank"}, "user:ada")
+		return err
+	})
+	if body := get(h, "GET", formHost, "/i/"+tok).Body.String(); !strings.Contains(body, "your own account number") || !strings.Contains(body, "8800000042") {
+		t.Errorf("own account: %s", body)
+	}
+	other := invoicing.Draft{AmountKobo: 500000}
+	other.Customer = invoicing.Customer{Name: "Bola Ade", Phone: "+2348031112222"}
+	var x invoicing.Invoice
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		x, err = w.inv.Create(ctx, tx, env.Tenant, other, "user:ada")
+		return err
+	})
+	sent, err := w.inv.Send(ctx, env.Tenant, x.Number, "user:ada", "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := get(h, "GET", formHost, strings.TrimPrefix(sent.Link, "https://"+formHost)).Body.String(); strings.Contains(body, "8800000042") {
+		t.Errorf("another customer sees the number: %s", body)
+	}
 }

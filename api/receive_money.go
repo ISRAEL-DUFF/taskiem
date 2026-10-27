@@ -818,3 +818,76 @@ func (s *Server) withdrawToBank(w http.ResponseWriter, r *http.Request) {
 func (s *Server) tenantTx(ctx context.Context, tenant uuid.UUID, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, fn)
 }
+
+// waReceiveCommand answers "my account number" and "balance" in chat for
+// a business that receives money with Taskiem (W3, W4); false when the
+// text is neither.
+func (s *Server) waReceiveCommand(ctx context.Context, c *chat, cmd string) (bool, error) {
+	var balance bool
+	switch cmd {
+	case "my account number", "account number", "my account", "my bank account", "pay me", "my number for payments":
+	case "balance", "my balance", "wallet balance", "my wallet":
+		balance = true
+	default:
+		return false, nil
+	}
+	if !c.p.Can(PermInvoiceRead) {
+		return true, c.say(ctx, s, c.t("wa.money.denied", "org", c.tenant.Name))
+	}
+	var m *receiveMoney
+	if err := s.tenantTx(ctx, c.tenant.ID, func(tx pgx.Tx) error {
+		var err error
+		m, err = loadReceiveMoney(ctx, tx, c.tenant.ID)
+		return err
+	}); err != nil {
+		return true, err
+	}
+	if m == nil {
+		return true, c.say(ctx, s, c.t("wa.receive.off", "link", s.PublicURL+"/settings/payments"))
+	}
+	if !balance {
+		if m.AccountNumber == nil {
+			return true, c.say(ctx, s, c.t("wa.receive.no_number", "link", s.PublicURL+"/settings/payments"))
+		}
+		return true, c.say(ctx, s, c.t("wa.receive.account", "account", *m.AccountNumber, "bank", deref(m.BankName), "name", deref(m.AccountName)))
+	}
+	available, ok := s.receiveBalance(ctx, c.tenant.ID)
+	if !ok {
+		return true, c.say(ctx, s, c.t("wa.receive.balance_unknown"))
+	}
+	return true, c.say(ctx, s, c.t("wa.receive.balance", "amount", invoicing.Naira(available)))
+}
+
+// receiveBalance is what the business's Taskiem wallet holds now, in
+// naira's kobo; ok is false when it does not receive money with Taskiem or
+// iswallet did not answer.
+func (s *Server) receiveBalance(ctx context.Context, tenant uuid.UUID) (int64, bool) {
+	var m *receiveMoney
+	if err := s.tenantTx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		m, err = loadReceiveMoney(ctx, tx, tenant)
+		return err
+	}); err != nil || m == nil {
+		return 0, false
+	}
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return 0, false
+	}
+	conn, ok := connectorByID(reg, receiveConnector)
+	if !ok {
+		return 0, false
+	}
+	out, err := s.connectionAction(ctx, tenant, conn, "get_balance", "receive_money.balance", map[string]any{"wallet_id": m.WalletID}, "")
+	if err != nil {
+		return 0, false
+	}
+	var available int64
+	list, _ := out["balances"].([]any)
+	for _, x := range list {
+		if b, _ := x.(map[string]any); b["currency"] == nil || b["currency"] == "NGN" {
+			available += kobo(b["available"])
+		}
+	}
+	return available, true
+}

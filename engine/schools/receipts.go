@@ -37,27 +37,31 @@ import (
 
 // Receipt is a receipt as the pages show it.
 type Receipt struct {
-	ID               uuid.UUID  `json:"id"`
-	Number           string     `json:"number"`
-	TermID           uuid.UUID  `json:"term_id"`
-	Term             string     `json:"term"`
-	StudentID        uuid.UUID  `json:"student_id"`
-	AdmissionNumber  string     `json:"admission_number"`
-	Name             string     `json:"name"`
-	ClassID          uuid.UUID  `json:"class_id"`
-	Class            string     `json:"class"`
-	InvoiceID        uuid.UUID  `json:"invoice_id"`
-	InvoiceNumber    string     `json:"invoice_number"`
-	PartID           uuid.UUID  `json:"part_id"`
-	AmountKobo       int64      `json:"amount_kobo"`
-	BalanceAfterKobo int64      `json:"balance_after_kobo"`
-	How              string     `json:"how"`
-	PaidAt           time.Time  `json:"paid_at"`
-	IssuedBy         string     `json:"issued_by"`
-	IssuedAt         time.Time  `json:"issued_at"`
-	Voided           bool       `json:"voided"`
-	VoidedAt         *time.Time `json:"voided_at,omitempty"`
-	VoidReason       string     `json:"void_reason,omitempty"`
+	ID               uuid.UUID `json:"id"`
+	Number           string    `json:"number"`
+	TermID           uuid.UUID `json:"term_id"`
+	Term             string    `json:"term"`
+	StudentID        uuid.UUID `json:"student_id"`
+	AdmissionNumber  string    `json:"admission_number"`
+	Name             string    `json:"name"`
+	ClassID          uuid.UUID `json:"class_id"`
+	Class            string    `json:"class"`
+	InvoiceID        uuid.UUID `json:"invoice_id"`
+	InvoiceNumber    string    `json:"invoice_number"`
+	PartID           uuid.UUID `json:"part_id"`
+	AmountKobo       int64     `json:"amount_kobo"`
+	BalanceAfterKobo int64     `json:"balance_after_kobo"`
+	// FeeKobo is the bank's fee on a transfer, when the rail reported one:
+	// the payer sent AmountKobo and the school received that less the fee
+	// (decision 0052: the partner's fee is passed to the payer).
+	FeeKobo    int64      `json:"fee_kobo,omitempty"`
+	How        string     `json:"how"`
+	PaidAt     time.Time  `json:"paid_at"`
+	IssuedBy   string     `json:"issued_by"`
+	IssuedAt   time.Time  `json:"issued_at"`
+	Voided     bool       `json:"voided"`
+	VoidedAt   *time.Time `json:"voided_at,omitempty"`
+	VoidReason string     `json:"void_reason,omitempty"`
 	// Link is the public verification page (empty when the server has
 	// no public host).
 	Link string `json:"link,omitempty"`
@@ -173,7 +177,8 @@ func voidReceipts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, parts []uuid
 
 const receiptCols = `r.id, r.number, r.term_id, t.name || ' ' || ss.label, r.student_id, s.admission_number, s.details,
 	r.class_id, c.name || CASE WHEN c.arm = '' THEN '' ELSE ' ' || c.arm END, r.invoice_id, i.number, r.part_id, r.amount_kobo, r.balance_after_kobo, r.how, r.paid_at,
-	r.issued_by, r.issued_at, r.voided_at, COALESCE(r.void_reason, ''), r.token
+	r.issued_by, r.issued_at, r.voided_at, COALESCE(r.void_reason, ''), r.token,
+	COALESCE((SELECT e.fee_kobo FROM customer_invoice_payments cp JOIN money_entries e ON e.id = cp.entry_id WHERE cp.id = r.part_id), 0)
 	FROM school_receipts r JOIN school_terms t ON t.id = r.term_id JOIN school_sessions ss ON ss.id = t.session_id JOIN school_students s ON s.id = r.student_id
 	JOIN school_classes c ON c.id = r.class_id JOIN customer_invoices i ON i.id = r.invoice_id`
 
@@ -186,7 +191,7 @@ func (s *Schools) scanReceipts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	list, err := pgx.CollectRows(rows, func(cr pgx.CollectableRow) (row, error) {
 		var x row
 		err := cr.Scan(&x.r.ID, &x.r.Number, &x.r.TermID, &x.r.Term, &x.r.StudentID, &x.r.AdmissionNumber, &x.student, &x.r.ClassID, &x.r.Class, &x.r.InvoiceID, &x.r.InvoiceNumber,
-			&x.r.PartID, &x.r.AmountKobo, &x.r.BalanceAfterKobo, &x.r.How, &x.r.PaidAt, &x.r.IssuedBy, &x.r.IssuedAt, &x.r.VoidedAt, &x.r.VoidReason, &x.token)
+			&x.r.PartID, &x.r.AmountKobo, &x.r.BalanceAfterKobo, &x.r.How, &x.r.PaidAt, &x.r.IssuedBy, &x.r.IssuedAt, &x.r.VoidedAt, &x.r.VoidReason, &x.token, &x.r.FeeKobo)
 		return x, err
 	})
 	if err != nil {
@@ -323,6 +328,10 @@ func ReceiptVars(r Receipt) map[string]string {
 // link, and the family page's link, where the receipt and its PDF are.
 func ReceiptText(r Receipt, familyLink string) string {
 	s := fmt.Sprintf("Receipt %s: we received %s towards %s. %s", r.Number, invoicing.Naira(r.AmountKobo), ReceiptWhat(r), ReceiptRest(r))
+	if r.FeeKobo > 0 && r.FeeKobo < r.AmountKobo {
+		s += fmt.Sprintf(" You sent %s; %s reached the school after the bank's fee of %s.", invoicing.Naira(r.AmountKobo),
+			invoicing.Naira(r.AmountKobo-r.FeeKobo), invoicing.Naira(r.FeeKobo))
+	}
 	if r.Link != "" {
 		s += " Check the receipt: " + r.Link
 	}

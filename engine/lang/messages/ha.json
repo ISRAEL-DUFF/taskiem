@@ -232,6 +232,10 @@
       "text": "Invoice {number}: {link}",
       "reviewed": false
     },
+    "invoice.chat.own_account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "reviewed": false
+    },
     "invoice.chat.paid": {
       "text": "An biya invoice {number} gaba ɗaya. Na gode!",
       "reviewed": false
@@ -424,10 +428,6 @@
       "text": "yana jira",
       "reviewed": false
     },
-    "sms.reconcile": {
-      "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
-      "reviewed": false
-    },
     "slack.link.button": {
       "text": "Tabbatar",
       "reviewed": false
@@ -446,6 +446,10 @@
     },
     "slack.not_linked": {
       "text": "Wannan asusun Slack ba a haɗa shi da ku a Taskiem ba, don haka ba zai iya yanke wannan ba. Ku haɗa shi daga shafin bayanan ku na Taskiem.",
+      "reviewed": false
+    },
+    "sms.reconcile": {
+      "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
       "reviewed": false
     },
     "tg.button_expired": {
@@ -1354,6 +1358,26 @@
     },
     "wa.publish.waiting": {
       "text": "*{name}* yana jiran wani mutum ya buga shi: za su yanke shawara a Approvals cikin Taskiem.",
+      "reviewed": false
+    },
+    "wa.receive.account": {
+      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "reviewed": false
+    },
+    "wa.receive.balance": {
+      "text": "Your Taskiem wallet holds {amount} now.",
+      "reviewed": false
+    },
+    "wa.receive.balance_unknown": {
+      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "reviewed": false
+    },
+    "wa.receive.no_number": {
+      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "reviewed": false
+    },
+    "wa.receive.off": {
+      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
       "reviewed": false
     },
     "wa.run.bad_inputs": {

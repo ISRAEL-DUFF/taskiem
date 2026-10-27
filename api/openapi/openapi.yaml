@@ -20538,6 +20538,9 @@ components:
           type: integer
         balance_after_kobo:
           type: integer
+        fee_kobo:
+          type: integer
+          description: The bank's fee on the transfer, when the payments service reported one; the school received amount_kobo less it.
         how:
           type: string
           enum: [exact, suggested, suggested_auto, manual]
@@ -25010,6 +25013,16 @@ components:
         whatsapp_overage:
           type: integer
         ai_tokens:
+          type: integer
+        rail_credits:
+          type: integer
+          description: Payments received that day on the business's Taskiem wallet (decision 0052).
+        rail_credit_kobo:
+          type: integer
+        rail_payouts:
+          type: integer
+          description: Withdrawals and payouts that day from the business's Taskiem wallet.
+        rail_payout_kobo:
           type: integer
         limits:
           type: object

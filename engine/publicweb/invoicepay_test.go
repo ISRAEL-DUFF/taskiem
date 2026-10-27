@@ -16,6 +16,14 @@ type fakePay struct {
 	opts []PayOption
 	reqs []string
 	ok   bool
+	own  string // the customer's own account number
+}
+
+func (f *fakePay) OwnAccount(context.Context, []byte) (string, string, error) {
+	if f.own == "" {
+		return "", "", nil
+	}
+	return f.own, "Wema Bank", nil
 }
 
 func (f *fakePay) Options(context.Context, []byte) ([]PayOption, error) { return f.opts, nil }
@@ -35,30 +43,33 @@ func TestInvoicePayOptions(t *testing.T) {
 		wants   []string
 		nots    []string
 		refresh string
+		own     string
 	}{
 		{"none yet", []PayOption{{Kind: "transfer"}, {Kind: "link"}},
 			[]string{"Pay this invoice", `value="transfer">Pay by bank transfer`, `value="link">Pay by card`, `action="/i/` + invoiceToken + `/pay"`},
-			[]string{"inv-amount", "http-equiv"}, ""},
+			[]string{"inv-amount", "http-equiv"}, "", ""},
 		{"waiting", []PayOption{{Kind: "transfer", Waiting: true}, {Kind: "link"}},
-			[]string{"Getting your account number…"}, nil, `content="2"`},
+			[]string{"Getting your account number…"}, nil, `content="2"`, ""},
 		{"open", []PayOption{{Kind: "transfer", Status: "open", AmountKobo: 750000, AccountNumber: "9900112233", BankName: "Wema Bank", AccountName: "Paystack-Ada",
 			ExpiresAt: &until, OnLate: "returned", OnWrongAmount: "returned", LastHour: 1, Issued: 1}, {Kind: "link"}},
 			[]string{"Transfer ₦7,500 to", "9900112233", "Wema Bank · Paystack-Ada", "Valid until 13:25 (Lagos time)", "25 minutes left",
-				"a different amount is sent back", "made after this time is sent back", "Get a new account number"}, nil, `content="30"`},
+				"a different amount is sent back", "made after this time is sent back", "Get a new account number"}, nil, `content="30"`, ""},
 		{"expired", []PayOption{{Kind: "transfer", Status: "open", AccountNumber: "9900112233", ExpiresAt: &now, LastHour: 1, Issued: 1}},
-			[]string{"has expired", "Get a new account number"}, []string{"9900112233"}, ""},
+			[]string{"has expired", "Get a new account number"}, []string{"9900112233"}, "", ""},
 		{"limits", []PayOption{{Kind: "transfer", Status: "failed", LastHour: 5, Issued: 5}},
-			[]string{"Too many account numbers", "contact Ada Kitchen"}, []string{`value="transfer"`}, ""},
+			[]string{"Too many account numbers", "contact Ada Kitchen"}, []string{`value="transfer"`}, "", ""},
 		{"card link", []PayOption{{Kind: "transfer"}, {Kind: "link", Status: "open", PaymentURL: "https://checkout.example/abc"}},
-			[]string{`href="https://checkout.example/abc"`, "Continue to card payment"}, nil, ""},
+			[]string{`href="https://checkout.example/abc"`, "Continue to card payment"}, nil, "", ""},
 		{"part payments", []PayOption{{Kind: "transfer", PartPayments: true}},
-			[]string{`id="inv-amount"`, "Leave empty to pay all of ₦7,500, or pay at least ₦1,000."}, nil, ""},
+			[]string{`id="inv-amount"`, "Leave empty to pay all of ₦7,500, or pay at least ₦1,000."}, nil, "", ""},
+		{"own account", []PayOption{{Kind: "transfer"}, {Kind: "link"}},
+			[]string{"Transfer ₦7,500 to your own account number", "8800000001", "counted to your invoices", `value="transfer">Get a one-time account number instead`}, nil, "", "8800000001"},
 	}
 	for _, theme := range brand.Themes {
 		for _, c := range cases {
 			s := invoiceServer(fakeInvoice(p), nil)
 			withBrand(s, brand.Brand{Theme: theme})
-			s.InvoicePay = &fakePay{opts: c.opts}
+			s.InvoicePay = &fakePay{opts: c.opts, own: c.own}
 			s.now = func() time.Time { return now }
 			res := get(s.Handler(), "GET", formHost, "/i/"+invoiceToken)
 			body := res.Body.String()
