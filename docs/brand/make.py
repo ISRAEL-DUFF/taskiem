@@ -56,19 +56,20 @@ def svg(body):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Taskiem">{body}</svg>\n'
 
 
-# --- B, relay (the default): a "t" with a round dot at its top right, as
-# signal's square is, in pine and lime; the i's dot is a round one too.
+# --- B, relay (the default): a "t" whose foot hands on to a dot, in pine and
+# lime; the wordmark's i carries the same round dot.
 def relay():
     pine, lime = "#0d3b2e", "#c8f169"
     t = ('<path d="M27 40H61" stroke="{t}" stroke-width="11" stroke-linecap="round"/>'
          '<path d="M42 22V58Q42 74 58 74H64" stroke="{t}" stroke-width="11" stroke-linecap="round" fill="none"/>'
-         '<circle cx="74" cy="24" r="7.5" fill="{d}"/>')
-    small = ('<path d="M24 40H64M42 18V60Q42 78 60 78H70" stroke="{t}" stroke-width="16" stroke-linecap="round" fill="none"/>'
-             '<circle cx="78" cy="20" r="10" fill="{d}"/>')
-    # For a round crop: the dot stays inside the middle 80% a phone keeps.
+         '<circle cx="78" cy="74" r="7" fill="{d}"/>')
+    # At 16 to 24 px the strokes are thicker and the foot shorter, so the dot
+    # keeps a gap from it.
+    small = ('<path d="M24 40H64M42 18V58Q42 76 60 76H62" stroke="{t}" stroke-width="16" stroke-linecap="round" fill="none"/>'
+             '<circle cx="81" cy="76" r="9" fill="{d}"/>')
     round_ = ('<path d="M30 41H60" stroke="{t}" stroke-width="10" stroke-linecap="round"/>'
               '<path d="M43 25V57Q43 71 57 71H62" stroke="{t}" stroke-width="10" stroke-linecap="round" fill="none"/>'
-              '<circle cx="71" cy="27" r="6.5" fill="{d}"/>')
+              '<circle cx="74" cy="71" r="6" fill="{d}"/>')
     return {
         "wordmark.svg": wordmark("taskıem", -0.035, pine, round_dot=True),
         "wordmark-reversed.svg": wordmark("taskıem", -0.035, WHITE, lime, round_dot=True),

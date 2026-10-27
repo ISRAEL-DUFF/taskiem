@@ -1,6 +1,6 @@
 # Taskiem's brand
 
-Taskiem's look ([decision 0043](../decisions/0043-taskiem-brand.md)): a "t" with a round dot at its top right, in pine and lime, and "taskiem" whose i carries the same round dot.
+Taskiem's look ([decision 0043](../decisions/0043-taskiem-brand.md)): a "t" whose foot hands the work on to a dot, in pine and lime, and "taskiem" whose i carries the same round dot.
 
 Building or changing a screen in the web app? Follow [Building screens in Taskiem's look](screens.md): the colours, type, layout, components, words and checks every screen uses.
 
@@ -10,7 +10,7 @@ Three directions were drawn; relay is Taskiem's brand, and the other two are kep
 
 | Folder | Direction |
 | --- | --- |
-| `relay/` | **The brand.** A lime "t" on pine with a white dot at its top right; "taskiem" in pine, the i's dot a round one (lime on pine) |
+| `relay/` | **The brand.** A lime "t" on pine whose foot hands the work on to a white dot; "taskiem" in pine, the i's dot a round one (lime on pine) |
 | `seal/` | A vermilion round stamp with a tilted T; "Taskiem" in ink blue |
 | `signal/` | A white "t" and a saffron square on ink; "taskiem" with a saffron square for the i's dot |
 
