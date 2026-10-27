@@ -240,7 +240,7 @@ Then:
 - binding codes, approval requests, step-up links and forms, run outcomes and alerts to the organisation's people go from its number, without the bracketed name; the 24-hour window is per business number (`whatsapp_own_contacts`);
 - anything else, and other organisations, use the shared number.
 
-**Embedded signup** needs a Business Solution Provider decision ([needs people](needs-people.md#phase-3), W3). `POST /channels/whatsapp/embedded-signup` is the hook and answers 501; when built it must bind the signup session to the organisation and admin that started it (single use), exchange the code for a business token server-side, read the phone number and WABA ids from the session, store them as above with `source: embedded_signup` and `own_app: false`, register the number and upload the Flows key.
+**Embedded signup** comes with Meta Tech Provider approval ([needs people](needs-people.md), NT4): the founder decided on 27 October 2026 (W3) to apply as a Tech Provider, so each tenant pays Meta for its own number's messages, rather than to become or partner with a Business Solution Provider. `POST /channels/whatsapp/embedded-signup` is the hook and answers 501; when built it must bind the signup session to the organisation and admin that started it (single use), exchange the code for a business token server-side, read the phone number and WABA ids from the session, store them as above with `source: embedded_signup` and `own_app: false`, register the number and upload the Flows key.
 
 ## Template costs
 
