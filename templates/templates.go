@@ -73,11 +73,14 @@ type Param struct {
 	Capability []string `json:"capability,omitempty"`
 	// Picker is how a person chooses the value instead of typing an id
 	// (no-technical-steps N8): sheet, sheet_tab, table, column, role,
-	// whatsapp_template or whatsapp_language. From names the parameter it
-	// depends on: a tab's spreadsheet, a column's table, a language's
-	// template.
-	Picker string `json:"picker,omitempty"`
-	From   string `json:"from,omitempty"`
+	// whatsapp_template, whatsapp_language, slack_channel, or choice: one
+	// of a connector's pickers, named by Choices ("mailchimp:audiences").
+	// From names the parameter it depends on: a tab's spreadsheet, a
+	// column's table, a language's template, a channel's Slack connection,
+	// a choice's connection.
+	Picker  string `json:"picker,omitempty"`
+	From    string `json:"from,omitempty"`
+	Choices string `json:"choices,omitempty"`
 
 	re *regexp.Regexp
 }
@@ -203,7 +206,11 @@ var paramName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
 // pickers are the choosers a parameter may name, with whether it needs
 // From.
-var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false, "column": true, "role": false, "whatsapp_template": false, "whatsapp_language": true}
+var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false, "column": true, "role": false, "whatsapp_template": false, "whatsapp_language": true,
+	"slack_channel": true, "choice": true}
+
+// choicesRe is a choice picker's connector and picker ("mailchimp:audiences").
+var choicesRe = regexp.MustCompile(`^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$`)
 
 var paramTypes = map[string]bool{"string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
 
@@ -309,6 +316,9 @@ func (t *Template) check() error {
 		}
 		if needsFrom, ok := pickers[p.Picker]; p.Picker != "" && (!ok || needsFrom != (p.From != "")) {
 			return fmt.Errorf("parameter %q: picker %q (from %q) is not one Taskiem has", p.Name, p.Picker, p.From)
+		}
+		if (p.Picker == "choice") != (p.Choices != "") || p.Choices != "" && !choicesRe.MatchString(p.Choices) {
+			return fmt.Errorf("parameter %q: a choice picker names its connector's picker in choices (mailchimp:audiences), and only it does", p.Name)
 		}
 		if p.Pattern != "" {
 			re, err := regexp.Compile(p.Pattern)

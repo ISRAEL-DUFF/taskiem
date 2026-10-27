@@ -376,6 +376,8 @@ export interface ConnectorInfo {
   };
   /** For a connector with `auth.oauth2`: whether it can be connected by OAuth on this platform. */
   oauth_linkable?: boolean;
+  /** For a connector whose modes are hosts: the modes it can be connected in by OAuth here. */
+  oauth_modes?: string[];
   actions: Record<string, { title: string; class: string; input?: JSONSchema; output?: JSONSchema }>;
   triggers: string[];
 }

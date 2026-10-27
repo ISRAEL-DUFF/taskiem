@@ -350,7 +350,8 @@ func TestCallableTemplatesFitTwoDeepOnEveryRail(t *testing.T) {
 			rails := 0
 			for _, c := range reg.List() {
 				m := c.Manifest
-				if m.KindOf() != "rail" {
+				// Rails, and products that declare capabilities (the books').
+				if len(m.Capabilities) == 0 {
 					continue
 				}
 				out, _, err := expansion.Expand(doc, expansion.ResolverFor([]expansion.Connection{{Name: "main", Connector: m.ID}}, reg))

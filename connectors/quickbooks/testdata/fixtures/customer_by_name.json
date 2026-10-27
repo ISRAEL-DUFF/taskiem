@@ -1,0 +1,40 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM Customer WHERE DisplayName = 'Adaeze Okafor'"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "Customer": [
+     {
+      "Id": "58",
+      "DisplayName": "Adaeze Okafor",
+      "PrimaryEmailAddr": {
+       "Address": "ada@example.com"
+      },
+      "PrimaryPhone": {
+       "FreeFormNumber": "+2348030000000"
+      },
+      "Balance": 15000.5,
+      "Active": true,
+      "SyncToken": "0",
+      "domain": "QBO",
+      "sparse": false
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 1
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

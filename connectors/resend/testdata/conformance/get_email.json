@@ -1,0 +1,18 @@
+{
+ "action": "get_email",
+ "input": {
+  "email_id": "49a3999c-0ce1-4ea6-ab68-afcd6dc2e794"
+ },
+ "credentials": {
+  "api_key": "re_test_123"
+ },
+ "exchanges": [
+  "email"
+ ],
+ "expect": {
+  "output": {
+   "email_id": "49a3999c-0ce1-4ea6-ab68-afcd6dc2e794",
+   "last_event": "delivered"
+  }
+ }
+}

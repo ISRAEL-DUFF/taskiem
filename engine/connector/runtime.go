@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/israel-duff/taskiem/engine/effects"
 )
 
 // Request is what an action handler receives (spec 6.3).
@@ -28,6 +30,36 @@ type Request struct {
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Rotate replaces credentials a provider rotates (QuickBooks issues a
+	// new refresh token on every refresh and revokes the chain when an old
+	// one is used again): see RotateCredentials. Nil where the request's
+	// credentials are not a stored connection's.
+	Rotate func(ctx context.Context, fn RotateFunc) (map[string]string, error)
+}
+
+// RotateFunc refreshes credentials. It is given the connection's stored
+// credentials as they are now, read under a lock no other worker can hold
+// at the same time, and returns them as they should be stored: the same
+// map when another worker already refreshed them (its access token is
+// still good), or the fields the provider handed back merged in. An error
+// stores nothing; wrap ErrCredentialsRejected when the provider refused
+// the refresh token, so the connection is marked expired.
+type RotateFunc func(current map[string]string) (map[string]string, error)
+
+// ErrNoRotate is a refresh asked for where the credentials cannot be
+// stored back: refreshing anyway would spend a refresh token for good.
+var ErrNoRotate = errors.New("these credentials cannot be refreshed and stored here")
+
+// RotateCredentials refreshes the request's connection's credentials once
+// across every worker: fn runs with the stored credentials under the
+// connection's lock, and what it returns is stored before the lock is let
+// go, so the next worker sees the new refresh token, never the spent one.
+// It returns the credentials to use, which the caller keeps for the call.
+func (r Request) RotateCredentials(ctx context.Context, fn RotateFunc) (map[string]string, error) {
+	if r.Rotate == nil {
+		return nil, fmt.Errorf("%w: %w", ErrNoRotate, effects.ErrFatal)
+	}
+	return r.Rotate(ctx, fn)
 }
 
 // Response is a handler's result.
@@ -92,7 +124,34 @@ type Connector struct {
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
 	CheckCredentials func(creds map[string]string) error
+	// Link completes a connection made by OAuth before it is saved, for
+	// providers whose grant is not yet the account (Meta: the user's token
+	// becomes the one Page's own, and the Page is subscribed to Taskiem's
+	// app). It fills the manifest's auth.oauth2.linked_fields (rule 21);
+	// an error wrapping ErrLinkRefused is shown to the person as it is.
+	Link func(ctx context.Context, c LinkCall) (map[string]string, error)
+	// CheckInput, when set, checks a workflow step's input for an action
+	// when the workflow is published (engine/wdcheck): what the manifest's
+	// schema cannot say, such as a value that must be chosen from a set
+	// the connector knows. The input is as written, expressions ("=...")
+	// unevaluated; each message names a problem.
+	CheckInput func(action string, input map[string]any) []string
 }
+
+// LinkCall is what Link gets: the fields made so far, the token the
+// provider granted, Taskiem's client, and an egress-guarded client for
+// the connector's hosts.
+type LinkCall struct {
+	Credentials  map[string]string
+	Token        string
+	ClientID     string
+	ClientSecret string
+	HTTP         *http.Client
+}
+
+// ErrLinkRefused is a grant that makes no connection, in the person's
+// words ("choose exactly one Page").
+var ErrLinkRefused = errors.New("link refused")
 
 // WebhookVerifier checks one delivery; secret is the connection credential
 // named by the trigger's secret_field. A non-nil error refuses it.
@@ -239,6 +298,9 @@ func (c *Connector) Check() error {
 		if _, ok := c.Manifest.Triggers[name]; !ok {
 			return fmt.Errorf("connector %s: enricher %q is not a trigger in the manifest", c.Manifest.ID, name)
 		}
+	}
+	if o := c.Manifest.Auth.OAuth2; o != nil && (len(o.LinkedFields) > 0) != (c.Link != nil) {
+		return fmt.Errorf("connector %s: auth.oauth2.linked_fields and a Link handler go together", c.Manifest.ID)
 	}
 	return nil
 }

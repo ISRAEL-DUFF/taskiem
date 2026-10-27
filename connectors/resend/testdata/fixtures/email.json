@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794",
+  "headers": {
+   "Authorization": "Bearer re_test_123"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "object": "email",
+   "id": "49a3999c-0ce1-4ea6-ab68-afcd6dc2e794",
+   "to": [
+    "ada@example.com"
+   ],
+   "from": "Ada Cakes <orders@adacakes.ng>",
+   "created_at": "2026-10-26 12:00:00.000000+00",
+   "subject": "Receipt for invoice INV-0042",
+   "html": "<p>Thank you</p>",
+   "text": null,
+   "bcc": [],
+   "cc": [],
+   "reply_to": [],
+   "last_event": "delivered",
+   "scheduled_at": null
+  }
+ }
+}

@@ -6,6 +6,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/connectors/anchor"
 	"github.com/israel-duff/taskiem/connectors/breet"
+	"github.com/israel-duff/taskiem/connectors/brevo"
 	"github.com/israel-duff/taskiem/connectors/dojah"
 	"github.com/israel-duff/taskiem/connectors/email"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
@@ -16,6 +17,8 @@ import (
 	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
+	"github.com/israel-duff/taskiem/connectors/mailchimp"
+	"github.com/israel-duff/taskiem/connectors/meta"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
 	"github.com/israel-duff/taskiem/connectors/moniepointpos"
 	"github.com/israel-duff/taskiem/connectors/mono"
@@ -29,7 +32,9 @@ import (
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
+	"github.com/israel-duff/taskiem/connectors/quickbooks"
 	"github.com/israel-duff/taskiem/connectors/remita"
+	"github.com/israel-duff/taskiem/connectors/resend"
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
@@ -40,6 +45,9 @@ import (
 	"github.com/israel-duff/taskiem/connectors/whatsapp"
 	"github.com/israel-duff/taskiem/connectors/xenibase"
 	"github.com/israel-duff/taskiem/connectors/youverify"
+	"github.com/israel-duff/taskiem/connectors/zohobooks"
+	"github.com/israel-duff/taskiem/connectors/zohocrm"
+	"github.com/israel-duff/taskiem/connectors/zohomail"
 	"github.com/israel-duff/taskiem/engine/connector"
 )
 
@@ -64,6 +72,28 @@ type Options struct {
 	// provider's sandbox by default). IswalletURL and PayrollaURL are the
 	// live modes' (each provider's production by default).
 	IswalletTestURL, PayrollaTestURL string
+	// QuickBooksURL and QuickBooksTestURL replace QuickBooks' production
+	// and sandbox hosts, QuickBooksTokenURL Intuit's token endpoint
+	// (TASKIEM_QUICKBOOKS_URL, _TEST_URL, _TOKEN_URL; tests, a proxy).
+	QuickBooksURL, QuickBooksTestURL, QuickBooksTokenURL string
+	// ZohoBooksURL and ZohoAccountsURL replace Zoho Books' API and Zoho's
+	// accounts server for every connection, instead of each account's own
+	// data centre (TASKIEM_ZOHO_BOOKS_URL, TASKIEM_ZOHO_ACCOUNTS_URL; tests).
+	ZohoBooksURL, ZohoAccountsURL string
+	// ZohoMailURL and ZohoCRMURL replace Zoho Mail's server and CRM's API
+	// for every connection (TASKIEM_ZOHO_MAIL_URL, TASKIEM_ZOHO_CRM_URL;
+	// tests).
+	ZohoMailURL, ZohoCRMURL string
+	// ResendURL and BrevoURL replace Resend's and Brevo's APIs
+	// (TASKIEM_RESEND_URL, TASKIEM_BREVO_URL; tests).
+	ResendURL, BrevoURL string
+	// MailchimpURL and MailchimpMetadataURL replace every account's
+	// Mailchimp server and Mailchimp's OAuth metadata
+	// (TASKIEM_MAILCHIMP_URL, TASKIEM_MAILCHIMP_METADATA_URL; tests).
+	MailchimpURL, MailchimpMetadataURL string
+	// MetaURL replaces the Graph API for Messenger and Instagram
+	// (TASKIEM_META_GRAPH_URL; tests).
+	MetaURL string
 	// XenibaseURL is the platform's Xenibase, for connections that name no
 	// server of their own (TASKIEM_XENIBASE_URL; none by default).
 	XenibaseURL string
@@ -118,6 +148,15 @@ func Register(r *connector.Registry, o Options) error {
 		mpesa.New(mpesa.Options{BaseURL: o.MpesaURL}),
 		mtnmomo.New(mtnmomo.Options{BaseURL: o.MTNMoMoURL}),
 		payrolla.New(payrolla.Options{BaseURL: o.PayrollaURL, LiveURL: o.PayrollaURL, TestURL: o.PayrollaTestURL}),
+		quickbooks.New(quickbooks.Options{LiveURL: o.QuickBooksURL, TestURL: o.QuickBooksTestURL, TokenURL: o.QuickBooksTokenURL}),
+		zohobooks.New(zohobooks.Options{BaseURL: o.ZohoBooksURL, AccountsServer: o.ZohoAccountsURL}),
+		zohomail.New(zohomail.Options{BaseURL: o.ZohoMailURL, AccountsServer: o.ZohoAccountsURL}),
+		zohocrm.New(zohocrm.Options{BaseURL: o.ZohoCRMURL, AccountsServer: o.ZohoAccountsURL}),
+		meta.Messenger(meta.Options{BaseURL: o.MetaURL}),
+		resend.New(resend.Options{BaseURL: o.ResendURL}),
+		brevo.New(brevo.Options{BaseURL: o.BrevoURL}),
+		mailchimp.New(mailchimp.Options{BaseURL: o.MailchimpURL, MetadataURL: o.MailchimpMetadataURL}),
+		meta.Instagram(meta.Options{BaseURL: o.MetaURL}),
 		postgres.New(),
 		xenibase.New(xenibase.Options{BaseURL: o.XenibaseURL}),
 		mysql.New(),

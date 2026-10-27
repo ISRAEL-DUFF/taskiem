@@ -1,0 +1,23 @@
+{
+ "action": "upsert_record",
+ "input": {
+  "module": "Leads",
+  "record": {
+   "First_Name": "Adaeze"
+  }
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "upsert_400"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}

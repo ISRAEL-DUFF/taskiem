@@ -1,0 +1,66 @@
+{
+  "schema": "wd-test/v1",
+  "template": "slack-school-daily-close",
+  "params": {
+    "slack_connection": "main",
+    "channel": "C0BURSAR",
+    "send_time": "19:00"
+  },
+  "cases": [
+    {
+      "name": "a day that reconciles",
+      "trigger": {},
+      "mocks": {
+        "close": {
+          "output": {
+            "day": "2026-10-26",
+            "reconciles": true,
+            "text": "Collected ₦1,200,000."
+          }
+        },
+        "post": {
+          "output": {
+            "channel": "C0BURSAR",
+            "ts": "1.1"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "channel": "C0BURSAR",
+            "text": "Daily close 2026-10-26\nCollected ₦1,200,000."
+          }
+        }
+      }
+    },
+    {
+      "name": "a day that does not is flagged",
+      "trigger": {},
+      "mocks": {
+        "close": {
+          "output": {
+            "day": "2026-10-26",
+            "reconciles": false,
+            "text": "Unmatched ₦40,000."
+          }
+        },
+        "post": {
+          "output": {
+            "channel": "C0BURSAR",
+            "ts": "1.2"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "text": "Daily close 2026-10-26: DOES NOT RECONCILE\nUnmatched ₦40,000."
+          }
+        }
+      }
+    }
+  ]
+}

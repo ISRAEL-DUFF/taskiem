@@ -1,0 +1,23 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/Leads/5843104000000425001",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": [
+    {
+     "id": "5843104000000425001",
+     "Last_Name": "Okafor",
+     "First_Name": "Adaeze",
+     "Email": "ada@example.com",
+     "Lead_Status": "Contacted"
+    }
+   ]
+  }
+ }
+}

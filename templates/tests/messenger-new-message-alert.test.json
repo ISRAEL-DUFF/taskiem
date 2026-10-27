@@ -1,0 +1,45 @@
+{
+  "schema": "wd-test/v1",
+  "template": "messenger-new-message-alert",
+  "params": {},
+  "cases": [
+    {
+      "name": "the owner hears of a new conversation, without the message",
+      "trigger": {
+        "event": "message",
+        "item": {
+          "account": "104123456789012",
+          "sender_id": "6789012345678901",
+          "event": {
+            "sender": {
+              "id": "6789012345678901"
+            },
+            "recipient": {
+              "id": "104123456789012"
+            },
+            "timestamp": 1793012400000,
+            "message": {
+              "mid": "m_1",
+              "text": "Do you deliver to Lekki?"
+            }
+          }
+        }
+      },
+      "mocks": {
+        "tell": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell": {
+            "to": "owner"
+          }
+        }
+      }
+    }
+  ]
+}

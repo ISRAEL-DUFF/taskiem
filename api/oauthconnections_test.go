@@ -34,6 +34,8 @@ type oauthWorld struct {
 	// browser is the binding cookie the last start set: the browser that
 	// started linking carries it back to the callback.
 	browser *http.Cookie
+	// consent is the last consent URL start answered.
+	consent string
 }
 
 // newOAuthWorld is a world whose platform Xenibase is the fake, with
@@ -55,7 +57,18 @@ func newOAuthWorld(t *testing.T) *oauthWorld {
 // start begins linking and returns the consent URL's query.
 func (w *oauthWorld) start(t *testing.T, c *client, name string) url.Values {
 	t.Helper()
-	raw, _ := json.Marshal(map[string]any{"connector": "xenibase@1", "environment": "prod", "name": name})
+	q := w.startFor(t, c, map[string]any{"connector": "xenibase@1", "environment": "prod", "name": name})
+	if w.fake != nil && !strings.HasPrefix(w.consent, w.fake.URL+"/oauth/authorize?") {
+		t.Fatalf("consent URL %s is not the platform's Xenibase", w.consent)
+	}
+	return q
+}
+
+// startFor begins linking as body asks and returns the consent URL's
+// query.
+func (w *oauthWorld) startFor(t *testing.T, c *client, body map[string]any) url.Values {
+	t.Helper()
+	raw, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", w.base+"/v1/connections/oauth/start", bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.token)
@@ -84,9 +97,7 @@ func (w *oauthWorld) start(t *testing.T, c *client, name string) url.Values {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(u.String(), w.fake.URL+"/oauth/authorize?") {
-		t.Fatalf("consent URL %s is not the platform's Xenibase", u)
-	}
+	w.consent = u.String()
 	return u.Query()
 }
 

@@ -1,0 +1,89 @@
+{
+  "schema": "wd-test/v1",
+  "template": "brevo-opted-in-customers",
+  "params": {
+    "list_id": 3
+  },
+  "cases": [
+    {
+      "name": "a customer who agreed is put on the list, with their consent",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "table": "customers",
+          "record": {
+            "email": "ada@example.com",
+            "name": "Adaeze Okafor",
+            "phone": "+2348030000000",
+            "marketing_opt_in": true
+          }
+        }
+      },
+      "mocks": {
+        "add": {
+          "output": {
+            "contact_id": "21",
+            "created": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "add": {
+            "email": "ada@example.com",
+            "first_name": "Adaeze Okafor",
+            "phone": "+2348030000000",
+            "list_ids": [
+              3
+            ],
+            "consent": {
+              "opted_in": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer who did not agree is never added",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "table": "customers",
+          "record": {
+            "email": "ada@example.com",
+            "name": "Adaeze Okafor",
+            "phone": "+2348030000000",
+            "marketing_opt_in": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "add": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a row that does not say is never added",
+      "trigger": {
+        "event": "UPDATE",
+        "body": {
+          "type": "UPDATE",
+          "record": {
+            "email": "bola@example.com"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "add": "skipped"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/campaigns/nope",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "type": "https://mailchimp.com/developer/marketing/docs/errors/",
+   "title": "Resource Not Found",
+   "status": 404,
+   "detail": "The requested resource could not be found.",
+   "instance": "a1b2"
+  }
+ }
+}

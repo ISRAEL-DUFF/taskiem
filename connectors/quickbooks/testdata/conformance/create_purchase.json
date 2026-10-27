@@ -1,0 +1,35 @@
+{
+ "action": "create_purchase",
+ "input": {
+  "doc_number": "RCPT-7781",
+  "paid_from_account_id": "35",
+  "txn_date": "2026-10-24",
+  "vat_kobo": 150000,
+  "private_note": "Diesel for the generator",
+  "lines": [
+   {
+    "account_id": "64",
+    "amount_kobo": 2150000
+   }
+  ]
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "purchase_by_number_none",
+  "purchase_create"
+ ],
+ "expect": {
+  "output": {
+   "purchase_id": "220",
+   "created": true,
+   "total_kobo": 2150000
+  }
+ }
+}

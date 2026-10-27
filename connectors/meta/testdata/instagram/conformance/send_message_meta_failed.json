@@ -1,0 +1,30 @@
+{
+ "action": "send_message",
+ "input": {
+  "recipient_id": "5432109876543210",
+  "text": "Here is your link: https://pay.example/l/abc",
+  "quick_replies": [
+   {
+    "title": "Paid",
+    "payload": "paid"
+   },
+   {
+    "title": "Later"
+   }
+  ]
+ },
+ "credentials": {
+  "instagram_id": "17841400000000001",
+  "instagram_username": "ada.cakes",
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "conversation_open",
+  "send_500"
+ ],
+ "expect": {
+  "error": "unknown_outcome"
+ }
+}

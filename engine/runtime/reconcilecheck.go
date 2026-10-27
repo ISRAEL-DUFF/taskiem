@@ -129,7 +129,7 @@ func (w *Worker) CheckReconcile(ctx context.Context, ref RunRef, step string) (*
 	rctx, cancel := context.WithTimeout(ctx, w.CallTimeout)
 	defer cancel()
 	resp, err := conn.Actions[spec.Reconcile].Execute(rctx, connector.Request{Input: map[string]any{field: key}, Credentials: creds, IdempotencyKey: key,
-		Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc})
+		Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		rep.Found, rep.Output = true, MaskPersonal(resp.Output)

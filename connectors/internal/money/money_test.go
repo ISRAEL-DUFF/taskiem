@@ -75,3 +75,14 @@ func TestScale(t *testing.T) {
 		t.Error("unknown currency scaled")
 	}
 }
+
+func TestRound(t *testing.T) {
+	for in, want := range map[string]int64{"53750": 5375000, "53750.5": 5375050, "0.005": 1, "0.004": 0, "-12.345": -1235, "26.875": 2688, "x": 0} {
+		if got := Round(json.Number(in), 2); got != want {
+			t.Errorf("Round(%q) = %d, want %d", in, got, want)
+		}
+	}
+	if Round(nil, 2) != 0 || Round(12.5, 2) != 1250 {
+		t.Error("Round of nil or a float")
+	}
+}

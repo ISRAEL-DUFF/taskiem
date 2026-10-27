@@ -1,0 +1,13 @@
+{
+ "action": "get_account",
+ "input": {},
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "account_401"
+ ],
+ "expect": {
+  "error": "fatal"
+ }
+}

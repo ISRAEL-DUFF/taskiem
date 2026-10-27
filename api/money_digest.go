@@ -91,19 +91,13 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	}
 	day := time.Date(period.Year(), period.Month(), period.Day(), 12, 0, 0, 0, moneyreport.Lagos).Format("2 Jan 2006")
 	text := ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, link)
-	summary := whatsapp.TplDailySummary
-	m := whatsapp.Message{Text: text, Template: &summary, Vars: map[string]string{"tenant": business, "day": day, "summary": strings.TrimPrefix(full, "Yesterday: ")}, Tenant: it.Tenant}
-	_, err = ch.Send(ctx, addr, m)
-	if whatsapp.TemplateUnusable(err) {
-		// The summary template is not approved yet: the alert template
-		// carries the first line, as before it existed.
-		alert := whatsapp.TplAlert
-		m = whatsapp.Message{Text: text, Template: &alert, Vars: map[string]string{"tenant": business, "title": head, "link": tplLink}, Tenant: it.Tenant}
-		_, err = ch.Send(ctx, addr, m)
-	}
+	// With the summary template not approved yet, the alert template
+	// carries the first line, as before it existed.
+	err = sendOwnTemplate(ctx, ch, addr, text, it.Tenant, whatsapp.TplDailySummary, map[string]string{"tenant": business, "day": day, "summary": strings.TrimPrefix(full, "Yesterday: ")},
+		map[string]string{"tenant": business, "title": head, "link": tplLink})
 	switch {
-	case err == nil:
-		return nil
+	case err == nil, errors.Is(err, whatsapp.ErrFellBack):
+		return err
 	case errors.Is(err, telegram.ErrBlocked):
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}

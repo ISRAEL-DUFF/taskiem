@@ -382,9 +382,10 @@ type outcome struct {
 	appliedHash  string
 	remoteStatus string // "" leaves it unknown
 	reason       string
-	secret       string // a new signing secret to keep
-	deleted      bool   // the provider's subscription is gone and so is the row
-	audit        string // the audit action, if the provider changed
+	secret       string    // a new signing secret to keep
+	deleted      bool      // the provider's subscription is gone and so is the row
+	audit        string    // the audit action, if the provider changed
+	expiresAt    time.Time // when the provider lets it lapse; zero: never
 }
 
 // url is the ingest URL of a subscription.
@@ -439,7 +440,10 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		timeout = 20 * time.Second
 	}
 	call := connector.RemoteCall{Credentials: creds,
-		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout)}
+		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout),
+		Rotate: func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+			return r.Vault.RotateCredentials(use, tenant, x.env, conn.Manifest.ID, x.connection, fn)
+		}}
 	name := Name(x.id)
 
 	if x.desired == "absent" {
@@ -473,7 +477,7 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 			out.remoteStatus, out.reason, out.appliedHash = connector.RemoteMissing, "the provider no longer has this subscription; republish to create it again", h
 			return out, nil
 		}
-		out.remoteStatus, out.reason, out.appliedHash = st.Status, st.Reason, h
+		out.remoteStatus, out.reason, out.appliedHash, out.expiresAt = st.Status, st.Reason, h, st.ExpiresAt
 		return out, err
 	}
 	var st connector.RemoteState
@@ -515,7 +519,7 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		}
 		out.secret = st.Secret
 	}
-	out.remoteID, out.appliedHash, out.remoteStatus, out.reason = &st.ID, h, st.Status, st.Reason
+	out.remoteID, out.appliedHash, out.remoteStatus, out.reason, out.expiresAt = &st.ID, h, st.Status, st.Reason, st.ExpiresAt
 	return out, nil
 }
 
@@ -585,12 +589,22 @@ func (r *Reconciler) record(ctx context.Context, tenant uuid.UUID, x row, out ou
 		if out.reason != "" {
 			reason = &out.reason
 		}
-		// A row redeclared while this pass ran keeps its new intent, due at once.
+		// A row redeclared while this pass ran keeps its new intent, due at
+		// once. One that expires is due again before it lapses (a day
+		// before, or halfway for one lasting under two days): applying it
+		// then renews it.
+		var expires *time.Time
+		if !out.expiresAt.IsZero() {
+			expires = &out.expiresAt
+		}
+		// A check that reads no expiry keeps the one last applied.
 		_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET remote_id = COALESCE($2, remote_id), state = 'active', remote_status = $3, status_reason = $4,
-			last_error = NULL, attempts = 0, checked_at = now(), lease_until = NULL,
+			last_error = NULL, attempts = 0, checked_at = now(), lease_until = NULL, expires_at = COALESCE($7, expires_at),
 			applied_hash = CASE WHEN updated_at = $6 THEN $5 ELSE applied_hash END,
-			next_attempt_at = CASE WHEN updated_at = $6 THEN NULL ELSE next_attempt_at END
-			WHERE id = $1`, x.id, out.remoteID, status, reason, out.appliedHash, x.updatedAt)
+			next_attempt_at = CASE WHEN updated_at <> $6 THEN next_attempt_at
+				WHEN COALESCE($7, expires_at) IS NULL THEN NULL
+				ELSE greatest(now(), COALESCE($7, expires_at) - least(interval '1 day', (COALESCE($7, expires_at) - now()) / 2)) END
+			WHERE id = $1`, x.id, out.remoteID, status, reason, out.appliedHash, x.updatedAt, expires)
 		if err != nil || out.audit == "" {
 			return err
 		}

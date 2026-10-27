@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "account_id": "8d3a3db4d97663a9074efcc16",
+   "account_name": "Ada Cakes",
+   "email": "owner@adacakes.ng"
+  }
+ }
+}

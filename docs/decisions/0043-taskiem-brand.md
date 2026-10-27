@@ -16,6 +16,8 @@ The mark has to work small first: the most-seen version is a round WhatsApp prof
 4. **Applied** to the web app (accent and primary colours, the tab and home-screen icons, the mark in the sidebar and top bar, the sign-in page, the agent and operator consoles), the website mockup and the docs site, and the profile picture and link image in `docs/brand/relay/`.
 5. **The other two directions are kept** (`docs/brand/seal/`, `docs/brand/signal/`, drawn by the same `make.py`), and the web app shows either with `?brand=seal` or `?brand=signal`, for this browser only, so they can be compared on the real product before the brand is final.
 
+**Amended 27 October 2026.** The wordmark's i takes a round dot like the mark's, drawn where signal's square is: pine on light backgrounds, lime on the reversed wordmark (lime stays on pine). The 16 to 24 px mark now keeps its dot, its foot shortened to leave a gap. Moving the mark's dot to the "t"'s top right, as signal's square is, was tried and dropped: on an app icon a dot there reads as an unread badge, and the foot's dot is the mark's meaning.
+
 ## Alternatives considered
 
 Three directions were drawn and tried on the website (the brand canvas): a round seal with a tilted T (approvals), this mark, and a black-and-white wordmark with a saffron square for the i's dot. This mark was also drawn in five other colour pairs. The seal's red read as "error" across a whole site; the square wordmark was calm but had no mark of its own for a profile picture; pine and lime is the mark as first drawn.

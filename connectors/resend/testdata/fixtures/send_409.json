@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/emails",
+  "headers": {
+   "Authorization": "Bearer re_test_123"
+  },
+  "body": {
+   "from": "Ada Cakes <orders@adacakes.ng>",
+   "to": [
+    "ada@example.com"
+   ],
+   "subject": "Receipt for invoice INV-0042",
+   "html": "<p>Thank you</p>",
+   "tags": [
+    {
+     "name": "invoice",
+     "value": "INV-0042"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 409,
+  "body": {
+   "statusCode": 409,
+   "name": "invalid_idempotent_request",
+   "message": "Same idempotency key used with a different request payload within the last 24 hours."
+  }
+ }
+}

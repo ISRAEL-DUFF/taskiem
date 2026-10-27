@@ -1,0 +1,35 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM Vendor WHERE DisplayName = 'Lagos Paper Supplies'"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "Vendor": [
+     {
+      "Id": "41",
+      "DisplayName": "Lagos Paper Supplies",
+      "PrimaryEmailAddr": {
+       "Address": "sales@paper.example"
+      },
+      "Balance": 0,
+      "Active": true,
+      "SyncToken": "0"
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 1
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

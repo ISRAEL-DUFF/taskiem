@@ -1,0 +1,29 @@
+{
+ "action": "add_to_list",
+ "input": {
+  "list_id": 3,
+  "emails": [
+   "ada@example.com",
+   "bola@example.com"
+  ],
+  "consent": {
+   "opted_in": true
+  }
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "add"
+ ],
+ "expect": {
+  "output": {
+   "added": [
+    "ada@example.com"
+   ],
+   "failed": [
+    "bola@example.com"
+   ]
+  }
+ }
+}

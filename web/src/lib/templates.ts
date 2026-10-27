@@ -18,9 +18,11 @@ export interface TemplateParam {
   /** For a connection: the capabilities its rail must have (pay_bank); any rail that can is offered. */
   capability?: string[];
   /** How the value is chosen instead of typed (no-technical-steps N8). */
-  picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language";
+  picker?: "sheet" | "sheet_tab" | "table" | "column" | "role" | "whatsapp_template" | "whatsapp_language" | "slack_channel" | "choice";
   /** The parameter a picker depends on: a tab's sheet, a column's table, a language's template. */
   from?: string;
+  /** With picker choice: the connector's picker it lists from ("mailchimp:audiences"). */
+  choices?: string;
 }
 
 export interface TemplateLine {
@@ -56,6 +58,10 @@ export interface Template {
   superseded_by?: string;
   /** The product it works around (payrolla): offered to businesses that connected it. */
   product?: string;
+  /** The services it works with that a business connects, each the
+   * connectors that serve it, any one of which will do (the books:
+   * QuickBooks or Zoho Books): offered once each is connected. */
+  services?: string[][];
   /** For a template another workflow can use as a step (decision 0047): its interface. */
   callable?: CallableInterface;
 }

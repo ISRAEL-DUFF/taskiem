@@ -2,7 +2,7 @@
   "id": "school-receipt",
   "title": "Send the family a receipt for every school fees payment",
   "summary": "The moment a payment is counted towards a student's school fees, however it came, send the family the receipt's number, the amount and the link that proves it, with a link to their fees page.",
-  "description": "Starts the moment a payment is counted towards one of the school's term invoices: a transfer into the child's own account number, cash or a transfer posted at the desk, a payment matched in To match. Each such payment has a receipt already, numbered per term and issued as the money is counted. This sends the family's guardian one message, on the WhatsApp or Telegram they get the school's updates on, otherwise by SMS, and by email when the school has one: the receipt number, the amount, the invoice it paid and what is left on it, the link where anyone can check that the receipt is valid (the same the QR code on the PDF opens), and a fresh link to the family's fees page, where the receipt and its PDF are. It starts once per payment, so nobody gets a receipt twice; a payment on an invoice that is not a school's term invoice starts nothing here.",
+  "description": "Starts the moment a payment is counted towards one of the school's term invoices: a transfer into the child's own account number, cash or a transfer posted at the desk, a payment matched in To match. Each such payment has a receipt already, numbered per term and issued as the money is counted. This sends each of the family's guardians one message, on the WhatsApp or Telegram they get the school's updates on (outside WhatsApp's 24-hour window as the receipt template, with a Check receipt button), otherwise by SMS: the receipt number, the amount, the invoice it paid and what is left on it, the link where anyone can check that the receipt is valid (the same the QR code on the PDF opens), and a fresh link to the family's fees page, where the receipt and its PDF are. Each receipt is sent once, whoever asks, so nobody gets a receipt twice; a payment on an invoice that is not a school's term invoice starts nothing here.",
   "category": "collections",
   "tags": [
     "schools",
@@ -27,20 +27,9 @@
     "pupils"
   ],
   "connectors": [
-    "notify@1"
+    "schools@1"
   ],
-  "params": [
-    {
-      "name": "about",
-      "type": "string",
-      "title": "What the message is about",
-      "description": "A few words a WhatsApp update names the message by, such as school fees receipt.",
-      "required": false,
-      "default": "school fees receipt",
-      "example": "school fees receipt",
-      "max_length": 60
-    }
-  ],
+  "params": [],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_schoolReceipt",
@@ -58,15 +47,11 @@
         "id": "send",
         "type": "connector",
         "name": "Send the family the receipt",
-        "connector": "notify@1",
-        "action": "message",
+        "connector": "schools@1",
+        "action": "send_receipt",
         "when": "=has(trigger.body.receipt)",
         "input": {
-          "phone": "=has(trigger.body.customer.phone) ? trigger.body.customer.phone : ''",
-          "email": "=has(trigger.body.customer.email) ? trigger.body.customer.email : ''",
-          "title": "='Receipt ' + trigger.body.receipt.number",
-          "about": "{{about}}",
-          "message": "='Receipt ' + trigger.body.receipt.number + ': we received ' + trigger.body.payment.amount + ' towards ' + trigger.body.number + ' (school fees). ' + (trigger.body.due_kobo > 0 ? 'A balance is still left on it. ' : 'The invoice is paid in full. ') + (has(trigger.body.receipt.link) ? 'Check the receipt: ' + trigger.body.receipt.link + ' ' : '') + (has(trigger.body.family_link) ? 'Your fees page, with the receipt and its PDF: ' + trigger.body.family_link : '')"
+          "receipt": "=trigger.body.receipt.id"
         },
         "effect": {
           "idempotency_seed": "='school-receipt:' + trigger.body.payment.id"

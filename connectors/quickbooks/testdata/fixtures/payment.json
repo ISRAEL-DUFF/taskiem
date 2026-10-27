@@ -1,0 +1,40 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/payment/171",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "Payment": {
+    "Id": "171",
+    "CustomerRef": {
+     "value": "58"
+    },
+    "TotalAmt": 53750.0,
+    "UnappliedAmt": 0,
+    "TxnDate": "2026-10-26",
+    "PaymentRefNum": "ml_01JB8Z3K4M5N6P7Q8R",
+    "PrivateNote": "Taskiem reference: ml_01JB8Z3K4M5N6P7Q8R9S0T",
+    "Line": [
+     {
+      "Amount": 53750.0,
+      "LinkedTxn": [
+       {
+        "TxnId": "130",
+        "TxnType": "Invoice"
+       }
+      ]
+     }
+    ]
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

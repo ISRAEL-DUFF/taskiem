@@ -1,0 +1,41 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/invoices",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "reference_number": "INV-2026-0042"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "invoices": [
+    {
+     "invoice_id": "460000000027017",
+     "invoice_number": "INV-000042",
+     "reference_number": "INV-2026-0042",
+     "customer_id": "460000000026049",
+     "status": "sent",
+     "date": "2026-10-26",
+     "due_date": "2026-11-09",
+     "currency_code": "NGN",
+     "total": 53750.0,
+     "balance": 53750.0,
+     "created_time": "2026-10-26T10:00:00+0100",
+     "last_modified_time": "2026-10-26T10:00:00+0100"
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

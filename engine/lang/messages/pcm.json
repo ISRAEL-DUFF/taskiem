@@ -428,6 +428,26 @@
       "text": "We dey check your request {reference}. We go let you know.",
       "reviewed": false
     },
+    "slack.link.button": {
+      "text": "Confirm",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Na your Slack account be dis? Press Confirm make di approvals wey you dey decide for Taskiem dey come here, for Slack. If no be you ask for am, just ignore am.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "E don link. Approvals wey dey wait for you go dey come here.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Dis link no dey work again. Ask for new one for your Taskiem profile.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "Dis Slack account never link to you for Taskiem, so e no fit decide dis one. Link am from your Taskiem profile.",
+      "reviewed": false
+    },
     "tg.button_expired": {
       "text": "That button don expire. Send *approvals* make you get your open approvals again.",
       "reviewed": false

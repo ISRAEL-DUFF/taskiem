@@ -61,7 +61,7 @@ func (s *Server) RunWhatsApp(ctx context.Context) error {
 // bound number who have not had them, and how runs started from WhatsApp
 // ended.
 func (s *Server) WhatsAppTick(ctx context.Context) error {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants()`)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants() UNION SELECT tenant_id FROM taskiem_slack_tenants()`)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}
-		if sendErr != nil && !errors.Is(sendErr, whatsapp.ErrNothingToSend) {
+		if sendErr != nil && !errors.Is(sendErr, whatsapp.ErrNothingToSend) && !errors.Is(sendErr, whatsapp.ErrFellBack) {
 			s.Logger.Warn("whatsapp: send failed", "tenant", tenant, "kind", it.Kind, "message", it.ID, "attempt", it.Attempts, "err", sendErr)
 		}
 		if err := whatsapp.FinishOutbox(ctx, s.Store.Pool, it, sendErr, time.Now()); err != nil {

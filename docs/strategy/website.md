@@ -32,6 +32,7 @@ Where a sentence depends on something that is not true yet (a live WhatsApp numb
 | How it works | `/how-it-works` | The three steps, with a real conversation | hand-written |
 | What you can automate | `/templates` | Every template, grouped by the owner's problem | generated from `templates/library` |
 | Works with | `/integrations` | Every connector, Nigerian ones first | generated from manifests |
+| A service | `/integrations/<id>` | How it connects, what workflows do with it, what starts one, the templates that use it | generated from its manifest and `templates/library` |
 | Your records | `/tables` | Data tables: your debtors, stock and staff without a spreadsheet | hand-written |
 | Your page | `/storefront` | The one-page shop with orders and bookings | hand-written |
 | Pricing | `/pricing` | Plans in naira, what each includes, the trial | generated from `deploy/plans.yaml` |

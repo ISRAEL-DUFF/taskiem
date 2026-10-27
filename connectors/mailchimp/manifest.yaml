@@ -1,0 +1,225 @@
+# Mailchimp Marketing API (3.0): audiences, members, tags and campaigns,
+# connected through Taskiem's Mailchimp app or with an API key (K8 of
+# docs/spec/business-connectors.md). Built from Mailchimp's public
+# developer documentation, read 26 October 2026:
+#   https://mailchimp.com/developer/marketing/guides/access-user-data-oauth-2/
+#   https://mailchimp.com/developer/marketing/docs/fundamentals/ (the server
+#     prefix, authentication)
+#   https://mailchimp.com/developer/marketing/api/root/
+#   https://mailchimp.com/developer/marketing/api/lists/ (get lists)
+#   https://mailchimp.com/developer/marketing/api/list-members/add-or-update-list-member/
+#   https://mailchimp.com/developer/marketing/api/list-member-tags/add-or-remove-member-tags/
+#   https://mailchimp.com/developer/marketing/api/campaigns/ (add, list, get,
+#     send) and campaign-content/set-campaign-content/
+#   https://mailchimp.com/developer/marketing/api/list-webhooks/ (add, get,
+#     delete)
+#   https://mailchimp.com/developer/marketing/api-concepts/webhooks/ (the
+#     form body and X-Mailchimp-Signature)
+#   https://mailchimp.com/developer/marketing/docs/errors/
+# See docs/integrations/mailchimp.md.
+manifest: connector/v1
+id: mailchimp
+version: 1.0.0
+name: Mailchimp
+description: Keep your Mailchimp audience up to date (only people who opted in), tag members, create and send campaigns, and hear subscribes, unsubscribes and cleaned addresses.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - key: access_token
+      label: API key
+      secret: true
+      help: A Mailchimp API key, or connect with one click and nothing is pasted.
+      where: Mailchimp → Profile → Extras → API keys → Create A Key
+      link: https://us1.admin.mailchimp.com/account/api/
+    - { key: server, label: "Server prefix (us6: filled when you connect, or read from the key)", required: false }
+    - { key: account_name, label: Mailchimp account, required: false }
+  # One click through Taskiem's Mailchimp app. Mailchimp's tokens do not
+  # expire and have no scopes; the account's server prefix (dc) is read
+  # from Mailchimp's metadata once, when the connection is made (rule 21).
+  oauth2:
+    authorize_url: https://login.mailchimp.com/oauth2/authorize
+    token_url: https://login.mailchimp.com/oauth2/token
+    scopes: []
+    pkce: true
+    client: mailchimp
+    fields_from_token: { access_token: access_token }
+    linked_fields: [server, account_name]
+  test: { action: get_account }
+# Every account's server: us1.api.mailchimp.com, us6…, and the login
+# server for the metadata.
+egress_hosts: ["*.api.mailchimp.com", login.mailchimp.com]
+base_url: https://us1.api.mailchimp.com/3.0
+actions:
+  get_account:
+    title: Get the account
+    description: The Mailchimp account. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        account_id:   { type: string }
+        account_name: { type: string }
+        email:        { type: string }
+        server:       { type: string }
+  list_audiences:
+    title: List audiences
+    description: The account's audiences (lists), with how many subscribed members each has.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        audiences:
+          type: array
+          items:
+            type: object
+            properties:
+              id:      { type: string }
+              name:    { type: string }
+              members: { type: integer }
+  add_or_update_member:
+    title: Add or update a member
+    description: >-
+      A member of an audience, by email (PUT on the MD5 of the lowercased
+      address): added as subscribed when new, updated when there, so a retry
+      changes nothing more. Only someone who opted in (consent.opted_in:
+      true) is added; someone who unsubscribed stays unsubscribed.
+      request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [audience_id, email, consent]
+      properties:
+        audience_id: { type: string }
+        email:       { type: string }
+        first_name:  { type: string }
+        last_name:   { type: string }
+        phone:       { type: string }
+        merge_fields: { type: object, description: "Other merge fields, by their tags (BIRTHDAY, COMPANY)" }
+        tags:        { type: array, items: { type: string }, description: Tags added when they are added }
+        consent:
+          type: object
+          required: [opted_in]
+          properties:
+            opted_in: { const: true, description: The person said yes to marketing }
+            source:   { type: string }
+            at:       { type: string, description: When they opted in (ISO 8601) }
+        request_key: { type: string, description: Set by the engine; not sent to Mailchimp }
+    output:
+      type: object
+      properties:
+        member_id: { type: string, description: The MD5 of the lowercased address }
+        status:    { type: string, description: "subscribed, unsubscribed, cleaned, pending, transactional or archived" }
+    pii:
+      - { field: email, category: email }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: phone, category: phone }
+      - { field: merge_fields, category: other }
+  tag_member:
+    title: Tag a member
+    description: Adds or removes tags on a member. Doing it twice leaves the same tags; request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [audience_id, email]
+      properties:
+        audience_id: { type: string }
+        email:       { type: string }
+        add:         { type: array, items: { type: string } }
+        remove:      { type: array, items: { type: string } }
+        request_key: { type: string, description: Set by the engine; not sent to Mailchimp }
+    output:
+      type: object
+      properties:
+        member_id: { type: string }
+    pii:
+      - { field: email, category: email }
+  create_campaign:
+    title: Create a campaign
+    description: >-
+      A regular email campaign to an audience (or one of its tags), with its
+      subject, sender and HTML, ready to send. Named by its title: a
+      campaign with that title already made is answered (created false)
+      rather than made twice. request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [audience_id, title, subject, from_name, reply_to, html]
+      properties:
+        audience_id:  { type: string }
+        tag_id:       { type: integer, description: Only the members with this tag (a static segment) }
+        title:        { type: string, minLength: 1, description: The campaign's name in Mailchimp; unique for each campaign this makes }
+        subject:      { type: string }
+        preview_text: { type: string }
+        from_name:    { type: string }
+        reply_to:     { type: string, description: An address on a verified domain }
+        html:         { type: string }
+        request_key:  { type: string, description: Set by the engine; not sent to Mailchimp }
+    output:
+      type: object
+      properties:
+        campaign_id: { type: string }
+        created:     { type: boolean }
+        status:      { type: string }
+  send_campaign:
+    title: Send a campaign
+    description: Sends a campaign now. One already sent or sending is answered as it is; request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [campaign_id]
+      properties:
+        campaign_id: { type: string }
+        request_key: { type: string, description: Set by the engine; not sent to Mailchimp }
+    output:
+      type: object
+      properties:
+        campaign_id: { type: string }
+        status:      { type: string, description: "sending or sent" }
+# Audiences chosen by name in templates (picker choice).
+pickers:
+  audiences: { action: list_audiences, items: =output.audiences, id: =item.id, label: "=item.name + ' (' + string(item.members) + ' subscribed)'" }
+triggers:
+  # Taskiem creates the webhook on the audience (registration remote,
+  # decision 0021). Mailchimp checks the address with a plain GET first
+  # (answered 200, nothing read), then posts form-encoded events, signed
+  # with the secret it returned once (X-Mailchimp-Signature: t=…,v1=…, an
+  # HMAC-SHA256 of "<t>.<body>").
+  audience_events:
+    type: webhook
+    title: Subscribes, unsubscribes and changes in your Mailchimp audience
+    registration: remote
+    verify: { scheme: hmac_sha256_timestamped, header: X-Mailchimp-Signature, signature_format: t_v1, tolerance: 5m }
+    handshake: { method: GET, open: true, respond: '=""' }
+    options:
+      type: object
+      required: [audience_id]
+      additionalProperties: false
+      properties:
+        audience_id: { type: string, description: The audience watched }
+    events: [subscribe, unsubscribe, profile, upemail, cleaned, campaign]
+    event_type: '=has(body.type) ? string(body.type) : "unknown"'
+    dedup: '=string(body.type) + ":" + ("data[email]" in body ? string(body["data[email]"]) : ("data[new_email]" in body ? string(body["data[new_email]"]) : "")) + ":" + ("fired_at" in body ? string(body.fired_at) : "")'
+    # The person, by email: a run waiting on a member wakes when they
+    # unsubscribe.
+    correlation: '="data[email]" in body ? dyn(string(body["data[email]"])) : ("data[new_email]" in body ? dyn(string(body["data[new_email]"])) : null)'
+    pii:
+      - { field: "body.data[email]", category: email }
+      - { field: "body.data[new_email]", category: email }
+      - { field: "body.data[old_email]", category: email }
+      - { field: "body.data[merges][FNAME]", category: name }
+      - { field: "body.data[merges][LNAME]", category: name }
+      - { field: "body.data[merges][PHONE]", category: phone }
+    example:
+      body: { type: unsubscribe, fired_at: "2026-10-26 12:00:05", "data[action]": unsub, "data[reason]": manual, "data[id]": 8a25ff1d98, "data[list_id]": a6b5da1054, "data[email]": ada@example.com, "data[email_type]": html }

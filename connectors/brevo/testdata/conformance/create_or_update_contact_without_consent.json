@@ -1,0 +1,16 @@
+{
+ "action": "create_or_update_contact",
+ "input": {
+  "email": "ada@example.com",
+  "list_ids": [
+   3
+  ]
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [],
+ "expect": {
+  "error": "fatal"
+ }
+}

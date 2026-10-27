@@ -1,0 +1,39 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/items",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "per_page": "200"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "items": [
+    {
+     "item_id": "460000000020071",
+     "name": "Bookkeeping (monthly)",
+     "rate": 25000,
+     "tax_id": "460000000024001",
+     "status": "active"
+    },
+    {
+     "item_id": "460000000020072",
+     "name": "Delivery",
+     "rate": 1500.5
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

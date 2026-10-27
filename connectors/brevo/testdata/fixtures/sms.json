@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/transactionalSMS/send",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "body": {
+   "sender": "AdaCakes",
+   "recipient": "2348030000000",
+   "content": "Your order is ready.",
+   "type": "transactional"
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "messageId": 1511882900176220
+  }
+ }
+}

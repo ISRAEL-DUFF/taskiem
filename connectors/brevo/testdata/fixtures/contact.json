@@ -1,0 +1,27 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/contacts",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "body": {
+   "email": "ada@example.com",
+   "updateEnabled": true,
+   "attributes": {
+    "FIRSTNAME": "Adaeze",
+    "LASTNAME": "Okafor",
+    "SMS": "+2348030000000"
+   },
+   "listIds": [
+    3
+   ]
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "id": 21
+  }
+ }
+}

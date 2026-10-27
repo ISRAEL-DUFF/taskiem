@@ -1,0 +1,65 @@
+{
+  "schema": "wd-test/v1",
+  "template": "slack-money-received",
+  "params": {
+    "slack_connection": "main",
+    "channel": "C0SALES"
+  },
+  "cases": [
+    {
+      "name": "a payment by link",
+      "trigger": {
+        "event": "payment.received",
+        "fields": {
+          "payment_id": "ref_1",
+          "amount_kobo": 2500000,
+          "currency": "NGN"
+        }
+      },
+      "mocks": {
+        "post": {
+          "output": {
+            "channel": "C0SALES",
+            "ts": "1.1"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "channel": "C0SALES",
+            "text": "Received ₦25000 (ref_1)."
+          }
+        }
+      }
+    },
+    {
+      "name": "a credit to a customer's account number",
+      "trigger": {
+        "event": "virtual_account.credited",
+        "fields": {
+          "credit_id": "cr_9",
+          "amount_kobo": 5000000,
+          "reference": "va_1"
+        }
+      },
+      "mocks": {
+        "post": {
+          "output": {
+            "channel": "C0SALES",
+            "ts": "1.2"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "text": "Received ₦50000 into a customer account number (cr_9)."
+          }
+        }
+      }
+    }
+  ]
+}

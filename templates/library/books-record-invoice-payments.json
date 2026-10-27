@@ -1,0 +1,111 @@
+{
+  "id": "books-record-invoice-payments",
+  "title": "Record invoice payments in the books",
+  "summary": "Each time money is counted towards one of your invoices, record the invoice and the payment in your books (QuickBooks or Zoho Books).",
+  "description": "Whenever a payment is counted towards one of your invoices (a transfer to its account number, its link, or cash posted at the desk), copies the invoice to your books if it is not there yet and records the payment against it, with the money log's reference, so your books match what came in. A payment reported twice is recorded once. Works with whichever books you connected (QuickBooks or Zoho Books).",
+  "category": "bookkeeping",
+  "tags": [
+    "bookkeeping",
+    "invoices",
+    "payments",
+    "accounting",
+    "quickbooks"
+  ],
+  "keywords": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "reconcile",
+    "payment",
+    "paid",
+    "record"
+  ],
+  "requires": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "zoho books",
+    "ledger"
+  ],
+  "connectors": [
+    "capability:books_payment"
+  ],
+  "params": [
+    {
+      "name": "books_connection",
+      "type": "connection",
+      "capability": [
+        "books_payment"
+      ],
+      "title": "Your books",
+      "description": "The accounting software the invoices go to: QuickBooks or Zoho Books, connected with one click.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "deposit_account",
+      "type": "string",
+      "title": "Account the money goes into",
+      "description": "The bank account in your books the payments are recorded into. Leave it blank for the books' own default (QuickBooks: Undeposited Funds).",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 40
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_booksRecordInvoicePayments",
+    "version": 1,
+    "name": "Record invoice payments in the books",
+    "trigger": {
+      "type": "invoice",
+      "config": {
+        "event": "payment"
+      }
+    },
+    "steps": [
+      {
+        "id": "copy",
+        "type": "template",
+        "template": "books-copy-invoice",
+        "name": "Copy the invoice to the books",
+        "params": {
+          "books_connection": "{{books_connection}}"
+        },
+        "input": {
+          "number": "=trigger.body.number",
+          "name": "=trigger.body.customer.name",
+          "email": "=trigger.body.customer.?email",
+          "phone": "=trigger.body.customer.?phone",
+          "amount_kobo": "=trigger.body.amount_kobo"
+        }
+      },
+      {
+        "id": "payment",
+        "type": "capability",
+        "uses": "books_payment",
+        "name": "Record the payment",
+        "connection": "{{books_connection}}",
+        "needs": [
+          "copy"
+        ],
+        "input": {
+          "invoice_id": "=steps.copy.output.invoice_id",
+          "amount_kobo": "=trigger.body.payment.amount_kobo",
+          "reference": "=trigger.body.payment.id",
+          "paid_on": "=trigger.body.payment.paid_at.substring(0, 10)",
+          "account_id": "{{deposit_account}}"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "30m"
+    }
+  }
+}

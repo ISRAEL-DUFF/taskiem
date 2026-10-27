@@ -15,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Students' account numbers (docs/spec/schools.md 6, B4;
@@ -1075,4 +1076,136 @@ func plainInvoicing(err error) string {
 		msg = strings.ReplaceAll(msg, p, "")
 	}
 	return msg
+}
+
+// --- sending the account number to the family ---
+
+// IssuedAccount is a student's issued account: the one on the school's
+// issuing connection, else any issued one; ok is false when they have
+// none.
+func (s *Schools) IssuedAccount(ctx context.Context, tx pgx.Tx, tenant, student uuid.UUID) (StudentAccount, bool, error) {
+	list, err := s.StudentAccounts(ctx, tx, tenant, student)
+	if err != nil {
+		return StudentAccount{}, false, err
+	}
+	st, err := GetIssuing(ctx, tx, tenant)
+	if err != nil {
+		return StudentAccount{}, false, err
+	}
+	for _, want := range []string{st.Channel, ""} {
+		for _, a := range list {
+			if a.Status == "issued" && a.AccountNumber != "" && (want == "" || a.Connection == want) {
+				return a, true, nil
+			}
+		}
+	}
+	return StudentAccount{}, false, nil
+}
+
+// AccountNumberVars are the taskiem_account_number template's variables
+// (docs/whatsapp.md#templates): the child, the number, the bank and the
+// name to expect, with the family page's link for the button.
+func AccountNumberVars(child string, a StudentAccount, link string) map[string]string {
+	or := func(s string) string {
+		if s == "" || s == Erased {
+			return "-"
+		}
+		return s
+	}
+	return map[string]string{"who": or(child), "account_number": a.AccountNumber, "bank": or(a.BankName), "account_name": or(a.AccountName), "link": link}
+}
+
+// AccountNumberText is the message a family gets with a child's account
+// number: the number, the bank and the name they should see when they
+// transfer, and the family page's link.
+func AccountNumberText(child string, a StudentAccount, link string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Dear parent, %s's own account number for school fees is %s", child, a.AccountNumber)
+	switch {
+	case a.BankName != "" && a.AccountName != "":
+		fmt.Fprintf(&b, " (%s, in the name %s)", a.BankName, a.AccountName)
+	case a.BankName != "":
+		fmt.Fprintf(&b, " (%s)", a.BankName)
+	case a.AccountName != "":
+		fmt.Fprintf(&b, " (in the name %s)", a.AccountName)
+	}
+	fmt.Fprintf(&b, ". Pay the fees by transfer to it: the money lands on %s's fees by itself, and a receipt follows.", child)
+	if link != "" {
+		b.WriteString(" Your fees page: " + link)
+	}
+	return b.String()
+}
+
+// AccountNumberShort is the SMS: the same facts in fewer words.
+func AccountNumberShort(child string, a StudentAccount, link string) string {
+	s := fmt.Sprintf("%s's own account number for school fees: %s", child, a.AccountNumber)
+	if a.BankName != "" {
+		s += ", " + a.BankName
+	}
+	if a.AccountName != "" {
+		s += ", name " + a.AccountName
+	}
+	s += ". Pay by transfer to it and a receipt follows."
+	if link != "" {
+		s += " Fees page: " + link
+	}
+	return s
+}
+
+// AccountSent is what sending a student's account number did.
+type AccountSent struct {
+	Student Student        `json:"student"`
+	Account StudentAccount `json:"account"`
+	Sent    FamilySent     `json:"sent"`
+}
+
+// SendAccountNumber sends a student's family their account number, in
+// tx: on each guardian's chat app (as taskiem_account_number outside
+// WhatsApp's window, the family page's link on its button) or by SMS,
+// once per key (a step's key, or a fresh one from the student's page). A
+// student with no account number yet is refused; one in no family reaches
+// nobody.
+func (s *Schools) SendAccountNumber(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st Student, key, by string) (AccountSent, error) {
+	out := AccountSent{Student: st}
+	a, ok, err := s.IssuedAccount(ctx, tx, tenant, st.ID)
+	if err != nil {
+		return out, err
+	}
+	if !ok {
+		return out, refused("student %s has no account number yet", st.AdmissionNumber)
+	}
+	out.Account = a
+	if st.FamilyID == nil {
+		out.Sent = FamilySent{Channels: map[string]int{}, Nobody: true}
+		return out, nil
+	}
+	child := st.Name
+	if child == "" || child == Erased {
+		child = st.AdmissionNumber
+	}
+	out.Sent, err = s.SendFamily(ctx, tx, tenant, *st.FamilyID, FamilyMessage{Purpose: "account", Key: "account:" + st.ID.String() + ":" + key,
+		Text:     func(link string) string { return AccountNumberText(child, a, link) },
+		Short:    func(link string) string { return AccountNumberShort(child, a, link) },
+		Template: &whatsapp.TplAccountNumber,
+		Vars:     func(link string) map[string]string { return AccountNumberVars(child, a, link) }}, by)
+	return out, err
+}
+
+// SendAccountNumberOnce sends a student's (by id or admission number)
+// account number to the family in a transaction of its own, once per key
+// (SendAccountNumber).
+func (s Service) SendAccountNumberOnce(ctx context.Context, tenant uuid.UUID, idOrNumber, key, by string) (AccountSent, error) {
+	var out AccountSent
+	err := s.In(ctx, tenant, func(tx pgx.Tx) error {
+		if err := need(ctx, tx, tenant); err != nil {
+			return err
+		}
+		st, err := s.student(ctx, tx, tenant, idOrNumber)
+		if err != nil {
+			return err
+		}
+		out, err = s.SendAccountNumber(ctx, tx, tenant, st, key, by)
+		return err
+	})
+	return out, err
 }

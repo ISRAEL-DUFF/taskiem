@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/settings/modules",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "code": "INVALID_TOKEN",
+   "details": {},
+   "message": "invalid oauth token",
+   "status": "error"
+  }
+ }
+}

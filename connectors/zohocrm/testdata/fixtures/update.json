@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "PUT",
+  "path": "/Deals/5843104000000425101",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "data": [
+    {
+     "Stage": "Closed Won"
+    }
+   ],
+   "trigger": [
+    "workflow"
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": [
+    {
+     "code": "SUCCESS",
+     "details": {
+      "id": "5843104000000425101"
+     },
+     "message": "record updated",
+     "status": "success"
+    }
+   ]
+  }
+ }
+}

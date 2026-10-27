@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/emails",
+  "headers": {
+   "Authorization": "Bearer re_test_123"
+  },
+  "body": {
+   "from": "Ada Cakes <orders@adacakes.ng>",
+   "to": [
+    "ada@example.com"
+   ],
+   "subject": "Receipt for invoice INV-0042",
+   "html": "<p>Thank you</p>",
+   "tags": [
+    {
+     "name": "invoice",
+     "value": "INV-0042"
+    }
+   ],
+   "attachments": [
+    {
+     "filename": "receipt.pdf",
+     "content": "JVBERi0xLjQK",
+     "content_type": "application/pdf"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "59a3999c-0ce1-4ea6-ab68-afcd6dc2e794"
+  }
+ }
+}

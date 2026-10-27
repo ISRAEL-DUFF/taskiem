@@ -7,9 +7,27 @@ import (
 )
 
 func TestSet(t *testing.T) {
-	want := []string{"balance", "collect_link", "collect_push", "collect_transfer", "get_payment", "get_payout", "list_banks", "list_credits", "pay_bank", "pay_many", "pay_mobile_money", "pay_wallet", "refund", "resolve_account", "virtual_account"}
+	rails := []string{"balance", "collect_link", "collect_push", "collect_transfer", "get_payment", "get_payout", "list_banks", "list_credits", "pay_bank", "pay_many", "pay_mobile_money", "pay_wallet", "refund", "resolve_account", "virtual_account"}
+	books := []string{"books_accounts", "books_bill", "books_customer", "books_expense", "books_invoice", "books_items", "books_payment", "books_sale", "books_taxes"}
+	want := append(append([]string{}, rails...), books...)
 	if got := Names(); len(got) != len(want) {
 		t.Fatalf("capabilities %v, want %v", got, want)
+	}
+	// Rails pay and collect; the books are products' (decision 0051).
+	for kind, names := range map[string][]string{"rail": rails, "product": books} {
+		for _, n := range names {
+			if s, ok := Get(n); !ok || s.Kind != kind {
+				t.Errorf("%s: kind %v, want %s", n, s, kind)
+			}
+		}
+	}
+	for _, n := range []string{"books.invoice.created", "books.invoice.paid", "books.payment.recorded"} {
+		if e, ok := GetEvent(n); !ok || e.Kind != "product" || e.Correlation == "" {
+			t.Errorf("%s: %+v", n, e)
+		}
+	}
+	if e, _ := GetEvent("payout.settled"); e.Kind != "rail" {
+		t.Errorf("payout.settled: kind %q", e.Kind)
 	}
 	for _, n := range want {
 		s, ok := Get(n)

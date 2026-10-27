@@ -1,0 +1,67 @@
+{
+  "schema": "wd-test/v1",
+  "template": "mailchimp-opted-in-customers",
+  "params": {
+    "audience_id": "a6b5da1054"
+  },
+  "cases": [
+    {
+      "name": "a customer who agreed is added, with their consent",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "table": "customers",
+          "record": {
+            "email": "ada@example.com",
+            "name": "Adaeze Okafor",
+            "phone": "+2348030000000",
+            "marketing_opt_in": true
+          }
+        }
+      },
+      "mocks": {
+        "add": {
+          "output": {
+            "member_id": "a1",
+            "status": "subscribed"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "add": {
+            "audience_id": "a6b5da1054",
+            "email": "ada@example.com",
+            "consent": {
+              "opted_in": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer who did not agree is never added",
+      "trigger": {
+        "event": "INSERT",
+        "body": {
+          "type": "INSERT",
+          "table": "customers",
+          "record": {
+            "email": "ada@example.com",
+            "name": "Adaeze Okafor",
+            "phone": "+2348030000000",
+            "marketing_opt_in": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "add": "skipped"
+        }
+      }
+    }
+  ]
+}

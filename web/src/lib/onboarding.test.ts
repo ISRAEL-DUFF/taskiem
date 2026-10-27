@@ -43,6 +43,17 @@ describe("getting started", () => {
     expect(starterTemplates(list, ["paystack", "payrolla"]).map((t) => t.id)).toEqual(["payrolla-tell-staff", "daily-reminder"]);
   });
 
+  it("offers a service's templates first, once it is connected", () => {
+    const list = [
+      tpl("daily-reminder", ["notify@1"]),
+      { ...tpl("slack-paid-invoices", ["slack@1"]), services: [["slack"]] },
+      { ...tpl("books-copy-invoice", ["capability:books_invoice"]), services: [["quickbooks", "zoho_books"]] },
+    ];
+    expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder"]);
+    expect(starterTemplates(list, ["zoho_books"]).map((t) => t.id)).toEqual(["books-copy-invoice", "daily-reminder"]);
+    expect(starterTemplates(list, ["slack", "quickbooks"]).map((t) => t.id)).toEqual(["books-copy-invoice", "slack-paid-invoices", "daily-reminder"]);
+  });
+
   it("offers invoices among the starters, after the one that needs nothing connected", () => {
     const list = [tpl("chase-overdue-invoices", ["invoices@1", "notify@1"]), tpl("send-invoice", ["invoices@1", "notify@1"]), tpl("daily-reminder", ["notify@1"]), tpl("alpha", ["notify@1"])];
     expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder", "send-invoice", "chase-overdue-invoices", "alpha"]);

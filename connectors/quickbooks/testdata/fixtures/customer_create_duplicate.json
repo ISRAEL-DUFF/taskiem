@@ -1,0 +1,38 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/company/9341453050298730/customer",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  },
+  "body": {
+   "DisplayName": "Adaeze Okafor",
+   "PrimaryEmailAddr": {
+    "Address": "ada@example.com"
+   },
+   "PrimaryPhone": {
+    "FreeFormNumber": "+2348030000000"
+   }
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "Fault": {
+    "Error": [
+     {
+      "Message": "Duplicate Name Exists Error",
+      "Detail": "The name supplied already exists. : Another customer, vendor or employee is already using this name.",
+      "code": "6240",
+      "element": ""
+     }
+    ],
+    "type": "ValidationFault"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

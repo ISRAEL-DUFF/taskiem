@@ -1,0 +1,36 @@
+{
+ "action": "create_invoice",
+ "input": {
+  "doc_number": "INV-2026-0042",
+  "customer_id": "58",
+  "txn_date": "2026-10-26",
+  "due_date": "2026-11-09",
+  "customer_memo": "Thank you",
+  "lines": [
+   {
+    "description": "Bookkeeping, October",
+    "quantity": 2,
+    "amount_kobo": 2500000,
+    "item_id": "1",
+    "tax_code_id": "6"
+   }
+  ]
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice_by_number"
+ ],
+ "expect": {
+  "output": {
+   "invoice_id": "130",
+   "created": false
+  }
+ }
+}

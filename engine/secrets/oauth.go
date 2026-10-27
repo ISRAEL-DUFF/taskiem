@@ -37,6 +37,7 @@ type OAuthRequest struct {
 	Connector   string // id@major
 	Environment string
 	Name        string
+	Mode        string // live or test, as chosen before linking; "" for none
 	verifier    []byte
 	verifierKey []byte
 	kekVersion  int
@@ -72,7 +73,7 @@ func hashState(state, browser string) []byte {
 // sets it as a cookie only the starting browser holds) and the PKCE
 // verifier (the caller derives the challenge; the verifier is not kept in
 // the clear). The start is audited as connection.oauth_start.
-func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connector, env, name, by string) (state, browser, verifier string, err error) {
+func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, connector, env, name, mode, by string) (state, browser, verifier string, err error) {
 	if state, err = randomToken(); err != nil {
 		return "", "", "", err
 	}
@@ -92,9 +93,9 @@ func (v *Vault) BeginOAuthRequestTx(ctx context.Context, tx pgx.Tx, tenant uuid.
 	if _, err := tx.Exec(ctx, `DELETE FROM oauth_connection_requests WHERE tenant_id = $1 AND expires_at < now() - interval '1 hour'`, tenant); err != nil {
 		return "", "", "", err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO oauth_connection_requests (id, tenant_id, state_hash, person, connector, environment, name, verifier, verifier_key, kek_version, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now() + $11)`,
-		id, tenant, hashState(state, browser), by, connector, env, name, ct, wdek, ver, OAuthRequestTTL); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO oauth_connection_requests (id, tenant_id, state_hash, person, connector, environment, name, mode, verifier, verifier_key, kek_version, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10, $11, now() + $12)`,
+		id, tenant, hashState(state, browser), by, connector, env, name, mode, ct, wdek, ver, OAuthRequestTTL); err != nil {
 		return "", "", "", err
 	}
 	return state, browser, verifier, audit(ctx, tx, tenant, by, "connection.oauth_start", connector+"/"+name, map[string]any{"request_id": id, "environment": env})
@@ -109,8 +110,12 @@ func (v *Vault) TakeOAuthRequest(ctx context.Context, state, browser string) (*O
 		return nil, ErrOAuthRequest
 	}
 	var q OAuthRequest
-	err := v.Pool.QueryRow(ctx, `SELECT id, tenant_id, person, connector, environment, name, verifier, verifier_key, kek_version FROM taskiem_oauth_request_take($1)`, hashState(state, browser)).
-		Scan(&q.ID, &q.Tenant, &q.Person, &q.Connector, &q.Environment, &q.Name, &q.verifier, &q.verifierKey, &q.kekVersion)
+	var mode *string
+	err := v.Pool.QueryRow(ctx, `SELECT id, tenant_id, person, connector, environment, name, mode, verifier, verifier_key, kek_version FROM taskiem_oauth_request_take($1)`, hashState(state, browser)).
+		Scan(&q.ID, &q.Tenant, &q.Person, &q.Connector, &q.Environment, &q.Name, &mode, &q.verifier, &q.verifierKey, &q.kekVersion)
+	if mode != nil {
+		q.Mode = *mode
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrOAuthRequest
 	}

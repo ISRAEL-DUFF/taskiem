@@ -1,0 +1,24 @@
+{
+ "trigger": "changes",
+ "body": {
+  "event": "invoice.created",
+  "data": {
+   "event": "invoice.created",
+   "kind": "invoice",
+   "id": "460000000027017",
+   "number": "INV-000042",
+   "reference": "INV-2026-0042",
+   "customer_id": "460000000026049",
+   "total_kobo": 5375000,
+   "currency": "NGN",
+   "status": "sent",
+   "modified_at": "2026-10-26T10:00:00+0100"
+  }
+ },
+ "event": "books.invoice.created",
+ "expect": {
+  "invoice_id": "460000000027017",
+  "number": "INV-000042",
+  "total_kobo": 5375000
+ }
+}

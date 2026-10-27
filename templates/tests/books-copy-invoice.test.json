@@ -1,0 +1,104 @@
+{
+  "schema": "wd-test/v1",
+  "template": "books-copy-invoice",
+  "params": {},
+  "cases": [
+    {
+      "name": "the customer is found or added, then the invoice recorded under its number",
+      "trigger": {
+        "body": {
+          "number": "INV-0042",
+          "name": "Adaeze Okafor",
+          "email": "ada@example.com",
+          "amount_kobo": 5375000,
+          "issued_on": "2026-10-26",
+          "due_on": "2026-11-09"
+        }
+      },
+      "mocks": {
+        "customer": {
+          "output": {
+            "customer_id": "58",
+            "created": false
+          }
+        },
+        "invoice": {
+          "output": {
+            "invoice_id": "130",
+            "number": "INV-0042",
+            "total_kobo": 5375000
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "customer": {
+            "name": "Adaeze Okafor",
+            "email": "ada@example.com"
+          },
+          "invoice": {
+            "number": "INV-0042",
+            "customer_id": "58",
+            "issued_on": "2026-10-26",
+            "due_on": "2026-11-09",
+            "lines": [
+              {
+                "description": "Invoice INV-0042",
+                "amount_kobo": 5375000
+              }
+            ]
+          }
+        },
+        "outputs": {
+          "invoice": {
+            "invoice_id": "130"
+          },
+          "customer": {
+            "customer_id": "58"
+          }
+        }
+      }
+    },
+    {
+      "name": "what it is for names the line",
+      "trigger": {
+        "body": {
+          "number": "INV-0043",
+          "name": "Bola Ade",
+          "phone": "+2348030000001",
+          "amount_kobo": 1000000,
+          "description": "Catering, 12 October"
+        }
+      },
+      "mocks": {
+        "customer": {
+          "output": {
+            "customer_id": "61",
+            "created": true
+          }
+        },
+        "invoice": {
+          "output": {
+            "invoice_id": "131",
+            "number": "INV-0043",
+            "total_kobo": 1000000
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "invoice": {
+            "lines": [
+              {
+                "description": "Catering, 12 October",
+                "amount_kobo": 1000000
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

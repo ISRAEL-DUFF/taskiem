@@ -1,0 +1,22 @@
+{
+ "action": "list_audiences",
+ "input": {},
+ "credentials": {
+  "access_token": "mctestoauthtoken",
+  "account_name": "Ada Cakes"
+ },
+ "exchanges": [
+  "lists"
+ ],
+ "expect": {
+  "output": {
+   "audiences": [
+    {
+     "id": "a6b5da1054",
+     "name": "Newsletter",
+     "members": 118
+    }
+   ]
+  }
+ }
+}

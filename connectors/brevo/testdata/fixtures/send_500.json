@@ -1,0 +1,33 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/smtp/email",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "body": {
+   "sender": {
+    "email": "orders@adacakes.ng",
+    "name": "Ada Cakes"
+   },
+   "to": [
+    {
+     "email": "ada@example.com",
+     "name": "Adaeze Okafor"
+    }
+   ],
+   "subject": "Your receipt",
+   "htmlContent": "<p>Thank you</p>",
+   "tags": [
+    "receipt"
+   ]
+  }
+ },
+ "response": {
+  "status": 500,
+  "body": {
+   "code": "internal_error",
+   "message": "Internal error"
+  }
+ }
+}

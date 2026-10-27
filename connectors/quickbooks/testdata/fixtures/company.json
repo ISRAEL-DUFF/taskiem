@@ -1,0 +1,27 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/companyinfo/9341453050298730",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "CompanyInfo": {
+    "CompanyName": "Sandbox Company_NG_1",
+    "LegalName": "Sandbox Company NG Ltd",
+    "Country": "NG",
+    "Email": {
+     "Address": "owner@example.com"
+    },
+    "Id": "1"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

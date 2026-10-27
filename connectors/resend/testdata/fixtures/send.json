@@ -1,0 +1,30 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/emails",
+  "headers": {
+   "Authorization": "Bearer re_test_123",
+   "Idempotency-Key": "tsk-receipt-inv-0042-0000000000"
+  },
+  "body": {
+   "from": "Ada Cakes <orders@adacakes.ng>",
+   "to": [
+    "ada@example.com"
+   ],
+   "subject": "Receipt for invoice INV-0042",
+   "html": "<p>Thank you</p>",
+   "tags": [
+    {
+     "name": "invoice",
+     "value": "INV-0042"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "49a3999c-0ce1-4ea6-ab68-afcd6dc2e794"
+  }
+ }
+}

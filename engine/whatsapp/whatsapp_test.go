@@ -132,11 +132,27 @@ func TestNumbersAndMasking(t *testing.T) {
 
 func TestTemplates(t *testing.T) {
 	seen := map[string]bool{}
+	var tell []string
 	for _, tpl := range AllTemplates {
 		if seen[tpl.Name] {
 			t.Errorf("duplicate %s", tpl.Name)
 		}
 		seen[tpl.Name] = true
+		// A Tell me step may carry only the templates marked for it, and
+		// each of those is filled from text alone, the tenant first.
+		if x, ok := TellTemplate(tpl.Name); ok {
+			tell = append(tell, x.Name)
+			if !tpl.Tell || len(tpl.Vars) == 0 || tpl.Vars[0] != "tenant" || len(TellVars(x)) != len(tpl.Vars)-1 {
+				t.Errorf("%s: a Tell me template with %v", tpl.Name, tpl.Vars)
+			}
+			for _, b := range tpl.Buttons {
+				if b.Type != "url" || b.Dynamic() {
+					t.Errorf("%s: a Tell me template with a %s button", tpl.Name, b.Type)
+				}
+			}
+		} else if tpl.Tell {
+			t.Errorf("%s: marked Tell but not one", tpl.Name)
+		}
 		if len(tpl.Examples) != len(tpl.Vars) {
 			t.Errorf("%s: %d examples for %d variables", tpl.Name, len(tpl.Examples), len(tpl.Vars))
 		}
@@ -193,6 +209,9 @@ func TestTemplates(t *testing.T) {
 		if _, err := tpl.Submission("en", Hosts{}); err == nil && len(tpl.Buttons) > 0 && tpl.Buttons[0].Type == "url" {
 			t.Errorf("%s: submitted without a host for its url button", tpl.Name)
 		}
+	}
+	if strings.Join(tell, ",") != "taskiem_daily_summary,taskiem_daily_close" {
+		t.Errorf("Tell me templates: %v", tell)
 	}
 	// A dynamic url button takes only a link under its host and path.
 	b := TplInvoice.Buttons[1]

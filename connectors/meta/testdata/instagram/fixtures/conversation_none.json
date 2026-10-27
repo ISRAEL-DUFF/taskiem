@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/104123456789012/conversations",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "platform": "instagram",
+   "user_id": "5432109876543210"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": []
+  }
+ }
+}

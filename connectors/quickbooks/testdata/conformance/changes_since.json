@@ -1,0 +1,37 @@
+{
+ "action": "changes_since",
+ "input": {
+  "entities": [
+   "invoice",
+   "payment"
+  ],
+  "since": "2026-10-25T00:00:00Z"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "cdc"
+ ],
+ "expect": {
+  "output": {
+   "changes": [
+    {
+     "entity": "invoice",
+     "id": "130",
+     "deleted": false
+    },
+    {
+     "entity": "payment",
+     "id": "160",
+     "deleted": true
+    }
+   ]
+  }
+ }
+}

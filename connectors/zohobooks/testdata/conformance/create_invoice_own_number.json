@@ -1,0 +1,42 @@
+{
+ "action": "create_invoice",
+ "input": {
+  "reference_number": "INV-2026-0042",
+  "customer_id": "460000000026049",
+  "date": "2026-10-26",
+  "due_date": "2026-11-09",
+  "notes": "Thank you",
+  "lines": [
+   {
+    "description": "Bookkeeping, October",
+    "quantity": 2,
+    "amount_kobo": 2500000,
+    "item_id": "460000000020071",
+    "tax_id": "460000000024001"
+   }
+  ],
+  "invoice_number": "INV-2026-0042"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice_by_reference_none",
+  "invoice_create_numbered"
+ ],
+ "expect": {
+  "output": {
+   "created": true,
+   "invoice": {
+    "invoice_number": "INV-2026-0042"
+   }
+  }
+ }
+}

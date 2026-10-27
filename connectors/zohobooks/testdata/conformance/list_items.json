@@ -1,0 +1,32 @@
+{
+ "action": "list_items",
+ "input": {},
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "items"
+ ],
+ "expect": {
+  "output": {
+   "items": [
+    {
+     "item_id": "460000000020071",
+     "rate_kobo": 2500000,
+     "tax_id": "460000000024001"
+    },
+    {
+     "item_id": "460000000020072",
+     "rate_kobo": 150050
+    }
+   ]
+  }
+ }
+}

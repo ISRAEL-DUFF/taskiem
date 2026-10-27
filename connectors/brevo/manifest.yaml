@@ -1,0 +1,269 @@
+# Brevo: transactional and marketing email, SMS, and contacts and lists
+# (K7 of docs/spec/business-connectors.md). Built from Brevo's public API
+# reference, read 26 October 2026:
+#   https://developers.brevo.com/reference/sendtransacemail
+#   https://developers.brevo.com/reference/send-async-transactional-sms
+#   https://developers.brevo.com/reference/create-contact (updateEnabled)
+#   https://developers.brevo.com/reference/add-contact-to-list
+#   https://developers.brevo.com/reference/get-lists
+#   https://developers.brevo.com/reference/send-email-campaign-now (and
+#     get-email-campaign)
+#   https://developers.brevo.com/reference/get-account
+#   https://developers.brevo.com/reference/get-domains
+#   https://developers.brevo.com/reference/createwebhook (and get-webhooks,
+#     get-webhook, delete-webhook)
+#   https://developers.brevo.com/docs/transactional-webhooks (payloads)
+#   https://developers.brevo.com/docs/marketing-webhooks
+# See docs/integrations/brevo.md.
+manifest: connector/v1
+id: brevo
+version: 1.0.0
+name: Brevo
+description: Send email and SMS from your own domain and sender, keep your contacts and lists (only people who opted in on marketing lists), send campaigns, and hear deliveries, bounces and unsubscribes.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - key: api_key
+      label: API key
+      secret: true
+      help: A Brevo API key (v3).
+      where: Brevo → your name → SMTP & API → API keys → Generate a new API key
+      link: https://app.brevo.com/settings/keys/api
+      prefixes: [{ prefix: xkeysib- }]
+  test: { action: get_account }
+base_url: https://api.brevo.com/v3
+actions:
+  get_account:
+    title: Get the account
+    description: The Brevo account and its sending domains (authenticated or not). Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        email:        { type: string }
+        company_name: { type: string }
+        domains:
+          type: array
+          items:
+            type: object
+            properties:
+              domain:        { type: string }
+              authenticated: { type: boolean }
+              verified:      { type: boolean }
+  send_email:
+    title: Send an email
+    description: >-
+      From a sender on a domain authenticated in Brevo (a send from any
+      other is refused before calling), with HTML or text, or a Brevo
+      template and its params. Brevo takes no idempotency key, so a send
+      whose outcome is unknown is parked for a person rather than sent
+      twice.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [sender_email, to]
+      properties:
+        sender_email: { type: string }
+        sender_name:  { type: string }
+        to:           { type: array, minItems: 1, items: { type: string } }
+        cc:           { type: array, items: { type: string } }
+        bcc:          { type: array, items: { type: string } }
+        reply_to:     { type: string }
+        subject:      { type: string, description: Required without template_id }
+        html:         { type: string }
+        text:         { type: string }
+        template_id:  { type: integer, description: A Brevo template instead of subject and content }
+        params:       { type: object, description: The template's variables }
+        tags:         { type: array, items: { type: string } }
+        attachments:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:           { type: string }
+              content_base64: { type: string }
+              url:            { type: string }
+    output:
+      type: object
+      properties:
+        message_id: { type: string }
+    pii:
+      - { field: to, category: email }
+      - { field: cc, category: email }
+      - { field: bcc, category: email }
+      - { field: reply_to, category: email }
+      - { field: subject, category: other }
+      - { field: html, category: other }
+      - { field: text, category: other }
+      - { field: params, category: other }
+      - { field: attachments, category: other }
+  send_sms:
+    title: Send an SMS
+    description: >-
+      A text from the business's sender name (up to 11 letters and digits).
+      Marketing texts need the person's consent (consent.opted_in), as
+      marketing lists do. Brevo takes no idempotency key: an unknown outcome
+      is parked for a person.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [sender, recipient, content]
+      properties:
+        sender:    { type: string, pattern: "^([A-Za-z0-9]{1,11}|[0-9]{1,15})$" }
+        recipient: { type: string, description: "With the country code: +2348030000000" }
+        content:   { type: string }
+        type:      { enum: [transactional, marketing], default: transactional }
+        tag:       { type: string }
+        consent: &consent
+          type: object
+          required: [opted_in]
+          properties:
+            opted_in: { const: true, description: The person said yes to marketing }
+            source:   { type: string, description: "Where they said so: the order form, the customers table…" }
+            at:       { type: string, description: When }
+    output:
+      type: object
+      properties:
+        message_id: { type: string }
+    pii:
+      - { field: recipient, category: phone }
+      - { field: content, category: other }
+  create_or_update_contact:
+    title: Add or update a contact
+    description: >-
+      Brevo's contact, by email: updated when there is one, added when there
+      is not (updateEnabled), so a retry changes nothing more. Putting them
+      on lists needs their consent (consent.opted_in: true); nobody is put
+      on a list without it. request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [email]
+      properties:
+        email:       { type: string }
+        first_name:  { type: string }
+        last_name:   { type: string }
+        phone:       { type: string, description: With the country code }
+        attributes:  { type: object, description: "Other contact attributes, by their Brevo names (upper case)" }
+        list_ids:    { type: array, items: { type: integer }, description: Lists to put them on; needs consent }
+        consent:     *consent
+        request_key: { type: string, description: Set by the engine; not sent to Brevo }
+    output:
+      type: object
+      properties:
+        contact_id: { type: string, description: Brevo's id, when it says one (a new contact) }
+        created:    { type: boolean }
+    pii:
+      - { field: email, category: email }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
+      - { field: phone, category: phone }
+      - { field: attributes, category: other }
+  add_to_list:
+    title: Add contacts to a list
+    description: >-
+      Puts existing contacts on a list. Only people who opted in: consent is
+      required. Adding someone already on it changes nothing; request_key is
+      the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [list_id, emails, consent]
+      properties:
+        list_id:     { type: integer }
+        emails:      { type: array, minItems: 1, maxItems: 150, items: { type: string } }
+        consent:     *consent
+        request_key: { type: string, description: Set by the engine; not sent to Brevo }
+    output:
+      type: object
+      properties:
+        added:  { type: array, items: { type: string } }
+        failed: { type: array, items: { type: string } }
+    pii:
+      - { field: emails, category: email }
+      - { field: output.added, category: email }
+      - { field: output.failed, category: email }
+  list_lists:
+    title: List your contact lists
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        lists:
+          type: array
+          items:
+            type: object
+            properties:
+              id:          { type: integer }
+              name:        { type: string }
+              subscribers: { type: integer }
+  send_campaign:
+    title: Send an email campaign
+    description: >-
+      Sends a campaign made in Brevo now. Sending one already sent changes
+      nothing: it is answered as sent. request_key is the engine's and is not
+      sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [campaign_id]
+      properties:
+        campaign_id: { type: integer }
+        request_key: { type: string, description: Set by the engine; not sent to Brevo }
+    output:
+      type: object
+      properties:
+        campaign_id: { type: integer }
+        status:      { type: string, description: "queued, in_process or sent" }
+triggers:
+  # Taskiem creates the webhook in Brevo when a workflow is published
+  # (registration remote, decision 0021), with a bearer token of Taskiem's
+  # that Brevo sends with every delivery.
+  transactional_events:
+    type: webhook
+    title: What happens to the transactional emails you send
+    registration: remote
+    verify: { scheme: bearer }
+    events: [request, delivered, hardBounce, softBounce, blocked, spam, invalid, deferred, click, opened, uniqueOpened, unsubscribed]
+    # Brevo's deliveries name the event in snake case (hard_bounce): the
+    # trigger's names are the webhook's (hardBounce).
+    event_type: >-
+      ={"hard_bounce": "hardBounce", "soft_bounce": "softBounce", "invalid_email": "invalid", "unique_opened": "uniqueOpened",
+        "unsubscribe": "unsubscribed", "sent": "request"}[?string(body.event)].orValue(string(body.event))
+    dedup: '=("message-id" in body ? string(body["message-id"]) : string(body.email)) + ":" + string(body.event) + ":" + (has(body.ts_event) ? string(body.ts_event) : "")'
+    # The email sent (send_email's message_id).
+    correlation: '="message-id" in body ? dyn(string(body["message-id"])) : null'
+    pii:
+      - { field: body.email, category: email }
+      - { field: body.subject, category: other }
+    example:
+      body: { event: hard_bounce, email: ada@example.com, id: 1, date: "2026-10-26 13:00:05", ts: 1761480005, message-id: "<202610261200.12345@smtp-relay.mailin.fr>", ts_event: 1761480005, subject: Your receipt, reason: "550 5.1.1 user unknown" }
+  marketing_events:
+    type: webhook
+    title: Unsubscribes, bounces and list additions from your campaigns
+    registration: remote
+    verify: { scheme: bearer }
+    events: [delivered, opened, click, hardBounce, softBounce, spam, unsubscribed, listAddition, contactUpdated, contactDeleted]
+    event_type: >-
+      ={"hard_bounce": "hardBounce", "soft_bounce": "softBounce", "unsubscribe": "unsubscribed", "list_addition": "listAddition",
+        "contact_updated": "contactUpdated", "contact_deleted": "contactDeleted"}[?string(body.event)].orValue(string(body.event))
+    dedup: '=string(body.email) + ":" + string(body.event) + ":" + (has(body.camp_id) ? string(body.camp_id) : "") + ":" + (has(body.ts_event) ? string(body.ts_event) : (has(body.date_event) ? string(body.date_event) : ""))'
+    # The person, by email: a run waiting on a contact wakes when they
+    # unsubscribe or bounce.
+    correlation: '=has(body.email) ? dyn(string(body.email)) : null'
+    pii:
+      - { field: body.email, category: email }
+    example:
+      body: { event: unsubscribe, email: ada@example.com, id: 21, camp_id: 7, date_sent: "2026-10-25 10:00:00", date_event: "2026-10-26 13:00:05", ts_event: 1761480005, list_id: [3] }

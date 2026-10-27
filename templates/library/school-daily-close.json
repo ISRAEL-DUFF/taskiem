@@ -2,7 +2,7 @@
   "id": "school-daily-close",
   "title": "Send the proprietor the daily close every morning",
   "summary": "Every morning, close yesterday's books for the school and send the proprietor the close: money in on students, what matched by itself and what a person matched, what waits for a second person, what families say they paid, and anything that does not reconcile, each with where to fix it.",
-  "description": "Every morning at the time you choose, takes yesterday's close for the school (once: the close is taken exactly once per day, whoever asks first, and never recomputed) and sends it to the owners on the WhatsApp or Telegram they linked to Taskiem, or by email. The close says what landed on students that day, into their account numbers and at the desk; what was matched to fees by itself and what a person matched, and what is still not matched; money the look-back found before any bank notice; cash postings and discounts waiting for a second person; families who say they paid and whose money was not found; and anything that does not reconcile, such as a payment with no receipt or a receipt that should have been voided. Nothing is swept up: each item says the page to fix it on, and a day that does not reconcile is flagged in the title. Yesterday's close is also taken by Taskiem itself after midnight; this run sends it.",
+  "description": "Every morning at the time you choose, takes yesterday's close for the school (once: the close is taken exactly once per day, whoever asks first, and never recomputed) and sends it to the owners on the WhatsApp or Telegram they linked to Taskiem (outside WhatsApp's 24-hour window as the daily close template, its one-line summary with an Open button to the Overview), or by email. The close says what landed on students that day, into their account numbers and at the desk; what was matched to fees by itself and what a person matched, and what is still not matched; money the look-back found before any bank notice; cash postings and discounts waiting for a second person; families who say they paid and whose money was not found; and anything that does not reconcile, such as a payment with no receipt or a receipt that should have been voided. Nothing is swept up: each item says the page to fix it on, and a day that does not reconcile is flagged in the title. Yesterday's close is also taken by Taskiem itself after midnight; this run sends it.",
   "category": "collections",
   "tags": [
     "schools",
@@ -85,7 +85,12 @@
         "input": {
           "to": "owner",
           "title": "='Daily close ' + steps.close.output.day + (steps.close.output.reconciles ? '' : ': DOES NOT RECONCILE')",
-          "message": "=steps.close.output.text"
+          "message": "=steps.close.output.text",
+          "template": "taskiem_daily_close",
+          "template_vars": {
+            "day": "=steps.close.output.date",
+            "summary": "=steps.close.output.summary"
+          }
         },
         "effect": {
           "idempotency_seed": "='school-close:' + steps.close.output.day"

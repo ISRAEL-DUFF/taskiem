@@ -7,6 +7,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -115,6 +116,55 @@ func TestBasicAndQuerySecret(t *testing.T) {
 	for _, c := range [][2]string{{"s3cret", "guess"}, {"s3cret", ""}, {"", ""}, {"", "x"}} {
 		if VerifyPathSecret(c[0], c[1]) == nil {
 			t.Errorf("path_secret accepted %q for %q", c[1], c[0])
+		}
+	}
+}
+
+func TestVerifySvix(t *testing.T) {
+	// Svix's published example (docs.svix.com, "Verifying payloads manually").
+	const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"
+	body := []byte(`{"test": 2432232314}`)
+	hdr := func(id, ts, sig string) http.Header {
+		h := http.Header{}
+		h.Set("svix-id", id)
+		h.Set("svix-timestamp", ts)
+		h.Set("svix-signature", sig)
+		return h
+	}
+	defer func(n func() time.Time) { Now = n }(Now)
+	Now = func() time.Time { return time.Unix(1614265330, 0) }
+	spec := &VerifySpec{Scheme: "svix"}
+	good := "v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE="
+	if err := VerifyWebhook(spec, secret, hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", good), body); err != nil {
+		t.Fatalf("the published example: %v", err)
+	}
+	// While the sender rotates: an old signature and the good one.
+	if err := VerifyWebhook(spec, secret, hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", "v1,bm90IHRoaXMgb25l "+good), body); err != nil {
+		t.Errorf("rotating: %v", err)
+	}
+	// webhook-* headers (Standard Webhooks) are the same.
+	h := http.Header{}
+	h.Set("webhook-id", "msg_p5jXN8AQM9LWM0D4loKWxJek")
+	h.Set("webhook-timestamp", "1614265330")
+	h.Set("webhook-signature", good)
+	if err := VerifyWebhook(spec, secret, h, body); err != nil {
+		t.Errorf("webhook-* headers: %v", err)
+	}
+	for name, c := range map[string]struct {
+		secret string
+		h      http.Header
+		body   []byte
+	}{
+		"changed body":    {secret, hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", good), []byte(`{"test": 2432232315}`)},
+		"another id":      {secret, hdr("msg_other", "1614265330", good), body},
+		"wrong secret":    {"whsec_" + "c2VjcmV0", hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", good), body},
+		"not a whsec key": {"!!", hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", good), body},
+		"v2 only":         {secret, hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614265330", "v2,"+good[3:]), body},
+		"missing headers": {secret, http.Header{}, body},
+		"stale timestamp": {secret, hdr("msg_p5jXN8AQM9LWM0D4loKWxJek", "1614264000", good), body},
+	} {
+		if err := VerifyWebhook(spec, c.secret, c.h, c.body); !errors.Is(err, ErrBadSignature) {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
 }

@@ -132,7 +132,7 @@ func TestCapabilitiesRefused(t *testing.T) {
 		{"event field", `fields: { payout_id: "=body.id" }`, `fields: { id: "=body.id" }`, `payout.settled has no such field`},
 		{"event needs", `fields: { payout_id: "=body.id" }`, `fields: { amount_kobo: 1 }`, `payout.settled needs payout_id`},
 		{"event trigger", "payout.settled: { trigger: hook", "payout.settled: { trigger: hooks", `unknown trigger "hooks"`},
-		{"not a rail", "kind: rail", "kind: tool", `only a rail (kind: rail) declares capabilities`},
+		{"not a rail", "kind: rail", "kind: tool", `only a connector of kind rail declares it (this one is tool)`},
 	} {
 		src := railManifest + goodCapabilities
 		if !strings.Contains(src, c.from) {
@@ -244,5 +244,41 @@ func TestCollectTransferFacts(t *testing.T) {
 		if !strings.Contains(strings.Join(probs, "\n"), c.want) {
 			t.Errorf("%s: want %q among %q", c.name, c.want, probs)
 		}
+	}
+}
+
+// The books capabilities are products' (decision 0051): a books connector
+// maps them as a rail maps its own, and neither kind declares the other's.
+func TestBooksCapabilities(t *testing.T) {
+	const books = `manifest: connector/v1
+id: ledger
+version: 1.0.0
+name: Ledger
+category: productivity
+kind: product
+auth: { type: none }
+base_url: https://ledger.example
+actions:
+  list_accounts:
+    title: List accounts
+    class: read
+    input: { type: object, properties: { kind: { type: string } } }
+capabilities:
+  books_accounts:
+    action: list_accounts
+    input: { kind: "=input.?type" }
+    output: { accounts: "=output.accounts.map(a, {'id': a.id, 'name': a.name})" }
+`
+	if _, probs := Parse([]byte(books)); len(probs) > 0 {
+		t.Fatalf("a product mapping books_accounts: %v", probs)
+	}
+	if _, probs := Parse([]byte(strings.Replace(books, "kind: product", "kind: rail", 1))); !strings.Contains(strings.Join(probs, ";"), "only a connector of kind product declares it (this one is rail)") {
+		t.Errorf("a rail mapping books_accounts: %v", probs)
+	}
+	if _, probs := Parse([]byte(railManifest + goodCapabilities)); len(probs) > 0 {
+		t.Fatal(probs)
+	}
+	if _, probs := Parse([]byte(strings.Replace(railManifest+goodCapabilities, "kind: rail", "kind: product", 1))); !strings.Contains(strings.Join(probs, ";"), "only a connector of kind rail declares it (this one is product)") {
+		t.Errorf("a product mapping pay_bank: %v", probs)
 	}
 }
