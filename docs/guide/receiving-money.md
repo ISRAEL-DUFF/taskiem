@@ -34,6 +34,17 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 
 Every withdrawal and its outcome is in the money log, like any other payment.
 
+## Sending money to your bank automatically
+
+Under **Send money to your bank automatically**, an owner chooses:
+
+- **Every week**, on a day and at a time; or
+- **Whenever your wallet holds more than** an amount, checked every hour.
+
+You can also say how much to **keep in your wallet**. Each time, what the wallet holds, less what you keep and a little room for the bank's fee on the transfer, goes to the bank account you saved for withdrawals, when that is at least ₦1,000.
+
+Nobody approves these: they only ever pay your saved bank account, and changing that account is the same change, with the same second person if four-eyes is on. The owner is told each time money is sent, or that it could not be. Turn it off there at any time; it stops at once.
+
 ## What it costs
 
 Receiving money with Taskiem comes with your plan. If your plan does not include it, Get started and the Payments page say so, with a link to the plans.

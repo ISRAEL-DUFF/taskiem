@@ -102,6 +102,9 @@ type Server struct {
 	// Invoices are the business's invoices to its customers (decision
 	// 0045); nil: their routes answer that they are not available.
 	Invoices *invoicing.Invoices
+	// ReceivePayoutFeeKobo is the room a sweep to the bank leaves for the
+	// payout's fee (TASKIEM_ISWALLET_PAYOUT_FEE_KOBO); 0 is ₦100.
+	ReceivePayoutFeeKobo int64
 	// Matcher matches money to invoices (T5); nil: one is made from
 	// Invoices.
 	Matcher *matching.Matcher

@@ -21,28 +21,79 @@ test.beforeAll(async () => {
     req.on("data", (c: Buffer) => (body += c.toString("utf8")));
     req.on("end", () => {
       const json = (status: number, v: unknown) => {
-        res.writeHead(status, { "Content-Type": "application/json", "X-Request-ID": "req_e2e" });
+        res.writeHead(status, {
+          "Content-Type": "application/json",
+          "X-Request-ID": "req_e2e",
+        });
         res.end(JSON.stringify(v));
       };
-      if (req.headers.authorization !== "Bearer isw_platform_e2e") return json(401, { error: { code: "UNAUTHORIZED", message: "bad key" } });
+      if (req.headers.authorization !== "Bearer isw_platform_e2e")
+        return json(401, {
+          error: { code: "UNAUTHORIZED", message: "bad key" },
+        });
       const url = req.url ?? "";
       if (req.method === "POST" && url === "/v1/wallets") {
         const w = JSON.parse(body) as { bvn?: string };
-        if (!req.headers["idempotency-key"]) return json(400, { error: { code: "MISSING_IDEMPOTENCY_KEY", message: "Idempotency-Key is required" } });
+        if (!req.headers["idempotency-key"])
+          return json(400, {
+            error: {
+              code: "MISSING_IDEMPOTENCY_KEY",
+              message: "Idempotency-Key is required",
+            },
+          });
         sentBVN.push(w.bvn ?? "");
         wallets++;
-        return json(201, { wallet_id: `wal_rm_${wallets}`, internal_reference: "6256638601", tier: "TIER_1" });
+        return json(201, {
+          wallet_id: `wal_rm_${wallets}`,
+          internal_reference: "6256638601",
+          tier: "TIER_1",
+        });
       }
-      const m = url.match(/^\/v1\/wallets\/(wal_rm_\d+)\/(virtual-account|balance)$/);
+      const m = url.match(
+        /^\/v1\/wallets\/(wal_rm_\d+)\/(virtual-account|balance)$/,
+      );
       if (m && m[2] === "virtual-account") {
-        const a = JSON.parse(body) as { reference: string; account_name?: string };
-        return json(201, { reference: a.reference, account_number: "8800000001", bank_name: "Wema Bank", account_name: a.account_name ?? "", status: "active" });
+        const a = JSON.parse(body) as {
+          reference: string;
+          account_name?: string;
+        };
+        return json(201, {
+          reference: a.reference,
+          account_number: "8800000001",
+          bank_name: "Wema Bank",
+          account_name: a.account_name ?? "",
+          status: "active",
+        });
       }
-      if (m && m[2] === "balance") return json(200, { wallet_id: m[1], balances: [{ currency: "NGN", total: 7500000, available: 7000000, pending: 500000 }] });
-      if (url === "/v1/banks") return json(200, { banks: [{ code: "058", name: "GTBank" }, { code: "044", name: "Access Bank" }] });
+      if (m && m[2] === "balance")
+        return json(200, {
+          wallet_id: m[1],
+          balances: [
+            {
+              currency: "NGN",
+              total: 7500000,
+              available: 7000000,
+              pending: 500000,
+            },
+          ],
+        });
+      if (url === "/v1/banks")
+        return json(200, {
+          banks: [
+            { code: "058", name: "GTBank" },
+            { code: "044", name: "Access Bank" },
+          ],
+        });
       if (req.method === "POST" && url === "/v1/name-enquiry") {
-        const q = JSON.parse(body) as { account_number: string; bank_code: string };
-        return json(200, { account_name: "ADA OBI STORES", account_number: q.account_number, bank_code: q.bank_code });
+        const q = JSON.parse(body) as {
+          account_number: string;
+          bank_code: string;
+        };
+        return json(200, {
+          account_name: "ADA OBI STORES",
+          account_number: q.account_number,
+          bank_code: q.bank_code,
+        });
       }
       json(404, { error: { code: "NOT_FOUND", message: url } });
     });
@@ -50,14 +101,21 @@ test.beforeAll(async () => {
   await new Promise<void>((resolve) => fake.listen(port, "127.0.0.1", resolve));
 });
 
-test.afterAll(() => new Promise<void>((resolve) => fake.close(() => resolve())));
+test.afterAll(
+  () => new Promise<void>((resolve) => fake.close(() => resolve())),
+);
 
 const H = { "X-Taskiem-Request": "1" };
 
 async function signUp(page: Page) {
   const r = await page.request.post("/v1/signup", {
     headers: H,
-    data: { tenant: "Ada Obi Stores", email: `ada-${Date.now()}@obi.test`, name: "Ada", password: "correct horse battery" },
+    data: {
+      tenant: "Ada Obi Stores",
+      email: `ada-${Date.now()}@obi.test`,
+      name: "Ada",
+      password: "correct horse battery",
+    },
   });
   expect(r.status(), await r.text()).toBe(201);
 }
@@ -70,7 +128,9 @@ async function axeBoth(page: Page, where: string) {
   }
 }
 
-test("a business with no payments account receives money with Taskiem and withdraws to its bank", async ({ page }) => {
+test("a business with no payments account receives money with Taskiem and withdraws to its bank", async ({
+  page,
+}) => {
   test.setTimeout(120_000);
   await signUp(page);
 
@@ -84,12 +144,16 @@ test("a business with no payments account receives money with Taskiem and withdr
 
   // Where the money is held, the email and the BVN, sent once.
   const off = page.getByTestId("receive-money-off");
-  await expect(off.getByRole("radio", { name: /Only my own money/ })).toBeChecked();
+  await expect(
+    off.getByRole("radio", { name: /Only my own money/ }),
+  ).toBeChecked();
   await off.getByLabel("Your business email").fill("ada@obi.test");
   await off.getByLabel("The director's BVN").fill("2221234567x8");
   await expect(off.getByLabel("The director's BVN")).toHaveValue("22212345678");
   await off.getByRole("button", { name: "Turn it on" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "You can receive money now" })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "You can receive money now" }),
+  ).toBeVisible();
   const hero = page.getByTestId("receive-hero");
   await expect(hero.getByTestId("receive-number")).toHaveText("8800 000 001");
   await expect(hero).toContainText("Wema Bank");
@@ -103,7 +167,9 @@ test("a business with no payments account receives money with Taskiem and withdr
   // Where withdrawals go: the bank names the account; two owners from ₦500,000.
   const w = page.getByTestId("withdrawals");
   const form = w.getByTestId("withdraw-to-form");
-  await form.getByRole("combobox", { name: /^Your bank/ }).selectOption({ label: "GTBank" });
+  await form
+    .getByRole("combobox", { name: /^Your bank/ })
+    .selectOption({ label: "GTBank" });
   await form.getByLabel("Your account number").fill("0123456789");
   // Two owners need two owners: this business has one.
   await form.getByLabel("Two owners approve from (₦, optional)").fill("500000");
@@ -120,17 +186,48 @@ test("a business with no payments account receives money with Taskiem and withdr
   // A withdrawal waits for approval.
   const wd = w.getByTestId("withdraw");
   await wd.getByLabel("Amount to withdraw (₦)").fill("90000");
-  await expect(wd).toContainText("Your wallet holds ₦70,000: withdraw that much or less.");
+  await expect(wd).toContainText(
+    "Your wallet holds ₦70,000: withdraw that much or less.",
+  );
   await expect(wd.getByRole("button", { name: "Withdraw" })).toBeDisabled();
   await wd.getByLabel("Amount to withdraw (₦)").fill("15000");
   await wd.getByRole("button", { name: "Withdraw" }).click();
-  await expect(wd.getByTestId("withdraw-started")).toContainText("Nothing is paid until it is approved");
+  await expect(wd.getByTestId("withdraw-started")).toContainText(
+    "Nothing is paid until it is approved",
+  );
+
+  // Sending money to the bank automatically: weekly, no approval, only to
+  // the saved account; then off again.
+  const sw = page.getByTestId("sweep");
+  await expect(sw.getByTestId("sweep-line")).toContainText("Off");
+  await sw.getByRole("button", { name: "Turn on" }).click();
+  await sw.getByLabel("Every week").check();
+  await sw.getByLabel("Day").selectOption("friday");
+  await sw.getByLabel("Time (Lagos)").fill("17:00");
+  await sw.getByLabel("Keep in my wallet (₦, optional)").fill("20000");
+  await sw.getByRole("button", { name: "Save" }).click();
+  await expect(sw.getByTestId("sweep-line")).toHaveText(
+    "Every Friday at 17:00, what your wallet holds goes to your bank, keeping ₦20,000 in your wallet.",
+  );
+  await expect(sw).toContainText(
+    "Nobody approves it: it only ever pays your saved bank account",
+  );
+  await sw.getByRole("button", { name: "Change" }).click();
+  await sw.getByLabel("Off: I withdraw when I choose").check();
+  await sw.getByRole("button", { name: "Save" }).click();
+  await expect(sw.getByTestId("sweep-line")).toContainText(
+    "Off: your money stays in your wallet",
+  );
 
   // Money shows the number; Connections says Taskiem keeps the account.
   await page.goto("/money");
-  await expect(page.getByTestId("receive-card-number")).toHaveText("8800 000 001");
+  await expect(page.getByTestId("receive-card-number")).toHaveText(
+    "8800 000 001",
+  );
   await page.goto("/connections");
-  const conn = page.getByTestId("connection").filter({ hasText: "Your wallet with Taskiem" });
+  const conn = page
+    .getByTestId("connection")
+    .filter({ hasText: "Your wallet with Taskiem" });
   await expect(conn).toContainText("kept by Taskiem");
   await expect(conn.getByRole("button", { name: "Disconnect" })).toHaveCount(0);
 

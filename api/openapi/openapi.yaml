@@ -14784,6 +14784,58 @@ paths:
                 $ref: '#/components/schemas/ReceiveMoney'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/receive-money/sweep:
+    put:
+      operationId: putReceiveMoneySweep
+      tags:
+      - Invoices
+      summary: Send what the wallet holds to the bank automatically
+      description: |
+        Owners only. Weekly on a day and at a time, or whenever the wallet holds more than an amount (checked hourly), keeping an
+        amount; the rest, less room for the bank's fee and at least NGN 1,000, goes to the bank account saved for withdrawals, with
+        no approval. It needs that account. Turning it off takes it out of prod at once; turning it on or changing it publishes the
+        sweep's workflow, which four-eyes publishing holds for a second person.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: ["off", weekly, above]
+                day:
+                  type: string
+                  enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                time:
+                  type: string
+                  description: HH:MM, Lagos time
+                above_kobo:
+                  type: integer
+                  format: int64
+                  description: For above, at least 100000 (NGN 1,000)
+                keep_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 0
+      responses:
+        '200':
+          description: The setting now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/receive-money/balance:
     get:
       operationId: getReceiveMoneyBalance
@@ -20629,6 +20681,45 @@ components:
         withdraw_waiting:
           type: string
           description: What a change to withdrawals still waits for (a second person under four-eyes, a promotion to a gated prod); the account and rule before stay in force until then.
+        sweep:
+          $ref: '#/components/schemas/ReceiveMoneySweep'
+    ReceiveMoneySweep:
+      type: object
+      description: |
+        Sending what the wallet holds to the saved bank account automatically: weekly, or whenever the wallet holds more than an
+        amount (checked hourly). No approval: the money only goes to the account written into the sweep's workflow, which changes
+        with the withdrawal one.
+      required: [mode, above_kobo, keep_kobo, fee_allowance_kobo, minimum_kobo]
+      properties:
+        mode:
+          type: string
+          enum: ["off", weekly, above]
+        day:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        time:
+          type: string
+          description: HH:MM, Lagos time
+        above_kobo:
+          type: integer
+          format: int64
+        keep_kobo:
+          type: integer
+          format: int64
+        fee_allowance_kobo:
+          type: integer
+          format: int64
+          description: What each sweep leaves for the bank's fee on the transfer
+        minimum_kobo:
+          type: integer
+          format: int64
+          description: The least one sweep sends
+        workflow_id:
+          type: string
+          format: uuid
+        waiting:
+          type: string
+          description: What a change to the sweep still waits for (a second person under four-eyes, a promotion to a gated prod).
     Withdrawal:
       type: object
       required: [run_id, workflow_id, request_id, created]
