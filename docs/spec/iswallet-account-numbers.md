@@ -11,8 +11,9 @@ iswallet's guide of 27 October answers what the rail facts (B0) had to leave ope
 3. Taskiem can **create a school's wallet** from the Schools settings instead of asking the bursar to paste a wallet id.
 4. Every iswallet call keeps its `X-Request-ID`, and the two failure kinds the guide distinguishes (final against unknown) are told apart.
 5. A connection check that proves the key works and names the partners that can issue.
+6. **Taskiem subscribes the webhook itself**, one subscription per connection and environment, the signing secret kept as a platform secret: there is no iswallet dashboard to paste a URL into (iswallet, 27 October, [addendum](../integrations/iswallet-answers-2026-10-27-account-numbers.md#addendum-later-the-same-day-the-webhook-endpoint)).
 
-One PR, milestones I1 to I5 below, each small. Things that need people, not code, are in §6.
+One PR, milestones I1 to I7 below, each small. Things that need people, not code, are in §6.
 
 ## 2. What the guide settles
 
@@ -28,6 +29,7 @@ One PR, milestones I1 to I5 below, each small. Things that need people, not code
 | KYC before issuing | `email` on every wallet; a director's BVN on the two business types; `422 KYC_REQUIRED` names the field | The readiness note names the field (I5) |
 | Failure kinds | `502 PROVIDER_REJECTED` is final, nothing created; `500 INTERNAL_ERROR` is unknown, the account may exist | Map to fatal and unknown outcome (I4) |
 | Wallet creation | Flat identity fields, never `kyc_profile`; `Idempotency-Key` required; `owner_type`; the response's `account_number` is **not payable**, read `internal_reference` | The wallet action (I3) |
+| The webhook endpoint | Ours: given to iswallet in `endpoint_url` on `POST /v1/webhooks/subscriptions`, changed with `PATCH`; one subscription per environment, each with its own secret returned once; https and publicly resolvable (private or loopback refused, `400 INVALID_ENDPOINT_URL`); answer 2xx within 30 s and work afterwards; 10 retries then dead-letter; `GET …/subscriptions/{id}/deliveries` shows each attempt | Remote registration under decision 0021 (I7); ingest already answers 202 at once |
 | Signature | `HMAC-SHA256(secret, timestamp + "." + rawBody)`, `X-iSpend-Signature`, 300 s tolerance; retries carry `X-iSpend-Idempotency-Key` | Already the manifest's scheme; add the idempotency header to dedup (I1) |
 
 ## 3. Design
@@ -63,6 +65,16 @@ One PR, milestones I1 to I5 below, each small. Things that need people, not code
 - A read action `list_providers` (`GET /v1/providers`) and a readiness check on an iswallet connection: the key works, and these partners can issue permanent accounts for NGN. Shown on the connection page and used by the Schools settings before a batch is planned.
 - Readiness notes: a business wallet without its director's BVN gets "iswallet needs the director's BVN before it can issue account numbers" from the `KYC_REQUIRED` message's field.
 
+### 3.6 Subscribing ourselves (I7)
+
+iswallet has no dashboard where a business pastes a URL: the subscription is made over the API, and its signing secret is returned once. This is the case [decision 0021](../decisions/0021-remote-trigger-registration.md) was built for (Xenibase), so iswallet's three webhook triggers (`credit_event`, `outflow_event`, `transfer_event`) declare `registration: remote` and the connector supplies a `Registrar`:
+
+- **Create**: `POST /v1/webhooks/subscriptions` with `endpoint_url` (the ingest URL Taskiem registers, which names the subscription row: `…/hooks/…?env=&connection=&subscription=`) and the trigger's `event_types` exactly (no wildcards); the `signing_secret` goes to the tenant's vault under the platform environment `_remote`, never returned by the API. **Update**: `PATCH` the same subscription when the hooks URL or the events change. **Find by name**: iswallet subscriptions carry no name, so the reconciler finds one by its `endpoint_url`, which carries the row id, before creating (crash safety by name, 0021 point 4). **Delete** on undeploy. **Rotate**: not documented; absent until iswallet says.
+- **Drift**: the 10-minute check reads the subscription and its last deliveries (`GET …/subscriptions/{id}/deliveries`), records `healthy`, `failing` (recent non-2xx answers from us) or `missing`, and shows iswallet's status code and our response body for the last failed attempt on the connection page, so "we never got the webhook" is answered without asking iswallet.
+- **One subscription per connection and environment** (prod and staging each get their own secret), as the page already says; a partner's shared client keeps one subscription at the partner, routed by `wallet_id` as today (decision 0031).
+- The manual path (paste `webhook_secret`) stays for a connection whose subscription was made outside Taskiem; `webhook_secret` becomes optional, and the connection page says which of the two is in force.
+- Taskiem's side already answers `202` at once and does the work afterwards; the hooks host must be https and public: `TASKIEM_HOOKS_URL` on staging and production, which the readiness check (I5) names when missing.
+
 ## 4. Milestones
 
 | Id | Milestone | Size | Done when |
@@ -73,8 +85,9 @@ One PR, milestones I1 to I5 below, each small. Things that need people, not code
 | I4 | Request ids kept and shown; final against unknown failures | S | A failed step and a held credit show the id; a `502` fails fatally with the reason; a `500` parks, and an issue retries safely |
 | I5 | `list_providers` and the connection check; the BVN readiness note | S | The connection page says the key works and which partners issue; a business wallet without a BVN shows the note |
 | I6 | Docs: the iswallet page, the rail facts (iswallet rows closed), the partner tracker (what iswallet still needs), the schools open items (iswallet rows closed), the Schools guide (creating the wallet) | S | `docsite -check` passes; the open items no longer say the webhook is unmapped |
+| I7 | iswallet's triggers registered remotely (decision 0021): create, update, find by endpoint, delete, drift with the deliveries log; the secret a platform secret; the manual secret optional | M | Connecting iswallet on staging makes the subscription with no pasting; a signed delivery to the registered URL starts the credit; the connection page shows the subscription's health and the last failed attempt; undeploy removes it |
 
-Order: I1, I2, I4, I5, I3, I6. One PR.
+Order: I1, I2, I4, I5, I7, I3, I6. One PR.
 
 ## 5. Testing
 
@@ -84,13 +97,14 @@ Order: I1, I2, I4, I5, I3, I6. One PR.
 | Capability | `virtual_account.credited` from the fixture: gross, settled, fee, reference, account number, credit id; the reversal | `connectors/iswallet` |
 | Exactly once | The webhook and the look-back reporting the same credit count once; a redelivery with the same idempotency header is one event | `engine/lookback`, `engine/ingest` |
 | Schools | A student's account issued on the single call; a batch job over the batch call with `existing` items; the wallet created from settings | `engine/schools`, `api` |
-| Web | Settings: create the wallet, the readiness line, the BVN note | Playwright |
+| Remote registration | Create, find by endpoint, update, delete and drift against a fake iswallet (`engine/remote` tests as Xenibase's); the secret never in an API answer | `engine/remote`, `connectors/iswallet` |
+| Web | Settings: create the wallet, the readiness line, the BVN note; the connection page's subscription health | Playwright |
 
 ## 6. Needs people, not code
 
 | Item | Who | Status |
 | --- | --- | --- |
-| The webhook URL for sandbox and production, given to iswallet (`<edge>/hooks/…` as the connection page shows) | Founder | Open |
+| A public https hooks host on staging and production (`TASKIEM_HOOKS_URL`), so Taskiem's own subscriptions are accepted (private or loopback addresses are refused) | Founder (operations) | Open; nothing to give iswallet by hand once I7 is built |
 | Which `owner_type` the schools are. `client_end_user_business` means per-student credits reach the school's segregated account by iswallet's sweep (alarm at 10 minutes) while the balance is right at once; the alternative, one unreferenced number per school, loses per-student attribution | Founder, with iswallet | Open; the plan assumes `client_end_user_business` and eventual segregation |
 | Expected enrolment volume, so iswallet can say whether 500 a call needs paging on our side (our jobs page below that already) | Founder | Open |
 | Sandbox key and base URL on the staging connection, then the pilot checklist's issuing step run for real | Founder, then engineering | Open |

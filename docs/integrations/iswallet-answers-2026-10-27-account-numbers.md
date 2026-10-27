@@ -362,3 +362,11 @@ for completeness, not as something you need.
   public, no key needed
 - Amounts are **always minor units**. ₦2,000 is `200000`
 - A client key reaches only your own wallets
+
+---
+
+## Addendum, later the same day: the webhook endpoint
+
+> Kept verbatim. iswallet's answer to "what is the webhook URL".
+
+> There's no iswallet URL to point at — the webhook endpoint is yours, hosted on your side, and you give it to us when you subscribe via the `endpoint_url` field on `POST /v1/webhooks/subscriptions` (you can change it later with a `PATCH` to the same subscription). The path is entirely your choice, e.g. `https://taskiem.example/hooks/iswallet`, and you'll want a separate subscription per environment since each one gets its own signing secret, returned only once at creation. It must be **https** and publicly resolvable — URLs that resolve to private or loopback addresses are refused with `400 INVALID_ENDPOINT_URL`. Your endpoint should **return a 2xx within 30 seconds** and do the real work afterwards; anything else, including a 4xx, counts as a failure and is retried up to 10 times with backoff before we dead-letter it. Two things to build in from the start: verify the `X-iSpend-Signature` header before trusting the body, and make the handler idempotent on `X-iSpend-Idempotency-Key`, since retries are normal. If deliveries ever look wrong at your end, `GET /v1/webhooks/subscriptions/{id}/deliveries` shows you our status code and your response body for each attempt.
