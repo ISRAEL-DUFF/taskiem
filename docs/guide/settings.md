@@ -4,6 +4,8 @@
 
 **Advanced** (owners and admins): turns on the technical parts of the web app for someone who builds workflows by hand: a blank canvas, formulas, the test environment and your own connectors. Everyone in the business sees the same. Plans above Shop have it on to begin with. Without it, you see one environment, production: the real one. With it, you also see the test environment (dev), and connections, settings and workflows can differ between the two.
 
+**Payments** (owners turn it on): receive money with Taskiem when you have no payments account of your own: an account number for your business, your balance, and withdrawals to your bank ([more](receiving-money.md)).
+
 **People you message**: your staff who don't use Taskiem, and your customers, can get your workflows' messages on WhatsApp or Telegram instead of by text. Share **Your link** once, for example in your staff WhatsApp group: each person taps it and chooses their app. Forms that send people updates offer the same on their thank-you page. The list shows who asked, with their numbers partly hidden; **Remove** sends them texts again. Nobody ever needs to give you a chat ID ([more](../updates.md)).
 
 **Knowing what happened**: after you save, publish or upload something, a short message says it worked ("Saved", "Published"); if something goes wrong where you cannot see it, a message says so, and **Show me** takes you there. The bell at the top lists what you need to know: a workflow that failed, a problem to fix, approvals waiting for you. You don't have to set anything up. Under **Notifications** you choose what also reaches your WhatsApp or Telegram, or your email. If you ever see "Something went wrong on our side" with a reference such as E-7K2Q9M, quote it when you ask for help.

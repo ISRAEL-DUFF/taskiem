@@ -54,6 +54,10 @@ iswallet keys are client-scoped: a key reaches every wallet of its client (§A2)
 
 Wallet-scoped keys and per-wallet subscriptions at iswallet would add a second layer; they have been asked for (P4-W1 in [needs people](../needs-people.md#phase-4)) and the guard does not depend on them.
 
+## Taskiem's own client
+
+Taskiem also holds an iswallet client of its own, live and test, for businesses with no payments account ([decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md); [owner's guide](../guide/receiving-money.md); [runbook](../runbooks/iswallet-platform.md)). A business that turns on **Settings > Payments** gets a wallet under it and the connection `iswallet/taskiem`, which stores only that wallet: the vault hands the connector Taskiem's key for the connection's mode, as a shared client, so every wallet call keeps to that one wallet. Its events come through the client's one subscription per mode, at `/hooks/platform/iswallet@1?mode=`, routed to the business by `wallet_id`. Such a connection makes no subscription of its own, and its credentials cannot be replaced or the connection deleted through the API.
+
 ## Customers' account numbers
 
 Through `virtual_account` a business gives each customer (each student, for a school) a permanent account number on one of its wallets (`account`); the `account_name` asked for is what the payer's bank shows. The partner's fee (1.4%, capped at ₦2,000) is passed to the payer by default: `amount` is what the payer sent and `amount_credited` what landed.

@@ -17,7 +17,7 @@ import (
 
 const iswalletUsage = `usage: taskiem iswallet subscribe|status|unsubscribe [-mode live|test] [ID]
 
-Taskiem's own iswallet client (decision 0052; docs/operations/iswallet-platform.md),
+Taskiem's own iswallet client (decision 0052; docs/runbooks/iswallet-platform.md),
 for the mode's key (TASKIEM_ISWALLET_CLIENT_KEY, or _TEST_CLIENT_KEY):
   subscribe     make the client's one subscription for the mode, every
                 wallet event to TASKIEM_HOOKS_URL/platform/iswallet@1?mode=,

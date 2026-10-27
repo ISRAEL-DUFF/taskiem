@@ -35,6 +35,15 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 | R0-3 | [x] (23 October, [embedding](integrations/payrolla-reference/api/embedding.md)) Payrolla's embeddable screens: URLs, sign-in inside a frame, `frame-ancestors`, postMessage events (P3) | Payrolla | — | R6, app views |
 | R0-4 | [x] (per company, made with each company's key) Whether Payrolla's webhooks are set per company or once for all its companies | Payrolla with Taskiem | Partner routing built (decision 0031) | R5 |
 
+## Receiving money with Taskiem (decision 0052)
+
+| # | Item | Who | Code status | Unblocks |
+| --- | --- | --- | --- | --- |
+| RM-1 | [ ] Taskiem's own iswallet client, live and test, provisioned by iswallet; its keys into the secrets store as `TASKIEM_ISWALLET_CLIENT_KEY` and `_TEST_CLIENT_KEY` | Founder (iSpend), with iswallet | Built ([plan §9](spec/iswallet-account-numbers.md#9-built-workstream-w), [runbook](runbooks/iswallet-platform.md)) | Settings > Payments for every business |
+| RM-2 | [ ] Each mode's subscription made with `taskiem iswallet subscribe` against the public hooks URL, its secret stored as `TASKIEM_ISWALLET_WEBHOOK_SECRET` (or `_TEST_`) | Operations | Built | Payments reaching businesses in seconds |
+| RM-3 | [ ] Which plans include receiving money with Taskiem, and whether Taskiem charges a margin over iswallet's fee (`deploy/plans.yaml`: every plan for now) | Founder | Plan feature and metering built | Pricing |
+| RM-4 | [ ] Whether a business may move from pooled to segregated later, and the sweep's behaviour at volume | iswallet | The choice is made once; support changes it by hand | Businesses that grow into holding others' money |
+
 ## Business connectors (K0)
 
 The [business connectors plan](spec/business-connectors.md) and [decision 0051](decisions/0051-platform-apps.md). Start the Meta and Intuit items first: their reviews are the longest waits.
