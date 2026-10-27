@@ -1,0 +1,28 @@
+{
+ "action": "send_email",
+ "input": {
+  "from": "Ada Cakes <orders@adacakes.ng>",
+  "to": [
+   "ada@example.com"
+  ],
+  "subject": "Receipt for invoice INV-0042",
+  "html": "<p>Thank you</p>",
+  "tags": [
+   {
+    "name": "invoice",
+    "value": "INV-0042"
+   }
+  ]
+ },
+ "credentials": {
+  "api_key": "re_test_123"
+ },
+ "exchanges": [
+  "domains",
+  "send_429"
+ ],
+ "expect": {
+  "error": "retryable"
+ },
+ "idempotency_key": "tsk-receipt-inv-0042-0000000000"
+}

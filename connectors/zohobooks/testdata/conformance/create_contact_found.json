@@ -1,0 +1,27 @@
+{
+ "action": "create_contact",
+ "input": {
+  "contact_name": "Adaeze Okafor",
+  "email": "ada@example.com",
+  "phone": "+2348030000000"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "contact_by_email"
+ ],
+ "expect": {
+  "output": {
+   "contact_id": "460000000026049",
+   "created": false
+  }
+ }
+}

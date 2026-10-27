@@ -166,6 +166,7 @@ var synonyms = map[string][]string{
 	"spreadsheet": {"googlesheets", "productivity"}, "database": {"database", "query"}, "sql": {"database", "query"},
 	"file": {"storage"}, "upload": {"storage"}, "bucket": {"s3", "storage"}, "statement": {"open_banking"},
 	"bank": {"open_banking", "payments"}, "airtime": {"airtime"}, "chat": {"slack", "telegram"},
+	"books": {"accounting"}, "bookkeeping": {"accounting"}, "accounting": {"accounting"},
 	// Invoices to customers are invoices@1's (rule 17) however they are
 	// worded; "invoice" itself already names it.
 	"billing": {"invoices"}, "owe": {"invoices"}, "owes": {"invoices"}, "owed": {"invoices"},

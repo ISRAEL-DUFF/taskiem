@@ -1,0 +1,42 @@
+{
+  "schema": "wd-test/v1",
+  "template": "slack-paid-invoices",
+  "params": {
+    "slack_connection": "main",
+    "channel": "C0OPS"
+  },
+  "cases": [
+    {
+      "name": "a paid invoice is posted",
+      "trigger": {
+        "type": "invoice",
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "number": "INV-0042",
+          "status": "paid",
+          "amount_kobo": 15000000,
+          "amount": "₦150,000.00",
+          "currency": "NGN"
+        }
+      },
+      "mocks": {
+        "post": {
+          "output": {
+            "channel": "C0OPS",
+            "ts": "1.1"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "post": {
+            "channel": "C0OPS",
+            "text": "Invoice INV-0042 (₦150,000.00) is paid in full."
+          }
+        }
+      }
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
 
@@ -126,7 +128,7 @@ func (h *Handler) deliverInto(ctx context.Context, w http.ResponseWriter, r *htt
 		run, _, err := h.Store.StartRun(ctx, runtime.StartRequest{
 			TenantID: t.tenant, WorkflowID: s.workflow, Version: s.version, Environment: ev.env,
 			Trigger: runTrig, StartedBy: "connector:" + ev.ref, TriggerID: "event/" + s.workflow.String() + "/" + ev.env, DedupKey: ev.dedup,
-			Throttled: t.throttled,
+			Throttled: t.throttled, TriggerPII: triggerPII(ev),
 		})
 		if le, ok := runtime.IsLimit(err); ok {
 			limited(w, le)
@@ -216,26 +218,12 @@ func (h *Handler) routeEvent(ctx context.Context, w http.ResponseWriter, r *http
 			continue
 		}
 		// The sub-tenant's own gate, as at its own URL.
-		g, err := h.gate(ctx, *t.sub)
-		switch {
-		case errors.Is(err, errBusy):
-			w.Header().Set("Retry-After", "1")
-			replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
-			return 0, false
-		case err != nil:
-			h.unavailable(w, r, err)
-			return 0, false
-		case g.hard == nil:
-			continue // deleted since it was routed
-		case g.suspended:
-			h.suspended(w, r, *t.sub)
+		throttled, exists, ok := h.admit(ctx, w, r, *t.sub)
+		if !ok {
 			return 0, false
 		}
-		if !g.hard.Allow() {
-			h.Store.LimitHit(ctx, *t.sub, "ingest_ceiling")
-			w.Header().Set("Retry-After", "1")
-			reply(w, http.StatusTooManyRequests, map[string]string{"error": "ingest rate exceeded", "code": "rate_limited"})
-			return 0, false
+		if !exists {
+			continue // deleted since it was routed
 		}
 		var subs []subscriber
 		if err := db.InTenantTx(ctx, h.Store.Pool, []uuid.UUID{*t.sub}, func(tx pgx.Tx) error {
@@ -250,12 +238,43 @@ func (h *Handler) routeEvent(ctx context.Context, w http.ResponseWriter, r *http
 		if t.connection != nil {
 			conn = *t.connection
 		}
-		if _, ok := h.deliverInto(ctx, w, r, target{tenant: *t.sub, connection: conn, throttled: !g.soft.Allow(), subs: subs}, ev); !ok {
+		if _, ok := h.deliverInto(ctx, w, r, target{tenant: *t.sub, connection: conn, throttled: throttled, subs: subs}, ev); !ok {
 			return 0, false
 		}
 		n++
 	}
 	return n, true
+}
+
+// admit applies a tenant's own ingest gate to an event delivered into it
+// from elsewhere (a partner's subscription, Taskiem's platform app), as
+// at its own URL: its ceiling (429), its suspension (423) and its soft
+// rate (throttled: the runs it starts wait as queued). exists is false for
+// a tenant that no longer exists; ok false means the delivery has been
+// answered with an error.
+func (h *Handler) admit(ctx context.Context, w http.ResponseWriter, r *http.Request, tenant uuid.UUID) (throttled, exists, ok bool) {
+	g, err := h.gate(ctx, tenant)
+	switch {
+	case errors.Is(err, errBusy):
+		w.Header().Set("Retry-After", "1")
+		replyErr(w, http.StatusTooManyRequests, "ingest rate exceeded")
+		return false, false, false
+	case err != nil:
+		h.unavailable(w, r, err)
+		return false, false, false
+	case g.hard == nil:
+		return false, false, true
+	case g.suspended:
+		h.suspended(w, r, tenant)
+		return false, false, false
+	}
+	if !g.hard.Allow() {
+		h.Store.LimitHit(ctx, tenant, "ingest_ceiling")
+		w.Header().Set("Retry-After", "1")
+		reply(w, http.StatusTooManyRequests, map[string]string{"error": "ingest rate exceeded", "code": "rate_limited"})
+		return false, false, false
+	}
+	return !g.soft.Allow(), true, true
 }
 
 // deliverNormalised delivers the rail's normalised event for a delivery
@@ -289,9 +308,10 @@ func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, 
 		return 0, nil, true
 	}
 	// The money log hears every movement in prod, whether or not a
-	// workflow listens (decision 0045). A failed write is answered 503 so
+	// workflow listens (decision 0045); the books' events are records of
+	// money, not movements of it. A failed write is answered 503 so
 	// the rail delivers again; the log keeps it once.
-	if h.MoneyLog != nil && ev.env == "prod" {
+	if h.MoneyLog != nil && ev.env == "prod" && spec.Kind == "rail" {
 		if _, err := h.MoneyLog.RecordEvent(ctx, t.tenant, ev.env, ev.conn.Manifest.ID, t.connection, name, fields); err != nil {
 			h.unavailable(w, r, err)
 			return 0, nil, false
@@ -346,4 +366,18 @@ func (h *Handler) deliverNormalised(ctx context.Context, w http.ResponseWriter, 
 func asList(v any) []string {
 	l, _ := v.([]string)
 	return l
+}
+
+// triggerPII is the trigger's declared personal data (connector/v1 rule
+// 21) as paths under the run's trigger.
+func triggerPII(ev eventItem) []pii.Path {
+	if ev.conn == nil {
+		return nil
+	}
+	spec := ev.conn.Manifest.Triggers[ev.name]
+	out := make([]pii.Path, 0, len(spec.PII))
+	for _, p := range spec.PII {
+		out = append(out, pii.Path{Segments: strings.Split(p.Field, "."), Category: p.Category})
+	}
+	return out
 }

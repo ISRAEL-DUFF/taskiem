@@ -1,0 +1,26 @@
+{
+ "capability": "books_payment",
+ "input": {
+  "invoice_id": "130",
+  "amount_kobo": 5375000,
+  "paid_on": "2026-10-26",
+  "reference": "ml_01JB8Z3K4M5N6P7Q8R9S0T",
+  "account_id": "35"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice",
+  "payments_that_day_none",
+  "payment_create"
+ ],
+ "expect": {
+  "payment_id": "171"
+ }
+}

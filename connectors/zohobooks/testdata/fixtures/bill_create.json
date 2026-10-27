@@ -1,0 +1,41 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/bills",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695"
+  },
+  "body": {
+   "vendor_id": "460000000026101",
+   "bill_number": "LPS-0918",
+   "date": "2026-10-25",
+   "due_date": "2026-11-25",
+   "is_inclusive_tax": false,
+   "line_items": [
+    {
+     "account_id": "460000000000420",
+     "rate": 86000.0,
+     "quantity": 1,
+     "description": "A4 paper, 40 reams"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "bill": {
+    "bill_id": "460000000030001",
+    "bill_number": "LPS-0918",
+    "vendor_id": "460000000026101",
+    "total": 86000.0,
+    "balance": 86000.0
+   }
+  }
+ }
+}

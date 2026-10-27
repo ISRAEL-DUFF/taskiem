@@ -63,7 +63,33 @@ type TriggerSpec struct {
 	// dashboard the business pastes it.
 	Title string `json:"title,omitempty"`
 	Where string `json:"where,omitempty"`
+	// Delivery app: the provider sends every business's events to the one
+	// URL of Taskiem's platform app (rule 18; decision 0051); AccountKey
+	// says which account each is for, and the connections holding it get
+	// it. Revokes marks an event that takes the app away (Slack's
+	// app_uninstalled): those connections are marked expired.
+	Delivery   string `json:"delivery,omitempty"`
+	AccountKey string `json:"account_key,omitempty"`
+	Revokes    string `json:"revokes,omitempty"`
+	// PII is the personal data a delivery carries, as paths under the
+	// run's trigger (body.…, item.…; * for every element): sealed in
+	// history when a run starts (rule 21: a message's sender and text).
+	PII []PIIField `json:"pii,omitempty"`
+	// Example is a delivery as a run sees it ({body, item}), for dry runs
+	// and the docs: a split trigger's item cannot be guessed.
+	Example *TriggerExample `json:"example,omitempty"`
 }
+
+// TriggerExample is an example delivery: its body and, for a split
+// trigger, one item.
+type TriggerExample struct {
+	Body any `json:"body,omitempty"`
+	Item any `json:"item,omitempty"`
+}
+
+// AppDelivered reports whether the trigger's deliveries come (also) to
+// Taskiem's platform app URL: delivery app, or both.
+func (t TriggerSpec) AppDelivered() bool { return t.Delivery == "app" || t.Delivery == "both" }
 
 // PollSpec is how a webhook trigger's events are also polled: Action, a
 // read action, takes Since (an input field) set to a time and answers
@@ -138,6 +164,10 @@ type HandshakeSpec struct {
 	Respond     string `json:"respond"`
 	TokenQuery  string `json:"token_query"`
 	SecretField string `json:"secret_field"`
+	// Open: a GET check that only asks whether the address answers
+	// (Mailchimp's before it saves a webhook): 200, with no token, nothing
+	// read and nothing started.
+	Open bool `json:"open,omitempty"`
 }
 
 type VerifySpec struct {
@@ -150,6 +180,9 @@ type VerifySpec struct {
 	KeyDerivation   string `json:"key_derivation"` // none (default), sha256_hex
 	// Query names the URL parameter carrying the secret (query_secret).
 	Query string `json:"query"`
+	// Field names the JSON body's top-level field carrying the secret
+	// (body_token: Zoho CRM's channel token).
+	Field string `json:"field"`
 	// SignatureFormat t_v1 (hmac_sha256_timestamped): the header carries
 	// "t=<unix>,v1=<hex>[,v1=<hex>...]" instead of a timestamp header; any
 	// v1 value may match, so a provider can sign with an old and a new
@@ -264,6 +297,21 @@ func VerifyWebhook(v *VerifySpec, secret string, h http.Header, body []byte) err
 		return nil
 	case "none":
 		return nil
+	case "body_token":
+		// The provider echoes the token it was given in the body (Zoho
+		// CRM's notifications): nothing is signed, so it is compared in
+		// constant time and only over a body that parses.
+		var b map[string]any
+		if secret == "" || v.Field == "" || json.Unmarshal(body, &b) != nil {
+			return ErrBadSignature
+		}
+		got, _ := b[v.Field].(string)
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(secret)) != 1 {
+			return ErrBadSignature
+		}
+		return nil
+	case "svix":
+		return verifySvix(v, secret, h, body)
 	case "basic":
 		// The secret is "user:password", sent as HTTP Basic credentials.
 		want := "Basic " + base64.StdEncoding.EncodeToString([]byte(secret))
@@ -355,6 +403,47 @@ func verifyAny(secret string, signed []byte, sigs []string) error {
 	ok := 0
 	for _, s := range sigs {
 		ok |= subtle.ConstantTimeCompare([]byte(s), want)
+	}
+	if ok != 1 {
+		return ErrBadSignature
+	}
+	return nil
+}
+
+// verifySvix checks a delivery signed by Svix, as Resend's are (the
+// Standard Webhooks scheme): an HMAC-SHA256, base64-encoded, of
+// "<id>.<timestamp>.<raw body>" under the secret's key (the base64 after
+// "whsec_"). The id, timestamp and signatures come in svix-id,
+// svix-timestamp and svix-signature (or the webhook-* names); the last is
+// space-separated "v1,<base64>" values, any of which may match while the
+// sender rotates its secret.
+func verifySvix(v *VerifySpec, secret string, h http.Header, body []byte) error {
+	get := func(name string) string {
+		if s := strings.TrimSpace(h.Get("svix-" + name)); s != "" {
+			return s
+		}
+		return strings.TrimSpace(h.Get("webhook-" + name))
+	}
+	id, ts, sigs := get("id"), get("timestamp"), get("signature")
+	if id == "" || ts == "" || sigs == "" {
+		return fmt.Errorf("%w: missing svix-id, svix-timestamp or svix-signature", ErrBadSignature)
+	}
+	if err := checkTimestamp(v, ts); err != nil {
+		return err
+	}
+	key, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(secret, "whsec_"))
+	if secret == "" || err != nil || len(key) == 0 {
+		return fmt.Errorf("%w: the secret is not a whsec_ key", ErrBadSignature)
+	}
+	m := hmac.New(sha256.New, key)
+	m.Write([]byte(id + "." + ts + "."))
+	m.Write(body)
+	want := []byte(base64.StdEncoding.EncodeToString(m.Sum(nil)))
+	ok := 0
+	for _, part := range strings.Fields(sigs) {
+		if version, sig, found := strings.Cut(part, ","); found && version == "v1" {
+			ok |= subtle.ConstantTimeCompare([]byte(sig), want)
+		}
 	}
 	if ok != 1 {
 		return ErrBadSignature

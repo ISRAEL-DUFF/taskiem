@@ -1,0 +1,25 @@
+{
+ "action": "send_email",
+ "input": {
+  "sender_email": "orders@adacakes.ng",
+  "to": [
+   "ada@example.com"
+  ],
+  "template_id": 12,
+  "params": {
+   "INVOICE": "INV-0042"
+  }
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "domains",
+  "send_tmpl"
+ ],
+ "expect": {
+  "output": {
+   "message_id": "<t1@smtp-relay.mailin.fr>"
+  }
+ }
+}

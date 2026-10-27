@@ -130,3 +130,25 @@ func TestTriggerExpressions(t *testing.T) {
 		}
 	}
 }
+
+// Every built-in trigger's expressions compile, as ingest will compile
+// them: a manifest does not check its triggers' expressions when it loads.
+func TestTriggerExpressionsCompile(t *testing.T) {
+	reg := connector.NewRegistry()
+	if err := Register(reg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	e := expr.MustNewTriggerEngine("body", "headers", "query", "item")
+	for _, c := range reg.List() {
+		for name, spec := range c.Manifest.Triggers {
+			for field, src := range map[string]string{"split": spec.Split, "event_type": spec.EventType, "dedup": spec.Dedup, "correlation": spec.Correlation,
+				"account_key": spec.AccountKey, "revokes": spec.Revokes, "test_event": spec.TestEvent} {
+				if len(src) > 1 && src[0] == '=' {
+					if err := e.Check(src); err != nil {
+						t.Errorf("%s %s %s: %v", c.Ref(), name, field, err)
+					}
+				}
+			}
+		}
+	}
+}

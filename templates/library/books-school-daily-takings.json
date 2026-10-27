@@ -1,0 +1,114 @@
+{
+  "id": "books-school-daily-takings",
+  "title": "Record the school's daily takings in the books",
+  "summary": "Every evening, record the day's fees received, into account numbers and at the desk, as one sale in your books (QuickBooks or Zoho Books).",
+  "description": "Each evening, takes the school's daily close and records the students' money that landed that day as one sales receipt in your books, numbered by the day, with what came into account numbers and what was posted at the desk as its two lines. A day is recorded once, however often it runs. Use it when your books keep the school's takings rather than each family's invoices; to record each invoice and its payments instead, use Record invoice payments in the books.",
+  "category": "bookkeeping",
+  "tags": [
+    "bookkeeping",
+    "schools",
+    "accounting",
+    "quickbooks",
+    "daily close"
+  ],
+  "keywords": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "school",
+    "fees",
+    "takings",
+    "daily",
+    "close"
+  ],
+  "requires": [
+    "books",
+    "bookkeeping",
+    "accounting",
+    "accountant",
+    "quickbooks",
+    "zoho books",
+    "ledger"
+  ],
+  "connectors": [
+    "schools@1",
+    "capability:books_sale"
+  ],
+  "params": [
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the day is recorded, Lagos time.",
+      "required": true,
+      "default": "20:00",
+      "example": "20:00"
+    },
+    {
+      "name": "books_connection",
+      "type": "connection",
+      "capability": [
+        "books_sale"
+      ],
+      "title": "Your books",
+      "description": "The accounting software the takings go to: QuickBooks or Zoho Books, connected with one click.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "deposit_account",
+      "type": "string",
+      "title": "Account the money goes into",
+      "description": "The bank account in your books the takings are recorded into. Leave it blank for the books' own default (QuickBooks: Undeposited Funds).",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 40
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_booksSchoolDailyTakings",
+    "version": 1,
+    "name": "Record the school's daily takings",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * *",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "close",
+        "type": "connector",
+        "name": "Take the daily close",
+        "connector": "schools@1",
+        "action": "daily_close",
+        "input": {}
+      },
+      {
+        "id": "sale",
+        "type": "capability",
+        "uses": "books_sale",
+        "name": "Record the day's takings",
+        "connection": "{{books_connection}}",
+        "needs": [
+          "close"
+        ],
+        "when": "=steps.close.output.money_in.kobo > 0",
+        "input": {
+          "reference": "='fees-' + steps.close.output.day",
+          "date": "=steps.close.output.day",
+          "takings": "=[{'description': 'Into account numbers', 'amount_kobo': steps.close.output.into_accounts.kobo, 'account_id': {{deposit_account}}}, {'description': 'At the desk', 'amount_kobo': steps.close.output.at_the_desk.kobo}].filter(t, t.amount_kobo > 0)"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Taskiem's brand
 
-Taskiem's look ([decision 0043](../decisions/0043-taskiem-brand.md)): a "t" whose foot hands the work on to a dot, in pine and lime.
+Taskiem's look ([decision 0043](../decisions/0043-taskiem-brand.md)): a "t" whose foot hands the work on to a dot, in pine and lime, and "taskiem" whose i carries the same round dot.
 
 Building or changing a screen in the web app? Follow [Building screens in Taskiem's look](screens.md): the colours, type, layout, components, words and checks every screen uses.
 
@@ -10,7 +10,7 @@ Three directions were drawn; relay is Taskiem's brand, and the other two are kep
 
 | Folder | Direction |
 | --- | --- |
-| `relay/` | **The brand.** A lime "t" on pine whose foot hands the work on to a white dot; "taskiem" in pine |
+| `relay/` | **The brand.** A lime "t" on pine whose foot hands the work on to a white dot; "taskiem" in pine, the i's dot a round one (lime on pine) |
 | `seal/` | A vermilion round stamp with a tilted T; "Taskiem" in ink blue |
 | `signal/` | A white "t" and a saffron square on ink; "taskiem" with a saffron square for the i's dot |
 
@@ -32,7 +32,7 @@ Each folder holds the same files:
 | `wordmark-mono.svg` | Black, for print |
 | `og.png` | The picture a shared link shows (1200 × 630) |
 
-The wordmarks' letters are outlines of Plus Jakarta Sans ExtraBold (SIL Open Font License), so they look the same everywhere without the font. `make.py` draws every SVG from the font, all three brands at once; change it and rerun it rather than editing the files by hand. The PNGs are the SVGs rendered at size.
+Relay's and signal's wordmarks draw the i's dot themselves, placed where signal's square is: relay's is round, pine on light backgrounds and lime on pine (the reversed wordmark), so lime stays on pine. The wordmarks' letters are outlines of Plus Jakarta Sans ExtraBold (SIL Open Font License), so they look the same everywhere without the font. `make.py` draws every SVG from the font, all three brands at once; change it and rerun it rather than editing the files by hand. The PNGs are the SVGs rendered at size.
 
 The web app serves its copies from `web/public/brand/<brand>/` (the tab icon, the phone home-screen icon, the mark, the wordmark). For relay it also serves the install icons the app's manifest (`web/public/manifest.json`) names: `icon-192.png` and `mark-512.png` from `mark.svg`, and `maskable-192.png` and `maskable-512.png` from `avatar.svg`, whose square background lets a phone cut its own shape; the "t" and the dot sit inside the middle 80% a phone keeps.
 
@@ -42,7 +42,7 @@ The web app serves its copies from `web/public/brand/<brand>/` (the tab icon, th
 | --- | --- | --- |
 | Pine | `#0d3b2e` | The brand. Buttons, links, headings on light backgrounds, colour blocks |
 | Lime | `#c8f169` | On pine only: the "t", highlights, a button on a pine block. Never text on white (it does not read) |
-| White | `#ffffff` | The dot; text on pine |
+| White | `#ffffff` | The mark's dot; text on pine |
 | Mist | `#f1f4ef` | Light backgrounds |
 
 In the app's dark theme, lime takes pine's place as the accent.

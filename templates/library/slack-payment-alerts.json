@@ -1,0 +1,111 @@
+{
+  "id": "slack-payment-alerts",
+  "title": "Post failed and returned payments in Slack",
+  "summary": "When a payment you sent fails or comes back, or one you received is returned, say so in a Slack channel at once.",
+  "description": "Whenever your payments account reports that a payment you sent failed or came back after it had arrived, or that a payment you received was returned to the payer, posts its reference and the reason in the Slack channel you choose, so your team can check and act. Works with Paystack, Moniepoint, iswallet, Flutterwave or Anchor.",
+  "category": "alerts",
+  "tags": [
+    "alerts",
+    "slack"
+  ],
+  "keywords": [
+    "slack",
+    "channel",
+    "failed",
+    "reversed",
+    "returned"
+  ],
+  "requires": [
+    "slack"
+  ],
+  "connectors": [
+    "slack@1",
+    "capability:payout.failed",
+    "capability:payout.reversed",
+    "capability:payment.returned"
+  ],
+  "params": [
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "payout.failed",
+        "payout.reversed",
+        "payment.returned"
+      ],
+      "title": "Payments account",
+      "description": "Whose payments to report; every connected payments account when left blank.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "slack_connection",
+      "type": "connection",
+      "connector": "slack",
+      "title": "Slack connection",
+      "description": "Your Slack workspace, connected with Add to Slack.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "title": "Slack channel",
+      "description": "Where the message is posted. For a private channel, invite the Taskiem app to it first.",
+      "required": true,
+      "example": "C0123456789",
+      "pattern": "^[CG][A-Z0-9]{2,24}$",
+      "picker": "slack_channel",
+      "from": "slack_connection"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_slackPaymentAlerts",
+    "version": 1,
+    "name": "Post failed and returned payments in Slack",
+    "trigger": {
+      "type": "capability_event",
+      "config": {
+        "events": [
+          "payout.failed",
+          "payout.reversed",
+          "payment.returned"
+        ],
+        "connection": "{{rail_connection}}"
+      }
+    },
+    "steps": [
+      {
+        "id": "message",
+        "type": "transform",
+        "name": "Write the message",
+        "config": {
+          "output": {
+            "text": "=(trigger.event == 'payment.returned' ? 'A payment you received (' + trigger.fields.payment_id + ') was returned to the payer' : 'A payment you sent (' + trigger.fields.payout_id + ') ' + (trigger.event == 'payout.reversed' ? 'came back from the bank' : 'failed')) + (has(trigger.fields.reason) && trigger.fields.reason != '' ? ': ' + trigger.fields.reason : '') + '.'"
+          }
+        }
+      },
+      {
+        "id": "post",
+        "type": "connector",
+        "name": "Post it in Slack",
+        "connector": "slack@1",
+        "action": "post_message",
+        "connection": "{{slack_connection}}",
+        "input": {
+          "channel": "{{channel}}",
+          "text": "=steps.message.output.text"
+        },
+        "needs": [
+          "message"
+        ]
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

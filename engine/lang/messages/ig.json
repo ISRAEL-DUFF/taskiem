@@ -428,6 +428,26 @@
       "text": "Ana-enyocha aririo gi {reference}. Anyi ga-agwa gi.",
       "reviewed": false
     },
+    "slack.link.button": {
+      "text": "Kwado",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Ọ bụ akaụntụ Slack gị nke a? Pịa Kwado ka ị nweta nnabata ị na-ekpebi na Taskiem ebe a, na Slack. Ọ bụrụ na ị arịghị nke a, leghara ya anya.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "Ejikọtala. Nnabata na-echere gị ga-abịa ebe a.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Njikọ a anaghị arụ ọrụ ọzọ. Rịọ nke ọhụrụ na profaịlụ Taskiem gị.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "Ejikọtaghị akaụntụ Slack a na gị na Taskiem, ya mere ọ pụghị ikpebi nke a. Jikọọ ya site na profaịlụ Taskiem gị.",
+      "reviewed": false
+    },
     "tg.button_expired": {
       "text": "Bọtịnụ ahụ agwụla oge. Zipu *approvals* ka ị nweta nnabata gị ndị ka mepere emepe ọzọ.",
       "reviewed": false

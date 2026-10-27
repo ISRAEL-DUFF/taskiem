@@ -1,0 +1,35 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/bills",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "vendor_id": "460000000026101",
+   "bill_number": "LPS-0918"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "bills": [
+    {
+     "bill_id": "460000000030001",
+     "bill_number": "LPS-0918",
+     "vendor_id": "460000000026101",
+     "total": 86000.0,
+     "balance": 86000.0
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

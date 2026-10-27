@@ -1,0 +1,66 @@
+{{define "content"}}
+{{- with .Connector}}
+<div class="legacy">
+<section class="page-head">
+  <span class="eyebrow">{{.Kind}}</span>
+  <h1>{{.Name}}</h1>
+  <p class="lead">{{.Description}}</p>
+</section>
+<section class="tight" id="connect">
+  <h2 style="font-size:24px;line-height:32px">Connecting it</h2>
+  {{- if .Built}}
+  <p>It is part of Taskiem: there is nothing to connect.</p>
+  {{- else if .OneClick}}
+  <p>One click: sign in to {{.Name}} and allow Taskiem. There is nothing to copy.</p>
+  {{- else}}
+  <p>Paste the key from your {{.Name}} account once, when a workflow first needs it.</p>
+  {{- end}}
+  {{- if .DocURL}}
+  <p><a class="more" href="{{.DocURL}}">How it works, in the docs {{template "icon-arrow"}}</a></p>
+  {{- end}}
+</section>
+{{- if .Does}}
+<section class="tight" id="does">
+  <h2 style="font-size:24px;line-height:32px">What your workflows can do</h2>
+  <ul>
+  {{- range .Does}}
+    <li>{{.}}</li>
+  {{- end}}
+  </ul>
+</section>
+{{- end}}
+{{- if .Starts}}
+<section class="tight" id="starts">
+  <h2 style="font-size:24px;line-height:32px">What can start a workflow</h2>
+  <ul>
+  {{- range .Starts}}
+    <li>{{.}}</li>
+  {{- end}}
+  </ul>
+</section>
+{{- end}}
+{{- if .Templates}}
+<section class="tight" id="templates">
+  <h2 style="font-size:24px;line-height:32px">Ready-made workflows</h2>
+  <div class="cards">
+  {{- range .Templates}}
+    <article class="card">
+      <h3>{{.Title}}</h3>
+      <p>{{.Summary}}</p>
+      {{- if .Uses}}
+      <p class="uses">Uses {{join .Uses}}</p>
+      {{- end}}
+      {{- if .SetupURL}}
+      <p><a class="more" href="{{.SetupURL}}">Set it up {{template "icon-arrow"}}</a></p>
+      {{- end}}
+    </article>
+  {{- end}}
+  </div>
+</section>
+{{- end}}
+</div>
+{{- end}}
+<div class="legacy">
+{{template "banner" .}}
+</div>
+{{end}}

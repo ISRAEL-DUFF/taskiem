@@ -1,0 +1,145 @@
+{
+  "id": "mailchimp-unsubscribes-to-customers",
+  "title": "Mark Mailchimp unsubscribes in your table",
+  "summary": "When someone unsubscribes from your Mailchimp audience or their address is cleaned, update their row and stop marketing to them.",
+  "description": "Whenever someone unsubscribes from your Mailchimp audience, or Mailchimp cleans their address because it bounces, Taskiem finds them in your customers table by their address, turns their marketing_opt_in off and sets their email status, so no newsletter goes to them again.",
+  "category": "customers",
+  "tags": [
+    "mailchimp",
+    "newsletter",
+    "consent"
+  ],
+  "keywords": [
+    "mailchimp",
+    "unsubscribe",
+    "unsubscribed",
+    "cleaned",
+    "bounce"
+  ],
+  "requires": [
+    "mailchimp"
+  ],
+  "connectors": [
+    "mailchimp@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "mailchimp_connection",
+      "type": "connection",
+      "connector": "mailchimp",
+      "title": "Mailchimp connection",
+      "description": "Your Mailchimp account, connected with one click.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "audience_id",
+      "type": "string",
+      "title": "Mailchimp audience",
+      "description": "The audience they go on.",
+      "required": true,
+      "example": "a6b5da1054",
+      "picker": "choice",
+      "choices": "mailchimp:audiences",
+      "from": "mailchimp_connection"
+    },
+    {
+      "name": "customers_table",
+      "type": "string",
+      "title": "Customers table",
+      "description": "Your customers: name, email, phone, whether they agreed to marketing, and how their email is doing. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{customers_table}}",
+      "title": "Customers",
+      "description": "Your customers. marketing_opt_in is true only when the customer said yes to your newsletter; email_status says when their address bounced or they unsubscribed or complained.",
+      "columns": [
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "text",
+          "required": true,
+          "personal": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "phone",
+          "title": "Phone",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "marketing_opt_in",
+          "title": "Agreed to marketing",
+          "type": "boolean"
+        },
+        {
+          "name": "email_status",
+          "title": "Email status",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_mailchimpUnsubscribesToCustomers",
+    "version": 1,
+    "name": "Mark Mailchimp unsubscribes",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "mailchimp@1",
+        "trigger": "audience_events",
+        "events": [
+          "unsubscribe",
+          "cleaned"
+        ],
+        "connection": "{{mailchimp_connection}}",
+        "options": {
+          "audience_id": "{{audience_id}}"
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "mark",
+        "type": "connector",
+        "name": "Stop marketing to them",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{customers_table}}",
+          "filters": [
+            {
+              "column": "email",
+              "op": "ilike",
+              "value": "=trigger.body['data[email]']"
+            }
+          ],
+          "max_affected": 10,
+          "return": "minimal",
+          "set": "={'marketing_opt_in': false, 'email_status': trigger.body.type == 'cleaned' ? 'bounced' : 'unsubscribed'}"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

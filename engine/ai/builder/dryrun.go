@@ -90,6 +90,12 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			"amount_kobo": 2500000, "amount": "₦25,000", "paid_kobo": 2500000, "currency": "NGN",
 			"customer": map[string]any{"name": "A customer", "phone": "+2348030000000", "email": "customer@example.com"},
 			"paid_at":  "2026-01-01T09:00:00Z", "link": "https://forms.example/i/sample"}
+		if ev, _ := def.Trigger.Config["event"].(string); ev == "payment" {
+			// Every payment counted: the invoice with the part counted.
+			body := trig["body"].(map[string]any)
+			trig["event"], body["event"], body["due_kobo"] = "payment", "payment", 0
+			body["payment"] = map[string]any{"id": "00000000-0000-7000-8000-000000000001", "amount_kobo": 2500000, "amount": "₦25,000", "how": "exact", "paid_at": "2026-01-01T09:00:00Z"}
+		}
 	}
 	if def.Trigger.Type == "form" {
 		// What a submission carries beside the answers (forms 8.2).
@@ -109,6 +115,19 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 	if def.Trigger.Type == "connector_event" {
 		if evs, ok := def.Trigger.Config["events"].([]any); ok && len(evs) > 0 {
 			trig["event"] = evs[0]
+		}
+		// The trigger's own example delivery, where its manifest gives one.
+		ref, _ := def.Trigger.Config["connector"].(string)
+		name, _ := def.Trigger.Config["trigger"].(string)
+		if conn, ok := reg.Get(ref); ok {
+			if ex := conn.Manifest.Triggers[name].Example; ex != nil {
+				if ex.Body != nil {
+					trig["body"] = ex.Body
+				}
+				if ex.Item != nil {
+					trig["item"] = ex.Item
+				}
+			}
 		}
 	}
 	c.Trigger = trig

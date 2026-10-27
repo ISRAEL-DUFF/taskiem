@@ -1,0 +1,32 @@
+{
+ "action": "send_message",
+ "input": {
+  "recipient_id": "6789012345678901",
+  "text": "Here is your link: https://pay.example/l/abc",
+  "quick_replies": [
+   {
+    "title": "Paid",
+    "payload": "paid"
+   },
+   {
+    "title": "Later"
+   }
+  ]
+ },
+ "credentials": {
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "conversation_open",
+  "send"
+ ],
+ "expect": {
+  "output": {
+   "message_id": "m_AG5Hz2U",
+   "recipient_id": "6789012345678901",
+   "window_ends_at": "2026-10-27T11:55:00Z"
+  }
+ }
+}

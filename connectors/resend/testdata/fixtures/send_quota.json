@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/emails",
+  "headers": {
+   "Authorization": "Bearer re_test_123"
+  },
+  "body": {
+   "from": "Ada Cakes <orders@adacakes.ng>",
+   "to": [
+    "ada@example.com"
+   ],
+   "subject": "Receipt for invoice INV-0042",
+   "html": "<p>Thank you</p>",
+   "tags": [
+    {
+     "name": "invoice",
+     "value": "INV-0042"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 429,
+  "body": {
+   "statusCode": 429,
+   "name": "daily_quota_exceeded",
+   "message": "You have reached your daily email sending quota."
+  }
+ }
+}

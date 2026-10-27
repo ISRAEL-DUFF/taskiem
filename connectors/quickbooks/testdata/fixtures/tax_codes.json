@@ -1,0 +1,50 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM TaxCode WHERE Active = true MAXRESULTS 1000"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "TaxCode": [
+     {
+      "Id": "6",
+      "Name": "VAT 7.5%",
+      "Description": "Value Added Tax",
+      "Active": true,
+      "SalesTaxRateList": {
+       "TaxRateDetail": [
+        {
+         "TaxRateRef": {
+          "value": "11"
+         },
+         "TaxTypeApplicable": "TaxOnAmount",
+         "TaxOrder": 0
+        }
+       ]
+      }
+     },
+     {
+      "Id": "4",
+      "Name": "Exempt",
+      "Active": true,
+      "SalesTaxRateList": {
+       "TaxRateDetail": []
+      }
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 2
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

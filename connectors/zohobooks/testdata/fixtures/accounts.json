@@ -1,0 +1,47 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/chartofaccounts",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "filter_by": "AccountType.Active"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "chartofaccounts": [
+    {
+     "account_id": "460000000000358",
+     "account_name": "Petty Cash",
+     "account_type": "cash",
+     "currency_code": "NGN",
+     "is_active": true
+    },
+    {
+     "account_id": "460000000000361",
+     "account_name": "Zenith Current",
+     "account_type": "bank",
+     "currency_code": "NGN",
+     "is_active": true
+    },
+    {
+     "account_id": "460000000000415",
+     "account_name": "Fuel",
+     "account_type": "expense",
+     "is_active": true
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

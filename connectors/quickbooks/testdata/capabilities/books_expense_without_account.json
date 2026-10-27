@@ -1,0 +1,18 @@
+{
+ "capability": "books_expense",
+ "input": {
+  "reference": "RCPT-7781",
+  "amount_kobo": 2150000,
+  "account_id": "64"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [],
+ "error": "fatal"
+}

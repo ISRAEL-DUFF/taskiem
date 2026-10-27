@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/104123456789012/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "body": {
+   "recipient": {
+    "id": "5432109876543210"
+   },
+   "messaging_type": "RESPONSE",
+   "message": {
+    "attachment": {
+     "type": "image",
+     "payload": {
+      "url": "https://shop.example/blue.jpg",
+      "is_reusable": false
+     }
+    }
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "recipient_id": "5432109876543210",
+   "message_id": "m_img"
+  }
+ }
+}

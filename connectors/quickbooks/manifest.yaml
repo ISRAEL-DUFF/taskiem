@@ -1,0 +1,648 @@
+# QuickBooks Online, Intuit's Accounting API, connected through Taskiem's
+# Intuit app (K3 of docs/spec/business-connectors.md; decision 0051).
+# Built from Intuit's public developer documentation, read 26 October 2026:
+#   https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0
+#   https://developer.api.intuit.com/.well-known/openid_configuration (the
+#     authorize, token and revoke endpoints)
+#   https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/faq
+#     (refresh tokens: rotated, store the latest; their lifetime)
+#   https://developer.intuit.com/app/developer/qbo/docs/learn/explore-the-quickbooks-online-api/minor-versions
+#   https://developer.intuit.com/app/developer/qbo/docs/learn/rest-api-features (requestid,
+#     queries, change data capture)
+#   https://developer.intuit.com/app/developer/qbo/docs/develop/troubleshooting/error-codes
+#   https://developer.intuit.com/app/developer/qbo/docs/develop/webhooks (and its
+#     CloudEvents format and managing-webhooks-notifications pages)
+#   https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/invoice
+#     (and customer, vendor, payment, salesreceipt, purchase, bill, item,
+#     account, taxcode, taxrate, companyinfo)
+# See docs/integrations/quickbooks.md.
+manifest: connector/v1
+id: quickbooks
+version: 1.0.0
+name: QuickBooks
+description: Keep your books in QuickBooks Online up to date from your workflows (customers, invoices, payments, a day's takings, expenses and supplier bills), and start workflows when something changes there.
+category: accounting
+kind: product
+auth:
+  type: oauth2
+  fields:
+    - { key: realm_id, label: Company ID (filled when you connect) }
+    - { key: refresh_token, label: Refresh token, secret: true }
+    - { key: client_id, label: Intuit app client id (Taskiem's) }
+    - { key: client_secret, label: Intuit app client secret (Taskiem's), secret: true }
+    # Kept by the connector: the access token it last got, and when it and
+    # the refresh token lapse.
+    - { key: access_token, label: Access token (kept by Taskiem), secret: true, required: false }
+    - { key: access_expires_at, label: Access token expiry (kept by Taskiem), required: false }
+    - { key: refresh_expires_at, label: Refresh token expiry (kept by Taskiem), required: false }
+  # Production companies and Intuit's sandbox companies are separate hosts
+  # reached with separate keys of the same Intuit app: production keys for
+  # real companies, development keys for sandbox ones (rule 20). Each mode
+  # is linked with its own keys: TASKIEM_OAUTH_QUICKBOOKS_* for live,
+  # TASKIEM_OAUTH_QUICKBOOKS_SANDBOX_* for test.
+  modes:
+    - { mode: live, label: "Your company (real books)", base_url: https://quickbooks.api.intuit.com }
+    - { mode: test, label: "An Intuit sandbox company (practice)", base_url: https://sandbox-quickbooks.api.intuit.com, client: quickbooks_sandbox }
+  # One click through Taskiem's Intuit app. The company comes back on the
+  # callback as realmId; it is the connection's account, which routes the
+  # app's change notifications (rule 18). Intuit wants the client in HTTP
+  # Basic at the token URL and a JSON body at the revoke URL (rule 20).
+  # Access tokens last an hour; the connector refreshes them with Taskiem's
+  # client and stores the refresh token Intuit hands back each time
+  # (connector.Request.RotateCredentials).
+  oauth2:
+    authorize_url: https://appcenter.intuit.com/connect/oauth2
+    token_url: https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
+    revoke_url: https://developer.api.intuit.com/v2/oauth2/tokens/revoke
+    scopes: [com.intuit.quickbooks.accounting]
+    pkce: true
+    client: quickbooks
+    client_auth: basic
+    revoke_encoding: json
+    account_field: realm_id
+    fields_from_callback: { realm_id: realmId }
+    fields_from_token: { refresh_token: refresh_token }
+    platform_client_fields: { client_id: id, client_secret: secret }
+  test: { action: get_company }
+# 500 requests a minute per company, 10 at a time (Intuit's throttles).
+rate_limit: { requests: 500, per: 1m, scope: connection }
+# Connections made without a mode go to production.
+base_url: https://quickbooks.api.intuit.com
+# The token endpoint, for refreshing.
+egress_hosts: [oauth.platform.intuit.com]
+actions:
+  get_company:
+    title: Get the company
+    description: CompanyInfo. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        company_id:   { type: string, description: The realm id }
+        company_name: { type: string }
+        legal_name:   { type: string }
+        country:      { type: string }
+        email:        { type: string }
+  find_customer:
+    title: Find a customer
+    description: By email first, then by display name. found is false when there is none.
+    class: read
+    input:
+      type: object
+      properties:
+        email:        { type: string }
+        display_name: { type: string }
+    output:
+      type: object
+      properties:
+        found:    { type: boolean }
+        customer: &customer { type: object, properties: { id: { type: string }, display_name: { type: string }, email: { type: string }, phone: { type: string }, balance_kobo: { type: integer }, active: { type: boolean } } }
+    pii:
+      - { field: email, category: email }
+      - { field: display_name, category: name }
+  create_customer:
+    title: Add a customer
+    description: >-
+      Finds the customer by email, then by display name, before adding one,
+      so a retry finds the one it made (created false). Sent with Intuit's
+      requestid as well. A display name must be unique among customers,
+      suppliers and employees.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string, maxLength: 500 }
+        email:        { type: string }
+        phone:        { type: string }
+        company_name: { type: string }
+        given_name:   { type: string }
+        family_name:  { type: string }
+        notes:        { type: string }
+        request_key:  { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        customer_id: { type: string }
+        created:     { type: boolean, description: false when the customer was already there }
+        customer:    *customer
+    pii:
+      - { field: display_name, category: name }
+      - { field: email, category: email }
+      - { field: phone, category: phone }
+      - { field: given_name, category: name }
+      - { field: family_name, category: name }
+  find_vendor:
+    title: Find a supplier
+    description: By display name. found is false when there is none.
+    class: read
+    input:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string }
+    output:
+      type: object
+      properties:
+        found:  { type: boolean }
+        vendor: &vendor { type: object, properties: { id: { type: string }, display_name: { type: string }, email: { type: string }, balance_kobo: { type: integer } } }
+  create_vendor:
+    title: Add a supplier
+    description: Finds the supplier by display name before adding one, so a retry finds the one it made. Sent with requestid as well.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string, maxLength: 500 }
+        email:        { type: string }
+        phone:        { type: string }
+        company_name: { type: string }
+        request_key:  { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        vendor_id: { type: string }
+        created:   { type: boolean }
+        vendor:    *vendor
+    pii:
+      - { field: email, category: email }
+      - { field: phone, category: phone }
+  create_invoice:
+    title: Record an invoice
+    description: >-
+      An invoice to a customer, numbered doc_number (Taskiem's invoice
+      number; more than 21 characters are shortened the same way every
+      time). An invoice with that number already in the books is answered
+      (created false) rather than made twice; the create is sent with
+      requestid too. Amounts are in kobo (minor units), before tax; a line
+      without an item uses the company's default item.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [doc_number, customer_id, lines]
+      properties:
+        doc_number:  { type: string, minLength: 1 }
+        customer_id: { type: string }
+        txn_date:    { type: string, format: date }
+        due_date:    { type: string, format: date }
+        currency:    { type: string, description: "Only for a company with multicurrency on; otherwise the company's home currency" }
+        lines:
+          type: array
+          minItems: 1
+          items: &sale_line
+            type: object
+            required: [description, amount_kobo]
+            properties:
+              description: { type: string }
+              quantity:    { type: number, exclusiveMinimum: 0, default: 1 }
+              amount_kobo: { type: integer, minimum: 0, description: Each, in kobo }
+              item_id:     { type: string }
+              tax_code_id: { type: string, description: "As list_tax_codes lists it (US companies: TAX or NON)" }
+        tax_calculation:
+          enum: [excluded, inclusive, not_applicable]
+          description: "Whether line amounts include tax (outside the US). Default: excluded when a line names a tax code"
+        email:         { type: string, description: Where QuickBooks sends it, when it is sent from QuickBooks }
+        customer_memo: { type: string, description: Shown on the invoice }
+        private_note:  { type: string, description: Kept in the books only }
+        request_key:   { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        invoice_id: { type: string }
+        created:    { type: boolean, description: false when an invoice with this number was already there }
+        invoice: &invoice
+          type: object
+          properties:
+            invoice_id:   { type: string }
+            doc_number:   { type: string }
+            customer_id:  { type: string }
+            txn_date:     { type: string }
+            due_date:     { type: string }
+            currency:     { type: string }
+            total_kobo:   { type: integer, description: Tax included }
+            tax_kobo:     { type: integer }
+            balance_kobo: { type: integer, description: Left to pay }
+            paid:         { type: boolean }
+            email_status: { type: string }
+    pii:
+      - { field: email, category: email }
+  get_invoice:
+    title: Get an invoice
+    class: read
+    input:
+      type: object
+      required: [invoice_id]
+      properties:
+        invoice_id: { type: string }
+    output: *invoice
+  query_invoices:
+    title: Find invoices
+    description: By number, by customer, or changed since a time; the newest changed first, at most max (1,000).
+    class: read
+    input:
+      type: object
+      properties:
+        doc_number:    { type: string }
+        customer_id:   { type: string }
+        changed_since: { type: string, format: date-time }
+        unpaid:        { type: boolean, description: Only those with something left to pay }
+        max:           { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    output:
+      type: object
+      properties:
+        invoices: { type: array, items: *invoice }
+  create_payment:
+    title: Record a payment
+    description: >-
+      A payment received from a customer, applied to an invoice when
+      invoice_id is given (the customer is then the invoice's). The
+      reference (the money log entry's) is kept in the payment's note and,
+      shortened to 21 characters, as its reference number; a payment with
+      that reference already recorded for the customer that day is answered
+      (created false) rather than made twice. Sent with requestid too.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [amount_kobo, reference]
+      properties:
+        customer_id:        { type: string, description: Required without invoice_id }
+        invoice_id:         { type: string }
+        amount_kobo:        { type: integer, minimum: 1 }
+        txn_date:           { type: string, format: date, description: Default today }
+        reference:          { type: string, minLength: 1 }
+        deposit_account_id: { type: string, description: "The bank or cash account it went into; default: Undeposited Funds" }
+        payment_method_id:  { type: string }
+        currency:           { type: string }
+        memo:               { type: string }
+        request_key:        { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        payment_id:  { type: string }
+        created:     { type: boolean }
+        customer_id: { type: string }
+        amount_kobo: { type: integer }
+        unapplied_kobo: { type: integer, description: What was not applied to an invoice }
+  create_sales_receipt:
+    title: Record a sale
+    description: >-
+      A sales receipt: money taken at the time of the sale (a day's POS or
+      storefront takings). Numbered doc_number (the day and the source); one
+      with that number already in the books is answered rather than made
+      twice. Sent with requestid too.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [doc_number, lines]
+      properties:
+        doc_number:         { type: string, minLength: 1 }
+        txn_date:           { type: string, format: date }
+        customer_id:        { type: string }
+        lines:              { type: array, minItems: 1, items: *sale_line }
+        deposit_account_id: { type: string, description: "The bank or cash account the takings went into; default: Undeposited Funds" }
+        payment_method_id:  { type: string }
+        currency:           { type: string }
+        tax_calculation:    { enum: [excluded, inclusive, not_applicable] }
+        private_note:       { type: string }
+        request_key:        { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        sales_receipt_id: { type: string }
+        created:          { type: boolean }
+        doc_number:       { type: string }
+        total_kobo:       { type: integer }
+  create_purchase:
+    title: Record an expense
+    description: >-
+      A purchase paid at once (cash, transfer or card) from a bank, cash or
+      card account, to expense accounts. Numbered doc_number (the receipt's
+      or the money log entry's reference); one with that number already in
+      the books is answered rather than made twice. Sent with requestid too.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [doc_number, paid_from_account_id, lines]
+      properties:
+        doc_number:           { type: string, minLength: 1 }
+        paid_from_account_id: { type: string, description: The bank, cash or credit card account it was paid from }
+        payment_type:         { enum: [cash, check, credit_card], default: cash, description: "cash covers transfers; credit_card needs a card account" }
+        vendor_id:            { type: string }
+        txn_date:             { type: string, format: date }
+        lines:
+          type: array
+          minItems: 1
+          items: &expense_line
+            type: object
+            required: [account_id, amount_kobo]
+            properties:
+              account_id:  { type: string, description: The expense account }
+              amount_kobo: { type: integer, minimum: 0 }
+              description: { type: string }
+              tax_code_id: { type: string }
+        vat_kobo:             { type: integer, minimum: 0, description: "VAT included in the first line's amount, recorded as its own line on that line's account" }
+        currency:             { type: string }
+        tax_calculation:      { enum: [excluded, inclusive, not_applicable] }
+        private_note:         { type: string, description: "Kept in the books; also a line's description when it has none" }
+        request_key:          { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        purchase_id: { type: string }
+        created:     { type: boolean }
+        total_kobo:  { type: integer }
+  create_bill:
+    title: Record a supplier's bill
+    description: >-
+      A bill to pay later, numbered by the supplier's bill number; one from
+      the same supplier with that number already in the books is answered
+      rather than made twice. Sent with requestid too.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [vendor_id, doc_number, lines]
+      properties:
+        vendor_id:       { type: string }
+        doc_number:      { type: string, minLength: 1 }
+        txn_date:        { type: string, format: date }
+        due_date:        { type: string, format: date }
+        lines:           { type: array, minItems: 1, items: *expense_line }
+        currency:        { type: string }
+        tax_calculation: { enum: [excluded, inclusive, not_applicable] }
+        private_note:    { type: string }
+        request_key:     { type: string, description: Set by the engine; sent as requestid }
+    output:
+      type: object
+      properties:
+        bill_id:      { type: string }
+        created:      { type: boolean }
+        total_kobo:   { type: integer }
+        balance_kobo: { type: integer }
+  list_items:
+    title: List products and services
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:                { type: string }
+              name:              { type: string }
+              type:              { type: string, description: Service, Inventory, NonInventory… }
+              unit_price_kobo:   { type: integer }
+              income_account_id: { type: string }
+  list_accounts:
+    title: List accounts
+    class: read
+    input:
+      type: object
+      properties:
+        type: { enum: [income, expense, bank, cash, credit_card, receivable, payable, other], description: "Only accounts of this kind (cash: QuickBooks keeps cash in Bank accounts)" }
+    output:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:           { type: string }
+              name:         { type: string }
+              type:         { type: string, description: Taskiem's kind, as the type input }
+              account_type: { type: string, description: QuickBooks' own (Bank, Expense, Income…) }
+              currency:     { type: string }
+  list_tax_codes:
+    title: List tax codes
+    description: The company's sales tax codes, each with its rate (VAT at 7.5% for Nigeria), the sum of its sales rates.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        tax_codes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:          { type: string }
+              name:        { type: string }
+              description: { type: string }
+              percent:     { type: number }
+  get_entity:
+    title: Read a record
+    description: >-
+      Any record a change notification names, as QuickBooks returns it
+      (amounts in the company's currency, not kobo): what a workflow started
+      by changes reads first.
+    class: read
+    input:
+      type: object
+      required: [entity, id]
+      properties:
+        entity: { enum: [invoice, payment, customer, vendor, salesreceipt, purchase, bill, billpayment, item, account, estimate, creditmemo, refundreceipt, deposit, journalentry, taxcode] }
+        id:     { type: string }
+    output:
+      type: object
+      properties:
+        entity: { type: string }
+        record: { type: object, description: The record as QuickBooks returns it }
+  changes_since:
+    title: Read what changed
+    description: >-
+      Intuit's change data capture: the records of the named kinds changed
+      since a time (at most 30 days back, 1,000 a kind), for catching up
+      after notifications were missed. Deleted records come with
+      status Deleted.
+    class: read
+    input:
+      type: object
+      required: [entities, since]
+      properties:
+        entities: { type: array, minItems: 1, items: { enum: [invoice, payment, customer, vendor, salesreceipt, purchase, bill, billpayment, item, account, estimate, creditmemo, refundreceipt, deposit, journalentry] } }
+        since:    { type: string, format: date-time }
+    output:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              entity:  { type: string }
+              id:      { type: string }
+              deleted: { type: boolean }
+              record:  { type: object }
+triggers:
+  # QuickBooks sends every connected company's changes to the one webhook
+  # URL of Taskiem's Intuit app (/hooks/apps/quickbooks@1/changes), as a
+  # JSON array of CloudEvents, signed with the app's verifier token
+  # (intuit-signature: base64 HMAC-SHA256 of the body). One delivery may
+  # carry several companies' events: each is its own event, routed by its
+  # company (intuitaccountid). Intuit wants 200 within three seconds, so
+  # nothing is read before answering: a workflow reads the record it names
+  # (get_entity). The development and production apps each have their own
+  # webhook settings and verifier token; both point here.
+  changes:
+    type: webhook
+    title: Something changed in QuickBooks
+    delivery: app
+    verify: { scheme: hmac_sha256, header: intuit-signature, encoding: base64 }
+    split: =body
+    account_key: '=has(item.intuitaccountid) ? string(item.intuitaccountid) : ""'
+    # qbo.invoice.created.v1 → invoice.created
+    event_type: '=item.type.split(".").size() >= 3 ? item.type.split(".")[1] + "." + item.type.split(".")[2] : item.type'
+    events:
+      - invoice.created
+      - invoice.updated
+      - invoice.deleted
+      - invoice.voided
+      - invoice.emailed
+      - payment.created
+      - payment.updated
+      - payment.deleted
+      - payment.voided
+      - customer.created
+      - customer.updated
+      - customer.merged
+      - customer.deleted
+      - vendor.created
+      - vendor.updated
+      - salesreceipt.created
+      - salesreceipt.updated
+      - salesreceipt.voided
+      - purchase.created
+      - purchase.updated
+      - bill.created
+      - bill.updated
+      - bill.deleted
+      - billpayment.created
+      - estimate.created
+      - estimate.updated
+      - creditmemo.created
+      - item.created
+      - item.updated
+    dedup: =item.id
+    # The record's id: a run waiting on an invoice wakes when it changes
+    # (paid in full is an invoice.updated). A payment's id is no
+    # invoice's, so payments correlate on nothing.
+    correlation: '=!has(item.intuitentityid) || item.type.startsWith("qbo.payment.") ? null : dyn(string(item.intuitentityid))'
+capabilities:
+  books_customer:
+    action: create_customer
+    input:
+      display_name: =input.name
+      email: =input.?email
+      phone: =input.?phone
+    output:
+      customer_id: =output.customer_id
+      created: =output.created
+  books_invoice:
+    action: create_invoice
+    input:
+      doc_number: =input.number
+      customer_id: =input.customer_id
+      txn_date: =input.?issued_on
+      due_date: =input.?due_on
+      customer_memo: =input.?notes
+      lines: >-
+        =input.lines.map(l, {'description': l.description, 'quantity': has(l.quantity) ? l.quantity : 1,
+          'amount_kobo': l.amount_kobo, 'item_id': l.?item_id, 'tax_code_id': l.?tax_id})
+    output:
+      invoice_id: =output.invoice_id
+      number: =output.invoice.doc_number
+      total_kobo: =output.invoice.total_kobo
+    # The company's home currency: QuickBooks takes another only with
+    # multicurrency on.
+    ignores: [currency]
+  books_payment:
+    action: create_payment
+    input:
+      invoice_id: =input.invoice_id
+      amount_kobo: =input.amount_kobo
+      txn_date: =input.?paid_on
+      reference: =input.reference
+      deposit_account_id: =input.?account_id
+    output:
+      payment_id: =output.payment_id
+    ignores: [currency, method]
+  books_sale:
+    action: create_sales_receipt
+    input:
+      doc_number: =input.reference
+      txn_date: =input.date
+      lines: "=input.takings.map(t, {'description': t.description, 'amount_kobo': t.amount_kobo})"
+      # One receipt goes into one account: the first taking's.
+      deposit_account_id: "=input.takings.exists(t, has(t.account_id)) ? optional.of(input.takings.filter(t, has(t.account_id))[0].account_id) : optional.none()"
+    output:
+      sale_id: =output.sales_receipt_id
+    ignores: [currency]
+  books_expense:
+    action: create_purchase
+    input:
+      doc_number: =input.reference
+      paid_from_account_id: =input.paid_from_id
+      txn_date: =input.?date
+      private_note: "=[input.?supplier.orValue(''), input.?description.orValue('')].filter(x, x != '').join(': ')"
+      lines: "=[{'account_id': input.account_id, 'amount_kobo': input.amount_kobo}]"
+      vat_kobo: =input.?vat_kobo
+    output:
+      expense_id: =output.purchase_id
+    requires: [paid_from_id]
+    ignores: [currency]
+  books_bill:
+    action: create_bill
+    input:
+      vendor_id: =input.supplier_id
+      doc_number: =input.number
+      txn_date: =input.?issued_on
+      due_date: =input.?due_on
+      lines: "=input.lines.map(l, {'account_id': l.account_id, 'amount_kobo': l.amount_kobo, 'description': l.description, 'tax_code_id': l.?tax_id})"
+    output:
+      bill_id: =output.bill_id
+      total_kobo: =output.total_kobo
+    ignores: [currency]
+  books_accounts:
+    action: list_accounts
+    input: { type: "=input.?type" }
+    output: { accounts: "=output.accounts.map(a, {'id': a.id, 'name': a.name, 'type': a.type})" }
+  books_items:
+    action: list_items
+    input: {}
+    output: { items: "=output.items.map(i, has(i.unit_price_kobo) ? {'id': i.id, 'name': i.name, 'amount_kobo': i.unit_price_kobo} : {'id': i.id, 'name': i.name})" }
+  books_taxes:
+    action: list_tax_codes
+    input: {}
+    output: { taxes: "=output.tax_codes.map(t, has(t.percent) ? {'id': t.id, 'name': t.name, 'percent': t.percent} : {'id': t.id, 'name': t.name})" }
+events:
+  # Notifications name the record only: an invoice that came to be paid is
+  # an invoice.updated, told apart only by reading it, so QuickBooks gives
+  # no books.invoice.paid; a workflow on books.payment.recorded reads the
+  # payment for its invoice.
+  books.invoice.created:
+    trigger: changes
+    when: '=item.type == "qbo.invoice.created.v1"'
+    fields: { invoice_id: "=string(item.intuitentityid)" }
+  books.payment.recorded:
+    trigger: changes
+    when: '=item.type == "qbo.payment.created.v1"'
+    fields: { payment_id: "=string(item.intuitentityid)" }

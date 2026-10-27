@@ -240,6 +240,72 @@ function Telegram() {
   );
 }
 
+interface SlackLink {
+  enabled: boolean;
+  linked: boolean;
+  pending: boolean;
+  workspace?: string;
+  verified_at?: string;
+}
+
+/** Linking Slack in this business: Taskiem finds the member in its
+ * workspace by email and sends a Confirm button there
+ * (docs/integrations/slack.md#approvals-in-slack). */
+function Slack() {
+  const { me } = useAuth();
+  const b = useLoad(() => get<SlackLink>("/v1/me/slack"), []);
+  const [typed, setTyped] = useState("");
+  const act = useAction();
+  if (!b.data?.enabled) return b.error ? <ErrorBox error={b.error} /> : null;
+  return (
+    <section className="card" data-testid="slack">
+      <h2 style={{ marginTop: 0 }}>Slack</h2>
+      <p className="hint">
+        Get the approvals you decide in this business in Slack, as a direct message from your business's Slack app with Approve and Reject buttons. Your
+        roles and approval policies apply exactly as here; some approvals still ask for your passkey or authenticator code.
+      </p>
+      <ErrorBox error={act.error} />
+      {b.data.linked && (
+        <div className="row">
+          <p className="grow">
+            Linked in your workspace {b.data.verified_at && <span className="hint">since {fmtTime(b.data.verified_at)}</span>}
+          </p>
+          <button className="danger" disabled={act.busy} onClick={() => confirm("Unlink Slack?") && void act.run(async () => (await del("/v1/me/slack"), b.reload()), "Slack unlinked")}>
+            Unlink
+          </button>
+        </div>
+      )}
+      {b.data.pending && (
+        <p className="hint" role="status">
+          Open Slack and press <strong>Confirm</strong> in the message from your business's app. Then come back here.{" "}
+          <button className="link" onClick={() => b.reload()}>
+            I pressed it
+          </button>
+        </p>
+      )}
+      {!b.data.linked && (
+        <form
+          className="row"
+          style={{ alignItems: "flex-end" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act.run(async () => {
+              await post("/v1/me/slack", { ...(await proof(me?.factors, typed, "slack.link")) });
+              setTyped("");
+              b.reload();
+            }, false);
+          }}
+        >
+          <ProofField to="link Slack" value={typed} onChange={setTyped} />
+          <button type="submit" disabled={act.busy}>
+            {b.data.pending ? "Send the Confirm again" : "Link Slack"}
+          </button>
+        </form>
+      )}
+    </section>
+  );
+}
+
 function WhatsApp() {
   const { me } = useAuth();
   const b = useLoad(() => get<WhatsAppBinding>("/v1/me/whatsapp"), []);
@@ -365,13 +431,14 @@ export function Account() {
   const act = useAction();
   return (
     <>
-      <PageHeader title="Account" description="Your sign-in methods, invitations, and linked WhatsApp number and Telegram account." />
+      <PageHeader title="Account" description="Your sign-in methods, invitations, and linked WhatsApp number, Telegram account and Slack." />
       <Appearance />
       <Invitations />
       <ChangePassword />
       <Passkeys />
       <WhatsApp />
       <Telegram />
+      <Slack />
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Authenticator app</h2>
         <p className="hint">

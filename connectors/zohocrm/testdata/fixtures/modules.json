@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/settings/modules",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "modules": [
+    {
+     "api_name": "Leads",
+     "singular_label": "Lead",
+     "plural_label": "Leads",
+     "api_supported": true
+    },
+    {
+     "api_name": "Deals",
+     "singular_label": "Deal",
+     "plural_label": "Deals",
+     "api_supported": true
+    },
+    {
+     "api_name": "Visits",
+     "singular_label": "Visit",
+     "plural_label": "Visits",
+     "api_supported": false
+    }
+   ]
+  }
+ }
+}

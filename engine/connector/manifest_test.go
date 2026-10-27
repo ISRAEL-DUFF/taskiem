@@ -112,7 +112,7 @@ func TestOAuth2Declaration(t *testing.T) {
 	good := "    authorize_url: ${server}/oauth/authorize\n    token_url: https://p.example/oauth/token\n    revoke_url: ${server}/oauth/revoke\n    scopes: [read, write]\n    pkce: true\n    fields_from_token: { token: access_token, project_id: \"project_ids[0]\" }\n"
 	for name, c := range map[string]struct{ src, want string }{
 		"good":                   {manifest(fields, good), ""},
-		"no scopes":              {manifest(fields, strings.Replace(good, "[read, write]", "[]", 1)), "schema:"},
+		"no scopes (Mailchimp)":  {manifest(fields, strings.Replace(good, "[read, write]", "[]", 1)), ""},
 		"pkce off":               {manifest(fields, strings.Replace(good, "pkce: true", "pkce: false", 1)), "schema:"},
 		"plain http":             {manifest(fields, strings.Replace(good, "https://p.example", "http://p.example", 1)), "schema:"},
 		"fragment":               {manifest(fields, strings.Replace(good, "https://p.example/oauth/token", "https://p.example/oauth/token#x", 1)), "without a fragment"},

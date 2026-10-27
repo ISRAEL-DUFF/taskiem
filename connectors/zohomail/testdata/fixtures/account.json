@@ -1,0 +1,24 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": {
+    "accountId": "2560636000000008002",
+    "primaryEmailAddress": "orders@adacakes.ng",
+    "accountDisplayName": "Ada Cakes Orders",
+    "type": "ZOHO_ACCOUNT"
+   }
+  }
+ }
+}

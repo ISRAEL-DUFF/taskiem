@@ -1,0 +1,23 @@
+{
+ "action": "get_message",
+ "input": {
+  "folder_id": "2560636000000008014",
+  "message_id": "9"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z",
+  "account_id": "2560636000000008002",
+  "email_address": "orders@adacakes.ng"
+ },
+ "exchanges": [
+  "details_404"
+ ],
+ "expect": {
+  "error": "not_found"
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "action": "search_messages",
+ "input": {
+  "search_key": "subject:invoice"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z",
+  "account_id": "2560636000000008002",
+  "email_address": "orders@adacakes.ng"
+ },
+ "exchanges": [
+  "search"
+ ],
+ "expect": {
+  "output": {
+   "messages": [
+    {
+     "message_id": "1761400000000100009",
+     "subject": "Invoice from Lagos Paper"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/campaigns/42694e9e57",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "42694e9e57",
+   "status": "sent"
+  }
+ }
+}

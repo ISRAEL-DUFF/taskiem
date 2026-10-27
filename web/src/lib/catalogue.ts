@@ -159,6 +159,11 @@ const CAPABILITY_WORDS: [string, string][] = [
   ["refund", "refund payments"],
   ["balance", "check the balance"],
   ["resolve_account", "check account names"],
+  ["books_invoice", "record invoices in the books"],
+  ["books_payment", "record payments in the books"],
+  ["books_sale", "record the day's takings"],
+  ["books_expense", "record expenses"],
+  ["books_bill", "record supplier bills"],
 ];
 
 /** "Can pay bank accounts, …": what a rail can do, or "" for none. The

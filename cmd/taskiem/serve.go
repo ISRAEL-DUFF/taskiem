@@ -119,6 +119,9 @@ type config struct {
 	// ChatTokenKey signs approval tokens when WhatsApp is off
 	// (TASKIEM_CHAT_TOKEN_KEY; with WhatsApp on, its token key is used).
 	ChatTokenKey []byte
+	// SlackSigningSecret is Taskiem's Slack app's (TASKIEM_OAUTH_SLACK_WEBHOOK_SECRET):
+	// with it, approvals go to members' linked Slack (decision 0051).
+	SlackSigningSecret string
 	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
 	AI ai.Config
 	// Languages are languages beyond English and voice notes on WhatsApp,
@@ -328,6 +331,23 @@ func loadConfig() (config, error) {
 			// provider's sandbox by default.
 			IswalletTestURL: os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
 			PayrollaTestURL: os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
+			// QuickBooks' production and sandbox hosts and Intuit's token
+			// endpoint (tests, a proxy).
+			QuickBooksURL:      os.Getenv("TASKIEM_QUICKBOOKS_URL"),
+			QuickBooksTestURL:  os.Getenv("TASKIEM_QUICKBOOKS_TEST_URL"),
+			QuickBooksTokenURL: os.Getenv("TASKIEM_QUICKBOOKS_TOKEN_URL"),
+			// Zoho Books' API and Zoho's accounts server for every
+			// connection, instead of each account's own (tests, a proxy).
+			ZohoBooksURL:    os.Getenv("TASKIEM_ZOHO_BOOKS_URL"),
+			ZohoAccountsURL: os.Getenv("TASKIEM_ZOHO_ACCOUNTS_URL"),
+			ZohoMailURL:     os.Getenv("TASKIEM_ZOHO_MAIL_URL"),
+			ZohoCRMURL:      os.Getenv("TASKIEM_ZOHO_CRM_URL"),
+			// The Graph API for Messenger and Instagram (tests).
+			MetaURL:              os.Getenv("TASKIEM_META_GRAPH_URL"),
+			ResendURL:            os.Getenv("TASKIEM_RESEND_URL"),
+			BrevoURL:             os.Getenv("TASKIEM_BREVO_URL"),
+			MailchimpURL:         os.Getenv("TASKIEM_MAILCHIMP_URL"),
+			MailchimpMetadataURL: os.Getenv("TASKIEM_MAILCHIMP_METADATA_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
@@ -393,10 +413,13 @@ func loadConfig() (config, error) {
 	if c.Telegram, err = telegram.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
-	if c.Telegram != nil && c.WhatsApp == nil {
+	// Approvals in Slack (decision 0051): Taskiem's Slack app's signing
+	// secret verifies their clicks.
+	c.SlackSigningSecret = strings.TrimSpace(os.Getenv("TASKIEM_OAUTH_SLACK_WEBHOOK_SECRET"))
+	if (c.Telegram != nil || c.SlackSigningSecret != "") && c.WhatsApp == nil {
 		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(os.Getenv("TASKIEM_CHAT_TOKEN_KEY")))
 		if err != nil || len(key) < 32 {
-			return c, errors.New("TASKIEM_TELEGRAM_BOT_TOKEN is set without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
+			return c, errors.New("the Telegram bot or Taskiem's Slack app is set up without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
 		}
 		c.ChatTokenKey = key
 	}
@@ -726,7 +749,32 @@ func modeURLs(m *connector.Manifest) []string {
 
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
-		Egress: &egress.Guard{Logger: e.log}}
+		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry)}
+}
+
+// platformApps reads the secrets of Taskiem's platform apps whose
+// connectors have app-delivered triggers (decision 0051):
+// TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET, the secret the provider signs
+// with, and _VERIFY_TOKEN for an endpoint check (Meta's). An app without
+// a webhook secret takes no deliveries: its URL answers 404.
+func platformApps(reg *connector.Registry) map[string]ingest.App {
+	out := map[string]ingest.App{}
+	for _, c := range reg.List() {
+		for _, t := range c.Manifest.Triggers {
+			if !t.AppDelivered() {
+				continue
+			}
+			// Each mode's own app too (Intuit's development app signs the
+			// sandbox companies' notifications: rule 20).
+			for _, client := range c.Manifest.Clients() {
+				key := "TASKIEM_OAUTH_" + strings.ToUpper(client)
+				if s := strings.TrimSpace(os.Getenv(key + "_WEBHOOK_SECRET")); s != "" {
+					out[client] = ingest.App{WebhookSecret: s, VerifyToken: strings.TrimSpace(os.Getenv(key + "_VERIFY_TOKEN"))}
+				}
+			}
+		}
+	}
+	return out
 }
 
 // remote keeps providers' subscriptions for remotely registered triggers
@@ -978,6 +1026,12 @@ func serve(ctx context.Context, args []string) error {
 		if e.tg != nil {
 			// The platform bot's webhook (docs/telegram.md).
 			mux.HandleFunc("/channels/telegram", git.TelegramHooks().ServeHTTP)
+		}
+		if git.Slack != nil {
+			// Taskiem's Slack app's clicks: approvals here, the rest on to
+			// /hooks/apps/slack@1/interactions (docs/integrations/slack.md).
+			git.Ingest = e.hooks()
+			mux.HandleFunc("/channels/slack/interactions", git.SlackHooks().ServeHTTP)
 		}
 		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
 		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))
@@ -1246,6 +1300,8 @@ func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	if e.tg != nil {
 		a.Telegram = &api.TelegramAlerts{Pool: e.pool, Telegram: e.tg}
 	}
+	// Slack channels made from a business's Slack connection.
+	a.Slack = &api.SlackAlerts{Server: &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Egress: &egress.Guard{Logger: log}, Logger: log}}
 	if c.SMTPURL != "" {
 		m, err := alerts.NewSMTPMailer(c.SMTPURL)
 		if err != nil {
@@ -1287,15 +1343,21 @@ func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAu
 		if c.Manifest.Auth.OAuth2 == nil {
 			continue
 		}
-		key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ID)
-		id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
-		switch {
-		case id == "" && secret == "":
-			log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
-		case id == "" || secret == "":
-			return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
-		default:
-			out[c.Manifest.ID] = api.OAuthClient{ID: id, Secret: secret}
+		// The connector's app, and any mode's own (rule 20).
+		for _, client := range c.Manifest.Clients() {
+			if _, done := out[client]; done {
+				continue // one app serving several connectors (decision 0051)
+			}
+			key := "TASKIEM_OAUTH_" + strings.ToUpper(client)
+			id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
+			switch {
+			case id == "" && secret == "":
+				log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
+			case id == "" || secret == "":
+				return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
+			default:
+				out[client] = api.OAuthClient{ID: id, Secret: secret}
+			}
 		}
 	}
 	return out, nil
@@ -1324,6 +1386,9 @@ func (c config) relyingParty() (webauthn.Config, error) {
 // that signs approval buttons when WhatsApp is off.
 func (e *engine) chat(srv *api.Server) {
 	srv.Telegram = e.tg
+	if e.cfg.SlackSigningSecret != "" {
+		srv.Slack = &api.SlackApp{SigningSecret: e.cfg.SlackSigningSecret}
+	}
 	if e.wa == nil && len(e.cfg.ChatTokenKey) > 0 {
 		srv.ChatSigner = whatsapp.Signer{Key: e.cfg.ChatTokenKey}
 	}

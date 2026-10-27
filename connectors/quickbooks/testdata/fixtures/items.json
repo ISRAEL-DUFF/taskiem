@@ -1,0 +1,45 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM Item WHERE Active = true MAXRESULTS 1000"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "Item": [
+     {
+      "Id": "1",
+      "Name": "Services",
+      "Type": "Service",
+      "UnitPrice": 0,
+      "IncomeAccountRef": {
+       "value": "79"
+      },
+      "Active": true
+     },
+     {
+      "Id": "5",
+      "Name": "Bookkeeping (monthly)",
+      "Type": "Service",
+      "UnitPrice": 25000,
+      "IncomeAccountRef": {
+       "value": "79"
+      },
+      "Active": true
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 2
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

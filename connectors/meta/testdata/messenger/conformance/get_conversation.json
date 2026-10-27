@@ -1,0 +1,37 @@
+{
+ "action": "get_conversation",
+ "input": {
+  "person_id": "6789012345678901",
+  "limit": 20
+ },
+ "credentials": {
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "conversation_open"
+ ],
+ "expect": {
+  "output": {
+   "conversation_id": "t_100",
+   "last_from_person_at": "2026-10-26T11:55:00Z",
+   "window_ends_at": "2026-10-27T11:55:00Z",
+   "messages": [
+    {
+     "message_id": "m_3",
+     "from_person": false
+    },
+    {
+     "message_id": "m_2",
+     "from_person": true,
+     "text": "Do you have it in blue?"
+    },
+    {
+     "message_id": "m_1",
+     "from_person": true
+    }
+   ]
+  }
+ }
+}

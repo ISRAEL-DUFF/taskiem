@@ -2,7 +2,32 @@
 
 The connector is `connectors/slack` (`slack@1`). It uses Slack's Web API with a bot token, and takes the Events API and interactivity (button clicks, modal submissions) as triggers. Built from Slack's public developer documentation, read 6 October 2026 (api.slack.com now redirects to docs.slack.dev); the manifest header lists the pages.
 
-## Setting up the Slack app
+## Add to Slack (one click)
+
+Where Taskiem's own Slack app is registered (`TASKIEM_OAUTH_SLACK_CLIENT_ID`, `_CLIENT_SECRET` and `_WEBHOOK_SECRET`: [operations](../operations.md#configuration)), a business connects Slack with **Connect Slack**: Slack asks a workspace admin to allow Taskiem's app, and the connection keeps the bot token, the workspace's id (`team_id`) and its name, taken from the token answer (`oauth.v2.access`). Nothing is pasted. Deleting the connection gives the token back (`auth.revoke`).
+
+The app's events and button clicks come to Taskiem's app URLs for every workspace, verified with the app's signing secret and delivered to the connections of the workspace they name (decision 0051, connector/v1 rule 18), so the triggers below work the same whichever way Slack was connected. When the app is uninstalled, or its bot token revoked, the workspace's connections are marked expired and the Connections page says to connect again.
+
+Taskiem's Slack app (once, by Taskiem's operators):
+
+1. Create the app at <https://api.slack.com/apps>, with the bot scopes `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `chat:write.public`, `files:write`, `groups:read`, `im:history`, `im:write`, `reactions:write`, `users:read` and `users:read.email`, and the redirect URL `<TASKIEM_PUBLIC_URL>/v1/connections/oauth/callback`.
+2. **Event Subscriptions** → Request URL `<TASKIEM_HOOKS_URL>/apps/slack@1/events`; subscribe the bot to the events workflows use, and to `app_uninstalled` and `tokens_revoked`.
+3. **Interactivity** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/interactions`: approval buttons are decided there, and every other click goes on to `/hooks/apps/slack@1/interactions` (see [approvals in Slack](#approvals-in-slack)).
+4. **Manage Distribution** → turn on public distribution, so workspaces other than Taskiem's can install it.
+5. Put the client id, client secret and signing secret in the environment.
+
+## Approvals in Slack
+
+Approval requests can come to a member in Slack, as they do on WhatsApp and Telegram, through the business's own workspace (decision 0051; the same notices, decision tokens and deciding as [governance](../governance.md) describes for chat).
+
+- **Linking.** On their profile, a member links Slack in the business they are in (`POST /v1/me/slack`, with the same proof as adding a passkey). Taskiem finds them in the business's connected workspace by their email (`users.lookupByEmail`) and sends them, from the bot, a **Confirm** button; pressing it links that Slack user to them in this business (`slack_bindings`). Someone not in the workspace, or with another email there, is told so. A link is one business's, unlike a WhatsApp number or Telegram account. Unlink with `DELETE /v1/me/slack`.
+- **Requests.** An approval step waiting for a role reaches each linked approver who holds it as a direct message from the bot: the request in plain text (personal data masked, as on every chat channel) with **Approve** and **Reject** buttons carrying the signed decision tokens. School approvals come the same way to holders of `school.approve`.
+- **Deciding.** A button decides only for the member it was sent to, linked in that business; another person's click, an unlinked one, or the second button of a pair decides nothing. The answer comes as a reply, and the clicked message loses its buttons. An approval that asks for a passkey or code is handed to the web app, as on WhatsApp.
+- **Where clicks go.** Taskiem's Slack app has one interactivity URL, `/channels/slack/interactions`, verified with the app's signing secret: Taskiem's own buttons (approvals, Confirm) are handled there, and every other click goes on, unchanged, to `/hooks/apps/slack@1/interactions`, the `interactions` trigger.
+
+Not yet: the "First payment to this account" warning in chat requests (WhatsApp's and Telegram's do not show it either), and updating a request in Slack when it is decided somewhere else (its buttons then answer that it was already decided).
+
+## Your own Slack app
 
 1. At <https://api.slack.com/apps>, **Create New App** → *From scratch*, in the workspace the workflows will use.
 2. **OAuth & Permissions** → *Bot Token Scopes*. Add what the actions you use need:
@@ -26,7 +51,8 @@ The connector is `connectors/slack` (`slack@1`). It uses Slack's Web API with a 
 | Field | |
 | --- | --- |
 | `bot_token` | Bot User OAuth Token, `xoxb-...` |
-| `signing_secret` | Verifies events and interactions (`X-Slack-Signature`, scheme `slack_v0`) |
+| `signing_secret` | Verifies events and interactions (`X-Slack-Signature`, scheme `slack_v0`); for your own app only |
+| `team_id`, `team_name` | The workspace; filled when Taskiem's app is added |
 
 The connection test is `auth_test` (`auth.test`).
 
@@ -43,6 +69,9 @@ The connection test is `auth_test` (`auth.test`).
 | `get_conversation` | `conversations.info` | read | |
 | `lookup_user_by_email` | `users.lookupByEmail` | read | `found: false` for an unknown or deactivated address |
 | `upload_file` | `files.getUploadURLExternal`, POST to the upload URL, `files.completeUploadExternal` | unsafe write | Text `content` or `content_base64`, up to 50 MB; shared in `channel_id` when given |
+| `list_users` | `users.list` | read | A page of members (bots, Slackbot and deactivated people left out unless `include_bots`), with emails where `users:read.email` allows; `cursor` / `next_cursor` |
+| `open_conversation` | `conversations.open` | read | The direct message with one person (or a group DM): the same channel every time, so safe to repeat |
+| `schedule_message` | `chat.scheduleMessage` | unsafe write | `post_at` as RFC 3339 or Unix seconds; no idempotency key, so an unknown outcome is parked |
 
 Write methods are sent as JSON; reads and the file methods are form-encoded, which every method accepts.
 
@@ -101,6 +130,8 @@ Limits, honestly: which button was clicked cannot be read by an expression, so i
 - A Slack workspace and an app installed there for a live check: post, update, react, upload, the Events URL handshake, and a real button click through ingest.
 
 ## To confirm with Slack
+
+6. That `oauth.v2.access` ignores the PKCE `code_verifier` Taskiem always sends (Slack's OAuth page does not mention PKCE for distributed apps), and `/oauth/v2/authorize` the `code_challenge`.
 
 1. That read methods honour form-encoded arguments exactly as JSON ones (the connector form-encodes reads; the reference lists both content types).
 2. Whether `ratelimited` returned with HTTP 200 (as opposed to 429) also carries `Retry-After` (the error table says "refer to the Retry-After header").

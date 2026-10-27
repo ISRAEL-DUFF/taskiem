@@ -1,0 +1,105 @@
+{
+  "id": "instagram-away-reply",
+  "title": "Reply on Instagram when you are closed",
+  "summary": "When someone writes to your Instagram account outside your opening hours, reply once that day with a message you choose.",
+  "description": "When someone writes to your Instagram account before you open or after you close (Lagos time), Taskiem answers them in the same chat with the message you set, once a day for each person, so nobody waits without a word. Inside your hours nothing is sent. The reply goes within Meta's 24-hour window, since they have just written.",
+  "category": "customers",
+  "tags": [
+    "instagram",
+    "messages",
+    "auto reply"
+  ],
+  "keywords": [
+    "instagram",
+    "dm",
+    "message",
+    "reply",
+    "closed",
+    "hours",
+    "away",
+    "auto"
+  ],
+  "requires": [
+    "instagram"
+  ],
+  "connectors": [
+    "instagram@1"
+  ],
+  "params": [
+    {
+      "name": "conn",
+      "type": "connection",
+      "connector": "instagram",
+      "title": "Instagram connection",
+      "description": "Your Instagram professional account, connected with one click through its Facebook Page.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "opens",
+      "type": "time",
+      "title": "You open at",
+      "description": "Lagos time.",
+      "required": true,
+      "default": "08:00",
+      "example": "08:00"
+    },
+    {
+      "name": "closes",
+      "type": "time",
+      "title": "You close at",
+      "description": "Lagos time.",
+      "required": true,
+      "default": "18:00",
+      "example": "18:00"
+    },
+    {
+      "name": "reply",
+      "type": "string",
+      "title": "The reply",
+      "description": "What they are told.",
+      "required": true,
+      "example": "Thanks for your message! We are closed now and will reply when we open at 8am.",
+      "max_length": 640
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_instagramAwayReply",
+    "version": 1,
+    "name": "Reply on Instagram when closed",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "instagram@1",
+        "trigger": "messages",
+        "events": [
+          "message"
+        ],
+        "connection": "{{conn}}"
+      }
+    },
+    "steps": [
+      {
+        "id": "reply",
+        "type": "connector",
+        "name": "Tell them you are closed",
+        "connector": "instagram@1",
+        "action": "send_message",
+        "connection": "{{conn}}",
+        "when": "=timestamp(int(trigger.item.event.timestamp) / 1000).getHours('Africa/Lagos') * 60 + timestamp(int(trigger.item.event.timestamp) / 1000).getMinutes('Africa/Lagos') < {{opens:hour}} * 60 + {{opens:minute}} || timestamp(int(trigger.item.event.timestamp) / 1000).getHours('Africa/Lagos') * 60 + timestamp(int(trigger.item.event.timestamp) / 1000).getMinutes('Africa/Lagos') >= {{closes:hour}} * 60 + {{closes:minute}}",
+        "input": {
+          "recipient_id": "=trigger.item.sender_id",
+          "text": "{{reply}}"
+        },
+        "effect": {
+          "idempotency_seed": "='away:' + trigger.item.sender_id + ':' + string((int(trigger.item.event.timestamp) + 3600000) / 86400000)"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

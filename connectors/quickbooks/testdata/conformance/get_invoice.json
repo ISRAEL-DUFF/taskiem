@@ -1,0 +1,29 @@
+{
+ "action": "get_invoice",
+ "input": {
+  "invoice_id": "130"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice"
+ ],
+ "expect": {
+  "output": {
+   "invoice_id": "130",
+   "doc_number": "INV-2026-0042",
+   "customer_id": "58",
+   "total_kobo": 5375000,
+   "balance_kobo": 5375000,
+   "tax_kobo": 375000,
+   "paid": false,
+   "currency": "NGN"
+  }
+ }
+}

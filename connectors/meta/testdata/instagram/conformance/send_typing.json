@@ -1,0 +1,21 @@
+{
+ "action": "send_typing",
+ "input": {
+  "recipient_id": "5432109876543210"
+ },
+ "credentials": {
+  "instagram_id": "17841400000000001",
+  "instagram_username": "ada.cakes",
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "typing"
+ ],
+ "expect": {
+  "output": {
+   "recipient_id": "5432109876543210"
+  }
+ }
+}

@@ -1,0 +1,166 @@
+# Resend: transactional email from the business's own domain (K7 of
+# docs/spec/business-connectors.md). Built from Resend's public API
+# reference, read 26 October 2026:
+#   https://resend.com/docs/api-reference/emails/send-email (Idempotency-Key)
+#   https://resend.com/docs/api-reference/emails/retrieve-email
+#   https://resend.com/docs/api-reference/domains/list-domains
+#   https://resend.com/docs/dashboard/domains/introduction (domain statuses)
+#   https://resend.com/docs/api-reference/errors
+#   https://resend.com/docs/api-reference/webhooks/create-webhook (and list,
+#     retrieve, update, delete)
+#   https://resend.com/docs/dashboard/webhooks/event-types
+#   https://resend.com/docs/dashboard/webhooks/verify-webhooks-requests (Svix)
+# See docs/integrations/resend.md.
+manifest: connector/v1
+id: resend
+version: 1.0.0
+name: Resend
+description: Send receipts, invoices and notices from your own domain, once each however often a step is retried, and hear when they are delivered, opened, clicked or bounce.
+category: messaging
+auth:
+  type: api_key
+  fields:
+    - key: api_key
+      label: API key
+      secret: true
+      help: A Resend API key with full access, so Taskiem can check your domains and set up delivery events.
+      where: resend.com → API Keys → Create API Key (Full access)
+      link: https://resend.com/api-keys
+      prefixes: [{ prefix: re_ }]
+  test: { action: list_domains }
+# 2 requests a second per team by default.
+rate_limit: { requests: 2, per: 1s, scope: connection }
+base_url: https://api.resend.com
+actions:
+  list_domains:
+    title: List your domains
+    description: The sending domains in Resend and whether each is verified. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        domains:
+          type: array
+          items:
+            type: object
+            properties:
+              id:       { type: string }
+              name:     { type: string }
+              status:   { type: string, description: "not_started, pending, verified, failed or temporary_failure" }
+              verified: { type: boolean }
+              region:   { type: string }
+  send_email:
+    title: Send an email
+    description: >-
+      From an address on a domain verified in Resend (a send from any other
+      is refused before calling). Sent with the step's idempotency key
+      (Idempotency-Key), so Resend sends it once however often the step is
+      retried within 24 hours.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base64url
+      length: 32
+      prefix: "tsk-"
+      limits: { min_length: 1, max_length: 256, charset: "A-Za-z0-9_-" }
+    compensate: null
+    input:
+      type: object
+      required: [from, to, subject]
+      properties:
+        from:     { type: string, description: "Ada Cakes <orders@adacakes.ng>: the domain must be verified in Resend" }
+        to:       { type: array, minItems: 1, maxItems: 50, items: { type: string } }
+        cc:       { type: array, items: { type: string } }
+        bcc:      { type: array, items: { type: string } }
+        reply_to: { type: array, items: { type: string } }
+        subject:  { type: string }
+        html:     { type: string }
+        text:     { type: string, description: Plain text; made from the HTML when left out }
+        tags:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name:  { type: string, pattern: "^[A-Za-z0-9_-]{1,256}$" }
+              value: { type: string, pattern: "^[A-Za-z0-9_-]{1,256}$" }
+        attachments:
+          type: array
+          items:
+            type: object
+            required: [filename]
+            properties:
+              filename:       { type: string }
+              content_base64: { type: string }
+              path:           { type: string, description: An https link to the file, instead of its content }
+              content_type:   { type: string }
+        scheduled_at: { type: string, description: When to send (ISO 8601) }
+    output:
+      type: object
+      properties:
+        email_id: { type: string }
+    pii:
+      - { field: to, category: email }
+      - { field: cc, category: email }
+      - { field: bcc, category: email }
+      - { field: reply_to, category: email }
+      - { field: subject, category: other }
+      - { field: html, category: other }
+      - { field: text, category: other }
+      - { field: attachments, category: other }
+  get_email:
+    title: Get an email
+    description: A sent email and what last happened to it (sent, delivered, bounced, opened, clicked…).
+    class: read
+    input:
+      type: object
+      required: [email_id]
+      properties:
+        email_id: { type: string }
+    output:
+      type: object
+      properties:
+        email_id:     { type: string }
+        from:         { type: string }
+        to:           { type: array, items: { type: string } }
+        subject:      { type: string }
+        created_at:   { type: string }
+        last_event:   { type: string }
+        scheduled_at: { type: string }
+    pii:
+      - { field: output.to, category: email }
+      - { field: output.subject, category: other }
+triggers:
+  # Taskiem creates the webhook in Resend when a workflow is published
+  # (registration remote, decision 0021) and keeps the signing secret Resend
+  # returns; deliveries are signed by Svix.
+  email_events:
+    type: webhook
+    title: What happens to the emails you send
+    registration: remote
+    verify: { scheme: svix }
+    events:
+      - email.sent
+      - email.delivered
+      - email.delivery_delayed
+      - email.bounced
+      - email.complained
+      - email.opened
+      - email.clicked
+      - email.failed
+      - email.suppressed
+    event_type: =body.type
+    # Retries keep their svix-id.
+    dedup: '=headers["svix-id"]'
+    # The email: a run that sent it waits on its id (send_email's email_id).
+    correlation: '=has(body.data.email_id) ? dyn(body.data.email_id) : null'
+    pii:
+      - { field: body.data.to, category: email }
+      - { field: body.data.from, category: email }
+      - { field: body.data.subject, category: other }
+    example:
+      body:
+        type: email.bounced
+        created_at: "2026-10-26T12:00:05.000Z"
+        data: { email_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c", from: "Ada Cakes <orders@adacakes.ng>", to: [ada@example.com], subject: Receipt for invoice INV-0042, created_at: "2026-10-26T12:00:00.000Z", bounce: { type: Permanent, message: "The recipient's mailbox does not exist" } }

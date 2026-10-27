@@ -1,0 +1,31 @@
+{
+ "action": "get_invoice",
+ "input": {
+  "invoice_id": "460000000027017"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "invoice"
+ ],
+ "expect": {
+  "output": {
+   "invoice_id": "460000000027017",
+   "invoice_number": "INV-000042",
+   "reference_number": "INV-2026-0042",
+   "total_kobo": 5375000,
+   "tax_kobo": 375000,
+   "balance_kobo": 5375000,
+   "paid": false,
+   "currency": "NGN"
+  }
+ }
+}

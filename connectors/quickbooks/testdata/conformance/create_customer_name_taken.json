@@ -1,0 +1,28 @@
+{
+ "action": "create_customer",
+ "input": {
+  "display_name": "Adaeze Okafor",
+  "email": "ada@example.com",
+  "phone": "+2348030000000"
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "customer_by_email_none",
+  "customer_by_name_none",
+  "customer_create_duplicate",
+  "customer_by_name"
+ ],
+ "expect": {
+  "output": {
+   "customer_id": "58",
+   "created": false
+  }
+ }
+}

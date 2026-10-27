@@ -1,0 +1,107 @@
+{
+  "id": "slack-money-received",
+  "title": "Post money received in Slack",
+  "summary": "When money comes in by link, transfer or a customer's account number, post who paid and how much in a Slack channel.",
+  "description": "Whenever your payments account reports money received (a payment link, a transfer, or a payment into a customer's own account number), posts the amount and its reference in the Slack channel you choose, so your team sees sales as they happen. The payer's name is left out: Slack is shared with everyone in the channel.",
+  "category": "alerts",
+  "tags": [
+    "alerts",
+    "slack"
+  ],
+  "keywords": [
+    "slack",
+    "channel",
+    "received",
+    "sales"
+  ],
+  "requires": [
+    "slack"
+  ],
+  "connectors": [
+    "slack@1",
+    "capability:payment.received",
+    "capability:virtual_account.credited"
+  ],
+  "params": [
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "payment.received",
+        "virtual_account.credited"
+      ],
+      "title": "Payments account",
+      "description": "Whose payments to post; every connected payments account when left blank.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "slack_connection",
+      "type": "connection",
+      "connector": "slack",
+      "title": "Slack connection",
+      "description": "Your Slack workspace, connected with Add to Slack.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "title": "Slack channel",
+      "description": "Where the message is posted. For a private channel, invite the Taskiem app to it first.",
+      "required": true,
+      "example": "C0123456789",
+      "pattern": "^[CG][A-Z0-9]{2,24}$",
+      "picker": "slack_channel",
+      "from": "slack_connection"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_slackMoneyReceived",
+    "version": 1,
+    "name": "Post money received in Slack",
+    "trigger": {
+      "type": "capability_event",
+      "config": {
+        "events": [
+          "payment.received",
+          "virtual_account.credited"
+        ],
+        "connection": "{{rail_connection}}"
+      }
+    },
+    "steps": [
+      {
+        "id": "message",
+        "type": "transform",
+        "name": "Write the message",
+        "config": {
+          "output": {
+            "text": "='Received ' + (has(trigger.fields.currency) && trigger.fields.currency != 'NGN' ? trigger.fields.currency + ' ' + string(trigger.fields.amount_kobo / 100) : '₦' + string(trigger.fields.amount_kobo / 100)) + (trigger.event == 'virtual_account.credited' ? ' into a customer account number' : '') + ' (' + (trigger.event == 'virtual_account.credited' ? trigger.fields.credit_id : trigger.fields.payment_id) + ').'"
+          }
+        }
+      },
+      {
+        "id": "post",
+        "type": "connector",
+        "name": "Post it in Slack",
+        "connector": "slack@1",
+        "action": "post_message",
+        "connection": "{{slack_connection}}",
+        "input": {
+          "channel": "{{channel}}",
+          "text": "=steps.message.output.text"
+        },
+        "needs": [
+          "message"
+        ]
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

@@ -53,6 +53,11 @@ type templateView struct {
 	// Product is the product the template works around (payrolla): the
 	// Start page offers it to businesses that connected the product.
 	Product string `json:"product,omitempty"`
+	// Services are the services the template works with that a business
+	// connects (K9): each a list of the connectors that serve it, any one
+	// of which will do (the books: QuickBooks or Zoho Books). The Start
+	// page offers the template, first, once each is connected.
+	Services [][]string `json:"services,omitempty"`
 	// Callable is, for a template another workflow can use as a step
 	// (decision 0047), its interface: run inputs, outputs and effect.
 	Callable   *callableView   `json:"callable,omitempty"`
@@ -76,13 +81,21 @@ func viewTemplate(t *templates.Template, reg connector.Lookup, full bool) templa
 		Tables: nonNil(t.Tables), Steps: []wdtext.Line{}, Available: true, SupersededBy: t.SupersededBy, Product: t.Product}
 	for _, c := range t.Connectors {
 		if uses, ok := strings.CutPrefix(c, templates.CapabilityPrefix); ok {
-			if !railCan(reg, uses) {
+			by := providers(reg, uses)
+			if len(by) == 0 {
 				v.Available = false
+			} else if strings.HasPrefix(uses, "books_") {
+				v.Services = addService(v.Services, by)
 			}
 			continue
 		}
-		if _, ok := reg.Get(c); !ok {
+		got, ok := reg.Get(c)
+		if !ok {
 			v.Available = false
+			continue
+		}
+		if isService(got.Manifest) {
+			v.Services = addService(v.Services, []string{got.Manifest.ID})
 		}
 	}
 	if doc, err := t.Instantiate(t.Examples(), ""); err == nil {
@@ -362,14 +375,48 @@ func checkTemplateIDs(ids []string) error {
 	return nil
 }
 
-// railCan reports whether a rail the tenant can use declares the capability.
-func railCan(reg connector.Lookup, uses string) bool {
+// providers are the connectors the tenant can use that declare the
+// capability: rails, and for the books capabilities the books (QuickBooks
+// and Zoho Books are products: rule 16), sorted.
+func providers(reg connector.Lookup, uses string) []string {
+	var out []string
 	for _, c := range reg.List() {
 		_, can := c.Manifest.Capabilities[uses]
 		_, sends := c.Manifest.Events[uses] // capability:payout.failed, for a capability_event trigger
-		if (can || sends) && c.Manifest.KindOf() == "rail" {
+		kind := c.Manifest.KindOf()
+		if (can || sends) && (kind == "rail" || (kind == "product" && strings.HasPrefix(uses, "books"))) && !slices.Contains(out, c.Manifest.ID) {
+			out = append(out, c.Manifest.ID)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// isService reports whether a business connects the connector as a
+// service of its own, as the Start page counts them: an app (a product,
+// such as QuickBooks), or one connected through Taskiem's platform app
+// (Slack, Meta, Zoho, Mailchimp: rule 20).
+func isService(m *connector.Manifest) bool {
+	if m.KindOf() == "product" {
+		return true
+	}
+	if o := m.Auth.OAuth2; o != nil && o.Client != "" {
+		return true
+	}
+	for _, h := range m.Auth.HostModes {
+		if h.Client != "" {
 			return true
 		}
 	}
 	return false
+}
+
+// addService adds a service once.
+func addService(list [][]string, by []string) [][]string {
+	for _, s := range list {
+		if slices.Equal(s, by) {
+			return list
+		}
+	}
+	return append(list, by)
 }

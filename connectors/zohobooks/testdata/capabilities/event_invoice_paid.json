@@ -1,0 +1,21 @@
+{
+ "trigger": "changes",
+ "body": {
+  "event": "invoice.paid",
+  "data": {
+   "event": "invoice.paid",
+   "kind": "invoice",
+   "id": "460000000027010",
+   "number": "INV-000040",
+   "customer_id": "460000000026049",
+   "total_kobo": 5375000,
+   "currency": "NGN",
+   "status": "paid",
+   "modified_at": "2026-10-26T11:00:00+0100"
+  }
+ },
+ "event": "books.invoice.paid",
+ "expect": {
+  "invoice_id": "460000000027010"
+ }
+}

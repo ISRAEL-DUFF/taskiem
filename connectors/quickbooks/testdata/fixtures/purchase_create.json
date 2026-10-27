@@ -1,0 +1,55 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/company/9341453050298730/purchase",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  },
+  "body": {
+   "DocNumber": "RCPT-7781",
+   "PaymentType": "Cash",
+   "AccountRef": {
+    "value": "35"
+   },
+   "TxnDate": "2026-10-24",
+   "PrivateNote": "Diesel for the generator",
+   "Line": [
+    {
+     "DetailType": "AccountBasedExpenseLineDetail",
+     "Amount": 20000.0,
+     "Description": "Diesel for the generator",
+     "AccountBasedExpenseLineDetail": {
+      "AccountRef": {
+       "value": "64"
+      }
+     }
+    },
+    {
+     "DetailType": "AccountBasedExpenseLineDetail",
+     "Amount": 1500.0,
+     "Description": "VAT",
+     "AccountBasedExpenseLineDetail": {
+      "AccountRef": {
+       "value": "64"
+      }
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "Purchase": {
+    "Id": "220",
+    "DocNumber": "RCPT-7781",
+    "TotalAmt": 21500.0,
+    "PaymentType": "Cash"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

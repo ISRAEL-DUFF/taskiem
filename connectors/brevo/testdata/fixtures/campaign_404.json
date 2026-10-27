@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/emailCampaigns/9",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "code": "document_not_found",
+   "message": "Campaign not found"
+  }
+ }
+}

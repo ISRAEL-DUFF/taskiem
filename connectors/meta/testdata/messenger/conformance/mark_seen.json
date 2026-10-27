@@ -1,0 +1,19 @@
+{
+ "action": "mark_seen",
+ "input": {
+  "recipient_id": "6789012345678901"
+ },
+ "credentials": {
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "seen"
+ ],
+ "expect": {
+  "output": {
+   "recipient_id": "6789012345678901"
+  }
+ }
+}

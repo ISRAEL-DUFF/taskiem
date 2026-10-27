@@ -1,0 +1,36 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002/messages/search",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "searchKey": "subject:invoice",
+   "limit": "50"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": [
+    {
+     "messageId": "1761400000000100009",
+     "folderId": "2560636000000008014",
+     "threadId": "1761400000000100009",
+     "subject": "Invoice from Lagos Paper",
+     "fromAddress": "sales@paper.example",
+     "toAddress": "orders@adacakes.ng",
+     "summary": "Please find attached",
+     "receivedTime": "1761400000000",
+     "status": "1",
+     "hasAttachment": "1"
+    }
+   ]
+  }
+ }
+}

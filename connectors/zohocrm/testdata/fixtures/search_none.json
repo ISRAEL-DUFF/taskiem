@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/Leads/search",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "criteria": "(City:equals:Lagos)"
+  }
+ },
+ "response": {
+  "status": 204,
+  "body": null
+ }
+}

@@ -1,0 +1,33 @@
+{
+ "action": "create_expense",
+ "input": {
+  "reference_number": "RCPT-7781",
+  "account_id": "460000000000415",
+  "paid_through_account_id": "460000000000358",
+  "amount_kobo": 2150000,
+  "vat_kobo": 150000,
+  "date": "2026-10-24",
+  "description": "Diesel for the generator"
+ },
+ "credentials": {
+  "refresh_token": "1000.test-refresh-token",
+  "client_id": "1000.TESTCLIENT",
+  "client_secret": "test-client-secret",
+  "accounts_server": "https://accounts.zoho.com",
+  "organization_id": "10234695",
+  "organization_name": "Ada Foods Ltd",
+  "access_token": "1000.test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "expense_by_reference_none",
+  "expense_create"
+ ],
+ "expect": {
+  "output": {
+   "expense_id": "460000000029001",
+   "created": true,
+   "total_kobo": 2150000
+  }
+ }
+}

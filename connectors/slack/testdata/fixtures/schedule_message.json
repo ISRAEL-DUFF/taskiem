@@ -1,0 +1,4 @@
+{
+ "status": 200,
+ "body": {"ok": true, "channel": "C1H9RESGL", "scheduled_message_id": "Q1298393284", "post_at": "1562180400", "message": {"text": "Here's a message for you in the future", "type": "delayed_message"}}
+}
