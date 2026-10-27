@@ -1,0 +1,16 @@
+{
+  "title": "Taskiem Atlas",
+  "tagline": "How Taskiem is built, feature by feature, checked against the code.",
+  "repo": "https://github.com/ISRAEL-DUFF/taskiem",
+  "home": "home",
+  "parts": [
+    { "id": "A", "title": "Orientation" },
+    { "id": "B", "title": "Core engine" },
+    { "id": "C", "title": "Extending and connecting" },
+    { "id": "D", "title": "Trust and compliance" },
+    { "id": "E", "title": "Product modules" },
+    { "id": "F", "title": "Running it" },
+    { "id": "G", "title": "Synthesis" },
+    { "id": "Z", "title": "About" }
+  ]
+}

@@ -1,0 +1,27 @@
+<!--atlas
+{
+  "id": "security",
+  "title": "Security architecture",
+  "part": "D",
+  "order": 2,
+  "status": "planned",
+  "summary": "Envelope encryption and bring-your-own-key, personal-data sealing and crypto-shredding, the egress guard, HTTP hardening, and leak detection.",
+  "scope": [
+    "Secrets: data keys, tenant keys, the root key in OpenBao or a KMS",
+    "Bring your own key: rotation, re-wrapping, parking when a key is lost",
+    "Personal data sealed in history, subject keys, erasure",
+    "The egress guard: allow-lists, SSRF defences, the explicit proxy (decision 0028)",
+    "HTTP security headers and rate limits",
+    "Scrubbing secrets out of outputs",
+    "The threat model and self-review"
+  ],
+  "sources": [
+    "engine/secrets/",
+    "engine/byok/",
+    "engine/pii/",
+    "engine/egress/",
+    "engine/httpsec/",
+    "docs/security/"
+  ]
+}
+-->

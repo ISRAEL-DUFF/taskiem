@@ -1,0 +1,31 @@
+<!--atlas
+{
+  "id": "workflow-definitions",
+  "title": "Workflow definitions",
+  "part": "B",
+  "order": 1,
+  "status": "planned",
+  "summary": "The wd/v1 format, step types, CEL expressions, versioning, and the round trip between canvas, code and Git.",
+  "scope": [
+    "The <code>wd/v1</code> structure and its JSON Schema",
+    "Every step type and what <code>decide</code> does with it",
+    "CEL expressions: roots, cost bounds, and secrets-only expressions (decision 0010)",
+    "Versions, publish states, environments and promotion",
+    "Workflow code (<code>*.flow.ts</code>) compiled inside the binary with esbuild and QuickJS",
+    "Three-way merge of concurrent edits",
+    "Workflow tests (<code>wd-test/v1</code>)",
+    "Capability steps and their expansion into rails; templates and callable workflows"
+  ],
+  "sources": [
+    "engine/wd/",
+    "engine/expr/",
+    "engine/flowcode/",
+    "engine/wdcheck/",
+    "engine/wdmerge/",
+    "engine/wdtest/",
+    "engine/expansion/",
+    "schemas/wd-v1.schema.json",
+    "docs/contracts/wd-v1.md"
+  ]
+}
+-->

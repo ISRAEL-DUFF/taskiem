@@ -1,0 +1,28 @@
+<!--atlas
+{
+  "id": "exactly-once",
+  "title": "Exactly-once effects",
+  "part": "B",
+  "order": 3,
+  "status": "planned",
+  "summary": "Action classes, derived idempotency keys and their encoding, reconciliation, call deadlines, and parking for a person.",
+  "scope": [
+    "The four action classes and the rules in <code>effects</code>",
+    "Key material, digest and encoding per provider",
+    "Seeds across runs, forks and subflows",
+    "Reconcile actions and the call deadline (decision 0009)",
+    "<code>needs_reconciliation</code> and how operators resolve it",
+    "The crash-recovery suite (worker hooks)",
+    "Payouts in the money log"
+  ],
+  "sources": [
+    "engine/effects/",
+    "engine/runtime/worker.go",
+    "engine/runtime/reconcilecheck.go",
+    "docs/contracts/action-classes.md",
+    "docs/contracts/idempotency.md",
+    "docs/decisions/0005-idempotency-keys.md",
+    "docs/decisions/0009-write-call-deadlines.md"
+  ]
+}
+-->

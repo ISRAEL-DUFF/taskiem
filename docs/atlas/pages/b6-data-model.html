@@ -1,0 +1,23 @@
+<!--atlas
+{
+  "id": "data-model",
+  "title": "Data model and tenant isolation",
+  "part": "B",
+  "order": 4,
+  "status": "planned",
+  "summary": "The schema by table group, row-level security with tenant scope arrays, the dispatch role, and how migrations run and are tested.",
+  "scope": [
+    "Table groups and key tables as they are now, not as specced",
+    "<code>app.tenant_scope</code>, the policies, and the roles <code>taskiem_app</code>, <code>taskiem_dispatch</code> and <code>taskiem_public</code>",
+    "<code>SECURITY DEFINER</code> functions and how they are reviewed",
+    "Partner access to sub-tenants (decision 0015)",
+    "Append-only tables and revoked grants",
+    "goose migrations embedded in the binary",
+    "Row-level security bypass tests; the read replica (decision 0024)"
+  ],
+  "sources": [
+    "engine/db/",
+    "docs/decisions/0004-tenant-isolation-rls.md"
+  ]
+}
+-->

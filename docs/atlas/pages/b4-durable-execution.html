@@ -1,0 +1,29 @@
+<!--atlas
+{
+  "id": "durable-execution",
+  "title": "Durable execution",
+  "part": "B",
+  "order": 2,
+  "status": "planned",
+  "summary": "Event-sourced runs, the Postgres task queue, leases and fencing, timers, signals, sagas, forks, admission and retention.",
+  "scope": [
+    "<code>run_events</code> partitioning and <code>taskiem_append_event</code>",
+    "The fold, the decide cache and the determinism suite",
+    "Tasks, leases, heartbeats and lease recovery",
+    "Timers, signals (buffering and correlation) and callbacks",
+    "Retries, <code>on_error</code> and compensation",
+    "Concurrency keys, admission and tenant queues",
+    "Subflows; replay, fork and cancel",
+    "Retention, archiving and purge",
+    "Whether large outputs leave the database (spec 4.9): <code>payload_ref</code> has no reader or writer in the runtime yet"
+  ],
+  "sources": [
+    "engine/runtime/",
+    "engine/decide/",
+    "engine/history/",
+    "engine/db/migrations/00004_execution.sql",
+    "engine/db/migrations/00006_dispatch.sql",
+    "engine/db/migrations/00009_concurrency_retention.sql"
+  ]
+}
+-->

@@ -1,0 +1,176 @@
+<!--atlas
+{
+  "id": "life-of-a-run",
+  "title": "The life of a run",
+  "part": "A",
+  "order": 2,
+  "summary": "One webhook followed from the edge, through three transactions and a payment, to the end of the run: what is written where, and what happens when something fails along the way.",
+  "verified": "7659a15c26772a700fc5de6d51a07eaa6b4ba5ff",
+  "sources": [
+    "engine/ingest/hooks.go", "engine/ingest/webhook.go",
+    "engine/runtime/store.go", "engine/runtime/worker.go", "engine/runtime/scheduler.go", "engine/runtime/decidecache.go",
+    "engine/decide/decide.go", "engine/effects/", "engine/history/", "engine/db/db.go",
+    "engine/db/migrations/00004_execution.sql", "engine/db/migrations/00006_dispatch.sql", "engine/db/migrations/00007_engine_runtime.sql", "engine/db/migrations/00122_dispatch_timing.sql",
+    "connectors/paystack/manifest.yaml", "docs/contracts/idempotency.md", "docs/spec/architecture.md"
+  ]
+}
+-->
+<p>The fastest way to understand Taskiem is to follow one run from start to end. This page follows the spec's own example, a workflow that pays out an approved loan. It starts with a webhook, checks the borrower's BVN, waits for a credit officer's approval, sends the money with a Paystack transfer, and ends. Each stage names the function that does the work and the rows it writes, so you can open the code beside it.</p>
+
+<h2>The workflow</h2>
+<p>This is the definition as the spec gives it (<x-ref path="docs/spec/architecture.md" symbol="### 3.1 Structure">spec 3.1</x-ref>). Three things matter for this walkthrough. <code>verify_bvn</code> only reads. <code>approve</code> waits for a person. <code>pay</code> moves money, and its <code>effect.idempotency_seed</code> ties the payment's key to the loan rather than to the run, so even a second run for the same loan cannot pay it twice.</p>
+<x-code path="docs/spec/architecture.md" start="&quot;schema&quot;: &quot;wd/v1&quot;," end="&quot;settings&quot;: { &quot;timeout&quot;: &quot;72h&quot;" lang="json" caption="the spec's example, wd/v1"/>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>No <code>smileid</code> connector exists. In this repository a BVN check would use <code>youverify@1</code>'s <code>verify_bvn</code>, which is also a <code>read</code> action. Nothing below depends on which one is used.</p>
+</div>
+<p>The <code>pay</code> step calls Paystack's <code>transfer</code> action. Its manifest declares the action class and how the idempotency key is encoded to fit Paystack's reference format. It also names <code>verify_transfer</code> as the action that can ask Paystack, after a crash, whether a transfer happened.</p>
+<x-code path="connectors/paystack/manifest.yaml" start="  transfer:" end="    reconcile: verify_transfer" caption="the action the pay step calls"/>
+
+<h2>Follow the run</h2>
+<p>Select a stage to light up its part of the sequence. <strong>T1</strong>, <strong>T2</strong> and <strong>T3</strong> are database transactions. Everything a stage writes commits together or not at all.</p>
+<div class="stepper">
+  <ol class="stages">
+    <li class="stage" data-lit="s1">
+      <h3 id="life-of-a-run--edge">The delivery reaches the edge</h3>
+      <p>The provider posts to <code>/hooks/{tenant}/loans/approved</code>. <x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) receive("><code>receive</code></x-ref> checks the tenant exists and is active, and applies the tenant's two ingest rates. Above the hard ceiling the caller gets <code>429</code> with <code>Retry-After</code>. Above the soft rate the delivery is accepted but the run will be queued. The body is capped by the tenant's plan.</p>
+      <p><x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) webhook("><code>webhook</code></x-ref> then finds the trigger registered at that path, checks the method and CORS, and verifies the signature: HMAC, basic or JWT (<x-ref path="engine/ingest/webhook.go" symbol="func (h *Handler) verifyCall("><code>verifyCall</code></x-ref>). It validates the body against the workflow's inputs schema (<code>422</code> if it does not match). It computes a dedup key, by default a hash of the body, or the trigger's own expression. The whole request runs under a <x-ref path="engine/ingest/hooks.go" symbol="budget          = 5 * time.Second">5-second budget</x-ref>.</p>
+    </li>
+    <li class="stage" data-lit="s2">
+      <h3 id="life-of-a-run--t1">T1: the run starts and is decided</h3>
+      <p><x-ref path="engine/runtime/store.go" symbol="func (s *Store) Start(ctx"><code>Store.Start</code></x-ref> opens one tenant-scoped transaction, and <x-ref path="engine/runtime/store.go" symbol="func (s *Store) startIn("><code>startIn</code></x-ref> does everything else inside it. It checks the tenant is active. It inserts into <code>trigger_receipts</code>: if this <code>(trigger, dedup key)</code> was seen before, it returns the original run with <code>duplicate: true</code> and writes nothing more. It then checks billing, quotas and the tenant's hold (<x-ref path="engine/runtime/store.go" symbol="func tenantHold("><code>tenantHold</code></x-ref>), inserts the <code>runs</code> row, pins the connector versions and approval policies the run will use, seals personal data, and appends <span class="evt">RunStarted</span>.</p>
+      <p>If the run is admitted, <code>start</code> arms the run's timeout timer and calls <code>decideInline</code> in the same transaction. That makes the first decision, <span class="evt">StepScheduled</span> for <code>verify_bvn</code>, and inserts its <code>tasks</code> row. Only then does the transaction commit and the caller get <code>202</code> with the run id.</p>
+      <p class="writes"><span class="evt">RunStarted</span><span class="evt">StepScheduled</span><code>trigger_receipts</code><code>runs</code><code>tasks</code><code>timers</code><code>tenant_usage</code></p>
+    </li>
+    <li class="stage" data-lit="s3">
+      <h3 id="life-of-a-run--claim">The worker wakes and claims the task</h3>
+      <p>A trigger on <code>tasks</code> calls <code>pg_notify('taskiem_tasks', queue)</code>, which wakes idle workers on that queue at once; polling every second is the fallback. <x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) Run(ctx"><code>Worker.Run</code></x-ref> has one claimer feeding a fixed set of executors, and it only claims as many tasks as it has free executors.</p>
+      <p>The claim calls <code>taskiem_claim_tasks</code>, a <code>SECURITY DEFINER</code> function that can see every tenant's tasks but returns only routing columns. It takes ready tasks with <code>FOR UPDATE SKIP LOCKED</code>, sets a 60-second lease, and increments <code>lease_epoch</code>. That epoch is the fencing token for everything the worker writes about this task. A heartbeat extends the lease while the step runs.</p>
+    </li>
+    <li class="stage" data-lit="s4">
+      <h3 id="life-of-a-run--t2">T2: intent is recorded before anything is sent</h3>
+      <p><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) prepare("><code>prepare</code></x-ref> reads the run's history inside the tenant scope. It finds the step's <span class="evt">StepScheduled</span>, notices if the step already has an outcome or was cancelled, and resolves the connector action and its class. <code>verify_bvn</code> is a <code>read</code>, so the worker goes straight to the call, with no intent and no <span class="evt">StepStarted</span>.</p>
+      <p>For <code>pay</code>, a write, the worker derives the idempotency key from the tenant, the seed (here the loan id), the step and the attempt group. It looks at what earlier attempts left behind, then <x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) recordIntent("><code>recordIntent</code></x-ref> checks the fence, locks the run, makes sure the step was not cancelled meanwhile, and appends <span class="evt">StepStarted</span> and <span class="evt">EffectIntent</span> with the key and a digest of the input. This commits before the call.</p>
+      <p class="writes"><span class="evt">StepStarted</span><span class="evt">EffectIntent</span></p>
+    </li>
+    <li class="stage" data-lit="s5">
+      <h3 id="life-of-a-run--call">The call to Paystack</h3>
+      <p><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) send("><code>send</code></x-ref> resolves secrets and the connection's credentials. It puts the encoded key in the <code>reference</code> field and calls the action through an HTTP client that dials only through the egress guard. For a write, the call must start before the intent's time plus the call timeout, 30 seconds by default (decision 0009). If that deadline has passed, nothing is sent and the attempt fails as <em>not sent</em>, which is always safe to retry.</p>
+      <p>The output is compared with the manifest's schema, and any difference is recorded as connector drift. Errors are classified as retryable, fatal, not sent or unknown outcome. The class of the action decides what each of those means.</p>
+    </li>
+    <li class="stage" data-lit="s6">
+      <h3 id="life-of-a-run--t3">T3: the outcome is recorded and the next step decided</h3>
+      <p><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) finish("><code>finish</code></x-ref> releases the task under the fence. If another worker holds the lease now, it records nothing. It scrubs any secret echoed in the output, records a settled payout in the money log, seals personal data, and appends <span class="evt">StepCompleted</span> (or <span class="evt">StepFailed</span>).</p>
+      <p>In the same transaction it calls <code>decideInline</code>. After <code>verify_bvn</code> that writes <span class="evt">ApprovalRequested</span> and an <code>approvals</code> row. After <code>pay</code> it writes <span class="evt">RunCompleted</span>. <code>finish</code> retries across a database failover: repeating a finish that did commit is fenced out, so it can never record twice.</p>
+      <p class="writes"><span class="evt">StepCompleted</span><span class="evt">ApprovalRequested</span><code>approvals</code></p>
+    </li>
+    <li class="stage" data-lit="s7">
+      <h3 id="life-of-a-run--waits">Waiting costs nothing</h3>
+      <p>While the approval is open, nothing runs. There is only a row in <code>approvals</code> and, if the step has a timeout, a row in <code>timers</code>. When the credit officer approves, from the web app or WhatsApp, <x-ref path="engine/runtime/store.go" symbol="func (s *Store) DecideApproval("><code>DecideApproval</code></x-ref> locks the run, checks the approval is still open, appends <span class="evt">ApprovalDecided</span>, and decides inline. That writes <span class="evt">StepCompleted</span> for <code>approve</code> and <span class="evt">StepScheduled</span> for <code>pay</code>. Signals and timers wake runs the same way: one transaction appends the event and makes the next decision.</p>
+      <p class="writes"><span class="evt">ApprovalDecided</span><span class="evt">StepCompleted</span><span class="evt">StepScheduled</span></p>
+    </li>
+    <li class="stage" data-lit="s8">
+      <h3 id="life-of-a-run--safety-net">The scheduler is the safety net</h3>
+      <p>Every 250 ms <x-ref path="engine/runtime/scheduler.go" symbol="func (s *Scheduler) Tick("><code>Scheduler.Tick</code></x-ref> fires due timers (the approval's timeout among them), makes expired leases claimable again, and sweeps runs that have events nobody decided on, which happens after a crash between append and decide. It also admits runs that were queued behind tenant limits, purges runs past retention every ten minutes, and creates <code>run_events</code> partitions every hour.</p>
+    </li>
+    <li class="stage" data-lit="s9">
+      <h3 id="life-of-a-run--end">The run ends</h3>
+      <p>When <code>decide</code> finds nothing left to do, it writes <span class="evt">RunCompleted</span>. <code>applyEffects</code> calls <x-ref path="engine/runtime/store.go" symbol="func (s *Store) endRun("><code>endRun</code></x-ref>, which sets the status and the retention date, releases the run's concurrency slot, and admits the next run that was waiting for that slot.</p>
+      <p class="writes"><span class="evt">RunCompleted</span></p>
+    </li>
+  </ol>
+  <div class="stepper-figure">
+    <x-include name="run-sequence.html"/>
+    <div class="stepper-bar"><button class="prev" type="button">Previous</button><button class="next" type="button">Next</button><span class="count" aria-live="polite"></span></div>
+  </div>
+</div>
+
+<h2 id="life-of-a-run--the-events-it-leaves-behind">The events it leaves behind</h2>
+<p>This is the run's whole history when every step succeeds the first time. <code>seq</code> is allocated from <code>runs.last_seq</code> under the run's row lock, so it has no gaps. The origin column is recorded on each event. The transaction column shows which writes commit together.</p>
+<div class="ledger-wrap"><table class="ledger">
+  <thead><tr><th>seq</th><th>Event</th><th>Step</th><th>Origin</th><th>Committed in</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><span class="evt">RunStarted</span></td><td></td><td class="origin">ingest</td><td><span class="tx">T1 · webhook</span></td></tr>
+    <tr><td>2</td><td><span class="evt">StepScheduled</span></td><td><code>verify_bvn</code></td><td class="origin">decide</td><td><span class="tx">T1 · webhook</span></td></tr>
+    <tr class="tx-break"><td>3</td><td><span class="evt">StepCompleted</span></td><td><code>verify_bvn</code></td><td class="origin">worker</td><td><span class="tx">T3 · finish</span></td></tr>
+    <tr><td>4</td><td><span class="evt">ApprovalRequested</span></td><td><code>approve</code></td><td class="origin">decide</td><td><span class="tx">T3 · finish</span></td></tr>
+    <tr class="tx-break"><td>5</td><td><span class="evt">ApprovalDecided</span></td><td><code>approve</code></td><td class="origin">api</td><td><span class="tx">approval</span></td></tr>
+    <tr><td>6</td><td><span class="evt">StepCompleted</span></td><td><code>approve</code></td><td class="origin">decide</td><td><span class="tx">approval</span></td></tr>
+    <tr><td>7</td><td><span class="evt">StepScheduled</span></td><td><code>pay</code></td><td class="origin">decide</td><td><span class="tx">approval</span></td></tr>
+    <tr class="tx-break"><td>8</td><td><span class="evt">StepStarted</span></td><td><code>pay</code></td><td class="origin">worker</td><td><span class="tx">T2 · intent</span></td></tr>
+    <tr><td>9</td><td><span class="evt">EffectIntent</span></td><td><code>pay</code></td><td class="origin">worker</td><td><span class="tx">T2 · intent</span></td></tr>
+    <tr class="tx-break"><td>10</td><td><span class="evt">StepCompleted</span></td><td><code>pay</code></td><td class="origin">worker</td><td><span class="tx">T3 · finish</span></td></tr>
+    <tr><td>11</td><td><span class="evt">RunCompleted</span></td><td></td><td class="origin">decide</td><td><span class="tx">T3 · finish</span></td></tr>
+  </tbody>
+</table></div>
+<p>The Paystack call happens between seq 9 and seq 10. It is the only moment in the run when something has happened that the database does not yet know about, and <span class="evt">EffectIntent</span> exists to cover exactly that moment.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec says <span class="evt">StepStarted</span> is written when "a worker claims the step's task" (<x-ref path="docs/spec/architecture.md" symbol="| `StepStarted` |">spec 4.1</x-ref>). In the code a worker writes it only in <code>recordIntent</code>, so only for steps that write. That is why <code>verify_bvn</code> has no <span class="evt">StepStarted</span> above. <code>decide</code> also writes <span class="evt">StepStarted</span> for control steps (<code>branch</code>, <code>parallel</code>, <code>foreach</code>) to record which path or how many items it took. A run inspector that treats <span class="evt">StepStarted</span> as "a worker picked it up" will be wrong for reads.</p>
+</div>
+
+<h2 id="life-of-a-run--decide-inline">How a decision is made</h2>
+<p><code>decide</code> is a pure function of the definition and the history. Its package comment states the rule that everything else depends on:</p>
+<x-code path="engine/decide/decide.go" start="// Package decide is the orchestrator's pure function" end="package decide"/>
+<p>Retry backoff needs jitter but cannot use randomness, so <x-ref path="engine/decide/decide.go" symbol="func backoff("><code>backoff</code></x-ref> derives it from a hash of the run id and the step. Replaying a history gives the same delays.</p>
+<p><code>decideInline</code> is where the pure function meets the database. It locks the run row, folds the history (from an in-process cache of up to <x-ref path="engine/runtime/decidecache.go" symbol="const decideCacheSize">2,048 runs</x-ref>, so a busy run is not re-read from the start every time), asks for the next events, and appends each one with <code>applyEffects</code> turning it into rows: a task, a timer, a signal wait, an approval, a child run. Some effects cause new events. For example, a signal that arrived early and was buffered is delivered as soon as the run starts waiting for it. So the loop runs again, up to <x-ref path="engine/runtime/store.go" symbol="const maxInlineRounds">16 rounds</x-ref>, until nothing new happens.</p>
+<x-code path="engine/runtime/store.go" start="func (s *Store) decideInline(" doc="true" max="64"/>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec describes <code>decide</code> as returning commands (<code>ScheduleStep</code>, <code>StartTimer</code> and so on) that are then turned into events (<x-ref path="docs/spec/architecture.md" symbol="### 4.2 Orchestrator">spec 4.2</x-ref>). The code skips that layer. <code>decide</code> returns the events themselves (<code>NewEvent</code>), and <code>applyEffects</code> derives the rows from each event's type. One less translation step means one less place where a replay could come out different.</p>
+</div>
+<p>Each decision also counts the steps it scheduled. A run that goes past its plan's <code>max_steps_per_run</code>, for example a runaway <code>foreach</code>, is failed in the same transaction, so no step over the cap ever reaches a worker (<x-ref path="engine/runtime/store.go" symbol="func (s *Store) countSteps("><code>countSteps</code></x-ref>).</p>
+
+<h2 id="life-of-a-run--claiming">How work is claimed fairly</h2>
+<p>Claiming is the one place where a worker has to see every tenant's tasks. It is done by a function owned by the <code>taskiem_dispatch</code> role, so the worker's own login never needs to bypass row-level security. The function does more than the spec asks. It walks the distinct tenants that have ready tasks (a loose index scan, so it stays fast with many tenants). It keeps only tenants routed to this worker's pool. It caps each tenant at its concurrency limit, counting leases it already holds. It then takes tasks round-robin across tenants, so one tenant's backlog cannot starve the others.</p>
+<x-code path="engine/db/migrations/00122_dispatch_timing.sql" start="CREATE FUNCTION taskiem_claim_tasks(p_queue text, p_worker text, p_limit int, p_lease interval, p_tenant_cap int, p_pool text)" end="$$;" max="60"/>
+<p>The worker then does all of its real reading inside an ordinary transaction scoped to that one tenant, through <x-ref path="engine/db/db.go" symbol="func InTenantTx("><code>db.InTenantTx</code></x-ref>, which sets <code>app.tenant_scope</code> for row-level security to check.</p>
+
+<h2 id="life-of-a-run--intent">Intent, fencing and the call deadline</h2>
+<p>Three mechanisms together make the payment safe, and <code>recordIntent</code> is where they meet. The fence is the first statement. The run lock stops a cancellation from slipping in between the check and the write. The intent records the key and a digest of what is about to be sent.</p>
+<x-code path="engine/runtime/worker.go" start="func (w *Worker) recordIntent(" max="40"/>
+<p>The fence itself is a single function call that only succeeds while this worker still owns the task at this epoch. Every write a worker makes about a task goes through it.</p>
+<x-code path="engine/runtime/worker.go" start="func (w *Worker) fence(" max="20"/>
+
+<h2 id="life-of-a-run--when-something-goes-wrong">When something goes wrong</h2>
+<p>A process can die at any line. This is what happens at each point that matters, for the <code>pay</code> step.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>If this happens</th><th>What the engine does</th></tr></thead>
+  <tbody>
+    <tr><td>The provider sends the webhook twice</td><td>The second insert into <code>trigger_receipts</code> conflicts. The caller gets the first run's id with <code>duplicate: true</code>, and nothing else is written.</td></tr>
+    <tr><td>The edge dies before T1 commits</td><td>Nothing was recorded and the caller got no <code>202</code>, so the provider retries. The dedup key makes that safe even if T1 had in fact committed.</td></tr>
+    <tr><td>A process dies after an event is appended but before it is decided</td><td>The run is left with <code>decided_seq</code> behind <code>last_seq</code>. The sweep claims it within a tick and decides it.</td></tr>
+    <tr><td>The worker dies before T2</td><td>Nothing was sent. The lease expires after 60 seconds, the task is claimed again, and the new attempt finds no intent and sends normally.</td></tr>
+    <tr><td>The worker dies after T2, before or during the call</td><td>The next claim finds an <span class="evt">EffectIntent</span> with no outcome (<x-ref path="engine/runtime/worker.go" symbol="func openIntent("><code>openIntent</code></x-ref>), and <x-ref path="engine/effects/class.go" symbol="func OnOpenIntent("><code>effects.OnOpenIntent</code></x-ref> decides by class. <code>transfer</code> is an <code>idempotent_write</code>, so it is sent again with the same key, and Paystack recognises the reference. A <code>reconcilable_write</code> asks the provider first. An <code>unsafe_write</code> is never sent again. The step is parked in <code>needs_reconciliation</code> for a person.</td></tr>
+    <tr><td>The worker stalls past its lease, then wakes up</td><td>Its next write fails the fence, so it records nothing. The call deadline (intent time plus 30 seconds) means it also cannot send late, after another worker has already checked with the provider and sent again.</td></tr>
+    <tr><td>The call fails with an unknown outcome (connection dropped after sending, a 502)</td><td><x-ref path="engine/effects/class.go" symbol="func AfterError("><code>effects.AfterError</code></x-ref> decides: retry with the same key, reconcile, or park.</td></tr>
+    <tr><td>Reconcile is asked too early</td><td>A "not found" before the original call's deadline cannot be trusted, so <x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) reconcile("><code>reconcile</code></x-ref> puts the task back until the deadline has passed, without spending a retry.</td></tr>
+    <tr><td>Reconcile says the transfer never happened</td><td>The attempt group goes up by one, which gives a new key. A new intent is recorded and the transfer is sent under that key.</td></tr>
+    <tr><td>The database fails over while recording the outcome</td><td><code>finish</code> retries once the new primary answers. A finish that had committed released the task, so the repeat is fenced out and records nothing twice.</td></tr>
+    <tr><td>Retries run out on an unknown outcome</td><td>The step fails with <code>next: park</code>, and the run's status becomes <code>needs_reconciliation</code> instead of <code>failed</code>. Money may have moved, so a person has to look.</td></tr>
+  </tbody>
+</table></div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec says the attempt group goes up "only when a human or the repair flow deliberately re-issues an effect" (<x-ref path="docs/spec/architecture.md" symbol="attempt_group = 0, incremented only when a human">spec 4.4</x-ref>). The code also does it automatically when reconcile returns <code>not_found</code> after the call deadline. The contract allows exactly that (<x-ref path="docs/contracts/idempotency.md" symbol="`attempt_group` starts at 0">idempotency contract</x-ref>), so the code follows the contract and the spec text is out of date. It is safe because the deadline guarantees the first call can no longer be in flight.</p>
+</div>
+
+<h2 id="life-of-a-run--limits">Limits it can meet on the way</h2>
+<p>Plan limits act at specific points in this path, and each does something different:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Where</th><th>Limit</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td>Edge</td><td>Hard ingest ceiling</td><td><code>429</code> with <code>Retry-After: 1</code>. Nothing recorded</td></tr>
+    <tr><td>Edge</td><td>Soft ingest rate</td><td>Accepted. The run is recorded as <code>queued</code> and admitted later at the tenant's rate</td></tr>
+    <tr><td>Edge</td><td>Body size</td><td><code>413</code></td></tr>
+    <tr><td>Edge</td><td>Suspended tenant</td><td><code>423</code>, so providers that retry deliver again after the tenant is resumed</td></tr>
+    <tr><td>T1</td><td>Billing degraded, quotas</td><td>Refused with a limit error. Forks and running runs continue</td></tr>
+    <tr><td>T1</td><td>Running-runs cap, or other runs already waiting</td><td>Recorded as <code>queued</code>, and they keep their order</td></tr>
+    <tr><td>T1</td><td>Workflow <code>concurrency_key</code></td><td>Waits for its slot. <span class="evt">RunAdmitted</span> marks when it gets one</td></tr>
+    <tr><td>Decide</td><td><code>max_steps_per_run</code></td><td>The run fails in the same transaction</td></tr>
+    <tr><td>Claim</td><td>Per-tenant worker concurrency</td><td>The tenant's further tasks wait in the queue</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="life-of-a-run--read-next">Read next</h2>
+<ul>
+  <li><x-page id="durable-execution"/>: leases, timers, signals, sagas, forks and admission in full.</li>
+  <li><x-page id="exactly-once"/>: the four action classes, key derivation and encoding, and reconciliation.</li>
+  <li><x-page id="data-model"/>: <code>runs</code>, <code>run_events</code>, <code>tasks</code>, and the row-level security around them.</li>
+</ul>
