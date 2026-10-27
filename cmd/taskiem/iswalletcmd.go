@@ -72,7 +72,11 @@ func iswalletCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		if cfg.HooksURL == "" {
 			return errors.New("iswallet: set TASKIEM_HOOKS_URL (or TASKIEM_PUBLIC_URL): iswallet delivers to a public https address")
 		}
-		st, err := reg.Create(ctx, call, connector.RemoteSpec{Name: "taskiem-platform-" + *mode, URL: platformHookURL(cfg.HooksURL, *mode), Events: platformEvents(c.Manifest)})
+		// The name is the create's Idempotency-Key: unique to this run, so a
+		// second subscription (rotating the secret) is a new one, not the
+		// first answered again without its secret.
+		name := "taskiem-platform-" + *mode + "-" + time.Now().UTC().Format("20060102T150405Z")
+		st, err := reg.Create(ctx, call, connector.RemoteSpec{Name: name, URL: platformHookURL(cfg.HooksURL, *mode), Events: platformEvents(c.Manifest)})
 		if err != nil {
 			return fmt.Errorf("iswallet: subscribing: %w", err)
 		}
