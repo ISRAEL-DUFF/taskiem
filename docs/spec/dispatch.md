@@ -131,6 +131,7 @@ Order: D1 to D6. D4's door payment on the platform rail needs decision 0052's W3
 | Rider fees as income to the rider: withholding tax, contracts | Out of scope; the business's own affair; the payout is a payout |
 | The offer window and quiet-rider times | Settings per business, defaults 5, 20 and 90 minutes; tuned with the first businesses |
 | Fleets and platforms (Kwik, Glovo, GIG) | Later connectors behind `offer`; nothing in the record assumes a person |
+| Distance, routes and a drawn map | Not built; when a business asks, a maps provider becomes a connector that turns the drop into a distance and a fee, behind the same order form |
 
 ## 13. Out of scope
 
