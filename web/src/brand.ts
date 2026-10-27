@@ -1,7 +1,7 @@
 // Taskiem's own look (decision 0043): relay, a "t" handing on to a dot in
-// pine and lime, is the brand. Seal and signal, the other two directions,
-// are kept to experiment with: ?brand=seal (or signal, or relay) in the
-// address switches this browser to it and remembers it. Applied as
+// pine and lime, is the brand. Seal and signal, the other two
+// directions, are kept to experiment with: ?brand=seal (or signal, or relay)
+// in the address switches this browser to it and remembers it. Applied as
 // data-brand on <html> before the first paint (main.tsx), with the tab
 // icon to match; the colours are in styles.css, the files in
 // public/brand/<brand>/ (made by docs/brand/make.py).
