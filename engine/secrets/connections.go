@@ -353,7 +353,7 @@ func (v *Vault) handOut(creds map[string]string, connector string, mode, platfor
 	}
 	keys, ok := v.Platform.For(connector, m)
 	if !ok {
-		return fmt.Errorf("Taskiem's own %s client is not set up on this Taskiem for %s: %w", connector, m, ErrPlatformClient)
+		return fmt.Errorf("this Taskiem holds no %s client of its own for %s: %w", connector, m, ErrPlatformClient)
 	}
 	maps.Copy(creds, keys)
 	return nil
@@ -366,7 +366,7 @@ func (v *Vault) handOut(creds map[string]string, connector string, mode, platfor
 // taskiem). Its connector is handed the platform's key for the mode.
 func (v *Vault) CreatePlatformConnectionTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, name, mode, account string, fields map[string]string, by string) (uuid.UUID, error) {
 	if _, ok := v.Platform.For(connector, mode); !ok {
-		return uuid.Nil, fmt.Errorf("Taskiem's own %s client is not set up on this Taskiem for %s: %w", connector, mode, ErrPlatformClient)
+		return uuid.Nil, fmt.Errorf("this Taskiem holds no %s client of its own for %s: %w", connector, mode, ErrPlatformClient)
 	}
 	id, err := v.createConnectionTx(ctx, tx, tenant, env, connector, name, "api_key", fields, by, PlatformProvisioner, nil, map[string]any{"via": "platform", "mode": mode})
 	if err != nil {
