@@ -86,6 +86,9 @@ type Handler struct {
 	// Apps are Taskiem's platform apps by client name (decision 0051), for
 	// triggers delivered to /hooks/apps/{connector}/{trigger}.
 	Apps map[string]App
+	// Platform is Taskiem's own clients by connector id (decision 0052),
+	// for deliveries to /hooks/platform/{connector}.
+	Platform map[string]Platform
 
 	apps    appGate
 	once    sync.Once
@@ -110,6 +113,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rt := chi.NewRouter()
 		rt.Post("/apps/{connector}/{trigger}", h.appEvent)
 		rt.Get("/apps/{connector}/{trigger}", h.appHandshake)
+		rt.Post("/platform/{connector}", h.platformEvent)
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
 		rt.Put("/{tenant}/connectors/{connector}/{trigger}", h.connectorEvent)
 		rt.Post("/{tenant}/connectors/{connector}/{trigger}/{env}/{connection}/{token}", h.connectorEvent)
@@ -127,6 +131,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	kind := "webhook"
 	if strings.HasPrefix(r.URL.Path, "/apps/") {
 		kind = "app"
+	} else if strings.HasPrefix(r.URL.Path, "/platform/") {
+		kind = "platform"
 	} else if strings.Contains(r.URL.Path, "/connectors/") {
 		kind = "connector"
 	} else if strings.Contains(r.URL.Path, "/callbacks/") {

@@ -74,6 +74,9 @@ type connectionInfo struct {
 	ProvisionedBy *string `json:"provisioned_by"`
 	// Mode is live or test, when the key says which (N2).
 	Mode *string `json:"mode"`
+	// Platform is "taskiem" for a connection under Taskiem's own client
+	// (decision 0052): the business's wallet with Taskiem, no key of its own.
+	Platform *string `json:"platform,omitempty"`
 	// Remote is the state of the subscriptions Taskiem keeps at the
 	// provider through this connection (decision 0021), when there are any.
 	Remote *remoteSummary `json:"remote,omitempty" db:"-"`
@@ -92,7 +95,7 @@ func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
 	only := principalFrom(r.Context()).Environment // a key limited to one environment sees only it
 	err := s.tx(r, func(tx pgx.Tx) error {
 		rows, err := tx.Query(r.Context(), `SELECT c.id, c.environment, c.connector, c.name, c.auth_type, c.status, c.expires_at, c.created_at,
-			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id), c.provisioned_by, c.mode
+			(SELECT max(sr.at) FROM secret_reads sr WHERE sr.tenant_id = c.tenant_id AND sr.connection_id = c.id), c.provisioned_by, c.mode, c.platform
 			FROM connections c WHERE $1 = '' OR c.environment = $1 ORDER BY c.environment, c.connector, c.name`, only)
 		if err != nil {
 			return err
@@ -194,6 +197,10 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := checkCredentials(c, req.Credentials); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if req.Name == secrets.PlatformName {
+		s.fail(w, r, fmt.Errorf("%w: %q is kept for the account Taskiem holds for you: choose another name", errBadRequest, req.Name))
 		return
 	}
 	p := principalFrom(r.Context())
@@ -740,9 +747,15 @@ func (s *Server) checkSavedConnection(w http.ResponseWriter, r *http.Request) {
 		}
 		// Checking also repairs the connection's own subscriptions (and
 		// makes them for a connection made before Taskiem subscribed).
+		// Not under Taskiem's own client, whose one subscription carries
+		// every business's events (decision 0052).
 		var name string
-		if err := tx.QueryRow(ctx, `SELECT name FROM connections WHERE id = $1`, id).Scan(&name); err != nil {
+		var platform *string
+		if err := tx.QueryRow(ctx, `SELECT name, platform FROM connections WHERE id = $1`, id).Scan(&name, &platform); err != nil {
 			return err
+		}
+		if platform != nil {
+			return nil
 		}
 		subscribes, err = declareConnectionSubscriptions(ctx, tx, p.TenantID, env, c, name, creds)
 		return err

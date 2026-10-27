@@ -496,6 +496,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
 			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)
+			r.Group(s.receiveMoneyRoutes)                                               // receive money with Taskiem (receive_money.go)
 			r.Get("/settings/brand", s.getBrand)                                        // how public pages look (brand.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)
@@ -718,6 +719,14 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, "not found")
 	case errors.Is(err, runtime.ErrTenantSuspended):
 		writeErr(w, http.StatusLocked, err.Error())
+	case errors.Is(err, secrets.ErrPlatformConnection), errors.Is(err, secrets.ErrPlatformClient):
+		// Taskiem's own client (decision 0052): its details are Taskiem's,
+		// or this Taskiem does not hold it.
+		msg := err.Error()
+		if i := strings.LastIndex(msg, ": "); i > 0 {
+			msg = msg[:i]
+		}
+		writeErr(w, http.StatusConflict, msg)
 	case errors.Is(err, secrets.ErrKeyUnavailable):
 		// The tenant's customer key is revoked, disabled or unreachable (or
 		// the KMS is down): nothing can be encrypted or decrypted for it.

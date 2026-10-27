@@ -74,6 +74,10 @@ func (s *Server) createSchoolWallet(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: name the connection as service/name, such as iswallet/main", errBadRequest))
 		return
 	}
+	if name == secrets.PlatformName {
+		s.fail(w, r, fmt.Errorf("%w: Taskiem already holds your wallet on %s", errConflict, req.Connection))
+		return
+	}
 	reg, err := s.Registry.For(r.Context(), p.TenantID.String())
 	if err != nil {
 		s.fail(w, r, err)

@@ -135,6 +135,7 @@ var featureNames = map[string]string{
 	FeatureSSO: "single sign-on", FeatureSCIM: "SCIM provisioning", FeatureCustomRoles: "custom roles",
 	FeatureWhiteLabel: "white-label custom domains", FeatureBYOK: "bring-your-own-key encryption", FeatureGit: "Git integration",
 	FeatureAI: "AI building", FeatureEmbedded: "embedding and the partner API",
+	FeatureStorefrontPayOnOrder: "payment when a customer orders", FeatureReceiveMoney: "receiving money with Taskiem",
 }
 
 // Require returns a *FeatureError unless the tenant's plan has feature.
