@@ -1648,3 +1648,6 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
   .stepwin-head .pill { padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .picker, .stepwin { animation: none; } }
+
+/* Receive money with Taskiem: the business's own number on the Money page. */
+.receive-number { margin: 4px 0; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; color: var(--text); }

@@ -35,6 +35,8 @@ interface Conn {
   provisioned_by: string | null;
   /** live or test, when the connector has modes (a Paystack key's start, iswallet's host). */
   mode?: string | null;
+  /** "taskiem" for the wallet Taskiem holds for the business (decision 0052): no key of its own. */
+  platform?: string;
   /** Subscriptions Taskiem keeps at the provider through this connection (a Xenibase webhook per workflow). */
   remote?: {
     subscriptions: number;
@@ -174,6 +176,10 @@ export function Connections() {
                     {c.provisioned_by === "taskiem:data_tables" ? (
                       <>
                         <Link to="/tables">Data tables</Link> ({c.name}, kept by Taskiem)
+                      </>
+                    ) : c.platform === "taskiem" ? (
+                      <>
+                        <Link to="/settings/payments">Your wallet with Taskiem</Link> ({c.name}, kept by Taskiem)
                       </>
                     ) : (
                       c.name

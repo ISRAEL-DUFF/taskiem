@@ -30,6 +30,12 @@ export type SchoolSettingsWithIssuing = SchoolSettings & {
   issuers?: SchoolIssuer[];
 };
 
+/** The connection Taskiem holds for a business that receives money with it (decision 0052). */
+const TASKIEM_CHANNEL = "iswallet/taskiem";
+
+/** An issuer as the setting names it: Taskiem's own wallet by that name. */
+const issuerName = (i: SchoolIssuer) => (i.connection === TASKIEM_CHANNEL ? "Taskiem (your wallet with Taskiem)" : `${i.rail} (${i.connection})`);
+
 /** Runs a request and words the server's refusal as a sentence. */
 export async function plainly<T>(p: Promise<T>): Promise<T> {
   try {
@@ -61,8 +67,9 @@ export function IssuingSettings() {
       <ErrorBox error={settings.error} />
       {!settings.data && !settings.error && <Skeleton rows={2} label="Loading the settings…" />}
       {settings.data && issuers.length === 0 && (
-        <EmptyState icon="connections" action={<Link to="/connections">Connections</Link>}>
-          No connection here can issue account numbers yet. Connect iswallet, Paystack, Flutterwave or Moniepoint in prod first.
+        <EmptyState icon="connections" action={<Link to="/settings/payments">Receive money with Taskiem</Link>}>
+          No connection here can issue account numbers yet. Receive money with Taskiem (no account to sign up for), or connect iswallet, Paystack, Flutterwave or Moniepoint in
+          prod in <Link to="/connections">Connections</Link>.
         </EmptyState>
       )}
       {settings.data && issuers.length > 0 && (
@@ -87,17 +94,17 @@ export function IssuingSettings() {
               <option value="">None chosen</option>
               {issuers.map((i) => (
                 <option key={i.connection} value={i.connection}>
-                  {i.rail} ({i.connection})
+                  {issuerName(i)}
                 </option>
               ))}
             </select>
           </Field>
-          {chosen?.needs_account && (
+          {chosen?.needs_account && chosen.connection !== TASKIEM_CHANNEL && (
             <Field label="Wallet the numbers pay into" hint={`The wallet's id on ${chosen.rail}.`}>
               <input value={value.account ?? ""} onChange={(e) => setForm({ ...value, account: e.target.value })} placeholder="wal_…" />
             </Field>
           )}
-          {chosen?.creates_wallet && !settings.data?.issuing?.account && (
+          {chosen?.creates_wallet && chosen.connection !== TASKIEM_CHANNEL && !settings.data?.issuing?.account && (
             <CreateWallet
               connection={chosen.connection}
               rail={chosen.rail}
@@ -128,9 +135,7 @@ export function IssuingSettings() {
           <ul className="plain-list" data-testid="issuers">
             {issuers.map((i) => (
               <li key={i.connection}>
-                <strong>
-                  {i.rail} ({i.connection})
-                </strong>
+                <strong>{issuerName(i)}</strong>
                 : {i.requirement} {feeLine(i)}{" "}
                 {i.look_back && (i.webhook ? "Payments arrive by its webhook, and are also read back every 15 minutes." : "Payments are read back every 15 minutes.")}
               </li>

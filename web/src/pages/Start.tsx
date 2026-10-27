@@ -13,6 +13,7 @@ import { ProblemLine } from "../forms/ProblemLine";
 import { plainValue, resolveSchema } from "../lib/values";
 import { SchemaForm } from "../forms/SchemaForm";
 import { NewConnection, startLink } from "./Connections";
+import { ReceiveMoneyOffer } from "./ReceiveMoney";
 import { needsConnection } from "../lib/connections";
 import { railsForAll, templateCapabilities } from "../lib/capabilities";
 import type { ConnectionName } from "../forms/ConnectionPicker";
@@ -110,6 +111,7 @@ export function Start() {
           </ul>
         </section>
       )}
+      {can("invoice.read") && <ReceiveMoneyOffer />}
       {(me?.schools || me?.roles.includes("owner")) && can("school.read") && <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />}
       {can("workflow.edit") && (
         <section>

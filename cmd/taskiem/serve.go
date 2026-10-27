@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -716,31 +717,33 @@ func (e *engine) moneyLog() *moneylog.Log {
 func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]string {
 	var out map[string]string
 	for _, c := range reg.List() {
-		// The base URL, or else a mode's address (TASKIEM_ISWALLET_TEST_URL
-		// at a local fake): one loopback port per connector.
-		var u *url.URL
+		// The base URL and the modes' addresses (TASKIEM_ISWALLET_TEST_URL
+		// at a local fake): each loopback port a connector points at.
+		var ports []string
 		for _, raw := range append([]string{c.Manifest.BaseURL}, modeURLs(c.Manifest)...) {
-			p, err := url.Parse(raw)
+			u, err := url.Parse(raw)
 			if err != nil {
 				continue
 			}
-			if ip, err := netip.ParseAddr(p.Hostname()); err == nil && ip.IsLoopback() {
-				u = p
-				break
+			if ip, err := netip.ParseAddr(u.Hostname()); err != nil || !ip.IsLoopback() {
+				continue
+			}
+			port := u.Port()
+			if port == "" {
+				port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+			}
+			if !slices.Contains(ports, port) {
+				ports = append(ports, port)
+				log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
 			}
 		}
-		if u == nil {
+		if len(ports) == 0 {
 			continue
-		}
-		port := u.Port()
-		if port == "" {
-			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
 		}
 		if out == nil {
 			out = map[string]string{}
 		}
-		out["connector:"+c.Manifest.ID] = port
-		log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
+		out["connector:"+c.Manifest.ID] = strings.Join(ports, ",")
 	}
 	return out
 }
