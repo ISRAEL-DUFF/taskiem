@@ -1,0 +1,55 @@
+{
+  "capability": "collect_transfer",
+  "credentials": {
+    "api_key": "isw_test_key",
+    "wallet_ids": "6f1e"
+  },
+  "keys": {
+    "create_dynamic_account": "tot_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "input": {
+    "amount_kobo": 2500000,
+    "customer": {
+      "name": "Ada Obi"
+    },
+    "description": "Invoice INV-0042",
+    "expires_minutes": 120
+  },
+  "exchanges": [
+    {
+      "name": "one_time",
+      "request": {
+        "method": "POST",
+        "path": "/v1/wallets/6f1e/virtual-account",
+        "body": {
+          "type": "dynamic",
+          "amount": 2500000,
+          "reference": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
+          "account_name": "Ada Obi"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "X-Request-ID": "req_dyn"
+        },
+        "body": {
+          "account_number": "9907654321",
+          "bank_name": "Wema Bank",
+          "account_name": "Ada Obi",
+          "is_permanent": false,
+          "reference": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
+          "amount": 2500000,
+          "expires_at": "2026-10-05T09:44:00Z",
+          "status": "active"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "payment_id": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
+    "account_number": "9907654321",
+    "bank_name": "Wema Bank",
+    "amount_kobo": 2500000
+  }
+}

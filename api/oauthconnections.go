@@ -779,6 +779,12 @@ func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "connection.revoke", Actor: p.Actor()})
+	// The connection's own subscriptions go first, while its credentials
+	// can still reach the provider (connector/v1 registration: connection).
+	if err := s.releaseConnectionSubscriptions(r, reg, id, force); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var uses []connectionUse
 	var revoke func()
 	err = s.tx(r, func(tx pgx.Tx) error {

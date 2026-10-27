@@ -115,7 +115,8 @@ type Connector struct {
 	// describes (fields inside the body, for example). Keyed by trigger.
 	Verifiers map[string]WebhookVerifier
 	// Registrars set up the provider's subscriptions for triggers whose
-	// manifest says registration: remote (decision 0021). Keyed by trigger.
+	// manifest says registration: remote or connection (decision 0021).
+	// Keyed by trigger.
 	Registrars map[string]Registrar
 	// Enrichers complete a verified delivery before its runs start (a
 	// record the provider left out). Keyed by trigger; optional.
@@ -285,12 +286,12 @@ func (c *Connector) Check() error {
 		}
 	}
 	for name, t := range c.Manifest.Triggers {
-		if t.Remote() && c.Registrars[name] == nil {
+		if t.Registered() && c.Registrars[name] == nil {
 			return fmt.Errorf("connector %s: trigger %q is registered remotely but has no registrar", c.Manifest.ID, name)
 		}
 	}
 	for name := range c.Registrars {
-		if !c.Manifest.Triggers[name].Remote() {
+		if !c.Manifest.Triggers[name].Registered() {
 			return fmt.Errorf("connector %s: registrar %q is not a remote trigger in the manifest", c.Manifest.ID, name)
 		}
 	}

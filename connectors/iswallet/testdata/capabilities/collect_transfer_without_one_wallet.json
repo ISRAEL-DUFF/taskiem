@@ -1,0 +1,18 @@
+{
+  "capability": "collect_transfer",
+  "credentials": {
+    "api_key": "isw_test_key"
+  },
+  "keys": {
+    "create_dynamic_account": "tot_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "input": {
+    "amount_kobo": 2500000,
+    "customer": {
+      "name": "Ada Obi"
+    },
+    "description": "Invoice INV-0042"
+  },
+  "exchanges": [],
+  "error": "fatal"
+}

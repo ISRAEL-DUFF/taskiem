@@ -1,0 +1,18 @@
+{
+  "trigger": "credit_event",
+  "body": {
+    "event_type": "wallet.credit.posted",
+    "wallet_id": "5b00d9dd",
+    "data": {
+      "amount": 5000000,
+      "amount_credited": 4998750,
+      "currency": "NGN",
+      "virtual_account": {
+        "reference": "taskiem:user:88213",
+        "account_number": "0107062314",
+        "status": "active"
+      }
+    }
+  },
+  "event": ""
+}

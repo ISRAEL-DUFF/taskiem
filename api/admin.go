@@ -19,6 +19,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -216,6 +217,7 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id uuid.UUID
+	subscribes := false
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if req.Name == "" {
@@ -227,6 +229,9 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if err := setConnectionMode(r.Context(), tx, id, mode); err != nil {
+			return err
+		}
+		if subscribes, err = declareConnectionSubscriptions(r.Context(), tx, p.TenantID, env, c, req.Name, req.Credentials); err != nil {
 			return err
 		}
 		return secrets.SetRouteKeysTx(r.Context(), tx, p.TenantID, id, c.Manifest.RouteKeys(req.Credentials))
@@ -243,6 +248,11 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	// environment are tried again now (decision 0021).
 	if err := s.tx(r, func(tx pgx.Tx) error { return remote.Retry(r.Context(), tx, env, c.Ref()) }); err != nil {
 		s.Logger.Warn("remote subscriptions: retrying after a new connection", "err", err)
+	}
+	// A provider whose webhooks Taskiem subscribes per connection is
+	// subscribed now: nothing to paste.
+	if subscribes {
+		s.applyConnectionSubscriptions(r)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
 }
@@ -687,6 +697,127 @@ func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// checkSavedConnection answers POST /v1/connections/{id}/check: the
+// connector's own check with the saved credentials, in plain words, and,
+// for a rail that lists the partners issuing account numbers (iswallet's
+// list_providers), those that can issue permanent ones in naira.
+func (s *Server) checkSavedConnection(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: not a connection id", errBadRequest))
+		return
+	}
+	p := principalFrom(r.Context())
+	reg, err := s.Registry.For(r.Context(), p.TenantID.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	ctx := secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "connection.check", Actor: p.Actor()})
+	var c *connector.Connector
+	var creds map[string]string
+	subscribes := false
+	err = s.tx(r, func(tx pgx.Tx) error {
+		var connID, env string
+		err := tx.QueryRow(ctx, `SELECT connector, environment FROM connections WHERE id = $1`, id).Scan(&connID, &env)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return secrets.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := envParam(r, env); err != nil {
+			return err
+		}
+		var ok bool
+		if c, ok = connectorByID(reg, connID); !ok {
+			return fmt.Errorf("%w: connector %s is no longer available", errConflict, connID)
+		}
+		if creds, err = s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id); err != nil {
+			return err
+		}
+		// Checking also repairs the connection's own subscriptions (and
+		// makes them for a connection made before Taskiem subscribed).
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM connections WHERE id = $1`, id).Scan(&name); err != nil {
+			return err
+		}
+		subscribes, err = declareConnectionSubscriptions(ctx, tx, p.TenantID, env, c, name, creds)
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if subscribes {
+		s.applyConnectionSubscriptions(r)
+	}
+	out := map[string]any{"ok": true}
+	if c.Manifest.Auth.Test == nil {
+		out["message"] = c.Manifest.Name + " has no check of its own: a step that uses it is the test."
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	action, ok := c.Actions[c.Manifest.Auth.Test.Action]
+	if !ok {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	g := s.Egress
+	if g == nil {
+		g = &egress.Guard{Logger: s.Logger}
+	}
+	hc := g.Client(egress.Policy{Tenant: p.TenantID.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + c.Manifest.ID}, 20*time.Second)
+	tctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	res, err := action.Execute(tctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1})
+	if err != nil {
+		out["ok"] = false
+		out["message"] = c.Manifest.Name + " did not accept this connection's details: " + plainConnectorError(err)
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	out["message"] = c.Manifest.Name + " accepts this connection's details."
+	if partners := issuingPartners(res.Output); partners != nil {
+		out["partners"] = partners
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// issuingPartners are the partners a providers listing says can issue
+// permanent account numbers in naira; nil when the output is not one.
+func issuingPartners(output any) []string {
+	m, _ := output.(map[string]any)
+	list, ok := m["providers"].([]any)
+	if !ok {
+		return nil
+	}
+	out := []string{}
+	for _, x := range list {
+		p, _ := x.(map[string]any)
+		code, _ := p["code"].(string)
+		permanent, _ := p["permanent"].(bool)
+		curs, _ := p["currencies"].([]any)
+		if code != "" && permanent && slices.Contains(curs, any("NGN")) {
+			out = append(out, code)
+		}
+	}
+	return out
+}
+
+// plainConnectorError is a connector's error without the engine's
+// classification at its end.
+func plainConnectorError(err error) string {
+	m := err.Error()
+	for _, k := range []error{effects.ErrFatal, effects.ErrRetryable, effects.ErrUnknownOutcome, effects.ErrIndeterminate, effects.ErrNotSent} {
+		m = strings.ReplaceAll(m, ": "+k.Error(), "")
+	}
+	if len(m) > 300 {
+		m = m[:300]
+	}
+	return m
 }
 
 // listConnectionNames answers GET /v1/connection-names: the business's

@@ -8150,6 +8150,48 @@ paths:
                 $ref: '#/components/schemas/ConnectionInUse'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connections/{id}/check:
+    post:
+      operationId: checkSavedConnection
+      tags:
+      - Connectors
+      summary: Check a saved connection
+      description: |
+        Runs the service's own check with the connection's saved credentials and says in plain words whether it accepts them
+        (`ok` false with the service's reason otherwise; still 200). For a rail that lists the partners issuing account numbers
+        (iswallet's `list_providers`), `partners` are those that can issue permanent ones in naira.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: What the service said.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+                  partners:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/connections/{id}/credentials:
     put:
       operationId: mergeConnectionCredentials
@@ -14563,6 +14605,63 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/schools/wallet:
+    post:
+      operationId: createSchoolWallet
+      tags:
+      - Schools
+      summary: Create the school's wallet on the issuing connection
+      description: |
+        Owners only (403 otherwise). Creates the school's wallet on a connection whose service can (iswallet's `create_wallet`), and makes it the wallet
+        students' account numbers pay into (the issuing setting). The director's BVN and the business email go to the service once
+        and are kept nowhere in Taskiem. At most one wallet is made per business and connection: asking again (a lost answer) answers
+        the same wallet. The wallet-level number the service answers is its own handle, which nobody can pay into, and is never shown.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [connection, business_email, bvn]
+              properties:
+                connection:
+                  type: string
+                  description: The issuing connection as service/name, such as iswallet/main.
+                owner_type:
+                  type: string
+                  enum: [client_end_user_business, client_end_business]
+                  default: client_end_user_business
+                  description: Holding other people's money (fees) in the school's own account, or only its own money, pooled.
+                business_email:
+                  type: string
+                bvn:
+                  type: string
+                  description: The director's BVN, 11 digits.
+                business_name:
+                  type: string
+                  description: The business's name at the service; the business's own name when left out.
+      responses:
+        '201':
+          description: The wallet, and the issuing setting now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wallet_id, issuing]
+                properties:
+                  wallet_id:
+                    type: string
+                  issuing:
+                    $ref: '#/components/schemas/SchoolIssuing'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools:
     get:
       operationId: getSchoolSettings
@@ -20265,6 +20364,9 @@ components:
           type: boolean
         needs_bvn:
           type: boolean
+        creates_wallet:
+          type: boolean
+          description: Taskiem can create the school's wallet on this rail (POST /v1/settings/schools/wallet)
         needs_account:
           type: boolean
           description: The wallet the numbers pay into must be chosen
@@ -26260,7 +26362,7 @@ components:
       additionalProperties: false
     RemoteSubscription:
       type: object
-      description: A subscription Taskiem keeps at a provider for a remotely registered trigger (decision 0021).
+      description: A subscription Taskiem keeps at a provider for a remotely registered trigger (decision 0021), for a workflow or, with no workflow, for a connection (registration connection).
       required:
       - id
       - workflow_id
@@ -26284,8 +26386,11 @@ components:
           type: string
           format: uuid
         workflow_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
+          description: Null for a connection's own subscription, whose events reach every workflow subscribed.
         environment:
           type: string
         connector:

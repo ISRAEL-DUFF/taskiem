@@ -1324,6 +1324,8 @@ th { background: var(--panel-2); }
 .conn .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .conn-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .conn-actions button { min-height: 36px; border-radius: 999px; }
+.conn-actions [data-testid="connection-check"] { flex-basis: 100%; }
+.conn-actions .sub.warn { color: var(--tint-warn-text); }
 .template-card .list-icon { margin-bottom: 4px; }
 .template-card strong { font-weight: 600; font-size: 15px; }
 /* Empty states: the icon larger, on the brand's tint. */

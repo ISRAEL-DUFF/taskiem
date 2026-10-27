@@ -1,0 +1,24 @@
+{
+  "trigger": "credit_event",
+  "body": {
+    "id": "evt_c3",
+    "event_type": "wallet.credit.reversed",
+    "wallet_id": "6f1e",
+    "data": {
+      "txn_id": "t-14",
+      "provider_reference": "100004261023091402123456",
+      "amount": 5000000,
+      "currency": "NGN",
+      "virtual_account": {
+        "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+        "account_number": "9901234567"
+      }
+    }
+  },
+  "event": "payment.returned",
+  "expect": {
+    "payment_id": "100004261023091402123456",
+    "amount_kobo": 5000000,
+    "reason": "other"
+  }
+}
