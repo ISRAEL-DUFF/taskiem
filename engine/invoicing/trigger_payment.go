@@ -194,7 +194,8 @@ func (s *Invoices) startPayment(ctx context.Context, tenant, part, invoice, work
 // PaymentTrigger is the trigger of a run a payment counted starts:
 // trigger.body is the invoice as PaidTrigger gives it (event payment,
 // status as the invoice is now, due_kobo what is still due), with the
-// payment (its part's id, amount, how it was matched and when) and, for
+// payment (its part's id, amount, how it was matched and when, and the
+// bank's fee and what reached the business when the rail said) and, for
 // a school's invoice, its receipt (id, number and the verification link,
 // which a template sends the family) and family_link, a fresh link to the
 // family's page. The receipt and family links are sealed in the run's
@@ -204,8 +205,18 @@ func PaymentTrigger(x Invoice, p Payment, r *Receipt, link, familyLink string) m
 	body := t["body"].(map[string]any)
 	body["event"] = "payment"
 	body["due_kobo"] = x.DueKobo
-	body["payment"] = map[string]any{"id": p.ID.String(), "amount_kobo": p.AmountKobo, "amount": Naira(p.AmountKobo), "how": p.How,
+	pay := map[string]any{"id": p.ID.String(), "amount_kobo": p.AmountKobo, "amount": Naira(p.AmountKobo), "how": p.How,
 		"paid_at": p.CreatedAt.UTC().Format(time.RFC3339)}
+	if p.FeeKobo != nil {
+		pay["fee_kobo"], pay["fee"] = *p.FeeKobo, Naira(*p.FeeKobo)
+		pay["received_kobo"], pay["received"] = p.AmountKobo-*p.FeeKobo, Naira(p.AmountKobo-*p.FeeKobo)
+	}
+	body["payment"] = pay
+	// The invoice-wide figures are the payment's, not PaidTrigger's.
+	delete(body, "fee_kobo")
+	delete(body, "fee")
+	delete(body, "received_kobo")
+	delete(body, "received")
 	if r != nil {
 		rec := map[string]any{"id": r.ID.String(), "number": r.Number}
 		if r.Link != "" {

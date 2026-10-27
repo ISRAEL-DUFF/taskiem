@@ -248,6 +248,10 @@
       "text": "Lambar asusunku na invoice {number} tana kan hanya. Idan ba ta zo cikin minti ɗaya ba, danna Sabuwar lambar asusu.",
       "reviewed": false
     },
+    "invoice.receipt.fee_line": {
+      "text": "Kun aika {sent}; {received} ya isa ga {business} bayan cajin banki na {fee}.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Ina rubuta maka da {language}. Harsunan da ke nan: {languages}. Aika *language* da suna don canzawa.",
       "reviewed": false

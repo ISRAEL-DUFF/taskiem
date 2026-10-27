@@ -309,6 +309,11 @@
       "reviewed": true,
       "context": "The rail has not given the account yet"
     },
+    "invoice.receipt.fee_line": {
+      "text": "You sent {sent}; {received} reached {business} after the bank's fee of {fee}.",
+      "reviewed": true,
+      "context": "A receipt to a customer who paid an invoice by transfer: what they sent, what reached the business, and the bank's fee kept from it"
+    },
     "lang.current": {
       "text": "I write to you in {language}. Languages here: {languages}. Send *language* and a name to change.",
       "reviewed": true,

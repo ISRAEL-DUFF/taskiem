@@ -1,6 +1,6 @@
 # iswallet account numbers: the plan
 
-Status: workstreams I and W **built** 27 October 2026 ([§8](#8-built-workstream-i), [§9](#9-built-workstream-w)); what W left out is planned as workstream N ([§10](#10-next-what-w-left-out-workstream-n)). Drafted 27 October 2026, extended the same day with workstream W (Taskiem as a collection rail, [decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md)) · Source: iswallet's guide of 27 October ([kept verbatim](../integrations/iswallet-answers-2026-10-27-account-numbers.md)) · Connector: [iswallet](../integrations/iswallet.md) · Rail facts: [schools](schools-rail-facts.md#iswallet) · Decisions: [0046](../decisions/0046-balans-in-taskiem.md) (students' own account numbers), [0045](../decisions/0045-tally-in-taskiem.md) (customers' accounts, the money log)
+Status: workstreams I and W **built** 27 October 2026 ([§8](#8-built-workstream-i), [§9](#9-built-workstream-w)); what W left out is planned as workstream N ([§10](#10-next-what-w-left-out-workstream-n)), N1 built. Drafted 27 October 2026, extended the same day with workstream W (Taskiem as a collection rail, [decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md)) · Source: iswallet's guide of 27 October ([kept verbatim](../integrations/iswallet-answers-2026-10-27-account-numbers.md)) · Connector: [iswallet](../integrations/iswallet.md) · Rail facts: [schools](schools-rail-facts.md#iswallet) · Decisions: [0046](../decisions/0046-balans-in-taskiem.md) (students' own account numbers), [0045](../decisions/0045-tally-in-taskiem.md) (customers' accounts, the money log)
 
 ## 1. Summary
 
@@ -191,6 +191,8 @@ Planned 27 October 2026. Three pieces §9 records as not built: the fee on invoi
 - **A storefront order paid by transfer is refunded by hand.** Only Paystack refunds through its API; on iswallet, Flutterwave and OPay a refund is a payout to the customer's account, which Taskiem may not have. The owner sends the money back from their bank and marks the order refunded; a refund through a payout under approval is for later.
 
 ### 10.1 The fee on invoice receipts (N1)
+
+**Built** 27 October 2026, as below. An invoice's payments carry `fee_kobo` in the API too (`InvoicePayment`); a business's language for its customers chooses the sentence, as the storefront's messages.
 
 A school's receipt says what the payer sent against what reached the school (`engine/schools/receipts.go`); an invoice's receipt cannot, because the fee never reaches it:
 

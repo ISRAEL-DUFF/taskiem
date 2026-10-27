@@ -134,7 +134,9 @@ func (s *Invoices) startPaid(ctx context.Context, tenant, invoice, workflow uuid
 }
 
 // PaidTrigger is the trigger of a run an invoice being paid starts:
-// trigger.body is the invoice as a receipt needs it. The customer's
+// trigger.body is the invoice as a receipt needs it, with the bank's fee
+// and what reached the business when the rail said (fee_kobo,
+// received_kobo). The customer's
 // name, phone and email, and the page link, are sealed in the run's
 // history (engine/runtime: invoice trigger paths).
 func PaidTrigger(x Invoice, link string) map[string]any {
@@ -152,6 +154,12 @@ func PaidTrigger(x Invoice, link string) map[string]any {
 	}
 	if x.PaidAt != nil {
 		body["paid_at"] = x.PaidAt.UTC().Format(time.RFC3339)
+	}
+	// The bank's fee on the transfers that paid it, when it is known
+	// (Invoice.Fee): what reached the business is what was sent less it.
+	if sent, fee, ok := x.Fee(); ok {
+		body["fee_kobo"], body["fee"] = fee, Naira(fee)
+		body["received_kobo"], body["received"] = sent-fee, Naira(sent-fee)
 	}
 	return map[string]any{"type": TriggerType, "event": "paid", "body": body}
 }

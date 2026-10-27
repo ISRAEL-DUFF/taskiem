@@ -248,6 +248,10 @@
       "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
       "reviewed": false
     },
+    "invoice.receipt.fee_line": {
+      "text": "Ẹ fi {sent} ránṣẹ́; {received} ló dé ọ̀dọ̀ {business} lẹ́yìn owó báǹkì tí ó jẹ́ {fee}.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Mò ń kọ̀wé sí yín ní {language}. Àwọn èdè tó wà níbí: {languages}. Ẹ fi *language* àti orúkọ kan ránṣẹ́ láti yí i padà.",
       "reviewed": false

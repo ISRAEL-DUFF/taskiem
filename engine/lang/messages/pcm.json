@@ -248,6 +248,10 @@
       "text": "Your account number for invoice {number} dey come. If e no come for one minute, tap New account number.",
       "reviewed": false
     },
+    "invoice.receipt.fee_line": {
+      "text": "You send {sent}; {received} reach {business} after bank fee of {fee}.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "I dey write you for {language}. Languages wey dey here: {languages}. Send *language* and the name to change.",
       "reviewed": false

@@ -21,7 +21,7 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 - **Your own number.** Share it with anyone who pays you: on your receipts, your shop's page, your WhatsApp status. Each payment into it shows under **Invoices > To match**, where you say who it was from. On WhatsApp, send *my account number* to get it again.
 - **Invoices.** An invoice you send gets a number of its own for that one payment, shown on the invoice's page and when the customer presses *Pay by transfer* on WhatsApp. It is counted to the invoice by itself. A customer who has a number of their own (below) is shown that one instead; the invoice's page still offers a one-time number too.
 - **Customers you bill often.** Give a customer a number of their own from their invoice (**Give this customer an account number**, then issue it with Taskiem): it never expires, and every payment into it counts to their invoices. A school's students each get one, issued on your wallet with nothing to choose.
-- **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt message says what the parent sent and what reached the school, when the transfer was for that receipt alone.
+- **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt message, and an invoice's receipt (from the **Send a receipt when an invoice is paid** workflow and its email versions), say what the payer sent and what reached you, when the transfer was for that receipt alone.
 
 ## Your balance
 

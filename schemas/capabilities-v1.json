@@ -703,7 +703,8 @@
         "required": ["payment_id", "amount_kobo"],
         "properties": {
           "payment_id": { "type": "string" },
-          "amount_kobo": { "type": "integer" },
+          "amount_kobo": { "type": "integer", "description": "What the payer sent" },
+          "fee_kobo": { "type": "integer", "description": "The rail's fee taken from it, when the rail settles net and says so (a one-time number's transfer)" },
           "currency": { "type": "string" },
           "paid_at": { "type": "string" }
         }

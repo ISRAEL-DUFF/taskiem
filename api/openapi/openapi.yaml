@@ -23286,6 +23286,9 @@ components:
         created_at:
           type: string
           format: date-time
+        fee_kobo:
+          type: integer
+          description: The rail's fee on the transfer this payment was, when the rail reported it and the payment took the whole transfer; the business received amount_kobo less it
     CustomerInvoice:
       type: object
       description: An invoice the business sends a customer. Status and paid_kobo come only from the payments counted towards it.

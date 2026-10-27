@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -162,6 +163,28 @@ type Payment struct {
 	Undoes     *uuid.UUID `json:"undoes,omitempty"`
 	UndoneBy   *uuid.UUID `json:"undone_by,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
+	// FeeKobo is the rail's fee on the transfer this payment is, when the
+	// rail said what it kept and the payment took the whole transfer: the
+	// payer sent AmountKobo and the business received that less the fee.
+	FeeKobo *int64 `json:"fee_kobo,omitempty"`
+}
+
+// Fee is the rail's fee on the payments counted towards the invoice, for
+// its receipt: what was sent, what the fee was, and whether there is one
+// to show. There is one only when every payment standing was a whole
+// transfer whose fee the rail reported (a cash payment, a transfer split
+// over invoices or a rail that does not say leaves it unknown).
+func (x Invoice) Fee() (sent, fee int64, ok bool) {
+	for _, p := range x.Payments {
+		if p.Undoes != nil || p.UndoneBy != nil {
+			continue
+		}
+		if p.FeeKobo == nil {
+			return 0, 0, false
+		}
+		sent, fee = sent+p.AmountKobo, fee+*p.FeeKobo
+	}
+	return sent, fee, fee > 0 && fee < sent
 }
 
 // Settings are a business's defaults for its invoices.
@@ -377,7 +400,10 @@ func (s *Invoices) Get(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNum
 }
 
 func payments(ctx context.Context, tx pgx.Tx, invoice uuid.UUID) ([]Payment, error) {
-	rows, err := tx.Query(ctx, `SELECT p.id, p.amount_kobo, p.payment_id, COALESCE(p.connection, ''), p.how, p.by, p.reasons, p.undoes, u.id, p.created_at
+	// The fee is the money log entry's when the part took the whole of it
+	// (the schools' receipts' rule, engine/schools).
+	rows, err := tx.Query(ctx, `SELECT p.id, p.amount_kobo, p.payment_id, COALESCE(p.connection, ''), p.how, p.by, p.reasons, p.undoes, u.id, p.created_at,
+		(SELECT e.fee_kobo FROM money_entries e WHERE e.id = p.entry_id AND e.amount_kobo = p.amount_kobo AND e.fee_kobo > 0 AND e.fee_kobo < e.amount_kobo)
 		FROM customer_invoice_payments p LEFT JOIN customer_invoice_payments u ON u.undoes = p.id
 		WHERE p.invoice_id = $1 ORDER BY p.created_at, p.id`, invoice)
 	if err != nil {
@@ -386,7 +412,7 @@ func payments(ctx context.Context, tx pgx.Tx, invoice uuid.UUID) ([]Payment, err
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Payment, error) {
 		var p Payment
 		var reasons []byte
-		err := r.Scan(&p.ID, &p.AmountKobo, &p.PaymentID, &p.Connection, &p.How, &p.By, &reasons, &p.Undoes, &p.UndoneBy, &p.CreatedAt)
+		err := r.Scan(&p.ID, &p.AmountKobo, &p.PaymentID, &p.Connection, &p.How, &p.By, &reasons, &p.Undoes, &p.UndoneBy, &p.CreatedAt, &p.FeeKobo)
 		_ = json.Unmarshal(reasons, &p.Reasons)
 		if p.Reasons == nil {
 			p.Reasons = []string{}
@@ -915,7 +941,9 @@ func (s *Invoices) deliver(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x I
 }
 
 // NotifyCustomer sends the invoice's customer a message: {link} becomes
-// the invoice's page link, {number} its number and {due} what is due.
+// the invoice's page link, {number} its number, {due} what is due and
+// {fee_line} a sentence on the bank's fee, in the business's language for
+// its customers, when the rail said what it kept (Invoice.Fee), or nothing.
 func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNumber, text, subject, key string) (map[string]any, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -937,11 +965,18 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 			}
 			text = strings.ReplaceAll(text, "{link}", strings.TrimRight(s.PageBase, "/")+"/i/"+t)
 		}
-		text = strings.NewReplacer("{number}", x.Number, "{due}", Naira(x.DueKobo)).Replace(text)
 		var business string
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
 			return err
 		}
+		feeLine := ""
+		if strings.Contains(text, "{fee_line}") {
+			if sent, fee, ok := x.Fee(); ok {
+				feeLine = " " + lang.Default().Text(customerLanguage(ctx, tx, tenant), "invoice.receipt.fee_line",
+					"sent", Naira(sent), "received", Naira(sent-fee), "business", business, "fee", Naira(fee))
+			}
+		}
+		text = strings.NewReplacer("{number}", x.Number, "{due}", Naira(x.DueKobo), "{fee_line}", feeLine).Replace(text)
 		if subject == "" {
 			subject = "Invoice " + x.Number + " from " + business
 		}
@@ -1339,4 +1374,15 @@ func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, w
 		out = []Listed{}
 	}
 	return out, err
+}
+
+// customerLanguage is the language the business speaks to its customers
+// in: its default chat language (Settings > Languages), English when it
+// has none (no-technical-steps N6), as the storefront's.
+func customerLanguage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) lang.Tag {
+	var def string
+	if err := tx.QueryRow(ctx, `SELECT default_language FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&def); err == nil && lang.Valid(lang.Tag(def)) {
+		return lang.Tag(def)
+	}
+	return lang.EN
 }

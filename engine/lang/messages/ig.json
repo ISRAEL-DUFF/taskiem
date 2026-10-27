@@ -248,6 +248,10 @@
       "text": "Nọmba akaụntụ gị maka invoice {number} na-abịa. Ọ bụrụ na ọ bịaghị n'ime otu nkeji, pịa Nọmba akaụntụ ọhụrụ.",
       "reviewed": false
     },
+    "invoice.receipt.fee_line": {
+      "text": "Ị zitere {sent}; {received} ruru {business} mgbe ụlọ akụ wepụrụ ụgwọ {fee}.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Ana m edere gị n'asụsụ {language}. Asụsụ dị ebe a: {languages}. Ziga *language* na aha iji gbanwee.",
       "reviewed": false
