@@ -1,6 +1,6 @@
 # iswallet account numbers: the plan
 
-Status: **Draft** 27 October 2026, for the founder to extend · Source: iswallet's guide of 27 October ([kept verbatim](../integrations/iswallet-answers-2026-10-27-account-numbers.md)) · Connector: [iswallet](../integrations/iswallet.md) · Rail facts: [schools](schools-rail-facts.md#iswallet) · Decisions: [0046](../decisions/0046-balans-in-taskiem.md) (students' own account numbers), [0045](../decisions/0045-tally-in-taskiem.md) (customers' accounts, the money log)
+Status: **Draft** 27 October 2026, extended the same day with workstream W (Taskiem as a collection rail, [decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md)) · Source: iswallet's guide of 27 October ([kept verbatim](../integrations/iswallet-answers-2026-10-27-account-numbers.md)) · Connector: [iswallet](../integrations/iswallet.md) · Rail facts: [schools](schools-rail-facts.md#iswallet) · Decisions: [0046](../decisions/0046-balans-in-taskiem.md) (students' own account numbers), [0045](../decisions/0045-tally-in-taskiem.md) (customers' accounts, the money log)
 
 ## 1. Summary
 
@@ -13,7 +13,7 @@ iswallet's guide of 27 October answers what the rail facts (B0) had to leave ope
 5. A connection check that proves the key works and names the partners that can issue.
 6. **Taskiem subscribes the webhook itself**, one subscription per connection and environment, the signing secret kept as a platform secret: there is no iswallet dashboard to paste a URL into (iswallet, 27 October, [addendum](../integrations/iswallet-answers-2026-10-27-account-numbers.md#addendum-later-the-same-day-the-webhook-endpoint)).
 
-One PR, milestones I1 to I7 below, each small. Things that need people, not code, are in §6.
+Two workstreams: **I** (I1 to I7, the connector, one PR) and **W** (Taskiem as a collection rail through its own iswallet client, [decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md), one PR per milestone). Things that need people, not code, are in §6.
 
 ## 2. What the guide settles
 
@@ -75,6 +75,17 @@ iswallet has no dashboard where a business pastes a URL: the subscription is mad
 - The manual path (paste `webhook_secret`) stays for a connection whose subscription was made outside Taskiem; `webhook_secret` becomes optional, and the connection page says which of the two is in force.
 - Taskiem's side already answers `202` at once and does the work afterwards; the hooks host must be https and public: `TASKIEM_HOOKS_URL` on staging and production, which the readiness check (I5) names when missing.
 
+### 3.7 Taskiem as a collection rail (workstream W)
+
+iswallet, Payrolla and Taskiem are one company's products, and one iswallet client may hold wallets for many unrelated businesses. So Taskiem holds a client of its own and gives any business a wallet under it ([decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md)): a business with no Paystack, Flutterwave, Moniepoint or OPay account receives money from day one, and never sees iswallet.
+
+- **The platform client (W1).** `TASKIEM_ISWALLET_CLIENT_KEY` and `_TEST_CLIENT_KEY` as platform secrets on the `api` and `scheduler` roles; the platform's one subscription per environment registered by I7 at the platform's own URL (`/hooks/platform/iswallet?env=`), verified with its secret, and each event delivered into the tenant whose `iswallet/taskiem` connection lists the envelope's `wallet_id` (decision 0031's routing, with the platform in the partner's place); an event for a wallet no tenant lists is recorded and alerted to operators. A business's `iswallet/taskiem` connection carries no key: calls use the platform's, and the allow-list is its wallet (so `WALLET_NOT_ALLOWED` protects every other business, as today).
+- **Turning it on (W2).** Settings > Payments (and the Schools issuing setting, and the Start page for a business with no rail): **Receive money with Taskiem**. It asks what the business is (holding other people's money, such as fees, or only its own), explains segregated against pooled in plain words with the sweep's lag, takes the business email and, for a business wallet, the director's BVN (sealed PII, sent once, never shown again), then `create_wallet` (I3) with `owner_ref = tenant:<id>`, the chosen `owner_type` and an idempotency key per tenant, so a retry never makes a second wallet. The connection `iswallet/taskiem` is made with the wallet listed. Readiness names what is missing (`KYC_REQUIRED`'s field). An owner may change segregated or pooled only by asking (it is not reversible at iswallet without them).
+- **Collection (W3).** The wallet's own number (its single unreferenced account, `virtual_account` without a reference) is the business's "pay me" number: on the Money page, in chat (`my account number`), on the storefront's pay-by-transfer, counted by the catch-all matching. An invoice sent on this rail gives its customer a permanent number on first send (`register_account`, I2's path), so the invoice's page and the WhatsApp **Pay by transfer** show that number instead of a one-time one; the page's wording changes to "pay to your own account number, any time".
+- **Balance and withdrawal (W4).** The wallet's balance (`get_balance`, `available`) on the Money page and in the daily summary; **Withdraw to my bank**: the business's bank account resolved by `name_enquiry` and remembered, an approval policy on by default (the owner approves, four-eyes above a threshold the owner sets), the payout through the existing `payout` action with its outcome from `outflow_event`, in the money log as any payout. A template `withdraw-to-bank` (weekly, or when the balance passes an amount).
+- **Fees and plans (W5).** The partner fee passed to the payer by default, shown on receipts as sent against landed; billing meters credits and payouts on the platform rail; which plans include it and any Taskiem margin are settings the founder sets (`deploy/plans.yaml`).
+- **Operations and docs (W6).** Runbook: provisioning the platform client live and test, rotating its key, the subscription's health, unrouted events; the guide for business owners ("Receive money with Taskiem"); the Schools guide's issuing section; decision 0052 accepted.
+
 ## 4. Milestones
 
 | Id | Milestone | Size | Done when |
@@ -89,6 +100,17 @@ iswallet has no dashboard where a business pastes a URL: the subscription is mad
 
 Order: I1, I2, I4, I5, I7, I3, I6. One PR.
 
+| Id | Milestone | Size | Done when |
+| --- | --- | --- | --- |
+| W1 | The platform client: secrets, the platform subscription and its routing into tenants, `iswallet/taskiem` connections with no key and one wallet each | M | A credit to a tenant's wallet arrives at the platform URL and lands in that tenant's money log and nowhere else; a wallet no tenant lists is alerted; a tenant's step naming another wallet is refused before any request |
+| W2 | Turning it on: the choice of segregated or pooled, email and BVN sealed and sent once, the wallet created idempotently, readiness | M | A new business with no rail turns it on from the Start page and has a wallet and a connection; a retry makes no second wallet; the BVN is never readable again; the Schools setting offers "Taskiem" |
+| W3 | Collection: the business's own number, a permanent number per invoiced customer, the invoice page and chat wording on this rail | M | An invoice sent on this rail is payable by transfer to the customer's own number from the page and from WhatsApp; a transfer to the business's own number reaches To match |
+| W4 | Balance and withdrawal: the balance shown, Withdraw to my bank under approval, the template | M | An owner withdraws to a resolved bank account with an approval, the payout and its outcome are in the money log, the balance follows |
+| W5 | Fees and plans: metering, plan gating, the fee shown | S | Billing counts credits and payouts on the platform rail; a plan without the rail says so on the Start page |
+| W6 | Operations and docs; decision 0052 accepted | S | Runbook, owner's guide, Schools guide; `docsite -check` passes |
+
+Order: W1, W2, W3, W4, W5, W6, after the I workstream has merged (W1 and W2 build on I3, I5 and I7). One PR per milestone.
+
 ## 5. Testing
 
 | Level | What | Where |
@@ -99,6 +121,7 @@ Order: I1, I2, I4, I5, I7, I3, I6. One PR.
 | Schools | A student's account issued on the single call; a batch job over the batch call with `existing` items; the wallet created from settings | `engine/schools`, `api` |
 | Remote registration | Create, find by endpoint, update, delete and drift against a fake iswallet (`engine/remote` tests as Xenibase's); the secret never in an API answer | `engine/remote`, `connectors/iswallet` |
 | Web | Settings: create the wallet, the readiness line, the BVN note; the connection page's subscription health | Playwright |
+| The platform rail | A credit routed into the right tenant and only it; turning the rail on from scratch; an invoice paid to a customer's permanent number; a withdrawal under approval; a plan without the rail | `api`, Playwright |
 
 ## 6. Needs people, not code
 
@@ -109,7 +132,10 @@ Order: I1, I2, I4, I5, I7, I3, I6. One PR.
 | Expected enrolment volume, so iswallet can say whether 500 a call needs paging on our side (our jobs page below that already) | Founder | Open |
 | Sandbox key and base URL on the staging connection, then the pilot checklist's issuing step run for real | Founder, then engineering | Open |
 | The `account_name` length limit and whether iswallet adds a fee of its own on deposits | iswallet | Still unanswered; not blocking |
+| Taskiem's own iswallet client, live and test, provisioned by iswallet; its keys into the platform secrets | Founder (iSpend) | Open; needed for W1 |
+| Whether a business may move from pooled to segregated later, and the sweep's behaviour at volume | iswallet | Open; W2 says the choice is made once until answered |
+| Which plans include the platform rail, and whether Taskiem charges a margin over the partner fee | Founder | Open; W5 |
 
 ## 7. Out of scope
 
-Payouts, FX and crypto (the guide's own scope); one-time accounts on iswallet; changing where a school's money is held (iswallet's side); a ledger (0046).
+FX and crypto (the guide's own scope); payouts beyond the business withdrawing its own balance (payroll stays Payrolla's and the payout templates'); one-time accounts on iswallet; changing where a school's money is held (iswallet's side); a ledger (0046).
