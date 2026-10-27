@@ -11,16 +11,19 @@ number they can pay into. Payouts, FX and crypto are out of scope here.
 
 ## 1. What you will build
 
-Three calls, once per customer:
-
 ```
-POST /v1/wallets                              → a wallet for your customer
-POST /v1/wallets/{wallet_id}/virtual-account  → the account number they pay into
-POST /v1/webhooks/subscriptions               → once, for your whole integration
+POST /v1/wallets                                     → a wallet
+POST /v1/wallets/{wallet_id}/virtual-account         → an account number to pay into
+POST /v1/wallets/{wallet_id}/virtual-accounts/batch  → …or up to 500 at once
+POST /v1/webhooks/subscriptions                      → once, for your whole integration
 ```
 
 Nothing is auto-created. A wallet starts with **no** account number anyone can pay into;
 the second call is what produces one.
+
+**For your schools model that is one wallet per school and one account per student**, all
+on that wallet — see [§5](#5-one-wallet-many-accounts--the-school-model). Read §3 and §4
+first for the single-account case; §5 is the shape you will actually build.
 
 ## 2. Before you start, from us
 
@@ -175,7 +178,73 @@ Pass `"provider": "<code>"` on issuance to pick one. **Omit it and we choose** �
 the right default unless you have a reason. A wallet may hold accounts at more than one
 partner, and money sent to any of them lands in the same wallet.
 
-## 5. Find out when money arrives
+## 5. One wallet, many accounts — the school model
+
+This is the shape you described: **one wallet for the school**, and **one account number
+per student**, so every student's payment lands in the school's balance.
+
+That is exactly what this is built for. Issue one permanent account per student on the
+same wallet, each with its own `reference`:
+
+```bash
+POST /v1/wallets/$SCHOOL_WALLET_ID/virtual-account
+{ "type":"permanent", "reference":"student:gca-2026-0417", "account_name":"Ada Obi" }
+```
+
+Every one is a distinct NUBAN. Every credit carries its `reference` back to you, so a
+payment resolves to a student without a lookup table of your own that can drift. There is
+no practical cap on accounts per wallet.
+
+> Earlier this was not safe: a second permanent account on the same wallet silently
+> **overwrote** the first and returned `200`, so an integrator issuing one per student
+> would have ended up with one account and no error. It is keyed on `reference` precisely
+> so that cannot happen. Always send one.
+
+### Issuing a roll in bulk
+
+```bash
+POST /v1/wallets/$SCHOOL_WALLET_ID/virtual-accounts/batch
+{ "accounts": [ { "reference": "student:gca-2026-0417", "account_name": "Ada Obi" },
+                { "reference": "student:gca-2026-0418", "account_name": "Bayo Ade" } ] }
+```
+
+- **500 accounts per call**, issued 8 at a time
+- **per-item results** — `created` / `existing` / `failed`, each with its own error code. A
+  batch never collapses into "397 of 400 succeeded", which you could not act on
+- **idempotent per reference**, so re-running after a partial failure is safe
+- **permanent accounts only**, which matches the recommendation above
+- one partner per batch, so a partial failure cannot split an import across partners
+
+Use it for an enrolment sitting; use single calls for a student added mid-term.
+
+### Where the money sits, if the wallet is a business wallet
+
+Relevant only to `client_end_user_business` — the type whose balance is held in the
+business's own segregated account at our bank partner. You can skip this if your schools
+are `client_end_user`.
+
+A per-student account is **not** bound to that segregated account. The partner gives a
+payout sub-account exactly **one** static number, so only a wallet's single *unreferenced*
+account can be bound to it. Per-student accounts therefore settle through our pool, and a
+sweep moves the money into the school's segregated account afterwards.
+
+What this means in practice:
+
+- **the school's balance is correct immediately.** The ledger credits on the deposit, and
+  nothing you or the school can see is delayed — balance, transaction history, the credit
+  event
+- **the physical location of the money lags** by roughly the time it takes us to sweep.
+  That lag is bounded, monitored and self-correcting, with a default alarm at 10 minutes
+
+So segregation for per-student accounts is **eventual, not instantaneous**. It does not
+change what you build, and it does not change what the school sees — but it is a real
+property of the design, and you should hear it from us rather than discover it.
+
+If a school ever needs payments to land in its segregated account directly, that is the
+wallet's single unreferenced account — one number for the whole school, and no per-student
+attribution from the number. That is the trade; for your use case, per-student is right.
+
+## 6. Find out when money arrives
 
 Subscribe **once** for your whole integration:
 
@@ -235,7 +304,7 @@ Troubleshooting without asking us:
 `GET /v1/webhooks/subscriptions/{id}/deliveries` shows whether we sent it and what your
 endpoint returned.
 
-## 6. When something fails
+## 7. When something fails
 
 | Status | What it means | What to do |
 |---|---|---|
@@ -252,7 +321,7 @@ one string takes us straight to the request. Without it we are matching on times
 The difference between the last two rows matters: `502` is final and safe to treat as
 such; `500` means we need to look.
 
-## 7. Suggested order of work
+## 8. Suggested order of work
 
 1. `GET /v1/providers` with your sandbox key — confirms auth works, costs nothing.
 2. Create one wallet. Confirm you are storing `wallet_id` and **not** treating
@@ -261,18 +330,33 @@ such; `500` means we need to look.
    response.
 4. Subscribe your webhook, verify a signature end to end, and make your handler idempotent.
 5. Credit your customer from `amount_credited`.
-6. Only then, if you need it, add one-time accounts.
+6. Issue a roll through the batch endpoint (§5) once single issuance works.
 
-## 8. What we need from you
+You do not need one-time accounts for this. Permanent accounts keyed on your `reference`
+give you per-student attribution, free retries and no duplicate-account risk; the batch
+endpoint issues permanent accounts only. Skip the one-time path entirely — §4 describes it
+for completeness, not as something you need.
+
+## 9. Settled, and still open
+
+**Settled from your questions:**
+
+| | |
+|---|---|
+| One wallet per school, one account per student | **Supported** — see §5. Always send a `reference` |
+| One-time accounts | **Not needed.** Permanent only |
+| Batch | **500 per call**, idempotent per reference, permanent only |
+
+**Still needed from you:**
 
 - the **webhook URL** for sandbox and production
-- which **`owner_type`** your customers are (see §3) — if any are businesses, tell us and
-  we will walk through the two options
-- whether you need **one-time amount-locked accounts** at all
-- your **expected volume** for onboarding, so we can tell you whether to use the batch
-  endpoint instead of one call per customer
+- which **`owner_type`** your schools will be. If `client_end_user_business`, read the last
+  part of §5 — per-student accounts settle into the school's segregated account via a
+  sweep rather than directly, and we would rather you heard that from us now
+- your **expected enrolment volume**, so we can tell you whether 500 per call needs paging
+  on your side
 
-## 9. Reference
+## 10. Reference
 
 - Full endpoint list and the OpenAPI spec: `$BASE/docs` and `$BASE/openapi.json` — both
   public, no key needed
