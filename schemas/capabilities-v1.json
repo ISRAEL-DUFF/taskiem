@@ -886,7 +886,8 @@
         "payer_account": { "type": "string", "description": "The payer's account number, often masked by the rail", "x-pii": "account_number" },
         "payer_bank": { "type": "string" },
         "narration": { "type": "string", "description": "What the payer wrote, as the rail passed it on; often carries names", "x-pii": "other" },
-        "occurred_at": { "type": "string", "description": "RFC 3339" }
+        "occurred_at": { "type": "string", "description": "RFC 3339" },
+        "event": { "type": "string", "enum": ["payment.received"], "description": "payment.received for a payment into a one-time number (collect_transfer) the rail lists among its credits: recorded as that payment, under the same key as its payment.received event, not as an account credit" }
       }
     }
   }

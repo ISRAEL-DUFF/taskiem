@@ -534,6 +534,42 @@ func TestWebhookAndLookBackCreditAreOneEntry(t *testing.T) {
 	}
 }
 
+// A payment into a one-time number, heard by webhook (payment.received)
+// and read back by the look-back, is one entry, never an account credit
+// too.
+func TestWebhookAndLookBackOneTimePaymentAreOneEntry(t *testing.T) {
+	m := New(Options{}).Manifest
+	body, err := expr.DecodeJSON([]byte(`{"id":"evt_t1","event_type":"wallet.credit.posted","wallet_id":"6f1e","data":{"txn_id":"t-9",
+		"provider_reference":"100004261027091402777777","amount":1500000,"amount_credited":1479000,"currency":"NGN","occurred_at":"2026-10-27T09:14:02Z",
+		"virtual_account":{"reference":"tot_ab12cd34ef56gh78ij90kl12mn34op56","account_number":"9907654321","status":"active"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, heard, err := m.EventOf("credit_event", map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}})
+	if err != nil || name != "payment.received" {
+		t.Fatalf("%s %v", name, err)
+	}
+	listed, err := expr.DecodeJSON([]byte(`{"wallet_id":"6f1e","transactions":[{"txn_id":"t-9","type":"credit","direction":"in","status":"confirmed",
+		"amount":1479000,"amount_credited":1479000,"fee_charged":21000,"currency":"NGN","occurred_at":"2026-10-27T09:14:02Z",
+		"provider_reference":"100004261027091402777777","virtual_account":{"account_number":"9907654321","reference":"tot_ab12cd34ef56gh78ij90kl12mn34op56"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := m.CapabilityOutput("list_credits", map[string]any{"account": "6f1e"}, listed.(map[string]any), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := out["credits"].([]any)[0].(map[string]any)
+	a, okA := moneylog.FromEvent("iswallet/main", name, heard)
+	b, okB := moneylog.FromCredit("iswallet/main", read)
+	if !okA || !okB || a.Key() != b.Key() || b.Kind != "payment" {
+		t.Fatalf("webhook %v %q, look-back %v %q (%s)", okA, a.Key(), okB, b.Key(), b.Kind)
+	}
+	if *a.AmountKobo != 1500000 || *b.AmountKobo != 1500000 {
+		t.Errorf("webhook %d, look-back %d", *a.AmountKobo, *b.AmountKobo)
+	}
+}
+
 // The invoice path records a one-time number's payment id before asking
 // for it: the key it computes is the reference the payment will carry.
 func TestOneTimeNumberKeyIsItsReference(t *testing.T) {

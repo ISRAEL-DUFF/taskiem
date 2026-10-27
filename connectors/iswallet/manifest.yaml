@@ -564,7 +564,8 @@ capabilities:
         ?'payer_name': has(t.counterparty) ? t.counterparty.?name : optional.none(),
         ?'payer_account': has(t.counterparty) ? t.counterparty.?account_number : optional.none(),
         ?'payer_bank': has(t.counterparty) ? t.counterparty.?bank_name : optional.none(),
-        ?'narration': t.?narration, ?'occurred_at': t.?occurred_at})
+        ?'narration': t.?narration, ?'occurred_at': t.?occurred_at,
+        ?'event': string(t.virtual_account.reference).startsWith('tot_') ? optional.of('payment.received') : optional.none()})
       truncated: "=output.?truncated"
     requires: [account]
 events:

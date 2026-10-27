@@ -295,6 +295,18 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 // heard by webhook and read back is one entry. ok is false for a credit
 // without a reference or credit_id.
 func FromCredit(channel string, credit map[string]any) (Entry, bool) {
+	if str(credit, "event") == "payment.received" {
+		// A payment into a one-time number (iswallet's tot_ references):
+		// the same movement, by the same key, as the webhook's
+		// payment.received, so heard both ways it is one entry.
+		e, ok := FromEvent(channel, "payment.received", map[string]any{"payment_id": credit["reference"], "amount_kobo": credit["amount_kobo"],
+			"currency": credit["currency"], "paid_at": credit["occurred_at"]})
+		if !ok {
+			return Entry{}, false
+		}
+		e.Source = "lookup"
+		return e, true
+	}
 	e, ok := FromEvent(channel, "virtual_account.credited", credit)
 	if !ok || e.Credit == "" {
 		return Entry{}, false
