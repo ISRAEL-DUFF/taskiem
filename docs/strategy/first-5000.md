@@ -46,7 +46,7 @@ The product does many things. A new company can only be known for one or two. Th
 | Candidate | Pain felt | Value in naira | Built | Channel to many | Verdict |
 | --- | --- | --- | --- | --- | --- |
 | **Private schools: fee collection** ([schools](../schools.md)) | Every term | Fees collected faster; fewer debtors; no evening reconciling | Deep: account number per student, posting, receipts, debtors, reminder ladder, clearance, gate | Proprietors' associations, school software vendors, field agents | **Lead wedge** |
-| **POS shops: daily cash-up** ([POS terminals](pos-terminals.md)) | Every evening | Shortages and failed payments caught the same day | Built for Moniepoint; OPay waits on OPay (P16) | Moniepoint and OPay themselves, their agent networks | **Second wedge**, gated on Moniepoint access (P15) |
+| **POS shops: daily cash-up** ([POS terminals](pos-terminals.md)) | Every evening | Shortages and failed payments caught the same day | Built for Moniepoint; OPay switches the connection on per business (P16) | Field agents in dense markets; later, optionally, Moniepoint and OPay themselves | **Second wedge**, after a test on a beta shop's own terminal (P15) |
 | Storefronts with field agents | Moderate | Orders and bookings | Built (Phase 5) | Field agents | Ride along with the agent team; not a wedge alone |
 | General SME "remind my debtors" | Real but vague | Hard to show | Built | Self-serve only | Keep as the default for walk-ins; not where we spend |
 | Regulated fintechs and MFBs | High | Large | Built (governance, audit, BYOK, SSO) | Founder-led sales | Two or three design partners on Enterprise; not a volume channel |
@@ -61,7 +61,7 @@ A working model, to be replaced by pilot data at the end of February. Every numb
 | --- | --- | --- | --- |
 | Field agents | The contracted team already decided for Phase 5 (base plus a bonus per activated business, with clawback); they sign up schools, shops and storefronts in person | 25 agents by mid-2027, about 4 activations each a week, 60% still active at 90 days | ~1,800 |
 | Associations and vendors | School proprietors' associations (zone by zone), school-management software vendors who lack payments, market and trade associations | 15 partnerships averaging 60 active businesses | ~900 |
-| POS providers | A referral or co-marketing arrangement with Moniepoint (and OPay once its API is open) so cash-up is offered to their merchants | One provider, starting Q2 | ~1,000 |
+| POS providers (optional) | A referral or co-marketing arrangement with Moniepoint or OPay so cash-up is offered to their merchants. Shops never need it to connect: without it, field agents in dense markets sign these shops up | One provider, starting Q2 | ~1,000 |
 | Embedding and holdco | Payrolla's companies, MFBs offering Taskiem to SME customers under their name ([embedding](../embedding.md)) | 2 partners | ~600 |
 | Self-serve and referral | Website, WhatsApp, owners telling owners | Grows once WhatsApp signup (chat-first gap 1) ships | ~700 |
 | **Total** | | | **~5,000** |
@@ -94,7 +94,7 @@ The illustrative revenue at 5,000, with an assumed mix (2,000 on Shop at ₦5,00
 **Done when:** 40 schools ran second-term fees on Taskiem, 150 shops ran a daily cash-up or a storefront, two regulated design partners are signed, and we know day-30 retention and cost to acquire by channel.
 
 - **Schools, one city first (Lagos).** Recruit 40 schools by mid-December so their January invoices go out from Taskiem. Sell the outcome, not the software: *every child gets an account number; you see who paid tonight; the reminders go themselves*. Each school gets a named onboarding person who imports students and starts the term with the bursar, in person or on a call.
-- **POS shops, one market.** Start Moniepoint access now (P15). Pilot with 150 shops through the field-agent team in one dense market, cash-up first, storefront offered second.
+- **POS shops, one market.** Shops connect their own Moniepoint or OPay accounts: Taskiem needs no contract with either. First test the connection on a beta shop's own Moniepoint terminal, with its agreement (P15); OPay needs its sales representative to switch the connection on for each shop (P16). Pilot with 150 shops through the field-agent team in one dense market, cash-up first, storefront offered second.
 - **Design partners.** Two regulated fintechs or MFBs (X3), founder-led, on Enterprise & Regulated, comped to 31 March then paid. Their compliance sign-off (X5) is the reference that sells the next ten.
 - **Turn billing on** (`TASKIEM_BILLING=on`) on 1 February for everyone not comped, after the trial. Convert at least a third of the pilot to paid by end of February; a pilot that will not pay is a finding, not a failure.
 - **Gate G4 conflict.** The build plan says nothing of Phase 5 ships before G4, which needs 60 days of 99.9% availability. The January schools window cannot wait for that. Proposal: run Stage 2 as an explicitly labelled pilot on comped and early plans, while the G4 window is measured in parallel. This needs the founder's decision (section 8).
@@ -105,7 +105,7 @@ The illustrative revenue at 5,000, with an assumed mix (2,000 on Shop at ₦5,00
 
 - Scale the agent team from the pilot size to about 15, in Lagos and one more city, paid on activated businesses retained at 30 days.
 - Sign the first proprietors' associations and one or two school-software vendors; offer them a partner price and their members a term's discount.
-- Approach Moniepoint with the pilot's numbers for a referral or co-marketing arrangement.
+- Optionally, approach Moniepoint with the pilot's numbers for a referral or co-marketing arrangement: a sales channel, not something shops need to connect.
 - Ship the chat-first gaps that self-serve needs ([chat-first strategy, 3.2](chat-first-nigeria.md#32-three-product-gaps-that-keep-the-chat-from-being-chat-first)): signup from WhatsApp, connecting from chat, guarded publishing from chat.
 - Third-term (late April) is the schools' second sale: renewals plus every school their association referred.
 
