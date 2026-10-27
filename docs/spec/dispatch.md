@@ -18,6 +18,8 @@ Six milestones, D1 to D6, one PR each, in order.
 | Delivery | The record of one order's journey: the rider, each tap and its time, the photo, how it was paid at the door |
 | At the door | A one-time account number for the order's amount, issued when the rider taps Arrived |
 | Remittance due | Cash a rider received for an order and has not yet handed to the business |
+| Presence | Whether a rider is free, busy or off, known to the platform for the person (by their proven phone) across every business they ride for, and shown to each business without naming the others |
+| Drop | Where an order goes: the customer's area (one of the business's zones), their address as typed, a landmark, and a map pin or shared location when they give one |
 
 ## 3. Where we are
 
@@ -37,12 +39,25 @@ Six milestones, D1 to D6, one PR each, in order.
 - `riders@1` platform connector: `list_riders` (active, zone), `get_rider`, `add_rider`, `retire_rider`, and the dispatch actions of D2 to D5. Permissions: `order.manage` for riders and assignment (as orders), `order.read` to see.
 - Chat for the owner: `riders` (the list and who holds what), `add rider Musa 0803…  Lekki Ajah`.
 
+### 4.1 A rider shared by businesses
+
+A rider is often added by several businesses. Each business has its own contact for the rider (decision 0039 keys contacts by the hash of a proven phone, per business), with its own name, zones and fee, under its own row-level security; nothing of one business's riders is visible to another. The rider's chat with the platform number already carries the business's name on every message, and every button is signed for the business, the order and the contact, so an Accept for one business cannot land on another's order.
+
+What the platform adds is **presence**, the one place the rider is known as a person: `rider_presence` keyed by the phone hash, written by the engine and read through a definer function that answers only a state, never a business or an order:
+
+1. **What Taskiem knows.** A rider holding an accepted delivery not yet delivered, in any business, is **busy** (with how many are open and since when); otherwise **free**.
+2. **What the rider says.** Words to the platform number that apply everywhere: `off` and `on`, `busy till 3pm`, `free`. A rider who said off is offered nothing by anyone until they say on; the business sees "off today".
+3. **How they answer.** An offer not answered in the window is passed; three unanswered in a day mark the rider **not answering** for that business until they tap anything.
+4. **Where they are.** Not known (§13); a rider's last Delivered zone that day is a weak stand-in for rotation.
+
+Each business sees the state beside the rider's name ("Musa: busy, 1 delivery", "Tunde: free", "Bola: off today") and nothing else; busy elsewhere says a rider is working for someone else right now, which a phone call would reveal too, and the owner would rather know than wait for no answer.
+
 ## 5. Assignment (D2)
 
 - An order that is accepted and, where paid online, paid, and whose fulfilment is delivery, becomes **ready to dispatch**. The order workflow (the `storefront-order` template, extended, or the new `dispatch-orders` template the storefront's "turn on deliveries" publishes) offers it to a rider:
   - **By hand**: the owner is asked "Who takes AK-7QX4KD to Lekki?" with the active riders in the zone as buttons (and "any rider"); or from chat, `order AK-7QX4KD to Musa`.
-  - **By rotation**: the rider in the order's zone with the fewest open deliveries, then the next; the owner can set "always ask me" instead.
-- The offer in the rider's chat: the pickup (the business's address), the drop address and landmark from the order, the customer's first name and phone, the items in one line, the fee, **Accept** and **Can't**. Buttons are signed for the business, the order and the rider's contact (as an invoice's are for a customer) and work once. No answer in the business's offer window (default 5 minutes) or **Can't** moves to the next rider; no rider left tells the owner, who can offer again later.
+  - **By rotation**: among the active riders in the order's zone who are not off or not answering, the free ones first, then the least loaded (open deliveries across every business, from presence), then the next; the owner can set "always ask me" instead. The owner assigning by hand sees each rider's state beside the name and may override it.
+- The offer in the rider's chat: the pickup (the business's address, with its directions link from the card), the drop (§6.1: the area, the address as typed, the landmark, and a map link when the customer gave a pin), the customer's first name and phone, the items in one line, the fee, **Accept** and **Can't**. Buttons are signed for the business, the order and the rider's contact (as an invoice's are for a customer) and work once. No answer in the business's offer window (default 5 minutes) or **Can't** moves to the next rider; no rider left tells the owner, who can offer again later.
 - Accepting records the delivery with its rider and moves the order to `dispatched`; every other offer for that order stops working. The customer is told "Your order is on its way with Musa" at pickup, not at acceptance.
 - `riders@1`: `offer` (order, rider or zone, window), `assign` (by hand), `release` (take it back from a rider).
 
@@ -52,6 +67,16 @@ Six milestones, D1 to D6, one PR each, in order.
 - **Quiet riders**: an order `dispatched` with no pickup in 20 minutes, or `on_the_way` with no arrival in 90 minutes (the business's settings), raises a leak to the owner naming the rider and the order, closed when the next tap comes or the owner releases the order.
 - The owner sees deliveries on the order ("Musa: picked up 12:04, arrived 12:41, delivered 12:43, photo") and on a **Deliveries** list for the day: open, late, done.
 - The order's statuses gain `dispatched`, `on_the_way`, `arrived`; `completed` stays the end. The customer's status page shows them in plain words.
+
+### 6.1 Where the order goes
+
+Taskiem knows the drop from the order form, and only from what the customer gives:
+
+- **Area** (D1 setting): the business lists the areas it delivers to as its zones, each with a delivery fee ("Lekki Phase 1 ₦1,500; Yaba ₦2,000"); the order form offers them as a choice, so every delivery order carries a zone and its fee, and the customer sees the fee before ordering. A business with no zones takes a free-text area.
+- **Address and landmark**: text fields on the form ("12 Admiralty Way, opposite the Shoprite gate"); kept sealed with the customer's details and shown to the rider only while they hold the order.
+- **A map pin**: the form takes a pasted maps link or the browser's "use my location" (a latitude and longitude, offered, never required), and a customer in chat may send a WhatsApp or Telegram **location** message in reply to "Where should the rider come?"; either becomes a maps link in the rider's offer. Nothing is geocoded by Taskiem: the pin is passed on as the customer gave it.
+- **The pickup**: the business card's address and its directions link.
+- **The rider's own location**: not tracked (§13). A rider may send a location message when they tap Arrived, kept on the delivery as proof beside the photo; nothing is drawn on a map.
 
 ## 7. Payment at the door (D4)
 
@@ -76,8 +101,8 @@ Six milestones, D1 to D6, one PR each, in order.
 
 | Id | Milestone | Size | Done when |
 | --- | --- | --- | --- |
-| D1 | Riders: the record, the Riders page, `riders@1` listing and adding, the tap-in link, chat `riders` and `add rider` | S | A rider added by phone taps in on WhatsApp and is reachable there; retired riders keep their deliveries |
-| D2 | Assignment: ready to dispatch, offer by hand or rotation with Accept and Can't, the offer window, release, `dispatched` | M | An order offered to two riders is held by exactly one; a rider who does not answer is passed; the owner sees who has it |
+| D1 | Riders: the record, zones with fees, the Riders page, `riders@1` listing and adding, the tap-in link, presence across businesses with `off`/`on`, chat `riders` and `add rider` | M | A rider added by phone taps in on WhatsApp and is reachable there; the same phone added by two businesses is two contacts and one presence; `off` stops offers from both; retired riders keep their deliveries |
+| D2 | Assignment: ready to dispatch, the drop from the form (area, address, landmark, pin), offer by hand or rotation using presence with Accept and Can't, the offer window, not answering, release, `dispatched` | M | An order offered to two riders is held by exactly one; a rider busy for another business is offered last and shown as busy without naming it; a rider who does not answer is passed; the owner sees who has it |
 | D3 | The delivery: Picked up, Arrived, Delivered with a photo, the customer told each step, Delivered completes the order, quiet-rider leaks, the Deliveries list | M | A rider's three taps run an order to completed with the customer told three times; a quiet rider raises a leak; the photo is on the order |
 | D4 | Pay at the door: the fulfilment option, the one-time number on Arrived, Paid to the rider, New number, Cash received with remittance due, per-rider lines in the close and the Money page, the optional rider account | M | A pay-on-delivery order is paid at the door and matched exactly with no one asked; a cash order shows the rider's remittance due until a transfer matches it |
 | D5 | Fees, payouts and ratings: fees accrued, Riders > Pay, `pay-riders-weekly` under approval net of cash owed, the rating tap | M | Two riders are paid in one approved run, one net of cash owed, both in the money log; a rating shows on the rider |
@@ -92,7 +117,8 @@ Order: D1 to D6. D4's door payment on the platform rail needs decision 0052's W3
 | Signed buttons | A rider's button works once, only from that rider's contact, only while the order is theirs; a released order's buttons die | `api` |
 | Exactly once | An order offered to several riders is accepted by one; a double tap on Delivered completes once; a door payment heard twice counts once | `engine/storefront`, `engine/moneylog` |
 | Money | The door payment matched exactly by reference; cash received as a receipt plus a remittance due; a remittance matched oldest first; the payout net of cash owed | `engine/matching`, `engine/moneylog`, `api` |
-| Chat | The rider's flow on WhatsApp, Telegram and SMS words; the owner's commands; the five languages | `api`, `engine/plain` |
+| Chat | The rider's flow on WhatsApp, Telegram and SMS words; the owner's commands; location messages; the five languages | `api`, `engine/plain` |
+| Presence | Two tenants, one phone: each sees its own contact and the shared state only; the definer function never answers a tenant or an order; `off` applies to both | `engine/db`, `api` |
 | Web | Riders, Deliveries, the order's delivery record, Riders > Pay, the status page's new words | Playwright |
 
 ## 12. Risks and open questions
@@ -108,4 +134,4 @@ Order: D1 to D6. D4's door payment on the platform rail needs decision 0052's W3
 
 ## 13. Out of scope
 
-Route planning and maps; live location; a rider app; multi-drop runs (one rider, several orders at once: a later addition to the offer); platform and fleet connectors; insurance and disputes.
+Route planning, distance and maps drawn by Taskiem; geocoding; live location tracking (a rider's shared location at Arrived is kept, not tracked); a rider app; multi-drop runs (one rider, several orders at once: a later addition to the offer); platform and fleet connectors; insurance and disputes.
