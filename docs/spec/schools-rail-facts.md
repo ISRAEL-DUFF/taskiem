@@ -103,7 +103,7 @@ So the plan's naming (§6.3: the school's name shortens, the child's never does)
 
 | Rail | Question |
 | --- | --- |
-| iswallet | Which fields of `wallet.credit.posted` carry the virtual account's `reference` and `account_number` and the `provider_reference` (is `source_ref` the provider reference?), and the payer's name and account? Until answered, credits reach the log only through the look-back |
+| iswallet | **Answered 27 October** ([guide](../integrations/iswallet-answers-2026-10-27-account-numbers.md), [plan](iswallet-account-numbers.md)): `data.virtual_account.reference` and `.account_number`, `data.amount` gross, `data.amount_credited` net. Was: which fields of `wallet.credit.posted` carry the virtual account's `reference` and `account_number` and the `provider_reference` (is `source_ref` the provider reference?), and the payer's name and account? Until answered, credits reach the log only through the look-back |
 | iswallet | Does the batch's `account_name` change what payers see, and what is its length limit? |
 | iswallet | Does iswallet charge its own fee (`fee`) on deposits, besides the provider's `fee_charged`? Which `type`, `direction` and `status` values does a deposit have, and can a listed deposit be pending? |
 | iswallet | Is there a limit on numbers per wallet, or a fee per number? Is the request body of the single-issue endpoint (`is_permanent`, `client_reference`) to be preferred over the batch? |

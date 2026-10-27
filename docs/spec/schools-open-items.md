@@ -17,7 +17,7 @@ Status as of 25 October 2026: B0 to B9 are all built. Nothing has run against a 
 
 ## Rail facts and account mappings (B0)
 
-- **iswallet's credit webhook is not mapped**: its documentation does not say which fields name the account, so iswallet credits reach the log through the look-back only (48 hours, every 15 minutes), up to 15 minutes late, until iswallet answers.
+- **iswallet's credit webhook is not mapped** (its fields are now known: the [plan](iswallet-account-numbers.md) maps it, I1): its documentation does not say which fields name the account, so iswallet credits reach the log through the look-back only (48 hours, every 15 minutes), up to 15 minutes late, until iswallet answers.
 - **Naming**: Paystack names accounts itself ("Business name/Customer name") and Flutterwave documents no name, so §6.3's "the school's name shortens and the child's never does" holds only on iswallet (its partner bank may still show its own) and Moniepoint. Names are capped at 31 characters on every rail, since no rail documents its limit.
 - **Fees**: no rail documents a fee per account issued; each charges per payment (iswallet's partner 1.4% at most ₦2,000; Paystack 1% at most ₦300; Flutterwave 2% plus VAT). Whether iswallet adds its own `fee` on deposits is unknown. The plan's "shown before a batch is issued" shows these words, not a figure.
 - **Gross or net**: counted from each rail's fields as read from the documentation (`amount_kobo` what the payer sent, `settled_kobo` and `fee_kobo` where given); Flutterwave's `amount`, `charged_amount` and `app_fee` are a reading to confirm in sandbox.
