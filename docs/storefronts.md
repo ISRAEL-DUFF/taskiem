@@ -102,7 +102,7 @@ Under Storefront > Forms, **Set up** adds the form's default workflow from the t
   - after the owner accepts (the default);
   - when ordering;
   - no online payment.
-- **Fulfilment:** pickup and/or delivery, with a note.
+- **Fulfilment:** pickup and/or delivery, with a note; with delivery, the **areas you deliver to**, each with its fee: the customer chooses one and its fee is added to the total ([dispatch](dispatch.md#delivery-areas)).
 - **Payments connection:** which of the organisation's connections takes payments (default `main`). A Paystack connection takes card payments and bank transfers; any other that opens account numbers for one payment (iswallet, including a business's wallet with Taskiem, Flutterwave, OPay) takes bank transfers only, named `connector/name` (`iswallet/taskiem`). With no other such rail, the page offers the Paystack connections as before.
 
 Saving a form re-publishes a published page, so its buttons match.

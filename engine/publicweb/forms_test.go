@@ -605,3 +605,51 @@ func TestFormStock(t *testing.T) {
 		}
 	}
 }
+
+// With delivery areas, the order form offers them with their fees (in
+// every theme); delivery needs one, and its fee is added to the total.
+// Pickup needs none.
+func TestOrderDeliveryArea(t *testing.T) {
+	for _, theme := range []string{"classic", "bold", "editorial"} {
+		p := samplePage(theme, 4)
+		p.Model.Actions = allForms()
+		p.Model.Actions[0].Zones = []storefront.Zone{{Name: "Yaba", FeeKobo: 150000}, {Name: "Akoka", FeeKobo: 0}}
+		e := formServer(t, p)
+		body, tok := e.form(t, "/a/order")
+		if !strings.Contains(body, `<option value="Yaba" data-fee="150000">Yaba, ₦1,500 delivery</option>`) || !strings.Contains(body, "Akoka, free delivery") {
+			t.Fatalf("%s: the areas are not offered: %s", theme, body)
+		}
+		*e.now = e.now.Add(20 * time.Second)
+		v := goodOrder(tok)
+		if w := e.post("/a/order", v); w.Code != 422 || !strings.Contains(w.Body.String(), "choose the area") {
+			t.Fatalf("%s: no area: %d %s", theme, w.Code, w.Body.String())
+		}
+		_, tok = e.form(t, "/a/order")
+		*e.now = e.now.Add(20 * time.Second)
+		v = goodOrder(tok)
+		v.Set("zone", "Yaba")
+		w := e.post("/a/order", v)
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("%s: %d %s", theme, w.Code, w.Body.String())
+		}
+		ref := regexp.MustCompile(`/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+		sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sub.Zone != "Yaba" || sub.DeliveryKobo != 150000 || sub.TotalKobo != 450200+150000 {
+			t.Fatalf("%s: %+v", theme, sub)
+		}
+		// Pickup: no area, no fee.
+		_, tok = e.form(t, "/a/order")
+		*e.now = e.now.Add(20 * time.Second)
+		v = goodOrder(tok)
+		v.Set("fulfilment", "pickup")
+		v.Set("zone", "Yaba")
+		w = e.post("/a/order", v)
+		ref = regexp.MustCompile(`/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+		if sub, _ := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload); sub.Zone != "" || sub.TotalKobo != 450200 {
+			t.Fatalf("%s: pickup %+v", theme, sub)
+		}
+	}
+}

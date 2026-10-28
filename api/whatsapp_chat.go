@@ -382,6 +382,10 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.reachStopStart(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
+	// A rider's off, on or busy (whatsapp_riders.go).
+	if done, err := s.riderWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
 	if wa.Own() {
 		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
 			return err
@@ -546,6 +550,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
+		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
@@ -684,6 +691,9 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"))
 		if s.Orders != nil {
 			lines = append(lines, c.t("wa.help.shop_orders"))
+		}
+		if s.Riders.Ready() {
+			lines = append(lines, c.t("wa.help.riders"))
 		}
 	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {

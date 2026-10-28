@@ -115,6 +115,10 @@ type Order struct {
 	Basket     []Line     `json:"basket"`
 	TotalKobo  int64      `json:"total_kobo"`
 	Fulfilment string     `json:"fulfilment,omitempty"`
+	// Zone is the delivery area the customer chose and DeliveryKobo its
+	// fee, part of TotalKobo (dispatch D1).
+	Zone         string `json:"zone,omitempty"`
+	DeliveryKobo int64  `json:"delivery_kobo,omitempty"`
 	Payment    string     `json:"payment"`
 	PaymentURL string     `json:"payment_url,omitempty"`
 	PaidAt     *time.Time `json:"paid_at"`
@@ -156,6 +160,7 @@ func (x Order) CustomerID() string { return x.subject }
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0),
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -168,7 +173,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	var basket, change []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
-		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.PaidBy)
+		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -452,12 +457,17 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if note != "" {
 		noteArg = &note
 	}
+	var zone *string
+	var delivery *int64
+	if sub.Zone != "" && sub.Fulfilment == "delivery" {
+		zone, delivery = &sub.Zone, &sub.DeliveryKobo
+	}
 	id := uuid.Must(uuid.NewV7())
 	if _, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
-		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
-		key, deposit, serviceID, serviceName, starts, ends, change, noteArg); err != nil {
+		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery); err != nil {
 		return Order{}, err
 	}
 	if b != nil {
@@ -607,6 +617,11 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	}
 	body := map[string]any{"reference": ord.Reference, "kind": ord.Kind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
 		"total": FormatNaira(ord.TotalKobo), "summary": Summary(ord.Basket), "fulfilment": ord.Fulfilment, "payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}}
+	if ord.Zone != "" {
+		// The delivery area and its fee (dispatch D1), in the summary too.
+		body["zone"], body["delivery_kobo"], body["delivery_fee"] = ord.Zone, ord.DeliveryKobo, FormatNaira(ord.DeliveryKobo)
+		body["summary"] = Summary(ord.Basket) + ", delivery to " + ord.Zone + " " + FormatNaira(ord.DeliveryKobo)
+	}
 	dedup := ord.ID.String()
 	if ord.Kind == "booking" {
 		body["booking"] = o.bookingBody(ord, autoConfirm)

@@ -96,6 +96,17 @@ type formData struct {
 	Pickup       bool
 	Delivery     bool
 	DeliveryNote string
+	// Zones are the delivery areas to choose from, with fees; Zone the
+	// one chosen (dispatch D1).
+	Zones []zoneItem
+	Zone  string
+}
+
+type zoneItem struct {
+	Name     string
+	Fee      string // "₦1,500 delivery", or "free delivery"
+	FeeKobo  int64
+	Selected bool
 }
 
 type formItem struct {
@@ -227,6 +238,15 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 	}
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
+		if act.Delivery {
+			for _, z := range act.Zones {
+				fee := "free delivery"
+				if z.FeeKobo > 0 {
+					fee = storefront.FormatNaira(z.FeeKobo) + " delivery"
+				}
+				f.Zones = append(f.Zones, zoneItem{Name: z.Name, Fee: fee, FeeKobo: z.FeeKobo})
+			}
+		}
 		switch {
 		case f.Pickup && !f.Delivery:
 			f.Fulfilment = "pickup"
@@ -367,6 +387,7 @@ func (f *formData) keep(v url.Values) {
 	if fl := v.Get("fulfilment"); f.Pickup && f.Delivery && (fl == "pickup" || fl == "delivery") {
 		f.Fulfilment = fl
 	}
+	f.chooseZone(v.Get("zone"))
 	for i := range f.Items {
 		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
@@ -416,6 +437,14 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 			sub.Fulfilment = f.Fulfilment
 		}
 		if sub.Fulfilment == "delivery" {
+			if len(f.Zones) > 0 {
+				z, ok := f.chooseZone(v.Get("zone"))
+				if !ok {
+					return sub, "Please choose the area you want it delivered to."
+				}
+				sub.Zone, sub.DeliveryKobo = z.Name, z.FeeKobo
+				sub.TotalKobo += z.FeeKobo
+			}
 			if c.Address, bad = text(v.Get("address"), maxAddress, true); bad || c.Address == "" {
 				f.Address = ""
 				return sub, "Please enter the delivery address (up to 200 characters)."
@@ -490,6 +519,21 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 		return "Please choose at least one item."
 	}
 	return ""
+}
+
+// chooseZone marks the delivery area named (exactly as offered) chosen;
+// false when it is none of them.
+func (f *formData) chooseZone(name string) (zoneItem, bool) {
+	var got zoneItem
+	ok := false
+	f.Zone = ""
+	for i := range f.Zones {
+		f.Zones[i].Selected = name != "" && f.Zones[i].Name == name
+		if f.Zones[i].Selected {
+			got, ok, f.Zone = f.Zones[i], true, name
+		}
+	}
+	return got, ok
 }
 
 func (f *formData) clearQty(id string) {

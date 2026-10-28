@@ -404,6 +404,22 @@
       "text": "Fill {name}.",
       "reviewed": false
     },
+    "rider.busy": {
+      "text": "You dey busy until {time}. Send FREE when you fit carry delivery again.",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "You don join as rider for {business}. Their delivery go dey come here. Send OFF when you no dey work, and ON when you dey.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "You don off. No business go give you delivery until you send ON.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "You don on. The business wey you dey ride for fit give you delivery.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "don cancel",
       "reviewed": false
@@ -1040,6 +1056,10 @@
       "text": "• *spent* (or *I spend*) plus how much and wetin e be for (*spent 12,000 on diesel at Total*), or *cash in* (*cash enter*) or *cash out* (*cash comot*) plus how much (*cash in 20,000 till*): I go write am for your money log",
       "reviewed": false
     },
+    "wa.help.riders": {
+      "text": "• *riders*: your riders and who dey free; *add rider* with name, phone and area: add one",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* and the workflow name: start am (you go confirm first)",
       "reviewed": false
@@ -1394,6 +1414,62 @@
     },
     "wa.receive.off": {
       "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Talk am like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the area no compulsory).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} don be your rider. I don send dem link by SMS make dem dey get your delivery for WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} don be your rider, we go reach dem for {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "on leave",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "busy till {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "by SMS until dem tap the link",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} don already dey ride for you.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "free",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Your riders:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "You never get rider. Add one like this: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "off",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "on {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "I no fit add that rider: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Add one: *add rider Musa 0803 123 4567 Lekki*",
       "reviewed": false
     },
     "wa.run.bad_inputs": {

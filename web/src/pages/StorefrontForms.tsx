@@ -24,7 +24,13 @@ import {
   pickable,
   type ConnectionName,
 } from "../forms/ConnectionPicker";
-import { TRANSFER_ONLY_LINE, formRails, paystackLine } from "../lib/orders";
+import {
+  TRANSFER_ONLY_LINE,
+  ZONE_LIMITS,
+  feeKobo,
+  formRails,
+  paystackLine,
+} from "../lib/orders";
 import type { ConnectorInfo } from "../api";
 
 /** The storefront's forms (order, question, call-back, booking): each needs
@@ -414,7 +420,67 @@ function OrderOptions({
           />
         </Field>
       )}
+      {form.delivery && <DeliveryAreas form={form} set={set} />}
     </>
+  );
+}
+
+/** The areas an order is delivered to, each with its fee: the order form
+ * asks for one and adds the fee to the total (dispatch D1). */
+function DeliveryAreas({
+  form,
+  set,
+}: {
+  form: ActionForm;
+  set: (p: Partial<ActionForm>) => void;
+}) {
+  const rows = form.zones;
+  const change = (i: number, patch: Partial<{ name: string; fee: string }>) =>
+    set({ zones: rows.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  return (
+    <fieldset className="sf-choices">
+      <legend>Areas you deliver to</legend>
+      <p className="hint" style={{ marginTop: 0 }}>
+        Customers choose their area and see its delivery fee before they
+        order; the fee is added to the total. Leave the fee empty for free
+        delivery. Your riders cover these areas.
+      </p>
+      {rows.map((r, i) => (
+        <div key={i} className="toolbar" style={{ alignItems: "flex-end" }}>
+          <Field label={`Area ${i + 1}`}>
+            <input
+              value={r.name}
+              placeholder="Lekki Phase 1"
+              maxLength={ZONE_LIMITS.name}
+              onChange={(e) => change(i, { name: e.target.value })}
+            />
+          </Field>
+          <Field label={`Fee for area ${i + 1} (₦)`}>
+            <input
+              value={r.fee}
+              inputMode="decimal"
+              placeholder="1500"
+              onChange={(e) => change(i, { fee: e.target.value })}
+              aria-invalid={Number.isNaN(feeKobo(r.fee))}
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={() => set({ zones: rows.filter((_, j) => j !== i) })}
+          >
+            Remove<span className="sr-only"> area {i + 1}</span>
+          </button>
+        </div>
+      ))}
+      {rows.length < ZONE_LIMITS.zones && (
+        <button
+          type="button"
+          onClick={() => set({ zones: [...rows, { name: "", fee: "" }] })}
+        >
+          Add an area
+        </button>
+      )}
+    </fieldset>
   );
 }
 

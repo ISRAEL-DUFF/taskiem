@@ -1,0 +1,235 @@
+// Package riders is the riders platform connector (docs/dispatch.md,
+// decision 0053): what workflows read and do with the business's own
+// riders (list, read, add, retire). Unlike provider connectors it acts on
+// Taskiem's own records, for the tenant of the run calling it
+// (connector.CallerFrom), never one named in its input.
+package riders
+
+import (
+	"context"
+	_ "embed"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/effects"
+	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/storefront"
+)
+
+//go:embed manifest.yaml
+var manifest []byte
+
+// Ops is what the actions call: *riders.Riders.
+type Ops interface {
+	List(ctx context.Context, tenant uuid.UUID, f riders.Filter) ([]riders.Rider, error)
+	Get(ctx context.Context, tenant, id uuid.UUID) (riders.Rider, error)
+	Add(ctx context.Context, tenant uuid.UUID, in riders.In, actor string) (riders.Rider, error)
+	Retire(ctx context.Context, tenant, id uuid.UUID, actor string) (riders.Rider, error)
+}
+
+// New returns the connector; ops nil makes every action fail plainly.
+func New(ops Ops) *connector.Connector {
+	m := connector.MustParse(manifest)
+	a := &actions{ops: ops}
+	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
+		"list_riders":  connector.ActionFunc(a.list),
+		"get_rider":    connector.ActionFunc(a.get),
+		"add_rider":    connector.ActionFunc(a.add),
+		"retire_rider": connector.ActionFunc(a.retire),
+	}}
+}
+
+type actions struct{ ops Ops }
+
+func (a *actions) caller(ctx context.Context) (connector.Caller, error) {
+	c, ok := connector.CallerFrom(ctx)
+	if !ok {
+		return c, fmt.Errorf("riders actions run only in a workflow run: %w", effects.ErrFatal)
+	}
+	if a.ops == nil {
+		return c, fmt.Errorf("riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return c, nil
+}
+
+// Out is a rider as workflows read them.
+func Out(x riders.Rider) map[string]any {
+	out := map[string]any{"id": x.ID.String(), "name": x.Name, "phone": x.Phone, "zones": x.Zones, "fee_kobo": x.FeeKobo,
+		"fee": storefront.FormatNaira(x.FeeKobo), "active": x.Active, "retired": x.RetiredAt != nil, "reached": x.Reached, "state": x.Presence.State}
+	if x.Presence.State == "busy" && x.Presence.Until != nil {
+		out["busy_until"] = x.Presence.Until.Format(time.RFC3339)
+	}
+	return out
+}
+
+func (a *actions) list(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	zone, _ := req.Input["zone"].(string)
+	all, _ := req.Input["include_inactive"].(bool)
+	list, err := a.ops.List(ctx, c.Tenant, riders.Filter{Zone: zone, ActiveOnly: !all})
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	out := make([]any, len(list))
+	for i, x := range list {
+		out[i] = Out(x)
+	}
+	return connector.Response{Output: map[string]any{"riders": out, "count": len(out)}}, nil
+}
+
+func riderID(req connector.Request) (uuid.UUID, error) {
+	s, _ := req.Input["id"].(string)
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("a rider's id is required: %w", effects.ErrFatal)
+	}
+	return id, nil
+}
+
+func (a *actions) get(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	id, err := riderID(req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	x, err := a.ops.Get(ctx, c.Tenant, id)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: Out(x)}, nil
+}
+
+func (a *actions) add(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	var in riders.In
+	if s, ok := req.Input["name"].(string); ok {
+		in.Name = &s
+	}
+	if s, ok := req.Input["phone"].(string); ok {
+		in.Phone = &s
+	}
+	if list, ok := req.Input["zones"].([]any); ok {
+		zones := make([]string, 0, len(list))
+		for _, z := range list {
+			if s, ok := z.(string); ok {
+				zones = append(zones, s)
+			}
+		}
+		in.Zones = &zones
+	}
+	if n, ok := number(req.Input["fee_kobo"]); ok {
+		in.FeeKobo = &n
+	}
+	x, err := a.ops.Add(ctx, c.Tenant, in, "workflow:"+c.Run.String())
+	already := errors.Is(err, riders.ErrExists)
+	if err != nil && !already {
+		return connector.Response{}, classify(err)
+	}
+	out := Out(x)
+	out["already"] = already
+	return connector.Response{Output: out}, nil
+}
+
+func (a *actions) retire(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	id, err := riderID(req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	x, err := a.ops.Retire(ctx, c.Tenant, id, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: Out(x)}, nil
+}
+
+// number reads a JSON number (float64 from decoding, or an int).
+func number(v any) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), n == float64(int64(n))
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	}
+	return 0, false
+}
+
+func classify(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, riders.ErrInvalid), errors.Is(err, riders.ErrNoRider):
+		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
+	}
+	return err
+}
+
+// Late is Ops set after the connector is registered: the registry is built
+// before the vault and the database riders need.
+type Late struct {
+	mu  sync.RWMutex
+	ops Ops
+}
+
+// Set binds the operations.
+func (l *Late) Set(ops Ops) { l.mu.Lock(); l.ops = ops; l.mu.Unlock() }
+
+func (l *Late) get() (Ops, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.ops == nil {
+		return nil, fmt.Errorf("riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return l.ops, nil
+}
+
+func (l *Late) List(ctx context.Context, tenant uuid.UUID, f riders.Filter) ([]riders.Rider, error) {
+	ops, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return ops.List(ctx, tenant, f)
+}
+
+func (l *Late) Get(ctx context.Context, tenant, id uuid.UUID) (riders.Rider, error) {
+	ops, err := l.get()
+	if err != nil {
+		return riders.Rider{}, err
+	}
+	return ops.Get(ctx, tenant, id)
+}
+
+func (l *Late) Add(ctx context.Context, tenant uuid.UUID, in riders.In, actor string) (riders.Rider, error) {
+	ops, err := l.get()
+	if err != nil {
+		return riders.Rider{}, err
+	}
+	return ops.Add(ctx, tenant, in, actor)
+}
+
+func (l *Late) Retire(ctx context.Context, tenant, id uuid.UUID, actor string) (riders.Rider, error) {
+	ops, err := l.get()
+	if err != nil {
+		return riders.Rider{}, err
+	}
+	return ops.Retire(ctx, tenant, id, actor)
+}

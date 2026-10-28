@@ -449,6 +449,15 @@ export function StorefrontOrder() {
                           )}
                         </li>
                       ))}
+                      {o.zone && (
+                        <li>
+                          Delivery to {o.zone}
+                          <span className="sf-price">
+                            {" "}
+                            {formatPrice(o.delivery_kobo ?? 0)}
+                          </span>
+                        </li>
+                      )}
                     </ul>
                   </dd>
                   <dt>Total</dt>

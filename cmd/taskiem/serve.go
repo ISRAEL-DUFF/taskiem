@@ -31,6 +31,7 @@ import (
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
@@ -58,6 +59,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
@@ -531,6 +533,9 @@ type engine struct {
 	// invoices are the business's invoices to its customers (decision
 	// 0045, T3).
 	invoices *invoicing.Invoices
+	// riders are the businesses' own riders (dispatch D1); nil without
+	// the message hash key.
+	riders   *riders.Riders
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -581,6 +586,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// The storefront platform connector's actions are bound to the orders
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
+	riderOps := &ridersconn.Late{}
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
@@ -590,6 +596,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Invoices = invoiceOps
 	copts.Schools = schoolOps
 	copts.Storefront = orders
+	copts.Riders = riderOps
 	copts.Forms = formOps
 	copts.Email = emailOps
 	copts.Notify = tell
@@ -668,6 +675,18 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		n.Messages, n.Reach = e.messages, e.reach
 	}
 	tell.Set(n)
+	// Riders (dispatch D1): people outside the business, reached as its
+	// contacts are; the tap-in link goes by SMS to the form host's page.
+	if e.reach != nil {
+		e.riders = &riders.Riders{Pool: pool, Vault: vault, Book: e.reach}
+		if e.messages != nil {
+			e.riders.Messages = e.messages
+		}
+		if e.forms != nil && e.forms.FormHost != "" {
+			e.riders.PageBase = "https://" + e.forms.FormHost
+		}
+		riderOps.Set(e.riders)
+	}
 	// Invoices (decision 0045): their pages are on the form host.
 	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Start: e.store.Start, Logger: log.With("component", "invoices")}
 	// A customer who asked for the business's updates on a chat app gets
@@ -1447,6 +1466,7 @@ func (e *engine) chat(srv *api.Server) {
 	// Updates for people outside a tenant (N11): links they send back,
 	// STOP, and messages to them.
 	srv.Reach, srv.Messages = e.reach, e.messages
+	srv.Riders = e.riders
 	if e.forms != nil {
 		keys := e.forms.Keys
 		srv.ReachKeys = &keys

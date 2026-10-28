@@ -504,6 +504,26 @@
       "reviewed": true,
       "context": "Readiness: a setting (variable) the workflow reads is not set"
     },
+    "rider.busy": {
+      "text": "You're busy until {time}. Send FREE when you can take deliveries again.",
+      "reviewed": true,
+      "context": "A rider said busy till a time (Lagos time, like 15:00); keep FREE in English"
+    },
+    "rider.linked": {
+      "text": "You're set up as a rider for {business}. Their deliveries will come here. Send OFF when you're not working and ON when you are.",
+      "reviewed": true,
+      "context": "A rider of the business tapped its link: their deliveries come here; keep OFF and ON in English"
+    },
+    "rider.off": {
+      "text": "You're off. No business will offer you deliveries until you send ON.",
+      "reviewed": true,
+      "context": "A rider said off: no business they ride for offers them deliveries; keep ON in English"
+    },
+    "rider.on": {
+      "text": "You're on. The businesses you ride for can offer you deliveries.",
+      "reviewed": true,
+      "context": "A rider said on or free: the businesses they ride for can offer them deliveries"
+    },
     "run.status.cancelled": {
       "text": "cancelled",
       "reviewed": true,
@@ -1299,6 +1319,11 @@
       "reviewed": true,
       "context": "Help line, with invoice.manage; keep the command words and the examples in English"
     },
+    "wa.help.riders": {
+      "text": "• *riders*: your riders and who is free; *add rider* with a name, phone and areas: add one",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
+    },
     "wa.help.run": {
       "text": "• *run* and a workflow's name: start it (you confirm first)",
       "reviewed": true,
@@ -1743,6 +1768,76 @@
       "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
       "reviewed": true,
       "context": "The owner asked for their account number or balance, but receiving money with Taskiem is off"
+    },
+    "wa.riders.add_how": {
+      "text": "Say it like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the areas are optional).",
+      "reviewed": true,
+      "context": "The owner's add rider was missing the name or phone; keep the command in English"
+    },
+    "wa.riders.added": {
+      "text": "{name} is now your rider. I sent them a link by SMS to get your deliveries on WhatsApp.",
+      "reviewed": true,
+      "context": "The owner added a rider, who got the link by SMS"
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} is now your rider, reached on {app}.",
+      "reviewed": true,
+      "context": "The owner added a rider who already gets the business's messages on a chat app"
+    },
+    "wa.riders.away": {
+      "text": "on leave",
+      "reviewed": true,
+      "context": "A rider the owner marked not active"
+    },
+    "wa.riders.busy": {
+      "text": "busy till {time}",
+      "reviewed": true,
+      "context": "A rider's state in the owner's list, with a Lagos time"
+    },
+    "wa.riders.by_sms": {
+      "text": "by SMS until they tap the link",
+      "reviewed": true,
+      "context": "A rider who has not tapped the link yet is reached by SMS"
+    },
+    "wa.riders.exists": {
+      "text": "{name} already rides for you.",
+      "reviewed": true,
+      "context": "The owner added a rider whose phone already rides for them"
+    },
+    "wa.riders.free": {
+      "text": "free",
+      "reviewed": true,
+      "context": "A rider's state in the owner's list"
+    },
+    "wa.riders.head": {
+      "text": "Your riders:",
+      "reviewed": true,
+      "context": "Heading of the owner's list of riders"
+    },
+    "wa.riders.none": {
+      "text": "You have no riders yet. Add one like this: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": true,
+      "context": "The owner asked for their riders and has none; keep the command in English"
+    },
+    "wa.riders.off": {
+      "text": "off",
+      "reviewed": true,
+      "context": "A rider's state in the owner's list: they said off"
+    },
+    "wa.riders.on_app": {
+      "text": "on {app}",
+      "reviewed": true,
+      "context": "Where a rider is reached: WhatsApp or Telegram"
+    },
+    "wa.riders.refused": {
+      "text": "I could not add that rider: {reason}",
+      "reviewed": true,
+      "context": "Adding a rider was refused; reason is in English"
+    },
+    "wa.riders.tail": {
+      "text": "Add one: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": true,
+      "context": "After the owner's list of riders; keep the command in English"
     },
     "wa.run.bad_inputs": {
       "text": "The inputs do not fit {workflow}: {problems}. Send *run* again.",

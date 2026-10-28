@@ -38,6 +38,10 @@ type Submission struct {
 	Basket     []Line   `json:"basket,omitempty"`
 	TotalKobo  int64    `json:"total_kobo"`
 	Fulfilment string   `json:"fulfilment,omitempty"` // pickup or delivery
+	// Zone is the delivery area chosen and DeliveryKobo its fee, part of
+	// TotalKobo (dispatch D1).
+	Zone         string `json:"zone,omitempty"`
+	DeliveryKobo int64  `json:"delivery_kobo,omitempty"`
 	Payment    string   `json:"payment"`              // after_accept, at_order or none
 	Channel    string   `json:"channel"`              // direct or embed
 	// StatusKey is the secret of the customer's status link, so a payment

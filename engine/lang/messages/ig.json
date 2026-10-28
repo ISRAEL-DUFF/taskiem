@@ -404,6 +404,22 @@
       "text": "Dejupụta {name}.",
       "reviewed": false
     },
+    "rider.busy": {
+      "text": "Ị na-arụ ọrụ ruo {time}. Zipu FREE mgbe ị nwere ike ibu ihe ọzọ.",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "Ị bụzi onye na-ebuga ihe maka {business}. Ihe ha ga-ebuga ga-abịa ebe a. Zipu OFF mgbe ị naghị arụ ọrụ, na ON mgbe ị na-arụ.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "Ị kwụsịla. Ọ dịghị azụmahịa ga-enye gị ihe ibuga ruo mgbe ị zipụrụ ON.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "Ị malitela ọzọ. Azụmahịa ị na-ebuere ihe nwere ike inye gị ihe ibuga.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "akagbuola",
       "reviewed": false
@@ -1040,6 +1056,10 @@
       "text": "• *spent* (ma ọ bụ *emefuru m*) na ego ole na ihe e ji ya mee (*spent 12,000 on diesel at Total*), ma ọ bụ *cash in* (*ego batara*) ma ọ bụ *cash out* (*ego pụrụ*) na ego ole (*cash in 20,000 till*): m ga-edenye ya n'akwụkwọ ego unu",
       "reviewed": false
     },
+    "wa.help.riders": {
+      "text": "• *riders*: ndị na-ebugara gị ihe na onye nọ ọdụ; *add rider* na aha, ekwentị na ebe: tinye otu",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* na aha usoro ọrụ: malite ya (ị ga-ebu ụzọ kwado)",
       "reviewed": false
@@ -1394,6 +1414,62 @@
     },
     "wa.receive.off": {
       "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Kwuo ya otú a: *add rider Musa 0803 123 4567 Lekki Ajah* (ebe ndị ahụ adịghị mkpa).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} bụzi onye na-ebugara gị ihe. Ezigara m ha njikọ site na SMS ka ha nweta ihe ị ga-ebuga na WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} bụzi onye na-ebugara gị ihe, a ga-achọta ha na {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "nọ n'ezumike",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "na-arụ ọrụ ruo {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "site na SMS ruo mgbe ha pịrị njikọ ahụ",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} na-ebugara gị ihe na mbụ.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "nọ ọdụ",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Ndị na-ebugara gị ihe:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "Ị nweghị onye na-ebuga ihe ka. Tinye otu dị otú a: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "anọghị n'ọrụ",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "na {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "Enweghị m ike itinye onye ahụ: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Tinye otu: *add rider Musa 0803 123 4567 Lekki*",
       "reviewed": false
     },
     "wa.run.bad_inputs": {

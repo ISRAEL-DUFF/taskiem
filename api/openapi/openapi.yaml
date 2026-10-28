@@ -112,6 +112,9 @@ tags:
 - name: Storefront
   description: The organisation's one-page public storefront, its catalogue and its photos.
   x-taskiem-guide: storefronts
+- name: Riders
+  description: The business's own riders, who deliver its orders (dispatch).
+  x-taskiem-guide: dispatch
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
@@ -5319,6 +5322,186 @@ paths:
                 properties:
                   order:
                     $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders:
+    get:
+      operationId: listRiders
+      tags:
+      - Riders
+      summary: The business's riders
+      description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: retired
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The riders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [riders, zones]
+                properties:
+                  riders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Rider'
+                  zones:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeliveryZone'
+                  tap_in_url:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addRider
+      tags:
+      - Riders
+      summary: Add a rider
+      description: By name and phone, with the areas they cover and their fee per delivery. The rider gets the tap-in link by SMS until they tap it. A retired rider added again comes back; 409 when the phone already rides for the business.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderInput'
+      responses:
+        '201':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}:
+    patch:
+      operationId: updateRider
+      tags:
+      - Riders
+      summary: Change a rider
+      description: Their name, areas, fee, or whether they are active. The phone cannot change; retire them and add the new number.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderInput'
+      responses:
+        '200':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/retire:
+    post:
+      operationId: retireRider
+      tags:
+      - Riders
+      summary: Retire a rider
+      description: They are offered nothing more and keep their deliveries. Retiring one already retired changes nothing.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/invite:
+    post:
+      operationId: inviteRider
+      tags:
+      - Riders
+      summary: Send the tap-in link again
+      description: By SMS; 409 within ten minutes of the last.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/bookings:
@@ -23243,6 +23426,12 @@ components:
           type: boolean
         delivery_note:
           type: string
+        zones:
+          type: array
+          maxItems: 30
+          description: The areas an order is delivered to, each with its fee (dispatch D1); the form asks for one with delivery and adds its fee to the total
+          items:
+            $ref: '#/components/schemas/DeliveryZone'
         deposit_percent:
           type: integer
           minimum: 0
@@ -23252,6 +23441,87 @@ components:
           type: string
           enum: [full, keep_deposit, '']
           description: What a customer cancelling a paid booking gets back (default full)
+    DeliveryZone:
+      type: object
+      additionalProperties: false
+      required: [name, fee_kobo]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        fee_kobo:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+    Rider:
+      type: object
+      required: [id, name, phone, zones, fee_kobo, active, reached, presence, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        zones:
+          type: array
+          items:
+            type: string
+        fee_kobo:
+          type: integer
+          description: Their fee per delivery
+        active:
+          type: boolean
+          description: False while on leave (kept, offered nothing)
+        reached:
+          type: string
+          enum: [whatsapp, telegram, sms]
+          description: The chat app they tapped in on, or sms until they do
+        presence:
+          type: object
+          required: [state]
+          description: What the rider said to Taskiem, whichever business they ride for (never which)
+          properties:
+            state:
+              type: string
+              enum: [free, busy, "off"]
+            until:
+              type: string
+              format: date-time
+            since:
+              type: string
+              format: date-time
+        invited_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        created_at:
+          type: string
+          format: date-time
+        retired_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+    RiderInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        phone:
+          type: string
+          description: A Nigerian mobile number; set when adding, and cannot change
+        zones:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+          description: The delivery areas they cover (the order form's, when it has some)
+        fee_kobo:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+        active:
+          type: boolean
     StorefrontAvailability:
       type: object
       additionalProperties: false
@@ -24063,6 +24333,12 @@ components:
           type: integer
         fulfilment:
           type: string
+        zone:
+          type: string
+          description: The delivery area the customer chose (dispatch D1)
+        delivery_kobo:
+          type: integer
+          description: The area's delivery fee, part of total_kobo
         payment:
           type: string
           enum: [after_accept, at_order, none]

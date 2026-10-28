@@ -1,6 +1,6 @@
 # Dispatch: a business's own riders, deliveries in chat, payment at the door
 
-Status: **Draft** 27 October 2026, for review · Decision: [0053](../decisions/0053-dispatch-with-own-riders.md) · Builds on: [storefronts](../storefronts.md) (orders), [reaching people outside](../decisions/0039-reaching-people-outside.md), [invoices and the money log](invoices-and-money-log.md) (one-time account numbers, matching), [leaks](../leaks.md), [media](../media.md) · Stories: [user stories](../strategy/user-stories.md) 50–52, 65, 105, 106
+Status: **Building** · D1 built 28 October 2026 ([guide](../dispatch.md)); D2 to D6 to come · Decision: [0053](../decisions/0053-dispatch-with-own-riders.md) · Builds on: [storefronts](../storefronts.md) (orders), [reaching people outside](../decisions/0039-reaching-people-outside.md), [invoices and the money log](invoices-and-money-log.md) (one-time account numbers, matching), [leaks](../leaks.md), [media](../media.md) · Stories: [user stories](../strategy/user-stories.md) 50–52, 65, 105, 106
 
 ## 1. Summary
 
@@ -38,6 +38,7 @@ Six milestones, D1 to D6, one PR each, in order.
 - A `riders` record per business: `riders` (id, tenant, name sealed, phone as a contact under 0039, zones as labels, active, fee per delivery default, created, retired). Riders are listed on **Riders** (Storefront > Riders), added by name, phone and zones, retired rather than deleted (their deliveries stay). Adding one sends the tap-in link ("Tap to get Ada Stores' deliveries on WhatsApp"); until the rider taps, they are reached by SMS.
 - `riders@1` platform connector: `list_riders` (active, zone), `get_rider`, `add_rider`, `retire_rider`, and the dispatch actions of D2 to D5. Permissions: `order.manage` for riders and assignment (as orders), `order.read` to see.
 - Chat for the owner: `riders` (the list and who holds what), `add rider Musa 0803…  Lekki Ajah`.
+- **As built (D1):** permissions are `storefront.manage` throughout (orders have no separate permissions; the plan's `order.manage` and `order.read` do not exist). The record is keyed by the phone's keyed hash (the reach book's), not a contact row: a rider exists from the moment they are added, and is reached on the chat app of the contact with the same hash once they tap in. The tap-in link is the business's standing page (`/u/<id>`), sent by SMS; a rider tapping it is told "You're set up as a rider for …". The areas live in the order form's options (`zones`); `off` lasts until `on`, plain `busy` until the end of the day. The rider's words are read on WhatsApp and Telegram; by SMS reply they come with the offers (D2). Busy from open deliveries, and not answering, come with D2.
 
 ### 4.1 A rider shared by businesses
 
@@ -101,7 +102,7 @@ Taskiem knows the drop from the order form, and only from what the customer give
 
 | Id | Milestone | Size | Done when |
 | --- | --- | --- | --- |
-| D1 | Riders: the record, zones with fees, the Riders page, `riders@1` listing and adding, the tap-in link, presence across businesses with `off`/`on`, chat `riders` and `add rider` | M | A rider added by phone taps in on WhatsApp and is reachable there; the same phone added by two businesses is two contacts and one presence; `off` stops offers from both; retired riders keep their deliveries |
+| D1 (built) | Riders: the record, zones with fees, the Riders page, `riders@1` listing and adding, the tap-in link, presence across businesses with `off`/`on`, chat `riders` and `add rider` | M | A rider added by phone taps in on WhatsApp and is reachable there; the same phone added by two businesses is two contacts and one presence; `off` stops offers from both; retired riders keep their deliveries |
 | D2 | Assignment: ready to dispatch, the drop from the form (area, address, landmark, pin), offer by hand or rotation using presence with Accept and Can't, the offer window, not answering, release, `dispatched` | M | An order offered to two riders is held by exactly one; a rider busy for another business is offered last and shown as busy without naming it; a rider who does not answer is passed; the owner sees who has it |
 | D3 | The delivery: Picked up, Arrived, Delivered with a photo, the customer told each step, Delivered completes the order, quiet-rider leaks, the Deliveries list | M | A rider's three taps run an order to completed with the customer told three times; a quiet rider raises a leak; the photo is on the order |
 | D4 | Pay at the door: the fulfilment option, the one-time number on Arrived, Paid to the rider, New number, Cash received with remittance due, per-rider lines in the close and the Money page, the optional rider account | M | A pay-on-delivery order is paid at the door and matched exactly with no one asked; a cash order shows the rider's remittance due until a transfer matches it |

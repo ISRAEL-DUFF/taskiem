@@ -42,7 +42,9 @@
 <div class="box"><label for="f-email">Email · optional</label>
 <input id="f-email" type="email" name="email" value="{{.Email}}" maxlength="254" autocomplete="email"></div>
 {{if eq .Kind "order"}}
-{{if .Delivery}}<div class="box"><label for="f-address">Delivery address{{if .Pickup}} · for delivery{{end}}</label>
+{{if .Delivery}}{{with .Zones}}<div class="box"><label for="f-zone">Delivery area{{if $.Pickup}} · for delivery{{end}}</label>
+<select id="f-zone" name="zone"{{if not $.Pickup}} required{{end}}><option value="">Choose your area</option>{{range .}}<option value="{{.Name}}" data-fee="{{.FeeKobo}}"{{if .Selected}} selected{{end}}>{{.Name}}, {{.Fee}}</option>{{end}}</select></div>
+{{end}}<div class="box"><label for="f-address">Delivery address{{if .Pickup}} · for delivery{{end}}</label>
 <textarea id="f-address" name="address" rows="2" maxlength="200" autocomplete="street-address"{{if not .Pickup}} required{{end}}>{{.Address}}</textarea></div>
 {{end}}
 <div class="box"><label for="f-message">Message · optional</label>

@@ -404,6 +404,22 @@
       "text": "Cika {name}.",
       "reviewed": false
     },
+    "rider.busy": {
+      "text": "Kana da aiki har zuwa {time}. Aika FREE idan za ka iya karɓar kaya kuma.",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "An saka ka a matsayin mai kai kaya na {business}. Kayan da za a kai za su zo nan. Aika OFF idan ba ka aiki, da ON idan kana aiki.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "Ka tsaya. Babu kasuwancin da zai ba ka kaya ka kai har sai ka aika ON.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "Ka dawo. Kasuwancin da kake kai wa kaya za su iya ba ka kaya ka kai.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "an soke",
       "reviewed": false
@@ -1040,6 +1056,10 @@
       "text": "• *spent* (ko *na kashe*) tare da adadin kuɗi da abin da aka kashe a kai (*spent 12,000 on diesel at Total*), ko *cash in* (*kuɗi ya shigo*) ko *cash out* (*kuɗi ya fita*) da adadi (*cash in 20,000 till*): zan rubuta shi a littafin kuɗinku",
       "reviewed": false
     },
+    "wa.help.riders": {
+      "text": "• *riders*: masu kai maka kaya da wanda ba shi da aiki; *add rider* da suna, waya da yankuna: ƙara ɗaya",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* da sunan aiki: fara shi (za ka tabbatar da farko)",
       "reviewed": false
@@ -1394,6 +1414,62 @@
     },
     "wa.receive.off": {
       "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Faɗa haka: *add rider Musa 0803 123 4567 Lekki Ajah* (yankunan ba dole ba ne).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} ya zama mai kai maka kaya. Na aika masa mahaɗi ta SMS don ya riƙa samun kayanka a WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} ya zama mai kai maka kaya, za a same shi a {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "yana hutu",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "yana aiki har {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "ta SMS har sai sun taɓa mahaɗin",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} yana kai maka kaya tun da.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "ba shi da aiki",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Masu kai maka kaya:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "Ba ka da mai kai kaya tukuna. Ƙara ɗaya haka: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "baya aiki",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "a {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "Ban iya ƙara wannan mai kai kaya ba: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Ƙara ɗaya: *add rider Musa 0803 123 4567 Lekki*",
       "reviewed": false
     },
     "wa.run.bad_inputs": {

@@ -404,6 +404,22 @@
       "text": "Ẹ kọ {name} sí.",
       "reviewed": false
     },
+    "rider.busy": {
+      "text": "O ń ṣe ọwọ́ dí títí di {time}. Fi FREE ránṣẹ́ nígbà tí o bá lè gba iṣẹ́ ìfijíṣẹ́ padà.",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "O ti di ẹni tó ń bá {business} gbé ọjà. Àwọn iṣẹ́ ìfijíṣẹ́ wọn yóò máa wá síbí. Fi OFF ránṣẹ́ nígbà tí o kò bá ṣiṣẹ́, àti ON nígbà tí o bá ń ṣiṣẹ́.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "O ti dá iṣẹ́ dúró. Kò sí oníṣòwò tí yóò fún ọ ní iṣẹ́ ìfijíṣẹ́ títí o fi fi ON ránṣẹ́.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "O ti padà sẹ́nu iṣẹ́. Àwọn oníṣòwò tí o ń bá ṣiṣẹ́ lè fún ọ ní iṣẹ́ ìfijíṣẹ́.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "ti fagilé",
       "reviewed": false
@@ -1040,6 +1056,10 @@
       "text": "• *spent* (tàbí *mo ná*) pẹ̀lú iye owó àti ohun tí ẹ ná an sí (*spent 12,000 on diesel at Total*), tàbí *cash in* (*owó wọlé*) tàbí *cash out* (*owó jáde*) àti iye owó (*cash in 20,000 till*): yóò kọ ọ́ sínú àkọsílẹ̀ owó yín",
       "reviewed": false
     },
+    "wa.help.riders": {
+      "text": "• *riders*: àwọn tó ń gbé ọjà rẹ àti ẹni tó wà lófo; *add rider* pẹ̀lú orúkọ, fóònù àti agbègbè: fi ọ̀kan kún un",
+      "reviewed": false
+    },
     "wa.help.run": {
       "text": "• *run* àti orúkọ iṣẹ́ kan: láti bẹ̀rẹ̀ rẹ̀ (ẹ ó kọ́kọ́ fìdí rẹ̀ múlẹ̀)",
       "reviewed": false
@@ -1394,6 +1414,62 @@
     },
     "wa.receive.off": {
       "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Sọ ọ́ báyìí: *add rider Musa 0803 123 4567 Lekki Ajah* (àwọn agbègbè kò pọn dandan).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} ti di ẹni tó ń gbé ọjà rẹ. Mo ti fi ìjápọ̀ ránṣẹ́ sí wọn nípasẹ̀ SMS kí wọ́n lè máa gba iṣẹ́ ìfijíṣẹ́ rẹ lórí WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} ti di ẹni tó ń gbé ọjà rẹ, a ó máa rí wọn lórí {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "wà nísinmi",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "ọwọ́ dí títí di {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "nípasẹ̀ SMS títí wọn yóò fi tẹ ìjápọ̀ náà",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} ti ń bá ọ gbé ọjà tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "wà lófo",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Àwọn tó ń gbé ọjà rẹ:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "O kò tíì ní ẹni tó ń gbé ọjà. Fi ọ̀kan kún un báyìí: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "kò ṣiṣẹ́",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "lórí {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "Mi ò lè fi ẹni náà kún un: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Fi ọ̀kan kún un: *add rider Musa 0803 123 4567 Lekki*",
       "reviewed": false
     },
     "wa.run.bad_inputs": {

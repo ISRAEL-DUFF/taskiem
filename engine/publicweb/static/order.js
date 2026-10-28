@@ -7,6 +7,7 @@
   if (!form) return;
   var out = form.querySelector("[data-total]");
   var inputs = form.querySelectorAll("input[data-price]");
+  var zone = form.querySelector("select[name=zone]");
   function naira(k) {
     var whole = String(Math.floor(k / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     var frac = k % 100;
@@ -20,7 +21,14 @@
       var most = parseInt(inputs[i].getAttribute("max"), 10) || 20;
       if (q > 0 && q <= most && p >= 0) total += q * p;
     }
-    out.textContent = total > 0 ? "Total: " + naira(total) : "";
+    // The delivery area's fee, while delivery is what is chosen.
+    var fee = 0;
+    var how = form.querySelector("input[name=fulfilment]:checked");
+    var opt = zone && zone.options[zone.selectedIndex];
+    if (total > 0 && opt && opt.value && (!form.querySelector("input[name=fulfilment]") || (how && how.value === "delivery"))) {
+      fee = parseInt(opt.getAttribute("data-fee"), 10) || 0;
+    }
+    out.textContent = total > 0 ? "Total: " + naira(total + fee) + (fee > 0 ? " with " + naira(fee) + " delivery" : "") : "";
   }
   function step(input, by, label) {
     var b = document.createElement("button");
@@ -47,5 +55,6 @@
     box.appendChild(step(input, 1, "One more " + name));
   }
   form.addEventListener("input", update);
+  form.addEventListener("change", update);
   update();
 })();
