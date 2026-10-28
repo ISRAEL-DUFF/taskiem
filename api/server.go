@@ -446,6 +446,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
 			r.With(s.need(PermStorefrontManage)).Get("/dispatch/settings", s.getDispatchSettings)
+			r.With(s.need(PermStorefrontManage)).Get("/dispatch/workflow", s.getDeliveriesOn)
+			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.need(PermWorkflowPublish), s.tenantWide).Post("/dispatch/workflow", s.turnOnDeliveries)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/dispatch/settings", s.putDispatchSettings)
 			r.With(s.need(PermWorkflowRead)).Get("/forms", s.listForms)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)

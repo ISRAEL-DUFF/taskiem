@@ -2300,6 +2300,18 @@
       "text": "Ṣé kí n tan àwọn àṣẹ báyìí? Àwọn oníbàárà yóò lè ra láti ojú-ìwé yín, gbogbo àṣẹ yóò sì wá bá yín níbí láti gbà tàbí kọ̀.",
       "reviewed": false
     },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
+      "reviewed": false
+    },
     "wa.shop.which_item": {
       "text": "Ju ọ̀kan lọ ló bá a mu. Èwo?\n{list}\nFèsì pẹ̀lú nọ́mbà rẹ̀.",
       "reviewed": false

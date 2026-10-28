@@ -14,11 +14,13 @@ import (
 
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
+	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -86,6 +88,17 @@ func newDispatchWorld(t *testing.T, owner string) (*dispatchWorld, *client) {
 // order makes an accepted order to Lekki, paid as payment says.
 func (w *dispatchWorld) order(t *testing.T, payment string) string {
 	t.Helper()
+	ref := w.submit(t, payment)
+	if _, err := w.orders.Decide(context.Background(), w.biz, ref, "accept", "", "user:ada"); err != nil {
+		t.Fatal(err)
+	}
+	return ref
+}
+
+// submit sends an order for delivery to Lekki from the page, as a
+// customer does; its run starts.
+func (w *dispatchWorld) submit(t *testing.T, payment string) string {
+	t.Helper()
 	ctx := context.Background()
 	w.n++
 	ref := storefront.NewReference("ada-stores")
@@ -104,9 +117,6 @@ func (w *dispatchWorld) order(t *testing.T, payment string) string {
 		t.Fatalf("submit: %v %v", got, err)
 	}
 	if err := w.orders.Drain(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := w.orders.Decide(ctx, w.biz, ref, "accept", "", "user:ada"); err != nil {
 		t.Fatal(err)
 	}
 	return ref
@@ -312,5 +322,111 @@ func TestRidersPay(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs r JOIN trigger_receipts t ON t.run_id = r.id
 		WHERE r.id = $1 AND r.workflow_id = $2 AND t.dedup_key = $3`, run["run_id"], wf, "riders-pay:"+run["batch_id"].(string)).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("the run: %d %v", n, err)
+	}
+}
+
+// TestTurnOnDeliveries (dispatch D6): turning deliveries on puts a
+// workflow from dispatch-orders in place of the order form's, once; an
+// order then runs from the owner's accept to the rider's offer, and the
+// rider's Delivered completes the run.
+func TestTurnOnDeliveries(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	ops := &ridersconn.Late{}
+	ops.Set(w.srv.Riders)
+	ops.SetDispatch(w.srv.Dispatch)
+	for _, c := range []*connector.Connector{sfconn.New(w.orders), ridersconn.New(ops)} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	verifyPhone(t, w.world, ada, "phone", "business")
+	if v := ada.must(200, "GET", "/v1/dispatch/workflow", nil); v["on"] != false || v["workflow_id"] == nil {
+		t.Fatalf("before: %v", v)
+	}
+	old := ada.must(200, "GET", "/v1/dispatch/workflow", nil)["workflow_id"].(string)
+	// From chat: asked first, then on.
+	const adaWA = "+2348020000001"
+	ada.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": adaWA, "password": testPassword})
+	ada.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, adaWA).Text)})
+	got := w.whatsapp(t, adaWA, "turn on deliveries")
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Turn on deliveries now?") || len(got[0].Buttons) != 2 {
+		t.Fatalf("asked: %+v", got)
+	}
+	if got = w.press(t, adaWA, got[0].Buttons[0].ID); len(got) != 1 || !strings.Contains(got[0].Text, "Deliveries are on") {
+		t.Fatalf("yes: %+v", got)
+	}
+	on := ada.must(200, "POST", "/v1/dispatch/workflow", nil)
+	wf, _ := on["workflow_id"].(string)
+	if on["on"] != true || wf == "" || wf == old {
+		t.Fatalf("on: %v", on)
+	}
+	var triggers int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM triggers WHERE type = 'storefront' AND environment = 'prod' AND tenant_id = $1`, w.biz).Scan(&triggers); err != nil || triggers != 1 {
+		t.Fatalf("the form starts %d workflows: %v", triggers, err)
+	}
+	if again := ada.must(200, "POST", "/v1/dispatch/workflow", nil); again["workflow_id"] != wf {
+		t.Fatalf("again: %v", again)
+	}
+
+	// Musa taps in; an order is accepted in its run and offered to him.
+	const musa = "+2348031110001"
+	path := strings.TrimPrefix(ada.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+	loc, _ := url.Parse(w.page(t, path+"/whatsapp", nil).Header().Get("Location"))
+	w.whatsapp(t, musa, loc.Query().Get("text"))
+	ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})
+	ref := w.submit(t, "none")
+	w.env.Drain(t)
+	o := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil)["order"].(map[string]any)
+	runID := uuid.MustParse(o["run_id"].(string))
+	if err := w.env.Store.DecideApproval(ctx, runtime.RunRef{ID: runID, TenantID: w.biz}, "decide", "approved", "user:ada", "web"); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Drain(t)
+	ds := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)
+	if len(ds) != 1 || ds[0].(map[string]any)["status"] != "offered" || ds[0].(map[string]any)["rider"] != "Musa Bello" {
+		t.Fatalf("offered by the run: %v", ds)
+	}
+	id := uuid.MustParse(ds[0].(map[string]any)["id"].(string))
+	for _, a := range []string{dispatch.Accept, dispatch.PickedUp, dispatch.Arrived, dispatch.Delivered} {
+		if _, err := w.srv.Dispatch.Press(ctx, w.biz, id, a); err != nil {
+			t.Fatalf("%s: %v", a, err)
+		}
+	}
+	w.env.Drain(t)
+	var status string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM runs WHERE id = $1`, runID).Scan(&status); err != nil || status != "completed" {
+		t.Fatalf("the run after Delivered: %q %v", status, err)
+	}
+	if o := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil)["order"].(map[string]any); o["status"] != "completed" {
+		t.Fatalf("order %v", o["status"])
+	}
+}
+
+// Deliveries are not turned on for an order form that does not deliver,
+// nor under four-eyes publishing.
+func TestTurnOnDeliveriesRefused(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
+		_, err := storefront.SaveAction(ctx, tx, w.biz, storefront.Action{Kind: "order", Enabled: true, Payment: "after_accept",
+			Options: storefront.ActionOptions{Pickup: true}})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if e := ada.must(409, "POST", "/v1/dispatch/workflow", nil); !strings.Contains(fmt.Sprint(e["error"]), "turn on delivery on your order form") {
+		t.Fatalf("no delivery: %v", e)
+	}
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
+		_, err := storefront.SaveAction(ctx, tx, w.biz, storefront.Action{Kind: "order", Enabled: true, Payment: "after_accept",
+			Options: storefront.ActionOptions{Delivery: true}})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ada.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish": true})
+	if e := ada.must(409, "POST", "/v1/dispatch/workflow", nil); !strings.Contains(fmt.Sprint(e["error"]), "four-eyes") {
+		t.Fatalf("four-eyes: %v", e)
 	}
 }

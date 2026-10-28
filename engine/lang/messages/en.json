@@ -1630,7 +1630,7 @@
       "context": "Help line"
     },
     "wa.help.dispatch": {
-      "text": "• *order* and a reference *to Musa*: give it to a rider; *release* and a reference: take it back; *deliveries*: today's",
+      "text": "• *order* and a reference *to Musa*: give it to a rider; *release* and a reference: take it back; *deliveries*: today's; *turn on deliveries*: offer every confirmed order to your riders",
       "reviewed": true,
       "context": "Help line, with storefront.manage; keep the command words in English"
     },
@@ -2873,6 +2873,21 @@
       "text": "Turn on orders now? Customers can then order from your page, and each order comes to you here to accept or decline.",
       "reviewed": true,
       "context": "Offered after the page is published from chat"
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": true,
+      "context": "Asked before the order workflow is replaced by the one that offers orders to riders"
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": true,
+      "context": "After deliveries are turned on from chat"
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
+      "reviewed": true,
+      "context": "Turning on deliveries from chat was refused, with the reason"
     },
     "wa.shop.which_item": {
       "text": "More than one matches. Which one?\n{list}\nReply with its number.",

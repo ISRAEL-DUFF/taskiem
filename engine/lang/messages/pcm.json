@@ -1305,7 +1305,7 @@
       "reviewed": false
     },
     "wa.help.dispatch": {
-      "text": "• *order* and reference *to Musa*: give am to rider; *release* and reference: collect am back; *deliveries*: today own",
+      "text": "• *order* and reference *to Musa*: give am to rider; *release* and reference: collect am back; *deliveries*: today own; *turn on deliveries*: send every confirmed order to your riders",
       "reviewed": false
     },
     "wa.help.find": {
@@ -2298,6 +2298,18 @@
     },
     "wa.shop.turn_on_orders": {
       "text": "Make I on orders now? Customers go fit order from your page, and each order go come meet you here make you accept or decline.",
+      "reviewed": false
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Make we on deliveries now? Every order wey you confirm for delivery go reach your riders one by one, and when dem tap Delivered e go complete. Your order form go remain as e be.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries don on. Orders wey you confirm for delivery go reach your riders now; reply *deliveries* to see today own.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries never on: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {

@@ -2300,6 +2300,18 @@
       "text": "Ka m gbanye iwu ugbu a? Ndị ahịa ga-enwe ike ịzụ site na peeji gị, iwu ọ bụla ga-abịakwute gị ebe a ka ị nabata ma ọ bụ jụ.",
       "reviewed": false
     },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
+      "reviewed": false
+    },
     "wa.shop.which_item": {
       "text": "Ihe karịrị otu dabara. Kedu nke?\n{list}\nZaa na nọmba ya.",
       "reviewed": false

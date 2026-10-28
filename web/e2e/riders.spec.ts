@@ -95,6 +95,10 @@ test("an owner sets how orders are offered and opens riders' pay", async ({ page
   await expect(page.getByText("No deliveries that day.")).toBeVisible();
   await axeBoth(page, "/storefront/deliveries");
 
+  // Without delivery on the order form, deliveries cannot be turned on.
+  await page.getByRole("button", { name: "Turn on deliveries" }).click();
+  await expect(page.getByText("turn on delivery on your order form first")).toBeVisible();
+
   await page.getByRole("button", { name: "How orders are offered" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Ask me in chat who takes it").check();

@@ -211,6 +211,8 @@ export function StorefrontDeliveries() {
   const view = useLoad(() => get<{ deliveries: Delivery[] }>(path), [path]);
   useLiveRefresh(view.reload);
   const [settings, setSettings] = useState(false);
+  const on = useLoad(() => get<{ on: boolean; workflow_id: string | null }>("/v1/dispatch/workflow"), []);
+  const turnOn = useAction();
   const off = dispatchOff(view.error);
   const list = view.data?.deliveries ?? [];
   return (
@@ -228,6 +230,21 @@ export function StorefrontDeliveries() {
       />
       <StorefrontTabs />
       {off ? <EmptyState icon="members">Deliveries need text messages, which are not set up on this Taskiem yet.</EmptyState> : <ErrorBox error={view.error} />}
+      {!off && on.data && !on.data.on && (
+        <section className="card" aria-labelledby="deliveries-on">
+          <h2 id="deliveries-on" style={{ marginTop: 0 }}>
+            Offer orders to your riders by themselves
+          </h2>
+          <p className="hint">
+            Each order for delivery you confirm then goes to your riders in turn, and the rider's Delivered completes it. Your order form stays as it is; without
+            this, you offer each order from its page.
+          </p>
+          <ErrorBox error={turnOn.error} />
+          <button type="button" className="primary" disabled={turnOn.busy} onClick={() => void turnOn.run(async () => (await post("/v1/dispatch/workflow"), on.reload()), "Deliveries are on")}>
+            Turn on deliveries
+          </button>
+        </section>
+      )}
       {!off && (
         <div className="toolbar">
           <button type="button" className={open ? "small primary" : "small"} aria-pressed={open} onClick={() => setParams(open ? {} : { open: "true" })}>

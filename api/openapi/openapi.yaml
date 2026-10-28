@@ -5826,6 +5826,52 @@ paths:
                       $ref: '#/components/schemas/Delivery'
         default:
           $ref: '#/components/responses/Error'
+  /v1/dispatch/workflow:
+    get:
+      operationId: getDeliveriesOn
+      tags:
+      - Riders
+      summary: Whether orders are offered to riders
+      description: On when the order form's workflow is made from the dispatch-orders template.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: Whether deliveries are on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveriesOn'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: turnOnDeliveries
+      tags:
+      - Riders
+      summary: Turn on deliveries
+      description: |
+        Makes the order form's workflow from the dispatch-orders template and publishes it in place of the one the form starts
+        now, in one change: each confirmed order for delivery is then offered to the business's riders. Again, nothing changes.
+        409 when the order form does not deliver, under four-eyes publishing, or when the workflow cannot be published.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,workflow.edit,workflow.publish
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: Deliveries are on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveriesOn'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/dispatch/settings:
     get:
       operationId: getDispatchSettings
@@ -23998,6 +24044,16 @@ components:
           enum: [pickup, arrival]
         zone:
           type: string
+    DeliveriesOn:
+      type: object
+      required: ["on", workflow_id]
+      properties:
+        "on":
+          type: boolean
+        workflow_id:
+          type: [string, 'null']
+          format: uuid
+          description: The workflow the order form starts, if any
     DispatchSettings:
       type: object
       additionalProperties: false
