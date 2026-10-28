@@ -4,28 +4,114 @@
   "title": "Triggers, ingest and channels",
   "part": "C",
   "order": 3,
-  "status": "planned",
-  "summary": "Webhooks, connector events, cron and polling, remote registration, back-pressure, and the WhatsApp, Telegram, USSD and email channels.",
-  "scope": [
-    "Every <code>/hooks</code> route",
-    "Trigger registration and environments (decisions 0012 and 0021)",
-    "Platform apps routed by account (decision 0051)",
-    "Polling providers that send no webhooks; cron",
-    "Ingest rates and back-pressure",
-    "The platform WhatsApp number: binding, sessions, templates",
-    "Telegram, the USSD fast path, inbound email",
-    "Languages and voice notes"
-  ],
+  "summary": "How work gets in: every /hooks route and how it is verified, registration with providers, platform apps routed by account, polling and cron, rates and back-pressure, and the WhatsApp, Telegram, USSD and email channels.",
+  "verified": "ad3b87efe7f5a22c7de4a3e942a3e22a11286623",
   "sources": [
-    "engine/ingest/",
-    "engine/remote/",
-    "engine/whatsapp/",
-    "engine/telegram/",
-    "engine/ussd/",
-    "engine/inmail/",
-    "engine/voice/",
-    "engine/lang/",
-    "engine/reach/"
+    "engine/ingest/", "engine/remote/", "engine/whatsapp/", "engine/telegram/", "engine/ussd/", "engine/inmail/", "engine/voice/", "engine/lang/", "engine/reach/",
+    "api/whatsapp_chat.go", "api/telegram.go", "api/ussd.go", "api/oauthconnections.go", "cmd/taskiem/mail.go",
+    "engine/runtime/limits.go", "engine/db/migrations/00228_platform_apps.sql", "deploy/plans.yaml",
+    "docs/decisions/0012-trigger-registration.md", "docs/decisions/0021-remote-trigger-registration.md", "docs/decisions/0051-platform-apps.md", "docs/spec/architecture.md"
   ]
 }
 -->
+<h2>Ways in</h2>
+<p>A run starts, or a waiting run wakes, when something arrives from outside. The <code>edge</code> role takes HTTP from providers and callers. The <code>scheduler</code> role fires cron schedules and polls providers that send no webhooks. The <code>mail</code> role is an SMTP server. Chat and USSD are served by the edge under <code>/channels/...</code>, with the conversation logic in <x-ref path="api/"><code>api/</code></x-ref>. Whatever the way in, the rule is the same as on the <x-page id="life-of-a-run">Life of a run</x-page> page: by the time the caller gets an answer, the run is committed.</p>
+
+<h2 id="triggers-channels--hooks">The /hooks routes</h2>
+<p><x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) ServeHTTP("><code>ingest.Handler</code></x-ref> serves every route under <code>/hooks</code>:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Route</th><th>Handler</th><th>Checked with</th><th>Does</th></tr></thead>
+  <tbody>
+    <tr><td><code>/{tenant}/…</code> (any path)</td><td><x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) webhook("><code>webhook</code></x-ref></td><td>The workflow's own choice: none, HMAC, bearer, basic or JWT (<x-ref path="engine/ingest/webhook.go" symbol="func (h *Handler) verifyCall("><code>verifyCall</code></x-ref>)</td><td>Starts a run. <code>202</code> with its id, or the run's answer within 30 s if the workflow responds</td></tr>
+    <tr><td><code>/{tenant}/connectors/{connector}/{trigger}</code></td><td><x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) connectorEvent("><code>connectorEvent</code></x-ref></td><td>The manifest's scheme, with the connection's secret or the one made for a registered subscription</td><td>Signals waiting runs, starts subscribed workflows, records money events</td></tr>
+    <tr><td><code>/{tenant}/callbacks/{run}/{token}/{inst}</code></td><td><x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) callback("><code>callback</code></x-ref></td><td>A token derived from the run's key, compared in constant time</td><td>Delivers the callback a step is waiting for. <code>410</code> once the run has ended</td></tr>
+    <tr><td><code>/apps/{connector}/{trigger}</code></td><td><x-ref path="engine/ingest/apps.go" symbol="func (h *Handler) appEvent("><code>appEvent</code></x-ref></td><td>Taskiem's own app secret for that provider</td><td>Routes by account to every tenant connected through the app</td></tr>
+    <tr><td><code>/platform/{connector}</code></td><td><x-ref path="engine/ingest/platform.go" symbol="func (h *Handler) platformEvent("><code>platformEvent</code></x-ref></td><td>The platform client's secret for the mode</td><td>Routes by wallet id among connections Taskiem made</td></tr>
+    <tr><td><code>/{tenant}/_listen/{listen}/{token}</code></td><td><x-ref path="engine/ingest/listen.go" symbol="func (h *Handler) listen("><code>listen</code></x-ref></td><td>A one-time URL token</td><td>Captures one sample call for the designer, sealed. Starts nothing</td></tr>
+  </tbody>
+</table></div>
+<p>Every tenant route first passes <x-ref path="engine/ingest/hooks.go" symbol="func (h *Handler) receive("><code>receive</code></x-ref>, which decides whether the delivery is taken at all:</p>
+<ol>
+  <li>An unknown tenant gets <code>404</code>. A suspended one gets <code>423</code>, so a provider that retries delivers again after the tenant is resumed.</li>
+  <li>Above the tenant's hard ceiling the caller gets <code>429</code> with <code>Retry-After: 1</code>, and nothing is recorded.</li>
+  <li>Above the softer ingest rate the delivery is taken, but the runs it starts are <em>queued</em> and admitted later in order.</li>
+  <li>A body over the tenant's cap gets <code>413</code>.</li>
+</ol>
+<p>Signals to waiting runs are never throttled: a payment confirmation for a run that is already under way is always let through.</p>
+<h3>Duplicates</h3>
+<p>A provider that does not hear back sends again. Each trigger has a dedup key: the manifest's expression for connector events (Paystack uses the event and the transfer's reference), or the SHA-256 of the body for a plain webhook. A second delivery with the same key starts nothing and answers <code>"duplicate": true</code>. The key is held in <code>trigger_receipts</code> in the same transaction as the run (<x-ref path="engine/runtime/store.go" symbol="INSERT INTO trigger_receipts">store.go</x-ref>), so a crash cannot record one without the other.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>Nothing ever deletes from <code>trigger_receipts</code>. The run purge in <x-ref path="engine/db/migrations/00012_triggers.sql" symbol="CREATE OR REPLACE FUNCTION taskiem_purge_run(p_run uuid)">00012</x-ref> removes a run's events, tasks and approvals, not its receipts. The table grows with every delivery ever taken. Because the default key is the body hash, a webhook whose body is legitimately identical to one sent last year is still treated as a duplicate. Receipts should be purged with their run, or after a window such as 30 days. They are also the only replay defence for the schemes that sign no timestamp (plain HMAC, bearer, basic and the secret schemes), so the window should be well over any provider's retry period.</p>
+</div>
+
+<h2 id="triggers-channels--registration">Registering triggers</h2>
+<p>Publishing a workflow version rewrites its <code>triggers</code> rows for each environment it deploys to, in the same transaction (<x-ref path="engine/ingest/triggers.go" symbol="func SyncEnvironments("><code>SyncEnvironments</code></x-ref>, <x-ref path="docs/decisions/0012-trigger-registration.md">decision 0012</x-ref>). A webhook path is unique within a tenant and environment. A schedule fires in <code>prod</code> only. A USSD service code belongs to one workflow per environment. Form and email endpoints keep their public address across versions.</p>
+<p>Some providers must be told where to send events. <x-ref path="engine/remote/remote.go"><code>engine/remote</code></x-ref> keeps those subscriptions in step with what is deployed (<x-ref path="docs/decisions/0021-remote-trigger-registration.md">decision 0021</x-ref>). A deploy declares the subscription it wants and a removal marks it absent, both in the publishing transaction. Then a reconciler, every 5 seconds in the scheduler, makes the provider match. It creates, updates or deletes the subscription, adopts one it finds under its own name after a crash, and renews it before it expires. The signing secret goes in the vault before the row records the provider's id, so a crash in between cannot leave a subscription whose deliveries Taskiem cannot verify. Fatal errors back off from an hour to a day, transient ones from 10 seconds to an hour (<x-ref path="engine/remote/remote.go" symbol="func backoff("><code>backoff</code></x-ref>).</p>
+
+<h2 id="triggers-channels--platform-apps">One app, many tenants</h2>
+<p>For Slack, Meta and QuickBooks, a tenant connects through Taskiem's own app, and the provider sends every event for every customer to one address. <x-ref path="engine/ingest/apps.go" symbol="func (h *Handler) appEvent("><code>appEvent</code></x-ref> verifies the delivery with the app's secret, reads the account it is about (a Slack team, a Meta page, a QuickBooks company), and finds every connection made for that account (<x-ref path="docs/decisions/0051-platform-apps.md">decision 0051</x-ref>):</p>
+<x-code path="engine/db/migrations/00228_platform_apps.sql" start="CREATE FUNCTION taskiem_app_route_event(p_connector text, p_account text)" lines="11" lang="sql"/>
+<p>Each matching tenant's own gate then applies, and the event is delivered as if it had come to that tenant's own address. An event for an account nobody holds is counted and acknowledged with <code>200</code>, since a provider such as Slack wants plain success within three seconds.</p>
+<div class="callout risk"><span class="callout-label">Risk: needs a test and probably a fix</span>
+  <p>Routing trusts the account recorded on the connection. For QuickBooks that account is the company id, and it is taken from the <code>realmId</code> in the OAuth redirect, which passes through the user's browser (<x-ref path="connectors/quickbooks/manifest.yaml" symbol="fields_from_callback: { realm_id: realmId }">manifest</x-ref>, <x-ref path="api/oauthconnections.go" symbol="func applyCallbackFields("><code>applyCallbackFields</code></x-ref>). The callback saves the connection and its account without calling QuickBooks to confirm the token is for that company. The connector's own test, <code>get_company</code>, is not run there. A user who edits <code>realmId</code> on the redirect could therefore register another company's id and receive that company's Intuit change notifications (entity names, ids and operations) in their own workflows. They could not read the company's data, since API calls with their own token would be refused. The fix is to call <code>companyinfo/{realm}</code> with the new token before saving, and refuse on failure. Slack and Meta take their account from the token or the link step, so they are not affected. This was found by reading the code and has not been reproduced.</p>
+</div>
+<p>Two smaller points on this path. The per-app rate limit is spent before the signature is checked, so a flood of unsigned requests can cause the provider's real deliveries to get <code>429</code>. The platform-client path counts only after verifying. And one target tenant that is suspended or over its ceiling fails the whole delivery, so the provider retries it for everyone. The others then see duplicates, which are dropped.</p>
+
+<h2 id="triggers-channels--polling-cron">Polling and cron</h2>
+<p>Some providers send no webhooks, and Paystack's can go missing, so a trigger can also poll. Every minute <x-ref path="engine/ingest/poll.go" symbol="func (p *Poller) Tick("><code>Poller.Tick</code></x-ref> calls the manifest's list action for each trigger whose interval is due, looking back 10 minutes past the last poll. Each record is signed with the connection's own secret and replayed through the hooks handler in-process, so the ceiling, dedup and signals all apply exactly as for a webhook. A record already delivered by webhook is a duplicate and does nothing. The first poll only marks where to start: nothing earlier is replayed.</p>
+<p>Cron runs in the scheduler every second. It claims due schedules with <code>SKIP LOCKED</code>, at most 10 per tenant in a batch of 100, and starts each run with the slot's time as its dedup key, so two schedulers cannot both start it (<x-ref path="engine/ingest/cron.go" symbol="func (c *Cron) fire("><code>fire</code></x-ref>). A schedule missed while its tenant was suspended is skipped. After downtime a schedule fires once and moves on to the next time after now.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <ul>
+    <li>Decision 0012 and the comment in <code>cron.go</code> say a schedule fires once "for its latest missed time". It fires for the <em>earliest</em> missed time, since that is the stored <code>next_fire_at</code>, and then skips ahead. The run's <code>scheduled_time</code> is therefore the oldest missed slot. No test covers it.</li>
+    <li>The spec gives the schedule's time zone as "the tenant's time zone". It is the trigger's own <code>timezone</code>, defaulting to Africa/Lagos.</li>
+    <li>The spec says webhooks get "202, never 5xx". A database or vault error answers <code>503</code> with <code>Retry-After: 5</code>, which is better: the delivery was not recorded, and a 202 would lose it.</li>
+    <li>The spec says signatures are checked "before touching the database". The tenant lookup and limits come first, and connector deliveries read the registry and vault before verifying. Only the app, platform, WhatsApp and Telegram paths verify first.</li>
+    <li>The database-change trigger in spec 8.1 is not built, and is refused at publish.</li>
+  </ul>
+</div>
+
+<h2 id="triggers-channels--rates">Rates and back-pressure</h2>
+<p>Each tenant has two rates, a soft one and a hard ceiling, set by plan in <x-ref path="deploy/plans.yaml"><code>plans.yaml</code></x-ref> and adjustable per partner and per tenant (<x-ref path="engine/runtime/limits.go" symbol="func DefaultLimits() Limits {"><code>DefaultLimits</code></x-ref>):</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Plan</th><th>Soft rate / burst</th><th>Ceiling / burst</th></tr></thead>
+  <tbody>
+    <tr><td>shop</td><td>2 / 10</td><td>5 / 25</td></tr>
+    <tr><td>starter</td><td>5 / 25</td><td>20 / 100</td></tr>
+    <tr><td>growth</td><td>25 / 125</td><td>75 / 300</td></tr>
+    <tr><td>business</td><td>100 / 500</td><td>250 / 1,000</td></tr>
+    <tr><td>enterprise</td><td>20 / 100 (the defaults)</td><td>50 / 200 (the defaults)</td></tr>
+  </tbody>
+</table></div>
+<p>Bodies are capped at 1 MB for every plan, up to 10 MB by override. Queued runs are admitted by a token bucket in the database, so admission is the same whichever edge took the delivery.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <ul>
+    <li>The enterprise plan sets no ingest rates, so it falls back to the defaults, below business. Probably an omission in <code>plans.yaml</code>.</li>
+    <li>The rate limiters live in each edge process. With three edge replicas a tenant's ceiling is three times what the plan says.</li>
+    <li>Looking up a tenant that is not cached is limited to 100 a second across all tenants. Requests for random tenant ids can use that up, and real tenants whose cache entry has just expired then get <code>429</code> for a moment.</li>
+  </ul>
+</div>
+
+<h2 id="triggers-channels--whatsapp">WhatsApp</h2>
+<p>Taskiem has one platform WhatsApp number, and a business can connect its own. Meta's webhook is verified with HMAC-SHA256 over the raw body, and each message is claimed by its id before it is handled (<x-ref path="api/whatsapp_chat.go" symbol="func (s *Server) waReceive("><code>waReceive</code></x-ref>). Handling is therefore at most once: an error after the claim is logged, and the message is not handled again.</p>
+<p>A person binds their number to their Taskiem account with a six-digit code sent as an authentication template, valid for 10 minutes. After that, <x-ref path="api/whatsapp_chat.go" symbol="func (s *Server) converse("><code>converse</code></x-ref> finds the tenant, the person and their language, and continues the session. A session is idle, collecting inputs, waiting for "yes", or waiting for a step-up check before an approval. Starting a workflow from chat checks that the person may start runs, collects the inputs field by field or in a WhatsApp Flow (personal fields are sealed in the session), asks for confirmation, and starts the run with the confirmation's nonce as its dedup key.</p>
+<p>WhatsApp only lets a business send free text within 24 hours of the person's last message. <x-ref path="engine/whatsapp/platform.go" symbol="func (p *Platform) Send("><code>Send</code></x-ref> sends text inside that window and an approved template outside it, or refuses if there is no template. A message that must arrive, such as a run's outcome, goes through an outbox that tries 8 times over about 18 hours and stores nothing personal. Buttons that approve or reject carry a signed, single-use token bound to the tenant, run, step and person.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Sessions expire after 30 minutes, not with the 24-hour window as spec 11.3 says. 24 hours is only the cap. A business's own number is connected by an admin by hand: embedded signup (spec 11.4) answers <code>501</code>.</p>
+</div>
+
+<h2 id="triggers-channels--telegram-ussd-email">Telegram, USSD and email</h2>
+<h3>Telegram</h3>
+<p>Telegram works like WhatsApp and shares <code>converse</code>, with three differences. The webhook is checked by a secret header before the body is read. An account is bound by a one-time <code>/start</code> link that only someone who has proved their identity can make. There is no 24-hour window. Only private chats are answered.</p>
+<h3>USSD</h3>
+<p>A USSD session is a phone menu: the network waits about two seconds per screen and drops the session after a few minutes. <x-ref path="api/ussd.go" symbol="func (s *Server) ussdCallback("><code>ussdCallback</code></x-ref> works to a two-second budget. It checks the channel's token and optional IP range, limits by tenant and by number, and walks the workflow's menu inline from the session, without starting a run. When the caller confirms, it locks the session, seals the caller and the inputs, answers with an 8-character reference, and starts the run in the background with the session as its dedup key. The outcome is sent by SMS.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Spec 8.4 hands "only side-effecting steps" to the engine and shows the result on the next screen. The code starts the whole run after confirmation and always sends the result by SMS. Given the two-second budget, that is the safer design.</p>
+</div>
+<h3>Email</h3>
+<p>The <code>mail</code> role is an SMTP server on port 2525 (<x-ref path="cmd/taskiem/mail.go" symbol="func mailTask("><code>mailTask</code></x-ref>). It connects as <code>taskiem_public</code>, the same limited role as the public host. It accepts mail only for known 12-character addresses on Taskiem's domain, checks SPF, DKIM and DMARC, and seals the message with a public key whose private half only the api role holds (<x-ref path="engine/inmail/server.go" symbol="func (ss *session) Data("><code>Data</code></x-ref>). The api role drains the inbox every 2 seconds (<x-ref path="engine/inmail/service.go" symbol="func (s *Service) handle("><code>handle</code></x-ref>). It drops auto-replies and bounces, answers forwarding confirmations, requires the sender to be aligned with DKIM or SPF when the trigger lists senders, scans attachments, and starts the run with the message's id as its dedup key. Addresses and bodies are sealed in the run's history.</p>
+
+<h2 id="triggers-channels--language-voice">Languages and voice notes</h2>
+<p>Chat speaks English, Nigerian Pidgin, Yoruba, Hausa and Igbo (<x-ref path="engine/lang/"><code>engine/lang</code></x-ref>). Everything but English is a draft. A person's chosen language wins, then one detected from their message, then the tenant's default. USSD and SMS get plain ASCII. A voice note is transcribed only if the platform has a transcription provider and the tenant turns it on (<x-ref path="engine/voice/voice.go"><code>engine/voice</code></x-ref>). It is limited to 1 MB and 60 seconds by default, the recording is discarded after transcription, and the transcript is sealed and kept for 7 days.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>A voice note goes to an outside transcription service, OpenAI's by default, which then processes a customer's voice. That needs to be in the data-processing terms and the privacy notice. Only Ogg files have their length checked. Other formats are limited by size only.</p>
+</div>
