@@ -443,7 +443,7 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		var doc []byte
-		wf, version, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", func(action, target string, detail map[string]any) error {
+		wf, version, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", nil, func(action, target string, detail map[string]any) error {
 			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		if err == nil {

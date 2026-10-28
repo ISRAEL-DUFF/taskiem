@@ -60,6 +60,7 @@ const OWNER_FILES = [
   "canvas/StepPanel.tsx",
   "canvas/FormEditor.tsx",
   "pages/Editor.tsx",
+  "pages/MergeDialog.tsx",
   "pages/Workflows.tsx",
   "pages/Forms.tsx",
   "pages/StorefrontDomains.tsx",

@@ -27,7 +27,7 @@ Builds run in the background (`POST /v1/ai/build` answers 202 with an id; `GET /
 | `GET /v1/ai/status` | `workflow.read` | Whether AI building is on, the model, this month's budget and use |
 | `POST /v1/ai/build` | `workflow.edit` | `{goal, workflow?, environment?}`; starts a build. 503 `ai_disabled` when no provider is configured, 429 `ai_budget_exhausted` over budget, 429 `rate_limited` beyond five builds at once per tenant (one more every 20 seconds) |
 | `GET /v1/ai/builds/{id}` | `workflow.edit` | Status (`running`, `proposed`, `failed`, `saved`), stage, proposal |
-| `POST /v1/ai/builds/{id}/save` | `workflow.edit` | `{name?, tables?}`; saves the proposal as a draft version, once, and makes the `tables` sent (as `POST /v1/tables` takes them; needs `table.edit`), reporting each as `created`, `exists`, `skipped` or `failed` |
+| `POST /v1/ai/builds/{id}/save` | `workflow.edit` | `{name?, tables?, resolutions?}`; saves the proposal as a draft version, once, and makes the `tables` sent (as `POST /v1/tables` takes them; needs `table.edit`), reporting each as `created`, `exists`, `skipped` or `failed`. A build that changes a workflow records the version it started from (`ai_builds.base_digest`); a version saved since is merged three ways with the proposal, as a canvas save naming its `parent_digest` is, and where both changed the same step or field the save answers 409 with `conflicts`, `latest_version` and `latest_digest` until `resolutions` (`ours`: the proposal's) settle them |
 | `GET /v1/ai/builds/{id}/interactions` | `audit.read` | Every model call of the build, as logged |
 
 ## Safety model

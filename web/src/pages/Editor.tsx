@@ -15,6 +15,7 @@ import { runLook } from "../lib/lists";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, Item, Items, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { AIBuilder } from "./AIBuild";
+import { MergeDialog } from "./MergeDialog";
 import { resolveSchema } from "../lib/values";
 import { SchemaForm } from "../forms/SchemaForm";
 import { NeedsList } from "./Readiness";
@@ -1042,53 +1043,5 @@ function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: Wor
         </button>
       </div>
     </div>
-  );
-}
-
-/** Lets an editor choose, for each conflict, their edit or the newer version's. */
-function MergeDialog({
-  conflicts,
-  latest,
-  busy,
-  onClose,
-  onResolve,
-}: {
-  conflicts: MergeConflict[];
-  latest: number;
-  busy: boolean;
-  onClose: () => void;
-  onResolve: (res: Record<string, "ours" | "theirs">) => void;
-}) {
-  const [choice, setChoice] = useState<Record<string, "ours" | "theirs">>({});
-  const show = (v: unknown) => (v === undefined ? "(removed)" : JSON.stringify(v, null, 2));
-  const label = (c: MergeConflict) => (c.path.startsWith("steps/") ? `Step ${c.path.slice(6)}` : `Workflow ${c.path}`);
-  return (
-    <Modal title="Resolve conflicting edits" onClose={onClose}>
-      <p className="hint">
-        Version {latest} changed these parts too. Everything else is merged. Choose which version of each to keep, then save.
-      </p>
-      {conflicts.map((c) => (
-        <fieldset key={c.path} className="card" data-testid={`conflict-${c.path}`}>
-          <legend>
-            {label(c)} {c.kind === "changed_and_deleted" && "(changed on one side, removed on the other)"}
-          </legend>
-          <div className="row">
-            {(["ours", "theirs"] as const).map((side) => (
-              <label key={side} className="grow">
-                <input type="radio" name={c.path} checked={choice[c.path] === side} onChange={() => setChoice({ ...choice, [c.path]: side })} />{" "}
-                {side === "ours" ? "Yours" : `Version ${latest}`}
-                <pre className="mono">{show(c[side])}</pre>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      ))}
-      <div className="row">
-        <button className="primary" disabled={busy || conflicts.some((c) => !choice[c.path])} onClick={() => onResolve(choice)}>
-          Save merged version
-        </button>
-        <button onClick={onClose}>Cancel</button>
-      </div>
-    </Modal>
   );
 }
