@@ -14361,7 +14361,10 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: The proposal cannot be accepted in its state, or its failure class is settled by resolving
-            the step.
+            the step, or another repair of the workflow waits for its publish request. `repair_superseded`, with
+            `latest_version` and `conflicts` or `failures`, when the patch cannot be merged onto the version
+            published since the run's (both changed the same step or field) or no longer passes its tests once
+            merged; the proposal is then `superseded`.
           content:
             application/json:
               schema:
@@ -30935,6 +30938,7 @@ components:
           - published
           - resumed
           - dismissed
+          - superseded
         explanation:
           type: string
         action:

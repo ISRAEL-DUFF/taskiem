@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/shadow"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wddiff"
+	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 )
 
@@ -942,6 +943,19 @@ func (s *Server) acceptRepair(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "the patched definition no longer passes the publishing checks", "problems": probs})
 			return
 		}
+		var sup *repairSuperseded
+		if errors.As(err, &sup) {
+			s.supersedeRepair(ctx, p.TenantID, v.ID, sup)
+			out := map[string]any{"error": sup.Error(), "code": "repair_superseded", "latest_version": sup.latest}
+			if len(sup.conflicts) > 0 {
+				out["conflicts"] = sup.conflicts
+			}
+			if len(sup.failures) > 0 {
+				out["failures"] = sup.failures
+			}
+			writeJSON(w, http.StatusConflict, out)
+			return
+		}
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -1015,6 +1029,9 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 		if err != nil {
 			return err
 		}
+		if doc, err = s.rebaseRepair(ctx, tx, p.TenantID, v, doc); err != nil {
+			return err
+		}
 		if err := insertVersionTx(ctx, tx, p.TenantID, v.WorkflowID, version, doc, nil, repairCreatedBy, ""); err != nil {
 			return err
 		}
@@ -1084,6 +1101,104 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 		}
 	}
 	return probs, err
+}
+
+// repairSuperseded is a patch that cannot be carried onto the versions
+// published since its run's: their change and the patch's conflict, or
+// the merged definition fails the proposal's tests.
+type repairSuperseded struct {
+	latest    int
+	conflicts []wdmerge.Conflict
+	failures  []string
+}
+
+func (e *repairSuperseded) Error() string {
+	if len(e.conflicts) > 0 {
+		return fmt.Sprintf("version %d, published after the run's version, changed what the fix changes: the proposal is superseded", e.latest)
+	}
+	return fmt.Sprintf("merged onto version %d, published after the run's version, the fix no longer passes its tests: the proposal is superseded", e.latest)
+}
+
+// rebaseRepair carries a patch onto the versions published since the run's
+// (decision 0016): the patch was made against the version the run failed
+// on, and publishing it as it is would drop their changes. It is merged
+// three ways, the run's version the base, as a canvas save is merged onto
+// a newer version (createVersion), and the merged definition must pass the
+// proposal's tests (the regression test and the model's) again. Drafts are
+// left out: a draft saved since is merged when it is next saved, and is
+// not published by accepting a repair. Another repair of the workflow
+// awaiting its publish request is decided first, so neither drops the other.
+func (s *Server) rebaseRepair(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, v repairView, doc []byte) ([]byte, error) {
+	var waiting uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM repair_proposals WHERE workflow_id = $1 AND id <> $2 AND status = 'awaiting_publish' LIMIT 1`, v.WorkflowID, v.ID).Scan(&waiting)
+	if err == nil {
+		return nil, fmt.Errorf("%w: repair %s of this workflow waits for its publish request; decide it first", errConflict, waiting)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	var latest int
+	var theirs []byte
+	err = tx.QueryRow(ctx, `SELECT version, definition FROM workflow_versions WHERE workflow_id = $1 AND state IN ('published', 'deprecated')
+		ORDER BY version DESC LIMIT 1`, v.WorkflowID).Scan(&latest, &theirs)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && latest <= v.Version) {
+		return doc, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var base []byte
+	if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, v.WorkflowID, v.Version).Scan(&base); err != nil {
+		return nil, err
+	}
+	merged, conflicts, err := wdmerge.Merge(base, doc, theirs, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(conflicts) > 0 {
+		return nil, &repairSuperseded{latest: latest, conflicts: conflicts}
+	}
+	if doc, err = canonical(merged); err != nil {
+		return nil, err
+	}
+	def, err := wd.Load(doc)
+	if err != nil {
+		return nil, &repairSuperseded{latest: latest, failures: []string{err.Error()}}
+	}
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err
+	}
+	var policies map[string]json.RawMessage
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(jsonb_object_agg(name, document), '{}'::jsonb) FROM approval_policies WHERE state = 'active'`).Scan(&raw); err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(raw, &policies)
+	var tests []wdtest.Case
+	_ = json.Unmarshal(v.Test, &tests)
+	var failures []string
+	for _, t := range tests {
+		if res := shadow.RunCase(def, reg, policies, t); !res.Passed() {
+			failures = append(failures, t.Name)
+		}
+	}
+	if len(failures) > 0 {
+		return nil, &repairSuperseded{latest: latest, failures: failures}
+	}
+	return doc, nil
+}
+
+// supersedeRepair marks a proposal that can no longer be accepted.
+func (s *Server) supersedeRepair(ctx context.Context, tenant, id uuid.UUID, sup *repairSuperseded) {
+	ctx = context.WithoutCancel(ctx)
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE repair_proposals SET status = 'superseded', error = $2 WHERE id = $1 AND status = 'proposed'`, id, sup.Error())
+		return err
+	})
+	if err != nil {
+		s.Logger.Error("superseding a repair", "proposal", id, "err", err)
+	}
 }
 
 // repairsAfterDeploy moves a workflow's accepted repairs on: one whose

@@ -333,6 +333,61 @@ func TestRepairFourEyes(t *testing.T) {
 	}
 }
 
+// A version published after the run's is kept: accepting merges the patch
+// onto it (three ways, the run's version the base), and a version that
+// changed the step the patch changes supersedes the proposal (409), so
+// accepting never drops what was published in between.
+func TestRepairAcceptAfterNewerVersion(t *testing.T) {
+	wfDoc := func(steps ...string) json.RawMessage {
+		return json.RawMessage(`{"schema":"wd/v1","id":"wf_orders","version":1,"name":"orders","trigger":{"type":"manual"},"steps":[` + strings.Join(steps, ",") + `]}`)
+	}
+	publishV2 := func(t *testing.T, rw *repairWorld, wf string, doc json.RawMessage) {
+		t.Helper()
+		rw.owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": doc})
+		rw.owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/2/publish", nil)
+	}
+	verifyRetried := strings.Replace(stepVerify, `"action":"verify"`, `"action":"verify","retry":{"max":2}`, 1)
+
+	t.Run("merged", func(t *testing.T) {
+		rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+		rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+		wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+		run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-20"}, "failed")
+		p := rw.only(t, run)
+		// Someone else publishes version 2, changing another step.
+		publishV2(t, rw, wf, wfDoc(stepCharge, verifyRetried, stepNotify))
+		acc := rw.owner.must(200, "POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+		if acc["draft_version"] != float64(3) || acc["status"] != "resumed" {
+			t.Fatalf("accept: %v", acc)
+		}
+		def := toJSON(rw.owner.must(200, "GET", "/v1/workflows/"+wf+"/versions/3", nil)["definition"])
+		if !strings.Contains(def, `"retry":{"max":2}`) || !strings.Contains(def, "has(trigger.body.customer)") {
+			t.Fatalf("version 3 lost a change: %s", def)
+		}
+	})
+
+	t.Run("superseded", func(t *testing.T) {
+		rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+		rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+		wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+		run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-21"}, "failed")
+		p := rw.only(t, run)
+		// Version 2 changes the step the patch changes.
+		publishV2(t, rw, wf, wfDoc(stepCharge, stepVerify, strings.Replace(stepNotify, `"retry":{"max":0}`, `"retry":{"max":1}`, 1)))
+		st, out := rw.owner.do("POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+		if st != 409 || out["code"] != "repair_superseded" || out["latest_version"] != float64(2) || !strings.Contains(toJSON(out["conflicts"]), "steps/notify") {
+			t.Fatalf("accept: %d %v", st, out)
+		}
+		if got := rw.owner.must(200, "GET", "/v1/repairs/"+p["id"].(string), nil); got["status"] != "superseded" || got["draft_version"] != nil {
+			t.Fatalf("proposal: %v", got)
+		}
+		if n := len(rw.owner.must(200, "GET", "/v1/workflows/"+wf, nil)["versions"].([]any)); n != 2 {
+			t.Errorf("versions: %d", n)
+		}
+		rw.owner.must(409, "POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+	})
+}
+
 // Transient: no model call, no change; retry resumes through the normal
 // path on the same version.
 func TestRepairTransientRetry(t *testing.T) {
