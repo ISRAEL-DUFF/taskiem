@@ -195,18 +195,26 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 		// All of it went back to the payer before it was looked at.
 		return m.hold(ctx, tenant, e.ID, "matched", HeldReversed)
 	}
-	// Exact: the reference is one Taskiem gave for an invoice.
-	var account, invoice uuid.UUID
+	// Exact: the reference is one Taskiem gave for an invoice, or for a
+	// storefront order's account number (N3).
+	var account uuid.UUID
+	var invoice *uuid.UUID
+	var order string
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT id, invoice_id FROM customer_invoice_accounts WHERE tenant_id = $1 AND payment_id = $2 AND connector || '/' || connection = $3`,
-			tenant, e.Reference, e.Channel).Scan(&account, &invoice)
+		return tx.QueryRow(ctx, `SELECT a.id, a.invoice_id, COALESCE(o.reference, '') FROM customer_invoice_accounts a LEFT JOIN storefront_orders o ON o.id = a.order_id
+			WHERE a.tenant_id = $1 AND a.payment_id = $2 AND a.connector || '/' || a.connection = $3`, tenant, e.Reference, e.Channel).Scan(&account, &invoice, &order)
 	})
 	switch {
+	case err == nil && invoice == nil:
+		if order == "" || m.Orders == nil {
+			return m.mark(ctx, tenant, e.ID, "unmatched")
+		}
+		return m.exactOrder(ctx, tenant, e, order, &account)
 	case err == nil:
 		if e.AmountKobo <= 0 {
 			return m.mark(ctx, tenant, e.ID, "unmatched")
 		}
-		err := m.Invoices.Received(ctx, tenant, invoice, invoicing.Received{PaymentID: e.Reference, AmountKobo: e.AmountKobo, Connection: e.Channel, Account: account})
+		err := m.Invoices.Received(ctx, tenant, *invoice, invoicing.Received{PaymentID: e.Reference, AmountKobo: e.AmountKobo, Connection: e.Channel, Account: account})
 		if errors.Is(err, invoicing.ErrState) {
 			// A void invoice, or the money already counted elsewhere: a
 			// person decides.
@@ -227,7 +235,6 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 	}
 	// Exact: the reference is a storefront order's checkout page.
 	if m.Orders != nil {
-		var order string
 		err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 			var err error
 			order, err = storefront.ForCheckout(ctx, tx, tenant, e.Channel, e.Reference)
@@ -235,7 +242,7 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 		})
 		switch {
 		case err == nil:
-			return m.exactOrder(ctx, tenant, e, order)
+			return m.exactOrder(ctx, tenant, e, order, nil)
 		case !errors.Is(err, storefront.ErrNoOrder):
 			return err
 		}

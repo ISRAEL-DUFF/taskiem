@@ -135,7 +135,11 @@ func TestInvoicesInChat(t *testing.T) {
 	if got := w.press(t, eve, pay); len(got) != 1 || !strings.Contains(got[0].Text, "no longer works") {
 		t.Fatalf("another number: %+v", got)
 	}
-	if got := w.press(t, chidi, pay[:len(pay)-2]+"AA"); len(got) != 1 || !strings.Contains(got[0].Text, "no longer works") {
+	// Altered in the signature's first character, which always counts (the
+	// last one's low bits are base64 padding, which decoding ignores).
+	mac := strings.Index(pay, ".") + 1
+	altered := pay[:mac] + map[bool]string{true: "B", false: "A"}[pay[mac] == 'A'] + pay[mac+1:]
+	if got := w.press(t, chidi, altered); len(got) != 1 || !strings.Contains(got[0].Text, "no longer works") {
 		t.Fatalf("altered: %+v", got)
 	}
 	var waiting int

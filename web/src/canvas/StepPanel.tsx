@@ -187,8 +187,8 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
             label="Source"
             hint={
               cfg.language === "python"
-                ? "Define main(input, host). print() goes to the logs; host.secret, host.now and host.fetch are available. Standard library only."
-                : "Export a default function of the step input. host.log, host.secret, host.now and host.fetch are available."
+                ? "Define main(input, host). print() goes to the logs; host.secret, host.now and host.fetch (GET and HEAD only; send writes from an http or connector step) are available. Standard library only."
+                : "Export a default function of the step input. host.log, host.secret, host.now and host.fetch (GET and HEAD only; send writes from an http or connector step) are available."
             }
           >
             <textarea className="mono" rows={12} spellCheck={false} value={String(cfg.source ?? "")} onChange={(e) => setCfg({ source: e.target.value })} />

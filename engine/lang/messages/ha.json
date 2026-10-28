@@ -248,6 +248,10 @@
       "text": "Lambar asusunku na invoice {number} tana kan hanya. Idan ba ta zo cikin minti ɗaya ba, danna Sabuwar lambar asusu.",
       "reviewed": false
     },
+    "invoice.receipt.fee_line": {
+      "text": "Kun aika {sent}; {received} ya isa ga {business} bayan cajin banki na {fee}.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Ina rubuta maka da {language}. Harsunan da ke nan: {languages}. Aika *language* da suna don canzawa.",
       "reviewed": false
@@ -664,6 +668,10 @@
       "text": "A mayar wa abokin ciniki {total} na {ref}? Daga ma'aunin Paystack ɗinku ne, kuma zai isa gare su cikin kwanakin aiki 5 zuwa 10.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Za a yi wa {ref} alama an mayar da kuɗi? Sai bayan kun aika {total} ga abokin ciniki. Za a sanar da su.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Amsa *yes* don ajiye canjin, ko *cancel*.",
       "reviewed": false
@@ -682,6 +690,10 @@
     },
     "wa.booking.list_week": {
       "text": "Ajiyar lokaci a kwanaki 7 masu zuwa:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "An yi wa {ref} alama an mayar da kuɗi ({total}). An sanar da abokin ciniki.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -710,6 +722,10 @@
     },
     "wa.booking.off_done": {
       "text": "An huta ranar {day}: ba za a bayar da lokaci ba.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "An biya {ref} ta hanyar canja wuri daga banki, don haka Taskiem ba zai iya mayar da shi ba. Aika {total} ga abokin ciniki daga bankinku, sannan ku amsa *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {

@@ -51,3 +51,22 @@ theme. Forms only: the page refreshes itself, with no script. */}}
 {{if .CardURL}}<a class="btn btn-block" href="{{.CardURL}}" rel="noopener noreferrer">{{.CardLabel}}</a>{{else}}{{with .CardLabel}}<button class="btn btn-block" type="submit" name="kind" value="link">{{.}}</button>{{end}}{{end}}
 </form>{{else}}{{if .CardURL}}<a class="btn btn-block" href="{{.CardURL}}" rel="noopener noreferrer">{{.CardLabel}}</a>{{end}}{{end}}
 </section>{{end}}
+
+{{/* Paying an order or booking by bank transfer from its status page
+(N3); the same in every theme. A form only: the page refreshes itself. */}}
+{{define "ordertransfer"}}<section class="inv-pay" aria-labelledby="sf-pay-h">
+<h2 id="sf-pay-h">Pay by bank transfer</h2>
+{{with .Account}}<div class="inv-acct" role="status">
+<p class="hint">Transfer {{.Amount}} to</p>
+<p class="inv-acct-no">{{.Number}}</p>
+<p>{{.Bank}}{{with .Name}} · {{.}}{{end}}</p>
+<p><strong>{{.Until}}</strong> · {{.Left}}</p>
+{{with .Wrong}}<p class="hint">{{.}}</p>{{end}}{{with .Late}}<p class="hint">{{.}}</p>{{end}}
+<p class="hint">This page updates when your payment arrives.</p>
+</div>{{end}}
+{{with .Waiting}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with .Note}}<p class="hint">{{.}}</p>{{end}}
+{{with .Label}}<form method="post" action="{{$.Action}}" class="fields">
+<button class="btn btn-block{{if $.Primary}} btn-primary btn-brand{{end}}" type="submit">{{.}}</button>
+</form>{{end}}
+</section>{{end}}

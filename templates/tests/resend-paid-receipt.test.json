@@ -49,6 +49,52 @@
       }
     },
     {
+      "name": "a transfer whose fee the rail reported: the receipt says what reached the business",
+      "trigger": {
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "id": "0192f0aa-0000-7000-8000-000000000042",
+          "number": "INV-0042",
+          "status": "paid",
+          "amount_kobo": 5375000,
+          "amount": "₦53,750",
+          "paid_kobo": 5375000,
+          "currency": "NGN",
+          "customer": {
+            "name": "Adaeze Okafor",
+            "email": "ada@example.com"
+          },
+          "paid_at": "2026-10-26T14:05:00+01:00",
+          "link": "https://pay.example/i/x",
+          "fee_kobo": 80600,
+          "fee": "₦806",
+          "received_kobo": 5294400,
+          "received": "₦52,944"
+        }
+      },
+      "mocks": {
+        "receipt": {
+          "output": {
+            "email_id": "49a3999c"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "receipt": {
+            "from": "Ada Cakes <orders@adacakes.ng>",
+            "to": [
+              "ada@example.com"
+            ],
+            "subject": "Receipt for invoice INV-0042",
+            "text": "Dear Adaeze Okafor,\n\nThank you: we have received ₦53,750 for invoice INV-0042, which is now paid in full. Of what you sent, the bank kept a fee of ₦806 and ₦52,944 reached us.\n\nAda Cakes"
+          }
+        }
+      }
+    },
+    {
       "name": "no email, no receipt",
       "trigger": {
         "event": "paid",

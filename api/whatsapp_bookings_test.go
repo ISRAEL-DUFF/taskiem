@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -186,6 +187,36 @@ func TestWhatsAppBookings(t *testing.T) {
 		t.Fatalf("refunds sent: %d", pay.n)
 	}
 	viewer.must(403, "POST", "/v1/storefront/orders/"+second+"/refund", nil)
+
+	// Paid by bank transfer (or other money matched to it): Taskiem cannot
+	// send it back, so the owner does and marks it refunded (N3).
+	// (A second owner on another number: the first has used its chat rate.)
+	const on2 = "+2348010000011"
+	w.bind(t, w.member(t, owner, "bola@ada.test", "owner"), on2)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET status = 'refund_due', payment_ref = NULL, paid_at = now() WHERE reference = $1`, first); err != nil {
+		t.Fatal(err)
+	}
+	if r := w.say(t, on2, "refund "+strings.ToLower(first)); !strings.Contains(r, "cannot send it back") || !strings.Contains(r, "refunded "+first) {
+		t.Fatalf("refund by hand: %q", r)
+	}
+	owner.must(409, "POST", "/v1/storefront/orders/"+first+"/refund", nil)
+	if o := owner.must(200, "GET", "/v1/storefront/orders/"+first, nil)["order"].(map[string]any); o["paid_by"] != "other" || !strings.Contains(fmt.Sprint(o["note"]), "mark it refunded") {
+		t.Fatalf("by hand: %v", o)
+	}
+	if r := w.say(t, on2, "refunded "+strings.ToLower(first)); !strings.Contains(r, "Mark "+first+" refunded?") {
+		t.Fatalf("mark asked: %q", r)
+	}
+	if got := w.send(t, on2, whatsapptest.ButtonReply("yes", "Yes, save")); len(got) != 1 || !strings.Contains(got[0].Text, first+" is marked refunded") {
+		t.Fatalf("marked: %+v", got)
+	}
+	viewer.must(403, "POST", "/v1/storefront/orders/"+first+"/refunded", map[string]any{})
+	if o := owner.must(200, "POST", "/v1/storefront/orders/"+first+"/refunded", map[string]any{"note": "sent from GTBank"})["order"].(map[string]any); o["status"] != "refunded" {
+		t.Fatalf("again: %v", o)
+	}
+	owner.must(404, "POST", "/v1/storefront/orders/AD-NOPE00/refunded", map[string]any{})
+	if pay.n != 1 {
+		t.Fatalf("refunds sent: %d", pay.n)
+	}
 
 	sf := owner.must(200, "GET", "/v1/storefront", nil)
 	if off := sf["availability"].(map[string]any)["off"].([]any); len(off) != 1 || off[0] != day.Format("2006-01-02") {

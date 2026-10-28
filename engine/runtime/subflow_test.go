@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 const doubleIt = `{"schema":"wd/v1","id":"wf_double","version":1,"name":"Double it","trigger":{"type":"subflow"},
@@ -98,17 +101,74 @@ func TestSubflows(t *testing.T) {
 	if len(links.Subflows) != 1 || e.Status(t, ref4) != "running" && e.Status(t, ref4) != "waiting" {
 		t.Fatalf("waiting parent: %+v %s", links, e.Status(t, ref4))
 	}
-	if err := e.Store.CancelRun(ctx, ref4, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, ref4, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if st := e.Status(t, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}); st != "cancelled" {
 		t.Errorf("the child after the parent's cancel: %s", st)
 	}
+	// The child had nothing to reverse, so it ended inside the parent's
+	// decision; the parent must still hear it and end, and replay.
+	rt.WaitFor(t, 10*time.Second, "cancelled parent", func() bool { e.Drain(t); return e.Status(t, ref4) != "running" })
+	if st := e.Status(t, ref4); st != "cancelled" {
+		t.Errorf("the parent after its child ended: %s %s", st, types(events(t, e, ref4)))
+	}
+	if err := decide.Verify(waitingDef(t, e, waiting), events(t, e, ref4)); err != nil {
+		t.Errorf("replay: %v", err)
+	}
+
+	// A parent cancelled with reversing reverses the child it waits for
+	// first: the child's payment is refunded before the parent's own, and
+	// before the parent ends (decision 0054).
+	paying := e.Publish(t, `{"schema":"wd/v1","id":"wf_p","version":1,"name":"Paying","trigger":{"type":"subflow"},
+	  "steps":[{"id":"pay","type":"connector","connector":"fakepay@1","action":"transfer",
+	     "input":{"amount":1,"logical_id":"=run.id + ':pay'"},"compensate":{"action":"refund","input":{"logical_id":"=run.id + ':refund'"}}},
+	    {"id":"w","type":"signal","needs":["pay"],"config":{"event":"never","correlation":"=run.id"}}]}`)
+	outer := e.Publish(t, wfDoc(`{"id":"own","type":"connector","connector":"fakepay@1","action":"transfer",
+	     "input":{"amount":1,"logical_id":"=run.id + ':own'"},"compensate":{"action":"refund","input":{"logical_id":"=run.id + ':own_refund'"}}},
+	  {"id":"sub","type":"subflow","needs":["own"],"config":{"workflow":"`+paying.String()+`"}}`, ""))
+	ref6 := e.Start(t, outer, map[string]any{})
+	e.Drain(t)
+	links, _ = e.Store.Forks(ctx, ref6)
+	if len(links.Subflows) != 1 {
+		t.Fatalf("reversing parent: %+v %s", links, types(events(t, e, ref6)))
+	}
+	kid := runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}
+	if e.Provider.Executions(kid.ID.String()+":pay") != 1 {
+		t.Fatalf("the child has not paid: %s", types(events(t, e, kid)))
+	}
+	if err := e.Store.CancelRun(ctx, ref6, "u", true); err != nil {
+		t.Fatal(err)
+	}
+	rt.WaitFor(t, 10*time.Second, "reversed parent", func() bool { e.Drain(t); return e.Status(t, ref6) != "running" })
+	if st, kst := e.Status(t, ref6), e.Status(t, kid); st != "cancelled" || kst != "cancelled" {
+		t.Fatalf("parent %s, child %s: %s / %s", st, kst, types(events(t, e, ref6)), types(events(t, e, kid)))
+	}
+	if e.Provider.Executions(kid.ID.String()+":refund") != 1 || e.Provider.Executions(ref6.ID.String()+":own_refund") != 1 {
+		t.Errorf("refunds: %v", e.Provider.Snapshot())
+	}
+	var childDone, parentRefund, parentEnd time.Time
+	for _, ev := range events(t, e, kid) {
+		if ev.Type == history.StepCompleted && ev.StepID == "compensate:pay" {
+			childDone = ev.RecordedAt
+		}
+	}
+	for _, ev := range events(t, e, ref6) {
+		switch {
+		case ev.Type == history.StepCompleted && ev.StepID == "compensate:own":
+			parentRefund = ev.RecordedAt
+		case ev.Type == history.RunCancelled:
+			parentEnd = ev.RecordedAt
+		}
+	}
+	if childDone.IsZero() || parentRefund.Before(childDone) || parentEnd.Before(parentRefund) {
+		t.Errorf("order: child refund %v, parent refund %v, parent end %v", childDone, parentRefund, parentEnd)
+	}
 
 	// A child that is cancelled fails the step.
 	ref5 := e.Start(t, waiting, map[string]any{})
 	links, _ = e.Store.Forks(ctx, ref5)
-	if err := e.Store.CancelRun(ctx, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if st := e.Status(t, ref5); st != "failed" {
@@ -159,4 +219,13 @@ func payloadOf(t *testing.T, ev history.Event) map[string]any {
 		t.Fatal(err)
 	}
 	return m
+}
+
+func waitingDef(t *testing.T, e *rt.Env, wf uuid.UUID) *wd.Definition {
+	t.Helper()
+	def, err := e.Store.Definition(ctx, e.Tenant, wf, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return def
 }

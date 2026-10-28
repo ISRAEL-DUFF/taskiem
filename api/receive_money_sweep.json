@@ -1,0 +1,305 @@
+{
+  "id": "receive-money-sweep",
+  "title": "Send my money to my bank",
+  "summary": "Move what the business's Taskiem wallet holds to its saved bank account, weekly or whenever it holds more than an amount, keeping an amount the owner chooses, and tell the owner how it went.",
+  "description": "Made by Settings > Payments for a business that receives money with Taskiem (docs/spec/iswallet-account-numbers.md N2), not offered in the library: it pays without an approval step, which the library never does. It reads what the wallet holds, keeps the amount chosen and room for the bank's fee, and pays the rest, once per scheduled time, when that is at least the smallest amount, only to the bank account written into it. The owner is told when the bank confirms, or that it could not be paid.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "withdraw",
+    "bank",
+    "schedule"
+  ],
+  "keywords": [
+    "sweep",
+    "sweep to bank",
+    "automatic withdrawal",
+    "withdraw every week",
+    "move money to my bank",
+    "cash out",
+    "settle to my bank",
+    "wallet",
+    "balance"
+  ],
+  "connectors": [
+    "notify@1",
+    "capability:balance",
+    "capability:pay_bank",
+    "capability:resolve_account"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "bank_code",
+      "type": "string",
+      "title": "Bank",
+      "description": "Your bank's code, such as 058 for GTBank.",
+      "required": true,
+      "example": "058",
+      "pattern": "^[0-9A-Za-z]{3,6}$"
+    },
+    {
+      "name": "account_number",
+      "type": "string",
+      "title": "Account number",
+      "description": "Your 10-digit account number: the only place the money goes.",
+      "required": true,
+      "example": "0123456789",
+      "pattern": "^[0-9]{10}$"
+    },
+    {
+      "name": "day",
+      "type": "weekday",
+      "title": "Day",
+      "description": "The day of the week the money is sent.",
+      "required": false,
+      "default": "friday",
+      "example": "friday"
+    },
+    {
+      "name": "send_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the money is sent, Lagos time.",
+      "required": false,
+      "default": "17:00",
+      "example": "17:00"
+    },
+    {
+      "name": "keep",
+      "type": "number",
+      "title": "Keep in the wallet (naira)",
+      "description": "This much stays in the wallet; the rest is sent.",
+      "required": false,
+      "default": 0,
+      "example": 20000,
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    {
+      "name": "above",
+      "type": "number",
+      "title": "Only when the wallet holds more than (naira)",
+      "description": "Nothing is sent unless the wallet holds more than this. 0 sends whenever there is enough.",
+      "required": false,
+      "default": 0,
+      "example": 0,
+      "minimum": 0,
+      "maximum": 1000000000
+    },
+    {
+      "name": "minimum",
+      "type": "number",
+      "title": "Smallest amount to send (naira)",
+      "description": "Less than this is left for next time.",
+      "required": false,
+      "default": 1000,
+      "example": 1000,
+      "minimum": 1,
+      "maximum": 1000000000
+    },
+    {
+      "name": "fee_allowance",
+      "type": "number",
+      "title": "Room for the bank's fee (naira)",
+      "description": "Left in the wallet to pay the transfer's fee.",
+      "required": false,
+      "default": 100,
+      "example": 100,
+      "minimum": 0,
+      "maximum": 100000
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "balance",
+        "pay_bank",
+        "resolve_account"
+      ],
+      "title": "Send from",
+      "description": "The payments account the money is in: your Taskiem wallet, or any you connected that can pay a bank account.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one the money comes out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_sweepToBank",
+    "version": 1,
+    "name": "Send my money to my bank",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{send_time:minute}} {{send_time:hour}} * * {{day:cron}}",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "steps": [
+      {
+        "id": "balance",
+        "type": "capability",
+        "uses": "balance",
+        "name": "Read what the wallet holds",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "account": "{{funding_account}}"
+        }
+      },
+      {
+        "id": "plan",
+        "type": "transform",
+        "name": "Work out what to send",
+        "needs": [
+          "balance"
+        ],
+        "config": {
+          "output": {
+            "amount_kobo": "=int(steps.balance.output.available_kobo) - {{keep:kobo}} - {{fee_allowance:kobo}}",
+            "send": "=int(steps.balance.output.available_kobo) > {{above:kobo}} && int(steps.balance.output.available_kobo) - {{keep:kobo}} - {{fee_allowance:kobo}} >= {{minimum:kobo}}"
+          }
+        }
+      },
+      {
+        "id": "check_name",
+        "type": "capability",
+        "uses": "resolve_account",
+        "name": "Find the name on your bank account",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "plan"
+        ],
+        "when": "=steps.plan.output.send",
+        "input": {
+          "bank_code": "{{bank_code}}",
+          "account_number": "{{account_number}}"
+        }
+      },
+      {
+        "id": "sweep",
+        "type": "capability",
+        "uses": "pay_bank",
+        "name": "Pay it to your bank",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "plan",
+          "check_name"
+        ],
+        "when": "=steps.plan.output.send",
+        "input": {
+          "amount_kobo": "=steps.plan.output.amount_kobo",
+          "bank_code": "{{bank_code}}",
+          "account_number": "{{account_number}}",
+          "account_name": "=steps.check_name.output.account_name",
+          "narration": "Sent to my bank",
+          "source": "{{funding_account}}"
+        },
+        "effect": {
+          "idempotency_seed": "='sweep:' + (has(trigger.scheduled_time) ? string(trigger.scheduled_time) : run.id)"
+        },
+        "retry": {
+          "max": 8,
+          "backoff": "exponential",
+          "initial": "5s",
+          "max_delay": "10m",
+          "max_duration": "6h"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_failed",
+              "type": "connector",
+              "name": "Tell the owner the money could not be sent",
+              "connector": "notify@1",
+              "action": "tell",
+              "input": {
+                "message": "='Sending NGN ' + string(double(steps.plan.output.amount_kobo) / 100.0) + ' to your bank could not be paid; nothing left your wallet. It is tried again next time.'"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "settle",
+        "type": "capability",
+        "uses": "await_settlement",
+        "name": "Wait for the bank to confirm",
+        "needs": [
+          "sweep"
+        ],
+        "timeout": "72h",
+        "when": "=steps.sweep.output.status == 'pending'",
+        "input": {
+          "payout_id": "=steps.sweep.output.payout_id"
+        }
+      },
+      {
+        "id": "tell_done",
+        "type": "connector",
+        "name": "Tell the owner how it went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "sweep"
+        ],
+        "when": "=steps.sweep.output.status != 'pending'",
+        "input": {
+          "message": "='Sent NGN ' + string(double(steps.plan.output.amount_kobo) / 100.0) + ' from your wallet to ' + steps.check_name.output.account_name + ': ' + (steps.sweep.output.status == 'settled' ? 'paid' : 'failed')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_done_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_settled",
+        "type": "connector",
+        "name": "Tell the owner how it went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "settle"
+        ],
+        "input": {
+          "message": "='Sent NGN ' + string(double(steps.plan.output.amount_kobo) / 100.0) + ' from your wallet to ' + steps.check_name.output.account_name + ': ' + (steps.settle.output.status == 'settled' ? 'paid' : steps.settle.output.status)"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_settled_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4d"
+    }
+  }
+}

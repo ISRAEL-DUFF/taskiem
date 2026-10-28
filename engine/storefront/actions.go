@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -30,7 +31,10 @@ type Action struct {
 
 // ActionOptions are a form's choices.
 type ActionOptions struct {
-	// Connection is the Paystack connection payments use (default main).
+	// Connection is the connection payments use: a Paystack connection's
+	// name (default main), which takes card payments and transfers, or
+	// another rail's as connector/name ("iswallet/taskiem"), which takes
+	// bank transfers only (N3).
 	Connection string `json:"connection,omitempty"`
 	// Pickup and Delivery are what an order may choose; neither means
 	// neither is asked.
@@ -45,6 +49,9 @@ type ActionOptions struct {
 	// full (the default) or keep_deposit.
 	CancelRefund string `json:"cancel_refund,omitempty"`
 }
+
+// formConnection is a form's payments connection: name or connector/name.
+var formConnection = regexp.MustCompile(`^(?:[a-z][a-z0-9_-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 
 // takesPayment reports whether a form's kind may ask for payment.
 func takesPayment(kind string) bool { return kind == "order" || kind == "booking" }
@@ -156,6 +163,9 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, CancelRefund: a.Options.CancelRefund}
 	default:
 		a.Options = ActionOptions{}
+	}
+	if c := a.Options.Connection; c != "" && !formConnection.MatchString(c) {
+		return Action{}, fmt.Errorf("%w: the payments connection is a name, or connector/name", ErrInvalid)
 	}
 	if len([]rune(a.Options.DeliveryNote)) > 120 || hasLink(a.Options.DeliveryNote) {
 		return Action{}, fmt.Errorf("%w: a delivery note is up to 120 characters, with no links", ErrInvalid)

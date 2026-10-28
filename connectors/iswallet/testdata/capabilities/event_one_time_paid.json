@@ -22,6 +22,7 @@
   "expect": {
     "payment_id": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
     "amount_kobo": 2500000,
+    "fee_kobo": 35000,
     "currency": "NGN",
     "paid_at": "2026-10-05T09:20:00Z"
   }

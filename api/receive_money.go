@@ -63,6 +63,7 @@ func (s *Server) receiveMoneyRoutes(r chi.Router) {
 	r.With(s.need(PermInvoiceRead), s.tenantWide).Get("/settings/receive-money", s.getReceiveMoney)
 	r.With(s.tenantWide, s.feature(billing.FeatureReceiveMoney, false)).Post("/settings/receive-money", s.turnOnReceiveMoney)
 	r.With(s.tenantWide).Put("/settings/receive-money/withdrawals", s.putWithdrawals)
+	r.With(s.tenantWide).Put("/settings/receive-money/sweep", s.putSweep)
 	r.With(s.need(PermInvoiceRead), s.tenantWide).Get("/receive-money/balance", s.receiveMoneyBalance)
 	r.With(s.need(PermInvoiceRead), s.tenantWide).Get("/receive-money/banks", s.receiveMoneyBanks)
 	r.With(s.need(PermRunStart), s.tenantWide).Post("/receive-money/withdraw", s.withdrawToBank)
@@ -149,6 +150,8 @@ type receiveMoneyView struct {
 	// WithdrawWaiting says what a change to withdrawals waits for (a
 	// second person, a promotion), in plain words; "" when none.
 	WithdrawWaiting string `json:"withdraw_waiting,omitempty"`
+	// Sweep is the sweep to the bank (N2), once it is on.
+	Sweep *sweepView `json:"sweep,omitempty"`
 }
 
 func (s *Server) receiveMoneyView(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (receiveMoneyView, error) {
@@ -173,7 +176,10 @@ func (s *Server) receiveMoneyView(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 		out.WithdrawTo = &withdrawTo{BankCode: deref(m.PayoutBankCode), BankName: deref(m.PayoutBankName), AccountNumber: *m.PayoutAccount, AccountName: deref(m.PayoutName)}
 	}
 	out.TwoAboveKobo, out.WithdrawWorkflow = m.TwoAboveKobo, m.WithdrawWorkflow
-	out.WithdrawWaiting, err = withdrawWaiting(ctx, tx, m.WithdrawWorkflow)
+	if out.WithdrawWaiting, err = withdrawWaiting(ctx, tx, m.WithdrawWorkflow); err != nil {
+		return out, err
+	}
+	out.Sweep, err = s.sweepOf(ctx, tx, tenant)
 	return out, err
 }
 
@@ -679,8 +685,13 @@ func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 		if err := writeWithdrawPolicyTx(r, tx, p.TenantID, req.TwoAboveKobo, g.FourEyesPolicies, p.Actor()); err != nil {
 			return err
 		}
-		wf, v, err := s.withdrawWorkflowTx(r, tx, tpl, m.WalletID, m.WithdrawWorkflow, withdrawTo{BankCode: req.BankCode, AccountNumber: req.AccountNumber, AccountName: name}, g.FourEyesPublish)
+		to := withdrawTo{BankCode: req.BankCode, AccountNumber: req.AccountNumber, AccountName: name}
+		wf, v, err := s.withdrawWorkflowTx(r, tx, tpl, m.WalletID, m.WithdrawWorkflow, to, g.FourEyesPublish)
 		if err != nil {
+			return err
+		}
+		// A sweep that is on pays the new account too, from the same change.
+		if err := s.resweepTx(r, tx, m.WalletID, to, g.FourEyesPublish); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE receive_money SET payout_bank_code = $2, payout_bank_name = NULLIF($3, ''), payout_account_number = $4, payout_account_name = $5,
@@ -815,34 +826,60 @@ func withdrawDefinition(tpl *templates.Template, wallet string, to withdrawTo) (
 // version, for a new account) and publishes it: or, with four-eyes on
 // publishing, asks for it to be published, which a second person approves.
 func (s *Server) withdrawWorkflowTx(r *http.Request, tx pgx.Tx, tpl *templates.Template, wallet string, have *uuid.UUID, to withdrawTo, fourEyes bool) (uuid.UUID, int, error) {
-	ctx := r.Context()
-	p := principalFrom(ctx)
 	doc, err := withdrawDefinition(tpl, wallet, to)
 	if err != nil {
 		return uuid.Nil, 0, err
 	}
+	return s.managedWorkflowTx(r, tx, managedWorkflow{Name: "Withdraw to my bank", Template: tpl.ID, What: "where withdrawals go"}, doc, have, fourEyes)
+}
+
+// managedWorkflow is a workflow Taskiem makes and keeps for a business
+// (Receive money with Taskiem): its name, the library template it is made
+// from ("" for none) and, for a refusal, what changing it changes.
+type managedWorkflow struct {
+	Name, Template, What string
+}
+
+// managedWorkflowTx makes a workflow Taskiem keeps for the business, or
+// its next version, and publishes it: or, with four-eyes on publishing,
+// asks for it to be published, which a second person approves.
+func (s *Server) managedWorkflowTx(r *http.Request, tx pgx.Tx, mw managedWorkflow, doc []byte, have *uuid.UUID, fourEyes bool) (uuid.UUID, int, error) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
 	var wf uuid.UUID
+	var err error
 	v := 1
 	if have != nil {
 		wf = *have
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&v); err != nil {
 			return uuid.Nil, 0, err
 		}
-	} else if wf, err = s.createWorkflowTx(ctx, tx, p, "Withdraw to my bank"); err != nil {
+	} else if wf, err = s.createWorkflowTx(ctx, tx, p, mw.Name); err != nil {
 		return uuid.Nil, 0, err
 	}
 	if err := insertVersionTx(ctx, tx, p.TenantID, wf, v, doc, nil, p.Actor(), ""); err != nil {
 		return uuid.Nil, 0, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET template_id = $3 WHERE workflow_id = $1 AND version = $2`, wf, v, tpl.ID); err != nil {
-		return uuid.Nil, 0, err
+	if mw.Template != "" {
+		if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET template_id = $3 WHERE workflow_id = $1 AND version = $2`, wf, v, mw.Template); err != nil {
+			return uuid.Nil, 0, err
+		}
 	}
-	if err := auditTx(r, tx, "workflow.create", wf.String(), map[string]any{"name": "Withdraw to my bank", "template": tpl.ID, "version": v, "state": "draft", "via": "receive_money"}); err != nil {
+	detail := map[string]any{"name": mw.Name, "version": v, "state": "draft", "via": "receive_money"}
+	if mw.Template != "" {
+		detail["template"] = mw.Template
+	}
+	if err := auditTx(r, tx, "workflow.create", wf.String(), detail); err != nil {
 		return uuid.Nil, 0, err
 	}
 	if fourEyes {
 		if p.UserID == uuid.Nil {
-			return uuid.Nil, 0, fmt.Errorf("%w: with four-eyes publishing, a person changes where withdrawals go and another approves", errForbidden)
+			return uuid.Nil, 0, fmt.Errorf("%w: with four-eyes publishing, a person changes %s and another approves", errForbidden, mw.What)
+		}
+		// Only the newest change waits: approving an older one would
+		// publish settings (an account) since replaced.
+		if _, err := tx.Exec(ctx, `UPDATE publish_requests SET status = 'withdrawn', decided_at = now() WHERE workflow_id = $1 AND version < $2 AND status = 'pending'`, wf, v); err != nil {
+			return uuid.Nil, 0, err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO publish_requests (tenant_id, workflow_id, version, requested_by) VALUES ($1, $2, $3, $4)
 			ON CONFLICT (workflow_id, version) DO UPDATE SET requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL`,
@@ -861,7 +898,7 @@ func (s *Server) withdrawWorkflowTx(r *http.Request, tx pgx.Tx, tpl *templates.T
 		for i, pr := range probs {
 			msgs[i] = pr.Message
 		}
-		return uuid.Nil, 0, fmt.Errorf("%w: the withdrawal workflow could not be published: %s", errConflict, strings.Join(msgs, "; "))
+		return uuid.Nil, 0, fmt.Errorf("%w: %s could not be published: %s", errConflict, mw.Name, strings.Join(msgs, "; "))
 	}
 	return wf, v, err
 }
@@ -878,34 +915,46 @@ func withdrawWaiting(ctx context.Context, tx pgx.Tx, wf *uuid.UUID) (string, err
 	if rule {
 		waits = append(waits, "the new approval rule waits for a second person to approve it (Approval policies)")
 	}
-	if wf != nil {
-		var latest int
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) FROM workflow_versions WHERE workflow_id = $1`, *wf).Scan(&latest); err != nil {
-			return "", err
-		}
-		deployed, err := deployedVersion(ctx, tx, *wf, "prod")
-		if err != nil {
-			return "", err
-		}
-		if deployed != latest {
-			var asked bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM publish_requests WHERE workflow_id = $1 AND version = $2 AND status = 'pending')`, *wf, latest).Scan(&asked); err != nil {
-				return "", err
-			}
-			switch {
-			case asked:
-				waits = append(waits, "the new bank account waits for a second person to approve publishing it (Approvals)")
-			case deployed == 0:
-				waits = append(waits, "your prod environment takes only what is promoted to it: promote Withdraw to my bank there")
-			default:
-				waits = append(waits, "the new bank account is not in prod yet: promote Withdraw to my bank there")
-			}
-		}
+	w, err := workflowWaiting(ctx, tx, wf, "Withdraw to my bank", "the new bank account")
+	if err != nil {
+		return "", err
+	}
+	if w != "" {
+		waits = append(waits, w)
 	}
 	if len(waits) == 0 {
 		return "", nil
 	}
 	return strings.Join(waits, "; ") + ". Until then the account and rule before stay in force.", nil
+}
+
+// workflowWaiting says what the latest version of a workflow Taskiem keeps
+// waits for before it is in prod (a second person, a promotion), with
+// change naming it, or "".
+func workflowWaiting(ctx context.Context, tx pgx.Tx, wf *uuid.UUID, name, change string) (string, error) {
+	if wf == nil {
+		return "", nil
+	}
+	var latest int
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) FROM workflow_versions WHERE workflow_id = $1`, *wf).Scan(&latest); err != nil {
+		return "", err
+	}
+	deployed, err := deployedVersion(ctx, tx, *wf, "prod")
+	if err != nil || deployed == latest {
+		return "", err
+	}
+	var asked bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM publish_requests WHERE workflow_id = $1 AND version = $2 AND status = 'pending')`, *wf, latest).Scan(&asked); err != nil {
+		return "", err
+	}
+	switch {
+	case asked:
+		return change + " waits for a second person to approve publishing it (Approvals)", nil
+	case deployed == 0:
+		return "your prod environment takes only what is promoted to it: promote " + name + " there", nil
+	default:
+		return change + " is not in prod yet: promote " + name + " there", nil
+	}
 }
 
 type withdrawReq struct {

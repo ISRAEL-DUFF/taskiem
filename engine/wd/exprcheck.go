@@ -136,6 +136,7 @@ func (c *exprChecker) step(s *Step) {
 	check("input", s.Input, allowed)
 	if s.Effect != nil {
 		check("effect", s.Effect.IdempotencySeed, allowed)
+		c.seedPerItem(s)
 	}
 	if s.Compensate != nil {
 		check("compensate", s.Compensate.Input, selfOK)
@@ -160,6 +161,23 @@ func (c *exprChecker) step(s *Step) {
 			check("config."+k, v, allowed)
 		}
 	}
+}
+
+// seedPerItem refuses a seed inside a foreach that is the same for every
+// item. A seeded key leaves out the loop position (idempotency contract), so
+// such a seed gives every item one key, and the provider answers all but the
+// first as duplicates while each step reports success.
+func (c *exprChecker) seedPerItem(s *Step) {
+	seed := s.Effect.IdempotencySeed
+	if seed == "" || !c.inForeach(s) {
+		return
+	}
+	refs, err := engine.References(seed) // the schema makes a seed an expression
+	if err != nil || refs.Roots["item"] || refs.Roots["index"] {
+		return // a bad expression is reported by check
+	}
+	c.add(s, "effect", "idempotency_seed inside a foreach must read item or index, or every item gets the same idempotency key and the provider pays only the first; for example %s",
+		"=trigger.body.payroll_id + '/' + item.employee_id")
 }
 
 func (c *exprChecker) add(s *Step, where, format string, args ...any) {

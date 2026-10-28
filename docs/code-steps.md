@@ -29,6 +29,8 @@ For work that needs native libraries, more memory or more time (PDF rendering, i
 
 `fetch` goes through the egress guard: only hosts on the environment's allow-list (Secrets & settings → Allowed hosts), never private or metadata addresses. Responses are cut at 1 MB. Logs are kept with the step's result, up to 16 KB: do not log secrets or personal data.
 
+`fetch` sends only `GET` and `HEAD`; any other method throws before the request leaves the sandbox. A code step is retried as a read: if its worker stops after a call but before the result is recorded, the step runs again from the start. That is harmless for a read, but a payment, a message or any other write would happen twice. Send writes from an `http` step with an action `class`, or from a connector step: those carry an idempotency key and are never repeated blindly. Use a code step to compute the request and pass it on as that step's input.
+
 ## Limits
 
 | | Default | Per step |
