@@ -251,6 +251,67 @@ func TestAIStepUnrecordedCallIsRetried(t *testing.T) {
 	}
 }
 
+// Steps calling at once reserve their share of the budget, so they cannot
+// all pass the same check; a reservation lapses if its worker dies, and
+// the question sent is bounded.
+func TestAIStepReservesBudget(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, aiFlow)
+	fake := &ai.Fake{Respond: func(ai.Request) (*ai.Response, error) {
+		r := aiAnswer(`{"greeting":"Hi","priority":"low"}`)
+		r.Usage = ai.Usage{InputTokens: 10, OutputTokens: 5}
+		return &r, nil
+	}}
+	e.AI = fake
+	start := func(note string) runtime.RunRef {
+		return e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": note}})
+	}
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": 100000}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	// Another step is calling, and has reserved what is left.
+	other := uuid.Must(uuid.NewV7())
+	if _, err := e.DB.Admin.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, tokens, expires_at) VALUES ($1, $2, $1, 'ask', 100000, now() + interval '5 minutes')`, other, e.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	ref := start("n")
+	e.Drain(t)
+	f := failureOf(t, e, ref, "ask")
+	if f["kind"] != "limit" || f["next"] != "fail" || !strings.Contains(f["message"].(string), "not tried again") || len(fake.Requests()) != 0 {
+		t.Errorf("over budget with the other step's reservation: %v, %d calls", f, len(fake.Requests()))
+	}
+	// Its worker died: the reservation lapses.
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE ai_reservations SET expires_at = now() - interval '1 second' WHERE id = $1`, other); err != nil {
+		t.Fatal(err)
+	}
+	ref = start("n")
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" || len(fake.Requests()) != 1 {
+		t.Fatalf("after the reservation lapsed: %s, %d calls", st, len(fake.Requests()))
+	}
+	var left int
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM ai_reservations WHERE tenant_id = $1`, e.Tenant).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Errorf("%d reservations left after the step", left)
+	}
+	// A question over the bound is not sent. (An input over it cannot be
+	// scheduled, but sent as indented JSON a list of small items grows
+	// several times over.)
+	big := e.Publish(t, strings.Replace(strings.Replace(aiFlow, `"id":"wf_ai"`, `"id":"wf_aiBig"`, 1),
+		`"note":"=trigger.body.note"}`, `"note":"=trigger.body.note","items":"=trigger.body.items"}`, 1))
+	items := make([]any, 50000)
+	for i := range items {
+		items[i] = ""
+	}
+	ref = e.Start(t, big, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": "n", "items": items}})
+	e.Drain(t)
+	if f := failureOf(t, e, ref, "ask"); f["kind"] != "input_too_large" || len(fake.Requests()) != 1 {
+		t.Errorf("a question over the bound: %v, %d calls", f, len(fake.Requests()))
+	}
+}
+
 var errSlowDown = slowDown{}
 
 type slowDown struct{}

@@ -83,17 +83,13 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	}
 	cfg := p.step.AI
 	var allowed bool
-	var limit, used int64
+	var limit int64
 	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT ai_steps FROM governance_settings), true)`).Scan(&allowed); err != nil {
 			return err
 		}
 		lim, err := w.Store.limitsTx(ctx, tx, p.c.tenant)
-		if err != nil {
-			return err
-		}
 		limit = lim.AIMonthlyTokens
-		used, err = AITokensThisMonth(ctx, tx, p.c.tenant)
 		return err
 	})
 	if err != nil {
@@ -110,14 +106,6 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		if !ok {
 			return fail("disabled", "the business's plan does not include AI, which AI steps need; change plan under Billing")
 		}
-	}
-	if limit > 0 && used >= limit && w.AI.Overage != nil {
-		if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {
-			limit = 0
-		}
-	}
-	if limit > 0 && used >= limit {
-		return fail("limit", "this month's AI budget is used up (%d tokens); the step runs again once the budget allows", limit)
 	}
 	prov, model, err := w.AI.provider(cfg.Model)
 	if err != nil || prov == nil {
@@ -157,6 +145,9 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		logIn[k] = redactThrough(p.taint, v)
 	}
 	question, logged := aiQuestion(prompt, maskedIn), aiQuestion(prompt, logIn)
+	if len(question) > maxAIQuestion {
+		return fail("input_too_large", "the prompt and input come to %d bytes; an AI step sends at most %d", len(question), maxAIQuestion)
+	}
 	var schema map[string]any
 	if err := json.Unmarshal(cfg.OutputSchema, &schema); err != nil {
 		return fail("fatal", "output_schema: %v", err)
@@ -168,6 +159,25 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	}
 	if timeout <= 0 {
 		timeout = 2 * time.Minute
+	}
+	// The budget, with what the steps calling now have reserved: this
+	// step reserves what it may use (the question and the longest answer,
+	// for both rounds) until its calls are recorded.
+	if limit > 0 {
+		estimate := int64(2 * (len(aiStepSystem)/4 + len(question)/4 + maxTokens))
+		release, over, err := w.reserveAI(ctx, p, limit, estimate, 2*timeout+time.Minute)
+		if err != nil {
+			return failed(p.c, "retryable", "reserving the business's AI budget: "+err.Error(), "retry")
+		}
+		defer release()
+		if over && w.AI.Overage != nil {
+			if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {
+				over = false // a plan with AI overage bills tokens beyond the budget
+			}
+		}
+		if over {
+			return fail("limit", "this month's AI budget is used up (%d tokens); the step is not tried again (the budget starts afresh next month, UTC)", limit)
+		}
 	}
 	req := ai.Request{
 		System:    []ai.SystemBlock{{Text: aiStepSystem, Cache: true}},
@@ -275,6 +285,54 @@ func redactThrough(taint pii.Taint, v any) any {
 // redactAnswer is a model's answer as its record keeps it: it may repeat
 // the fields let through.
 func redactAnswer(taint pii.Taint, s string) string { return taint.RedactText(pii.Redact(s)) }
+
+// maxAIQuestion bounds what an ai step sends, its prompt and input: as
+// large as a step's output may be (maxStepOutput), so a step can pass
+// another's whole output to the model, but not an unbounded one.
+const maxAIQuestion = maxStepOutput
+
+// reserveAI checks the tenant's monthly AI budget, counting the tokens
+// recorded and those the ai steps calling now have reserved, and reserves
+// estimate tokens for this step until release is called (or ttl passes,
+// if its worker dies first). Checks are serialised per tenant, so steps
+// starting at once see each other's reservations. over: the budget is
+// used up, and nothing was reserved; release is safe to call either way.
+func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, ttl time.Duration) (release func(), over bool, err error) {
+	id := uuid.Must(uuid.NewV7())
+	release = func() {}
+	err = db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, p.c.tenant); err != nil {
+			return err
+		}
+		used, err := AITokensThisMonth(ctx, tx, p.c.tenant)
+		if err != nil {
+			return err
+		}
+		var reserved int64
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`,
+			p.c.tenant).Scan(&reserved); err != nil {
+			return err
+		}
+		if over = used+reserved >= limit; over {
+			return nil
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, tokens, expires_at) VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))`,
+			id, p.c.tenant, p.c.run, p.c.step, estimate, ttl.Seconds())
+		return err
+	})
+	if err != nil || over {
+		return release, over, err
+	}
+	return func() {
+		ctx := context.WithoutCancel(ctx)
+		if err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `DELETE FROM ai_reservations WHERE id = $1 OR (tenant_id = $2 AND expires_at <= now())`, id, p.c.tenant)
+			return err
+		}); err != nil {
+			w.Logger.Error("releasing an ai step's budget reservation", "run", p.c.run, "step", p.c.step, "err", err)
+		}
+	}, false, nil
+}
 
 func containsString(list []string, s string) bool {
 	for _, x := range list {
