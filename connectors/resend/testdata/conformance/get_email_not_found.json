@@ -1,0 +1,15 @@
+{
+ "action": "get_email",
+ "input": {
+  "email_id": "nope"
+ },
+ "credentials": {
+  "api_key": "re_test_123"
+ },
+ "exchanges": [
+  "email_404"
+ ],
+ "expect": {
+  "error": "not_found"
+ }
+}

@@ -1,0 +1,1 @@
+{"request": {"method": "GET", "path": "/v1/providers"}, "response": {"status": 200, "headers": {"X-Request-ID": "req_prov"}, "body": {"providers": [{"code": "flutterwave", "currencies": ["NGN"], "virtual_accounts": {"permanent": true, "dynamic": true}}]}}}

@@ -1,0 +1,176 @@
+{
+  "id": "mailchimp-opted-in-customers",
+  "title": "Put people who opted in on a Mailchimp audience",
+  "summary": "When a customer in your customers table agrees to marketing, add them to your Mailchimp audience, once.",
+  "description": "Whenever a customer is added to your customers table, or changed there, and their marketing_opt_in is true, Taskiem adds them to your Mailchimp audience as subscribed (or updates them there), with their name and phone. Nobody whose row does not say they agreed is ever added, and someone who unsubscribed in Mailchimp stays unsubscribed.",
+  "category": "customers",
+  "tags": [
+    "mailchimp",
+    "newsletter",
+    "consent"
+  ],
+  "keywords": [
+    "mailchimp",
+    "newsletter",
+    "marketing",
+    "audience",
+    "opt",
+    "subscribe"
+  ],
+  "requires": [
+    "mailchimp"
+  ],
+  "connectors": [
+    "xenibase@1",
+    "mailchimp@1"
+  ],
+  "params": [
+    {
+      "name": "mailchimp_connection",
+      "type": "connection",
+      "connector": "mailchimp",
+      "title": "Mailchimp connection",
+      "description": "Your Mailchimp account, connected with one click.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "audience_id",
+      "type": "string",
+      "title": "Mailchimp audience",
+      "description": "The audience they go on.",
+      "required": true,
+      "example": "a6b5da1054",
+      "picker": "choice",
+      "choices": "mailchimp:audiences",
+      "from": "mailchimp_connection"
+    },
+    {
+      "name": "customers_table",
+      "type": "string",
+      "title": "Customers table",
+      "description": "Your customers: name, email, phone, whether they agreed to marketing, and how their email is doing. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{customers_table}}",
+      "title": "Customers",
+      "description": "Your customers. marketing_opt_in is true only when the customer said yes to your newsletter; email_status says when their address bounced or they unsubscribed or complained.",
+      "columns": [
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "text",
+          "required": true,
+          "personal": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "phone",
+          "title": "Phone",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "marketing_opt_in",
+          "title": "Agreed to marketing",
+          "type": "boolean"
+        },
+        {
+          "name": "email_status",
+          "title": "Email status",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_mailchimpOptedInCustomers",
+    "version": 1,
+    "name": "Put people who opted in on a Mailchimp audience",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "xenibase@1",
+        "trigger": "row_changed",
+        "connection": "data_tables",
+        "events": [
+          "INSERT",
+          "UPDATE"
+        ],
+        "options": {
+          "tables": [
+            "{{customers_table}}"
+          ]
+        }
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "x-pii": "email"
+              },
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              },
+              "marketing_opt_in": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "add",
+        "type": "connector",
+        "name": "Add them to the audience",
+        "connector": "mailchimp@1",
+        "action": "add_or_update_member",
+        "connection": "{{mailchimp_connection}}",
+        "when": "=has(trigger.body.record.marketing_opt_in) && trigger.body.record.marketing_opt_in == true && has(trigger.body.record.email) && trigger.body.record.email != ''",
+        "input": {
+          "audience_id": "{{audience_id}}",
+          "email": "=trigger.body.record.email",
+          "first_name": "=trigger.body.record.?name.orValue('')",
+          "phone": "=trigger.body.record.?phone.orValue('')",
+          "consent": {
+            "opted_in": true,
+            "source": "the customers table"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

@@ -188,6 +188,83 @@ export const breet = {
   withdraw_to_bank: (input: BreetWithdrawToBankInput, extra?: ConnectorExtra): StepSpec => connector("breet@1", "withdraw_to_bank", input, extra),
 };
 
+// Brevo (brevo@1)
+export interface BrevoAddToListInput {
+  consent: Value;
+  emails: Value;
+  list_id: Val<number>;
+  /** Set by the engine; not sent to Brevo */
+  request_key?: Val<string>;
+}
+export interface BrevoCreateOrUpdateContactInput {
+  /** Other contact attributes, by their Brevo names (upper case) */
+  attributes?: Value;
+  consent?: Value;
+  email: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  /** Lists to put them on; needs consent */
+  list_ids?: Value;
+  /** With the country code */
+  phone?: Val<string>;
+  /** Set by the engine; not sent to Brevo */
+  request_key?: Val<string>;
+}
+export interface BrevoGetAccountInput {
+  [key: string]: Value;
+}
+export interface BrevoListListsInput {
+  [key: string]: Value;
+}
+export interface BrevoSendCampaignInput {
+  campaign_id: Val<number>;
+  /** Set by the engine; not sent to Brevo */
+  request_key?: Val<string>;
+}
+export interface BrevoSendEmailInput {
+  attachments?: Value;
+  bcc?: Value;
+  cc?: Value;
+  html?: Val<string>;
+  /** The template's variables */
+  params?: Value;
+  reply_to?: Val<string>;
+  sender_email: Val<string>;
+  sender_name?: Val<string>;
+  /** Required without template_id */
+  subject?: Val<string>;
+  tags?: Value;
+  /** A Brevo template instead of subject and content */
+  template_id?: Val<number>;
+  text?: Val<string>;
+  to: Value;
+}
+export interface BrevoSendSmsInput {
+  consent?: Value;
+  content: Val<string>;
+  /** With the country code: +2348030000000 */
+  recipient: Val<string>;
+  sender: Val<string>;
+  tag?: Val<string>;
+  type?: Val<"transactional" | "marketing">;
+}
+export const brevo = {
+  /** Add contacts to a list (idempotent_write) */
+  add_to_list: (input: BrevoAddToListInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "add_to_list", input, extra),
+  /** Add or update a contact (idempotent_write) */
+  create_or_update_contact: (input: BrevoCreateOrUpdateContactInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "create_or_update_contact", input, extra),
+  /** Get the account (read) */
+  get_account: (input?: BrevoGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "get_account", input, extra),
+  /** List your contact lists (read) */
+  list_lists: (input?: BrevoListListsInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "list_lists", input, extra),
+  /** Send an email campaign (idempotent_write) */
+  send_campaign: (input: BrevoSendCampaignInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "send_campaign", input, extra),
+  /** Send an email (unsafe_write) */
+  send_email: (input: BrevoSendEmailInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "send_email", input, extra),
+  /** Send an SMS (unsafe_write) */
+  send_sms: (input: BrevoSendSmsInput, extra?: ConnectorExtra): StepSpec => connector("brevo@1", "send_sms", input, extra),
+};
+
 // Dojah (dojah@1)
 export interface DojahCheckBalanceInput {
   [key: string]: Value;
@@ -496,6 +573,56 @@ export const googlesheets = {
   update_values: (input: GooglesheetsUpdateValuesInput, extra?: ConnectorExtra): StepSpec => connector("googlesheets@1", "update_values", input, extra),
 };
 
+// Instagram (instagram@1)
+export interface InstagramGetAccountInput {
+  [key: string]: Value;
+}
+export interface InstagramGetConversationInput {
+  limit?: Val<number>;
+  person_id: Val<string>;
+}
+export interface InstagramGetProfileInput {
+  person_id: Val<string>;
+}
+export interface InstagramMarkSeenInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+}
+export interface InstagramSendMessageInput {
+  attachment_type?: Val<"image" | "video" | "audio">;
+  /** An https link to an image */
+  attachment_url?: Val<string>;
+  quick_replies?: Value;
+  /** The person (sender_id on the messages trigger) */
+  recipient_id: Val<string>;
+  /** The message id this replies to */
+  reply_to?: Val<string>;
+  /** Outside the 24 hours: a person replying by hand, within 7 days */
+  tag?: Val<"HUMAN_AGENT">;
+  text?: Val<string>;
+}
+export interface InstagramSendTypingInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+  true?: Val<boolean>;
+}
+export const instagram = {
+  /** Get the account (read) */
+  get_account: (input?: InstagramGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "get_account", input, extra),
+  /** Read the conversation (read) */
+  get_conversation: (input: InstagramGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "get_conversation", input, extra),
+  /** Get the person's name (read) */
+  get_profile: (input: InstagramGetProfileInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "get_profile", input, extra),
+  /** Mark as seen (idempotent_write) */
+  mark_seen: (input: InstagramMarkSeenInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "mark_seen", input, extra),
+  /** Send a message (unsafe_write) */
+  send_message: (input: InstagramSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "send_message", input, extra),
+  /** Show typing (idempotent_write) */
+  send_typing: (input: InstagramSendTypingInput, extra?: ConnectorExtra): StepSpec => connector("instagram@1", "send_typing", input, extra),
+};
+
 // Interswitch (interswitch@1)
 export interface InterswitchGetPaymentInput {
   /** Kobo you expected */
@@ -621,6 +748,28 @@ export const invoices = {
 };
 
 // iswallet (iswallet@1)
+export interface IswalletCreateDynamicAccountInput {
+  /** What a payer's bank shows when it resolves the number */
+  account_name?: Val<string>;
+  /** Kobo */
+  amount: Val<number>;
+  expires_minutes?: Val<number>;
+  reference?: Val<string>;
+}
+export interface IswalletCreateWalletInput {
+  business_email?: Val<string>;
+  business_name?: Val<string>;
+  /** The director's BVN */
+  bvn?: Val<string>;
+  currency?: Val<string>;
+  email?: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  /** Taskiem's key for the owner (tenant:<id> for a business's own wallet) */
+  owner_ref: Val<string>;
+  /** An individual; a business holding other people's money (a school's fees), its own segregated account; a business holding only its own money, pooled */
+  owner_type: Val<"client_end_user" | "client_end_user_business" | "client_end_business">;
+}
 export interface IswalletGetBalanceInput {
   wallet_id: Val<string>;
 }
@@ -628,13 +777,22 @@ export interface IswalletGetPayoutInput {
   outflow_id: Val<string>;
 }
 export interface IswalletIssueVirtualAccountInput {
-  /** Asked for; iswallet says the name and bank are its partner's, so the number may show another */
+  /** What a payer's bank shows when it resolves the number */
   account_name?: Val<string>;
+  /** A partner from list_providers; iswallet chooses when it is left out */
+  provider?: Val<string>;
   reference?: Val<string>;
   /** The wallet the number pays into */
   wallet_id: Val<string>;
 }
+export interface IswalletIssueVirtualAccountsInput {
+  accounts: Value;
+  wallet_id: Val<string>;
+}
 export interface IswalletListBanksInput {
+  [key: string]: Value;
+}
+export interface IswalletListProvidersInput {
   [key: string]: Value;
 }
 export interface IswalletListTransactionsInput {
@@ -668,14 +826,22 @@ export interface IswalletTransferInput {
   to_wallet_id: Val<string>;
 }
 export const iswallet = {
+  /** Open an account number for one payment (unsafe_write) */
+  create_dynamic_account: (input: IswalletCreateDynamicAccountInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "create_dynamic_account", input, extra),
+  /** Create a wallet (idempotent_write) */
+  create_wallet: (input: IswalletCreateWalletInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "create_wallet", input, extra),
   /** Get wallet balance (read) */
   get_balance: (input: IswalletGetBalanceInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "get_balance", input, extra),
   /** Get payout status (read) */
   get_payout: (input: IswalletGetPayoutInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "get_payout", input, extra),
   /** Issue a customer's account number (idempotent_write) */
   issue_virtual_account: (input: IswalletIssueVirtualAccountInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "issue_virtual_account", input, extra),
+  /** Issue many customers' account numbers (idempotent_write) */
+  issue_virtual_accounts: (input: IswalletIssueVirtualAccountsInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "issue_virtual_accounts", input, extra),
   /** List banks (read) */
   list_banks: (input?: IswalletListBanksInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_banks", input, extra),
+  /** List the partners that issue account numbers (read) */
+  list_providers: (input?: IswalletListProvidersInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_providers", input, extra),
   /** List a wallet's transactions (read) */
   list_transactions: (input: IswalletListTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "list_transactions", input, extra),
   /** Resolve account name (read) */
@@ -746,6 +912,120 @@ export const lenco = {
   resolve_account: (input: LencoResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "resolve_account", input, extra),
   /** Transfer to a bank account (idempotent_write) */
   transfer: (input: LencoTransferInput, extra?: ConnectorExtra): StepSpec => connector("lenco@1", "transfer", input, extra),
+};
+
+// Mailchimp (mailchimp@1)
+export interface MailchimpAddOrUpdateMemberInput {
+  audience_id: Val<string>;
+  consent: Value;
+  email: Val<string>;
+  first_name?: Val<string>;
+  last_name?: Val<string>;
+  /** Other merge fields, by their tags (BIRTHDAY, COMPANY) */
+  merge_fields?: Value;
+  phone?: Val<string>;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+  /** Tags added when they are added */
+  tags?: Value;
+}
+export interface MailchimpCreateCampaignInput {
+  audience_id: Val<string>;
+  from_name: Val<string>;
+  html: Val<string>;
+  preview_text?: Val<string>;
+  /** An address on a verified domain */
+  reply_to: Val<string>;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+  subject: Val<string>;
+  /** Only the members with this tag (a static segment) */
+  tag_id?: Val<number>;
+  /** The campaign's name in Mailchimp; unique for each campaign this makes */
+  title: Val<string>;
+}
+export interface MailchimpGetAccountInput {
+  [key: string]: Value;
+}
+export interface MailchimpListAudiencesInput {
+  [key: string]: Value;
+}
+export interface MailchimpSendCampaignInput {
+  campaign_id: Val<string>;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+}
+export interface MailchimpTagMemberInput {
+  add?: Value;
+  audience_id: Val<string>;
+  email: Val<string>;
+  remove?: Value;
+  /** Set by the engine; not sent to Mailchimp */
+  request_key?: Val<string>;
+}
+export const mailchimp = {
+  /** Add or update a member (idempotent_write) */
+  add_or_update_member: (input: MailchimpAddOrUpdateMemberInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "add_or_update_member", input, extra),
+  /** Create a campaign (idempotent_write) */
+  create_campaign: (input: MailchimpCreateCampaignInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "create_campaign", input, extra),
+  /** Get the account (read) */
+  get_account: (input?: MailchimpGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "get_account", input, extra),
+  /** List audiences (read) */
+  list_audiences: (input?: MailchimpListAudiencesInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "list_audiences", input, extra),
+  /** Send a campaign (idempotent_write) */
+  send_campaign: (input: MailchimpSendCampaignInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "send_campaign", input, extra),
+  /** Tag a member (idempotent_write) */
+  tag_member: (input: MailchimpTagMemberInput, extra?: ConnectorExtra): StepSpec => connector("mailchimp@1", "tag_member", input, extra),
+};
+
+// Facebook Messenger (messenger@1)
+export interface MessengerGetConversationInput {
+  limit?: Val<number>;
+  person_id: Val<string>;
+}
+export interface MessengerGetPageInput {
+  [key: string]: Value;
+}
+export interface MessengerGetProfileInput {
+  person_id: Val<string>;
+}
+export interface MessengerMarkSeenInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+}
+export interface MessengerSendMessageInput {
+  attachment_type?: Val<"image" | "video" | "audio" | "file">;
+  /** An https link to an image */
+  attachment_url?: Val<string>;
+  quick_replies?: Value;
+  /** The person (sender_id on the messages trigger) */
+  recipient_id: Val<string>;
+  /** The message id this replies to */
+  reply_to?: Val<string>;
+  /** Outside the 24 hours: a person replying by hand, within 7 days */
+  tag?: Val<"HUMAN_AGENT">;
+  text?: Val<string>;
+}
+export interface MessengerSendTypingInput {
+  recipient_id: Val<string>;
+  /** Set by the engine; not sent to Meta */
+  request_key?: Val<string>;
+  true?: Val<boolean>;
+}
+export const messenger = {
+  /** Read the conversation (read) */
+  get_conversation: (input: MessengerGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "get_conversation", input, extra),
+  /** Get the Page (read) */
+  get_page: (input?: MessengerGetPageInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "get_page", input, extra),
+  /** Get the person's name (read) */
+  get_profile: (input: MessengerGetProfileInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "get_profile", input, extra),
+  /** Mark as seen (idempotent_write) */
+  mark_seen: (input: MessengerMarkSeenInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "mark_seen", input, extra),
+  /** Send a message (unsafe_write) */
+  send_message: (input: MessengerSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "send_message", input, extra),
+  /** Show typing (idempotent_write) */
+  send_typing: (input: MessengerSendTypingInput, extra?: ConnectorExtra): StepSpec => connector("messenger@1", "send_typing", input, extra),
 };
 
 // Moniepoint (Monnify) (moniepoint@1)
@@ -1300,6 +1580,10 @@ export interface NotifyTellInput {
   message: Val<string>;
   /** With to: role, the role */
   role?: Val<string>;
+  /** Optional: the WhatsApp template that carries the message outside the 24-hour window instead of the generic alert, by name (taskiem_daily_close, taskiem_daily_summary: one of the registry's templates for the business's own people, with no link or button filled at each send); checked when the workflow is published */
+  template?: Val<string>;
+  /** With template: its variables (every one but the business's name, which Taskiem adds), each a line of text, such as day and summary for taskiem_daily_close */
+  template_vars?: Value;
   /** A first line, and an email's subject */
   title?: Val<string>;
   /** Who hears it: the owners (the default), the members with a role, or named members */
@@ -1791,6 +2075,181 @@ export const prembly = {
   verify_voters_card: (input: PremblyVerifyVotersCardInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_voters_card", input, extra),
 };
 
+// QuickBooks (quickbooks@1)
+export interface QuickbooksChangesSinceInput {
+  entities: Value;
+  since: Val<string>;
+}
+export interface QuickbooksCreateBillInput {
+  currency?: Val<string>;
+  doc_number: Val<string>;
+  due_date?: Val<string>;
+  lines: Value;
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+  vendor_id: Val<string>;
+}
+export interface QuickbooksCreateCustomerInput {
+  company_name?: Val<string>;
+  display_name: Val<string>;
+  email?: Val<string>;
+  family_name?: Val<string>;
+  given_name?: Val<string>;
+  notes?: Val<string>;
+  phone?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+}
+export interface QuickbooksCreateInvoiceInput {
+  /** Only for a company with multicurrency on; otherwise the company's home currency */
+  currency?: Val<string>;
+  customer_id: Val<string>;
+  /** Shown on the invoice */
+  customer_memo?: Val<string>;
+  doc_number: Val<string>;
+  due_date?: Val<string>;
+  /** Where QuickBooks sends it */
+  email?: Val<string>;
+  lines: Value;
+  /** Kept in the books only */
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  /** Whether line amounts include tax (outside the US). Default: excluded when a line names a tax code */
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+}
+export interface QuickbooksCreatePaymentInput {
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  /** Required without invoice_id */
+  customer_id?: Val<string>;
+  /** The bank or cash account it went into; default: Undeposited Funds */
+  deposit_account_id?: Val<string>;
+  invoice_id?: Val<string>;
+  memo?: Val<string>;
+  payment_method_id?: Val<string>;
+  reference: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  /** Default today */
+  txn_date?: Val<string>;
+}
+export interface QuickbooksCreatePurchaseInput {
+  currency?: Val<string>;
+  doc_number: Val<string>;
+  lines: Value;
+  /** The bank */
+  paid_from_account_id: Val<string>;
+  /** cash covers transfers; credit_card needs a card account */
+  payment_type?: Val<"cash" | "check" | "credit_card">;
+  /** Kept in the books; also a line's description when it has none */
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+  /** VAT included in the first line's amount, recorded as its own line on that line's account */
+  vat_kobo?: Val<number>;
+  vendor_id?: Val<string>;
+}
+export interface QuickbooksCreateSalesReceiptInput {
+  currency?: Val<string>;
+  customer_id?: Val<string>;
+  /** The bank or cash account the takings went into; default: Undeposited Funds */
+  deposit_account_id?: Val<string>;
+  doc_number: Val<string>;
+  lines: Value;
+  payment_method_id?: Val<string>;
+  private_note?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+  tax_calculation?: Val<"excluded" | "inclusive" | "not_applicable">;
+  txn_date?: Val<string>;
+}
+export interface QuickbooksCreateVendorInput {
+  company_name?: Val<string>;
+  display_name: Val<string>;
+  email?: Val<string>;
+  phone?: Val<string>;
+  /** Set by the engine; sent as requestid */
+  request_key?: Val<string>;
+}
+export interface QuickbooksFindCustomerInput {
+  display_name?: Val<string>;
+  email?: Val<string>;
+}
+export interface QuickbooksFindVendorInput {
+  display_name: Val<string>;
+}
+export interface QuickbooksGetCompanyInput {
+  [key: string]: Value;
+}
+export interface QuickbooksGetEntityInput {
+  entity: Val<"invoice" | "payment" | "customer" | "vendor" | "salesreceipt" | "purchase" | "bill" | "billpayment" | "item" | "account" | "estimate" | "creditmemo" | "refundreceipt" | "deposit" | "journalentry" | "taxcode">;
+  id: Val<string>;
+}
+export interface QuickbooksGetInvoiceInput {
+  invoice_id: Val<string>;
+}
+export interface QuickbooksListAccountsInput {
+  /** Only accounts of this kind (cash: QuickBooks keeps cash in Bank accounts) */
+  type?: Val<"income" | "expense" | "bank" | "cash" | "credit_card" | "receivable" | "payable" | "other">;
+}
+export interface QuickbooksListItemsInput {
+  [key: string]: Value;
+}
+export interface QuickbooksListTaxCodesInput {
+  [key: string]: Value;
+}
+export interface QuickbooksQueryInvoicesInput {
+  changed_since?: Val<string>;
+  customer_id?: Val<string>;
+  doc_number?: Val<string>;
+  max?: Val<number>;
+  /** Only those with something left to pay */
+  unpaid?: Val<boolean>;
+}
+export const quickbooks = {
+  /** Read what changed (read) */
+  changes_since: (input: QuickbooksChangesSinceInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "changes_since", input, extra),
+  /** Record a supplier's bill (idempotent_write) */
+  create_bill: (input: QuickbooksCreateBillInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_bill", input, extra),
+  /** Add a customer (idempotent_write) */
+  create_customer: (input: QuickbooksCreateCustomerInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_customer", input, extra),
+  /** Record an invoice (idempotent_write) */
+  create_invoice: (input: QuickbooksCreateInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_invoice", input, extra),
+  /** Record a payment (idempotent_write) */
+  create_payment: (input: QuickbooksCreatePaymentInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_payment", input, extra),
+  /** Record an expense (idempotent_write) */
+  create_purchase: (input: QuickbooksCreatePurchaseInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_purchase", input, extra),
+  /** Record a sale (idempotent_write) */
+  create_sales_receipt: (input: QuickbooksCreateSalesReceiptInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_sales_receipt", input, extra),
+  /** Add a supplier (idempotent_write) */
+  create_vendor: (input: QuickbooksCreateVendorInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "create_vendor", input, extra),
+  /** Find a customer (read) */
+  find_customer: (input?: QuickbooksFindCustomerInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "find_customer", input, extra),
+  /** Find a supplier (read) */
+  find_vendor: (input: QuickbooksFindVendorInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "find_vendor", input, extra),
+  /** Get the company (read) */
+  get_company: (input?: QuickbooksGetCompanyInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "get_company", input, extra),
+  /** Read a record (read) */
+  get_entity: (input: QuickbooksGetEntityInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "get_entity", input, extra),
+  /** Get an invoice (read) */
+  get_invoice: (input: QuickbooksGetInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "get_invoice", input, extra),
+  /** List accounts (read) */
+  list_accounts: (input?: QuickbooksListAccountsInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "list_accounts", input, extra),
+  /** List products and services (read) */
+  list_items: (input?: QuickbooksListItemsInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "list_items", input, extra),
+  /** List tax codes (read) */
+  list_tax_codes: (input?: QuickbooksListTaxCodesInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "list_tax_codes", input, extra),
+  /** Find invoices (read) */
+  query_invoices: (input?: QuickbooksQueryInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("quickbooks@1", "query_invoices", input, extra),
+};
+
 // Remita (remita@1)
 export interface RemitaBulkTransferInput {
   batch_payment_identifier?: Val<string>;
@@ -1872,6 +2331,98 @@ export const remita = {
   resolve_account: (input: RemitaResolveAccountInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "resolve_account", input, extra),
   /** Transfer to a bank account (single payment) (idempotent_write) */
   transfer: (input: RemitaTransferInput, extra?: ConnectorExtra): StepSpec => connector("remita@1", "transfer", input, extra),
+};
+
+// Resend (resend@1)
+export interface ResendGetEmailInput {
+  email_id: Val<string>;
+}
+export interface ResendListDomainsInput {
+  [key: string]: Value;
+}
+export interface ResendSendEmailInput {
+  attachments?: Value;
+  bcc?: Value;
+  cc?: Value;
+  /** Ada Cakes <orders@adacakes.ng>: the domain must be verified in Resend */
+  from: Val<string>;
+  html?: Val<string>;
+  reply_to?: Value;
+  /** When to send (ISO 8601) */
+  scheduled_at?: Val<string>;
+  subject: Val<string>;
+  tags?: Value;
+  /** Plain text; made from the HTML when left out */
+  text?: Val<string>;
+  to: Value;
+}
+export const resend = {
+  /** Get an email (read) */
+  get_email: (input: ResendGetEmailInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "get_email", input, extra),
+  /** List your domains (read) */
+  list_domains: (input?: ResendListDomainsInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "list_domains", input, extra),
+  /** Send an email (idempotent_write) */
+  send_email: (input: ResendSendEmailInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "send_email", input, extra),
+};
+
+// Riders (riders@1)
+export interface RidersAddRiderInput {
+  /** Their fee per delivery in kobo */
+  fee_kobo?: Val<number>;
+  name: Val<string>;
+  /** A Nigerian mobile number */
+  phone: Val<string>;
+  zones?: Value;
+}
+export interface RidersFinishPayoutsInput {
+  batch_id: Val<string>;
+  cancel?: Val<boolean>;
+  results?: Value;
+}
+export interface RidersGetRiderInput {
+  id: Val<string>;
+}
+export interface RidersListRidersInput {
+  /** Riders on leave too */
+  include_inactive?: Val<boolean>;
+  /** A delivery area, as on the order form (Lekki Phase 1) */
+  zone?: Val<string>;
+}
+export interface RidersOfferInput {
+  /** This delivery's fee for the rider (default the rider's) */
+  fee_kobo?: Val<number>;
+  /** The order's reference (trigger.body.reference) */
+  reference: Val<string>;
+  /** A rider to offer it to; omit for rotation */
+  rider_id?: Val<string>;
+}
+export interface RidersPreparePayoutsInput {
+  /** A batch Riders > Pay made; empty for this run's */
+  batch_id?: Val<string>;
+}
+export interface RidersReleaseInput {
+  reference: Val<string>;
+}
+export interface RidersRetireRiderInput {
+  id: Val<string>;
+}
+export const riders = {
+  /** Add a rider (idempotent_write) */
+  add_rider: (input: RidersAddRiderInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "add_rider", input, extra),
+  /** Record how the payout went (idempotent_write) */
+  finish_payouts: (input: RidersFinishPayoutsInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "finish_payouts", input, extra),
+  /** Read a rider (read) */
+  get_rider: (input: RidersGetRiderInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "get_rider", input, extra),
+  /** List riders (read) */
+  list_riders: (input?: RidersListRidersInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "list_riders", input, extra),
+  /** Offer an order to a rider (idempotent_write) */
+  offer: (input: RidersOfferInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "offer", input, extra),
+  /** Add up what each rider is due (idempotent_write) */
+  prepare_payouts: (input?: RidersPreparePayoutsInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "prepare_payouts", input, extra),
+  /** Take an order back from its rider (idempotent_write) */
+  release: (input: RidersReleaseInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "release", input, extra),
+  /** Retire a rider (idempotent_write) */
+  retire_rider: (input: RidersRetireRiderInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "retire_rider", input, extra),
 };
 
 // Amazon S3 (s3@1)
@@ -2046,6 +2597,14 @@ export interface SchoolsPlanDecisionsInput {
   /** Only decisions the family was not told of yet (true by default) */
   untold?: Val<boolean>;
 }
+export interface SchoolsSendAccountNumberInput {
+  /** The student's id or admission number */
+  student: Val<string>;
+}
+export interface SchoolsSendReceiptInput {
+  /** The receipt's id or number (the invoice trigger's payment event carries it as receipt.id) */
+  receipt: Val<string>;
+}
 export interface SchoolsSendRemindersInput {
   /** Without students: only this class's debtors (id or label) */
   class?: Val<string>;
@@ -2096,6 +2655,10 @@ export const schools = {
   list_students: (input?: SchoolsListStudentsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "list_students", input, extra),
   /** List payment plan decisions (read) */
   plan_decisions: (input?: SchoolsPlanDecisionsInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "plan_decisions", input, extra),
+  /** Send a family a student's account number (idempotent_write) */
+  send_account_number: (input: SchoolsSendAccountNumberInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_account_number", input, extra),
+  /** Send a family a receipt (idempotent_write) */
+  send_receipt: (input: SchoolsSendReceiptInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_receipt", input, extra),
   /** Send fee reminders (idempotent_write) */
   send_reminders: (input?: SchoolsSendRemindersInput, extra?: ConnectorExtra): StepSpec => connector("schools@1", "send_reminders", input, extra),
   /** Tell a family its plan's decision (idempotent_write) */
@@ -2200,8 +2763,19 @@ export interface SlackListConversationsInput {
   /** Comma-separated: public_channel (default), private_channel, mpim, im */
   types?: Val<string>;
 }
+export interface SlackListUsersInput {
+  cursor?: Val<string>;
+  /** Bots and deactivated people are left out unless true */
+  include_bots?: Val<boolean>;
+  /** Default 200 */
+  limit?: Val<number>;
+}
 export interface SlackLookupUserByEmailInput {
   email: Val<string>;
+}
+export interface SlackOpenConversationInput {
+  /** User ids, comma-separated (U123 or U123,U456) */
+  users: Val<string>;
 }
 export interface SlackPostEphemeralInput {
   blocks?: Value;
@@ -2232,6 +2806,14 @@ export interface SlackPostMessageInput {
   unfurl_media?: Val<boolean>;
   /** Needs chat:write.customize */
   username?: Val<string>;
+}
+export interface SlackScheduleMessageInput {
+  blocks?: Value;
+  channel: Val<string>;
+  /** When, RFC 3339 (2026-10-27T09:00:00+01:00), or Unix seconds */
+  post_at: Val<string>;
+  text?: Val<string>;
+  thread_ts?: Val<string>;
 }
 export interface SlackUpdateMessageInput {
   /** Replaces the blocks; [] removes them */
@@ -2268,12 +2850,18 @@ export const slack = {
   get_conversation: (input: SlackGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_conversation", input, extra),
   /** List channels (read) */
   list_conversations: (input?: SlackListConversationsInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_conversations", input, extra),
+  /** List the workspace's people (read) */
+  list_users: (input?: SlackListUsersInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_users", input, extra),
   /** Find a user by email (read) */
   lookup_user_by_email: (input: SlackLookupUserByEmailInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "lookup_user_by_email", input, extra),
+  /** Open a direct message (read) */
+  open_conversation: (input: SlackOpenConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "open_conversation", input, extra),
   /** Post an ephemeral message (unsafe_write) */
   post_ephemeral: (input: SlackPostEphemeralInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "post_ephemeral", input, extra),
   /** Post a message (unsafe_write) */
   post_message: (input: SlackPostMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "post_message", input, extra),
+  /** Schedule a message (unsafe_write) */
+  schedule_message: (input: SlackScheduleMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "schedule_message", input, extra),
   /** Update a message (idempotent_write) */
   update_message: (input: SlackUpdateMessageInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "update_message", input, extra),
   /** Upload a file (unsafe_write) */
@@ -2752,21 +3340,315 @@ export const youverify = {
   verify_phone: (input: YouverifyVerifyPhoneInput, extra?: ConnectorExtra): StepSpec => connector("youverify@1", "verify_phone", input, extra),
 };
 
+// Zoho Books (zoho_books@1)
+export interface ZohoBooksChangesSinceInput {
+  since: Val<string>;
+}
+export interface ZohoBooksCreateBillInput {
+  bill_number: Val<string>;
+  /** Default today */
+  date?: Val<string>;
+  due_date?: Val<string>;
+  is_inclusive_tax?: Val<boolean>;
+  lines: Value;
+  notes?: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  vendor_id: Val<string>;
+}
+export interface ZohoBooksCreateContactInput {
+  company_name?: Val<string>;
+  contact_name: Val<string>;
+  contact_type?: Val<"customer" | "vendor">;
+  email?: Val<string>;
+  notes?: Val<string>;
+  phone?: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export interface ZohoBooksCreateExpenseInput {
+  /** The expense account */
+  account_id: Val<string>;
+  /** The total paid */
+  amount_kobo: Val<number>;
+  /** Default today */
+  date?: Val<string>;
+  description?: Val<string>;
+  /** The bank */
+  paid_through_account_id: Val<string>;
+  reference_number: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  /** Zoho works the tax out from it instead */
+  tax_id?: Val<string>;
+  /** VAT included in amount_kobo */
+  vat_kobo?: Val<number>;
+  vendor_id?: Val<string>;
+}
+export interface ZohoBooksCreateInvoiceInput {
+  customer_id: Val<string>;
+  date?: Val<string>;
+  due_date?: Val<string>;
+  /** Zoho's own number; left out */
+  invoice_number?: Val<string>;
+  is_inclusive_tax?: Val<boolean>;
+  lines: Value;
+  /** Shown on the invoice */
+  notes?: Val<string>;
+  reference_number: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export interface ZohoBooksCreateSalesReceiptInput {
+  customer_id?: Val<string>;
+  date?: Val<string>;
+  lines: Value;
+  notes?: Val<string>;
+  payment_mode?: Val<"cash" | "check" | "credit_card" | "bank_transfer" | "bank_remittance" | "others">;
+  receipt_number: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export interface ZohoBooksFindContactInput {
+  contact_name?: Val<string>;
+  contact_type?: Val<"customer" | "vendor">;
+  email?: Val<string>;
+  phone?: Val<string>;
+}
+export interface ZohoBooksFindInvoicesInput {
+  changed_since?: Val<string>;
+  customer_id?: Val<string>;
+  invoice_number?: Val<string>;
+  reference_number?: Val<string>;
+  status?: Val<"draft" | "sent" | "overdue" | "paid" | "partially_paid" | "unpaid" | "void" | "viewed">;
+}
+export interface ZohoBooksGetInvoiceInput {
+  invoice_id: Val<string>;
+}
+export interface ZohoBooksListAccountsInput {
+  /** Only accounts of this kind */
+  type?: Val<"income" | "expense" | "bank" | "cash" | "credit_card" | "receivable" | "payable" | "other">;
+}
+export interface ZohoBooksListItemsInput {
+  [key: string]: Value;
+}
+export interface ZohoBooksListOrganizationsInput {
+  [key: string]: Value;
+}
+export interface ZohoBooksListTaxesInput {
+  [key: string]: Value;
+}
+export interface ZohoBooksRecordPaymentInput {
+  /** The bank or cash account it went into */
+  account_id?: Val<string>;
+  amount_kobo: Val<number>;
+  /** Required without invoice_id */
+  customer_id?: Val<string>;
+  /** Default today */
+  date?: Val<string>;
+  description?: Val<string>;
+  invoice_id?: Val<string>;
+  payment_mode?: Val<"cash" | "check" | "credit_card" | "bank_transfer" | "bank_remittance" | "others">;
+  reference: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export const zoho_books = {
+  /** Read what changed (read) */
+  changes_since: (input: ZohoBooksChangesSinceInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "changes_since", input, extra),
+  /** Record a supplier's bill (idempotent_write) */
+  create_bill: (input: ZohoBooksCreateBillInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_bill", input, extra),
+  /** Add a customer or supplier (idempotent_write) */
+  create_contact: (input: ZohoBooksCreateContactInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_contact", input, extra),
+  /** Record an expense (idempotent_write) */
+  create_expense: (input: ZohoBooksCreateExpenseInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_expense", input, extra),
+  /** Record an invoice (idempotent_write) */
+  create_invoice: (input: ZohoBooksCreateInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_invoice", input, extra),
+  /** Record a sale (idempotent_write) */
+  create_sales_receipt: (input: ZohoBooksCreateSalesReceiptInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "create_sales_receipt", input, extra),
+  /** Find a customer or supplier (read) */
+  find_contact: (input?: ZohoBooksFindContactInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "find_contact", input, extra),
+  /** Find invoices (read) */
+  find_invoices: (input?: ZohoBooksFindInvoicesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "find_invoices", input, extra),
+  /** Get an invoice (read) */
+  get_invoice: (input: ZohoBooksGetInvoiceInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "get_invoice", input, extra),
+  /** List accounts (read) */
+  list_accounts: (input?: ZohoBooksListAccountsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_accounts", input, extra),
+  /** List items (read) */
+  list_items: (input?: ZohoBooksListItemsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_items", input, extra),
+  /** List organisations (read) */
+  list_organizations: (input?: ZohoBooksListOrganizationsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_organizations", input, extra),
+  /** List taxes (read) */
+  list_taxes: (input?: ZohoBooksListTaxesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "list_taxes", input, extra),
+  /** Record a payment (idempotent_write) */
+  record_payment: (input: ZohoBooksRecordPaymentInput, extra?: ConnectorExtra): StepSpec => connector("zoho_books@1", "record_payment", input, extra),
+};
+
+// Zoho CRM (zoho_crm@1)
+export interface ZohoCrmAddNoteInput {
+  content: Val<string>;
+  /** The record the note is on */
+  id: Val<string>;
+  module: Val<string>;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  title?: Val<string>;
+}
+export interface ZohoCrmGetRecordInput {
+  id: Val<string>;
+  module: Val<string>;
+}
+export interface ZohoCrmListModulesInput {
+  [key: string]: Value;
+}
+export interface ZohoCrmSearchRecordsInput {
+  criteria?: Val<string>;
+  email?: Val<string>;
+  limit?: Val<number>;
+  module: Val<string>;
+  phone?: Val<string>;
+  word?: Val<string>;
+}
+export interface ZohoCrmUpdateRecordInput {
+  id: Val<string>;
+  module: Val<string>;
+  /** The fields to set */
+  record: Value;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  run_workflows?: Val<boolean>;
+}
+export interface ZohoCrmUpsertRecordInput {
+  /** The unique fields to match by */
+  duplicate_check_fields?: Value;
+  /** The module's API name: Leads, Contacts, Deals… */
+  module: Val<string>;
+  /** Fields by their API names */
+  record: Value;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+  /** Whether CRM's own workflow rules run for the change */
+  run_workflows?: Val<boolean>;
+}
+export const zoho_crm = {
+  /** Add a note (idempotent_write) */
+  add_note: (input: ZohoCrmAddNoteInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "add_note", input, extra),
+  /** Read a record (read) */
+  get_record: (input: ZohoCrmGetRecordInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "get_record", input, extra),
+  /** List modules (read) */
+  list_modules: (input?: ZohoCrmListModulesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "list_modules", input, extra),
+  /** Find records (read) */
+  search_records: (input: ZohoCrmSearchRecordsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "search_records", input, extra),
+  /** Update a record (idempotent_write) */
+  update_record: (input: ZohoCrmUpdateRecordInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "update_record", input, extra),
+  /** Add or update a record (idempotent_write) */
+  upsert_record: (input: ZohoCrmUpsertRecordInput, extra?: ConnectorExtra): StepSpec => connector("zoho_crm@1", "upsert_record", input, extra),
+};
+
+// Zoho Mail (zoho_mail@1)
+export interface ZohoMailGetAccountInput {
+  [key: string]: Value;
+}
+export interface ZohoMailGetMessageInput {
+  folder_id: Val<string>;
+  message_id: Val<string>;
+}
+export interface ZohoMailListFoldersInput {
+  [key: string]: Value;
+}
+export interface ZohoMailListLabelsInput {
+  [key: string]: Value;
+}
+export interface ZohoMailListMessagesInput {
+  /** As list_folders lists it; default the inbox */
+  folder_id?: Val<string>;
+  label_id?: Val<string>;
+  limit?: Val<number>;
+  status?: Val<"all" | "read" | "unread">;
+}
+export interface ZohoMailNewMessagesInput {
+  since: Val<string>;
+}
+export interface ZohoMailReplyInput {
+  /** Reply to all */
+  all?: Val<boolean>;
+  cc?: Value;
+  html?: Val<string>;
+  /** The email replied to */
+  message_id: Val<string>;
+  /** Default: Re: and the email's subject */
+  subject?: Val<string>;
+  text?: Val<string>;
+  to: Value;
+}
+export interface ZohoMailSearchMessagesInput {
+  limit?: Val<number>;
+  search_key: Val<string>;
+}
+export interface ZohoMailSendMessageInput {
+  bcc?: Value;
+  cc?: Value;
+  /** The mailbox (the default) or one of its aliases */
+  from?: Val<string>;
+  /** HTML body; takes the place of text */
+  html?: Val<string>;
+  subject: Val<string>;
+  /** Plain-text body */
+  text?: Val<string>;
+  to: Value;
+}
+export interface ZohoMailUpdateMessageInput {
+  change: Val<"mark_read" | "mark_unread" | "move" | "add_label" | "remove_label">;
+  /** move: the folder */
+  folder_id?: Val<string>;
+  /** add_label, remove_label: the label */
+  label_id?: Val<string>;
+  message_ids: Value;
+  /** Set by the engine; not sent to Zoho */
+  request_key?: Val<string>;
+}
+export const zoho_mail = {
+  /** Get the mailbox (read) */
+  get_account: (input?: ZohoMailGetAccountInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "get_account", input, extra),
+  /** Read an email (read) */
+  get_message: (input: ZohoMailGetMessageInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "get_message", input, extra),
+  /** List folders (read) */
+  list_folders: (input?: ZohoMailListFoldersInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "list_folders", input, extra),
+  /** List labels (read) */
+  list_labels: (input?: ZohoMailListLabelsInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "list_labels", input, extra),
+  /** List emails (read) */
+  list_messages: (input?: ZohoMailListMessagesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "list_messages", input, extra),
+  /** Read new mail (read) */
+  new_messages: (input: ZohoMailNewMessagesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "new_messages", input, extra),
+  /** Reply to an email (unsafe_write) */
+  reply: (input: ZohoMailReplyInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "reply", input, extra),
+  /** Search emails (read) */
+  search_messages: (input: ZohoMailSearchMessagesInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "search_messages", input, extra),
+  /** Send an email (unsafe_write) */
+  send_message: (input: ZohoMailSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "send_message", input, extra),
+  /** Mark, file or label an email (idempotent_write) */
+  update_message: (input: ZohoMailUpdateMessageInput, extra?: ConnectorExtra): StepSpec => connector("zoho_mail@1", "update_message", input, extra),
+};
+
 /** Connector refs with helpers here, for code generation. */
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
   "anchor@1": "anchor",
   "breet@1": "breet",
+  "brevo@1": "brevo",
   "dojah@1": "dojah",
   "email@1": "email",
   "flutterwave@1": "flutterwave",
   "form@1": "form",
   "gmail@1": "gmail",
   "googlesheets@1": "googlesheets",
+  "instagram@1": "instagram",
   "interswitch@1": "interswitch",
   "invoices@1": "invoices",
   "iswallet@1": "iswallet",
   "lenco@1": "lenco",
+  "mailchimp@1": "mailchimp",
+  "messenger@1": "messenger",
   "moniepoint@1": "moniepoint",
   "moniepoint_pos@1": "moniepoint_pos",
   "mono@1": "mono",
@@ -2780,7 +3662,10 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
+  "quickbooks@1": "quickbooks",
   "remita@1": "remita",
+  "resend@1": "resend",
+  "riders@1": "riders",
   "s3@1": "s3",
   "schools@1": "schools",
   "sftp@1": "sftp",
@@ -2791,6 +3676,9 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "whatsapp@1": "whatsapp",
   "xenibase@1": "xenibase",
   "youverify@1": "youverify",
+  "zoho_books@1": "zoho_books",
+  "zoho_crm@1": "zoho_crm",
+  "zoho_mail@1": "zoho_mail",
 };
 
 /** The actions each helper has: any other action is generated as connector(...). */
@@ -2798,16 +3686,20 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
+  "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "email@1": ["file_url"],
   "flutterwave@1": ["create_dynamic_account", "create_static_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "list_transactions", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
+  "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
-  "iswallet@1": ["get_balance", "get_payout", "issue_virtual_account", "list_banks", "list_transactions", "name_enquiry", "payout", "transfer"],
+  "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
+  "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],
+  "messenger@1": ["get_conversation", "get_page", "get_profile", "mark_seen", "send_message", "send_typing"],
   "moniepoint@1": ["create_reserved_account", "get_balance", "get_reserved_account", "get_transaction", "get_transfer", "init_transaction", "list_banks", "resolve_account", "transfer"],
   "moniepoint_pos@1": ["check_access", "get_transaction", "request_payment"],
   "mono@1": ["cancel_mandate", "check_mandate_balance", "create_customer", "create_mandate", "debit_mandate", "exchange_token", "get_account", "get_balance", "get_debit", "get_identity", "get_income_records", "get_mandate", "get_statement", "get_statement_pdf", "initiate_account_linking", "initiate_mandate", "initiate_payment", "initiate_reauthorisation", "list_banks", "list_transactions", "pause_mandate", "reinstate_mandate", "request_creditworthiness", "request_income", "unlink_account", "verify_payment"],
@@ -2821,17 +3713,23 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
+  "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
+  "resend@1": ["get_email", "list_domains", "send_email"],
+  "riders@1": ["add_rider", "finish_payouts", "get_rider", "list_riders", "offer", "prepare_payouts", "release", "retire_rider"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
-  "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_reminders", "tell_plan_decision", "term_invoices"],
+  "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
-  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "lookup_user_by_email", "post_ephemeral", "post_message", "update_message", "upload_file"],
+  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
+  "zoho_books@1": ["changes_since", "create_bill", "create_contact", "create_expense", "create_invoice", "create_sales_receipt", "find_contact", "find_invoices", "get_invoice", "list_accounts", "list_items", "list_organizations", "list_taxes", "record_payment"],
+  "zoho_crm@1": ["add_note", "get_record", "list_modules", "search_records", "update_record", "upsert_record"],
+  "zoho_mail@1": ["get_account", "get_message", "list_folders", "list_labels", "list_messages", "new_messages", "reply", "search_messages", "send_message", "update_message"],
 };
 
 // Capabilities (schemas/capabilities-v1.json): the same input and output on every rail.
@@ -2845,6 +3743,136 @@ export interface CapabilityBalanceInput {
 export type CapabilityBalanceOutput = {
   available_kobo: number;
   currency: string;
+};
+/** List the books' accounts: input */
+export interface CapabilityBooksAccountsInput {
+  /** Only accounts of this type */
+  type?: Val<"income" | "expense" | "bank" | "cash" | "receivable" | "payable" | "other">;
+}
+/** List the books' accounts: output */
+export type CapabilityBooksAccountsOutput = {
+  accounts: Array<{
+    id: string;
+    name: string;
+    type?: string;
+  }>;
+};
+/** Record a supplier's bill in the books: input */
+export interface CapabilityBooksBillInput {
+  currency?: Val<string>;
+  due_on?: Val<string>;
+  issued_on?: Val<string>;
+  lines: Value;
+  /** The supplier's bill number: a retry finds the bill by it */
+  number: Val<string>;
+  supplier_id: Val<string>;
+}
+/** Record a supplier's bill in the books: output */
+export type CapabilityBooksBillOutput = {
+  bill_id: string;
+  total_kobo?: number;
+};
+/** Find or add a customer in the books: input */
+export interface CapabilityBooksCustomerInput {
+  /** Found by it before a customer is added, so a retry finds the one it made */
+  email?: Val<string>;
+  name: Val<string>;
+  /** Found by it when there is no email */
+  phone?: Val<string>;
+}
+/** Find or add a customer in the books: output */
+export type CapabilityBooksCustomerOutput = {
+  created?: boolean;
+  customer_id: string;
+};
+/** Record an expense in the books: input */
+export interface CapabilityBooksExpenseInput {
+  /** The expense account, as books_accounts lists it */
+  account_id: Val<string>;
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  date?: Val<string>;
+  description?: Val<string>;
+  /** The bank or cash account it was paid from */
+  paid_from_id?: Val<string>;
+  /** The receipt's or the money log entry's: a retry finds the expense by it */
+  reference: Val<string>;
+  supplier?: Val<string>;
+  vat_kobo?: Val<number>;
+}
+/** Record an expense in the books: output */
+export type CapabilityBooksExpenseOutput = {
+  expense_id: string;
+};
+/** Record an invoice in the books: input */
+export interface CapabilityBooksInvoiceInput {
+  currency?: Val<string>;
+  /** As books_customer answered it */
+  customer_id: Val<string>;
+  due_on?: Val<string>;
+  issued_on?: Val<string>;
+  lines: Value;
+  notes?: Val<string>;
+  /** Taskiem's invoice number, kept as the books' reference (reference_number, DocNumber): a retry finds the invoice instead of making a second */
+  number: Val<string>;
+}
+/** Record an invoice in the books: output */
+export type CapabilityBooksInvoiceOutput = {
+  invoice_id: string;
+  number?: string;
+  total_kobo?: number;
+};
+/** List the books' items: input */
+export interface CapabilityBooksItemsInput {
+  [key: string]: Value;
+}
+/** List the books' items: output */
+export type CapabilityBooksItemsOutput = {
+  items: Array<{
+    amount_kobo?: number;
+    id: string;
+    name: string;
+  }>;
+};
+/** Record a payment against an invoice in the books: input */
+export interface CapabilityBooksPaymentInput {
+  /** The bank or cash account it went into, as books_accounts lists it */
+  account_id?: Val<string>;
+  amount_kobo: Val<number>;
+  currency?: Val<string>;
+  invoice_id: Val<string>;
+  method?: Val<"transfer" | "card" | "cash" | "pos" | "other">;
+  paid_on?: Val<string>;
+  /** The money log entry's reference: a retry finds the payment by it */
+  reference: Val<string>;
+}
+/** Record a payment against an invoice in the books: output */
+export type CapabilityBooksPaymentOutput = {
+  payment_id: string;
+};
+/** Record a day's takings in the books: input */
+export interface CapabilityBooksSaleInput {
+  currency?: Val<string>;
+  date: Val<string>;
+  /** The day and the source (pos-2026-10-24): a retry finds the receipt by it */
+  reference: Val<string>;
+  takings: Value;
+}
+/** Record a day's takings in the books: output */
+export type CapabilityBooksSaleOutput = {
+  sale_id: string;
+};
+/** List the books' taxes: input */
+export interface CapabilityBooksTaxesInput {
+  [key: string]: Value;
+}
+/** List the books' taxes: output */
+export type CapabilityBooksTaxesOutput = {
+  taxes: Array<{
+    id: string;
+    name: string;
+    percent?: number;
+  }>;
 };
 /** Make a payment page for a customer: input */
 export interface CapabilityCollectLinkInput {
@@ -2944,6 +3972,7 @@ export type CapabilityListCreditsOutput = {
     amount_kobo: number;
     credit_id: string;
     currency?: string;
+    event?: "payment.received";
     fee_kobo?: number;
     narration?: string;
     occurred_at?: string;
@@ -3096,6 +4125,24 @@ export const pay = {
 export const rail = {
   /** Check the balance */
   balance: (input: CapabilityBalanceInput, extra?: CapabilityExtra): StepSpec => capability("balance", input, extra),
+  /** List the books' accounts */
+  books_accounts: (input: CapabilityBooksAccountsInput, extra?: CapabilityExtra): StepSpec => capability("books_accounts", input, extra),
+  /** Record a supplier's bill in the books */
+  books_bill: (input: CapabilityBooksBillInput, extra?: CapabilityExtra): StepSpec => capability("books_bill", input, extra),
+  /** Find or add a customer in the books */
+  books_customer: (input: CapabilityBooksCustomerInput, extra?: CapabilityExtra): StepSpec => capability("books_customer", input, extra),
+  /** Record an expense in the books */
+  books_expense: (input: CapabilityBooksExpenseInput, extra?: CapabilityExtra): StepSpec => capability("books_expense", input, extra),
+  /** Record an invoice in the books */
+  books_invoice: (input: CapabilityBooksInvoiceInput, extra?: CapabilityExtra): StepSpec => capability("books_invoice", input, extra),
+  /** List the books' items */
+  books_items: (input: CapabilityBooksItemsInput, extra?: CapabilityExtra): StepSpec => capability("books_items", input, extra),
+  /** Record a payment against an invoice in the books */
+  books_payment: (input: CapabilityBooksPaymentInput, extra?: CapabilityExtra): StepSpec => capability("books_payment", input, extra),
+  /** Record a day's takings in the books */
+  books_sale: (input: CapabilityBooksSaleInput, extra?: CapabilityExtra): StepSpec => capability("books_sale", input, extra),
+  /** List the books' taxes */
+  books_taxes: (input: CapabilityBooksTaxesInput, extra?: CapabilityExtra): StepSpec => capability("books_taxes", input, extra),
   /** Look a payment up */
   get_payment: (input: CapabilityGetPaymentInput, extra?: CapabilityExtra): StepSpec => capability("get_payment", input, extra),
   /** Look a payout up */
@@ -3127,6 +4174,15 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   await_reversal: "waitFor.reversal",
   await_settlement: "waitFor.settlement",
   balance: "rail.balance",
+  books_accounts: "rail.books_accounts",
+  books_bill: "rail.books_bill",
+  books_customer: "rail.books_customer",
+  books_expense: "rail.books_expense",
+  books_invoice: "rail.books_invoice",
+  books_items: "rail.books_items",
+  books_payment: "rail.books_payment",
+  books_sale: "rail.books_sale",
+  books_taxes: "rail.books_taxes",
   collect_link: "collect.link",
   collect_push: "collect.push",
   collect_transfer: "collect.transfer",
@@ -3146,9 +4202,18 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
 /** The built-in rails that declare each capability. */
 export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   balance: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
+  books_accounts: ["quickbooks@1", "zoho_books@1"],
+  books_bill: ["quickbooks@1", "zoho_books@1"],
+  books_customer: ["quickbooks@1", "zoho_books@1"],
+  books_expense: ["quickbooks@1", "zoho_books@1"],
+  books_invoice: ["quickbooks@1", "zoho_books@1"],
+  books_items: ["quickbooks@1", "zoho_books@1"],
+  books_payment: ["quickbooks@1", "zoho_books@1"],
+  books_sale: ["quickbooks@1", "zoho_books@1"],
+  books_taxes: ["quickbooks@1", "zoho_books@1"],
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
-  collect_transfer: ["flutterwave@1", "opay@1", "paystack@1"],
+  collect_transfer: ["flutterwave@1", "iswallet@1", "opay@1", "paystack@1"],
   get_payment: ["flutterwave@1", "moniepoint@1", "opay@1", "paystack@1"],
   get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],

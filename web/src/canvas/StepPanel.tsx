@@ -17,6 +17,7 @@ import type { Source } from "../lib/plaincanvas";
 import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
 import { ParamField } from "../pages/Templates";
 import { effectWords, toParams, type CallableWorkflow, type Template } from "../lib/templates";
+import { stepFromJson } from "../lib/flow";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -33,6 +34,8 @@ interface Props {
   sources?: Source[];
   /** Step names by id, for "Runs after". */
   names?: Record<string, string>;
+  /** Inside the builder's step window: no heading or Delete (the window has them), and the canvas's arrows say what it runs after. */
+  bare?: boolean;
 }
 
 /** What an owner reads where a step's technical settings would be. */
@@ -58,23 +61,26 @@ type Any = Record<string, unknown>;
 const JS_TEMPLATE = "export default (input: Record<string, unknown>) => {\n  return { ok: true };\n};\n";
 const PYTHON_TEMPLATE = "def main(input, host):\n    return {\"ok\": True}\n";
 
-export function StepPanel({ step, others, connectors, onChange, onRename, onDelete, problems = [], sources = [], names = {} }: Props) {
+export function StepPanel({ step, others, connectors, onChange, onRename, onDelete, problems = [], sources = [], names = {}, bare = false }: Props) {
   const advanced = useAdvanced();
   const [id, setId] = useState(step.id);
   const [idError, setIdError] = useState("");
+  const [jsonError, setJsonError] = useState("");
   const set = (patch: Any) => onChange(merge(step, patch));
   const cfg = ((step as { config?: Any }).config ?? {}) as Any;
   const setCfg = (patch: Any) => set({ config: merge(cfg, patch) });
   return (
     <div key={step.id}>
-      <div className="toolbar">
-        <h2 className="grow" style={{ margin: 0 }}>
-          {step.type} step
-        </h2>
-        <button className="danger" onClick={onDelete}>
-          Delete
-        </button>
-      </div>
+      {!bare && (
+        <div className="toolbar">
+          <h2 className="grow" style={{ margin: 0 }}>
+            {step.type} step
+          </h2>
+          <button className="danger" onClick={onDelete}>
+            Delete
+          </button>
+        </div>
+      )}
       {advanced && (
       <Field label="ID" hint={idError || "Lower-case letters, digits and _. Expressions refer to steps.<id>."}>
         <input
@@ -93,7 +99,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
       <Field label="Name">
         <input value={step.name ?? ""} onChange={(e) => set({ name: e.target.value })} />
       </Field>
-      {others.length > 0 && (
+      {!bare && others.length > 0 && (
         <Field label="Runs after">
           <div>
             {others.map((o) => (
@@ -122,7 +128,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
         </Field>
       )}
 
-      <h3>Configuration</h3>
+      {!bare && <h3>Configuration</h3>}
       {step.type === "connector" && <ConnectorConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "capability" && <CapabilityConfig step={step} connectors={connectors} set={set} advanced={advanced} sources={sources} />}
       {step.type === "template" && <TemplateConfig step={step} set={set} advanced={advanced} sources={sources} />}
@@ -183,8 +189,8 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
             label="Source"
             hint={
               cfg.language === "python"
-                ? "Define main(input, host). print() goes to the logs; host.secret, host.now and host.fetch are available. Standard library only."
-                : "Export a default function of the step input. host.log, host.secret, host.now and host.fetch are available."
+                ? "Define main(input, host). print() goes to the logs; host.secret, host.now and host.fetch (GET and HEAD only; send writes from an http or connector step) are available. Standard library only."
+                : "Export a default function of the step input. host.log, host.secret, host.now and host.fetch (GET and HEAD only; send writes from an http or connector step) are available."
             }
           >
             <textarea className="mono" rows={12} spellCheck={false} value={String(cfg.source ?? "")} onChange={(e) => setCfg({ source: e.target.value })} />
@@ -303,7 +309,20 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </Field>
           <details>
             <summary>Edit this step as JSON</summary>
-            <JsonInput value={step} onChange={(v) => v && typeof v === "object" && onChange(v as Step)} rows={14} />
+            <JsonInput
+              value={step}
+              onChange={(v) => {
+                const next = stepFromJson(step, v);
+                setJsonError(typeof next === "string" ? next : "");
+                if (typeof next !== "string") onChange(next);
+              }}
+              rows={14}
+            />
+            {jsonError && (
+              <div className="error" role="alert" data-testid="step-json-problem">
+                {jsonError}
+              </div>
+            )}
           </details>
         </>
       )}

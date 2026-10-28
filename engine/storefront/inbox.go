@@ -38,8 +38,12 @@ type Submission struct {
 	Basket     []Line   `json:"basket,omitempty"`
 	TotalKobo  int64    `json:"total_kobo"`
 	Fulfilment string   `json:"fulfilment,omitempty"` // pickup or delivery
-	Payment    string   `json:"payment"`              // after_accept, at_order or none
-	Channel    string   `json:"channel"`              // direct or embed
+	// Zone is the delivery area chosen and DeliveryKobo its fee, part of
+	// TotalKobo (dispatch D1).
+	Zone         string `json:"zone,omitempty"`
+	DeliveryKobo int64  `json:"delivery_kobo,omitempty"`
+	Payment      string `json:"payment"` // after_accept, at_order or none
+	Channel      string `json:"channel"` // direct or embed
 	// StatusKey is the secret of the customer's status link, so a payment
 	// provider can send the customer back to it; it is not stored.
 	StatusKey string    `json:"status_key"`
@@ -63,10 +67,16 @@ type Booked struct {
 
 // Customer is who submitted. Phone is E.164.
 type Customer struct {
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email,omitempty"`
-	Address  string `json:"address,omitempty"`
+	Name    string `json:"name"`
+	Phone   string `json:"phone"`
+	Email   string `json:"email,omitempty"`
+	Address string `json:"address,omitempty"`
+	// Landmark and Pin say where a delivery goes beyond the address
+	// (dispatch D2): "opposite the Shoprite gate", and a maps link the
+	// customer gave (pasted, or their browser's location). Shown to the
+	// rider who holds the order only.
+	Landmark string `json:"landmark,omitempty"`
+	Pin      string `json:"pin,omitempty"`
 	Message  string `json:"message,omitempty"`
 	BestTime string `json:"best_time,omitempty"`
 }

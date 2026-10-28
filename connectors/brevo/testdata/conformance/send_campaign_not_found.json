@@ -1,0 +1,15 @@
+{
+ "action": "send_campaign",
+ "input": {
+  "campaign_id": 9
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "campaign_404"
+ ],
+ "expect": {
+  "error": "not_found"
+ }
+}

@@ -1,0 +1,26 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/expenses",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "reference_number": "RCPT-7781"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "expenses": [],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

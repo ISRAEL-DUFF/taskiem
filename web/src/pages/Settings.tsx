@@ -542,14 +542,20 @@ function Git({ env }: { env: string }) {
 /** Four-eyes on change (spec 9.1); owners change it, everyone can see it. */
 function Governance() {
   const { me } = useAuth();
-  const { data, error, reload } = useLoad(() => get<{ four_eyes_publish: boolean; four_eyes_policies: boolean; default_retention: string; ai_steps?: boolean }>("/v1/governance"), []);
+  const { data, error, reload } = useLoad(
+    () => get<{ four_eyes_publish: boolean; four_eyes_publish_environments?: string[]; four_eyes_policies: boolean; default_retention: string; ai_steps?: boolean }>("/v1/governance"),
+    [],
+  );
+  const envs = useEnvironments();
   const ai = useLoad(() => get<{ enabled: boolean; provider?: string; model?: string; step_models?: string[]; retention?: string; steps_plan: boolean }>("/v1/ai/status"), []);
   const [retention, setRetention] = useState<string>();
   const act = useAction();
   const owner = me?.roles.includes("owner") ?? false;
   if (!data) return error ? <ErrorBox error={error} /> : null;
-  const set = (k: "four_eyes_publish" | "four_eyes_policies" | "default_retention" | "ai_steps", v: boolean | string) =>
+  const set = (k: "four_eyes_publish" | "four_eyes_publish_environments" | "four_eyes_policies" | "default_retention" | "ai_steps", v: boolean | string | string[]) =>
     act.run(async () => (await put("/v1/governance", { ...data, [k]: v }), reload()), "Saved");
+  const gated = data.four_eyes_publish_environments ?? [];
+  const toggleEnv = (env: string, on: boolean) => void set("four_eyes_publish_environments", on ? [...gated, env] : gated.filter((e) => e !== env));
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Four-eyes</h2>
@@ -557,8 +563,24 @@ function Governance() {
       <ErrorBox error={act.error} />
       <label>
         <input type="checkbox" checked={data.four_eyes_publish} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_publish", e.target.checked)} /> Publishing a
-        workflow needs a second publisher
+        workflow needs a second publisher, in every environment
       </label>
+      {!data.four_eyes_publish && (envs.data?.environments.length ?? 0) > 0 && (
+        <fieldset style={{ border: 0, padding: "4px 0 4px 24px", margin: 0 }} data-testid="four-eyes-environments">
+          <legend className="hint" style={{ padding: 0 }}>
+            Or only in these environments:
+          </legend>
+          {envs.data?.environments.map((e) => (
+            <label key={e.name} style={{ marginRight: 16 }}>
+              <input type="checkbox" checked={gated.includes(e.name)} disabled={!owner || act.busy} onChange={(ev) => toggleEnv(e.name, ev.target.checked)} /> {e.name}
+            </label>
+          ))}
+          <p className="hint" style={{ margin: "4px 0 0" }}>
+            A publish that reaches a ticked environment waits for a second person, and so does promoting into one. Let production take versions only by promotion from staging, and publishing to
+            the others is never held up.
+          </p>
+        </fieldset>
+      )}
       <br />
       <label>
         <input type="checkbox" checked={data.four_eyes_policies} disabled={!owner || act.busy} onChange={(e) => void set("four_eyes_policies", e.target.checked)} /> A new

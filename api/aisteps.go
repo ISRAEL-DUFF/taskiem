@@ -11,19 +11,41 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/expansion"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // AI steps (decision 0050) ask the deployment's model at run time. Saving
 // a version that has one checks what the runtime would refuse: a
 // deployment without a model, a model it does not offer, a plan without
 // the ai feature, or a business that has turned AI steps off. Publishing
-// one that lets personal data reach the model is audited.
+// one that lets personal data reach the model is audited. Both look at
+// the ai steps inside the callable templates a version uses too: they
+// are expanded into the run when it starts, and run like its own.
 
-// aiStepProblems checks a definition's ai steps against the deployment,
-// the plan and the business's settings.
-func (s *Server) aiStepProblems(ctx context.Context, tenant uuid.UUID, doc []byte) []problem {
+// aiSteps is the definition with its template steps expanded (find gives
+// their templates), so the ai steps inside them are seen. Templates that
+// cannot be expanded are reported by the definition's own checks; their
+// steps are left out here.
+func aiSteps(doc []byte, find expansion.Templates) (*wd.Definition, error) {
 	def, err := wd.Load(doc)
+	if err != nil || find == nil || !def.HasTemplates() {
+		return def, err
+	}
+	if raw, _, xerr := expansion.ExpandTemplates(doc, find); xerr == nil {
+		if expanded, lerr := wd.Load(raw); lerr == nil {
+			return expanded, nil
+		}
+	}
+	return def, nil
+}
+
+// aiStepProblems checks a definition's ai steps, its templates' among
+// them, against the deployment, the plan and the business's settings.
+func (s *Server) aiStepProblems(ctx context.Context, tenant uuid.UUID, doc []byte, find expansion.Templates) []problem {
+	def, err := aiSteps(doc, find)
 	if err != nil || !def.HasAI() {
 		return nil
 	}
@@ -58,8 +80,17 @@ func (s *Server) aiStepProblems(ctx context.Context, tenant uuid.UUID, doc []byt
 }
 
 // auditAIPersonalData records, when a version is published, each ai step
-// that lets personal data reach the model, and the fields it lets through.
-func auditAIPersonalData(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, def *wd.Definition, by *uuid.UUID) error {
+// (its pinned templates' among them) that lets personal data reach the
+// model, and the fields it lets through.
+func auditAIPersonalData(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte, by *uuid.UUID) error {
+	find, _, err := runtime.PinnedTemplates(ctx, tx, wf, v, runtime.Callables(ctx, tx, templates.Default()))
+	if err != nil {
+		return err
+	}
+	def, err := aiSteps(doc, find)
+	if err != nil {
+		return err
+	}
 	steps := def.AIPersonalData()
 	if len(steps) == 0 {
 		return nil
@@ -74,7 +105,7 @@ func auditAIPersonalData(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v
 	if by != nil {
 		actorType, actor = "user", by.String()
 	}
-	_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, $2, $3, $4, $5, $6)`, tenant, actorType, actor, "ai.personal_data.allow",
+	_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, $2, $3, $4, $5, $6)`, tenant, actorType, actor, "ai.personal_data.allow",
 		fmt.Sprintf("workflow:%s/v%d", wf, v), detail)
 	return err
 }

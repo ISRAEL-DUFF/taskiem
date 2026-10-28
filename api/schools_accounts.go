@@ -26,6 +26,7 @@ func (s *Server) schoolAccountRoutes(r chi.Router) {
 	read, manage := s.need(PermSchoolRead), s.need(PermSchoolManage)
 	r.With(read).Get("/schools/students/{id}/accounts", s.listStudentAccounts)
 	r.With(manage, s.tenantWide).Post("/schools/students/{id}/account", s.issueStudentAccount)
+	r.With(manage, s.tenantWide).Post("/schools/students/{id}/account/send", s.sendStudentAccount)
 	r.With(manage, s.tenantWide).Post("/schools/accounts/issue", s.issueSchoolAccounts)
 	r.With(read).Get("/schools/accounts/jobs", s.listSchoolAccountJobs)
 	r.With(read).Get("/schools/accounts/jobs/{id}", s.getSchoolAccountJob)
@@ -121,6 +122,38 @@ func (s *Server) issueStudentAccount(w http.ResponseWriter, r *http.Request) {
 	list := []schools.StudentAccount{a}
 	maskAccounts(list)
 	writeJSON(w, http.StatusOK, list[0])
+}
+
+// sendStudentAccount serves POST /v1/schools/students/{id}/account/send:
+// sends the student's family their account number (the number, the bank,
+// the name to expect, a fresh family page link) on each guardian's chat
+// app or by SMS, as the school-issue-accounts template does when the
+// number is issued. Each call sends afresh (audited).
+func (s *Server) sendStudentAccount(w http.ResponseWriter, r *http.Request) {
+	if !s.invoicesOn(w, r) {
+		return
+	}
+	idOrNumber, err := studentParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var out schools.AccountSent
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		st, err := s.schoolsSvc().Student(r.Context(), tx, p.TenantID, idOrNumber)
+		if err != nil {
+			return schoolErr(err)
+		}
+		if out, err = s.schoolsSvc().SendAccountNumber(r.Context(), tx, p.TenantID, st.Student, "staff:"+time.Now().UTC().Format(time.RFC3339Nano), p.Actor()); err != nil {
+			return schoolErr(err)
+		}
+		return auditTx(r, tx, "school.account.send", st.ID.String(), map[string]any{"channels": out.Sent.Channels, "nobody": out.Sent.Nobody})
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"student_id": out.Student.ID, "account_number": out.Account.AccountNumber, "channels": out.Sent.Channels, "expires_at": out.Sent.ExpiresAt, "nobody": out.Sent.Nobody})
 }
 
 // issueSchoolAccounts serves POST /v1/schools/accounts/issue: {} answers

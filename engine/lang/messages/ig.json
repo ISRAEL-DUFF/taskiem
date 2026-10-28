@@ -164,6 +164,30 @@
       "text": "Daalụ. Anyị ga-akpọghachi gị n'oge na-adịghị anya ({reference}).",
       "reviewed": false
     },
+    "customer.delivery_arrived": {
+      "text": "Onye na-ebute ihe gị rutere n'ọnụ ụzọ na {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_done": {
+      "text": "Ebugala {reference}. Daalụ.",
+      "reviewed": false
+    },
+    "customer.delivery_done_rate": {
+      "text": "Ebugala {reference}. Kedu ka mbuga ahụ dị? Kpee ya ikpe ebe a: {link}",
+      "reviewed": false
+    },
+    "customer.delivery_on_way": {
+      "text": "Ihe i nyere iwu {reference} na-abịa na {rider} ({phone}).",
+      "reviewed": false
+    },
+    "customer.delivery_paid": {
+      "text": "Anatala ụgwọ gị, daalụ: {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Onye na-ebute ihe gị rutere na {reference}. Kwụọ {total} na {account}, {bank}, {name}, tupu {until}.",
+      "reviewed": false
+    },
     "customer.enquiry_thanks": {
       "text": "Anyị anatala ajụjụ gị ({reference}) ma anyị ga-aza n'oge na-adịghị anya.",
       "reviewed": false
@@ -232,6 +256,10 @@
       "text": "Invoice {number}: {link}",
       "reviewed": false
     },
+    "invoice.chat.own_account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "reviewed": false
+    },
     "invoice.chat.paid": {
       "text": "Akwụchaala invoice {number}. Daalụ!",
       "reviewed": false
@@ -242,6 +270,10 @@
     },
     "invoice.chat.wait": {
       "text": "Nọmba akaụntụ gị maka invoice {number} na-abịa. Ọ bụrụ na ọ bịaghị n'ime otu nkeji, pịa Nọmba akaụntụ ọhụrụ.",
+      "reviewed": false
+    },
+    "invoice.receipt.fee_line": {
+      "text": "Ị zitere {sent}; {received} ruru {business} mgbe ụlọ akụ wepụrụ ụgwọ {fee}.",
       "reviewed": false
     },
     "lang.current": {
@@ -310,6 +342,34 @@
     },
     "money.daily.link": {
       "text": "Peeji ego: {link}",
+      "reviewed": false
+    },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
       "reviewed": false
     },
     "money.daily.school": {
@@ -396,6 +456,166 @@
       "text": "Dejupụta {name}.",
       "reviewed": false
     },
+    "rider.arrived": {
+      "text": "Ị rutela na {reference}: nye ha ya ma pịa Ebugala m ya.",
+      "reviewed": false
+    },
+    "rider.btn.accept": {
+      "text": "Nabata",
+      "reviewed": false
+    },
+    "rider.btn.arrived": {
+      "text": "Erutela m",
+      "reviewed": false
+    },
+    "rider.btn.cant": {
+      "text": "Enweghị m ike",
+      "reviewed": false
+    },
+    "rider.btn.cash": {
+      "text": "Anatara m ego",
+      "reviewed": false
+    },
+    "rider.btn.delivered": {
+      "text": "Ebugala m ya",
+      "reviewed": false
+    },
+    "rider.btn.new_number": {
+      "text": "Nọmba ọhụrụ",
+      "reviewed": false
+    },
+    "rider.btn.picked_up": {
+      "text": "Eburula m ya",
+      "reviewed": false
+    },
+    "rider.busy": {
+      "text": "Ị na-arụ ọrụ ruo {time}. Zipu FREE mgbe ị nwere ike ibu ihe ọzọ.",
+      "reviewed": false
+    },
+    "rider.button_invalid": {
+      "text": "Bọtịnụ ahụ anaghị arụ ọrụ ọzọ.",
+      "reviewed": false
+    },
+    "rider.cant": {
+      "text": "Ọ dị mma: {reference} ga-aga onye ọzọ.",
+      "reviewed": false
+    },
+    "rider.collect": {
+      "text": "Onye ahịa ga-akwụ {total} n'ọnụ ụzọ.",
+      "reviewed": false
+    },
+    "rider.collect_door": {
+      "text": "Onye ahịa ga-akwụ {total} n'ọnụ ụzọ: pịa Erutela m, Taskiem ga-enye ha nọmba akaụntụ ha ga-akwụ ụgwọ na ya.",
+      "reviewed": false
+    },
+    "rider.customer": {
+      "text": "Onye ahịa: {customer}, {phone}",
+      "reviewed": false
+    },
+    "rider.done": {
+      "text": "Daalụ: ebugala {reference}.",
+      "reviewed": false
+    },
+    "rider.done_proof": {
+      "text": "Daalụ: ebugala {reference}. Zipu foto ya n'ọnụ ụzọ dịka ihe akaebe.",
+      "reviewed": false
+    },
+    "rider.door": {
+      "text": "Gwa onye ahịa ka o zipu {total} na {account}, {bank}, {name}. Ọ ga-arụ ọrụ ruo {time}. M ga-agwa gị mgbe ọ batara.",
+      "reviewed": false
+    },
+    "rider.drop": {
+      "text": "Buga ya na: {drop}",
+      "reviewed": false
+    },
+    "rider.fee": {
+      "text": "Ụgwọ gị: {fee}",
+      "reviewed": false
+    },
+    "rider.held": {
+      "text": "{reference} bụ nke gị.",
+      "reviewed": false
+    },
+    "rider.held_tail": {
+      "text": "Pịa Eburula m ya mgbe ọ dị gị n'aka.",
+      "reviewed": false
+    },
+    "rider.items": {
+      "text": "Ihe dị n'ime ya: {items}",
+      "reviewed": false
+    },
+    "rider.landmark": {
+      "text": "Akara: {landmark}",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "Ị bụzi onye na-ebuga ihe maka {business}. Ihe ha ga-ebuga ga-abịa ebe a. Zipu OFF mgbe ị naghị arụ ọrụ, na ON mgbe ị na-arụ.",
+      "reviewed": false
+    },
+    "rider.location_kept": {
+      "text": "Anatara m ebe ị nọ: o so ihe ibuga ahụ.",
+      "reviewed": false
+    },
+    "rider.no_delivery": {
+      "text": "Ị nweghị ihe ibuga dabara na nke ahụ ugbu a.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "Ị kwụsịla. Ọ dịghị azụmahịa ga-enye gị ihe ibuga ruo mgbe ị zipụrụ ON.",
+      "reviewed": false
+    },
+    "rider.offer": {
+      "text": "Ihe ị ga-ebuga: {reference}.",
+      "reviewed": false
+    },
+    "rider.offer_tail": {
+      "text": "Zaa tupu {time}.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "Ị malitela ọzọ. Azụmahịa ị na-ebuere ihe nwere ike inye gị ihe ibuga.",
+      "reviewed": false
+    },
+    "rider.on_way": {
+      "text": "Ị nọ n'ụzọ na {reference}. Pịa Erutela m n'ọnụ ụzọ.",
+      "reviewed": false
+    },
+    "rider.paid": {
+      "text": "Akwụọla ụgwọ. Nye ha {reference} ma pịa Ebugala m ya.",
+      "reviewed": false
+    },
+    "rider.photo_failed": {
+      "text": "Ndo, enweghị ike ichekwa foto ahụ. Nwaa ọzọ.",
+      "reviewed": false
+    },
+    "rider.photo_kept": {
+      "text": "Echekwala m foto ahụ dịka akaebe. Daalụ.",
+      "reviewed": false
+    },
+    "rider.pickup": {
+      "text": "Bulie ya na: {pickup}",
+      "reviewed": false
+    },
+    "rider.pin": {
+      "text": "Map: {pin}",
+      "reviewed": false
+    },
+    "rider.refused": {
+      "text": "Ọ bụghị ugbu a: {reason}",
+      "reviewed": false
+    },
+    "rider.released": {
+      "text": "{business} ewerela {reference} azụ: ị dịghị mkpa ibuga ya.",
+      "reviewed": false
+    },
+    "rider.unpaid": {
+      "text": "A kwụbeghị ụgwọ {reference}: {total}. Gwa onye ahịa ka ọ kwụọ, ma ọ bụ nara ego ma pịa Anatara m ego.",
+      "reviewed": false
+    },
+    "rider.withdrawn": {
+      "text": "Onyinye {reference} agafeela.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "akagbuola",
       "reviewed": false
@@ -422,6 +642,26 @@
     },
     "run.status.waiting": {
       "text": "na-eche",
+      "reviewed": false
+    },
+    "slack.link.button": {
+      "text": "Kwado",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Ọ bụ akaụntụ Slack gị nke a? Pịa Kwado ka ị nweta nnabata ị na-ekpebi na Taskiem ebe a, na Slack. Ọ bụrụ na ị arịghị nke a, leghara ya anya.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "Ejikọtala. Nnabata na-echere gị ga-abịa ebe a.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Njikọ a anaghị arụ ọrụ ọzọ. Rịọ nke ọhụrụ na profaịlụ Taskiem gị.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "Ejikọtaghị akaụntụ Slack a na gị na Taskiem, ya mere ọ pụghị ikpebi nke a. Jikọọ ya site na profaịlụ Taskiem gị.",
       "reviewed": false
     },
     "sms.reconcile": {
@@ -640,6 +880,10 @@
       "text": "Laghachi {total} nye onye ahịa maka {ref}? Ọ si n'ego Paystack gị, ọ ga-eru ha n'ime ụbọchị ọrụ 5 ruo 10.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Kaa {ref} dị ka e weghachiri ego ya? Naanị mgbe i zigharala onye ahịa {total}. A ga-agwa ha.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Zaa *yes* iji chekwaa mgbanwe ahụ, ma ọ bụ *cancel*.",
       "reviewed": false
@@ -658,6 +902,10 @@
     },
     "wa.booking.list_week": {
       "text": "Ndebanye oge n'ụbọchị 7 na-abịa:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "Akaala {ref} dị ka e weghachiri ego ({total}). A gwala onye ahịa.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -686,6 +934,10 @@
     },
     "wa.booking.off_done": {
       "text": "{day} bụ ụbọchị izu ike: a gaghị enye oge.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "A kwụrụ {ref} site na nnyefe ego n'ụlọ akụ, ya mere Taskiem enweghị ike iweghachi ya. Zitere onye ahịa {total} site n'ụlọ akụ gị, wee zaa *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {
@@ -722,6 +974,10 @@
     },
     "wa.build.budget_ran_out": {
       "text": "Mmefu AI nke ọnwa a gwụrụ tupu mbido ahụ adị njikere. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ.",
+      "reviewed": false
+    },
+    "wa.build.changed": {
+      "text": "Onye ọzọ gbanwere usoro ọrụ a kemgbe m malitere ịrụ ya (ụdị {version}), n'otu ebe ahụ, ya mere echekwaghị m ya. Mee mgbanwe ahụ na ngwa weebụ{link}.",
       "reviewed": false
     },
     "wa.build.denied": {
@@ -790,6 +1046,10 @@
     },
     "wa.build.offer_publish": {
       "text": "Ka m bipụta *{name}* ugbu a ka ọ malite ọrụ? Zaa *yes* ma ọ bụ *no*.",
+      "reviewed": false
+    },
+    "wa.build.plan": {
+      "text": "Atụmatụ {org} enweghị iwu site na AI, ya mere enweghị m ike iwu ya ebe a. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ, ma ọ bụ gbanwee atụmatụ na Billing.",
       "reviewed": false
     },
     "wa.build.publish_later": {
@@ -888,6 +1148,78 @@
       "text": "Zaa *yes* ka {workflow} malite, ma ọ bụ *cancel*.",
       "reviewed": false
     },
+    "wa.dispatch.held": {
+      "text": "{rider} nwere {ref} na mbụ.",
+      "reviewed": false
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "o gafeela oge iru",
+      "reviewed": false
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "o gafeela oge iburu ya",
+      "reviewed": false
+    },
+    "wa.dispatch.no_rider": {
+      "text": "Ọ dịghị onye na-ebuga ihe nwere ike iburu {ref} ugbu a. Tinye ndị ọzọ, ma ọ bụ kpọọ otu aha: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "Ị nweghị onye na-ebuga ihe aha ya bụ {name}. Zipu *riders* ka ị hụ ha.",
+      "reviewed": false
+    },
+    "wa.dispatch.none_today": {
+      "text": "Enwebeghị ihe ebugara taa.",
+      "reviewed": false
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "Ọ dịghị onye nwere {ref}.",
+      "reviewed": false
+    },
+    "wa.dispatch.offered": {
+      "text": "E nyela {rider} {ref}. M ga-agwa gị ma ha enweghị ike iburu ya.",
+      "reviewed": false
+    },
+    "wa.dispatch.refused": {
+      "text": "Ọ bụghị ugbu a: {reason}",
+      "reviewed": false
+    },
+    "wa.dispatch.released": {
+      "text": "E weghachitela {ref} n'aka {rider}. Nye ya ọzọ: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "nabatara ya, ebughị ya",
+      "reviewed": false
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "ọ nọ n'ọnụ ụzọ",
+      "reviewed": false
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "ebugala",
+      "reviewed": false
+    },
+    "wa.dispatch.state.offered": {
+      "text": "e nyere",
+      "reviewed": false
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "ọ nọ n'ụzọ",
+      "reviewed": false
+    },
+    "wa.dispatch.state.released": {
+      "text": "e weghachiri ya",
+      "reviewed": false
+    },
+    "wa.dispatch.today": {
+      "text": "Ihe ebugara taa:",
+      "reviewed": false
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Kedu nke: {names}?",
+      "reviewed": false
+    },
     "wa.field.enter": {
       "text": "Tinye {label}",
       "reviewed": false
@@ -980,6 +1312,10 @@
       "text": "• *cancel*: hapụ ihe na-aga n'ihu",
       "reviewed": false
     },
+    "wa.help.dispatch": {
+      "text": "• *order* na nọmba *to Musa*: nye onye na-ebuga ihe; *release* na nọmba: weghachi ya; *deliveries*: nke taa",
+      "reviewed": false
+    },
     "wa.help.find": {
       "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị",
       "reviewed": false
@@ -998,6 +1334,10 @@
     },
     "wa.help.money": {
       "text": "• *spent* (ma ọ bụ *emefuru m*) na ego ole na ihe e ji ya mee (*spent 12,000 on diesel at Total*), ma ọ bụ *cash in* (*ego batara*) ma ọ bụ *cash out* (*ego pụrụ*) na ego ole (*cash in 20,000 till*): m ga-edenye ya n'akwụkwọ ego unu",
+      "reviewed": false
+    },
+    "wa.help.riders": {
+      "text": "• *riders*: ndị na-ebugara gị ihe na onye nọ ọdụ; *add rider* na aha, ekwentị na ebe: tinye otu",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1138,6 +1478,10 @@
     },
     "wa.match.more": {
       "text": "Ọ bụrụ na ọ bụghị ya, Mba ga-egosi akwụkwọ ụgwọ ọzọ.",
+      "reviewed": false
+    },
+    "wa.match.needs_approval": {
+      "text": "Ejikọbeghị ya: e ji aka tinye ego a, ọ ruru oke ego ụlọ akwụkwọ, ya mere onye ọzọ ga-akwado ya na Schools, Approvals.",
       "reviewed": false
     },
     "wa.match.other_person": {
@@ -1336,6 +1680,82 @@
       "text": "*{name}* na-eche onye ọzọ ka o bipụta ya: ha ga-ekpebi n'Approvals na Taskiem.",
       "reviewed": false
     },
+    "wa.receive.account": {
+      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "reviewed": false
+    },
+    "wa.receive.balance": {
+      "text": "Your Taskiem wallet holds {amount} now.",
+      "reviewed": false
+    },
+    "wa.receive.balance_unknown": {
+      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "reviewed": false
+    },
+    "wa.receive.no_number": {
+      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "reviewed": false
+    },
+    "wa.receive.off": {
+      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Kwuo ya otú a: *add rider Musa 0803 123 4567 Lekki Ajah* (ebe ndị ahụ adịghị mkpa).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} bụzi onye na-ebugara gị ihe. Ezigara m ha njikọ site na SMS ka ha nweta ihe ị ga-ebuga na WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} bụzi onye na-ebugara gị ihe, a ga-achọta ha na {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "nọ n'ezumike",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "na-arụ ọrụ ruo {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "site na SMS ruo mgbe ha pịrị njikọ ahụ",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} na-ebugara gị ihe na mbụ.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "nọ ọdụ",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Ndị na-ebugara gị ihe:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "Ị nweghị onye na-ebuga ihe ka. Tinye otu dị otú a: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "anọghị n'ọrụ",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "na {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "Enweghị m ike itinye onye ahụ: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Tinye otu: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "Ntinye adabaghị {workflow}: {problems}. Ziga *run* ọzọ.",
       "reviewed": false
@@ -1396,6 +1816,10 @@
       "text": "Kedu nke?\n{list}\nZiga *run* na aha ya zuru oke.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} e ji aka tinye, {by} jikọrọ ya na invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} a kwụrụ {how} maka {student} ({class}), {by} tinyere ya.",
       "reviewed": false
@@ -1422,6 +1846,10 @@
     },
     "wa.school.how.transfer": {
       "text": "site na nyefe n'akaụntụ ụlọ akwụkwọ",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "njikọ ego e ji aka tinye",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {
@@ -1820,6 +2248,10 @@
       "text": "anabatara",
       "reviewed": false
     },
+    "wa.shop.status.arrived": {
+      "text": "ọ nọ n'ọnụ ụzọ onye ahịa",
+      "reviewed": false
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "na-eche ịkwụ ụgwọ",
       "reviewed": false
@@ -1836,12 +2268,20 @@
       "text": "ajụrụ",
       "reviewed": false
     },
+    "wa.shop.status.dispatched": {
+      "text": "ọ nọ n'aka onye na-ebuga ya",
+      "reviewed": false
+    },
     "wa.shop.status.expired": {
       "text": "agwụla",
       "reviewed": false
     },
     "wa.shop.status.no_show": {
       "text": "abịaghị",
+      "reviewed": false
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "ọ nọ n'ụzọ",
       "reviewed": false
     },
     "wa.shop.status.paid": {
@@ -1878,6 +2318,18 @@
     },
     "wa.shop.turn_on_orders": {
       "text": "Ka m gbanye iwu ugbu a? Ndị ahịa ga-enwe ike ịzụ site na peeji gị, iwu ọ bụla ga-abịakwute gị ebe a ka ị nabata ma ọ bụ jụ.",
+      "reviewed": false
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {

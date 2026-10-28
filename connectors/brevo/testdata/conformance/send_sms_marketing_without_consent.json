@@ -1,0 +1,16 @@
+{
+ "action": "send_sms",
+ "input": {
+  "sender": "AdaCakes",
+  "recipient": "+2348030000000",
+  "content": "20% off this weekend",
+  "type": "marketing"
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [],
+ "expect": {
+  "error": "fatal"
+ }
+}

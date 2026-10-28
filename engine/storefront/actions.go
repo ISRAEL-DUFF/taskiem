@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -30,7 +31,10 @@ type Action struct {
 
 // ActionOptions are a form's choices.
 type ActionOptions struct {
-	// Connection is the Paystack connection payments use (default main).
+	// Connection is the connection payments use: a Paystack connection's
+	// name (default main), which takes card payments and transfers, or
+	// another rail's as connector/name ("iswallet/taskiem"), which takes
+	// bank transfers only (N3).
 	Connection string `json:"connection,omitempty"`
 	// Pickup and Delivery are what an order may choose; neither means
 	// neither is asked.
@@ -38,6 +42,14 @@ type ActionOptions struct {
 	Delivery bool `json:"delivery,omitempty"`
 	// DeliveryNote is shown with delivery ("Yaba and Surulere only").
 	DeliveryNote string `json:"delivery_note,omitempty"`
+	// Zones are the areas an order is delivered to, each with its fee
+	// (dispatch D1): the form asks for one with delivery and adds its fee
+	// to the total, and riders cover them. None: the address is enough.
+	Zones []Zone `json:"zones,omitempty"`
+	// PayOnDelivery lets a customer choosing delivery pay at the door, by
+	// a one-time account number when the rider arrives or in cash
+	// (dispatch D4). Off by default.
+	PayOnDelivery bool `json:"pay_on_delivery,omitempty"`
 	// DepositPercent is how much of a service's price a booking pays
 	// online (1 to 100; unset is the full price).
 	DepositPercent int `json:"deposit_percent,omitempty"`
@@ -45,6 +57,68 @@ type ActionOptions struct {
 	// full (the default) or keep_deposit.
 	CancelRefund string `json:"cancel_refund,omitempty"`
 }
+
+// Zone is an area a business delivers to and what delivery there costs.
+type Zone struct {
+	Name    string `json:"name"`
+	FeeKobo int64  `json:"fee_kobo"`
+}
+
+// Limits on delivery areas: how many, a name's length, and the most a
+// delivery may cost (₦100,000).
+const (
+	MaxZones       = 30
+	MaxZoneName    = 40
+	MaxZoneFeeKobo = 10_000_000
+)
+
+// CleanZones checks a form's delivery areas: named, each once (whatever
+// the case), with a fee from nothing to ₦100,000.
+func CleanZones(in []Zone) ([]Zone, error) {
+	if len(in) > MaxZones {
+		return nil, fmt.Errorf("%w: up to %d delivery areas", ErrInvalid, MaxZones)
+	}
+	out := make([]Zone, 0, len(in))
+	seen := map[string]bool{}
+	for _, z := range in {
+		z.Name = strings.Join(strings.Fields(z.Name), " ")
+		if z.Name == "" || len([]rune(z.Name)) > MaxZoneName || hasLink(z.Name) || strings.ContainsAny(z.Name, ",") {
+			return nil, fmt.Errorf("%w: an area's name is 1 to %d characters, with no commas or links", ErrInvalid, MaxZoneName)
+		}
+		if seen[strings.ToLower(z.Name)] {
+			return nil, fmt.Errorf("%w: %s is listed twice", ErrInvalid, z.Name)
+		}
+		seen[strings.ToLower(z.Name)] = true
+		if z.FeeKobo < 0 || z.FeeKobo > MaxZoneFeeKobo {
+			return nil, fmt.Errorf("%w: a delivery fee is from ₦0 to ₦100,000", ErrInvalid)
+		}
+		out = append(out, z)
+	}
+	return out, nil
+}
+
+// Zones are the order form's delivery areas, in its order.
+func Zones(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Zone, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `SELECT options->'zones' FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order'`, tenant).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) || raw == nil {
+		return []Zone{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []Zone
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []Zone{}
+	}
+	return out, nil
+}
+
+// formConnection is a form's payments connection: name or connector/name.
+var formConnection = regexp.MustCompile(`^(?:[a-z][a-z0-9_-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 
 // takesPayment reports whether a form's kind may ask for payment.
 func takesPayment(kind string) bool { return kind == "order" || kind == "booking" }
@@ -65,6 +139,10 @@ type PublicAction struct {
 	Pickup       bool   `json:"pickup,omitempty"`
 	Delivery     bool   `json:"delivery,omitempty"`
 	DeliveryNote string `json:"delivery_note,omitempty"`
+	// Zones are the delivery areas the customer chooses from, with fees.
+	Zones []Zone `json:"zones,omitempty"`
+	// PayOnDelivery offers paying at the door with delivery.
+	PayOnDelivery bool `json:"pay_on_delivery,omitempty"`
 	// DepositPercent is a booking's online part of the price (100: all).
 	DepositPercent int `json:"deposit_percent,omitempty"`
 }
@@ -146,6 +224,14 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	switch a.Kind {
 	case "order":
 		a.Options.DepositPercent = 0
+		zones, err := CleanZones(a.Options.Zones)
+		if err != nil {
+			return Action{}, err
+		}
+		a.Options.Zones = zones
+		if !a.Options.Delivery || a.Payment == "none" {
+			a.Options.PayOnDelivery = false
+		}
 	case "booking":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
 			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
@@ -156,6 +242,9 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, CancelRefund: a.Options.CancelRefund}
 	default:
 		a.Options = ActionOptions{}
+	}
+	if c := a.Options.Connection; c != "" && !formConnection.MatchString(c) {
+		return Action{}, fmt.Errorf("%w: the payments connection is a name, or connector/name", ErrInvalid)
 	}
 	if len([]rune(a.Options.DeliveryNote)) > 120 || hasLink(a.Options.DeliveryNote) {
 		return Action{}, fmt.Errorf("%w: a delivery note is up to 120 characters, with no links", ErrInvalid)
@@ -204,7 +293,7 @@ func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAc
 	for _, a := range list {
 		if a.Enabled {
 			out = append(out, PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
-				DepositPercent: a.Options.DepositPercent})
+				Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent})
 		}
 	}
 	return out, nil

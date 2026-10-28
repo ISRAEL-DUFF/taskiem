@@ -164,6 +164,30 @@
       "text": "Ẹ ṣé. A ó pè yín padà láìpẹ́ ({reference}).",
       "reviewed": false
     },
+    "customer.delivery_arrived": {
+      "text": "Ẹni tó gbé ọjà rẹ ti dé ẹnu ọ̀nà pẹ̀lú {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_done": {
+      "text": "A ti fi {reference} jíṣẹ́. O ṣé.",
+      "reviewed": false
+    },
+    "customer.delivery_done_rate": {
+      "text": "A ti fi {reference} jíṣẹ́. Báwo ni ìfijíṣẹ́ náà ṣe rí? Fún un ní máàkì níbí: {link}",
+      "reviewed": false
+    },
+    "customer.delivery_on_way": {
+      "text": "Ọjà rẹ {reference} ti ń bọ̀ pẹ̀lú {rider} ({phone}).",
+      "reviewed": false
+    },
+    "customer.delivery_paid": {
+      "text": "A ti gba owó rẹ, o ṣé: {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Ẹni tó gbé ọjà rẹ ti dé pẹ̀lú {reference}. San {total} sí {account}, {bank}, {name}, kí ó tó di {until}.",
+      "reviewed": false
+    },
     "customer.enquiry_thanks": {
       "text": "A ti gba ìbéèrè yín ({reference}), a ó sì dáhùn láìpẹ́.",
       "reviewed": false
@@ -232,6 +256,10 @@
       "text": "Invoice {number}: {link}",
       "reviewed": false
     },
+    "invoice.chat.own_account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "reviewed": false
+    },
     "invoice.chat.paid": {
       "text": "Wọ́n ti san invoice {number} tán. Ẹ ṣé o!",
       "reviewed": false
@@ -242,6 +270,10 @@
     },
     "invoice.chat.wait": {
       "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
+      "reviewed": false
+    },
+    "invoice.receipt.fee_line": {
+      "text": "Ẹ fi {sent} ránṣẹ́; {received} ló dé ọ̀dọ̀ {business} lẹ́yìn owó báǹkì tí ó jẹ́ {fee}.",
       "reviewed": false
     },
     "lang.current": {
@@ -310,6 +342,34 @@
     },
     "money.daily.link": {
       "text": "Ojú-ìwé owó: {link}",
+      "reviewed": false
+    },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
       "reviewed": false
     },
     "money.daily.school": {
@@ -396,6 +456,166 @@
       "text": "Ẹ kọ {name} sí.",
       "reviewed": false
     },
+    "rider.arrived": {
+      "text": "O ti dé pẹ̀lú {reference}: fi lé wọn lọ́wọ́ kí o tẹ Mo ti fi lé e.",
+      "reviewed": false
+    },
+    "rider.btn.accept": {
+      "text": "Gbà á",
+      "reviewed": false
+    },
+    "rider.btn.arrived": {
+      "text": "Mo ti dé",
+      "reviewed": false
+    },
+    "rider.btn.cant": {
+      "text": "Mi ò lè",
+      "reviewed": false
+    },
+    "rider.btn.cash": {
+      "text": "Mo gba owó",
+      "reviewed": false
+    },
+    "rider.btn.delivered": {
+      "text": "Mo ti fi lé e",
+      "reviewed": false
+    },
+    "rider.btn.new_number": {
+      "text": "Nọ́mbà tuntun",
+      "reviewed": false
+    },
+    "rider.btn.picked_up": {
+      "text": "Mo ti gbé e",
+      "reviewed": false
+    },
+    "rider.busy": {
+      "text": "O ń ṣe ọwọ́ dí títí di {time}. Fi FREE ránṣẹ́ nígbà tí o bá lè gba iṣẹ́ ìfijíṣẹ́ padà.",
+      "reviewed": false
+    },
+    "rider.button_invalid": {
+      "text": "Bọ́tìnì yẹn kò ṣiṣẹ́ mọ́.",
+      "reviewed": false
+    },
+    "rider.cant": {
+      "text": "Ó dáa: {reference} yóò lọ sọ́dọ̀ ẹlòmíì.",
+      "reviewed": false
+    },
+    "rider.collect": {
+      "text": "Oníbàárà yóò san {total} ní ẹnu ọ̀nà.",
+      "reviewed": false
+    },
+    "rider.collect_door": {
+      "text": "Oníbàárà yóò san {total} ní ẹnu ọ̀nà: tẹ Mo ti dé, Taskiem yóò fún wọn ní nọ́mbà àkáǹtì láti sanwó sí.",
+      "reviewed": false
+    },
+    "rider.customer": {
+      "text": "Oníbàárà: {customer}, {phone}",
+      "reviewed": false
+    },
+    "rider.done": {
+      "text": "O ṣé: a ti fi {reference} jíṣẹ́.",
+      "reviewed": false
+    },
+    "rider.done_proof": {
+      "text": "O ṣé: a ti fi {reference} jíṣẹ́. Fi àwòrán rẹ̀ ní ẹnu ọ̀nà ránṣẹ́ gẹ́gẹ́ bí ẹ̀rí.",
+      "reviewed": false
+    },
+    "rider.door": {
+      "text": "Sọ fún oníbàárà kí ó fi {total} ránṣẹ́ sí {account}, {bank}, {name}. Ó wúlò títí di {time}. Màá sọ fún ọ nígbà tí ó bá dé.",
+      "reviewed": false
+    },
+    "rider.drop": {
+      "text": "Mú u lọ sí: {drop}",
+      "reviewed": false
+    },
+    "rider.fee": {
+      "text": "Owó rẹ: {fee}",
+      "reviewed": false
+    },
+    "rider.held": {
+      "text": "{reference} jẹ́ tìrẹ.",
+      "reviewed": false
+    },
+    "rider.held_tail": {
+      "text": "Tẹ Mo ti gbé e nígbà tí o bá ti gbà á.",
+      "reviewed": false
+    },
+    "rider.items": {
+      "text": "Ohun tó wà níbẹ̀: {items}",
+      "reviewed": false
+    },
+    "rider.landmark": {
+      "text": "Àmì ibẹ̀: {landmark}",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "O ti di ẹni tó ń bá {business} gbé ọjà. Àwọn iṣẹ́ ìfijíṣẹ́ wọn yóò máa wá síbí. Fi OFF ránṣẹ́ nígbà tí o kò bá ṣiṣẹ́, àti ON nígbà tí o bá ń ṣiṣẹ́.",
+      "reviewed": false
+    },
+    "rider.location_kept": {
+      "text": "Mo ti gba ibi tí o wà: ó wà pẹ̀lú ìfijíṣẹ́ náà.",
+      "reviewed": false
+    },
+    "rider.no_delivery": {
+      "text": "O kò ní ìfijíṣẹ́ tó bá ìyẹn mu báyìí.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "O ti dá iṣẹ́ dúró. Kò sí oníṣòwò tí yóò fún ọ ní iṣẹ́ ìfijíṣẹ́ títí o fi fi ON ránṣẹ́.",
+      "reviewed": false
+    },
+    "rider.offer": {
+      "text": "Ìfijíṣẹ́ fún ọ: {reference}.",
+      "reviewed": false
+    },
+    "rider.offer_tail": {
+      "text": "Dáhùn kí ó tó di {time}.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "O ti padà sẹ́nu iṣẹ́. Àwọn oníṣòwò tí o ń bá ṣiṣẹ́ lè fún ọ ní iṣẹ́ ìfijíṣẹ́.",
+      "reviewed": false
+    },
+    "rider.on_way": {
+      "text": "O wà lójú ọ̀nà pẹ̀lú {reference}. Tẹ Mo ti dé ní ẹnu ọ̀nà.",
+      "reviewed": false
+    },
+    "rider.paid": {
+      "text": "Wọ́n ti sanwó. Fi {reference} lé wọn lọ́wọ́ kí o tẹ Mo ti fi lé e.",
+      "reviewed": false
+    },
+    "rider.photo_failed": {
+      "text": "Má bínú, a kò lè tọ́jú àwòrán yẹn. Gbìyànjú lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
+    "rider.photo_kept": {
+      "text": "Mo ti tọ́jú àwòrán náà gẹ́gẹ́ bí ẹ̀rí. O ṣé.",
+      "reviewed": false
+    },
+    "rider.pickup": {
+      "text": "Gbé e ní: {pickup}",
+      "reviewed": false
+    },
+    "rider.pin": {
+      "text": "Máàpù: {pin}",
+      "reviewed": false
+    },
+    "rider.refused": {
+      "text": "Kì í ṣe báyìí: {reason}",
+      "reviewed": false
+    },
+    "rider.released": {
+      "text": "{business} ti gba {reference} padà: o kò nílò láti fi jíṣẹ́ mọ́.",
+      "reviewed": false
+    },
+    "rider.unpaid": {
+      "text": "A kò tíì san {reference}: {total}. Sọ fún oníbàárà kí ó sanwó, tàbí gba owó kí o tẹ Mo gba owó.",
+      "reviewed": false
+    },
+    "rider.withdrawn": {
+      "text": "Ìfilọ̀ {reference} ti kọjá.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "ti fagilé",
       "reviewed": false
@@ -422,6 +642,26 @@
     },
     "run.status.waiting": {
       "text": "ń dúró",
+      "reviewed": false
+    },
+    "slack.link.button": {
+      "text": "Jẹ́rìí",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Ṣé àkáǹtì Slack yín nìyí? Ẹ tẹ Jẹ́rìí láti máa gba àwọn ìfọwọ́sí tí ẹ ń pinnu lórí Taskiem níbí, nínú Slack. Tí kì í ṣe ẹ̀yin lẹ béèrè, ẹ fi sílẹ̀.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "A ti so ó pọ̀. Àwọn ìfọwọ́sí tó ń dúró dè yín yóò máa wá síbí.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Ìsopọ̀ yìí kò wúlò mọ́. Ẹ béèrè tuntun lórí àkọsílẹ̀ Taskiem yín.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "A kò so àkáǹtì Slack yìí mọ́ yín lórí Taskiem, nítorí náà kò lè pinnu èyí. Ẹ so ó pọ̀ láti àkọsílẹ̀ Taskiem yín.",
       "reviewed": false
     },
     "sms.reconcile": {
@@ -640,6 +880,10 @@
       "text": "Dá {total} padà fún oníbàárà fún {ref}? Láti inú owó Paystack yín ni, yóò sì dé ọ̀dọ̀ wọn láàárín ọjọ́ iṣẹ́ 5 sí 10.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Ṣé kí a sàmì sí {ref} pé a ti dá owó padà? Kìkì tí ẹ bá ti fi {total} ránṣẹ́ padà sí oníbàárà. A ó sọ fún wọn.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Fèsì *yes* láti fi àyípadà náà pamọ́, tàbí *cancel*.",
       "reviewed": false
@@ -658,6 +902,10 @@
     },
     "wa.booking.list_week": {
       "text": "Àwọn ìfiṣúra ọjọ́ méje tó ń bọ̀:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "A ti sàmì sí {ref} pé a ti dá owó padà ({total}). A ti sọ fún oníbàárà.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -686,6 +934,10 @@
     },
     "wa.booking.off_done": {
       "text": "{day} jẹ́ ọjọ́ ìsinmi: a kò ní fún ẹnikẹ́ni ní àkókò.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "Wọ́n san {ref} nípa fífi owó ránṣẹ́ láti báǹkì, nítorí náà Taskiem kò lè dá a padà. Fi {total} ránṣẹ́ sí oníbàárà láti báǹkì yín, lẹ́yìn náà ẹ dáhùn *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {
@@ -722,6 +974,10 @@
     },
     "wa.build.budget_ran_out": {
       "text": "Ìnáwó AI oṣù yìí tán kí àkọsílẹ̀ náà tó ṣetán. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù.",
+      "reviewed": false
+    },
+    "wa.build.changed": {
+      "text": "Ẹnìkan ti yí iṣẹ́ yìí padà láti ìgbà tí mo bẹ̀rẹ̀ (ẹ̀yà {version}), ní àwọn ibi kan náà, nítorí náà n kò fi pamọ́. Ẹ ṣe àyípadà náà nínú ohun èlò wẹ́ẹ̀bù{link}.",
       "reviewed": false
     },
     "wa.build.denied": {
@@ -790,6 +1046,10 @@
     },
     "wa.build.offer_publish": {
       "text": "Ṣé kí n tẹ *{name}* jáde báyìí kí ó bẹ̀rẹ̀ iṣẹ́? Ẹ fèsì *yes* tàbí *no*.",
+      "reviewed": false
+    },
+    "wa.build.plan": {
+      "text": "Ètò {org} kò ní kíkọ́ pẹ̀lú AI, nítorí náà mi ò lè kọ́ ọ níbí. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù, tàbí kí ẹ yí ètò padà ní Billing.",
       "reviewed": false
     },
     "wa.build.publish_later": {
@@ -888,6 +1148,78 @@
       "text": "Ẹ dáhùn *yes* láti bẹ̀rẹ̀ {workflow}, tàbí *cancel*.",
       "reviewed": false
     },
+    "wa.dispatch.held": {
+      "text": "{rider} ti ní {ref} tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "ó ti pẹ́ láti dé",
+      "reviewed": false
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "ó ti pẹ́ láti gbé e",
+      "reviewed": false
+    },
+    "wa.dispatch.no_rider": {
+      "text": "Kò sí ẹni tó lè gbé {ref} báyìí. Fi àwọn míì kún un, tàbí dárúkọ ọ̀kan: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "O kò ní ẹni tó ń gbé ọjà tí à ń pè ní {name}. Fi *riders* ránṣẹ́ láti rí wọn.",
+      "reviewed": false
+    },
+    "wa.dispatch.none_today": {
+      "text": "Kò tíì sí ìfijíṣẹ́ lónìí.",
+      "reviewed": false
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "Kò sí ẹni tó ní {ref}.",
+      "reviewed": false
+    },
+    "wa.dispatch.offered": {
+      "text": "A ti fi {ref} lọ {rider}. Màá sọ fún ọ bí wọn kò bá lè gbé e.",
+      "reviewed": false
+    },
+    "wa.dispatch.refused": {
+      "text": "Kì í ṣe báyìí: {reason}",
+      "reviewed": false
+    },
+    "wa.dispatch.released": {
+      "text": "A ti gba {ref} padà lọ́wọ́ {rider}. Fi í lọ ẹlòmíì: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "wọ́n gbà á, wọn kò tíì gbé e",
+      "reviewed": false
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "ó wà ní ẹnu ọ̀nà",
+      "reviewed": false
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "a ti fi jíṣẹ́",
+      "reviewed": false
+    },
+    "wa.dispatch.state.offered": {
+      "text": "a ti fi lọ̀",
+      "reviewed": false
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "ó ń bọ̀",
+      "reviewed": false
+    },
+    "wa.dispatch.state.released": {
+      "text": "a gbà á padà",
+      "reviewed": false
+    },
+    "wa.dispatch.today": {
+      "text": "Àwọn ìfijíṣẹ́ òní:",
+      "reviewed": false
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Èwo nínú wọn: {names}?",
+      "reviewed": false
+    },
     "wa.field.enter": {
       "text": "Ẹ tẹ {label}",
       "reviewed": false
@@ -980,6 +1312,10 @@
       "text": "• *cancel*: láti pa ohun tó ń lọ lọ́wọ́ tì",
       "reviewed": false
     },
+    "wa.help.dispatch": {
+      "text": "• *order* àti nọ́mbà *to Musa*: fi fún ẹni tó ń gbé ọjà; *release* àti nọ́mbà: gbà á padà; *deliveries*: ti òní",
+      "reviewed": false
+    },
     "wa.help.find": {
       "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà",
       "reviewed": false
@@ -998,6 +1334,10 @@
     },
     "wa.help.money": {
       "text": "• *spent* (tàbí *mo ná*) pẹ̀lú iye owó àti ohun tí ẹ ná an sí (*spent 12,000 on diesel at Total*), tàbí *cash in* (*owó wọlé*) tàbí *cash out* (*owó jáde*) àti iye owó (*cash in 20,000 till*): yóò kọ ọ́ sínú àkọsílẹ̀ owó yín",
+      "reviewed": false
+    },
+    "wa.help.riders": {
+      "text": "• *riders*: àwọn tó ń gbé ọjà rẹ àti ẹni tó wà lófo; *add rider* pẹ̀lú orúkọ, fóònù àti agbègbè: fi ọ̀kan kún un",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1138,6 +1478,10 @@
     },
     "wa.match.more": {
       "text": "Tí kì í bá ṣe é, Rárá yóò fi ìwé owó tó kàn hàn.",
+      "reviewed": false
+    },
+    "wa.match.needs_approval": {
+      "text": "Kò tíì so pọ̀: ọwọ́ ni a fi tẹ owó yìí sílẹ̀, ó sì tó ààlà owó ilé-ìwé, nítorí náà ẹlòmíràn gbọ́dọ̀ fọwọ́ sí i ní Schools, Approvals.",
       "reviewed": false
     },
     "wa.match.other_person": {
@@ -1336,6 +1680,82 @@
       "text": "*{name}* ń dúró de ẹlòmíràn láti tẹ̀ ẹ́ jáde: wọ́n á pinnu nínú Approvals ní Taskiem.",
       "reviewed": false
     },
+    "wa.receive.account": {
+      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "reviewed": false
+    },
+    "wa.receive.balance": {
+      "text": "Your Taskiem wallet holds {amount} now.",
+      "reviewed": false
+    },
+    "wa.receive.balance_unknown": {
+      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "reviewed": false
+    },
+    "wa.receive.no_number": {
+      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "reviewed": false
+    },
+    "wa.receive.off": {
+      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Sọ ọ́ báyìí: *add rider Musa 0803 123 4567 Lekki Ajah* (àwọn agbègbè kò pọn dandan).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} ti di ẹni tó ń gbé ọjà rẹ. Mo ti fi ìjápọ̀ ránṣẹ́ sí wọn nípasẹ̀ SMS kí wọ́n lè máa gba iṣẹ́ ìfijíṣẹ́ rẹ lórí WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} ti di ẹni tó ń gbé ọjà rẹ, a ó máa rí wọn lórí {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "wà nísinmi",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "ọwọ́ dí títí di {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "nípasẹ̀ SMS títí wọn yóò fi tẹ ìjápọ̀ náà",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} ti ń bá ọ gbé ọjà tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "wà lófo",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Àwọn tó ń gbé ọjà rẹ:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "O kò tíì ní ẹni tó ń gbé ọjà. Fi ọ̀kan kún un báyìí: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "kò ṣiṣẹ́",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "lórí {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "Mi ò lè fi ẹni náà kún un: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Fi ọ̀kan kún un: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "Àwọn ìwọlé kò bá {workflow} mu: {problems}. Ẹ tún fi *run* ránṣẹ́.",
       "reviewed": false
@@ -1396,6 +1816,10 @@
       "text": "Èwo?\n{list}\nẸ fi *run* àti orúkọ rẹ̀ ní kíkún ránṣẹ́.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} tí a fi ọwọ́ tẹ̀ sílẹ̀, {by} so ó pọ̀ mọ́ invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} tí a san {how} fún {student} ({class}), {by} ló gbà á sílẹ̀.",
       "reviewed": false
@@ -1422,6 +1846,10 @@
     },
     "wa.school.how.transfer": {
       "text": "nípa gbígbé owó sí àkáǹtì ilé ẹ̀kọ́",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "owó tí a fi ọwọ́ tẹ̀ tí a so pọ̀",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {
@@ -1820,6 +2248,10 @@
       "text": "a ti gbà á",
       "reviewed": false
     },
+    "wa.shop.status.arrived": {
+      "text": "ó wà ní ẹnu ọ̀nà oníbàárà",
+      "reviewed": false
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "ń dúró de ìsanwó",
       "reviewed": false
@@ -1836,12 +2268,20 @@
       "text": "a kọ̀ ọ́",
       "reviewed": false
     },
+    "wa.shop.status.dispatched": {
+      "text": "ó wà lọ́wọ́ ẹni tó ń gbé e",
+      "reviewed": false
+    },
     "wa.shop.status.expired": {
       "text": "ó ti parí àkókò",
       "reviewed": false
     },
     "wa.shop.status.no_show": {
       "text": "kò wá",
+      "reviewed": false
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "ó ń bọ̀",
       "reviewed": false
     },
     "wa.shop.status.paid": {
@@ -1878,6 +2318,18 @@
     },
     "wa.shop.turn_on_orders": {
       "text": "Ṣé kí n tan àwọn àṣẹ báyìí? Àwọn oníbàárà yóò lè ra láti ojú-ìwé yín, gbogbo àṣẹ yóò sì wá bá yín níbí láti gbà tàbí kọ̀.",
+      "reviewed": false
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {

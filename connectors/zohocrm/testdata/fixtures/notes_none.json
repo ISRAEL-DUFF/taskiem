@@ -1,0 +1,16 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/Leads/5843104000000425001/Notes",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "fields": "Note_Title,Note_Content"
+  }
+ },
+ "response": {
+  "status": 204,
+  "body": null
+ }
+}

@@ -1,0 +1,18 @@
+{
+ "request": {
+  "method": "PUT",
+  "path": "/campaigns/42694e9e57/content",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  },
+  "body": {
+   "html": "<p>20% off this week</p>"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "html": "<p>20% off this week</p>"
+  }
+ }
+}

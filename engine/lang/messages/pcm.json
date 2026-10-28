@@ -164,6 +164,30 @@
       "text": "Thank you. We go call you back soon ({reference}).",
       "reviewed": false
     },
+    "customer.delivery_arrived": {
+      "text": "Your rider don reach your door with {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_done": {
+      "text": "{reference} don deliver. Thank you.",
+      "reviewed": false
+    },
+    "customer.delivery_done_rate": {
+      "text": "{reference} don deliver. How the delivery be? Rate am here: {link}",
+      "reviewed": false
+    },
+    "customer.delivery_on_way": {
+      "text": "Your order {reference} dey come with {rider} ({phone}).",
+      "reviewed": false
+    },
+    "customer.delivery_paid": {
+      "text": "We don receive your payment, thank you: {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Your rider don reach with {reference}. Pay {total} by transfer to {account}, {bank}, {name}, before {until}.",
+      "reviewed": false
+    },
     "customer.enquiry_thanks": {
       "text": "We don get your question ({reference}) and we go reply soon.",
       "reviewed": false
@@ -232,6 +256,10 @@
       "text": "Invoice {number}: {link}",
       "reviewed": false
     },
+    "invoice.chat.own_account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "reviewed": false
+    },
     "invoice.chat.paid": {
       "text": "Invoice {number} don pay finish. Thank you!",
       "reviewed": false
@@ -242,6 +270,10 @@
     },
     "invoice.chat.wait": {
       "text": "Your account number for invoice {number} dey come. If e no come for one minute, tap New account number.",
+      "reviewed": false
+    },
+    "invoice.receipt.fee_line": {
+      "text": "You send {sent}; {received} reach {business} after bank fee of {fee}.",
       "reviewed": false
     },
     "lang.current": {
@@ -310,6 +342,34 @@
     },
     "money.daily.link": {
       "text": "Money page: {link}",
+      "reviewed": false
+    },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} pay for door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} don hand over",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "still owe {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rating {rating} of 5",
       "reviewed": false
     },
     "money.daily.school": {
@@ -396,6 +456,166 @@
       "text": "Fill {name}.",
       "reviewed": false
     },
+    "rider.arrived": {
+      "text": "You don reach with {reference}: give dem and tap Delivered.",
+      "reviewed": false
+    },
+    "rider.btn.accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "rider.btn.arrived": {
+      "text": "I don reach",
+      "reviewed": false
+    },
+    "rider.btn.cant": {
+      "text": "I no fit",
+      "reviewed": false
+    },
+    "rider.btn.cash": {
+      "text": "Dem pay cash",
+      "reviewed": false
+    },
+    "rider.btn.delivered": {
+      "text": "I don deliver",
+      "reviewed": false
+    },
+    "rider.btn.new_number": {
+      "text": "New number",
+      "reviewed": false
+    },
+    "rider.btn.picked_up": {
+      "text": "I don carry am",
+      "reviewed": false
+    },
+    "rider.busy": {
+      "text": "You dey busy until {time}. Send FREE when you fit carry delivery again.",
+      "reviewed": false
+    },
+    "rider.button_invalid": {
+      "text": "That button no dey work again.",
+      "reviewed": false
+    },
+    "rider.cant": {
+      "text": "OK: {reference} go go another rider.",
+      "reviewed": false
+    },
+    "rider.collect": {
+      "text": "Customer go pay {total} for door.",
+      "reviewed": false
+    },
+    "rider.collect_door": {
+      "text": "Customer go pay {total} for door: tap Arrived and Taskiem go give dem account number to pay into.",
+      "reviewed": false
+    },
+    "rider.customer": {
+      "text": "Customer: {customer}, {phone}",
+      "reviewed": false
+    },
+    "rider.done": {
+      "text": "Thank you: {reference} don deliver.",
+      "reviewed": false
+    },
+    "rider.done_proof": {
+      "text": "Thank you: {reference} don deliver. Send photo of am for the door as proof.",
+      "reviewed": false
+    },
+    "rider.door": {
+      "text": "Tell the customer make dem transfer {total} to {account}, {bank}, {name}. E dey work till {time}. I go tell you when e land.",
+      "reviewed": false
+    },
+    "rider.drop": {
+      "text": "Drop am: {drop}",
+      "reviewed": false
+    },
+    "rider.fee": {
+      "text": "Your money: {fee}",
+      "reviewed": false
+    },
+    "rider.held": {
+      "text": "{reference} na your own now.",
+      "reviewed": false
+    },
+    "rider.held_tail": {
+      "text": "Tap Picked up when e don dey your hand.",
+      "reviewed": false
+    },
+    "rider.items": {
+      "text": "Wetin dey inside: {items}",
+      "reviewed": false
+    },
+    "rider.landmark": {
+      "text": "Landmark: {landmark}",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "You don join as rider for {business}. Their delivery go dey come here. Send OFF when you no dey work, and ON when you dey.",
+      "reviewed": false
+    },
+    "rider.location_kept": {
+      "text": "I don collect your location: e dey with the delivery.",
+      "reviewed": false
+    },
+    "rider.no_delivery": {
+      "text": "You no get delivery wey fit that one now.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "You don off. No business go give you delivery until you send ON.",
+      "reviewed": false
+    },
+    "rider.offer": {
+      "text": "Delivery for you: {reference}.",
+      "reviewed": false
+    },
+    "rider.offer_tail": {
+      "text": "Answer before {time}.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "You don on. The business wey you dey ride for fit give you delivery.",
+      "reviewed": false
+    },
+    "rider.on_way": {
+      "text": "You dey road with {reference}. Tap Arrived when you reach the door.",
+      "reviewed": false
+    },
+    "rider.paid": {
+      "text": "Dem don pay. Give dem {reference} and tap Delivered.",
+      "reviewed": false
+    },
+    "rider.photo_failed": {
+      "text": "Sorry, that photo no fit save. Try again small time.",
+      "reviewed": false
+    },
+    "rider.photo_kept": {
+      "text": "Photo don save as proof of delivery. Thank you.",
+      "reviewed": false
+    },
+    "rider.pickup": {
+      "text": "Pick am up: {pickup}",
+      "reviewed": false
+    },
+    "rider.pin": {
+      "text": "Map: {pin}",
+      "reviewed": false
+    },
+    "rider.refused": {
+      "text": "No be now: {reason}",
+      "reviewed": false
+    },
+    "rider.released": {
+      "text": "{business} don collect {reference} back: you no need deliver am again.",
+      "reviewed": false
+    },
+    "rider.unpaid": {
+      "text": "{reference} never pay: {total}. Tell the customer make dem pay, or collect cash and tap Cash received.",
+      "reviewed": false
+    },
+    "rider.withdrawn": {
+      "text": "The offer for {reference} don pass.",
+      "reviewed": false
+    },
     "run.status.cancelled": {
       "text": "don cancel",
       "reviewed": false
@@ -422,6 +642,26 @@
     },
     "run.status.waiting": {
       "text": "dey wait",
+      "reviewed": false
+    },
+    "slack.link.button": {
+      "text": "Confirm",
+      "reviewed": false
+    },
+    "slack.link.confirm": {
+      "text": "Na your Slack account be dis? Press Confirm make di approvals wey you dey decide for Taskiem dey come here, for Slack. If no be you ask for am, just ignore am.",
+      "reviewed": false
+    },
+    "slack.link.done": {
+      "text": "E don link. Approvals wey dey wait for you go dey come here.",
+      "reviewed": false
+    },
+    "slack.link.stale": {
+      "text": "Dis link no dey work again. Ask for new one for your Taskiem profile.",
+      "reviewed": false
+    },
+    "slack.not_linked": {
+      "text": "Dis Slack account never link to you for Taskiem, so e no fit decide dis one. Link am from your Taskiem profile.",
       "reviewed": false
     },
     "sms.reconcile": {
@@ -640,6 +880,10 @@
       "text": "Refund {total} give di customer for {ref}? E go comot from your Paystack balance, and e go reach dem for like 5 to 10 working days.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Mark {ref} as refunded? Only when you don send {total} back give the customer. We go tell dem.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Reply *yes* make we save di change, or *cancel*.",
       "reviewed": false
@@ -658,6 +902,10 @@
     },
     "wa.booking.list_week": {
       "text": "Bookings for di next 7 days:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "{ref} don mark as refunded ({total}). We don tell the customer.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -686,6 +934,10 @@
     },
     "wa.booking.off_done": {
       "text": "{day} na off day: we no go show any time.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "{ref} pay by bank transfer, so Taskiem no fit send am back. Send {total} give the customer from your bank, then reply *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {
@@ -722,6 +974,10 @@
     },
     "wa.build.budget_ran_out": {
       "text": "The AI budget for this month finish before the draft ready. You still fit build workflows for the web app.",
+      "reviewed": false
+    },
+    "wa.build.changed": {
+      "text": "Somebody don change this workflow since I start the build (version {version}), for the same places, so I no save am. Make the change for the web app{link}.",
       "reviewed": false
     },
     "wa.build.denied": {
@@ -790,6 +1046,10 @@
     },
     "wa.build.offer_publish": {
       "text": "Make I publish *{name}* now so e start work? Reply *yes* or *no*.",
+      "reviewed": false
+    },
+    "wa.build.plan": {
+      "text": "The plan wey {org} dey use no get building with AI, so I no fit build am here. You fit still build workflows for the web app, or change plan for Billing.",
       "reviewed": false
     },
     "wa.build.publish_later": {
@@ -888,6 +1148,78 @@
       "text": "Reply *yes* make {workflow} start, or *cancel*.",
       "reviewed": false
     },
+    "wa.dispatch.held": {
+      "text": "{rider} don get {ref} already.",
+      "reviewed": false
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "e don late to reach",
+      "reviewed": false
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "e don late to pick",
+      "reviewed": false
+    },
+    "wa.dispatch.no_rider": {
+      "text": "No rider dey free to carry {ref} now. Add riders, or name one: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "You no get rider wey dem call {name}. Send *riders* to see dem.",
+      "reviewed": false
+    },
+    "wa.dispatch.none_today": {
+      "text": "No delivery today yet.",
+      "reviewed": false
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "No rider get {ref}.",
+      "reviewed": false
+    },
+    "wa.dispatch.offered": {
+      "text": "{ref} don go {rider}. I go tell you if dem no fit carry am.",
+      "reviewed": false
+    },
+    "wa.dispatch.refused": {
+      "text": "No be now: {reason}",
+      "reviewed": false
+    },
+    "wa.dispatch.released": {
+      "text": "{ref} don comot from {rider} hand. Give am again: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "e don take am, never carry",
+      "reviewed": false
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "e don reach door",
+      "reviewed": false
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "delivered",
+      "reviewed": false
+    },
+    "wa.dispatch.state.offered": {
+      "text": "offered",
+      "reviewed": false
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "e dey road",
+      "reviewed": false
+    },
+    "wa.dispatch.state.released": {
+      "text": "dem collect am back",
+      "reviewed": false
+    },
+    "wa.dispatch.today": {
+      "text": "Today delivery:",
+      "reviewed": false
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Which one: {names}?",
+      "reviewed": false
+    },
     "wa.field.enter": {
       "text": "Put {label}",
       "reviewed": false
@@ -980,6 +1312,10 @@
       "text": "• *cancel*: drop wetin dey go on",
       "reviewed": false
     },
+    "wa.help.dispatch": {
+      "text": "• *order* and reference *to Musa*: give am to rider; *release* and reference: collect am back; *deliveries*: today own; *turn on deliveries*: send every confirmed order to your riders",
+      "reviewed": false
+    },
     "wa.help.find": {
       "text": "• *find*, the table name and one word: look for rows",
       "reviewed": false
@@ -998,6 +1334,10 @@
     },
     "wa.help.money": {
       "text": "• *spent* (or *I spend*) plus how much and wetin e be for (*spent 12,000 on diesel at Total*), or *cash in* (*cash enter*) or *cash out* (*cash comot*) plus how much (*cash in 20,000 till*): I go write am for your money log",
+      "reviewed": false
+    },
+    "wa.help.riders": {
+      "text": "• *riders*: your riders and who dey free; *add rider* with name, phone and area: add one",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1138,6 +1478,10 @@
     },
     "wa.match.more": {
       "text": "If no be am, No go show the next invoice wey fit be.",
+      "reviewed": false
+    },
+    "wa.match.needs_approval": {
+      "text": "E never match yet: na hand dem take enter this money and e reach the school cash limit, so another person go approve the match for Schools, Approvals.",
       "reviewed": false
     },
     "wa.match.other_person": {
@@ -1336,6 +1680,82 @@
       "text": "*{name}* dey wait make another person publish am: dem go decide for Approvals inside Taskiem.",
       "reviewed": false
     },
+    "wa.receive.account": {
+      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "reviewed": false
+    },
+    "wa.receive.balance": {
+      "text": "Your Taskiem wallet holds {amount} now.",
+      "reviewed": false
+    },
+    "wa.receive.balance_unknown": {
+      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "reviewed": false
+    },
+    "wa.receive.no_number": {
+      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "reviewed": false
+    },
+    "wa.receive.off": {
+      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Talk am like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the area no compulsory).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} don be your rider. I don send dem link by SMS make dem dey get your delivery for WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} don be your rider, we go reach dem for {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "on leave",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "busy till {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "by SMS until dem tap the link",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} don already dey ride for you.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "free",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Your riders:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "You never get rider. Add one like this: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "off",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "on {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "I no fit add that rider: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Add one: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
     "wa.run.bad_inputs": {
       "text": "The inputs no fit {workflow}: {problems}. Send *run* again.",
       "reviewed": false
@@ -1396,6 +1816,10 @@
       "text": "Which one?\n{list}\nSend *run* and the full name.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} wey dem enter with hand, {by} match am to invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} wey dem pay {how} for {student} ({class}), na {by} post am.",
       "reviewed": false
@@ -1422,6 +1846,10 @@
     },
     "wa.school.how.transfer": {
       "text": "by transfer to the school account",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "match of money wey dem enter with hand",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {
@@ -1820,6 +2248,10 @@
       "text": "accepted",
       "reviewed": false
     },
+    "wa.shop.status.arrived": {
+      "text": "e don reach customer door",
+      "reviewed": false
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "dey wait for payment",
       "reviewed": false
@@ -1836,12 +2268,20 @@
       "text": "declined",
       "reviewed": false
     },
+    "wa.shop.status.dispatched": {
+      "text": "e dey with rider",
+      "reviewed": false
+    },
     "wa.shop.status.expired": {
       "text": "expired",
       "reviewed": false
     },
     "wa.shop.status.no_show": {
       "text": "no come",
+      "reviewed": false
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "e dey road",
       "reviewed": false
     },
     "wa.shop.status.paid": {
@@ -1878,6 +2318,18 @@
     },
     "wa.shop.turn_on_orders": {
       "text": "Make I on orders now? Customers go fit order from your page, and each order go come meet you here make you accept or decline.",
+      "reviewed": false
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Make we on deliveries now? Every order wey you confirm for delivery go reach your riders one by one, and when dem tap Delivered e go complete. Your order form go remain as e be.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries don on. Orders wey you confirm for delivery go reach your riders now; reply *deliveries* to see today own.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries never on: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {

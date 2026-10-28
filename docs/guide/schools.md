@@ -24,7 +24,7 @@ When fees are set, **Invoice the term** (on the term's Invoices) makes one invoi
 
 ## Each child's own account number
 
-Under **Schools > Settings > Students' account numbers**, the owner chooses the connected payments account that issues them. Then **Schools > Account numbers > Check who gets one** shows the plan and **Issue** gives each student a permanent account number of their own, named for the school and the child where the bank allows. A parent pays by ordinary transfer to it, and the money lands on that child's fees by itself: no one has to match it. The number is on the student's page and on the family's fees page, with a copy button.
+Under **Schools > Settings > Students' account numbers**, the owner chooses the connected payments account that issues them. A school with no payments account of its own turns on [receiving money with Taskiem](receiving-money.md) first: its wallet with Taskiem then issues the numbers, with nothing to paste. With iswallet, **Create the school's wallet** opens the wallet the numbers pay into: give the school's business email and the director's BVN, which go to iswallet once and are not kept by Taskiem. Then **Schools > Account numbers > Check who gets one** shows the plan and **Issue** gives each student a permanent account number of their own, named for the school and the child where the bank allows. A parent pays by ordinary transfer to it, and the money lands on that child's fees by itself: no one has to match it. The number is on the student's page and on the family's fees page, with a copy button.
 
 A new student added during the term gets a number within a quarter of an hour when the *Give each new student their own account number* template is on; it also sends the family the number and the bank.
 

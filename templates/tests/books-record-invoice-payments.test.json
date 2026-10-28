@@ -1,0 +1,79 @@
+{
+  "schema": "wd-test/v1",
+  "template": "books-record-invoice-payments",
+  "params": {
+    "deposit_account": "35"
+  },
+  "cases": [
+    {
+      "name": "a payment counted is recorded against the invoice copied to the books",
+      "trigger": {
+        "event": "payment",
+        "body": {
+          "event": "payment",
+          "id": "0192f0aa-0000-7000-8000-000000000042",
+          "number": "INV-0042",
+          "status": "part_paid",
+          "amount_kobo": 5375000,
+          "amount": "₦53,750",
+          "paid_kobo": 2000000,
+          "due_kobo": 3375000,
+          "currency": "NGN",
+          "customer": {
+            "name": "Adaeze Okafor",
+            "email": "ada@example.com"
+          },
+          "payment": {
+            "id": "ml_01JB8Z3K4M5N6P7Q8R9S0T",
+            "amount_kobo": 2000000,
+            "amount": "₦20,000",
+            "how": "exact",
+            "paid_at": "2026-10-26T14:05:00+01:00"
+          }
+        }
+      },
+      "mocks": {
+        "copy__customer": {
+          "output": {
+            "customer_id": "58",
+            "created": false
+          }
+        },
+        "copy__invoice": {
+          "output": {
+            "invoice_id": "130",
+            "number": "INV-0042",
+            "total_kobo": 5375000
+          }
+        },
+        "payment": {
+          "output": {
+            "payment_id": "171"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "copy__invoice": {
+            "number": "INV-0042",
+            "customer_id": "58",
+            "lines": [
+              {
+                "description": "Invoice INV-0042",
+                "amount_kobo": 5375000
+              }
+            ]
+          },
+          "payment": {
+            "invoice_id": "130",
+            "amount_kobo": 2000000,
+            "reference": "ml_01JB8Z3K4M5N6P7Q8R9S0T",
+            "paid_on": "2026-10-26",
+            "account_id": "35"
+          }
+        }
+      }
+    }
+  ]
+}

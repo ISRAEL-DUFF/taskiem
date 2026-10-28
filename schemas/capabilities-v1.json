@@ -1,7 +1,7 @@
 {
   "$id": "https://schemas.taskiem.dev/capabilities/v1.json",
   "title": "Taskiem capabilities v1",
-  "description": "What a rail can do, said the same way for every rail (decision 0044, docs/spec/rails-and-products.md 4.1). A rail's manifest maps each capability it has to its own actions (connector/v1 rule 16); templates use the capability and run on any rail that declares it. Amounts are integer minor units (kobo for NGN). x-pii marks personal fields, sealed whatever the rail. classes are the effect classes a rail's action may have to stand for the capability.",
+  "description": "What a rail can do, said the same way for every rail (decision 0044, docs/spec/rails-and-products.md 4.1), and what the books can do, the same way for every books (kind: product; decision 0051). A rail's manifest maps each capability it has to its own actions (connector/v1 rule 16); templates use the capability and run on any rail that declares it. Amounts are integer minor units (kobo for NGN). x-pii marks personal fields, sealed whatever the rail. classes are the effect classes a rail's action may have to stand for the capability.",
   "capabilities": {
     "balance": {
       "title": "Check the balance",
@@ -365,6 +365,292 @@
           "amount_kobo": { "type": "integer" }
         }
       }
+    },
+    "books_customer": {
+      "title": "Find or add a customer in the books",
+      "kind": "product",
+      "classes": ["idempotent_write", "reconcilable_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "x-pii": "name" },
+          "email": { "type": "string", "x-pii": "email", "description": "Found by it before a customer is added, so a retry finds the one it made" },
+          "phone": { "type": "string", "x-pii": "phone", "description": "Found by it when there is no email" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["customer_id"],
+        "properties": {
+          "customer_id": { "type": "string", "description": "The books' own id" },
+          "created": { "type": "boolean", "description": "false when the customer was already there" }
+        }
+      }
+    },
+    "books_invoice": {
+      "title": "Record an invoice in the books",
+      "kind": "product",
+      "classes": ["idempotent_write", "reconcilable_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["number", "customer_id", "lines"],
+        "properties": {
+          "number": { "type": "string", "description": "Taskiem's invoice number, kept as the books' reference (reference_number, DocNumber): a retry finds the invoice instead of making a second" },
+          "customer_id": { "type": "string", "description": "As books_customer answered it" },
+          "issued_on": { "type": "string", "format": "date" },
+          "due_on": { "type": "string", "format": "date" },
+          "currency": { "type": "string", "default": "NGN" },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["description", "amount_kobo"],
+              "properties": {
+                "description": { "type": "string" },
+                "quantity": { "type": "number", "exclusiveMinimum": 0, "default": 1 },
+                "amount_kobo": { "type": "integer", "minimum": 0, "description": "Each, before tax" },
+                "item_id": { "type": "string", "description": "As books_items lists it" },
+                "tax_id": { "type": "string", "description": "As books_taxes lists it (VAT at 7.5%)" }
+              }
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["invoice_id"],
+        "properties": {
+          "invoice_id": { "type": "string" },
+          "number": { "type": "string" },
+          "total_kobo": { "type": "integer", "description": "As the books worked it out, tax included" }
+        }
+      }
+    },
+    "books_payment": {
+      "title": "Record a payment against an invoice in the books",
+      "kind": "product",
+      "classes": ["idempotent_write", "reconcilable_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["invoice_id", "amount_kobo", "reference"],
+        "properties": {
+          "invoice_id": { "type": "string" },
+          "amount_kobo": { "type": "integer", "minimum": 1 },
+          "currency": { "type": "string", "default": "NGN" },
+          "paid_on": { "type": "string", "format": "date" },
+          "reference": { "type": "string", "description": "The money log entry's reference: a retry finds the payment by it" },
+          "method": { "enum": ["transfer", "card", "cash", "pos", "other"] },
+          "account_id": { "type": "string", "description": "The bank or cash account it went into, as books_accounts lists it" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id"],
+        "properties": {
+          "payment_id": { "type": "string" }
+        }
+      }
+    },
+    "books_sale": {
+      "title": "Record a day's takings in the books",
+      "kind": "product",
+      "classes": ["idempotent_write", "reconcilable_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference", "date", "takings"],
+        "properties": {
+          "reference": { "type": "string", "description": "The day and the source (pos-2026-10-24): a retry finds the receipt by it" },
+          "date": { "type": "string", "format": "date" },
+          "currency": { "type": "string", "default": "NGN" },
+          "takings": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["description", "amount_kobo"],
+              "properties": {
+                "description": { "type": "string", "description": "Card, transfer, cash…" },
+                "amount_kobo": { "type": "integer", "minimum": 0 },
+                "account_id": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sale_id"],
+        "properties": {
+          "sale_id": { "type": "string" }
+        }
+      }
+    },
+    "books_expense": {
+      "title": "Record an expense in the books",
+      "kind": "product",
+      "classes": ["idempotent_write", "reconcilable_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference", "amount_kobo", "account_id"],
+        "properties": {
+          "reference": { "type": "string", "description": "The receipt's or the money log entry's: a retry finds the expense by it" },
+          "supplier": { "type": "string" },
+          "amount_kobo": { "type": "integer", "minimum": 1 },
+          "vat_kobo": { "type": "integer", "minimum": 0 },
+          "currency": { "type": "string", "default": "NGN" },
+          "date": { "type": "string", "format": "date" },
+          "account_id": { "type": "string", "description": "The expense account, as books_accounts lists it" },
+          "paid_from_id": { "type": "string", "description": "The bank or cash account it was paid from" },
+          "description": { "type": "string" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expense_id"],
+        "properties": {
+          "expense_id": { "type": "string" }
+        }
+      }
+    },
+    "books_bill": {
+      "title": "Record a supplier's bill in the books",
+      "kind": "product",
+      "classes": ["idempotent_write", "reconcilable_write"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["supplier_id", "number", "lines"],
+        "properties": {
+          "supplier_id": { "type": "string" },
+          "number": { "type": "string", "description": "The supplier's bill number: a retry finds the bill by it" },
+          "issued_on": { "type": "string", "format": "date" },
+          "due_on": { "type": "string", "format": "date" },
+          "currency": { "type": "string", "default": "NGN" },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["description", "amount_kobo", "account_id"],
+              "properties": {
+                "description": { "type": "string" },
+                "amount_kobo": { "type": "integer", "minimum": 0 },
+                "account_id": { "type": "string" },
+                "tax_id": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bill_id"],
+        "properties": {
+          "bill_id": { "type": "string" },
+          "total_kobo": { "type": "integer" }
+        }
+      }
+    },
+    "books_accounts": {
+      "title": "List the books' accounts",
+      "kind": "product",
+      "classes": ["read"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["income", "expense", "bank", "cash", "receivable", "payable", "other"], "description": "Only accounts of this type" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accounts"],
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "books_items": {
+      "title": "List the books' items",
+      "kind": "product",
+      "classes": ["read"],
+      "input": { "type": "object", "additionalProperties": false, "properties": {} },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "amount_kobo": { "type": "integer", "description": "Its price, where it has one" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "books_taxes": {
+      "title": "List the books' taxes",
+      "kind": "product",
+      "classes": ["read"],
+      "input": { "type": "object", "additionalProperties": false, "properties": {} },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["taxes"],
+        "properties": {
+          "taxes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "percent": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "events": {
@@ -417,7 +703,8 @@
         "required": ["payment_id", "amount_kobo"],
         "properties": {
           "payment_id": { "type": "string" },
-          "amount_kobo": { "type": "integer" },
+          "amount_kobo": { "type": "integer", "description": "What the payer sent" },
+          "fee_kobo": { "type": "integer", "description": "The rail's fee taken from it, when the rail settles net and says so (a one-time number's transfer)" },
           "currency": { "type": "string" },
           "paid_at": { "type": "string" }
         }
@@ -507,6 +794,56 @@
           "payer_name": { "type": "string", "x-pii": "name" }
         }
       }
+    },
+    "books.invoice.created": {
+      "title": "An invoice was made in the books",
+      "kind": "product",
+      "correlation": "invoice_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["invoice_id"],
+        "properties": {
+          "invoice_id": { "type": "string" },
+          "number": { "type": "string" },
+          "customer_id": { "type": "string" },
+          "total_kobo": { "type": "integer" },
+          "currency": { "type": "string" }
+        }
+      }
+    },
+    "books.invoice.paid": {
+      "title": "An invoice was paid in full in the books",
+      "kind": "product",
+      "correlation": "invoice_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["invoice_id"],
+        "properties": {
+          "invoice_id": { "type": "string" },
+          "number": { "type": "string" },
+          "total_kobo": { "type": "integer" },
+          "currency": { "type": "string" }
+        }
+      }
+    },
+    "books.payment.recorded": {
+      "title": "A payment was recorded in the books",
+      "kind": "product",
+      "correlation": "invoice_id",
+      "fields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payment_id"],
+        "properties": {
+          "payment_id": { "type": "string" },
+          "invoice_id": { "type": "string" },
+          "amount_kobo": { "type": "integer" },
+          "currency": { "type": "string" },
+          "reference": { "type": "string" }
+        }
+      }
     }
   },
   "$defs": {
@@ -550,7 +887,8 @@
         "payer_account": { "type": "string", "description": "The payer's account number, often masked by the rail", "x-pii": "account_number" },
         "payer_bank": { "type": "string" },
         "narration": { "type": "string", "description": "What the payer wrote, as the rail passed it on; often carries names", "x-pii": "other" },
-        "occurred_at": { "type": "string", "description": "RFC 3339" }
+        "occurred_at": { "type": "string", "description": "RFC 3339" },
+        "event": { "type": "string", "enum": ["payment.received"], "description": "payment.received for a payment into a one-time number (collect_transfer) the rail lists among its credits: recorded as that payment, under the same key as its payment.received event, not as an account credit" }
       }
     }
   }

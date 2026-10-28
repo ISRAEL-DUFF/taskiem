@@ -1,0 +1,11 @@
+# Code owners (https://docs.github.com/articles/about-code-owners): GitHub
+# asks them to review every pull request that changes these paths.
+
+# Functions that run past row-level security, and the columns the dispatch
+# role may read (spec 5.3). A new or changed SECURITY DEFINER function must
+# change definers.tsv in the same pull request (TestDefinersAllowList), so
+# its review comes here.
+/engine/db/definers.tsv           @ISRAEL-DUFF
+/engine/db/dispatch_columns.txt   @ISRAEL-DUFF
+/engine/db/definers_test.go       @ISRAEL-DUFF
+/.github/CODEOWNERS               @ISRAEL-DUFF

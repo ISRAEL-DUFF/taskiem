@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/history"
@@ -25,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/shadow"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wddiff"
+	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 )
 
@@ -92,33 +94,43 @@ type repairJob struct {
 	attempts        int
 }
 
-// RepairOnce analyses every repair job due now, one tenant at a time, and
-// reports how many it finished.
+// RepairOnce analyses the repair jobs due now and reports how many it
+// finished. It works in rounds, one job per tenant each round, so a
+// tenant with hundreds of failed runs does not hold the others' repairs
+// up (an analysis can take minutes); it returns once a round finds none.
 func (s *Server) RepairOnce(ctx context.Context) (int, error) {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_repair_due_tenants(50)`)
-	if err != nil {
-		return 0, err
-	}
-	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-	if err != nil {
-		return 0, err
-	}
 	n := 0
-	for _, tenant := range tenants {
-		for ctx.Err() == nil {
+	for ctx.Err() == nil {
+		rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_repair_due_tenants(50)`)
+		if err != nil {
+			return n, err
+		}
+		tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return n, err
+		}
+		round := 0
+		for _, tenant := range tenants {
+			if ctx.Err() != nil {
+				break
+			}
 			job, ok, err := s.claimRepairJob(ctx, tenant)
 			if err != nil {
 				return n, err
 			}
 			if !ok {
-				break
+				continue
 			}
 			status, detail := s.processRepairJob(ctx, job)
 			if err := s.finishRepairJob(ctx, job, status, detail); err != nil {
 				return n, err
 			}
-			n++
+			round++
 		}
+		if round == 0 {
+			break
+		}
+		n += round
 	}
 	return n, nil
 }
@@ -173,6 +185,14 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 	defer cancel()
 	if s.AI == nil || s.AI.Provider == nil {
 		return "skipped", "no model provider is configured"
+	}
+	// Repair is an AI feature of the plan, as building is (/v1/ai).
+	if err := s.Billing.Require(ctx, j.tenant, billing.FeatureAI); err != nil {
+		var fe *billing.FeatureError
+		if errors.As(err, &fe) {
+			return "skipped", "the plan does not include AI"
+		}
+		return "failed", err.Error()
 	}
 	on, err := s.repairEnabled(ctx, j.tenant)
 	if err != nil {
@@ -265,13 +285,26 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 	}
 
 	id := uuid.Must(uuid.NewV7())
+	var same uuid.UUID
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{j.tenant}, func(tx pgx.Tx) error {
+		// One analysis per failure: runs of a version that fail the same
+		// way (the same step, reason and class) are covered by the first
+		// one's proposal, so a burst of failures asks the model once.
+		if failure.Step != "" && (cl.Class.Patches() || !cl.Certain) {
+			var err error
+			if same, err = sameFailure(ctx, tx, wf, version, j.reason, failure.Step, cl.Class); err != nil || same != uuid.Nil {
+				return err
+			}
+		}
 		_, err := tx.Exec(ctx, `INSERT INTO repair_proposals (id, tenant_id, run_id, job_id, workflow_id, version, environment, reason, class, classified_by, step_id, provider, model)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'rules', NULLIF($10, ''), $11, $12)`,
 			id, j.tenant, j.run, j.id, wf, version, env, j.reason, cl.Class, failure.Step, s.AI.Provider.Name(), s.AI.Provider.Model())
 		return err
 	}); err != nil {
 		return "failed", err.Error()
+	}
+	if same != uuid.Nil {
+		return "skipped", "the same failure of this version is analysed in repair " + same.String()
 	}
 
 	ev := &repairEvidence{Classification: cl}
@@ -293,6 +326,7 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 			}
 			return out
 		},
+		Find:      s.callables(ctx, j.tenant),
 		Meter:     aiMeter{s: s, tenant: j.tenant},
 		Recorder:  repairRecorder{s: s, repair: id, tenant: j.tenant, provider: s.AI.Provider.Name()},
 		Effort:    s.AI.Effort,
@@ -334,6 +368,46 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 		return "failed", err.Error()
 	}
 	return "done", p.status
+}
+
+// sameFailure finds a proposal of the workflow's version for the same
+// failure: its step (any instance of it), reason and the class the rules
+// gave it (kept in the evidence once the model has classified). Analyses
+// that failed, were interrupted, ran out of budget or were superseded do
+// not count. It holds a lock on the failure until tx ends, so two workers
+// never both analyse it.
+func sameFailure(ctx context.Context, tx pgx.Tx, wf uuid.UUID, version int, reason, step string, class repair.Class) (uuid.UUID, error) {
+	_, sid := history.SplitInstance(step)
+	key := fmt.Sprintf("repair:%s:%d:%s:%s:%s", wf, version, reason, sid, class)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, key); err != nil {
+		return uuid.Nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id, step_id FROM repair_proposals
+		WHERE workflow_id = $1 AND version = $2 AND reason = $3 AND step_id IS NOT NULL
+		  AND COALESCE(evidence->'classification'->>'class', class) = $4
+		  AND status NOT IN ('failed', 'superseded') AND NOT (status = 'withheld' AND error IS NOT NULL)
+		  AND NOT (status = 'analysing' AND created_at < now() - $5::interval)
+		ORDER BY created_at`, wf, version, reason, string(class), (repairTimeout + time.Minute).String())
+	if err != nil {
+		return uuid.Nil, err
+	}
+	type row struct {
+		id   uuid.UUID
+		step string
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var x row
+		return x, r.Scan(&x.id, &x.step)
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	for _, x := range list {
+		if _, other := history.SplitInstance(x.step); other == sid {
+			return x.id, nil
+		}
+	}
+	return uuid.Nil, nil
 }
 
 // repairEvidence is what a proposal shows besides its diff.
@@ -705,28 +779,35 @@ type storedTest struct {
 func (s *Server) workflowTests(ctx context.Context, tenant, wf uuid.UUID) ([]storedTest, error) {
 	var out []storedTest
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT test, policies FROM workflow_tests WHERE workflow_id = $1 ORDER BY created_at`, wf)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var raw, pol []byte
-			if err := rows.Scan(&raw, &pol); err != nil {
-				return err
-			}
-			var t storedTest
-			if err := json.Unmarshal(raw, &t.test); err != nil {
-				continue
-			}
-			if len(pol) > 0 {
-				_ = json.Unmarshal(pol, &t.policies)
-			}
-			out = append(out, t)
-		}
-		return rows.Err()
+		var err error
+		out, err = workflowTestsTx(ctx, tx, wf)
+		return err
 	})
 	return out, err
+}
+
+func workflowTestsTx(ctx context.Context, tx pgx.Tx, wf uuid.UUID) ([]storedTest, error) {
+	var out []storedTest
+	rows, err := tx.Query(ctx, `SELECT test, policies FROM workflow_tests WHERE workflow_id = $1 ORDER BY created_at`, wf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw, pol []byte
+		if err := rows.Scan(&raw, &pol); err != nil {
+			return nil, err
+		}
+		var t storedTest
+		if err := json.Unmarshal(raw, &t.test); err != nil {
+			continue
+		}
+		if len(pol) > 0 {
+			_ = json.Unmarshal(pol, &t.policies)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 // repairRecorder writes a repair's model calls to ai_interactions.
@@ -796,18 +877,23 @@ type repairView struct {
 	DismissedBy  *string         `json:"dismissed_by"`
 	DismissedAt  *time.Time      `json:"dismissed_at"`
 	ResumedRunID *uuid.UUID      `json:"resumed_run_id"`
+	// PublishedSince: the latest version published after the run's, onto
+	// which accepting merges the patch (rebaseRepair).
+	PublishedSince *int `json:"published_since"`
 }
 
 const repairColumns = `id, run_id, workflow_id, version, environment, reason, class, classified_by, step_id, status, explanation, action, definition, diff,
 	evidence, test, attempts, provider, model, total_tokens, error, created_by, created_at, finished_at, draft_version, accepted_by, accepted_at,
-	dismissed_by, dismissed_at, resumed_run_id`
+	dismissed_by, dismissed_at, resumed_run_id,
+	(SELECT max(wv.version) FROM workflow_versions wv WHERE wv.workflow_id = repair_proposals.workflow_id AND wv.state IN ('published', 'deprecated')
+		AND wv.version > repair_proposals.version AND wv.repair_id IS DISTINCT FROM repair_proposals.id)`
 
 func scanRepair(r pgx.CollectableRow) (repairView, error) {
 	var v repairView
 	var action, def, diff, ev, test []byte
 	err := r.Scan(&v.ID, &v.RunID, &v.WorkflowID, &v.Version, &v.Environment, &v.Reason, &v.Class, &v.ClassifiedBy, &v.Step, &v.Status, &v.Explanation,
 		&action, &def, &diff, &ev, &test, &v.Attempts, &v.Provider, &v.Model, &v.TotalTokens, &v.Error, &v.CreatedBy, &v.CreatedAt, &v.FinishedAt,
-		&v.DraftVersion, &v.AcceptedBy, &v.AcceptedAt, &v.DismissedBy, &v.DismissedAt, &v.ResumedRunID)
+		&v.DraftVersion, &v.AcceptedBy, &v.AcceptedAt, &v.DismissedBy, &v.DismissedAt, &v.ResumedRunID, &v.PublishedSince)
 	raw := func(b []byte) json.RawMessage {
 		if b == nil {
 			return json.RawMessage("null")
@@ -942,6 +1028,19 @@ func (s *Server) acceptRepair(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "the patched definition no longer passes the publishing checks", "problems": probs})
 			return
 		}
+		var sup *repairSuperseded
+		if errors.As(err, &sup) {
+			s.supersedeRepair(ctx, p.TenantID, v.ID, sup)
+			out := map[string]any{"error": sup.Error(), "code": "repair_superseded", "latest_version": sup.latest}
+			if len(sup.conflicts) > 0 {
+				out["conflicts"] = sup.conflicts
+			}
+			if len(sup.failures) > 0 {
+				out["failures"] = sup.failures
+			}
+			writeJSON(w, http.StatusConflict, out)
+			return
+		}
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -1015,6 +1114,9 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 		if err != nil {
 			return err
 		}
+		if doc, err = s.rebaseRepair(ctx, tx, p.TenantID, v, doc); err != nil {
+			return err
+		}
 		if err := insertVersionTx(ctx, tx, p.TenantID, v.WorkflowID, version, doc, nil, repairCreatedBy, ""); err != nil {
 			return err
 		}
@@ -1041,7 +1143,11 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 		if err != nil {
 			return err
 		}
-		if g.FourEyesPublish {
+		wait, err := publishNeedsApproval(ctx, tx, g, nil)
+		if err != nil {
+			return err
+		}
+		if wait {
 			if p.UserID == uuid.Nil {
 				return fmt.Errorf("%w: with four-eyes publishing, a person accepts a repair and another approves its publication", errForbidden)
 			}
@@ -1072,7 +1178,7 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 			model = *v.Model
 		}
 		return auditTx(r, tx, "ai.repair.accept", fmt.Sprintf("%s/%d", v.WorkflowID, version), map[string]any{"proposal": v.ID.String(),
-			"run": v.RunID.String(), "co_author": "ai:" + model, "created_by": repairCreatedBy, "four_eyes": g.FourEyesPublish})
+			"run": v.RunID.String(), "co_author": "ai:" + model, "created_by": repairCreatedBy, "four_eyes": wait})
 	})
 	if err == nil && published {
 		if g := s.proposeToGit(r, v.WorkflowID, version); g != nil {
@@ -1080,6 +1186,139 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 		}
 	}
 	return probs, err
+}
+
+// repairSuperseded is a patch that cannot be carried onto the versions
+// published since its run's: their change and the patch's conflict, or
+// the merged definition fails the patch's check.
+type repairSuperseded struct {
+	latest    int
+	conflicts []wdmerge.Conflict
+	failures  []string
+}
+
+func (e *repairSuperseded) Error() string {
+	if len(e.conflicts) > 0 {
+		return fmt.Sprintf("version %d, published after the run's version, changed what the fix changes: the proposal is superseded", e.latest)
+	}
+	return fmt.Sprintf("merged onto version %d, published after the run's version, the fix no longer passes its tests: the proposal is superseded", e.latest)
+}
+
+// rebaseRepair carries a patch onto the versions published since the run's
+// (decision 0016): the patch was made against the version the run failed
+// on, and publishing it as it is would drop their changes. It is merged
+// three ways, the run's version the base, as a canvas save is merged onto
+// a newer version (createVersion), and the merged definition must pass the
+// patch's whole check again (shadowCheck), and still resume the run safely
+// if the patch did; the change it makes to the latest version is kept on
+// the proposal's evidence (merged). Drafts are
+// left out: a draft saved since is merged when it is next saved, and is
+// not published by accepting a repair. Another repair of the workflow
+// awaiting its publish request is decided first, so neither drops the other.
+func (s *Server) rebaseRepair(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, v repairView, doc []byte) ([]byte, error) {
+	var waiting uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM repair_proposals WHERE workflow_id = $1 AND id <> $2 AND status = 'awaiting_publish' LIMIT 1`, v.WorkflowID, v.ID).Scan(&waiting)
+	if err == nil {
+		return nil, fmt.Errorf("%w: repair %s of this workflow waits for its publish request; decide it first", errConflict, waiting)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	var latest int
+	var theirs []byte
+	err = tx.QueryRow(ctx, `SELECT version, definition FROM workflow_versions WHERE workflow_id = $1 AND state IN ('published', 'deprecated')
+		ORDER BY version DESC LIMIT 1`, v.WorkflowID).Scan(&latest, &theirs)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && latest <= v.Version) {
+		return doc, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var base []byte
+	if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, v.WorkflowID, v.Version).Scan(&base); err != nil {
+		return nil, err
+	}
+	merged, conflicts, err := wdmerge.Merge(base, doc, theirs, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(conflicts) > 0 {
+		return nil, &repairSuperseded{latest: latest, conflicts: conflicts}
+	}
+	if doc, err = canonical(merged); err != nil {
+		return nil, err
+	}
+	orig, err := wd.Load(base)
+	if err != nil {
+		return nil, err
+	}
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err
+	}
+	// The same check the patch passed (shadowCheck): the shadow run over
+	// the run's recorded data, the failing case, the model's test and the
+	// workflow's stored tests.
+	ref := runtime.RunRef{ID: v.RunID, TenantID: tenant}
+	opened, taint, err := s.Store.OpenedHistoryWithTaint(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	sealed, err := s.Store.RunHistory(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	rec, err := shadow.Record(opened)
+	if err != nil {
+		return nil, err
+	}
+	srec, err := shadow.Record(sealed)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := workflowTestsTx(ctx, tx, v.WorkflowID)
+	if err != nil {
+		return nil, err
+	}
+	var proposed []wdtest.Case
+	_ = json.Unmarshal(v.Test, &proposed)
+	var modelTest *wdtest.Case
+	if len(proposed) > 1 { // the failing case, then the model's
+		modelTest = &proposed[1]
+	}
+	var was repairEvidence
+	_ = json.Unmarshal(v.Evidence, &was)
+	ev := &repairEvidence{}
+	var tests []wdtest.Case
+	check := s.shadowCheck(orig, doc, reg, rec, srec.Redacted(orig, reg), existing, modelTest, scrubber(taint), ev, &tests, v.RunID)
+	failures := check.Feedback
+	// A patch that could resume the run must still: a write the run
+	// completed is not sent again with another input.
+	if was.Resumable && check.Passed && !ev.Resumable && ev.Shadow != nil {
+		failures = append(failures, "the merged definition would send a write the run completed with another input: "+strings.Join(ev.Shadow.Mismatches, ", "))
+	}
+	if !check.Passed || len(failures) > 0 {
+		return nil, &repairSuperseded{latest: latest, failures: failures}
+	}
+	// What accepting publishes, against the latest version, is kept on the
+	// proposal: the diff the person saw was against the run's version.
+	note, _ := json.Marshal(map[string]any{"onto": latest, "diff": nonNil(wddiff.Diff(theirs, doc))})
+	if _, err := tx.Exec(ctx, `UPDATE repair_proposals SET evidence = jsonb_set(COALESCE(evidence, '{}'::jsonb), '{merged}', $2::jsonb) WHERE id = $1`, v.ID, note); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+// supersedeRepair marks a proposal that can no longer be accepted.
+func (s *Server) supersedeRepair(ctx context.Context, tenant, id uuid.UUID, sup *repairSuperseded) {
+	ctx = context.WithoutCancel(ctx)
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE repair_proposals SET status = 'superseded', error = $2 WHERE id = $1 AND status = 'proposed'`, id, sup.Error())
+		return err
+	})
+	if err != nil {
+		s.Logger.Error("superseding a repair", "proposal", id, "err", err)
+	}
 }
 
 // repairsAfterDeploy moves a workflow's accepted repairs on: one whose

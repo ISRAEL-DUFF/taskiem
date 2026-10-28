@@ -1,0 +1,29 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/invoice/999",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "Fault": {
+    "Error": [
+     {
+      "Message": "Object Not Found",
+      "Detail": "Object Not Found : Something you're trying to use has been made inactive. Check the fields with accounts, customers, items, vendors or employees.",
+      "code": "610",
+      "element": ""
+     }
+    ],
+    "type": "ValidationFault"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

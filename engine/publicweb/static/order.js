@@ -7,6 +7,7 @@
   if (!form) return;
   var out = form.querySelector("[data-total]");
   var inputs = form.querySelectorAll("input[data-price]");
+  var zone = form.querySelector("select[name=zone]");
   function naira(k) {
     var whole = String(Math.floor(k / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     var frac = k % 100;
@@ -20,7 +21,14 @@
       var most = parseInt(inputs[i].getAttribute("max"), 10) || 20;
       if (q > 0 && q <= most && p >= 0) total += q * p;
     }
-    out.textContent = total > 0 ? "Total: " + naira(total) : "";
+    // The delivery area's fee, while delivery is what is chosen.
+    var fee = 0;
+    var how = form.querySelector("input[name=fulfilment]:checked");
+    var opt = zone && zone.options[zone.selectedIndex];
+    if (total > 0 && opt && opt.value && (!form.querySelector("input[name=fulfilment]") || (how && how.value === "delivery"))) {
+      fee = parseInt(opt.getAttribute("data-fee"), 10) || 0;
+    }
+    out.textContent = total > 0 ? "Total: " + naira(total + fee) + (fee > 0 ? " with " + naira(fee) + " delivery" : "") : "";
   }
   function step(input, by, label) {
     var b = document.createElement("button");
@@ -46,6 +54,31 @@
     box.appendChild(input);
     box.appendChild(step(input, 1, "One more " + name));
   }
+  // The map pin: the browser's location, when the customer asks for it
+  // (offered, never required; the server turns it into a maps link).
+  var pin = form.querySelector("input[data-pin]");
+  if (pin && window.navigator.geolocation) {
+    var here = document.createElement("button");
+    here.type = "button";
+    here.className = "btn btn-small";
+    here.textContent = "Use my location";
+    here.addEventListener("click", function () {
+      here.disabled = true;
+      window.navigator.geolocation.getCurrentPosition(
+        function (p) {
+          pin.value = p.coords.latitude.toFixed(6) + "," + p.coords.longitude.toFixed(6);
+          here.textContent = "Location added";
+        },
+        function () {
+          here.disabled = false;
+          here.textContent = "Location not available";
+        },
+        { timeout: 15000 }
+      );
+    });
+    pin.parentNode.appendChild(here);
+  }
   form.addEventListener("input", update);
+  form.addEventListener("change", update);
   update();
 })();

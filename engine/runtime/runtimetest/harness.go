@@ -32,8 +32,10 @@ type Env struct {
 	// are the models steps may name besides the default.
 	AI       ai.Provider
 	AIModels []string
-	Tenant   uuid.UUID
-	Secrets  runtime.MapSecrets
+	// AIPlan says whether the tenant's plan includes AI (nil: it does).
+	AIPlan  func(ctx context.Context, tenant uuid.UUID) (bool, error)
+	Tenant  uuid.UUID
+	Secrets runtime.MapSecrets
 	// VaultSecrets makes workers read workflow secrets from Vault (which
 	// records each read) instead of Secrets.
 	VaultSecrets bool
@@ -74,6 +76,7 @@ func New(t testing.TB) *Env {
 	t.Cleanup(func() { _ = wrt.Close(context.Background()) })
 	src := &wasmconn.Source{Pool: d.AppPool(t, 2), Runtime: wrt}
 	reg.SetTenantSource(src.Connectors)
+	reg.SetVersionSource(src.Version)
 	guard := &egress.Guard{Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
 	vault := &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}
 	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault, HooksURL: "https://hooks.test/hooks"}, Registry: reg, Provider: prov, Tenant: tn.ID,
@@ -157,7 +160,7 @@ func (e *Env) AIWorker(id string, prov ai.Provider, models ...string) *runtime.W
 	w := e.Worker(id)
 	w.Queue = "ai"
 	w.AI = &runtime.AISteps{Config: ai.Config{Provider: "fake", Model: "default-model", StepModels: models},
-		For: func(string) (ai.Provider, error) { return prov, nil }}
+		For: func(string) (ai.Provider, error) { return prov, nil }, Plan: e.AIPlan}
 	return w
 }
 

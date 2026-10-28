@@ -1,0 +1,164 @@
+<!--atlas
+{
+  "id": "overview",
+  "title": "System overview",
+  "part": "A",
+  "order": 1,
+  "summary": "What Taskiem is, the roles its one binary runs as, how the repository is laid out, and a map of every engine package.",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "sources": ["cmd/taskiem/serve.go", "cmd/taskiem/main.go", "engine/runtime/scheduler.go", "go.mod", "web/package.json", "docs/spec/architecture.md"]
+}
+-->
+<h2>What Taskiem is</h2>
+<p>Taskiem runs workflows for businesses whose workflows move money. A workflow is a versioned JSON document in the <code>wd/v1</code> format. It can be drawn on the canvas, written as TypeScript, drafted by the AI builder or built from WhatsApp, and all of these produce the same document. A run of that workflow is an append-only log of events in PostgreSQL. Workers carry out the steps: calling Paystack or Moniepoint, running sandboxed code, asking a model. Every call that moves money carries an idempotency key derived from the run, so a crash or a retry never pays twice.</p>
+<p>The spec names four kinds of customer (<x-ref path="docs/spec/architecture.md" symbol="### 1.1 Target users">spec 1.1</x-ref>):</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Segment</th><th>Example</th><th>What they need from it</th></tr></thead>
+  <tbody>
+    <tr><td>Regulated fintechs and microfinance banks</td><td>Lenders, payroll providers, wallets</td><td>Money flows with audit trails and approvals</td></tr>
+    <tr><td>SaaS companies</td><td>Payroll, HR and accounting tools</td><td>Automation embedded in their own product for their customers</td></tr>
+    <tr><td>Small and informal businesses</td><td>Retailers, cooperatives, agents</td><td>Simple automations run from WhatsApp</td></tr>
+    <tr><td>Internal operations teams</td><td>Portfolio companies of the holding company</td><td>Back-office glue without writing services</td></tr>
+  </tbody>
+</table></div>
+<p>The engine is the core, but the repository has grown well past it. It now holds chat channels (WhatsApp, Telegram, USSD, inbound email), a money layer (a money log of every movement on a business's rails, matching payments to invoices, receiving money, reports), a Schools product, and public storefronts and hosted forms. The README puts the project in Phase 2 (hardening). The <code>docs/phase-*-status.md</code> files record later product work as built or in review, and gated on go-live.</p>
+
+<h2>By the numbers</h2>
+<p>Counted from the repository by the build, so these figures are as current as the build.</p>
+<div class="stats">
+  <div class="stat"><x-stat name="go-lines-nontest"/><span class="stat-k">lines of Go, not counting tests</span></div>
+  <div class="stat"><x-stat name="go-test-lines"/><span class="stat-k">lines of Go tests</span></div>
+  <div class="stat"><x-stat name="engine-packages"/><span class="stat-k">packages under <code>engine/</code></span></div>
+  <div class="stat"><x-stat name="connectors"/><span class="stat-k">connectors with a manifest</span></div>
+  <div class="stat"><x-stat name="migrations"/><span class="stat-k">SQL migrations, numbered up to <x-stat name="migrations-latest"/></span></div>
+  <div class="stat"><x-stat name="api-operations"/><span class="stat-k">operations in the OpenAPI document</span></div>
+  <div class="stat"><x-stat name="web-pages"/><span class="stat-k">screens in the web app</span></div>
+  <div class="stat"><x-stat name="decisions"/><span class="stat-k">recorded design decisions</span></div>
+</div>
+
+<h2>One binary, seven roles</h2>
+<p><code>taskiem serve --role ROLE</code> (or <code>TASKIEM_ROLE</code>) chooses what a process does. <code>all</code>, the default, runs every engine role in one process, which is how a small install runs. A larger one runs each role on its own and scales each separately. Every role shares one <x-ref path="cmd/taskiem/serve.go" symbol="type engine struct"><code>engine</code></x-ref> built by <x-ref path="cmd/taskiem/serve.go" symbol="func newEngine("><code>newEngine</code></x-ref>: the database pool, the store, the secrets vault, the connector registry and the WebAssembly connector runtime. The exceptions are <code>public</code> and <code>mail</code>. They load a smaller configuration and connect with their own database login, so a fault in the public pages cannot reach engine data.</p>
+<x-code path="cmd/taskiem/serve.go" start="var roles = map[string]bool" lines="1" caption="the accepted roles"/>
+<div class="table-wrap"><table>
+  <thead><tr><th>Role</th><th>What runs in it</th></tr></thead>
+  <tbody>
+    <tr><td><code>api</code></td><td>The REST API for the web app, CLI, SDKs and partners, plus the web app's static files and the embedded builder's bundle. Also a set of background loops: Git sync, the WhatsApp and USSD sessions, storefronts and their orders, hosted forms, invoices, the inbound email drain, the self-repair queue (when a model is configured) and the outbound SMS and email sender. Lists and dashboards read from a replica when <code>TASKIEM_DATABASE_READ_URL</code> points to one.</td></tr>
+    <tr><td><code>edge</code></td><td>Ingest. <code>/hooks</code> for webhooks, connector events and run callbacks, <code>/git-hooks</code> for pushes, and <code>/channels/…</code> for the platform's WhatsApp number, Telegram bot, Slack interactions and USSD aggregators. In <code>all</code> mode the api listener serves <code>/hooks</code> as well.</td></tr>
+    <tr><td><code>orchestrator</code></td><td>Sweeps runs that were left with events nobody decided on, every 100 ms. It is the scheduler type with <code>SweepOnly</code> set, because most decisions run inline in the transaction that appends the event.</td></tr>
+    <tr><td><code>scheduler</code></td><td>Fires timers, recovers expired leases, sweeps, admits queued runs, purges runs past retention and creates event partitions. It also runs the cron triggers and about fifteen other periodic jobs: alerts, hourly secret-read digests, partner webhooks, billing, domain and embed-site checks, tenant key health, data-table token renewal, the Paystack event poller, storefront reopening, the money-log and schools mirrors, money summaries, the canary and audit anchoring.</td></tr>
+    <tr><td><code>worker</code></td><td>One worker loop per queue named in <code>TASKIEM_WORKER_QUEUES</code> (by default <code>connector,sandbox,ai</code>). The <code>container</code> queue brings up the container runner and its egress proxy. A worker can serve a dedicated pool for chosen tenants or plans.</td></tr>
+    <tr><td><code>public</code></td><td>The public host for storefronts and hosted forms. It connects as <code>taskiem_public</code> and never builds the engine.</td></tr>
+    <tr><td><code>mail</code></td><td>The SMTP server for email triggers. It accepts mail only for known addresses and leaves it sealed in an inbox for the api role to read.</td></tr>
+  </tbody>
+</table></div>
+<p>This is how a worker process starts one loop per queue:</p>
+<x-code path="cmd/taskiem/serve.go" start="if is(&quot;worker&quot;) {" max="50"/>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec lists five roles (<x-ref path="docs/spec/architecture.md" symbol="### 2.1 Components">spec 2.1</x-ref>). The code adds <code>public</code> and <code>mail</code>, which the spec only mentions as a proposal. The spec also says schedulers are leader-elected with a session advisory lock (<x-ref path="docs/spec/architecture.md" symbol="Scheduler instances use a session-level Postgres advisory lock">spec 2.3</x-ref>). The code has no leader election. Instead, <x-ref path="engine/runtime/scheduler.go" symbol="// Scheduler fires timers">the scheduler</x-ref> is written to be safe when several run at once: every claim uses <code>SKIP LOCKED</code> and every timer firing is guarded by <code>fired_at</code>. Running several schedulers costs some duplicated work and nothing worse.</p>
+</div>
+<h3>Starting and stopping</h3>
+<p><x-ref path="cmd/taskiem/serve.go" symbol="func runTasks("><code>runTasks</code></x-ref> runs every loop a role needs as a goroutine. If any loop returns an error, the whole process stops so its supervisor (systemd or Kubernetes) restarts it clean. On SIGTERM, <x-ref path="cmd/taskiem/serve.go" symbol="func drainOnShutdown("><code>drainOnShutdown</code></x-ref> fails readiness at once, keeps serving for a delay so load balancers stop sending traffic, and only then stops the loops. Workers let calls already in flight finish (<code>TASKIEM_WORKER_DRAIN</code>, 30 seconds by default) and hand their leases back, so their tasks can be claimed again at once. Every role serves <code>/metrics</code>, <code>/healthz</code> and <code>/readyz</code> on the metrics listener, so roles without an HTTP API can still be probed.</p>
+
+<h2>The architecture map</h2>
+<x-include name="architecture-map.html"/>
+<p>Requests come in at the top. The front roles verify and record them. Nothing important happens in memory: an accepted webhook is already a committed run with its first decision made when the caller gets <code>202</code>. The core roles pick up work from PostgreSQL, and only workers call out. Every outbound connection, whether a connector call, an HTTP step, a fetch from the sandbox or a database connection, dials through the egress guard.</p>
+
+<h2>Repository layout</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Directory</th><th>What it holds</th></tr></thead>
+  <tbody>
+    <tr><td><x-ref path="cmd/taskiem/"><code>cmd/taskiem</code></x-ref></td><td>The binary: <code>serve</code> for the roles, plus about thirty CLI commands (migrate, validate, build, test, diff, deploy, promote, dev, connector, catalogue, tenants, billing, pools, operators, canary and more). The CLI is hand-written on Go's <code>flag</code> package. <x-ref path="cmd/taskiem/main.go" symbol="const usage =">The usage text</x-ref> is the full list.</td></tr>
+    <tr><td><x-ref path="cmd/taskiem-shim/"><code>cmd/taskiem-shim</code></x-ref></td><td>A small supervisor installed inside a container step's sandbox. It runs the step's program and reports its output on stdout.</td></tr>
+    <tr><td><x-ref path="api/"><code>api</code></x-ref></td><td>The public REST API (chi), the largest package in the repository. Its contract is <x-ref path="api/openapi/openapi.yaml"><code>api/openapi/openapi.yaml</code></x-ref>, which tests check against the routes, permissions and responses.</td></tr>
+    <tr><td><x-ref path="engine/"><code>engine</code></x-ref></td><td>Everything else on the server: the runtime, the contracts, security, channels and the business modules. The package map below covers all of it.</td></tr>
+    <tr><td><x-ref path="connectors/"><code>connectors</code></x-ref></td><td>First-party connectors, compiled into the binary. Each is a <code>manifest.yaml</code> (the <code>connector/v1</code> contract) plus Go handlers and recorded fixtures. <code>connectors/builtin</code> registers them all.</td></tr>
+    <tr><td><x-ref path="web/src/"><code>web</code></x-ref></td><td>The React web app: the builder canvas (xyflow), the run inspector and operations pages, forms, the embeddable builder (a separate Vite build) and the product screens.</td></tr>
+    <tr><td><x-ref path="sdk/"><code>sdk</code></x-ref></td><td>The TypeScript SDK for workflow code (<code>*.flow.ts</code>), which the binary embeds and bundles with esbuild, and <code>sdk/connectorsdk</code>, the Go SDK for WebAssembly connectors.</td></tr>
+    <tr><td><x-ref path="schemas/"><code>schemas</code></x-ref></td><td>JSON Schemas for <code>wd/v1</code>, <code>connector/v1</code> and the capability set.</td></tr>
+    <tr><td><x-ref path="flows/"><code>flows</code></x-ref>, <x-ref path="templates/"><code>templates</code></x-ref></td><td>Dogfood and example workflows that CI validates, and the template library that template steps expand from.</td></tr>
+    <tr><td><x-ref path="deploy/"><code>deploy</code></x-ref></td><td>Docker Compose, a Helm chart, raw Kubernetes manifests, a VM kit with systemd units, Prometheus rules, Grafana dashboards, and <code>plans.yaml</code>, the plan catalogue.</td></tr>
+    <tr><td><x-ref path="e2e/"><code>e2e</code></x-ref>, <x-ref path="evals/"><code>evals</code></x-ref></td><td>End-to-end suites against the real binary, and the AI builder and repair evaluations.</td></tr>
+    <tr><td><x-ref path="tools/"><code>tools</code></x-ref></td><td>The docs site and API reference builder, the licence gate, the load tester, the SDK generator and the AI evaluation runner.</td></tr>
+    <tr><td><x-ref path="third_party/"><code>third_party</code></x-ref></td><td>The vendored QuickJS fork used by the code-step sandbox (decision 0011).</td></tr>
+    <tr><td><x-ref path="docs/"><code>docs</code></x-ref></td><td>The spec and build plan, <x-stat name="decisions"/> decision records, the contracts, user guides, runbooks, and this atlas.</td></tr>
+  </tbody>
+</table></div>
+
+<h2>The package map</h2>
+<p>Every package under <code>engine/</code>, grouped by what it is for. Each card shows the package's size (Go lines, not counting tests) and the first sentence of its own package comment. The build reads both from the code. A new package that is not yet placed here appears at the end and the build reports it.</p>
+
+<h3>Core runtime</h3>
+<p>The definition format, the pure decision function, the event log, the store and the loops that run workflows, plus ingest, which turns outside events into runs.</p>
+<x-packages names="wd,expr,history,decide,runtime,effects,db,archive,ingest,expansion,capability,lru"/>
+
+<h3>Running steps</h3>
+<p>What a worker uses to carry out a step: connectors in the binary or in WebAssembly, the code sandbox, containers, and the model layer.</p>
+<x-packages names="connector,wasmconn,sandbox,container,ai,egress,drift"/>
+
+<h3>Authoring and change</h3>
+<p>Turning code, canvas edits and plain language into definitions, and testing, comparing and merging them.</p>
+<x-packages names="flowcode,wdcheck,wdtest,wddiff,wdmerge,wdtext,shadow,gitprovider,remote"/>
+
+<h3>Security, identity and governance</h3>
+<x-packages names="secrets,byok,pii,audit,access,policy,oidc,saml,webauthn,totp,httpsec,ops,embed"/>
+
+<h3>Channels and messaging</h3>
+<x-packages names="whatsapp,telegram,ussd,inmail,voice,lang,reach,sender,notices,plain"/>
+
+<h3>Money</h3>
+<x-packages names="moneylog,matching,invoicing,leaks,lookback,moneydigest,moneyreport,billing"/>
+
+<h3>Public pages and business products</h3>
+<x-packages names="storefront,dispatch,riders,publicweb,forms,formguard,publicnames,brand,moderation,media,embedsites,datatables,schools,pdf"/>
+
+<h3>Operations and the connector catalogue</h3>
+<x-packages names="telemetry,slo,alerts,status,canary,catalogue,connpkg,conntest,spike"/>
+
+<h3>Not yet placed</h3>
+<x-packages rest/>
+
+<h2>Technology, as built</h2>
+<p>Taken from <code>go.mod</code> and <code>web/package.json</code>, not from the spec.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Layer</th><th>What the code uses</th></tr></thead>
+  <tbody>
+    <tr><td>Language</td><td>Go <x-stat name="go-version"/>. One module, <code>github.com/israel-duff/taskiem</code></td></tr>
+    <tr><td>HTTP</td><td>chi v5 for the API, ingest and public host</td></tr>
+    <tr><td>Database access</td><td>pgx v5 with hand-written SQL. No ORM and no generated query code</td></tr>
+    <tr><td>Migrations</td><td>goose, with the SQL files embedded in the binary (<x-ref path="engine/db/db.go" symbol="func migrate("><code>db.migrate</code></x-ref>)</td></tr>
+    <tr><td>Expressions</td><td>cel-go</td></tr>
+    <tr><td>Sandboxes</td><td>wazero, running QuickJS (a vendored fork) and CPython compiled to WebAssembly. Tenants' WebAssembly connectors run on it too</td></tr>
+    <tr><td>Workflow code</td><td>esbuild, linked into the binary, bundles <code>*.flow.ts</code>, which then runs in the QuickJS sandbox</td></tr>
+    <tr><td>Telemetry</td><td>Prometheus client and OpenTelemetry tracing (a no-op until an OTLP endpoint is set)</td></tr>
+    <tr><td>Web app</td><td>React 19, React Router 7, xyflow for the canvas, Vite 8, Vitest and Playwright</td></tr>
+  </tbody>
+</table></div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec's stack table (<x-ref path="docs/spec/architecture.md" symbol="## 17. Technology stack">spec 17</x-ref>) names sqlc, cobra, Monaco, Valkey and NATS JetStream. None of them is a dependency today. Queries are hand-written, the CLI uses the standard library, and the web app has no Monaco editor. The spec presents Valkey and JetStream as later options, so their absence is expected. The others are choices the code made differently.</p>
+</div>
+
+<h2>Where the spec and the code disagree</h2>
+<p>These are the differences found so far. Each is explained where it matters.</p>
+<ol>
+  <li>Seven roles, not five, and no scheduler leader election (above).</li>
+  <li><code>decide()</code> returns events, not commands. <x-page id="life-of-a-run--decide-inline">Life of a run</x-page></li>
+  <li>A worker writes <span class="evt">StepStarted</span> only for steps that write. Read steps go straight from scheduled to completed. <x-page id="life-of-a-run--the-events-it-leaves-behind">Life of a run</x-page></li>
+  <li>The attempt group, and with it the idempotency key, moves on automatically when a reconcile finds that a payment never happened. The contract says so and the spec's own section 4.4 is out of date. <x-page id="life-of-a-run--when-something-goes-wrong">Life of a run</x-page></li>
+  <li>The spec's example workflow uses <code>smileid@2</code>. There is no such connector. Identity checks go through <code>youverify</code>, <code>prembly</code> and <code>dojah</code>.</li>
+  <li>Several tools named in the stack table are not used (above).</li>
+  <li>There are <x-stat name="definer-functions"/> <code>SECURITY DEFINER</code> functions that bypass row-level security, not the spec's four. <x-page id="data-model--the-cross-tenant-functions">Data model</x-page></li>
+  <li>Large outputs are never moved out of the database: <code>payload_ref</code> is unused and outputs over 256 KB are refused or cut. <x-page id="durable-execution">Durable execution</x-page></li>
+</ol>
+<p>These were differences and have been resolved, in the code or by correcting the spec (findings 1 to 5):</p>
+<ul>
+  <li>Postgres is the queue by design. The spec no longer promises an interface to swap for NATS JetStream.</li>
+  <li>Cancelling a run reverses its completed steps (decision 0054). <x-page id="durable-execution">Durable execution</x-page></li>
+  <li>Runs past retention can be archived to an S3-compatible bucket, not only a local directory.</li>
+  <li>A run waiting on a timer, signal or approval has status <code>waiting</code>. <x-page id="durable-execution--run-statuses">Run statuses</x-page></li>
+  <li>Publish approval can be required per environment. <x-page id="workflow-definitions--versions-environments-and-publishing">Workflow definitions</x-page></li>
+  <li>An operator's retry on a parked write gets a new idempotency key. <x-page id="exactly-once--when-a-person-has-to-decide">Exactly-once effects</x-page></li>
+  <li>Code steps cannot write through <code>fetch</code>, and seeds inside a <code>foreach</code> must differ per item. <x-page id="exactly-once">Exactly-once effects</x-page></li>
+  <li>The cross-tenant functions are pinned to an owned allow-list. <x-page id="data-model--the-cross-tenant-functions">Data model</x-page></li>
+</ul>
+</ol>
+<p>The code also goes past the spec in places. Workers claim tasks fairly across tenants, with a concurrency cap per tenant and dedicated worker pools. Runs over a tenant's limits are queued and admitted later instead of being refused. The <x-page id="durable-execution"/> page covers both.</p>

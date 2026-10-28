@@ -36,6 +36,10 @@ type PaymentIn struct {
 	// counts towards (moneylog.Counting.Add): the order's own rule then
 	// decides (one payment, so it is refused while that one stands).
 	Add bool
+	// Account is the one-time account number given for the order that
+	// the money was paid into (N3): marked paid with the payment, which
+	// also says the order was paid by bank transfer (refunds by hand).
+	Account *uuid.UUID
 }
 
 // Counted is what counting a payment towards an order did. Pass it to
@@ -75,13 +79,27 @@ type OrderPayment struct {
 // acceptance waits for its payment link to be made first: its workflow
 // sends the link and waits for it.
 func (x Order) Matchable() bool {
-	return x.PaidAt == nil && (x.Kind == "order" || x.Kind == "booking") && x.Payable() >= 100 &&
-		(x.Status == "awaiting_payment" || x.Payment == "none" && (x.Status == "received" || x.Status == "accepted"))
+	if x.PaidAt != nil || (x.Kind != "order" && x.Kind != "booking") || x.Payable() < 100 {
+		return false
+	}
+	switch x.Payment {
+	case "none":
+		return x.Status == "received" || x.Status == "accepted"
+	case "on_delivery":
+		// Paid at the door (dispatch D4), or before: until it is completed.
+		switch x.Status {
+		case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived":
+			return true
+		}
+		return false
+	}
+	return x.Status == "awaiting_payment"
 }
 
 // matchableSQL is Matchable in SQL.
 const matchableSQL = `paid_at IS NULL AND kind IN ('order', 'booking') AND COALESCE(deposit_kobo, total_kobo) >= 100
-	AND (status = 'awaiting_payment' OR payment = 'none' AND status IN ('received', 'accepted'))`
+	AND (status = 'awaiting_payment' OR payment = 'none' AND status IN ('received', 'accepted')
+	  OR payment = 'on_delivery' AND status IN ('received', 'accepted', 'dispatched', 'on_the_way', 'arrived'))`
 
 // CountPayment counts a payment towards the order with this reference, in
 // the caller's transaction, and moves the order to paid when it is not
@@ -116,6 +134,12 @@ func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		}})
 	if err != nil {
 		return c, err
+	}
+	if p.Account != nil {
+		if _, err := tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND order_id = $3`,
+			tenant, *p.Account, c.Order.ID); err != nil {
+			return c, err
+		}
 	}
 	if k.Already {
 		return c, o.open(ctx, tx, tenant, &c.Order)
@@ -197,6 +221,12 @@ func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *C
 // payment commits: its run starts, or the run waiting for its payment is
 // woken. Nothing when the payment did not move the order to paid.
 func (o *Orders) Paid(ctx context.Context, tenant uuid.UUID, c Counted) error {
+	if c.Became && o.AfterPaid != nil {
+		// Dispatch tells a rider at the door (D4).
+		if err := o.AfterPaid(ctx, tenant, c.Order); err != nil {
+			o.log().Warn("storefront: after a payment", "reference", c.Order.Reference, "err", err)
+		}
+	}
 	if !c.Became || !c.wake {
 		return nil
 	}
@@ -217,19 +247,36 @@ func ForCheckout(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, ref 
 	var reference string
 	err := tx.QueryRow(ctx, `SELECT o.reference FROM storefront_orders o
 		LEFT JOIN storefront_actions a ON a.storefront_id = o.storefront_id AND a.kind = o.kind
-		WHERE o.tenant_id = $1 AND o.payment_ref = $2 AND 'paystack/' || COALESCE(NULLIF(a.options->>'connection', ''), 'main') = $3`, tenant, ref, channel).Scan(&reference)
+		WHERE o.tenant_id = $1 AND o.payment_ref = $2 AND `+channelSQL+` = $3`, tenant, ref, channel).Scan(&reference)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoOrder
 	}
 	return reference, err
 }
 
-// checkoutChannel is the money log channel of a form's payments.
+// channelSQL is checkoutChannel in SQL, over a form's options (a).
+const channelSQL = `CASE WHEN COALESCE(a.options->>'connection', '') LIKE '%/%' THEN a.options->>'connection'
+	ELSE 'paystack/' || COALESCE(NULLIF(a.options->>'connection', ''), 'main') END`
+
+// checkoutChannel is the money log channel of a form's payments: its
+// connection as connector/name; a bare name is Paystack's, as forms named
+// it before any other rail could take their payments.
 func checkoutChannel(connection string) string {
+	if strings.Contains(connection, "/") {
+		return connection
+	}
 	if connection == "" {
 		connection = "main"
 	}
 	return "paystack/" + connection
+}
+
+// paystackConnection is the Paystack connection a form's card payments
+// use, and false when the form's connection is another rail's, which
+// takes payment by bank transfer only.
+func paystackConnection(connection string) (string, bool) {
+	c, name, ok := strings.Cut(checkoutChannel(connection), "/")
+	return name, ok && c == "paystack"
 }
 
 // Matchables lists the tenant's orders that can still be paid, newest

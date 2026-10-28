@@ -16,7 +16,9 @@
             "matched_auto": {"count": 1, "kobo": 10000000}, "matched_person": {"count": 1, "kobo": 5000000}, "unmatched": {"count": 0, "kobo": 0}, "lookback_found": {"count": 0, "kobo": 0},
             "pending": 0, "claims": 0, "problem_list": [{"kind": "part_without_receipt", "message": "₦50,000 counted towards INV-0002 (GCA/002) has no receipt", "path": "/invoices/x", "amount_kobo": 5000000, "ref": "INV-0002"}],
             "pending_list": [], "claim_list": [], "unmatched_list": [],
-            "text": "Daily close, 24 Oct 2026 (First term 2026/2027).\nMoney in on students: ₦150,000 (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk.\nMatched to fees: ₦100,000 by itself, ₦50,000 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nDOES NOT RECONCILE: 1 problem(s).\n\nProblems:\n- ₦50,000 counted towards INV-0002 (GCA/002) has no receipt → https://app.example/invoices/x"
+            "text": "Daily close, 24 Oct 2026 (First term 2026/2027).\nMoney in on students: ₦150,000 (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk.\nMatched to fees: ₦100,000 by itself, ₦50,000 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nDOES NOT RECONCILE: 1 problem(s).\n\nProblems:\n- ₦50,000 counted towards INV-0002 (GCA/002) has no receipt → https://app.example/invoices/x",
+            "date": "24 Oct 2026",
+            "summary": "₦150,000 in on students (2 payments); matched ₦150,000; not matched ₦0; DOES NOT RECONCILE: 1 problem(s)."
           }
         },
         "send": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
@@ -28,7 +30,9 @@
           "send": {
             "to": "owner",
             "title": "Daily close 2026-10-24: DOES NOT RECONCILE",
-            "message": "Daily close, 24 Oct 2026 (First term 2026/2027).\nMoney in on students: ₦150,000 (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk.\nMatched to fees: ₦100,000 by itself, ₦50,000 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nDOES NOT RECONCILE: 1 problem(s).\n\nProblems:\n- ₦50,000 counted towards INV-0002 (GCA/002) has no receipt → https://app.example/invoices/x"
+            "message": "Daily close, 24 Oct 2026 (First term 2026/2027).\nMoney in on students: ₦150,000 (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk.\nMatched to fees: ₦100,000 by itself, ₦50,000 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nDOES NOT RECONCILE: 1 problem(s).\n\nProblems:\n- ₦50,000 counted towards INV-0002 (GCA/002) has no receipt → https://app.example/invoices/x",
+            "template": "taskiem_daily_close",
+            "template_vars": {"day": "24 Oct 2026", "summary": "₦150,000 in on students (2 payments); matched ₦150,000; not matched ₦0; DOES NOT RECONCILE: 1 problem(s)."}
           }
         },
         "steps": {
@@ -53,7 +57,9 @@
             "money_in": {"count": 0, "kobo": 0}, "into_accounts": {"count": 0, "kobo": 0}, "at_the_desk": {"count": 0, "kobo": 0},
             "matched_auto": {"count": 0, "kobo": 0}, "matched_person": {"count": 0, "kobo": 0}, "unmatched": {"count": 0, "kobo": 0}, "lookback_found": {"count": 0, "kobo": 0},
             "pending": 0, "claims": 0, "problem_list": [], "pending_list": [], "claim_list": [], "unmatched_list": [],
-            "text": "Daily close, 25 Oct 2026.\nMoney in on students: ₦0 (0 payments): ₦0 into account numbers, ₦0 at the desk.\nMatched to fees: ₦0 by itself, ₦0 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nEverything reconciles."
+            "text": "Daily close, 25 Oct 2026.\nMoney in on students: ₦0 (0 payments): ₦0 into account numbers, ₦0 at the desk.\nMatched to fees: ₦0 by itself, ₦0 by a person. Not matched: ₦0.\nWaiting for a second person: 0. Families saying they paid, not found: 0.\nEverything reconciles.",
+            "date": "25 Oct 2026",
+            "summary": "₦0 in on students (0 payments); matched ₦0; not matched ₦0; everything reconciles."
           }
         },
         "send": {"output": {"people": 1, "chat": 0, "email": 1, "nobody": false}}
@@ -62,7 +68,7 @@
         "status": "completed",
         "inputs": {
           "close": {"link": ""},
-          "send": {"title": "Daily close 2026-10-25"}
+          "send": {"title": "Daily close 2026-10-25", "template_vars": {"day": "25 Oct 2026", "summary": "₦0 in on students (0 payments); matched ₦0; not matched ₦0; everything reconciles."}}
         },
         "calls": {
           "close": 1,

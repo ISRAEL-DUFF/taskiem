@@ -20,6 +20,8 @@ export interface SchoolIssuer {
   name_limit?: number;
   one_account_per_email?: boolean;
   needs_bvn?: boolean;
+  /** Taskiem can create the school's wallet on this rail (iswallet). */
+  creates_wallet?: boolean;
   needs_account: boolean;
   look_back: boolean;
   webhook: boolean;

@@ -1,4 +1,5 @@
 {{template "fhead" .}}{{if .Refresh}}<meta http-equiv="refresh" content="3">
+{{else if .RefreshAfter}}<meta http-equiv="refresh" content="{{.RefreshAfter}}">
 {{end}}{{template "fbody" .}}
 <h1>{{.Headline}}</h1>
 {{with .Error}}<p class="form-error" role="alert">{{.}}</p>{{end}}
@@ -8,6 +9,8 @@
 {{end}}</div>
 {{with .PayURL}}<p><a class="btn btn-primary btn-block btn-big" href="{{.}}"{{if $.NewTab}} target="_blank"{{end}} rel="noopener noreferrer">{{$.PayLabel}}</a></p>
 <p class="hint center">{{template "i-lock"}} Never share your card PIN or OTP.</p>{{end}}
+{{with .Transfer}}{{template "ordertransfer" .}}{{end}}
+{{with .Rate}}{{template "orderrate" .}}{{end}}
 {{range .Buttons}}<form method="post" action="{{.Action}}" class="change">
 <input type="hidden" name="token" value="{{$.Token}}">
 <div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{$.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>

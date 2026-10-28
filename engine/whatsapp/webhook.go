@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -54,6 +55,14 @@ type Inbound struct {
 	// arrives; the file is fetched from the Graph API, as a recording is.
 	// Telegram's photos arrive here too.
 	Image *Media
+	// Location is a shared location (type location), as a maps link: a
+	// rider's at the door (dispatch). Telegram's arrive here too.
+	Location string
+}
+
+// MapsLink is a latitude and longitude as a maps link.
+func MapsLink(lat, lng float64) string {
+	return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", lat, lng)
 }
 
 // Media is an audio message's or a photo's reference.
@@ -127,6 +136,10 @@ func Parse(body []byte) ([]Inbound, error) {
 							SHA256   string `json:"sha256"`
 							Caption  string `json:"caption"`
 						} `json:"image"`
+						Location *struct {
+							Latitude  float64 `json:"latitude"`
+							Longitude float64 `json:"longitude"`
+						} `json:"location"`
 					} `json:"messages"`
 				} `json:"value"`
 			} `json:"changes"`
@@ -166,9 +179,68 @@ func Parse(body []byte) ([]Inbound, error) {
 						in.Image = &Media{ID: m.Image.ID, MimeType: m.Image.MimeType, SHA256: m.Image.SHA256}
 						in.Text = m.Image.Caption
 					}
+				case "location":
+					if m.Location != nil {
+						in.Location = MapsLink(m.Location.Latitude, m.Location.Longitude)
+					}
 				}
 				out = append(out, in)
 			}
+		}
+	}
+	return out, nil
+}
+
+// ParseTemplateStatuses extracts the template status events of a webhook
+// delivery (field message_template_status_update, subscribed to beside
+// messages): the account (entry id), the event, Meta's template id, the
+// name and language, and the reason, with any rejection or pause details
+// in words. Other fields are ignored.
+func ParseTemplateStatuses(body []byte) ([]TemplateStatusUpdate, error) {
+	var d struct {
+		Entry []struct {
+			ID      string `json:"id"`
+			Changes []struct {
+				Field string `json:"field"`
+				Value struct {
+					Event     string          `json:"event"`
+					ID        json.RawMessage `json:"message_template_id"`
+					Name      string          `json:"message_template_name"`
+					Language  string          `json:"message_template_language"`
+					Reason    string          `json:"reason"`
+					Rejection struct {
+						Reason         string `json:"reason"`
+						Recommendation string `json:"recommendation"`
+					} `json:"rejection_info"`
+					Other struct {
+						Title       string `json:"title"`
+						Description string `json:"description"`
+					} `json:"other_info"`
+				} `json:"value"`
+			} `json:"changes"`
+		} `json:"entry"`
+	}
+	if err := json.Unmarshal(body, &d); err != nil {
+		return nil, err
+	}
+	var out []TemplateStatusUpdate
+	for _, e := range d.Entry {
+		for _, c := range e.Changes {
+			if c.Field != "message_template_status_update" {
+				continue
+			}
+			v := c.Value
+			var why []string
+			if v.Reason != "" && !strings.EqualFold(v.Reason, "NONE") && !strings.EqualFold(v.Reason, "null") {
+				why = append(why, v.Reason)
+			}
+			if v.Rejection.Reason != "" || v.Rejection.Recommendation != "" {
+				why = append(why, strings.TrimSpace(v.Rejection.Reason+": "+v.Rejection.Recommendation))
+			}
+			if v.Other.Title != "" || v.Other.Description != "" {
+				why = append(why, strings.TrimSpace(v.Other.Title+": "+v.Other.Description))
+			}
+			out = append(out, TemplateStatusUpdate{WABA: e.ID, Event: v.Event, MetaID: anyID(v.ID), Name: v.Name, Language: v.Language, Reason: strings.Join(why, "; ")})
 		}
 	}
 	return out, nil

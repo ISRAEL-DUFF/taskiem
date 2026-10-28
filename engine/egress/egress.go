@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -60,10 +61,12 @@ type Guard struct {
 	// Blocked decides whether an address is off limits. Defaults to
 	// BlockedAddr; tests can loosen it to reach httptest servers.
 	Blocked func(netip.Addr) bool
-	// Loopback lets one purpose reach loopback on one port: an operator
+	// Loopback lets one purpose reach loopback on its ports: an operator
 	// pointing a connector at a fake provider on the same machine (browser
-	// tests; "connector:termii" -> "12727"). The policy's host allow-list
-	// still applies, and nothing else private becomes reachable.
+	// tests; "connector:termii" -> "12727", or "12828,12829" for a
+	// connector whose live and test hosts are both fakes). The policy's
+	// host allow-list still applies, and nothing else private becomes
+	// reachable.
 	Loopback map[string]string
 	Timeout  time.Duration
 	// Upstream is the explicit CONNECT proxy this guard's connections
@@ -83,7 +86,7 @@ func (g *Guard) upstream() *Upstream {
 // port.
 func (g *Guard) loopbackOK(p Policy, a netip.Addr, port string) bool {
 	want, ok := g.Loopback[p.Purpose]
-	return ok && want != "" && want == port && a.Unmap().IsLoopback()
+	return ok && want != "" && port != "" && slices.Contains(strings.Split(want, ","), port) && a.Unmap().IsLoopback()
 }
 
 func (g *Guard) resolver() Resolver {

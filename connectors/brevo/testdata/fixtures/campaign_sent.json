@@ -1,0 +1,17 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/emailCampaigns/7",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": 7,
+   "name": "October",
+   "status": "sent"
+  }
+ }
+}

@@ -159,7 +159,7 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 | `GET /me` | — | The end user, sub-tenant, permissions, the app's allowed connectors and templates, branding tokens, `white_label`, expiry |
 | `GET /connectors` | — | The connectors the app allows, with their actions and schemas, and the allowed gated step types |
 | `GET /workflows`, `GET /workflows/{wf}`, `GET /workflows/{wf}/versions/{v}` | `workflow.read` | As `/v1/workflows` |
-| `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems` |
+| `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems`, but must be an object with a `steps` list (400 otherwise) |
 | `GET /templates` | — | The app's allowed templates, `available` when the app also allows their connectors |
 | `POST /templates/{id}/instantiate` | `workflow.edit` | `{"params", "name"?}`; a draft from one of the app's templates ([templates](templates.md)) |
 | `POST /workflows/{wf}/versions` | `workflow.edit` | Save a version (three-way merge with `parent_digest`, as `/v1`) |
@@ -171,7 +171,7 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 | `GET /runs/{run}/stream` | `run.read` | Server-sent events of a run's history (use `fetch` with the header; `EventSource` cannot send it) |
 | `POST /runs/{run}/cancel` | `run.cancel` | Cancel |
 
-**Allowed connectors and templates.** Every definition an end user saves, validates or publishes is checked against the app: a connector, or an `http`, `code` or `ai` step, that the app does not allow (anywhere, nested steps and the trigger included) is refused with 403 and `"not_allowed": [...]`. Starting a run checks the version that would run too, so narrowing an app later stops runs of what it no longer allows. A `template` must be one of the app's.
+**Allowed connectors and templates.** Every definition an end user saves, validates or publishes is checked against the app: a connector, or an `http`, `code` or `ai` step, that the app does not allow (anywhere, nested steps and the trigger included) is refused with 403 and `"not_allowed": [...]`. Starting a run checks the version that would run too, so narrowing an app later stops runs of what it no longer allows. A `template` must be one of the app's. Field names are taken as spelled: a body with `Definition` or `Template` (any other case) is refused with 400, so the check cannot be passed by changing case.
 
 **Headless mode** is the same API without a browser: register the app with `"headless": true` and call these routes from your servers with an end-user token, to build your own UI on the engine. `TestHeadlessFlow` (`api/embed_test.go`) walks it end to end: list connectors, create from a template, validate, save a second version, lay out, publish, start a run, read it, stream it, list runs, and see the outcome, redacted, through the partner API.
 
@@ -386,7 +386,7 @@ Credentials are write-only everywhere: no route returns them, to you, to the sub
 
 A provider that subscribes webhooks per client sends all your customers' events to one URL. Point it at **your own tenant**, and Taskiem delivers each event into the sub-tenants it is about.
 
-1. In your own tenant, create the provider's connection with the subscription's signing secret (iswallet: `webhook_secret`), and optionally list your own accounts in it (`wallet_ids`: the funding wallet). Register your tenant's URL with the provider (`/hooks/{your tenant}/connectors/iswallet@1/outflow_event?env=prod&connection=main`, one per trigger).
+1. In your own tenant, create the provider's connection, and optionally list your own accounts in it (`wallet_ids`: the funding wallet). iswallet's is subscribed by Taskiem when you connect it, nothing to register; for a provider you subscribe by hand, put the subscription's signing secret on the connection and register your tenant's URL with the provider (`/hooks/{your tenant}/connectors/<connector>/<trigger>?env=prod&connection=main`, one per trigger).
 2. Provision each sub-tenant's connection with its accounts (above).
 3. Each delivery is verified with your secret and processed in your tenant as usual (your own subscribed workflows run). Then, for a connector trigger that declares a `route` ([connector/v1](contracts/connector-v1.md), rule 7), it is delivered into **every one of your sub-tenants whose connection in that environment lists the event's key** (iswallet: the envelope's `wallet_id`), as if it had arrived at that sub-tenant's own URL: the same dedup key (iswallet: the envelope `id`), the same signal and correlation (`iswallet@1:outflow_event` on `outflow_id`), the sub-tenant's own subscribed workflows, its own ingest limits, and `423` while it is suspended (the provider retries).
 

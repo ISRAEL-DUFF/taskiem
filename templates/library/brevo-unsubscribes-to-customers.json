@@ -1,0 +1,132 @@
+{
+  "id": "brevo-unsubscribes-to-customers",
+  "title": "Mark Brevo unsubscribes in your table",
+  "summary": "When someone unsubscribes from your Brevo emails, their address bounces or they mark one as spam, update their row and stop marketing to them.",
+  "description": "Whenever someone unsubscribes from a Brevo campaign, their address hard-bounces, or they mark it as spam, Taskiem finds them in your customers table by their address, turns their marketing_opt_in off and sets their email status, so no newsletter goes to them again.",
+  "category": "customers",
+  "tags": [
+    "brevo",
+    "newsletter",
+    "consent"
+  ],
+  "keywords": [
+    "brevo",
+    "unsubscribe",
+    "unsubscribed",
+    "bounce",
+    "spam"
+  ],
+  "requires": [
+    "brevo"
+  ],
+  "connectors": [
+    "brevo@1",
+    "xenibase@1"
+  ],
+  "params": [
+    {
+      "name": "brevo_connection",
+      "type": "connection",
+      "connector": "brevo",
+      "title": "Brevo connection",
+      "description": "Your Brevo account, by its API key.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "customers_table",
+      "type": "string",
+      "title": "Customers table",
+      "description": "Your customers: name, email, phone, whether they agreed to marketing, and how their email is doing. Taskiem makes it for you if it does not exist.",
+      "required": false,
+      "default": "customers",
+      "example": "customers",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$",
+      "picker": "table"
+    }
+  ],
+  "tables": [
+    {
+      "name": "{{customers_table}}",
+      "title": "Customers",
+      "description": "Your customers. marketing_opt_in is true only when the customer said yes to your newsletter; email_status says when their address bounced or they unsubscribed or complained.",
+      "columns": [
+        {
+          "name": "email",
+          "title": "Email",
+          "type": "text",
+          "required": true,
+          "personal": true
+        },
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "phone",
+          "title": "Phone",
+          "type": "text",
+          "personal": true
+        },
+        {
+          "name": "marketing_opt_in",
+          "title": "Agreed to marketing",
+          "type": "boolean"
+        },
+        {
+          "name": "email_status",
+          "title": "Email status",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_brevoUnsubscribesToCustomers",
+    "version": 1,
+    "name": "Mark Brevo unsubscribes",
+    "trigger": {
+      "type": "connector_event",
+      "config": {
+        "connector": "brevo@1",
+        "trigger": "marketing_events",
+        "events": [
+          "unsubscribed",
+          "hardBounce",
+          "spam"
+        ],
+        "connection": "{{brevo_connection}}"
+      }
+    },
+    "steps": [
+      {
+        "id": "mark",
+        "type": "connector",
+        "name": "Stop marketing to them",
+        "connector": "xenibase@1",
+        "action": "update_rows",
+        "connection": "data_tables",
+        "input": {
+          "table": "{{customers_table}}",
+          "filters": [
+            {
+              "column": "email",
+              "op": "ilike",
+              "value": "=trigger.body.email"
+            }
+          ],
+          "max_affected": 10,
+          "return": "minimal",
+          "set": "={'marketing_opt_in': false, 'email_status': trigger.body.event == 'unsubscribe' || trigger.body.event == 'unsubscribed' ? 'unsubscribed' : trigger.body.event == 'spam' ? 'complained' : 'bounced'}"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

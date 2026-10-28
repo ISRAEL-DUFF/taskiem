@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
+import { PageBoundary } from "./PageBoundary";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
+import { NewWorkflow } from "./pages/NewWorkflow";
 import { Editor } from "./pages/Editor";
 import { Runs } from "./pages/Runs";
 import { RunPage } from "./pages/Run";
@@ -32,6 +34,8 @@ import { TablePage, Tables } from "./pages/Tables";
 import { Storefront } from "./pages/Storefront";
 import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
+import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
+import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
@@ -53,6 +57,7 @@ import { Home } from "./pages/Home";
 import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
+import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { brandFile } from "./brand";
 import { standalone, useInstall } from "./install";
 import { PULL_AT, pullRefreshes, pullShown } from "./lib/pull";
@@ -258,6 +263,7 @@ function SignedIn() {
     ["/templates", "Templates", "templates", true],
     ["/members", "Members & keys", "members", can("member.manage")],
     ["/settings/billing", "Billing", "billing", can("billing.manage")],
+    ["/settings/payments", "Payments", "money", can("invoice.read") || me.roles.includes("owner")],
     ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
     ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
@@ -287,8 +293,11 @@ function SignedIn() {
   ).filter(([, , , ok]) => ok);
   const name = me.user?.name || me.user?.email || "API key";
   const business = me.tenant_name || "Taskiem";
+  // The workflow builder fills the window: the menu shrinks to a rail of
+  // icons on a computer, and the top and tab bars give way on a phone.
+  const building = /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
   return (
-    <div className="shell">
+    <div className={building ? "shell builder-mode" : "shell"}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -352,13 +361,15 @@ function SignedIn() {
           </button>
         </div>
       </nav>
-      <main className={/^\/workflows\/[^/]+$/.test(pathname) ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
+      <main className={building ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
+        <PageBoundary>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
           <Route path="/workflows" element={<Workflows />} />
+          <Route path="/workflows/new" element={<NewWorkflow />} />
           <Route path="/workflows/:id" element={<Editor />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/tables" element={<Tables />} />
@@ -368,6 +379,9 @@ function SignedIn() {
           <Route path="/storefront/orders" element={<StorefrontOrders />} />
           <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
           <Route path="/storefront/bookings" element={<StorefrontBookings />} />
+          <Route path="/storefront/riders" element={<StorefrontRiders />} />
+          <Route path="/storefront/riders/pay" element={<RidersPayPage />} />
+          <Route path="/storefront/deliveries" element={<StorefrontDeliveries />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/new" element={<InvoiceNew />} />
           <Route path="/invoices/settings" element={<InvoiceSettingsPage />} />
@@ -412,6 +426,7 @@ function SignedIn() {
           <Route path="/catalogue" element={<Catalogue />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/billing" element={<Billing />} />
+          <Route path="/settings/payments" element={<PaymentsSettings />} />
           <Route path="/settings/keys" element={<Keys />} />
           <Route path="/settings/notifications" element={<NotificationSettings />} />
           <Route path="/alerts" element={<Alerts />} />
@@ -423,6 +438,7 @@ function SignedIn() {
           <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
         </Routes>
+        </PageBoundary>
         </div>
       </main>
       <PullToRefresh

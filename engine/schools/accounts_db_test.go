@@ -185,7 +185,8 @@ func TestIssueOneStudent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Status != schools.AccountIssued || a.AccountNumber == "" || !a.Shortened || a.Flagged || !a.NamedByRail || !strings.HasPrefix(a.Reference, "tsk_") {
+	// iswallet shows payers the name asked for (27 October 2026).
+	if a.Status != schools.AccountIssued || a.AccountNumber == "" || !a.Shortened || a.Flagged || a.NamedByRail || !strings.HasPrefix(a.Reference, "tsk_") {
 		t.Fatalf("issued %+v", a)
 	}
 	if got := w.rails.asked[0]; got["account_name"] != "GREENFIELD COURT / EBUBE EZE" || got["account"] != "wal_1" {

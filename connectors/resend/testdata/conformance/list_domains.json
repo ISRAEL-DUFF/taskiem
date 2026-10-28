@@ -1,0 +1,25 @@
+{
+ "action": "list_domains",
+ "input": {},
+ "credentials": {
+  "api_key": "re_test_123"
+ },
+ "exchanges": [
+  "domains"
+ ],
+ "expect": {
+  "output": {
+   "domains": [
+    {
+     "name": "adacakes.ng",
+     "verified": true
+    },
+    {
+     "name": "example.ng",
+     "verified": false,
+     "status": "pending"
+    }
+   ]
+  }
+ }
+}

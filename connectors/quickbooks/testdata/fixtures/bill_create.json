@@ -1,0 +1,48 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/v3/company/9341453050298730/bill",
+  "query": {
+   "minorversion": "75"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  },
+  "body": {
+   "DocNumber": "LPS-0918",
+   "VendorRef": {
+    "value": "41"
+   },
+   "TxnDate": "2026-10-25",
+   "DueDate": "2026-11-25",
+   "Line": [
+    {
+     "DetailType": "AccountBasedExpenseLineDetail",
+     "Amount": 86000.0,
+     "Description": "A4 paper, 40 reams",
+     "AccountBasedExpenseLineDetail": {
+      "AccountRef": {
+       "value": "70"
+      }
+     }
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "Bill": {
+    "Id": "240",
+    "DocNumber": "LPS-0918",
+    "VendorRef": {
+     "value": "41"
+    },
+    "TotalAmt": 86000.0,
+    "Balance": 86000.0,
+    "DueDate": "2026-11-25"
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

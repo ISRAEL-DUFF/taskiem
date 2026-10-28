@@ -13,7 +13,7 @@ Personal data in a run is encrypted under its data subject's own key before it i
 Detection is conservative, because a step's data is full of digit strings that are not personal:
 
 - Only strings are examined; numbers only under a field name that says what they are (`bvn`, `nin`, `phone`, `account_number`, `card_number`, ...).
-- **Phone**: a Nigerian mobile number, `+234`/`234`/`0` then a 70x, 71x, 80x, 81x, 90x or 91x prefix.
+- **Phone**: a Nigerian mobile number, `+234`/`234`/`0` then a 70x, 71x, 80x, 81x, 90x or 91x prefix, however its digits are grouped (`0803 123 4567`, `(0803) 123-4567`, `+234 (0)803 123 4567`); or any number in international form, `+` and a country code with 8 to 15 digits in all (`+44 20 7946 0958`).
 - **BVN / NIN**: 11 digits (BVNs start with 22), unless they are a phone number.
 - **Account number (NUBAN)**: 10 digits under an account field name, or beside a bank code whose CBN check digit it satisfies.
 - **Card**: 13 to 19 digits passing the Luhn check with a Visa, Mastercard, Verve, American Express or Discover prefix and length. Card numbers should never reach a workflow: connectors tokenise with the provider.
@@ -34,4 +34,4 @@ Workflows keep working on the plain values: the orchestrator and workers open se
 
 Subject ids are keyed by the organisation's pseudonymisation key, which is kept under its tenant key and re-wrapped when that key rotates, so ids stay the same across rotations. Subject keys are re-wrapped too. With [bring your own key](byok.md), every subject key is ultimately under the organisation's own key: revoking it makes all personal data unreadable at once, and runs that need it pause until it returns.
 
-`POST /v1/pii/erase` with a subject destroys its key (`pii.erase`): every envelope for that subject, in events, approvals and archives, becomes unreadable in place, and the audit chain still verifies. Runs still in flight for the subject must finish or be cancelled first.
+`POST /v1/pii/erase` with a subject destroys its key (`pii.erase`): every envelope for that subject, in events, approvals and archives, becomes unreadable in place, and the audit chain still verifies. It cannot be undone, so it is done by a person who confirms it with a passkey (a step-up challenge for `pii.erase` and the subject id) or an authenticator code; an API key cannot erase. A string built from a person's data (`'ref-' + bvn`) is sealed under that person too, so it is erased with them. Runs still in flight for the subject must finish or be cancelled first.

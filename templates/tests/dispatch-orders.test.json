@@ -1,0 +1,200 @@
+{
+  "schema": "wd-test/v1",
+  "template": "dispatch-orders",
+  "params": {},
+  "cases": [
+    {
+      "name": "a confirmed delivery order is offered to a rider; Delivered completes it",
+      "trigger": {
+        "body": {
+          "reference": "AK-7QX4KD",
+          "kind": "order",
+          "customer": {
+            "name": "Bola",
+            "phone": "+2348031234567"
+          },
+          "total_kobo": 650000,
+          "total": "₦6,500",
+          "summary": "2 × Jollof rice, delivery to Lekki ₦1,500",
+          "fulfilment": "delivery",
+          "payment": {
+            "mode": "none",
+            "status": "none"
+          }
+        }
+      },
+      "mocks": {
+        "accept_paid": {
+          "output": {
+            "status": "accepted"
+          }
+        },
+        "tell_confirmed": {
+          "output": {
+            "sent": true
+          }
+        },
+        "offer": {
+          "output": {
+            "reference": "AK-7QX4KD",
+            "status": "offered",
+            "rider": "Musa",
+            "delivery_id": "d1"
+          }
+        },
+        "complete": {
+          "output": {
+            "status": "completed"
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "decision": "approved",
+          "by": "owner"
+        },
+        "done": {
+          "decision": "approved",
+          "by": "dispatch:delivered"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "offer": "completed",
+          "complete": "completed",
+          "decline": "skipped"
+        },
+        "inputs": {
+          "offer": {
+            "reference": "AK-7QX4KD"
+          }
+        }
+      }
+    },
+    {
+      "name": "an order for pickup is not offered",
+      "trigger": {
+        "body": {
+          "reference": "AK-7QX4KD",
+          "kind": "order",
+          "customer": {
+            "name": "Bola",
+            "phone": "+2348031234567"
+          },
+          "total_kobo": 650000,
+          "total": "₦6,500",
+          "summary": "2 × Jollof rice, delivery to Lekki ₦1,500",
+          "fulfilment": "pickup",
+          "payment": {
+            "mode": "none",
+            "status": "none"
+          }
+        }
+      },
+      "mocks": {
+        "accept_paid": {
+          "output": {
+            "status": "accepted"
+          }
+        },
+        "tell_confirmed": {
+          "output": {
+            "sent": true
+          }
+        },
+        "offer": {
+          "output": {
+            "reference": "AK-7QX4KD",
+            "status": "offered",
+            "rider": "Musa",
+            "delivery_id": "d1"
+          }
+        },
+        "complete": {
+          "output": {
+            "status": "completed"
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "decision": "approved",
+          "by": "owner"
+        },
+        "done": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "offer": "skipped",
+          "complete": "completed"
+        }
+      }
+    },
+    {
+      "name": "no rider able to take it still leaves the order to complete",
+      "trigger": {
+        "body": {
+          "reference": "AK-7QX4KD",
+          "kind": "order",
+          "customer": {
+            "name": "Bola",
+            "phone": "+2348031234567"
+          },
+          "total_kobo": 650000,
+          "total": "₦6,500",
+          "summary": "2 × Jollof rice, delivery to Lekki ₦1,500",
+          "fulfilment": "delivery",
+          "payment": {
+            "mode": "none",
+            "status": "none"
+          }
+        }
+      },
+      "mocks": {
+        "accept_paid": {
+          "output": {
+            "status": "accepted"
+          }
+        },
+        "tell_confirmed": {
+          "output": {
+            "sent": true
+          }
+        },
+        "offer": {
+          "error": {
+            "kind": "fatal", "code": "not_ready",
+            "message": "dispatch: the order is not ready to dispatch"
+          }
+        },
+        "complete": {
+          "output": {
+            "status": "completed"
+          }
+        }
+      },
+      "approvals": {
+        "decide": {
+          "decision": "approved",
+          "by": "owner"
+        },
+        "done": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "offer_failed": "completed",
+          "complete": "completed"
+        }
+      }
+    }
+  ]
+}

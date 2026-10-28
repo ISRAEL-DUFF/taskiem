@@ -19,6 +19,7 @@ const port = 12828;
 const accounts = new Map<string, { account_number: string; account_name: string }>();
 const credits: unknown[] = [];
 let issued = 0;
+let wallets = 0;
 let fake: Server;
 
 test.beforeAll(async () => {
@@ -31,20 +32,25 @@ test.beforeAll(async () => {
         res.end(JSON.stringify(v));
       };
       if (req.headers.authorization !== "Bearer isw_e2e_key") return json(401, { error: { code: "UNAUTHORIZED", message: "bad key" } });
-      if (req.method === "POST" && req.url === "/v1/wallets/wal_e2e/virtual-accounts/batch") {
-        const items = (JSON.parse(body) as { accounts: { reference: string; account_name?: string }[] }).accounts;
-        const out = items.map((a) => {
-          if ((a.account_name ?? "").includes("REFUSE"))
-            return { reference: a.reference, status: "failed", error_code: "KYC_REQUIRED", error_message: "the director's BVN is missing" };
-          let x = accounts.get(a.reference);
-          if (!x) {
-            issued++;
-            x = { account_number: `98${String(accounts.size + 1).padStart(8, "0")}`, account_name: a.account_name ?? "" };
-            accounts.set(a.reference, x);
-          }
-          return { reference: a.reference, status: "created", bank_name: "Wema Bank", ...x };
-        });
-        return json(200, { wallet_id: "wal_e2e", accounts: out });
+      // The school's wallet, made once from the settings (flat identity, a key required).
+      if (req.method === "POST" && req.url === "/v1/wallets") {
+        const w = JSON.parse(body) as { bvn?: string; business_email?: string; kyc_profile?: unknown };
+        if (!req.headers["idempotency-key"]) return json(400, { error: { code: "MISSING_IDEMPOTENCY_KEY", message: "Idempotency-Key is required" } });
+        if (w.kyc_profile || !w.bvn || !w.business_email) return json(400, { error: { code: "INVALID_REQUEST", message: "flat identity fields, with bvn and an email" } });
+        wallets++;
+        return json(201, { wallet_id: "wal_e2e", account_number: "6256638601", internal_reference: "6256638601", tier: "TIER_1" });
+      }
+      // One permanent number per reference (27 October 2026).
+      if (req.method === "POST" && req.url === "/v1/wallets/wal_e2e/virtual-account") {
+        const a = JSON.parse(body) as { type: string; reference: string; account_name?: string };
+        if ((a.account_name ?? "").includes("REFUSE")) return json(422, { error: { code: "KYC_REQUIRED", message: "bvn is required for a business wallet" } });
+        let x = accounts.get(a.reference);
+        if (!x) {
+          issued++;
+          x = { account_number: `98${String(accounts.size + 1).padStart(8, "0")}`, account_name: a.account_name ?? "" };
+          accounts.set(a.reference, x);
+        }
+        return json(200, { reference: a.reference, is_permanent: true, status: "active", bank_name: "Wema Bank", ...x });
       }
       if (req.method === "GET" && (req.url ?? "").startsWith("/v1/wallets/wal_e2e/transactions")) {
         return json(200, { transactions: credits, pagination: { has_more: false } });
@@ -113,9 +119,20 @@ test("students are issued their own account numbers once, and a payment into one
   await expect(setting.getByTestId("issuers")).toContainText("director's BVN");
   await setting.getByLabel("Issuing connection").selectOption("iswallet/school_e2e");
   await expect(setting.getByRole("alert")).toHaveText("iswallet needs the wallet the numbers pay into.");
-  await setting.getByLabel("Wallet the numbers pay into").fill("wal_e2e");
-  await setting.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("Account number settings saved")).toBeVisible();
+  // No wallet yet: the school's is created here, the director's BVN sent once.
+  await setting.getByRole("button", { name: "Create the school's wallet" }).click();
+  const create = setting.getByTestId("create-wallet");
+  await expect(create.getByLabel(/It holds parents' fees/)).toBeChecked();
+  await axeBoth(page, "/settings/schools (creating the wallet)");
+  await create.getByLabel("The school's business email").fill("bursar@okafor.test");
+  await create.getByLabel("The director's BVN").fill("2221234567x8");
+  await expect(create.getByLabel("The director's BVN")).toHaveValue("22212345678");
+  await create.getByRole("button", { name: "Create the wallet" }).click();
+  await expect(page.getByText("The school's wallet is ready")).toBeVisible();
+  await expect(setting.getByLabel("Wallet the numbers pay into")).toHaveValue("wal_e2e");
+  await expect(setting.getByTestId("create-wallet")).toHaveCount(0);
+  expect(wallets).toBe(1);
+  await expect(page.locator("body")).not.toContainText("6256638601"); // iswallet's own handle, which nobody can pay into
   await axeBoth(page, "/settings/schools (account numbers)");
 
   // Plan, confirm, follow. Other tests add students meanwhile: a plan
@@ -132,7 +149,7 @@ test("students are issued their own account numbers once, and a payment into one
   }
   await expect(job.getByRole("status")).toContainText(/^Done: \d+ accounts? issued of \d+\./, { timeout: 90_000 });
   const refused = page.getByTestId("accounts-problem").filter({ hasText: "ACC/002" });
-  await expect(refused).toContainText("KYC_REQUIRED");
+  await expect(refused).toContainText("iswallet needs the director's BVN before it can issue account numbers");
   await expect(refused).toContainText("Not issued");
   await axeBoth(page, "/schools/accounts (a batch done)");
 
@@ -152,12 +169,19 @@ test("students are issued their own account numbers once, and a payment into one
   const number = ((await one.json()) as { account_number: string }).account_number;
   await expect(panel.getByTestId("student-account-number")).toContainText(`${number.slice(0, 4)} ${number.slice(4, 7)} ${number.slice(7)}`);
   await expect(panel.getByRole("button", { name: `Copy the account number ${number}` })).toBeVisible();
-  await expect(panel).toContainText("names the account itself");
+  // iswallet shows payers the name asked for (27 October 2026).
+  await expect(panel).not.toContainText("names the account itself");
   await expect(panel).toContainText("O•••");
+  // The bursar sends the family the number from here: the message goes
+  // the family's one way (chat or SMS), with a fresh fees page link.
+  await panel.getByRole("button", { name: "Send the account number to the family" }).click();
+  const told = panel.getByTestId("student-account-sent");
+  await expect(told).toBeVisible();
+  await expect(told).toContainText(/^(Sent .* to 1 guardian\.|Nobody could be reached)/);
   await axeBoth(page, "/schools/students/:id (an account number)");
 
   // An invoice of hers, sent; a payment into her number, which only the
-  // look-back finds (iswallet's credit webhook is not mapped), pays it.
+  // look-back finds (this fake iswallet takes no webhook subscription), pays it.
   const inv = await page.request.post("/v1/invoices", {
     headers: { ...H, "Idempotency-Key": `e2e:acc:${Date.now()}` },
     data: { customer: { name: "Uche Okafor", phone: "+2348035550001", key: `student:${ada}` }, amount_kobo: 2500000, description: "Fees" },

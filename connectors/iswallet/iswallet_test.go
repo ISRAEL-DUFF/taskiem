@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/expr"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
 const key = "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
@@ -385,5 +386,239 @@ func TestModesChooseTheHost(t *testing.T) {
 	}
 	if h := m.Hosts(); !slices.Equal(h, []string{"synledger.name.ng", "ispend.name.ng"}) {
 		t.Errorf("hosts: %v", h)
+	}
+}
+
+func TestBatchIssueGivesEachAccountItsResult(t *testing.T) {
+	in := map[string]any{"wallet_id": "6f1e", "accounts": []any{
+		map[string]any{"reference": "student_1", "account_name": "Ada Obi"}, map[string]any{"reference": "student_2"}}}
+	r, err := call(t, "issue_virtual_accounts", in, write(1, now), "issue_batch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	accounts := out["accounts"].([]any)
+	if len(accounts) != 2 || out["request_id"] != "req_batch" || out["failed"] != float64(1) {
+		t.Errorf("output %v", out)
+	}
+	if second := accounts[1].(map[string]any); second["error_code"] != "KYC_REQUIRED" {
+		t.Errorf("second %v", second)
+	}
+	if _, err := call(t, "issue_virtual_accounts", map[string]any{"wallet_id": "6f1e", "accounts": []any{map[string]any{"account_name": "No ref"}}}, write(1, now)); effects.Classify(err) != effects.KindFatal {
+		t.Errorf("an account without a reference: %v", err)
+	}
+}
+
+func TestProvidersProveTheKeyAndSayWhoIssues(t *testing.T) {
+	r, err := call(t, "list_providers", map[string]any{}, connector.Request{}, "providers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	p := out["providers"].([]any)[0].(map[string]any)
+	if p["code"] != "flutterwave" || p["permanent"] != true || p["dynamic"] != true || out["request_id"] != "req_prov" {
+		t.Errorf("output %v", out)
+	}
+	if New(Options{}).Manifest.Auth.Test.Action != "list_providers" {
+		t.Error("the connection check is not list_providers")
+	}
+}
+
+func TestCreateWalletSendsFlatIdentityAndNeverTheWalletNumber(t *testing.T) {
+	in := map[string]any{"owner_type": "client_end_user_business", "owner_ref": "tenant:0192", "business_email": "bursar@greenfield.example",
+		"bvn": "22212345678", "business_name": "Greenfield Academy"}
+	r, err := call(t, "create_wallet", in, write(1, now), "create_wallet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	if out["wallet_id"] != "5b00d9dd" || out["internal_reference"] != "6256638601" || out["request_id"] != "req_wallet" {
+		t.Errorf("output %v", out)
+	}
+	if _, ok := out["account_number"]; ok {
+		t.Errorf("the wallet-level number, which nobody can pay into, is in the output: %v", out)
+	}
+	_, err = call(t, "create_wallet", in, write(1, now), "create_wallet_nested_kyc")
+	if effects.Classify(err) != effects.KindFatal || !strings.Contains(err.Error(), "request req_bad") {
+		t.Errorf("a refusal: %v", err)
+	}
+	if _, err := call(t, "create_wallet", map[string]any{"owner_type": "someone", "owner_ref": "x"}, write(1, now)); effects.Classify(err) != effects.KindFatal {
+		t.Errorf("an unknown owner type: %v", err)
+	}
+}
+
+func TestOneTimeNumberWindowIsTaskiems(t *testing.T) {
+	req := connector.Request{IdempotencyKey: "tot_ab12cd34ef56gh78ij90kl12mn34op56", Attempt: 1}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-ID", "req_dyn")
+		_, _ = w.Write([]byte(`{"account_number":"9907654321","bank_name":"Wema Bank","reference":"tot_ab12cd34ef56gh78ij90kl12mn34op56","expires_at":"2026-10-05T09:44:00Z"}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(Options{BaseURL: srv.URL, Now: func() time.Time { return now }})
+	req.Input, req.HTTP = map[string]any{"amount": 2500000, "expires_minutes": 180}, srv.Client()
+	req.Credentials = map[string]string{"api_key": "isw_test_key", "wallet_ids": "6f1e"}
+	r, err := c.Actions["create_dynamic_account"].Execute(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := r.Output.(map[string]any)
+	if out["expires_at"] != "2026-10-05T12:14:00Z" || out["reference"] != OneTimeRefPrefix+"ab12cd34ef56gh78ij90kl12mn34op56" || out["request_id"] != "req_dyn" {
+		t.Errorf("output %v", out)
+	}
+	if c.Manifest.Actions["create_dynamic_account"].Class != effects.UnsafeWrite {
+		t.Error("one-time numbers are not deduplicated by iswallet: the action must be unsafe")
+	}
+}
+
+func TestCreditDedupFallsBackToTheDeliveryKey(t *testing.T) {
+	m := New(Options{}).Manifest
+	e := expr.MustNewTriggerEngine("body", "headers", "query")
+	dedup := func(body string, headers map[string]any) string {
+		t.Helper()
+		b, err := expr.DecodeJSON([]byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := e.Eval(m.Triggers["credit_event"].Dedup, map[string]any{"body": b, "headers": headers, "query": map[string]any{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v.(string)
+	}
+	noTxn := `{"id":"evt_9","event_type":"wallet.credit.posted","wallet_id":"6f1e","data":{"amount":1}}`
+	if got := dedup(noTxn, map[string]any{"x-ispend-idempotency-key": "k-1"}); got != "k-1" {
+		t.Errorf("with the delivery key: %q", got)
+	}
+	if got := dedup(noTxn, map[string]any{}); got != "evt_9" {
+		t.Errorf("without it: %q", got)
+	}
+	byRef := `{"id":"evt_10","event_type":"wallet.credit.posted","wallet_id":"6f1e","data":{"provider_reference":"100004"}}`
+	if got := dedup(byRef, map[string]any{"x-ispend-idempotency-key": "k-2"}); got != "wallet.credit.posted:100004:6f1e" {
+		t.Errorf("by the credit's id: %q", got)
+	}
+}
+
+// A credit heard by webhook and read back by the look-back is one entry in
+// the money log: the two mappings name it by the same credit_id, and both
+// count what the payer sent.
+func TestWebhookAndLookBackCreditAreOneEntry(t *testing.T) {
+	m := New(Options{}).Manifest
+	body, err := expr.DecodeJSON([]byte(`{"id":"evt_c1","event_type":"wallet.credit.posted","wallet_id":"6f1e","data":{"txn_id":"t-2",
+		"provider_reference":"100004261023091402123456","amount":5000000,"amount_credited":4930000,"currency":"NGN","occurred_at":"2026-10-23T09:14:02Z",
+		"virtual_account":{"reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56","account_number":"9901234567","status":"active"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, heard, err := m.EventOf("credit_event", map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}})
+	if err != nil || name != "virtual_account.credited" {
+		t.Fatalf("%s %v", name, err)
+	}
+	listed, err := expr.DecodeJSON([]byte(`{"wallet_id":"6f1e","transactions":[{"txn_id":"t-2","type":"credit","direction":"in","status":"confirmed",
+		"amount":4930000,"amount_credited":4930000,"fee_charged":70000,"currency":"NGN","occurred_at":"2026-10-23T09:14:02Z",
+		"provider_reference":"100004261023091402123456","virtual_account":{"account_number":"9901234567","reference":"tsk_ab12cd34ef56gh78ij90kl12mn34op56"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := m.CapabilityOutput("list_credits", map[string]any{"account": "6f1e"}, listed.(map[string]any), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := out["credits"].([]any)[0].(map[string]any)
+	a, okA := moneylog.FromEvent("iswallet/main", name, heard)
+	b, okB := moneylog.FromCredit("iswallet/main", read)
+	if !okA || !okB || a.Key() != b.Key() {
+		t.Fatalf("webhook %v %q, look-back %v %q", okA, a.Key(), okB, b.Key())
+	}
+	if *a.AmountKobo != 5000000 || *b.AmountKobo != 5000000 || *a.FeeKobo != 70000 {
+		t.Errorf("webhook %d (fee %d), look-back %d", *a.AmountKobo, *a.FeeKobo, *b.AmountKobo)
+	}
+}
+
+// A payment into a one-time number, heard by webhook (payment.received)
+// and read back by the look-back, is one entry, never an account credit
+// too.
+func TestWebhookAndLookBackOneTimePaymentAreOneEntry(t *testing.T) {
+	m := New(Options{}).Manifest
+	body, err := expr.DecodeJSON([]byte(`{"id":"evt_t1","event_type":"wallet.credit.posted","wallet_id":"6f1e","data":{"txn_id":"t-9",
+		"provider_reference":"100004261027091402777777","amount":1500000,"amount_credited":1479000,"currency":"NGN","occurred_at":"2026-10-27T09:14:02Z",
+		"virtual_account":{"reference":"tot_ab12cd34ef56gh78ij90kl12mn34op56","account_number":"9907654321","status":"active"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, heard, err := m.EventOf("credit_event", map[string]any{"body": body, "headers": map[string]any{}, "query": map[string]any{}})
+	if err != nil || name != "payment.received" {
+		t.Fatalf("%s %v", name, err)
+	}
+	listed, err := expr.DecodeJSON([]byte(`{"wallet_id":"6f1e","transactions":[{"txn_id":"t-9","type":"credit","direction":"in","status":"confirmed",
+		"amount":1479000,"amount_credited":1479000,"fee_charged":21000,"currency":"NGN","occurred_at":"2026-10-27T09:14:02Z",
+		"provider_reference":"100004261027091402777777","virtual_account":{"account_number":"9907654321","reference":"tot_ab12cd34ef56gh78ij90kl12mn34op56"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := m.CapabilityOutput("list_credits", map[string]any{"account": "6f1e"}, listed.(map[string]any), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := out["credits"].([]any)[0].(map[string]any)
+	a, okA := moneylog.FromEvent("iswallet/main", name, heard)
+	b, okB := moneylog.FromCredit("iswallet/main", read)
+	if !okA || !okB || a.Key() != b.Key() || b.Kind != "payment" {
+		t.Fatalf("webhook %v %q, look-back %v %q (%s)", okA, a.Key(), okB, b.Key(), b.Kind)
+	}
+	if *a.AmountKobo != 1500000 || *b.AmountKobo != 1500000 {
+		t.Errorf("webhook %d, look-back %d", *a.AmountKobo, *b.AmountKobo)
+	}
+	// Both ways the fee is what iswallet kept of what the payer sent.
+	if a.FeeKobo == nil || b.FeeKobo == nil || *a.FeeKobo != 21000 || *b.FeeKobo != 21000 {
+		t.Errorf("fee: webhook %v, look-back %v", a.FeeKobo, b.FeeKobo)
+	}
+}
+
+// The invoice path records a one-time number's payment id before asking
+// for it: the key it computes is the reference the payment will carry.
+func TestOneTimeNumberKeyIsItsReference(t *testing.T) {
+	m := New(Options{}).Manifest
+	k, err := m.CapabilityKey("collect_transfer", "create_dynamic_account", effects.KeyInput{TenantID: "t1", Seed: "invoice:i1", StepID: "transfer:1:create_dynamic_account"})
+	if err != nil || !strings.HasPrefix(k, OneTimeRefPrefix) || len(k) != len(OneTimeRefPrefix)+32 {
+		t.Fatalf("key %q %v", k, err)
+	}
+}
+
+func TestKYCRefusalSaysWhatIsMissing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-ID", "req_kyc")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"code":"KYC_REQUIRED","message":"bvn is required for a business wallet"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(Options{BaseURL: srv.URL})
+	req := connector.Request{IdempotencyKey: key, Attempt: 1, HTTP: srv.Client(), Credentials: map[string]string{"api_key": "k"},
+		Input: map[string]any{"wallet_id": "6f1e", "reference": key}}
+	_, err := c.Actions["issue_virtual_account"].Execute(context.Background(), req)
+	if effects.Classify(err) != effects.KindFatal || !strings.Contains(err.Error(), "iswallet needs the director's BVN before it can issue account numbers") ||
+		!strings.Contains(err.Error(), "request req_kyc") {
+		t.Errorf("%v", err)
+	}
+}
+
+// A shared client's key reaches other customers' wallets: its connection
+// (a partner's sub-tenant, a business under Taskiem's own client) makes
+// no wallet and no subscription; nothing is sent.
+func TestSharedClientMakesNoWalletOrSubscription(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("a request was sent: %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	c := New(Options{BaseURL: srv.URL})
+	creds := map[string]string{"api_key": "isw_platform", "shared_client": "true", "wallet_ids": "w_1"}
+	_, err := c.Actions["create_wallet"].Execute(context.Background(), connector.Request{Credentials: creds, HTTP: srv.Client(), IdempotencyKey: "k1",
+		Input: map[string]any{"owner_type": "client_end_business", "owner_ref": "tenant:victim", "business_email": "x@y.z", "bvn": "22212345678"}})
+	if effects.Classify(err) != effects.KindFatal {
+		t.Errorf("create_wallet on a shared client: %v", err)
+	}
+	_, err = c.Registrars["credit_event"].Create(context.Background(), connector.RemoteCall{Credentials: creds, HTTP: srv.Client()},
+		connector.RemoteSpec{Name: "x", URL: "https://hooks.example/x"})
+	if effects.Classify(err) != effects.KindFatal {
+		t.Errorf("a subscription on a shared client: %v", err)
 	}
 }

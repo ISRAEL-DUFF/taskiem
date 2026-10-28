@@ -187,6 +187,25 @@ func TestBuild(t *testing.T) {
 			if _, ok := files["www.css"]; !ok {
 				t.Errorf("%s: no www.css", cfg.Base)
 			}
+			// A page for each service (K9), linked from the integrations
+			// page, with what it does and the templates that use it.
+			for page, wants := range map[string][]string{
+				"integrations/mailchimp":  {"One click: sign in to Mailchimp", "Add or update a member", "Put people who opted in on a Mailchimp audience", cfg.Base + "docs/integrations/mailchimp"},
+				"integrations/messenger":  {"Messages to your Facebook Page", cfg.Base + "docs/integrations/messenger-and-instagram"},
+				"integrations/quickbooks": {"Copy an invoice to the books", "Uses QuickBooks or Zoho Books"},
+				"integrations/paystack":   {"Paste the key from your Paystack account"},
+				"integrations/schools":    {"there is nothing to connect"},
+			} {
+				body := string(files[page+".html"])
+				for _, want := range wants {
+					if !strings.Contains(body, want) {
+						t.Errorf("%s: %s lacks %q", cfg.Base, page, want)
+					}
+				}
+			}
+			if !strings.Contains(string(files["integrations.html"]), `href="`+cfg.Base+`integrations/instagram"`) {
+				t.Errorf("%s: the integrations page does not link Instagram's page", cfg.Base)
+			}
 			home := string(files["index.html"])
 			for _, want := range []string{"Run your business from WhatsApp", "Tell Taskiem what to do in your own words", cfg.Base + "docs/", "Paystack", cfg.Base + "img/mark-small.svg", cfg.Base + "www.css"} {
 				if !strings.Contains(home, want) {
@@ -348,8 +367,8 @@ func TestTemplateRails(t *testing.T) {
 		"pay_bank,balance,resolve_account":          "Paystack, Moniepoint (Monnify), iswallet, Flutterwave or Anchor",
 		"refund,get_payment":                        "Paystack",
 		"virtual_account":                           "Paystack, Moniepoint (Monnify), iswallet or Flutterwave",
-		"virtual_account.credited":                  "Paystack, Moniepoint (Monnify) or Flutterwave",
-		"payment.received,virtual_account.credited": "Paystack, Moniepoint (Monnify) or Flutterwave",
+		"virtual_account.credited":                  "Paystack, Moniepoint (Monnify), iswallet or Flutterwave",
+		"payment.received,virtual_account.credited": "Paystack, Moniepoint (Monnify), iswallet or Flutterwave",
 	} {
 		if got := railsFor(strings.Split(uses, ","), conns); got != want {
 			t.Errorf("%s: %q, want %q", uses, got, want)

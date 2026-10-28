@@ -63,6 +63,6 @@ You need these settings:
 - `TASKIEM_MESSAGE_HASH_KEY` (it keys the contacts' hashes). Without it, updates are off and messages go by text.
 - Hosted forms' public key, for the links on thank-you pages and the business's link.
 - The Telegram bot ([telegram](telegram.md)) and/or the WhatsApp platform number ([whatsapp](whatsapp.md)).
-- For WhatsApp, `TASKIEM_WHATSAPP_DISPLAY_NUMBER` set to the platform number (links point at it), and the `taskiem_update` template submitted to Meta with the others. Until it is approved, WhatsApp is used inside the 24-hour window only, and other messages go by text.
+- For WhatsApp, `TASKIEM_WHATSAPP_DISPLAY_NUMBER` set to the platform number (links point at it), and the `taskiem_update` template submitted to Meta with the others ([the template registry](whatsapp.md#the-template-registry) submits them and follows their approval). Until it is approved, WhatsApp is used inside the 24-hour window only, and other messages go by text.
 
 The api role records the bot's username and the number for the form host at start. Messages go through the chat outbox ([delivery and retries](whatsapp.md#delivery-and-retries)), which holds no address or text. Each message counts in the per-person limits across Taskiem that SMS uses (5 an hour, 20 a day).

@@ -2,6 +2,7 @@ package wasmconn
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -293,6 +294,40 @@ func (s *Source) loadInstalled(ctx context.Context, tenant uuid.UUID, id, versio
 	s.loaded[key] = c
 	s.mu.Unlock()
 	return c, nil
+}
+
+// Version implements connector.VersionSource: one exact version for a
+// run pinned to it. A tenant's own version loads even when disabled (that
+// withdraws it from new runs only); a partner's shared version and a
+// catalogue version load only while they may still run (shared, or
+// installed, published and from a verified publisher), else nil.
+func (s *Source) Version(ctx context.Context, tenant, id, version string) (*connector.Connector, error) {
+	tid, err := uuid.Parse(tenant)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(id, connector.CataloguePrefix) {
+		c, err := s.loadInstalled(ctx, tid, id, version)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return c, err
+	}
+	c, err := s.load(ctx, tid, id, version)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return c, err
+	}
+	var partner uuid.UUID
+	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tid}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT partner_id FROM taskiem_shared_connectors($1) WHERE connector_id = $2 AND version = $3`, tid, id, version).Scan(&partner)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.loadShared(ctx, tid, partner, id, version)
 }
 
 // manifestsKey marks cache entries of connectors loaded for their

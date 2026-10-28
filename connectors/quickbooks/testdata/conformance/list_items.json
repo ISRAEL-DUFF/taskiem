@@ -1,0 +1,31 @@
+{
+ "action": "list_items",
+ "input": {},
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "items"
+ ],
+ "expect": {
+  "output": {
+   "items": [
+    {
+     "id": "1",
+     "name": "Services"
+    },
+    {
+     "id": "5",
+     "name": "Bookkeeping (monthly)",
+     "unit_price_kobo": 2500000,
+     "income_account_id": "79"
+    }
+   ]
+  }
+ }
+}

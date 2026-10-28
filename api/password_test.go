@@ -98,7 +98,11 @@ func TestForgotPasswordDoesNotTellWhoHasAnAccount(t *testing.T) {
 	w.srv.WaitBackground()
 	// Only the person with a password gets a link (twice: case does not
 	// matter), and nobody without one is given a password this way.
+	// Each is sent on its own, so they may arrive in either order.
 	sent := mail.all()
+	if len(sent) == 2 && strings.Contains(sent[1], "To: op@") {
+		sent[0], sent[1] = sent[1], sent[0]
+	}
 	if len(sent) != 2 || !strings.Contains(sent[0], "To: op@acme.test") || !strings.Contains(sent[1], "To: OP@acme.test") {
 		t.Fatalf("emails:\n%s", strings.Join(sent, "\n----\n"))
 	}

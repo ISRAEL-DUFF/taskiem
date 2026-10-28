@@ -1,0 +1,38 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/contacts",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "contact_name": "Adaeze Okafor",
+   "contact_type": "customer"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "contacts": [
+    {
+     "contact_id": "460000000026050",
+     "contact_name": "Adaeze Okafor-Bello",
+     "contact_type": "customer",
+     "status": "active",
+     "email": "ada@example.com",
+     "phone": "+2348030000000",
+     "outstanding_receivable_amount": 15000.5,
+     "outstanding_payable_amount": 0
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

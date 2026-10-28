@@ -1,0 +1,229 @@
+# Messenger: a Facebook Page's messages, through Taskiem's Meta app (K5 of
+# docs/spec/business-connectors.md; decision 0051), on the Graph API v26.0.
+# Built from Meta's public developer documentation, read 26 October 2026:
+#   https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow
+#   https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived
+#   https://developers.facebook.com/documentation/business-messaging/messenger-platform/send-messages
+#   https://developers.facebook.com/documentation/business-messaging/messenger-platform/webhooks
+#   https://developers.facebook.com/documentation/business-messaging/messenger-platform/conversations
+#   https://developers.facebook.com/docs/messenger-platform/policy/policy-overview
+# See docs/integrations/messenger-and-instagram.md.
+manifest: connector/v1
+id: messenger
+version: 1.0.0
+name: Facebook Messenger
+description: Answer and follow up the people who write to your Facebook Page, and start workflows when they do.
+category: messaging
+auth:
+  type: oauth2
+  fields:
+    - { key: page_id, label: Facebook Page ID (filled when you connect) }
+    - { key: page_name, label: Facebook Page, required: false }
+    - { key: page_token, label: Page access token (kept by Taskiem), secret: true }
+    - { key: instagram_id, label: Linked Instagram account ID, required: false }
+    - { key: instagram_username, label: Linked Instagram account, required: false }
+  # One login through Taskiem's Meta app (client meta, shared with
+  # Instagram): Meta grants a short-lived user token, which Taskiem turns
+  # into the one Page's own long-lived token and subscribes the Page to the
+  # app (Connector.Link, rule 21). The user token is not kept. Graph takes
+  # the code exchange as a GET. Meta joins scopes with commas.
+  oauth2:
+    authorize_url: https://www.facebook.com/v26.0/dialog/oauth
+    token_url: https://graph.facebook.com/v26.0/oauth/access_token
+    token_method: get
+    scopes: [pages_show_list, pages_messaging, pages_manage_metadata, pages_read_engagement]
+    scope_separator: ","
+    pkce: true
+    client: meta
+    account_field: page_id
+    linked_fields: [page_id, page_name, page_token, instagram_id, instagram_username]
+  test: { action: get_page }
+base_url: https://graph.facebook.com/v26.0
+egress_hosts: [graph.facebook.com]
+actions:
+  get_page:
+    title: Get the Page
+    description: The connected Page. Also the connection's check.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        page_id:   { type: string }
+        name:      { type: string }
+  send_message:
+    title: Send a message
+    description: >-
+      Text, or an image, video, audio clip or file by its link, with up to 13
+      quick replies, to a person by their id as the messages trigger gives it
+      (sender_id). Meta allows a reply within 24 hours of the person's last
+      message; after that, only a person replying by hand within 7 days
+      (tag HUMAN_AGENT, once Meta grants it). The window is checked before
+      sending: outside it the step fails, saying when it closed, and nothing
+      is sent. Meta's Send API takes no idempotency key, so an unknown
+      outcome is parked for a person rather than sent twice.
+    class: unsafe_write
+    compensate: null
+    input:
+      type: object
+      required: [recipient_id]
+      properties:
+        recipient_id:    { type: string, description: The person (sender_id on the messages trigger) }
+        text:            { type: string, maxLength: 2000 }
+        attachment_url:  { type: string, description: An https link to an image, video, audio clip or file }
+        attachment_type: { enum: [image, video, audio, file], default: image }
+        quick_replies:
+          type: array
+          maxItems: 13
+          items:
+            type: object
+            required: [title]
+            properties:
+              title:   { type: string, maxLength: 20 }
+              payload: { type: string, description: What the trigger gives back when it is tapped (default the title) }
+        tag:             { enum: [HUMAN_AGENT], description: "Outside the 24 hours: a person replying by hand, within 7 days" }
+        reply_to:        { type: string, description: The message id this replies to }
+    output:
+      type: object
+      properties:
+        message_id:     { type: string }
+        recipient_id:   { type: string }
+        window_ends_at: { type: string, description: When replies without a tag stop being allowed }
+    pii:
+      - { field: recipient_id, category: other }
+      - { field: text, category: other }
+  send_typing:
+    title: Show typing
+    description: Shows the person that the Page is typing (or stops it). Showing it twice changes nothing; request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [recipient_id]
+      properties:
+        recipient_id: { type: string }
+        on:           { type: boolean, default: true }
+        request_key:  { type: string, description: Set by the engine; not sent to Meta }
+    output:
+      type: object
+      properties:
+        recipient_id: { type: string }
+    pii:
+      - { field: recipient_id, category: other }
+  mark_seen:
+    title: Mark as seen
+    description: Marks the person's messages seen. Marking twice changes nothing; request_key is the engine's and is not sent.
+    class: idempotent_write
+    idempotency: { field: request_key, encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [recipient_id]
+      properties:
+        recipient_id: { type: string }
+        request_key:  { type: string, description: Set by the engine; not sent to Meta }
+    output:
+      type: object
+      properties:
+        recipient_id: { type: string }
+    pii:
+      - { field: recipient_id, category: other }
+  get_profile:
+    title: Get the person's name
+    description: The name (and profile picture) of a person who wrote to the Page.
+    class: read
+    input:
+      type: object
+      required: [person_id]
+      properties:
+        person_id: { type: string }
+    output:
+      type: object
+      properties:
+        person_id:   { type: string }
+        name:        { type: string }
+        first_name:  { type: string }
+        last_name:   { type: string }
+        profile_pic: { type: string }
+    pii:
+      - { field: person_id, category: other }
+      - { field: output.name, category: name }
+      - { field: output.first_name, category: name }
+      - { field: output.last_name, category: name }
+      - { field: output.profile_pic, category: other }
+  get_conversation:
+    title: Read the conversation
+    description: The latest messages (at most 20, Meta's limit) between the Page and a person, newest first, and when the person last wrote.
+    class: read
+    input:
+      type: object
+      required: [person_id]
+      properties:
+        person_id: { type: string }
+        limit:     { type: integer, minimum: 1, maximum: 20, default: 10 }
+    output:
+      type: object
+      properties:
+        conversation_id: { type: string }
+        last_from_person_at: { type: string }
+        window_ends_at:  { type: string }
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              message_id:  { type: string }
+              created_at:  { type: string }
+              from_person: { type: boolean, description: false for the Page's own }
+              text:        { type: string }
+    pii:
+      - { field: person_id, category: other }
+      - { field: output.messages.*.text, category: other }
+triggers:
+  # Meta sends every connected Page's messages to the Page webhook of
+  # Taskiem's Meta app (/hooks/apps/messenger@1/messages), signed with the
+  # app secret (X-Hub-Signature-256), checked with a GET challenge, and
+  # batched: each messaging event is its own, routed by its Page (entry
+  # id). Meta wants 200 within 5 seconds and disables a webhook failing for
+  # an hour.
+  messages:
+    type: webhook
+    title: Messages to your Facebook Page
+    delivery: app
+    verify: { scheme: hmac_sha256, header: X-Hub-Signature-256 }
+    handshake: { method: GET, token_query: hub.verify_token, respond: '=query["hub.challenge"]' }
+    split: '=has(body.entry) ? body.entry.map(e, has(e.messaging) ? e.messaging.map(m, {"account": e.id, "event": m, "sender_id": m.sender.id}) : []).flatten() : []'
+    account_key: '=string(item.account)'
+    events: [message, echo, postback, referral, read, delivery, reaction]
+    event_type: >-
+      =has(item.event.message) ? (has(item.event.message.is_echo) && item.event.message.is_echo ? "echo" : "message")
+      : has(item.event.postback) ? "postback" : has(item.event.referral) ? "referral" : has(item.event.read) ? "read"
+      : has(item.event.delivery) ? "delivery" : has(item.event.reaction) ? "reaction" : "other"
+    dedup: >-
+      =has(item.event.message) && has(item.event.message.mid) ? item.event.message.mid
+      : has(item.event.postback) && has(item.event.postback.mid) ? item.event.postback.mid
+      : item.event.sender.id + ":" + string(int(item.event.timestamp))
+    # The person: a run waiting on their reply wakes when they write. The
+    # Page's own messages (echoes) correlate on the person they went to.
+    correlation: '=has(item.event.message) && has(item.event.message.is_echo) && item.event.message.is_echo ? dyn(item.event.recipient.id) : dyn(item.event.sender.id)'
+    # A message as a run sees it (dry runs and the docs).
+    example:
+      item:
+        account: "104123456789012"
+        sender_id: "6789012345678901"
+        event:
+          sender: { id: "6789012345678901" }
+          recipient: { id: "104123456789012" }
+          timestamp: 1761480000000
+          message: { mid: "m_sample", text: "Hello, do you deliver to Lekki?" }
+    pii:
+      - { field: body.entry.*.messaging.*.sender.id, category: other }
+      - { field: body.entry.*.messaging.*.recipient.id, category: other }
+      - { field: body.entry.*.messaging.*.message.text, category: other }
+      - { field: body.entry.*.messaging.*.message.attachments, category: other }
+      - { field: item.sender_id, category: other }
+      - { field: item.event.sender.id, category: other }
+      - { field: item.event.recipient.id, category: other }
+      - { field: item.event.message.text, category: other }
+      - { field: item.event.message.attachments, category: other }

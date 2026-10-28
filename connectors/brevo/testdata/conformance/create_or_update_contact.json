@@ -1,0 +1,28 @@
+{
+ "action": "create_or_update_contact",
+ "input": {
+  "email": "ada@example.com",
+  "first_name": "Adaeze",
+  "last_name": "Okafor",
+  "phone": "+2348030000000",
+  "list_ids": [
+   3
+  ],
+  "consent": {
+   "opted_in": true,
+   "source": "customers table"
+  }
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "contact"
+ ],
+ "expect": {
+  "output": {
+   "contact_id": "21",
+   "created": true
+  }
+ }
+}

@@ -64,16 +64,18 @@ type oauthProvider struct {
 	client                   OAuthClient
 }
 
-// oauthFor says how connector c is linked here, or why it cannot be.
-func (s *Server) oauthFor(c *connector.Connector) (oauthProvider, error) {
+// oauthFor says how connector c is linked here for connections in a mode
+// ("" for none), or why it cannot be.
+func (s *Server) oauthFor(c *connector.Connector, mode string) (oauthProvider, error) {
 	o := c.Manifest.Auth.OAuth2
 	if o == nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s does not connect by OAuth; add a connection with its credentials", errBadRequest, c.Manifest.Name)
 	}
-	client, ok := s.OAuthClients[c.Manifest.ID]
+	name := c.Manifest.ClientFor(mode)
+	client, ok := s.OAuthClients[name]
 	if !ok || client.ID == "" {
 		return oauthProvider{}, fmt.Errorf("%w: Taskiem is not registered as an OAuth client with %s on this platform (TASKIEM_OAUTH_%s_CLIENT_ID); add a connection with its credentials instead",
-			errOAuthUnavailable, c.Manifest.Name, strings.ToUpper(c.Manifest.ID))
+			errOAuthUnavailable, c.Manifest.Name, strings.ToUpper(name))
 	}
 	if s.PublicURL == "" {
 		return oauthProvider{}, fmt.Errorf("%w: connecting by OAuth needs TASKIEM_PUBLIC_URL, which is not set", errOAuthUnavailable)
@@ -85,15 +87,44 @@ func (s *Server) oauthFor(c *connector.Connector) (oauthProvider, error) {
 	return oauthProvider{authorize: authorize, token: token, revoke: revoke, server: strings.TrimRight(c.Manifest.BaseURL, "/"), client: client}, nil
 }
 
+// forAccount resolves the endpoints that live where the account does
+// (Zoho's accounts server, named on the callback and kept on the
+// connection: connector/v1 rule 19) from the connection's fields.
+func (p oauthProvider) forAccount(m *connector.Manifest, fields map[string]string) (oauthProvider, error) {
+	var err error
+	if p.token, err = m.OAuthURL(p.token, fields); err != nil {
+		return p, err
+	}
+	if p.revoke != "" {
+		p.revoke, err = m.OAuthURL(p.revoke, fields)
+	}
+	return p, err
+}
+
 // oauthLinkable is listConnectors' answer to whether a connector can be
-// linked here: nil for a connector without OAuth.
+// linked here, in some mode: nil for a connector without OAuth.
 func (s *Server) oauthLinkable(c *connector.Connector) *bool {
 	if c.Manifest.Auth.OAuth2 == nil {
 		return nil
 	}
-	_, err := s.oauthFor(c)
-	ok := err == nil
+	_, err := s.oauthFor(c, "")
+	ok := err == nil || len(s.oauthModes(c)) > 0
 	return &ok
+}
+
+// oauthModes are the modes a connector with modes can be linked in here:
+// those this platform has an address and an OAuth client for.
+func (s *Server) oauthModes(c *connector.Connector) []string {
+	var out []string
+	for _, h := range c.Manifest.Auth.HostModes {
+		if _, ok := c.Manifest.ModeURL(h.Mode); !ok || c.Manifest.Auth.OAuth2 == nil {
+			continue
+		}
+		if _, err := s.oauthFor(c, h.Mode); err == nil {
+			out = append(out, h.Mode)
+		}
+	}
+	return out
 }
 
 func (s *Server) oauthRedirectURI() string { return s.PublicURL + oauthCallbackPath }
@@ -113,6 +144,9 @@ type oauthStartReq struct {
 	Connector   string `json:"connector"` // "xenibase@1"
 	Environment string `json:"environment"`
 	Name        string `json:"name"`
+	// Mode is live or test, for a connector whose modes are hosts
+	// (QuickBooks' sandbox companies): the connection is made in it.
+	Mode string `json:"mode,omitempty"`
 }
 
 // startOAuthConnection records the request and answers the provider's
@@ -139,7 +173,12 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
 		return
 	}
-	prov, err := s.oauthFor(c)
+	mode, err := connectionMode(c, nil, req.Mode)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	prov, err := s.oauthFor(c, mode)
 	if err != nil {
 		s.failOAuth(w, r, err)
 		return
@@ -162,7 +201,7 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		if exists {
 			return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, req.Name, env)
 		}
-		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, p.Actor())
+		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, mode, p.Actor())
 		return err
 	})
 	if err != nil {
@@ -173,10 +212,13 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 	q := url.Values{
 		"client_id":             {prov.client.ID},
 		"redirect_uri":          {s.oauthRedirectURI()},
-		"scope":                 {strings.Join(c.Manifest.Auth.OAuth2.Scopes, " ")},
 		"state":                 {state},
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
+	}
+	// A provider without scopes (Mailchimp) takes none.
+	if sc := c.Manifest.Auth.OAuth2.Scopes; len(sc) > 0 {
+		q.Set("scope", strings.Join(sc, c.Manifest.Auth.OAuth2.ScopeSeparator()))
 	}
 	for k, v := range c.Manifest.Auth.OAuth2.AuthorizeParams {
 		q.Set(k, v)
@@ -238,9 +280,15 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", fmt.Errorf("%w: %s sent the browser back without a code", errOAuthProvider, c.Manifest.Name))
 		return
 	}
-	prov, err := s.oauthFor(c)
+	prov, err := s.oauthFor(c, req.Mode)
 	if err != nil {
 		s.oauthDone(w, r, "", err)
+		return
+	}
+	fromCallback := map[string]string{}
+	applyCallbackFields(c.Manifest, fromCallback, q)
+	if prov, err = prov.forAccount(c.Manifest, fromCallback); err != nil {
+		s.oauthDone(w, r, "", fmt.Errorf("%w: %s sent the browser back naming a server Taskiem does not use: %w", errOAuthProvider, c.Manifest.Name, err))
 		return
 	}
 	var verifier string
@@ -260,6 +308,20 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	token := asString(answer["access_token"])
 	creds, expiresAt, err := oauthCredentials(c.Manifest, answer, prov.server)
 	applyPlatformClient(c.Manifest, creds, prov.client)
+	applyCallbackFields(c.Manifest, creds, q)
+	if err != nil {
+		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
+		s.oauthDone(w, r, "", err)
+		return
+	}
+	if err == nil && c.Link != nil {
+		// The grant made into the account (Meta: the one Page, its own
+		// token, subscribed to Taskiem's app: rule 21).
+		creds, err = s.oauthLink(ctx, req.Tenant, c, prov, creds, token)
+		// What it made lasts as the connector says, not as the granted
+		// token did (a Page token does not expire).
+		expiresAt = nil
+	}
 	if err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
 		s.oauthDone(w, r, "", err)
@@ -270,11 +332,32 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", err)
 		return
 	}
+	// A field from the callback (QuickBooks' realmId) came through the
+	// person's browser, which can change it, and it can name the account
+	// the platform app's events route here (decision 0051). The provider
+	// is asked, with the new token, before anything is saved.
+	if len(c.Manifest.Auth.OAuth2.FieldsFromCallback) > 0 {
+		if err := s.testCredentials(ctx, req.Tenant, c, withMode(withGrantedToken(c.Manifest, creds, answer), req.Mode)); err != nil {
+			s.oauthRevoke(ctx, req.Tenant, c, prov, token)
+			s.oauthDone(w, r, "", err)
+			return
+		}
+	}
 	var id uuid.UUID
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error {
 		var err error
 		if id, err = s.Vault.CreateOAuthConnectionTx(ctx, tx, req.Tenant, req.Environment, c.Manifest.ID, req.Name, creds, expiresAt, req.Person); err != nil {
 			return err
+		}
+		if err := setConnectionMode(ctx, tx, id, req.Mode); err != nil {
+			return err
+		}
+		// Made through Taskiem's app: its events for this account come here
+		// (decision 0051).
+		if f := c.Manifest.Auth.OAuth2.AccountField; f != "" {
+			if err := secrets.SetAppAccountTx(ctx, tx, req.Tenant, id, c.Manifest.ClientFor(req.Mode), creds[f]); err != nil {
+				return err
+			}
 		}
 		return secrets.SetRouteKeysTx(ctx, tx, req.Tenant, id, c.Manifest.RouteKeys(creds))
 	})
@@ -341,8 +424,9 @@ func (s *Server) oauthHTTP(tenant uuid.UUID, c *connector.Connector, target stri
 }
 
 // oauthExchange trades the code for a token at the provider (RFC 6749
-// section 4.1.3, form-encoded, the client secret in the body) and returns
-// the answer's fields.
+// section 4.1.3, form-encoded, the client secret in the body or, where
+// the manifest says client_auth: basic, in HTTP Basic) and returns the
+// answer's fields.
 func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connector.Connector, prov oauthProvider, code, verifier string) (map[string]any, error) {
 	hc, err := s.oauthHTTP(tenant, c, prov.token)
 	if err != nil {
@@ -356,11 +440,36 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 		"client_secret": {prov.client.Secret},
 		"code_verifier": {verifier},
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.token, strings.NewReader(form.Encode()))
+	basic := c.Manifest.Auth.OAuth2.ClientAuth == "basic"
+	if basic {
+		form.Del("client_id")
+		form.Del("client_secret")
+	}
+	var req *http.Request
+	if c.Manifest.Auth.OAuth2.TokenMethod == "get" {
+		// Meta's Graph API takes the exchange as a GET (rule 21).
+		u, perr := url.Parse(prov.token)
+		if perr != nil {
+			return nil, perr
+		}
+		q := u.Query()
+		for k, vs := range form {
+			q[k] = vs
+		}
+		u.RawQuery = q.Encode()
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	} else {
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, prov.token, strings.NewReader(form.Encode()))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if basic {
+		req.SetBasicAuth(prov.client.ID, prov.client.Secret)
+	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -383,10 +492,32 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 		return nil, fmt.Errorf("%w: %s refused the token exchange: %s", errOAuthProvider, c.Manifest.Name, strings.TrimSpace(e.Error+" "+e.Description))
 	}
 	var answer map[string]any
-	if err := json.Unmarshal(body, &answer); err != nil || answer["access_token"] == nil {
+	if err := json.Unmarshal(body, &answer); err != nil {
+		return nil, fmt.Errorf("%w: %s's token answer is not the published shape", errOAuthProvider, c.Manifest.Name)
+	}
+	// Slack answers a refused exchange with 200 and {"ok": false, "error": …}.
+	if ok, said := answer["ok"].(bool); said && !ok {
+		return nil, fmt.Errorf("%w: %s refused the token exchange: %s", errOAuthProvider, c.Manifest.Name, asString(answer["error"]))
+	}
+	if answer["access_token"] == nil {
 		return nil, fmt.Errorf("%w: %s's token answer is not the published shape", errOAuthProvider, c.Manifest.Name)
 	}
 	return answer, nil
+}
+
+// oauthLink runs the connector's Link on a new connection's fields: its
+// refusals are the person's to read; anything else is the provider not
+// answering as published.
+func (s *Server) oauthLink(ctx context.Context, tenant uuid.UUID, c *connector.Connector, prov oauthProvider, creds map[string]string, token string) (map[string]string, error) {
+	hc := s.egressGuard().Client(egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "oauth:" + c.Manifest.ID}, 30*time.Second)
+	out, err := c.Link(ctx, connector.LinkCall{Credentials: creds, Token: token, ClientID: prov.client.ID, ClientSecret: prov.client.Secret, HTTP: hc})
+	switch {
+	case errors.Is(err, connector.ErrLinkRefused):
+		return nil, fmt.Errorf("%w: %s", errOAuthGrant, strings.TrimSuffix(strings.TrimSuffix(err.Error(), connector.ErrLinkRefused.Error()), ": "))
+	case err != nil:
+		return nil, fmt.Errorf("%w: %s did not complete the connection: %w", errOAuthProvider, c.Manifest.Name, err)
+	}
+	return out, nil
 }
 
 // oauthCredentials builds a connection's fields from the token answer as
@@ -399,7 +530,7 @@ func oauthCredentials(m *connector.Manifest, answer map[string]any, server strin
 			continue
 		}
 		name, one := connector.TokenField(from)
-		v := answer[name]
+		v := tokenValue(answer, name)
 		if !one {
 			if s := asString(v); s != "" {
 				creds[field] = s
@@ -439,6 +570,52 @@ func applyPlatformClient(m *connector.Manifest, creds map[string]string, client 
 			creds[field] = client.ID
 		case "secret":
 			creds[field] = client.Secret
+		}
+	}
+}
+
+// tokenValue is a field of the token answer, or of an object in it by a
+// dotted path (Slack's team.id).
+func tokenValue(answer map[string]any, path string) any {
+	var v any = answer
+	for _, part := range strings.Split(path, ".") {
+		m, ok := v.(map[string]any)
+		if !ok {
+			return nil
+		}
+		v = m[part]
+	}
+	return v
+}
+
+// applyCallbackFields fills the fields a provider names in the query it
+// sends the browser back with (QuickBooks' realmId, Zoho's location).
+// withGrantedToken lends the test the access token just granted, where the
+// connector keeps only the refresh token and would otherwise refresh
+// (QuickBooks): a copy, so nothing more is stored.
+func withGrantedToken(m *connector.Manifest, creds map[string]string, answer map[string]any) map[string]string {
+	out := maps.Clone(creds)
+	tok := asString(answer["access_token"])
+	has := func(k string) bool {
+		return slices.ContainsFunc(m.Auth.Fields, func(f connector.AuthField) bool { return f.Key == k })
+	}
+	if tok == "" || out["access_token"] != "" || !has("access_token") {
+		return out
+	}
+	out["access_token"] = tok
+	if n, ok := answer["expires_in"].(float64); ok && n > 0 && has("access_expires_at") {
+		out["access_expires_at"] = time.Now().Add(time.Duration(n) * time.Second).UTC().Format(time.RFC3339)
+	}
+	return out
+}
+
+func applyCallbackFields(m *connector.Manifest, creds map[string]string, q url.Values) {
+	if creds == nil || m.Auth.OAuth2 == nil {
+		return
+	}
+	for field, param := range m.Auth.OAuth2.FieldsFromCallback {
+		if v := strings.TrimSpace(q.Get(param)); v != "" {
+			creds[field] = v
 		}
 	}
 }
@@ -484,11 +661,17 @@ func (s *Server) oauthRevoke(ctx context.Context, tenant uuid.UUID, c *connector
 		s.Logger.Warn("oauth: token not revoked", "connector", c.Manifest.ID, "err", err)
 		return
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.revoke, strings.NewReader(url.Values{"token": {token}}.Encode()))
+	body, ct := url.Values{"token": {token}}.Encode(), "application/x-www-form-urlencoded"
+	if c.Manifest.Auth.OAuth2.RevokeEncoding == "json" {
+		raw, _ := json.Marshal(map[string]string{"token": token})
+		body, ct = string(raw), "application/json"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, prov.revoke, strings.NewReader(body))
 	if err != nil {
 		return
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", ct)
+	req.Header.Set("Accept", "application/json")
 	req.SetBasicAuth(prov.client.ID, prov.client.Secret)
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -626,6 +809,35 @@ func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := secrets.WithUse(r.Context(), secrets.Use{Kind: secrets.KindConnection, Purpose: "connection.revoke", Actor: p.Actor()})
+	// Whether it may be deleted at all comes first: a key limited to
+	// another environment, or a connection Taskiem keeps, releases nothing.
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var env string
+		var managed *string
+		err := tx.QueryRow(ctx, `SELECT environment, provisioned_by FROM connections WHERE id = $1`, id).Scan(&env, &managed)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return secrets.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := envParam(r, env); err != nil {
+			return err
+		}
+		if managed != nil {
+			return fmt.Errorf("%w: this connection is kept by Taskiem (%s) and cannot be deleted", errConflict, *managed)
+		}
+		return nil
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// The connection's own subscriptions go first, while its credentials
+	// can still reach the provider (connector/v1 registration: connection).
+	if err := s.releaseConnectionSubscriptions(r, reg, id, force); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var uses []connectionUse
 	var revoke func()
 	err = s.tx(r, func(tx pgx.Tx) error {
@@ -651,14 +863,16 @@ func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
 			return errConnectionInUse
 		}
 		if authType == "oauth2" {
-			if c, ok := connectorByID(reg, connID); ok && c.Manifest.Auth.OAuth2 != nil {
-				if prov, err := s.oauthFor(c); err == nil && prov.revoke != "" {
-					creds, err := s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id)
-					if err != nil {
-						return err
+			if c, ok := connectorByID(reg, connID); ok && c.Manifest.Auth.OAuth2 != nil && c.Manifest.Auth.OAuth2.RevokeURL != "" {
+				creds, err := s.Vault.ConnectionCredentialsTx(ctx, tx, p.TenantID, id)
+				if err != nil {
+					return err
+				}
+				if prov, err := s.oauthFor(c, creds[connector.ModeKey]); err == nil && prov.revoke != "" {
+					if prov, err := prov.forAccount(c.Manifest, creds); err == nil {
+						tenant := p.TenantID
+						revoke = func() { s.oauthRevoke(context.WithoutCancel(ctx), tenant, c, prov, oauthToken(c, creds)) }
 					}
-					tenant := p.TenantID
-					revoke = func() { s.oauthRevoke(context.WithoutCancel(ctx), tenant, c, prov, oauthToken(c, creds)) }
 				}
 			}
 		}

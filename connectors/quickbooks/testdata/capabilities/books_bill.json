@@ -1,0 +1,32 @@
+{
+ "capability": "books_bill",
+ "input": {
+  "supplier_id": "41",
+  "number": "LPS-0918",
+  "issued_on": "2026-10-25",
+  "due_on": "2026-11-25",
+  "lines": [
+   {
+    "description": "A4 paper, 40 reams",
+    "amount_kobo": 8600000,
+    "account_id": "70"
+   }
+  ]
+ },
+ "credentials": {
+  "realm_id": "9341453050298730",
+  "client_id": "ABtestclientid",
+  "client_secret": "test-client-secret",
+  "refresh_token": "AB11-test-refresh",
+  "access_token": "eyJ-test-access-token",
+  "access_expires_at": "2099-01-01T00:00:00Z"
+ },
+ "exchanges": [
+  "bill_by_number_other_supplier",
+  "bill_create"
+ ],
+ "expect": {
+  "bill_id": "240",
+  "total_kobo": 8600000
+ }
+}

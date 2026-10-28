@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,12 @@ func (m MapSecrets) Get(_ context.Context, _ uuid.UUID, _ string, name string) (
 // Connections resolves connector credentials for a tenant and environment.
 type Connections interface {
 	Credentials(ctx context.Context, tenant uuid.UUID, environment, connector, name string) (map[string]string, error)
+}
+
+// CredentialRotator stores credentials a provider rotates, once across
+// workers (connector.Request.Rotate); secrets.Vault implements it.
+type CredentialRotator interface {
+	RotateCredentials(ctx context.Context, tenant uuid.UUID, environment, connector, name string, fn func(map[string]string) (map[string]string, error)) (map[string]string, error)
 }
 
 // Hooks inject faults for the crash-recovery suite. A hook returning an
@@ -380,6 +387,47 @@ var errAbandoned = errors.New("abandoned")
 // errPostpone asks for the task to be requeued until p.intentAt + CallTimeout.
 var errPostpone = errors.New("postpone")
 
+// rateLimited asks for the task to be requeued until the connection's rate
+// limit has a token for it: nothing was sent, and no retry is spent.
+type rateLimited struct{ wait time.Duration }
+
+func (e *rateLimited) Error() string { return fmt.Sprintf("rate limited for %s", e.wait) }
+
+// takeRate draws one call from the connector's rate limit (spec 6.2), a
+// token bucket in the database shared by every worker, inside prepare's
+// transaction: committed only with the rest of prepare. Without a token it
+// returns how long until one is due, and the task waits that long.
+func takeRate(ctx context.Context, tx pgx.Tx, p *plan) error {
+	if p.conn == nil || p.conn.Manifest.RateLimit == nil {
+		return nil
+	}
+	rl := p.conn.Manifest.RateLimit
+	rate, burst := rl.PerSecond(), float64(rl.Requests)
+	if rate <= 0 {
+		return nil
+	}
+	bucket := p.conn.Manifest.ID
+	if rl.Scope != "tenant" {
+		bucket += "/" + p.env + "/" + p.sched.Connection
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO connector_rate_buckets (tenant_id, bucket, tokens, updated_at) VALUES ($1, $2, $3, clock_timestamp())
+		ON CONFLICT DO NOTHING`, p.c.tenant, bucket, burst); err != nil {
+		return err
+	}
+	var tokens, elapsed float64
+	if err := tx.QueryRow(ctx, `SELECT tokens, GREATEST(0, EXTRACT(EPOCH FROM clock_timestamp() - updated_at)) FROM connector_rate_buckets
+		WHERE tenant_id = $1 AND bucket = $2 FOR UPDATE`, p.c.tenant, bucket).Scan(&tokens, &elapsed); err != nil {
+		return err
+	}
+	tokens = min(burst, tokens+elapsed*rate)
+	if tokens < 1 {
+		return &rateLimited{wait: time.Duration((1 - tokens) / rate * float64(time.Second))}
+	}
+	_, err := tx.Exec(ctx, `UPDATE connector_rate_buckets SET tokens = $3, updated_at = clock_timestamp() WHERE tenant_id = $1 AND bucket = $2`,
+		p.c.tenant, bucket, tokens-1)
+	return err
+}
+
 // errCancelled: the step was cancelled (a losing parallel branch) before its
 // write could start; the task is dropped without an outcome.
 var errCancelled = errors.New("cancelled")
@@ -408,6 +456,7 @@ type plan struct {
 	c        claim
 	env      string
 	sched    history.ScheduledPayload
+	pins     map[string]string // connector versions the run started with
 	stepType string
 	class    effects.Class
 	conn     *connector.Connector
@@ -461,6 +510,10 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 			*outcome = "fenced"
 			return nil
 		}
+		if rl := (*rateLimited)(nil); errors.As(err, &rl) {
+			*outcome = "rate_limited"
+			return w.postpone(ctx, p, time.Now().Add(rl.wait))
+		}
 		if errors.Is(err, errCancelled) {
 			*outcome = "cancelled"
 			return w.finish(ctx, p, nil)
@@ -501,6 +554,7 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 	if p.mode == modeSend {
 		result = w.send(ctx, p)
 	}
+	result = capOutput(p, result)
 	if w.Hooks != nil && w.Hooks.AfterCall != nil {
 		if err := w.Hooks.AfterCall(c.step, c.attempt); err != nil {
 			return nil
@@ -547,6 +601,37 @@ func failed(c claim, kind, msg, next string) history.Event {
 	return history.Event{Type: history.StepFailed, StepID: c.step, Attempt: c.attempt, Payload: raw}
 }
 
+// maxStepOutput bounds a step's output kept in its history (spec 4.9:
+// 256 KB inline). A larger one would be copied into the decision cache and
+// every replay of the run; until outputs over it move to object storage, a
+// step that returns one fails. http steps cut their response body to the
+// same size instead (maxHTTPBody), and container steps keep to their own
+// limits.output_bytes.
+const maxStepOutput = 256 << 10
+
+// capOutput turns a completion whose output is over maxStepOutput into a
+// failure that says so. A write has already happened, so it parks for an
+// operator, who records it as completed with a smaller output, rather than
+// failing in a way someone could take for "not paid".
+func capOutput(p *plan, ev history.Event) history.Event {
+	if ev.Type != history.StepCompleted || p.stepType == "http" || p.stepType == "container" {
+		return ev
+	}
+	var cp struct {
+		Output json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(ev.Payload, &cp); err != nil || len(cp.Output) <= maxStepOutput {
+		return ev
+	}
+	msg := fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10)
+	if !p.class.IsWrite() {
+		return failed(p.c, "output_too_large", msg, "fail")
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "output_too_large", Next: "park", MaybeApplied: true,
+		Message: msg + ". The provider accepted the call: record the step as completed with the output later steps need"}})
+	return history.Event{Type: history.StepFailed, StepID: ev.StepID, Attempt: ev.Attempt, Payload: raw}
+}
+
 func completedEvent(c claim, out any, reconciled bool) history.Event {
 	raw, _ := json.Marshal(history.CompletedPayload{Output: out, Reconciled: reconciled})
 	return history.Event{Type: history.StepCompleted, StepID: c.step, Attempt: c.attempt, Payload: raw}
@@ -579,12 +664,19 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		p.taint = taint
 		observeRunStart(hist, c, dbNow)
-		found, cancelled := false, false
+		found, cancelled, reissued := false, false, false
 		var intents []history.IntentPayload
 		var intentAttempts []int
 		var intentTimes []time.Time
 		outcomes := map[int]history.Error{}
 		for _, e := range hist {
+			if e.Type == history.RunStarted {
+				var rs history.RunStartedPayload
+				if err := json.Unmarshal(e.Payload, &rs); err != nil {
+					return err
+				}
+				p.pins = rs.Connectors
+			}
 			if e.StepID != c.step {
 				continue
 			}
@@ -604,6 +696,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				var fp history.FailedPayload
 				_ = json.Unmarshal(e.Payload, &fp)
 				outcomes[e.Attempt] = fp.Error
+				reissued = reissued || fp.Error.Reissue
 				if e.Attempt == c.attempt {
 					p.mode = modeDone
 				}
@@ -613,6 +706,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 					return err
 				}
 				intents = append(intents, ip)
+				reissued = false // an operator's re-issue moves only the key sent after it
 				intentAttempts = append(intentAttempts, e.Attempt)
 				intentTimes = append(intentTimes, e.RecordedAt)
 			}
@@ -639,7 +733,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			return w.recordFailure(ctx, tx, p, "fatal", err.Error())
 		}
 		if !p.class.IsWrite() {
-			return nil
+			return takeRate(ctx, tx, p)
 		}
 
 		// Choose how to proceed from what earlier attempts left behind.
@@ -661,6 +755,9 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup
+			if reissued {
+				p.group++
+			}
 			p.intentAt = intentTimes[n-1]
 			var next effects.Next
 			if prev, ok := outcomes[lastAttempt]; ok && lastAttempt != c.attempt {
@@ -689,6 +786,10 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		if p.mode != modeSend {
 			return nil
+		}
+		// A token before the intent: a write that must wait is not open.
+		if err := takeRate(ctx, tx, p); err != nil {
+			return err
 		}
 		return w.recordIntent(ctx, tx, p)
 	})
@@ -723,13 +824,17 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 		if w.Registry == nil {
 			return fmt.Errorf("no connector registry")
 		}
-		reg, err := w.Registry.For(ctx, p.c.tenant.String())
+		// The version the run started with (spec 6.4), not the newest.
+		conn, repinned, err := w.Registry.Pinned(ctx, p.c.tenant.String(), p.sched.Connector, p.pins[p.sched.Connector])
 		if err != nil {
 			return fmt.Errorf("%w: %w", errLookup, err)
 		}
-		conn, ok := reg.Get(p.sched.Connector)
-		if !ok {
+		if conn == nil {
 			return fmt.Errorf("connector %s is not installed", p.sched.Connector)
+		}
+		if repinned && w.Logger != nil {
+			w.Logger.Warn("the connector version the run started with is not available; using the newest", "run", p.c.run, "connector", p.sched.Connector,
+				"pinned", p.pins[p.sched.Connector], "using", conn.Manifest.Version)
 		}
 		spec, ok := conn.Manifest.Actions[p.sched.Action]
 		if !ok {
@@ -742,8 +847,9 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 			p.spec = &defaultHTTPKey
 		}
 	case p.stepType == "code":
-		// Code has no external effects of its own; host.fetch goes through
-		// the egress guard. It is treated as a read for retries.
+		// Code has no external effects of its own: host.fetch goes through
+		// the egress guard and refuses every method but GET and HEAD, so a
+		// re-run after a crash cannot repeat a write. A read for retries.
 		p.class = effects.Read
 	case p.stepType == "ai":
 		// Asking a model changes nothing: a read, retried freely.
@@ -1001,7 +1107,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc})
+	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -1092,7 +1198,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
@@ -1262,21 +1368,47 @@ func (w *Worker) credentials(ctx context.Context, p *plan) (map[string]string, e
 	if err != nil {
 		return nil, err
 	}
-	declared := map[string]bool{}
 	for _, f := range p.conn.Manifest.Auth.Fields {
 		if creds[f.Key] == "" && (f.Required == nil || *f.Required) {
 			return nil, fmt.Errorf("connection is missing %q", f.Key)
 		}
-		declared[f.Key] = !f.Secret
 	}
-	declared[connector.ModeKey] = true // live or test: not a secret
-	for k, v := range creds {
-		if public, ok := declared[k]; !ok || !public {
-			p.scrub = append(p.scrub, v) // secret fields, and tokens the manifest does not list
-		}
-	}
+	addScrub(p, creds)
 	p.creds = creds
 	return creds, nil
+}
+
+// addScrub keeps a connection's secret values out of what the step
+// records: its secret fields, and tokens the manifest does not list.
+func addScrub(p *plan, creds map[string]string) {
+	declared := map[string]bool{connector.ModeKey: true} // live or test: not a secret
+	for _, f := range p.conn.Manifest.Auth.Fields {
+		declared[f.Key] = !f.Secret
+	}
+	for k, v := range creds {
+		if public, ok := declared[k]; (!ok || !public) && v != "" && !slices.Contains(p.scrub, v) {
+			p.scrub = append(p.scrub, v)
+		}
+	}
+}
+
+// rotate is the step's connector.Request.Rotate: credentials the provider
+// rotates are refreshed once across workers and stored before use, and
+// their new secret values are scrubbed like the old ones.
+func (w *Worker) rotate(p *plan) func(context.Context, connector.RotateFunc) (map[string]string, error) {
+	r, ok := w.Connections.(CredentialRotator)
+	if !ok || p.conn == nil {
+		return nil
+	}
+	return func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+		creds, err := r.RotateCredentials(secrets.WithUse(ctx, p.use(secrets.KindConnection)), p.c.tenant, p.env, p.conn.Manifest.ID, p.sched.Connection, fn)
+		if err != nil {
+			return nil, err
+		}
+		addScrub(p, creds)
+		p.creds = creds
+		return creds, nil
+	}
 }
 
 // policy is the egress policy for this task: a connector may reach only its

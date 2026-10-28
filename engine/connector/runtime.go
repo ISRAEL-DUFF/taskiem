@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/israel-duff/taskiem/engine/effects"
 )
 
 // Request is what an action handler receives (spec 6.3).
@@ -28,6 +30,36 @@ type Request struct {
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Rotate replaces credentials a provider rotates (QuickBooks issues a
+	// new refresh token on every refresh and revokes the chain when an old
+	// one is used again): see RotateCredentials. Nil where the request's
+	// credentials are not a stored connection's.
+	Rotate func(ctx context.Context, fn RotateFunc) (map[string]string, error)
+}
+
+// RotateFunc refreshes credentials. It is given the connection's stored
+// credentials as they are now, read under a lock no other worker can hold
+// at the same time, and returns them as they should be stored: the same
+// map when another worker already refreshed them (its access token is
+// still good), or the fields the provider handed back merged in. An error
+// stores nothing; wrap ErrCredentialsRejected when the provider refused
+// the refresh token, so the connection is marked expired.
+type RotateFunc func(current map[string]string) (map[string]string, error)
+
+// ErrNoRotate is a refresh asked for where the credentials cannot be
+// stored back: refreshing anyway would spend a refresh token for good.
+var ErrNoRotate = errors.New("these credentials cannot be refreshed and stored here")
+
+// RotateCredentials refreshes the request's connection's credentials once
+// across every worker: fn runs with the stored credentials under the
+// connection's lock, and what it returns is stored before the lock is let
+// go, so the next worker sees the new refresh token, never the spent one.
+// It returns the credentials to use, which the caller keeps for the call.
+func (r Request) RotateCredentials(ctx context.Context, fn RotateFunc) (map[string]string, error) {
+	if r.Rotate == nil {
+		return nil, fmt.Errorf("%w: %w", ErrNoRotate, effects.ErrFatal)
+	}
+	return r.Rotate(ctx, fn)
 }
 
 // Response is a handler's result.
@@ -83,7 +115,8 @@ type Connector struct {
 	// describes (fields inside the body, for example). Keyed by trigger.
 	Verifiers map[string]WebhookVerifier
 	// Registrars set up the provider's subscriptions for triggers whose
-	// manifest says registration: remote (decision 0021). Keyed by trigger.
+	// manifest says registration: remote or connection (decision 0021).
+	// Keyed by trigger.
 	Registrars map[string]Registrar
 	// Enrichers complete a verified delivery before its runs start (a
 	// record the provider left out). Keyed by trigger; optional.
@@ -92,7 +125,34 @@ type Connector struct {
 	// before they are saved (a combination of fields the connector cannot
 	// use safely). Its error is shown to whoever saves them.
 	CheckCredentials func(creds map[string]string) error
+	// Link completes a connection made by OAuth before it is saved, for
+	// providers whose grant is not yet the account (Meta: the user's token
+	// becomes the one Page's own, and the Page is subscribed to Taskiem's
+	// app). It fills the manifest's auth.oauth2.linked_fields (rule 21);
+	// an error wrapping ErrLinkRefused is shown to the person as it is.
+	Link func(ctx context.Context, c LinkCall) (map[string]string, error)
+	// CheckInput, when set, checks a workflow step's input for an action
+	// when the workflow is published (engine/wdcheck): what the manifest's
+	// schema cannot say, such as a value that must be chosen from a set
+	// the connector knows. The input is as written, expressions ("=...")
+	// unevaluated; each message names a problem.
+	CheckInput func(action string, input map[string]any) []string
 }
+
+// LinkCall is what Link gets: the fields made so far, the token the
+// provider granted, Taskiem's client, and an egress-guarded client for
+// the connector's hosts.
+type LinkCall struct {
+	Credentials  map[string]string
+	Token        string
+	ClientID     string
+	ClientSecret string
+	HTTP         *http.Client
+}
+
+// ErrLinkRefused is a grant that makes no connection, in the person's
+// words ("choose exactly one Page").
+var ErrLinkRefused = errors.New("link refused")
 
 // WebhookVerifier checks one delivery; secret is the connection credential
 // named by the trigger's secret_field. A non-nil error refuses it.
@@ -127,12 +187,18 @@ const CataloguePrefix = "p_"
 // connectors it installed.
 type TenantSource func(ctx context.Context, tenant string) ([]*Connector, error)
 
+// VersionSource loads one exact version of an uploaded connector (x_ or
+// p_) for a tenant, or returns nil when that version can no longer run
+// there (uninstalled, revoked, or no longer shared).
+type VersionSource func(ctx context.Context, tenant, id, version string) (*Connector, error)
+
 // Registry holds the connectors compiled into this binary, and reaches
 // tenants' own connectors through its TenantSource.
 type Registry struct {
-	mu     sync.RWMutex
-	m      map[string]*Connector
-	tenant TenantSource
+	mu       sync.RWMutex
+	m        map[string]*Connector
+	tenant   TenantSource
+	versions VersionSource
 }
 
 // SetTenantSource makes For include each tenant's own connectors.
@@ -140,6 +206,46 @@ func (r *Registry) SetTenantSource(f TenantSource) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tenant = f
+}
+
+// SetVersionSource lets Pinned load a version older than the newest.
+func (r *Registry) SetVersionSource(f VersionSource) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.versions = f
+}
+
+// Pinned is the connector a run's step calls: the version of ref the run
+// recorded when it started (RunStarted, spec 6.4), so uploading a newer
+// minor version does not change a run already under way. An uploaded
+// connector's pinned version is loaded even when a newer one is enabled,
+// or the pinned one was disabled for new runs. A built-in has only the
+// version in this binary, and a version that can no longer run (revoked,
+// uninstalled, unshared) gives way to the newest: repinned reports both.
+func (r *Registry) Pinned(ctx context.Context, tenant, ref, version string) (c *Connector, repinned bool, err error) {
+	lk, err := r.For(ctx, tenant)
+	if err != nil {
+		return nil, false, err
+	}
+	cur, ok := lk.Get(ref)
+	if version == "" || ok && cur.Manifest.Version == version {
+		return cur, false, nil
+	}
+	id, _, _ := strings.Cut(ref, "@")
+	r.mu.RLock()
+	src := r.versions
+	r.mu.RUnlock()
+	if src == nil || !strings.HasPrefix(id, TenantPrefix) && !strings.HasPrefix(id, CataloguePrefix) {
+		return cur, ok, nil
+	}
+	old, err := src(ctx, tenant, id, version)
+	if err != nil {
+		return nil, false, fmt.Errorf("connector %s %s: %w", id, version, err)
+	}
+	if old == nil || old.Ref() != ref {
+		return cur, ok, nil
+	}
+	return old, false, nil
 }
 
 // For is the connectors tenant can use: the built-ins and its own.
@@ -196,7 +302,7 @@ func (v *view) Pins() map[string]string {
 func NewRegistry() *Registry { return &Registry{m: map[string]*Connector{}} }
 
 // Register checks that every manifest action has a handler, then adds the
-// connector. A newer minor version of the same major replaces an older one.
+// connector, replacing one already registered under the same id@major.
 func (r *Registry) Register(c *Connector) error {
 	if err := c.Check(); err != nil {
 		return err
@@ -226,12 +332,12 @@ func (c *Connector) Check() error {
 		}
 	}
 	for name, t := range c.Manifest.Triggers {
-		if t.Remote() && c.Registrars[name] == nil {
+		if t.Registered() && c.Registrars[name] == nil {
 			return fmt.Errorf("connector %s: trigger %q is registered remotely but has no registrar", c.Manifest.ID, name)
 		}
 	}
 	for name := range c.Registrars {
-		if !c.Manifest.Triggers[name].Remote() {
+		if !c.Manifest.Triggers[name].Registered() {
 			return fmt.Errorf("connector %s: registrar %q is not a remote trigger in the manifest", c.Manifest.ID, name)
 		}
 	}
@@ -239,6 +345,9 @@ func (c *Connector) Check() error {
 		if _, ok := c.Manifest.Triggers[name]; !ok {
 			return fmt.Errorf("connector %s: enricher %q is not a trigger in the manifest", c.Manifest.ID, name)
 		}
+	}
+	if o := c.Manifest.Auth.OAuth2; o != nil && (len(o.LinkedFields) > 0) != (c.Link != nil) {
+		return fmt.Errorf("connector %s: auth.oauth2.linked_fields and a Link handler go together", c.Manifest.ID)
 	}
 	return nil
 }

@@ -571,7 +571,7 @@ func (s *Store) ViewLimits(ctx context.Context, tenant uuid.UUID) (LimitsView, e
 			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT
-			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status = 'running'),
+			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status IN ('running', 'waiting')),
 			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status = 'queued'),
 			(SELECT count(*) FROM workflows WHERE tenant_id = $1),
 			(SELECT count(*) FROM secrets WHERE tenant_id = $1 AND name IS NOT NULL),

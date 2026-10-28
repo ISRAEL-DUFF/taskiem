@@ -63,8 +63,9 @@ func (s *Store) ResolveStep(ctx context.Context, ref RunRef, step, resolution st
 			typ, payload = history.StepFailed, history.FailedPayload{Error: history.Error{Kind: "resolved", Message: "operator confirmed it did not happen: " + note, Next: "fail"}}
 		case ResolveRetry:
 			// "not_sent": the operator confirmed nothing reached the provider, so
-			// the worker may send again even for an unsafe write.
-			typ, payload = history.StepFailed, history.FailedPayload{Error: history.Error{Kind: "not_sent", Message: "operator confirmed it did not happen and asked for a retry: " + note, Next: "retry"}}
+			// the worker may send again even for an unsafe write. A person's
+			// re-issue gets a new key (decision 0053).
+			typ, payload = history.StepFailed, history.FailedPayload{Error: history.Error{Kind: "not_sent", Message: "operator confirmed it did not happen and asked for a retry: " + note, Next: "retry", Reissue: true}}
 		default:
 			return fmt.Errorf("resolution must be completed, failed, or retry")
 		}

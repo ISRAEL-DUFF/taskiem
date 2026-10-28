@@ -1,0 +1,114 @@
+<!--atlas
+{
+  "id": "identity-tenancy",
+  "title": "Identity, access and tenancy",
+  "part": "D",
+  "order": 1,
+  "summary": "How people, keys, partners and operators prove who they are, what each may do, and how every request ends up scoped to one tenant: sign-in, sessions, API keys, roles, step-up, sub-tenants, embedding and the operator console.",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "sources": [
+    "engine/access/", "engine/oidc/", "engine/saml/", "engine/webauthn/", "engine/totp/", "engine/embed/", "engine/ops/",
+    "api/auth.go", "api/passkeys.go", "api/password.go", "api/sso.go", "api/scim.go", "api/roles.go", "api/approvals.go",
+    "api/partner.go", "api/partnerpeople.go", "api/embed.go", "api/embedapps.go", "api/ops.go", "api/ops_console.go",
+    "engine/db/db.go", "engine/runtime/approvals.go",
+    "docs/decisions/0015-embedding-tenancy.md", "docs/decisions/0026-bound-step-up-and-cookie-sessions.md", "docs/decisions/0027-operator-console.md",
+    "docs/spec/architecture.md"
+  ]
+}
+-->
+<h2>Four kinds of caller</h2>
+<p>Every request to Taskiem is made by one of four kinds of caller, and each is resolved to a <code>Principal</code> with one tenant and a set of permissions before any handler runs:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Caller</th><th>Proves itself with</th><th>Reaches</th></tr></thead>
+  <tbody>
+    <tr><td>A person</td><td>A session cookie (<code>taskiem_session</code>) after password, passkey or SSO sign-in</td><td><code>/v1</code>, in one of their tenants at a time</td></tr>
+    <tr><td>An API key</td><td><code>Bearer tsk_key_…</code></td><td><code>/v1</code>, in its tenant, optionally one environment. A partner's key also reaches its sub-tenants through <code>/v1/partner</code></td></tr>
+    <tr><td>An end user of a partner's product</td><td><code>Bearer tsk_eut_…</code>, minted by the partner</td><td><code>/v1/embed/{app}</code> only, in one sub-tenant</td></tr>
+    <tr><td>A Taskiem operator</td><td><code>taskiem_ops_session</code>, with a passkey for every write</td><td><code>/v1/ops</code> only, never a tenant's API</td></tr>
+  </tbody>
+</table></div>
+<p>The tokens are all 256 random bits, stored only as their SHA-256, so a copy of the database holds nothing that signs anyone in. A different prefix for each kind means one can never be taken for another: the tenant middleware ignores operator tokens, and the operator console refuses any <code>Authorization</code> header at all (<x-ref path="api/ops.go" symbol="func (s *Server) operatorAuth(next http.Handler) http.Handler {"><code>operatorAuth</code></x-ref>).</p>
+
+<h2 id="identity-tenancy--sign-in">Signing in</h2>
+<p>A person signs in with a password, a passkey, or their company's identity provider over OIDC or SAML. There is no emailed sign-in link; emailed links exist only for invitations, password resets and verifying an address.</p>
+<ul>
+  <li><strong>Password.</strong> Hashed with argon2id (2 passes, 19 MiB). An unknown email is checked against a dummy hash, so timing does not tell whether an account exists. Sign-in takes JSON only, which a cross-site form cannot send, and is limited per IP and per email: a burst of 10, then one try every 6 seconds (<x-ref path="api/auth.go" symbol="if !s.loginLimiter(&quot;login-email:&quot;">limiter</x-ref>).</li>
+  <li><strong>Passkey.</strong> WebAuthn with user verification required, ES256, EdDSA or RS256. A signature counter that does not move forward marks a cloned authenticator and is refused (<x-ref path="engine/webauthn/webauthn.go" symbol="if (ad.signCount != 0 || cred.SignCount != 0) &amp;&amp; ad.signCount &lt;= cred.SignCount {">webauthn</x-ref>).</li>
+  <li><strong>OIDC.</strong> Authorization code with PKCE, RS256, PS256 or ES256 only, with issuer, audience, nonce and expiry checked, and an unverified email refused (<x-ref path="engine/oidc/oidc.go" symbol="func (p *Provider) Verify("><code>oidc.Verify</code></x-ref>).</li>
+  <li><strong>SAML.</strong> Signed assertions, audience, recipient and time checked, and only in answer to a request Taskiem made: a response the identity provider sends unasked is refused (<x-ref path="engine/saml/saml.go" symbol="if scd.InResponseTo != requestID {"><code>saml</code></x-ref>).</li>
+</ul>
+<p>Both SSO flows set a cookie that ties the callback to the browser that started it. <x-ref path="api/sso.go" symbol="func (s *Server) finishSSO("><code>finishSSO</code></x-ref> then requires the email's domain to be one the tenant has proved it owns through DNS, finds or creates the person, and keeps their roles in step with the identity provider's groups. A tenant can enforce SSO, which refuses its members password and passkey sign-in, except owners, so a broken identity provider cannot lock a business out. SCIM provisioning (<code>/scim/v2</code>) takes only an API key holding <code>scim.provision</code>, and can never make an owner.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>A person signed in through SSO is matched to an existing account by email alone. The identity provider's subject is not recorded or checked (the operator console's SSO does pin it). The domain must be the tenant's, proved through DNS, so the reach is limited to people whose mailbox the tenant already controls.</p>
+</div>
+
+<h2 id="identity-tenancy--sessions">Sessions</h2>
+<p><x-ref path="api/passkeys.go" symbol="func (s *Server) createSession(r *http.Request, user, want uuid.UUID, method string) (session, error) {"><code>createSession</code></x-ref> makes a fresh token for every sign-in, so a session cannot be fixed in advance, and records how the person signed in. The browser gets it as an HttpOnly, Secure, SameSite=Lax cookie that lasts 12 hours; a script or the CLI gets it as a bearer token instead, never both. A session is revoked on sign-out, on a password change or reset (all the person's other sessions), when their last role is removed, when SCIM deactivates them, and when a partner suspends the sub-tenant.</p>
+<p>A cookie session must send the <code>X-Taskiem-Request</code> header on anything but GET and HEAD. A cross-site page cannot add a custom header without a CORS preflight, and <code>/v1</code> answers none, so the header is enough to stop cross-site requests (<x-ref path="api/auth.go" symbol="if p.viaCookie &amp;&amp; r.Method != http.MethodGet">CSRF check</x-ref>).</p>
+<p>Roles are read from the database on every request (<x-ref path="api/auth.go" symbol="func (s *Server) loadRoles("><code>loadRoles</code></x-ref>), so removing someone's role takes effect at once even while their session lasts.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec says "Sessions are short-lived with refresh rotation; sensitive actions require recent authentication" (<x-ref path="docs/spec/architecture.md" symbol="Sessions are short-lived with refresh rotation">spec 13.2</x-ref>). A session lasts a fixed 12 hours with no refresh. Recent authentication is asked for only on specific operations, through step-up below.</p>
+</div>
+
+<h2 id="identity-tenancy--api-keys">API keys</h2>
+<p>A key is <code>tsk_key_</code> and 256 random bits, shown once, and lasts 90 days by default and a year at most. It carries a list of permissions and, optionally, one environment; a key limited to an environment cannot reach routes that span them all. Its creator cannot give it a permission they do not hold. Most importantly, a key acts within what its owner may do <em>now</em>: each request takes the key's permissions and keeps only those the owner still holds, and a key whose owner has left stops working (<x-ref path="api/auth.go" symbol="// A key acts within what its owner may do now: it loses whatever">resolve</x-ref>).</p>
+<p>Some things a key can never do: decide an approval, change the tenant's encryption keys, or reach the operator console. Approvals and keys need a person, and step-up.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Keys are "scoped (workspace, environment, permissions)" in spec 13.2, and role assignments "can be scoped to a workspace or a folder" in 13.3. Neither workspaces nor folders exist: a key is scoped to its tenant, an environment and permissions, and a role to the whole tenant. There is no endpoint to rotate a key; rotating is making a new one and revoking the old.</p>
+</div>
+
+<h2 id="identity-tenancy--roles">Roles and permissions</h2>
+<p>There are <strong>34 permissions</strong> (<x-ref path="engine/access/access.go" symbol="var All = []string{WorkflowRead"><code>access.All</code></x-ref>), and eight built-in roles bundle them:</p>
+<x-code path="engine/access/access.go" start="var Roles = map[string][]string{" lines="11" caption="the built-in roles"/>
+<div class="table-wrap"><table>
+  <thead><tr><th>Role</th><th>Can</th><th>Cannot</th></tr></thead>
+  <tbody>
+    <tr><td>owner</td><td>Everything</td><td></td></tr>
+    <tr><td>admin</td><td>Build, publish, run, manage members, roles, secrets, connections, connectors, policies, Git and alerts</td><td>Decide approvals, reveal or erase personal data, billing, encryption keys, partner management</td></tr>
+    <tr><td>builder</td><td>Read and edit workflows and tables, start runs</td><td>Publish</td></tr>
+    <tr><td>operator</td><td>Run, cancel and resolve runs, invoices, schools</td><td>Edit workflows</td></tr>
+    <tr><td>approver</td><td>Read, and decide approvals</td><td>Anything else</td></tr>
+    <tr><td>auditor</td><td>Read workflows, runs, tables, invoices and the audit log</td><td>Change anything, see secrets or members</td></tr>
+    <tr><td>viewer</td><td>Read</td><td>Change anything</td></tr>
+    <tr><td>gate</td><td>The school gate screen only</td><td>Everything else</td></tr>
+  </tbody>
+</table></div>
+<p>Admin is deliberately not a superset. Approving payments and seeing personal data stay with the owner and with people the owner chooses, so an admin who manages members cannot make themselves an approver. The rule that holds this together is <x-ref path="api/roles.go" symbol="func canGrant(ctx context.Context, tx pgx.Tx, p *Principal, roles []string) error {"><code>canGrant</code></x-ref>: nobody can grant a role carrying a permission they do not hold, and granting a role that an approval policy names needs <code>approval.decide</code>. A tenant can also define custom roles from the same permissions (a plan feature), and use business roles, such as <code>credit_officer</code>, that carry no permissions and only qualify someone for the approvals that name them.</p>
+<p>Every <code>/v1</code> request passes <x-ref path="api/auth.go" symbol="func (s *Server) authenticate(next http.Handler) http.Handler {"><code>authenticate</code></x-ref>, then the route's <code>need(permission)</code>, then the handler's transaction, which sets the tenant for row-level security.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec's builder can "publish only to dev" (<x-ref path="docs/spec/architecture.md" symbol="| Builder | Create and edit workflows; publish only to dev |">spec 13.3</x-ref>); the code's builder cannot publish at all. The spec's auditor has "read-only access to everything"; the code's reads workflows, runs, tables, invoices and the audit log, not secrets, connections or members.</p>
+</div>
+
+<h2 id="identity-tenancy--step-up">Step-up</h2>
+<p>Some actions need a second proof, given with the request itself:</p>
+<ul>
+  <li><strong>Approvals</strong>, when the policy rule asks for it: a WhatsApp PIN, an authenticator code (TOTP) or a passkey, in rising strength, and any stronger method satisfies a weaker requirement (<x-ref path="engine/runtime/approvals.go" symbol="func StepUpSatisfies(required, given string) bool {"><code>StepUpSatisfies</code></x-ref>).</li>
+  <li><strong>Changing encryption keys</strong>: always.</li>
+  <li><strong>Changing your own sign-in factors</strong> (adding a passkey, setting up TOTP, changing your password): your passkey or code if you have one, otherwise your password.</li>
+</ul>
+<p>A passkey challenge is bound to one operation and one target, such as approving step <code>pay</code> of one run. The last 16 bytes of the challenge are the hash of that scope, and the server checks it again when the challenge is used, so a passkey signature collected for one approval cannot approve another (<x-ref path="api/passkeys.go" symbol="func (s *Server) issueChallenge("><code>issueChallenge</code></x-ref>, <x-ref path="docs/decisions/0026-bound-step-up-and-cookie-sessions.md">decision 0026</x-ref>). An authenticator code is not bound this way: it is used once and locks after 5 wrong tries in 15 minutes.</p>
+<p>When there is a public URL, anyone holding an administrative permission (members, roles, secrets, policies, Git, connectors, personal data) is held to passkeys: signed in with a password, they can only enrol a passkey, and once they have one, password sign-in is refused.</p>
+<p>Someone created by SSO has no password, passkey or code of their own. For them, changing factors needs a sign-in within the last 10 minutes (<x-ref path="api/passkeys.go" symbol="const recentSignIn = 10 * time.Minute"><code>recentSignIn</code></x-ref>), so a session someone took cannot enrol a passkey that would outlive it. An administrator who signs in through SSO is held to passkeys as one who uses a password is: until they have one, the session can only enrol one.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Both were gaps found while writing this page: <code>proveFactor</code> asked nothing of a person with no factor, and the passkey rule for administrators applied to password sessions only. The spec's "passkeys are the default for admins and approvers" still differs for approvers, whose approvals need a passkey only when the policy says so.</p>
+</div>
+
+<h2 id="identity-tenancy--tenancy">Tenants and partners</h2>
+<p>Every query a request makes runs inside <x-ref path="engine/db/db.go" symbol="func InTenantTx("><code>db.InTenantTx</code></x-ref>, which sets <code>app.tenant_scope</code> for the transaction, and row-level security then shows only that tenant's rows. The <x-page id="data-model">Data model</x-page> page covers the policies and the functions that cross tenants.</p>
+<p>A partner (a bank, a payroll company) has sub-tenants for its own customers, one level deep. A membership never reaches a sub-tenant. A partner reaches one only with a full-tenant API key on the partner API, and each call enters exactly one sub-tenant through <code>taskiem_partner_enter</code>, which checks the parent, records the access in both tenants' audit logs, and narrows the scope to that sub-tenant:</p>
+<x-code path="engine/db/migrations/00045_subtenants.sql" start="CREATE FUNCTION taskiem_partner_enter(p_sub uuid, p_actor_type text, p_actor_id text, p_action text, p_detail jsonb)" end="$$;" lang="sql"/>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>A partner with <code>partner.manage</code> can invite its own staff into a sub-tenant as admin at any time, and can define custom roles there with any permission except the partner ones, including revealing personal data and managing secrets. The person must accept the invitation, both audit logs record it, and the sub-tenant's people can see who is a member. The threat model accepts this, as a partner usually operates the product for its customers, but a sub-tenant has no way to refuse it.</p>
+</div>
+
+<h2 id="identity-tenancy--embedding">Embedding</h2>
+<p>A partner can put Taskiem inside its own product (<x-ref path="docs/decisions/0015-embedding-tenancy.md">decision 0015</x-ref>). It registers an embed app with the origins allowed to frame it, and its server mints a short-lived end-user token, 15 minutes by default and an hour at most (also a database constraint), for one sub-tenant. Such a token can only ever hold a few permissions, whatever the partner asks for:</p>
+<x-code path="engine/embed/embed.go" start="var EndUserCeiling = []string{" lines="1"/>
+<p>Embedded requests use their own routes, <code>/v1/embed/{app}</code>, where <x-ref path="api/embed.go" symbol="func (s *Server) embedAuth(next http.Handler) http.Handler {"><code>embedAuth</code></x-ref> checks that the token belongs to that app and that the request comes from an allowed origin. White label, a custom domain proved through DNS and the partner's own branding, is a capability Taskiem grants per partner.</p>
+
+<h2 id="identity-tenancy--operators">Taskiem's own staff</h2>
+<p>Operators are made only from the command line, never through the API (<x-ref path="docs/decisions/0027-operator-console.md">decision 0027</x-ref>). Their sessions last an hour, at most eight, with a strict-same-site cookie scoped to <code>/v1/ops</code>, and every write needs a passkey bound to that write. Their actions go to a platform audit log of their own, anchored outside the database like a tenant's. What they can do is narrow: review catalogue submissions and storefronts, post status incidents, manage field agents, and read a list of tenants. They cannot act inside a tenant's workflows or see its secrets.</p>
+<p>Every page an operator reads is recorded as <code>ops.view</code> before it is answered, and is not served if it cannot be recorded (<x-ref path="api/ops.go" symbol="func (s *Server) opsRecordViews(next http.Handler) http.Handler {"><code>opsRecordViews</code></x-ref>). Every write is recorded in the same transaction as the change. An operator can suspend or resume any tenant, with a reason and a passkey for that tenant, recorded in the platform's chain and the tenant's.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The tenant list, a storefront's photos, submissions and reports used to be read without a record. Status incidents and the CLI's operator changes were recorded in a second transaction after the change. And only partners could suspend.</p>
+</div>

@@ -3,6 +3,9 @@
   "credentials": {
     "api_key": "isw_test_key"
   },
+  "keys": {
+    "issue_virtual_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
   "input": {
     "customer": {
       "name": "Ebube Eze"
@@ -10,43 +13,33 @@
     "account_name": "GREENFIELD / EBUBE EZE",
     "account": "6f1e"
   },
-  "keys": {
-    "issue_virtual_account": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
-  },
   "exchanges": [
     {
       "name": "issue_one",
       "request": {
         "method": "POST",
-        "path": "/v1/wallets/6f1e/virtual-accounts/batch",
+        "path": "/v1/wallets/6f1e/virtual-account",
         "headers": {
           "Authorization": "Bearer isw_test_key"
         },
         "body": {
-          "accounts": [
-            {
-              "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
-              "account_name": "GREENFIELD / EBUBE EZE"
-            }
-          ]
+          "type": "permanent",
+          "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+          "account_name": "GREENFIELD / EBUBE EZE"
         }
       },
       "response": {
-        "status": 200,
+        "status": 201,
+        "headers": {
+          "X-Request-ID": "req_issue_1"
+        },
         "body": {
-          "wallet_id": "6f1e",
-          "created": 1,
-          "existing": 0,
-          "failed": 0,
-          "accounts": [
-            {
-              "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
-              "status": "created",
-              "account_number": "9901234567",
-              "account_name": "ISPEND / EBUBE EZE",
-              "bank_name": "Wema Bank"
-            }
-          ]
+          "account_number": "9901234567",
+          "bank_name": "Wema Bank",
+          "account_name": "GREENFIELD / EBUBE EZE",
+          "is_permanent": true,
+          "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+          "status": "active"
         }
       }
     }
@@ -54,7 +47,7 @@
   "expect": {
     "account_number": "9901234567",
     "bank_name": "Wema Bank",
-    "account_name": "ISPEND / EBUBE EZE",
+    "account_name": "GREENFIELD / EBUBE EZE",
     "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
   }
 }

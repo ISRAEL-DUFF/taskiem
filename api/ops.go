@@ -96,7 +96,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 	r.Get("/auth/sso/start", s.opsSSOStart)
 	r.Get("/auth/sso/callback", s.opsSSOCallback)
 	r.Group(func(r chi.Router) {
-		r.Use(s.operatorAuth)
+		r.Use(s.operatorAuth, s.opsRecordViews)
 		r.Get("/me", s.opsMe)
 		r.Post("/auth/logout", s.opsLogout)
 		r.Post("/step-up/options", s.opsStepUpOptions)
@@ -123,6 +123,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Post("/agents/{id}/{action}", s.opsAgentAction)
 		r.Get("/tenants", s.opsTenants)
 		r.Get("/tenants/{id}", s.opsTenant)
+		r.Post("/tenants/{id}/{action}", s.opsTenantAction)
 		r.Get("/audit", s.opsAudit)
 		r.Get("/audit/verify", s.opsAuditVerify)
 		r.Get("/audit/export", s.opsAuditExport)
@@ -135,6 +136,32 @@ func (s *Server) opsOn(next http.Handler) http.Handler {
 		if s.Ops == nil {
 			writeErr(w, http.StatusNotFound, "not found")
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// opsRecordViews records every operator read in the platform chain before
+// it is answered (threat model B19: "every sign-in, write and tenant view"),
+// so what staff looked at, a business's photos or a tenant list, is on the
+// record; a view that cannot be recorded is not served. Their own session,
+// and the views that record themselves (a tenant, the chain export), are
+// left to themselves.
+func (s *Server) opsRecordViews(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		self := strings.HasSuffix(path, "/ops/me") || strings.HasSuffix(path, "/ops/audit/export") ||
+			strings.Contains(path, "/ops/tenants/")
+		if r.Method == http.MethodGet && !self {
+			o := operatorFrom(r.Context())
+			detail := map[string]any{}
+			if r.URL.RawQuery != "" {
+				detail["query"] = r.URL.RawQuery
+			}
+			if err := ops.Audit(r.Context(), s.Store.Pool, o.Actor(), "ops.view", path, detail); err != nil {
+				s.fail(w, r, err)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -531,6 +558,8 @@ func (s *Server) opsEnrol(w http.ResponseWriter, r *http.Request) {
 //	                         <slug>
 //	ops.status.open          incident | maintenance
 //	ops.status.update        <incident id>/<status>
+//	ops.tenant.suspend, ops.tenant.resume
+//	                         <tenant id>
 var opsStepUpOps = map[string]bool{
 	"ops.catalogue.review": true, "ops.catalogue.revoke": true,
 	"ops.publisher.verify": true, "ops.publisher.suspend": true, "ops.publisher.reinstate": true,
@@ -538,6 +567,7 @@ var opsStepUpOps = map[string]bool{
 	"ops.storefront.review": true, "ops.storefront.suspend": true, "ops.storefront.restore": true,
 	"ops.report.dismiss": true, "ops.report.action": true, "ops.report.contact": true,
 	"ops.agent.add": true, "ops.agent.suspend": true, "ops.agent.reactivate": true, "ops.agent.retire": true,
+	"ops.tenant.suspend": true, "ops.tenant.resume": true,
 }
 
 func (s *Server) opsStepUpOptions(w http.ResponseWriter, r *http.Request) {

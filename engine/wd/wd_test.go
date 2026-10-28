@@ -94,6 +94,15 @@ func TestInvalid(t *testing.T) {
 		"secret in effect seed": {
 			`{"id":"a","type":"connector","connector":"paystack@1","action":"transfer","effect":{"idempotency_seed":"=secrets.k"}}`,
 			`secrets may only be used`},
+		"shared seed in foreach": {
+			`{"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.employees","steps":[
+			   {"id":"pay_employee","type":"connector","connector":"paystack@1","action":"transfer","effect":{"idempotency_seed":"=trigger.body.payroll_id"}}]}}`,
+			`idempotency_seed inside a foreach must read item or index`},
+		"shared seed in nested foreach": {
+			`{"id":"outer","type":"foreach","config":{"items":"=trigger.body.batches","steps":[
+			   {"id":"b","type":"branch","config":{"paths":[{"name":"p","when":"=true","steps":[
+			     {"id":"pay","type":"connector","connector":"paystack@1","action":"transfer","effect":{"idempotency_seed":"=run.id"}}]}]}}]}}`,
+			`step pay effect: idempotency_seed inside a foreach must read item or index`},
 		"duplicate branch path": {
 			`{"id":"b","type":"branch","config":{"paths":[
 			   {"name":"p","when":"=true","steps":[{"id":"x","type":"wait","config":{"duration":"1s"}}]},
@@ -162,6 +171,20 @@ func TestInvalid(t *testing.T) {
 	}
 }
 
+func TestSeedPerItemAllowed(t *testing.T) {
+	for _, seed := range []string{
+		`=trigger.body.payroll_id + '/' + item.employee_id`,
+		`=trigger.body.payroll_id + '/' + string(index)`,
+	} {
+		ok := doc(`{"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.employees","steps":[
+		  {"id":"pay_employee","type":"connector","connector":"paystack@1","action":"transfer","effect":{"idempotency_seed":"` + seed + `"}}]}},
+		  {"id":"pay_once","type":"connector","connector":"paystack@1","action":"transfer","effect":{"idempotency_seed":"=trigger.body.payroll_id"}}`)
+		if p := Validate(ok); len(p) > 0 {
+			t.Errorf("seed %s: unexpected problems: %v", seed, p)
+		}
+	}
+}
+
 func TestTransitiveAndEnclosingReferencesAllowed(t *testing.T) {
 	ok := doc(`{"id":"a","type":"transform","config":{"output":1}},
 	  {"id":"b","type":"transform","needs":["a"],"config":{"output":"=steps.a.output"}},
@@ -181,5 +204,17 @@ func TestSecretInTriggerRejected(t *testing.T) {
 	probs := Validate(d)
 	if len(probs) == 0 || !strings.Contains(probs[0].Message, "secrets") {
 		t.Errorf("got %v", probs)
+	}
+}
+
+// A workflow keeps its runs at least a day: a retention of minutes would
+// purge a run, and the approvals in it, almost as soon as it ends.
+func TestRetentionIsAtLeastADay(t *testing.T) {
+	for r, ok := range map[string]bool{"1d": true, "24h": true, "90d": true, "23h": false, "10m": false, "1s": false} {
+		src := strings.Replace(string(doc(`{"id":"a","type":"transform","config":{"output":1}}`)), `"steps"`, `"settings":{"retention":"`+r+`"},"steps"`, 1)
+		probs := Validate([]byte(src))
+		if ok != (len(probs) == 0) || !ok && !strings.Contains(probs[0].Message, "shorter than a day") {
+			t.Errorf("retention %s: %v", r, probs)
+		}
 	}
 }

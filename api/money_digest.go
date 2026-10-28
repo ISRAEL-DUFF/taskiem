@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -23,9 +26,11 @@ const moneyDailyStale = 24 * time.Hour
 // sendMoneyDailyItem sends a queued daily money summary
 // (moneydigest.OutboxDaily, docs/money-reports.md) to its person, its
 // figures read from the money log now. Outside WhatsApp's 24-hour window
-// it goes as the alert template, in the one line the template has.
-// Dropped when the person turned it off or may no longer read invoices
-// (moneydigest.Gets), or it waited too long.
+// it goes as the daily summary template with its Open button once Meta
+// approved it in the number's account, else as the alert template, in
+// the one line that template has. Dropped when the person turned it off
+// or may no longer read invoices (moneydigest.Gets), or it waited too
+// long.
 func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem) error {
 	if it.Digest == nil || it.User == uuid.Nil {
 		return fmt.Errorf("%w: incomplete", whatsapp.ErrNothingToSend)
@@ -33,8 +38,10 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	var business string
 	var sum moneyreport.Summary
 	var school *moneydigest.SchoolSummary
+	var riderDays []dispatch.RiderDay
+	var period time.Time
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
-		var period, sentAt time.Time
+		var sentAt time.Time
 		if err := tx.QueryRow(ctx, `SELECT period, sent_at FROM money_digests WHERE id = $1 AND kind = 'daily'`, *it.Digest).Scan(&period, &sentAt); err != nil {
 			return err
 		}
@@ -55,7 +62,12 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 		if sum, err = moneyreport.Summarise(ctx, tx, it.Tenant, from, to); err != nil {
 			return err
 		}
-		school, err = moneydigest.SchoolSummarise(ctx, tx, s.schoolsSvc(), it.Tenant, from, to)
+		if school, err = moneydigest.SchoolSummarise(ctx, tx, s.schoolsSvc(), it.Tenant, from, to); err != nil {
+			return err
+		}
+		if s.Dispatch != nil {
+			riderDays, err = s.Dispatch.RiderDaysTx(ctx, tx, it.Tenant, from, to)
+		}
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -73,7 +85,15 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	if s.PublicURL != "" {
 		link = s.PublicURL + "/money"
 	}
-	head := moneydigest.DailyHead(l, sum)
+	full := moneydigest.DailyHead(l, sum)
+	if line := moneydigest.SchoolLine(l, school); line != "" {
+		full += " " + line
+	}
+	// What the business's Taskiem wallet holds, when it has one (W4).
+	if bal, ok := s.receiveBalance(ctx, it.Tenant); ok {
+		full += " " + tr(l, "wa.receive.balance", "amount", invoicing.Naira(bal))
+	}
+	head := full
 	if r := []rune(head); len(r) > 200 {
 		head = string(r[:200]) + "…"
 	}
@@ -81,13 +101,25 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	if tplLink == "" {
 		tplLink = "-"
 	}
-	tpl := whatsapp.TplAlert
-	m := whatsapp.Message{Text: ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, link), Template: &tpl,
-		Vars: map[string]string{"tenant": business, "title": head, "link": tplLink}, Tenant: it.Tenant}
-	_, err = ch.Send(ctx, addr, m)
+	day := time.Date(period.Year(), period.Month(), period.Day(), 12, 0, 0, 0, moneyreport.Lagos).Format("2 Jan 2006")
+	text := ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, "")
+	// Each rider's day (dispatch D4), before the link.
+	if len(riderDays) > 0 {
+		text += "\n\n" + tr(l, "money.daily.riders")
+		for _, x := range riderDays {
+			text += "\n" + dispatch.RiderLine(l, x)
+		}
+	}
+	if link != "" {
+		text += "\n\n" + tr(l, "money.daily.link", "link", link)
+	}
+	// With the summary template not approved yet, the alert template
+	// carries the first line, as before it existed.
+	err = sendOwnTemplate(ctx, ch, addr, text, it.Tenant, whatsapp.TplDailySummary, map[string]string{"tenant": business, "day": day, "summary": strings.TrimPrefix(full, "Yesterday: ")},
+		map[string]string{"tenant": business, "title": head, "link": tplLink})
 	switch {
-	case err == nil:
-		return nil
+	case err == nil, errors.Is(err, whatsapp.ErrFellBack):
+		return err
 	case errors.Is(err, telegram.ErrBlocked):
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}

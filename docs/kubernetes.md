@@ -150,7 +150,7 @@ Install the pool first, then route tenants with `taskiem pools assign <name> --t
 
 The scheduler mounts the claim at `/var/lib/taskiem`:
 
-- `archive/` holds runs past retention.
+- `archive/` holds runs past retention, unless `TASKIEM_ARCHIVE_S3_BUCKET` sends them to a bucket ([operations](operations.md)). Use a bucket when the scheduler runs more than one replica or the volume is not backed up.
 - `anchors/` holds signed audit-chain heads.
 
 Anchors are only worth something as a copy outside the database. Use a storage class with write-once (object-lock) semantics where you can, and back the volume up.

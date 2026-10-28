@@ -1,0 +1,48 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002/messages/view",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "limit": "200",
+   "sortorder": "false"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": [
+    {
+     "messageId": "1761480000000100001",
+     "folderId": "2560636000000008014",
+     "threadId": "1761480000000100001",
+     "subject": "Order for 40 cupcakes",
+     "fromAddress": "Ada &lt;ada@example.com&gt;",
+     "toAddress": "orders@adacakes.ng",
+     "summary": "Hello, I would like 40 cupcakes for Saturday",
+     "receivedTime": "1761480000000",
+     "status": "0",
+     "hasAttachment": "0"
+    },
+    {
+     "messageId": "1761400000000100009",
+     "folderId": "2560636000000008014",
+     "threadId": "1761400000000100009",
+     "subject": "Invoice from Lagos Paper",
+     "fromAddress": "sales@paper.example",
+     "toAddress": "orders@adacakes.ng",
+     "summary": "Please find attached",
+     "receivedTime": "1761400000000",
+     "status": "1",
+     "hasAttachment": "1"
+    }
+   ]
+  }
+ }
+}

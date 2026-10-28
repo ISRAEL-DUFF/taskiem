@@ -90,6 +90,7 @@ type decider struct {
 	policies              map[string]snapshot
 	terminal              bool
 	runTimeout            bool
+	cancel                *history.CancelPayload // a person cancelled the run, reversing it
 	compStarted, compDone bool
 	out                   []NewEvent
 
@@ -147,6 +148,13 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 		return nil
 	case history.RunCompleted, history.RunFailed, history.RunCancelled:
 		d.terminal = true
+		return nil
+	case history.CancelRequested:
+		var p history.CancelPayload
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return err
+		}
+		d.cancel = &p
 		return nil
 	case history.CompensationStarted:
 		d.compStarted = true
@@ -307,6 +315,10 @@ type iteration struct {
 
 func (d *decider) run() {
 	d.memo = map[string]status{}
+	if d.cancel != nil {
+		d.cancelRun()
+		return
+	}
 	top := scope{steps: d.def.Steps}
 	done, failedTop, why := d.scope(top, !d.runTimeout)
 	switch {
@@ -964,6 +976,13 @@ func (d *decider) parallelSettle(sc scope, s *wd.Step, inst, winner string) stat
 	return completed
 }
 
+// waitsForChild reports whether a subflow step that waits for its child
+// run has not yet heard how the child ended.
+func waitsForChild(f *facts) bool {
+	p, ok := f.scheduled[1]
+	return ok && p.Kind == history.KindSubflow && p.Subflow != nil && p.Subflow.Wait && f.signal == nil && !f.completed && f.finalFailure == nil
+}
+
 // cancelledPending reports whether a cancelled step may still take effect:
 // a write whose intent was recorded and whose outcome is not yet known, or
 // one parked for an operator.
@@ -1093,6 +1112,43 @@ func (d *decider) compensate(why *history.Error) {
 	if why == nil {
 		why = &history.Error{Kind: "failed", Message: "run failed", Next: "fail"}
 	}
+	if _, done := d.reverse(); done {
+		d.emit(history.RunFailed, "", 0, history.RunFailedPayload{Error: *why})
+	}
+}
+
+// cancelRun ends a run a person cancelled with its effects reversed: it
+// withdraws the steps that have not finished, waits for writes already
+// under way (they may complete, and are then reversed too) and for the
+// child runs it was waiting on (the runtime cancels them, reversing them
+// too, when their subflow step is withdrawn), runs the compensations as a
+// failure does, then cancels the run.
+func (d *decider) cancelRun() {
+	waiting := false
+	for _, inst := range append([]string(nil), d.order...) {
+		f := d.facts[inst]
+		if strings.HasPrefix(inst, history.CompensationPrefix) || f.completed || f.skipped || f.finalFailure != nil {
+			continue
+		}
+		_, id := history.SplitInstance(inst)
+		if s := d.def.Step(id); !f.cancelled && s != nil && d.begun(s, f) {
+			d.emit(history.StepCancelled, inst, 0, map[string]any{"reason": "run cancelled by " + d.cancel.By})
+		}
+		if cancelledPending(f) || waitsForChild(f) {
+			waiting = true
+		}
+	}
+	if waiting {
+		return
+	}
+	if todo, done := d.reverse(); done {
+		d.emit(history.RunCancelled, "", 0, history.CancelPayload{By: d.cancel.By, Reversed: todo})
+	}
+}
+
+// reverse runs the compensations of completed steps, newest first, and
+// reports them and whether they have all completed.
+func (d *decider) reverse() ([]string, bool) {
 	var todo []string
 	for _, inst := range d.order {
 		if strings.HasPrefix(inst, history.CompensationPrefix) {
@@ -1110,11 +1166,11 @@ func (d *decider) compensate(why *history.Error) {
 			d.emit(history.CompensationStarted, "", 0, map[string]any{"steps": todo})
 		}
 		if !d.compensations(todo) {
-			return
+			return todo, false
 		}
 		d.emit(history.CompensationCompleted, "", 0, map[string]any{})
 	}
-	d.emit(history.RunFailed, "", 0, history.RunFailedPayload{Error: *why})
+	return todo, true
 }
 
 // compensations runs the compensating actions for insts, one at a time in

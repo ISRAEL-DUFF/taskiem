@@ -1,0 +1,76 @@
+{
+  "schema": "wd-test/v1",
+  "template": "mailchimp-unsubscribes-to-customers",
+  "params": {
+    "audience_id": "a6b5da1054"
+  },
+  "cases": [
+    {
+      "name": "an unsubscribe stops marketing",
+      "trigger": {
+        "event": "unsubscribe",
+        "body": {
+          "type": "unsubscribe",
+          "fired_at": "2026-10-26 12:00:05",
+          "data[email]": "ada@example.com",
+          "data[list_id]": "a6b5da1054"
+        }
+      },
+      "mocks": {
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "mark": {
+            "filters": [
+              {
+                "column": "email",
+                "op": "ilike",
+                "value": "ada@example.com"
+              }
+            ],
+            "set": {
+              "marketing_opt_in": false,
+              "email_status": "unsubscribed"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a cleaned address is marked bounced",
+      "trigger": {
+        "event": "cleaned",
+        "body": {
+          "type": "cleaned",
+          "fired_at": "2026-10-26 12:00:05",
+          "data[email]": "ada@example.com",
+          "data[list_id]": "a6b5da1054"
+        }
+      },
+      "mocks": {
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "mark": {
+            "set": {
+              "marketing_opt_in": false,
+              "email_status": "bounced"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

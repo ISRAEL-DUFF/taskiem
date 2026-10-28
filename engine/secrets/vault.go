@@ -23,6 +23,14 @@ var ErrNotFound = errors.New("not found")
 // ErrAmbiguous means several connections match and none was named.
 var ErrAmbiguous = errors.New("ambiguous connection")
 
+// ErrPlatformClient: a connection under Taskiem's own client (decision
+// 0052) whose client this Taskiem has no credentials for in its mode.
+var ErrPlatformClient = errors.New("platform client not configured")
+
+// ErrPlatformConnection: a connection under Taskiem's own client, whose
+// credentials only Taskiem writes.
+var ErrPlatformConnection = errors.New("platform connection")
+
 // Vault stores secrets and connection credentials.
 type Vault struct {
 	Pool    *pgxpool.Pool
@@ -42,6 +50,9 @@ type Vault struct {
 	DestroyAfter time.Duration
 	// Now is the clock (tests).
 	Now func() time.Time
+	// Platform is Taskiem's own provider clients (decision 0052): what a
+	// connection made under one is handed for its mode.
+	Platform PlatformClients
 
 	keks      sync.Map // "tenant/version" -> cachedKey
 	pseudo    sync.Map // tenant -> cachedKey

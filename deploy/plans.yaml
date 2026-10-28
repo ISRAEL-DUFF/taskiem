@@ -12,6 +12,11 @@
 # `taskiem tenants limits` (0: no limit; a key left out takes the platform
 # default, TASKIEM_DEFAULT_*). Operator overrides (taskiem tenants limits
 # --set) still apply on top of a tenant's plan.
+#
+# receive_money (decision 0052) is on every plan so a business with no
+# payments account receives money from day one; which plans keep it, and
+# any margin over iswallet's fee, are the founder's to set (spec
+# iswallet-account-numbers §6). A plan without it says so on the Start page.
 placeholder_prices: false
 currency: NGN
 vat_percent: 7.5          # Nigerian VAT, shown separately on invoices (finance to confirm, B1)
@@ -60,7 +65,7 @@ plans:
       storefront_bookings_monthly: 300
       sms_monthly: 100
       embed_sites: 1
-    features: {}
+    features: {receive_money: true}
 
   - id: shop_plus
     name: Shop Plus
@@ -90,7 +95,7 @@ plans:
       storefront_bookings_monthly: 1500
       sms_monthly: 500
       embed_sites: 3
-    features: {storefront_pay_on_order: true}
+    features: {receive_money: true, storefront_pay_on_order: true}
   - id: starter
     name: Starter Trader
     tier: starter
@@ -116,7 +121,7 @@ plans:
       max_data_tables: 10
       storefront_items: 2000
       sms_monthly: 1000
-    features: {storefront_pay_on_order: true, ai: true}
+    features: {receive_money: true, storefront_pay_on_order: true, ai: true}
 
   - id: growth
     name: Growing Business
@@ -143,7 +148,7 @@ plans:
       max_data_tables: 50
       storefront_items: 2000
       sms_monthly: 1000
-    features: {storefront_pay_on_order: true, ai: true, git: true}
+    features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true}
 
   - id: business
     name: Business
@@ -170,7 +175,7 @@ plans:
       max_data_tables: 0
       storefront_items: 2000
       sms_monthly: 1000
-    features: {storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}
+    features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50
       subtenant_runs_per_month: 200000
@@ -186,13 +191,17 @@ plans:
     limits:
       max_running_runs: 0
       worker_concurrency: 0
+      ingest_rate: 250
+      ingest_burst: 1250
+      ingest_ceiling: 500
+      ingest_ceiling_burst: 2000
       max_queued_runs: 100000
       max_workflows: 0
       max_retention_days: 2555   # up to 7 years (spec 16.1)
       ai_monthly_tokens: 50000000
       whatsapp_templates_monthly: 100000
       container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
-    features: {storefront_pay_on_order: true, ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
+    features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
     partner:
       max_subtenants: 0
     overage:

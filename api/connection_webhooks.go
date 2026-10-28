@@ -87,7 +87,7 @@ func moneyWebhooks(c *connector.Connector, base string, tenant uuid.UUID, connec
 	var out []moneyWebhook
 	for _, name := range triggers {
 		spec, ok := c.Manifest.Triggers[name]
-		if !ok || spec.Type != "webhook" || spec.Remote() {
+		if !ok || spec.Type != "webhook" || spec.Registered() {
 			continue
 		}
 		slices.Sort(events[name])

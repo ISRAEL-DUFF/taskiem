@@ -27,6 +27,12 @@ link preview, and a form's hidden fields. Each theme draws the rest. */}}
 theme. Forms only: the page refreshes itself, with no script. */}}
 {{define "invoicepay"}}<section class="inv-pay" aria-labelledby="inv-pay-h">
 <h2 id="inv-pay-h">Pay this invoice</h2>
+{{with .Own}}<div class="inv-acct">
+<p class="hint">Transfer {{.Amount}} to your own account number</p>
+<p class="inv-acct-no">{{.Number}}</p>
+{{with .Bank}}<p>{{.}}</p>{{end}}
+<p class="hint">It is yours to keep: money paid into it is counted to your invoices.</p>
+</div>{{end}}
 {{with .Account}}<div class="inv-acct" role="status">
 <p class="hint">Transfer {{.Amount}} to</p>
 <p class="inv-acct-no">{{.Number}}</p>
@@ -44,4 +50,31 @@ theme. Forms only: the page refreshes itself, with no script. */}}
 {{with .TransferLabel}}<button class="btn btn-primary btn-brand btn-block" type="submit" name="kind" value="transfer">{{.}}</button>{{end}}
 {{if .CardURL}}<a class="btn btn-block" href="{{.CardURL}}" rel="noopener noreferrer">{{.CardLabel}}</a>{{else}}{{with .CardLabel}}<button class="btn btn-block" type="submit" name="kind" value="link">{{.}}</button>{{end}}{{end}}
 </form>{{else}}{{if .CardURL}}<a class="btn btn-block" href="{{.CardURL}}" rel="noopener noreferrer">{{.CardLabel}}</a>{{end}}{{end}}
+</section>{{end}}
+
+{{/* Paying an order or booking by bank transfer from its status page
+(N3); the same in every theme. A form only: the page refreshes itself. */}}
+{{define "orderrate"}}<section aria-labelledby="sf-rate-h">
+{{if .Given}}<p class="notice" role="status" id="sf-rate-h">Thank you. You rated the delivery {{.Given}} of 5.</p>
+{{else}}<h2 id="sf-rate-h">How was the delivery?</h2>
+<form method="post" action="{{.Action}}" class="rate-row hero-actions">
+{{range .Stars}}<button class="btn" type="submit" name="rating" value="{{.}}" aria-label="{{.}} of 5">{{.}}</button>
+{{end}}</form>
+<p class="hint">1 is poor, 5 is very good. Only {{.Business}} sees it.</p>{{end}}
+</section>{{end}}
+{{define "ordertransfer"}}<section class="inv-pay" aria-labelledby="sf-pay-h">
+<h2 id="sf-pay-h">Pay by bank transfer</h2>
+{{with .Account}}<div class="inv-acct" role="status">
+<p class="hint">Transfer {{.Amount}} to</p>
+<p class="inv-acct-no">{{.Number}}</p>
+<p>{{.Bank}}{{with .Name}} · {{.}}{{end}}</p>
+<p><strong>{{.Until}}</strong> · {{.Left}}</p>
+{{with .Wrong}}<p class="hint">{{.}}</p>{{end}}{{with .Late}}<p class="hint">{{.}}</p>{{end}}
+<p class="hint">This page updates when your payment arrives.</p>
+</div>{{end}}
+{{with .Waiting}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with .Note}}<p class="hint">{{.}}</p>{{end}}
+{{with .Label}}<form method="post" action="{{$.Action}}" class="fields">
+<button class="btn btn-block{{if $.Primary}} btn-primary btn-brand{{end}}" type="submit">{{.}}</button>
+</form>{{end}}
 </section>{{end}}

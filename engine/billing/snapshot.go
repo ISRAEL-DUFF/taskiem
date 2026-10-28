@@ -13,18 +13,27 @@ import (
 // Snapshot is a tenant's usage on one UTC day against its limits (spec
 // 16.3). Month-to-date counters (WhatsApp, AI) are as of the snapshot.
 type Snapshot struct {
-	Day               string         `json:"day"`
-	Plan              string         `json:"plan,omitempty"`
-	RunsStarted       int64          `json:"runs_started"`
-	Steps             int64          `json:"steps"`
-	ActiveWorkflows   int64          `json:"active_workflows"`
-	RunningRuns       int64          `json:"running_runs"`
-	StoredRuns        int64          `json:"stored_runs"`
-	WhatsAppTemplates int64          `json:"whatsapp_templates"`
-	WhatsAppOverage   int64          `json:"whatsapp_overage"`
-	AITokens          int64          `json:"ai_tokens"`
-	Limits            map[string]any `json:"limits,omitempty"`
+	Day               string `json:"day"`
+	Plan              string `json:"plan,omitempty"`
+	RunsStarted       int64  `json:"runs_started"`
+	Steps             int64  `json:"steps"`
+	ActiveWorkflows   int64  `json:"active_workflows"`
+	RunningRuns       int64  `json:"running_runs"`
+	StoredRuns        int64  `json:"stored_runs"`
+	WhatsAppTemplates int64  `json:"whatsapp_templates"`
+	WhatsAppOverage   int64  `json:"whatsapp_overage"`
+	AITokens          int64  `json:"ai_tokens"`
+	// Credits and payouts that day on the business's Taskiem wallet
+	// (decision 0052), counted and summed from its money log.
+	RailCredits    int64          `json:"rail_credits"`
+	RailCreditKobo int64          `json:"rail_credit_kobo"`
+	RailPayouts    int64          `json:"rail_payouts"`
+	RailPayoutKobo int64          `json:"rail_payout_kobo"`
+	Limits         map[string]any `json:"limits,omitempty"`
 }
+
+// RailChannel is the money log's channel for a business's Taskiem wallet.
+const RailChannel = "iswallet/taskiem"
 
 // SnapshotAll snapshots every live tenant for today, and for yesterday on
 // the first run of a day (so each day's row ends complete).
@@ -74,7 +83,7 @@ func (s *Service) SnapshotTenant(ctx context.Context, tenant uuid.UUID, day time
 			  WHERE r.tenant_id = $1 AND r.started_at < $3 AND (r.ended_at IS NULL OR r.ended_at >= $2)
 			    AND e.type = 'StepScheduled' AND e.recorded_at >= $2 AND e.recorded_at < $3),
 			(SELECT count(DISTINCT workflow_id) FROM deployments WHERE tenant_id = $1),
-			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status = 'running'),
+			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status IN ('running', 'waiting')),
 			(SELECT count(*) FROM runs WHERE tenant_id = $1),
 			COALESCE((SELECT sum(sent) FROM whatsapp_template_usage WHERE tenant_id = $1 AND month = $4::date), 0)::bigint,
 			COALESCE((SELECT sum(over_allowance) FROM whatsapp_template_usage WHERE tenant_id = $1 AND month = $4::date), 0)::bigint,
@@ -84,14 +93,27 @@ func (s *Service) SnapshotTenant(ctx context.Context, tenant uuid.UUID, day time
 		if err != nil {
 			return err
 		}
+		// The rail's movements that day, at their latest status, not failed.
+		err = tx.QueryRow(ctx, `SELECT
+			count(*) FILTER (WHERE direction = 'in'), COALESCE(sum(amount_kobo) FILTER (WHERE direction = 'in'), 0)::bigint,
+			count(*) FILTER (WHERE kind = 'payout'), COALESCE(sum(amount_kobo) FILTER (WHERE kind = 'payout'), 0)::bigint
+			FROM money_entries WHERE tenant_id = $1 AND channel = $4 AND corrects IS NULL AND status IN ('settled', 'pending')
+			  AND (kind IN ('payment', 'account_credit') AND direction = 'in' OR kind = 'payout')
+			  AND COALESCE(occurred_at, recorded_at) >= $2 AND COALESCE(occurred_at, recorded_at) < $3`,
+			tenant, day, next, RailChannel).Scan(&sn.RailCredits, &sn.RailCreditKobo, &sn.RailPayouts, &sn.RailPayoutKobo)
+		if err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `INSERT INTO usage_snapshots (tenant_id, day, plan_id, runs_started, steps, active_workflows, running_runs, stored_runs,
-			whatsapp_templates, whatsapp_overage, ai_tokens, limits, taken_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+			whatsapp_templates, whatsapp_overage, ai_tokens, limits, taken_at, rail_credits, rail_credit_kobo, rail_payouts, rail_payout_kobo)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), $13, $14, $15, $16)
 			ON CONFLICT (tenant_id, day) DO UPDATE SET plan_id = EXCLUDED.plan_id, runs_started = EXCLUDED.runs_started, steps = EXCLUDED.steps,
 			active_workflows = EXCLUDED.active_workflows, running_runs = EXCLUDED.running_runs, stored_runs = EXCLUDED.stored_runs,
 			whatsapp_templates = EXCLUDED.whatsapp_templates, whatsapp_overage = EXCLUDED.whatsapp_overage, ai_tokens = EXCLUDED.ai_tokens,
-			limits = EXCLUDED.limits, taken_at = now()`,
-			tenant, day, plan, sn.RunsStarted, sn.Steps, sn.ActiveWorkflows, sn.RunningRuns, sn.StoredRuns, sn.WhatsAppTemplates, sn.WhatsAppOverage, sn.AITokens, limits)
+			limits = EXCLUDED.limits, taken_at = now(), rail_credits = EXCLUDED.rail_credits, rail_credit_kobo = EXCLUDED.rail_credit_kobo,
+			rail_payouts = EXCLUDED.rail_payouts, rail_payout_kobo = EXCLUDED.rail_payout_kobo`,
+			tenant, day, plan, sn.RunsStarted, sn.Steps, sn.ActiveWorkflows, sn.RunningRuns, sn.StoredRuns, sn.WhatsAppTemplates, sn.WhatsAppOverage, sn.AITokens, limits,
+			sn.RailCredits, sn.RailCreditKobo, sn.RailPayouts, sn.RailPayoutKobo)
 		return err
 	})
 }
@@ -99,7 +121,7 @@ func (s *Service) SnapshotTenant(ctx context.Context, tenant uuid.UUID, day time
 // Snapshots reads a tenant's last days of snapshots, oldest first.
 func Snapshots(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) ([]Snapshot, error) {
 	rows, err := tx.Query(ctx, `SELECT day::text, COALESCE(plan_id, ''), runs_started, steps, active_workflows, running_runs, stored_runs,
-		whatsapp_templates, whatsapp_overage, ai_tokens, limits FROM (
+		whatsapp_templates, whatsapp_overage, ai_tokens, limits, rail_credits, rail_credit_kobo, rail_payouts, rail_payout_kobo FROM (
 		  SELECT * FROM usage_snapshots WHERE tenant_id = $1 ORDER BY day DESC LIMIT $2) s ORDER BY day`, tenant, days)
 	if err != nil {
 		return nil, err
@@ -108,7 +130,7 @@ func Snapshots(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, days int) ([]Sn
 		var sn Snapshot
 		var limits []byte
 		if err := r.Scan(&sn.Day, &sn.Plan, &sn.RunsStarted, &sn.Steps, &sn.ActiveWorkflows, &sn.RunningRuns, &sn.StoredRuns,
-			&sn.WhatsAppTemplates, &sn.WhatsAppOverage, &sn.AITokens, &limits); err != nil {
+			&sn.WhatsAppTemplates, &sn.WhatsAppOverage, &sn.AITokens, &limits, &sn.RailCredits, &sn.RailCreditKobo, &sn.RailPayouts, &sn.RailPayoutKobo); err != nil {
 			return sn, err
 		}
 		return sn, json.Unmarshal(limits, &sn.Limits)

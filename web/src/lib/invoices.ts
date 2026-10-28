@@ -59,6 +59,8 @@ export interface InvoicePayment {
   undoes?: string;
   undone_by?: string;
   created_at: string;
+  /** The rail's fee on the whole transfer this payment was, when reported. */
+  fee_kobo?: number;
 }
 
 /** One invoice (CustomerInvoice). */

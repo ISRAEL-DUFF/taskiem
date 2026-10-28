@@ -1,0 +1,78 @@
+{{define "content"}}
+{{- with .Connector}}
+<section class="page-hero">
+  <div class="wrap head">
+    <p class="eyebrow">{{.Kind}}</p>
+    <h1>{{.Name}}</h1>
+    <p class="lead">{{.Description}}</p>
+    <p><a class="more" href="{{$.Base}}integrations">Everything Taskiem works with {{template "i-arrow"}}</a></p>
+  </div>
+</section>
+
+<section class="section tight" id="connect">
+  <div class="wrap grid g2">
+    <article class="card pine">
+      {{template "i-plug"}}
+      <h3>Connecting it</h3>
+      {{- if .Built}}
+      <p>It is part of Taskiem: there is nothing to connect.</p>
+      {{- else if .OneClick}}
+      <p>One click: sign in to {{.Name}} and allow Taskiem. There is nothing to copy.</p>
+      {{- else}}
+      <p>Paste the key from your {{.Name}} account once, when a workflow first needs it. Taskiem keeps it sealed and never shows it again.</p>
+      {{- end}}
+      {{- if .DocURL}}
+      <p><a class="more" href="{{.DocURL}}">How it works, in the docs {{template "i-arrow"}}</a></p>
+      {{- end}}
+    </article>
+    {{- if or .Does .Starts}}
+    <div class="grid">
+      {{- if .Does}}
+      <article class="card" id="does">
+        <h3>What your workflows can do</h3>
+        <ul class="ticks">
+        {{- range .Does}}
+          <li>{{template "i-tick"}}<span>{{.}}</span></li>
+        {{- end}}
+        </ul>
+      </article>
+      {{- end}}
+      {{- if .Starts}}
+      <article class="card" id="starts">
+        <h3>What can start a workflow</h3>
+        <ul class="ticks">
+        {{- range .Starts}}
+          <li>{{template "i-tick"}}<span>{{.}}</span></li>
+        {{- end}}
+        </ul>
+      </article>
+      {{- end}}
+    </div>
+    {{- end}}
+  </div>
+</section>
+
+{{- if .Templates}}
+<section class="section tight" id="templates">
+  <div class="wrap stack">
+    <div class="group-head"><h2 class="h3">Ready-made workflows</h2><span class="count">{{len .Templates}}</span></div>
+    <div class="grid g3">
+    {{- range .Templates}}
+      <article class="card">
+        <h3>{{.Title}}</h3>
+        <p>{{.Summary}}</p>
+        {{- if .Uses}}
+        <p class="uses">Uses {{join .Uses}}</p>
+        {{- end}}
+        {{- if .SetupURL}}
+        <p><a class="more" href="{{.SetupURL}}">Set it up {{template "i-arrow"}}</a></p>
+        {{- end}}
+      </article>
+    {{- end}}
+    </div>
+  </div>
+</section>
+{{- end}}
+{{- end}}
+{{template "closing" .}}
+{{end}}

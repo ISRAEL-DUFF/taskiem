@@ -8,10 +8,11 @@ A leak is money a business may be losing: money that came in and belongs to noth
 | --- | --- | --- |
 | **Money in with nothing to match** | A payment, a credit to an account or a statement line that has been in the log for a day and counts towards no invoice | The payment |
 | **Invoice overdue** | An invoice past its due date and not paid in full | What is still due |
-| **Duplicate** | The same reference and amount on one connection twice, as two kinds of event (one movement the payment service reported twice) | The extra copies |
+| **Duplicate** | The same reference and amount on one connection twice, as two kinds of event (one movement the payment service reported twice). A payment into a customer's own account number is known by the payment service's id for that payment, not the account's reference, so two equal fee payments into one student's account are two payments | The extra copies |
 | **Overpaid** | An invoice paid more than it asked for | The excess |
 | **Paid after it was voided** | Money paid into an account number Taskiem gave for an invoice that was then voided | The payment |
 | **Fee above the agreed rate** | A payment whose fee is above the rate the owner set for its connection | The difference |
+| **Cash a rider owes** | Cash a rider took at the door and has not handed in, above the business's limit ([dispatch](dispatch.md#paying-at-the-door)) | What they owe |
 
 POS sales and cash are takings, not money owed, so they are never "money in with nothing to match". Statement lines are not checked for duplicates: the same line uploaded twice is kept once, and lines without a reference (bank charges) repeat by nature.
 

@@ -244,7 +244,7 @@ func TestContainerStepCancelled(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("container did not start")
 	}
-	if err := e.Store.CancelRun(ctx, ref, "u1"); err != nil {
+	if err := e.Store.CancelRun(ctx, ref, "u1", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-stopped; err == nil || err.Error() == "not cancelled" {

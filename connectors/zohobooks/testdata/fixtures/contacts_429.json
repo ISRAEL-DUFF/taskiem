@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/contacts",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "email": "ada@example.com"
+  }
+ },
+ "response": {
+  "status": 429,
+  "body": {
+   "code": 44,
+   "message": "You have made too many requests. Please try again after some time."
+  }
+ }
+}

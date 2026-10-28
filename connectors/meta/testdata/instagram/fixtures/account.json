@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/104123456789012",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "fields": "id,instagram_business_account{id,username}"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "104123456789012",
+   "instagram_business_account": {
+    "id": "17841400000000001",
+    "username": "ada.cakes"
+   }
+  }
+ }
+}

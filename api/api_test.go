@@ -171,6 +171,31 @@ func TestAuthAndCSRF(t *testing.T) {
 	}
 }
 
+// A seed shared by every item of a foreach gives every payment one key:
+// saving lists the problem and publishing is refused until the seed reads
+// the item.
+func TestSharedSeedInForeachRefused(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	payroll := func(seed string) json.RawMessage {
+		return json.RawMessage(`{"schema":"wd/v1","id":"wf_payroll","version":1,"name":"payroll","trigger":{"type":"manual"},"steps":[
+		  {"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.employees","steps":[
+		    {"id":"pay_employee","type":"http","config":{"method":"POST","url":"https://pay.example/transfer","class":"idempotent_write","idempotency_header":"Idempotency-Key"},
+		     "effect":{"idempotency_seed":"` + seed + `"}}]}}]}`)
+	}
+	bad := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "payroll", "definition": payroll("=trigger.body.payroll_id")})
+	if probs := toJSON(bad["problems"]); !strings.Contains(probs, "idempotency_seed inside a foreach must read item or index") {
+		t.Fatalf("problems: %s", probs)
+	}
+	owner.must(422, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions/1/publish", nil)
+
+	good := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "payroll", "definition": payroll("=trigger.body.payroll_id + '/' + item.employee_id")})
+	if probs := good["problems"].([]any); len(probs) != 0 {
+		t.Fatalf("item-specific seed: %v", probs)
+	}
+	owner.must(200, "POST", "/v1/workflows/"+good["id"].(string)+"/versions/1/publish", nil)
+}
+
 func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	w := newWorld(t)
 	owner := w.tenant(t, "Acme", "owner@acme.test")
@@ -181,6 +206,13 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 		t.Fatal("expected problems for an unknown connector")
 	}
 	owner.must(422, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions/1/publish", nil)
+	// But it is a definition: an object with a list of steps, or the
+	// builder could not draw it.
+	for _, doc := range []string{`{"schema":"wd/v1","id":"x","name":"x"}`, `[]`, `"x"`, `{"steps":{}}`, `{"steps":null}`, `{"steps":[1]}`} {
+		owner.must(400, "POST", "/v1/workflows", map[string]any{"name": "draft", "definition": json.RawMessage(doc)})
+		owner.must(400, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions", map[string]any{"definition": json.RawMessage(doc)})
+	}
+	owner.must(201, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions", map[string]any{"definition": json.RawMessage(`{"schema":"wd/v1","steps":[]}`)})
 
 	wf := publishFlow(t, owner, loanFlow)
 	owner.must(204, "PUT", "/v1/workflows/"+wf+"/versions/1/layout", map[string]any{"ok": map[string]any{"x": 10, "y": 20}})
@@ -225,6 +257,19 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	open := owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
 	if !strings.Contains(toJSON(open), "22212345678") {
 		t.Error("revealed history should show the BVN")
+	}
+	// A page that refreshes what it revealed is audited once per window,
+	// not once per fetch; another run revealed is audited on its own.
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	other := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", in, "Idempotency-Key", "loan-2")["run_id"].(string)
+	owner.must(200, "GET", "/v1/runs/"+other+"?reveal=true", nil)
+	reveals := map[string]int{}
+	for _, e := range owner.must(200, "GET", "/v1/audit?action=pii.reveal", nil)["entries"].([]any) {
+		reveals[e.(map[string]any)["target"].(string)]++
+	}
+	if reveals["run:"+run] != 1 || reveals["run:"+other] != 1 {
+		t.Errorf("reveal audit entries: %v", reveals)
 	}
 
 	owner.must(200, "POST", "/v1/runs/"+run+"/cancel", nil)
@@ -361,8 +406,12 @@ func TestAdminAndErasure(t *testing.T) {
 
 	wf := publishFlow(t, owner, loanFlow)
 	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22299999999", "amount": 5}})["run_id"].(string)
-	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"})
-	owner.must(404, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"})
+	// Erasure cannot be undone: a person confirms it with a second factor.
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"}); st != 403 || body["step_up"] != "required" {
+		t.Fatalf("erasure without step-up: %d %v", st, body)
+	}
+	secret := enrol(t, owner)
+	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "totp": codeAfter(secret, 1)})
 	if s := toJSON(owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)); strings.Contains(s, "22299999999") {
 		t.Error("erased BVN still readable")
 	}

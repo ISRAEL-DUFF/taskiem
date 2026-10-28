@@ -53,6 +53,9 @@ var wwwPages = []wwwPage{
 	{"404", "Not found · Taskiem", ""},
 }
 
+// adapterKinds name each connector category on its own page.
+var adapterKinds = map[string]string{"payments": "Payments & Banking", "messaging": "Messaging", "identity": "Identity Checks", "open_banking": "Open Banking", "productivity": "Spreadsheets & Email", "accounting": "Accounting", "database": "Database", "storage": "File Storage"}
+
 // The home page's picks: the templates it shows as cards, and the
 // services it names, by id. A build fails if one goes missing.
 var (
@@ -85,11 +88,15 @@ var connectorGroups = []struct {
 	{"Messages", []string{"messaging"}},
 	{"Identity and bank checks", []string{"identity", "open_banking"}},
 	{"Sheets and email", []string{"productivity"}},
+	{"Accounting", []string{"accounting"}},
 	{"Your data", []string{"database"}},
 	{"Files", []string{"storage"}},
 }
 
-var ownConnectors = map[string]bool{"notify": true, "form": true, "storefront": true, "invoices": true, "schools": true}
+// docAliases are the connectors one docs page covers with others.
+var docAliases = map[string]string{"messenger": "messenger-and-instagram", "instagram": "messenger-and-instagram"}
+
+var ownConnectors = map[string]bool{"notify": true, "form": true, "storefront": true}
 
 // wwwTemplate is a template as the site shows it.
 type wwwTemplate struct {
@@ -106,9 +113,19 @@ type wwwTemplateGroup struct {
 type wwwConnector struct {
 	ID, Name, Category, Description string
 	DocURL                          string // the connector's docs page, when it has one
+	Kind                            string // its category's label, on its page
 	// Can are a rail's capabilities and the payment events it sends
-	// (connector/v1 rule 16), for naming the rails a template runs on.
+	// (connector/v1 rule 16), and the books' (QuickBooks, Zoho Books), for
+	// naming the services a template runs on.
 	Can map[string]bool
+	// Its page on the website (K9): integrations/<id>.
+	Page     string
+	OneClick bool     // connected through Taskiem's app, by signing in; else with a key
+	Built    bool     // part of Taskiem: nothing to connect
+	Does     []string // what a workflow can do with it: its actions' titles
+	Starts   []string // what can start a workflow: its triggers' titles
+	// Templates are the ready-made workflows that use it.
+	Templates []wwwTemplate
 }
 
 type wwwConnectorGroup struct {
@@ -149,6 +166,7 @@ type wwwData struct {
 	// app's sign-up, else the owner's guide.
 	Start            string
 	Page             wwwPage
+	Connector        *wwwConnector // on a connector's page
 	Featured         []wwwTemplate
 	FeaturedServices []string
 	Templates        []wwwTemplateGroup
@@ -192,8 +210,11 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 	names := map[string]string{}
 	for i, c := range conns {
 		names[c.ID] = c.Name
-		if docPages["integrations/"+c.ID] {
-			conns[i].DocURL = docsBase + "integrations/" + c.ID
+		for _, page := range []string{c.ID, strings.ReplaceAll(c.ID, "_", "-"), docAliases[c.ID]} {
+			if page != "" && docPages["integrations/"+page] {
+				conns[i].DocURL = docsBase + "integrations/" + page
+				break
+			}
 		}
 	}
 	data.Connectors = groupConnectors(conns)
@@ -213,6 +234,23 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 	data.Templates, data.Featured, err = groupTemplates(data.App, names, conns)
 	if err != nil {
 		return err
+	}
+	var services []wwwConnector
+	for _, c := range conns {
+		if ownConnectors[c.ID] {
+			continue
+		}
+		for _, g := range data.Templates {
+			for _, w := range g.Items {
+				if t, _ := templates.Default().Get(w.ID); usesConnector(t, c) {
+					c.Templates = append(c.Templates, w)
+				}
+			}
+		}
+		if c.Kind = adapterKinds[c.Category]; c.Kind == "" {
+			c.Kind = "Integration"
+		}
+		services = append(services, c)
 	}
 	if data.Pricing, err = loadPricing(root); err != nil {
 		return err
@@ -268,12 +306,56 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 		}
 		files[p.Name+".html"] = buf.Bytes()
 	}
+	// A page for each service (K9), from its manifest and the templates
+	// that use it.
+	t, err := template.New("layout.html").Funcs(wwwFuncs).ParseFS(assets, "assets/www/layout.html", "assets/www/parts.html", "assets/www/connector.html")
+	if err != nil {
+		return fmt.Errorf("website: connector: %w", err)
+	}
+	for i := range services {
+		c := &services[i]
+		d := data
+		d.Page = wwwPage{Name: c.Page, Title: c.Name + " · Taskiem", Description: firstSentence(c.Description)}
+		d.Connector = c
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, d); err != nil {
+			return fmt.Errorf("website: %s: %w", c.Page, err)
+		}
+		files[c.Page+".html"] = buf.Bytes()
+	}
 	return nil
+}
+
+// usesConnector reports whether a template works with the connector:
+// named, or by capabilities it has (a payment on a rail, an invoice in
+// the books).
+func usesConnector(t *templates.Template, c wwwConnector) bool {
+	var uses []string
+	for _, ref := range t.Connectors {
+		if u, ok := strings.CutPrefix(ref, templates.CapabilityPrefix); ok {
+			uses = append(uses, u)
+			continue
+		}
+		if id, _, _ := strings.Cut(ref, "@"); id == c.ID {
+			return true
+		}
+	}
+	return len(uses) > 0 && c.Can != nil && railsFor(uses, []wwwConnector{c}) != ""
+}
+
+// firstSentence is a description's first sentence, for a page's meta
+// description.
+func firstSentence(s string) string {
+	if i := strings.Index(s, ". "); i >= 0 {
+		return s[:i+1]
+	}
+	return s
 }
 
 // loadConnectors reads every manifest under connectors/.
 func loadConnectors(root string) ([]wwwConnector, error) {
-	paths, err := filepath.Glob(filepath.Join(root, "connectors", "*", "manifest.yaml"))
+	// A package may hold several (connectors/meta: Messenger and Instagram).
+	paths, err := filepath.Glob(filepath.Join(root, "connectors", "*", "*.yaml"))
 	if err != nil {
 		return nil, err
 	}
@@ -290,8 +372,19 @@ func loadConnectors(root string) ([]wwwConnector, error) {
 		if len(probs) > 0 {
 			return nil, fmt.Errorf("%s: %s", p, strings.Join(probs, "; "))
 		}
-		c := wwwConnector{ID: m.ID, Name: m.Name, Category: m.Category, Description: strings.TrimSpace(m.Description)}
-		if m.KindOf() == "rail" {
+		c := wwwConnector{ID: m.ID, Name: m.Name, Category: m.Category, Description: strings.TrimSpace(m.Description),
+			Page: "integrations/" + m.ID, OneClick: m.Auth.OAuth2 != nil, Built: m.Auth.Type == "none"}
+		for _, a := range m.Actions {
+			c.Does = append(c.Does, a.Title)
+		}
+		for _, t := range m.Triggers {
+			if t.Title != "" {
+				c.Starts = append(c.Starts, t.Title)
+			}
+		}
+		slices.Sort(c.Does)
+		slices.Sort(c.Starts)
+		if m.KindOf() == "rail" || m.KindOf() == "product" {
 			c.Can = map[string]bool{}
 			for n := range m.Capabilities {
 				c.Can[n] = true

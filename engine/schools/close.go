@@ -727,6 +727,29 @@ func CloseText(c Close, publicURL string) string {
 // characters).
 const MaxCloseText = 1400
 
+// CloseDate is the close's day in words (24 Oct 2026): the
+// taskiem_daily_close template's day.
+func CloseDate(c Close) string { return dateWords(c.Day) }
+
+// CloseSummary is the close in one line, for the taskiem_daily_close
+// template outside WhatsApp's window (docs/whatsapp.md#templates): the
+// money in, what matched and what did not, what waits, and whether the
+// day reconciles; the template's Open button leads to every item.
+func CloseSummary(c Close) string {
+	n := invoicing.Naira
+	s := fmt.Sprintf("%s in on students (%d payments); matched %s; not matched %s", n(c.MoneyIn.Kobo), c.MoneyIn.Count, n(c.MatchedAuto.Kobo+c.MatchedPerson.Kobo), n(c.Unmatched.Kobo))
+	if len(c.Pending) > 0 {
+		s += fmt.Sprintf("; %d waiting for a second person", len(c.Pending))
+	}
+	if len(c.Claims) > 0 {
+		s += fmt.Sprintf("; %d families saying they paid, not found", len(c.Claims))
+	}
+	if c.Reconciles {
+		return s + "; everything reconciles."
+	}
+	return s + fmt.Sprintf("; DOES NOT RECONCILE: %d problem(s).", c.Problems)
+}
+
 // --- running it ---
 
 // Closed is what a nightly run did.

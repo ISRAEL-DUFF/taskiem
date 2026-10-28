@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"mime"
 	"net/url"
 	"slices"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/schemas"
 )
 
@@ -31,16 +33,29 @@ type Manifest struct {
 	// Kind is rail, product or tool (decision 0044); empty is tool.
 	Kind string `json:"kind,omitempty"`
 	// Description is the manifest's own summary, shown to builders.
-	Description string                 `json:"description"`
-	Auth        Auth                   `json:"auth"`
-	BaseURL     string                 `json:"base_url"`
-	Egress      []string               `json:"egress_hosts"`
-	Actions     map[string]ActionSpec  `json:"actions"`
-	Triggers    map[string]TriggerSpec `json:"triggers"`
+	Description string   `json:"description"`
+	Auth        Auth     `json:"auth"`
+	BaseURL     string   `json:"base_url"`
+	Egress      []string `json:"egress_hosts"`
+	// ConnectionHosts are the hosts a connection's fields may name, where
+	// the provider keeps each account in one place (Zoho's data centres:
+	// *.zoho.com, *.zoho.eu…; rule 19): a ${connection.<field>} egress host
+	// or OAuth URL naming any other host is refused. Empty: any public host.
+	ConnectionHosts []string `json:"connection_hosts,omitempty"`
+	// RateLimit is the provider's request quota, which workers keep to
+	// together (spec 6.2): a token bucket per connection or per tenant.
+	RateLimit *RateLimit             `json:"rate_limit,omitempty"`
+	Actions   map[string]ActionSpec  `json:"actions"`
+	Triggers  map[string]TriggerSpec `json:"triggers"`
 	// Capabilities and Events say what a rail can do in Taskiem's words
 	// (rule 16, engine/capability).
 	Capabilities map[string]CapabilityMap `json:"capabilities,omitempty"`
-	Events       map[string]EventMap      `json:"events,omitempty"`
+	// Pickers are lists a person chooses from instead of typing an id (a
+	// Mailchimp audience, a Brevo list), each a read action and how its
+	// output reads as choices: a template parameter names one (picker
+	// choice).
+	Pickers map[string]PickerSpec `json:"pickers,omitempty"`
+	Events  map[string]EventMap   `json:"events,omitempty"`
 }
 
 type Auth struct {
@@ -81,6 +96,74 @@ type OAuth2 struct {
 	// with the provider ("id" or "secret"), for connectors that refresh
 	// their own tokens with the client that was granted them.
 	PlatformClientFields map[string]string `json:"platform_client_fields,omitempty"`
+	// Client is the platform app Taskiem registered with the provider
+	// (TASKIEM_OAUTH_<CLIENT>_*; rule 18): one app may serve several
+	// connectors. Empty: the connector's id.
+	Client string `json:"client,omitempty"`
+	// AccountField is the auth field holding the provider account a
+	// connection is for (Slack's team id): the app's events for that
+	// account go to the connections that hold it.
+	AccountField string `json:"account_field,omitempty"`
+	// FieldsFromCallback fills auth fields from the query parameters the
+	// provider sends the browser back with (QuickBooks' realmId).
+	FieldsFromCallback map[string]string `json:"fields_from_callback,omitempty"`
+	// ScopeSeparator joins the scopes on the consent URL: a space by
+	// default (RFC 6749), a comma for Slack.
+	ScopeSeparatorChar string `json:"scope_separator,omitempty"`
+	// ClientAuth is how Taskiem's client proves itself at the token URL:
+	// "body" (default: client_id and client_secret in the form) or "basic"
+	// (HTTP Basic, as Intuit requires; RFC 6749 section 2.3.1).
+	ClientAuth string `json:"client_auth,omitempty"`
+	// RevokeEncoding is the revoke request's body: "form" (default, RFC
+	// 7009) or "json" ({"token": …}, Intuit's).
+	RevokeEncoding string `json:"revoke_encoding,omitempty"`
+	// TokenMethod is how the code is exchanged: "post" (default, RFC
+	// 6749) or "get" (the parameters in the query, Meta's Graph API).
+	TokenMethod string `json:"token_method,omitempty"`
+	// LinkedFields are auth fields the connector's Link fills when the
+	// connection is made (Meta's Page and its token: rule 21).
+	LinkedFields []string `json:"linked_fields,omitempty"`
+}
+
+// ScopeSeparator is what joins the scopes on the consent URL.
+func (o *OAuth2) ScopeSeparator() string {
+	if o.ScopeSeparatorChar == "" {
+		return " "
+	}
+	return o.ScopeSeparatorChar
+}
+
+// ClientName is the platform app a connector's OAuth uses: Client, or the
+// connector's id.
+func (m *Manifest) ClientName() string {
+	if m.Auth.OAuth2 != nil && m.Auth.OAuth2.Client != "" {
+		return m.Auth.OAuth2.Client
+	}
+	return m.ID
+}
+
+// ClientFor is the platform app for connections in a mode: the mode's own
+// (Intuit's development keys reach only sandbox companies: rule 20), or
+// ClientName.
+func (m *Manifest) ClientFor(mode string) string {
+	for _, h := range m.Auth.HostModes {
+		if h.Mode == mode && h.Client != "" {
+			return h.Client
+		}
+	}
+	return m.ClientName()
+}
+
+// Clients is every platform app a connector's OAuth may use: ClientName,
+// then the modes' own.
+func (m *Manifest) Clients() []string {
+	out := []string{m.ClientName()}
+	for _, h := range m.Auth.HostModes {
+		if h.Client != "" && !slices.Contains(out, h.Client) {
+			out = append(out, h.Client)
+		}
+	}
+	return out
 }
 
 // ServerPlaceholder starts an OAuth URL resolved from the connector's base
@@ -159,6 +242,9 @@ type HostMode struct {
 	Mode    string `json:"mode"`
 	Label   string `json:"label"`
 	BaseURL string `json:"base_url,omitempty"`
+	// Client is the platform app connections in this mode are linked with
+	// by OAuth, where it is not the connector's (rule 20).
+	Client string `json:"client,omitempty"`
 }
 
 // ModeKey is where a connection's mode reaches its connector: the vault
@@ -357,10 +443,71 @@ func (m *Manifest) KindOf() string {
 	return m.Kind
 }
 
+// RateLimit is requests per period: a bucket of Requests tokens, refilled
+// evenly over Per.
+type RateLimit struct {
+	Requests int    `json:"requests"`
+	Per      string `json:"per"`
+	Scope    string `json:"scope,omitempty"` // connection (default) or tenant
+}
+
+// PerSecond is the bucket's refill rate.
+func (r *RateLimit) PerSecond() float64 {
+	d, err := wd.ParseDuration(r.Per)
+	if err != nil || d <= 0 {
+		return 0
+	}
+	return float64(r.Requests) / d.Seconds()
+}
+
 func (m *Manifest) check() []string {
 	var out []string
 	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
 
+	if rl := m.RateLimit; rl != nil {
+		if rl.PerSecond() <= 0 {
+			add("/rate_limit/per: %q is not a period", rl.Per)
+		}
+		if rl.Scope == "global" {
+			add("/rate_limit/scope: global is not supported yet; use connection or tenant")
+		}
+	}
+	if o := m.Auth.OAuth2; o != nil {
+		for _, u := range []string{o.AuthorizeURL, o.TokenURL, o.RevokeURL} {
+			if strings.HasPrefix(u, connectionPlaceholder) && len(m.ConnectionHosts) == 0 {
+				add("/auth/oauth2: %s takes its server from a connection field, so connection_hosts must list the provider's servers", u)
+			}
+		}
+		if strings.HasPrefix(o.AuthorizeURL, connectionPlaceholder) {
+			add("/auth/oauth2/authorize_url: the consent page is reached before the connection has fields")
+		}
+	}
+	for _, tname := range slices.Sorted(maps.Keys(m.Triggers)) {
+		t := m.Triggers[tname]
+		p := "/triggers/" + tname
+		if hs := t.Handshake; hs != nil && hs.Method == "GET" && hs.SecretField == "" && !hs.Open && t.Delivery != "app" {
+			add("%s/handshake: a GET check needs secret_field, the connection's token it is compared with", p)
+		}
+		if !t.AppDelivered() {
+			if t.AccountKey != "" || t.Revokes != "" {
+				add("%s: account_key and revokes are for delivery: app or both", p)
+			}
+			continue
+		}
+		if t.Delivery == "both" && (t.Verify == nil || t.Verify.SecretField == "") {
+			add("%s: delivery both is also verified with the connection's secret: verify needs secret_field", p)
+		}
+		switch {
+		case m.Auth.OAuth2 == nil || m.Auth.OAuth2.AccountField == "":
+			add("%s: delivery app needs auth.oauth2.account_field, the account a connection is for", p)
+		case t.AccountKey == "":
+			add("%s: delivery app needs account_key, the account an event is for", p)
+		case t.Registered() || t.Route != nil || t.Poll != nil:
+			add("%s: delivery app takes no remote registration, route or poll", p)
+		case t.Verify == nil || slices.Contains([]string{"query_secret", "path_secret", "none"}, t.Verify.Scheme):
+			add("%s: delivery app is verified with the app's secret: a signature scheme, not %v", p, t.Verify)
+		}
+	}
 	for i, h := range m.Auth.HostModes {
 		if slices.ContainsFunc(m.Auth.HostModes[:i], func(x HostMode) bool { return x.Mode == h.Mode }) {
 			add("/auth/modes/%d: mode %q is named twice", i, h.Mode)
@@ -432,6 +579,9 @@ func (m *Manifest) check() []string {
 				add("/triggers/%s/poll: only a trigger verified by plain HMAC can be polled", name)
 			}
 		}
+		if v := m.Triggers[name].Verify; v != nil && v.Scheme == "body_token" && v.Field == "" {
+			add("/triggers/%s/verify/field: body_token names the body field carrying the token", name)
+		}
 		// An ack is served from the hooks origin: never as a page.
 		if a := m.Triggers[name].Ack; a != nil && a.ContentType != "" {
 			if mt, _, err := mime.ParseMediaType(a.ContentType); err != nil || (mt != "text/plain" && mt != "application/json") {
@@ -440,14 +590,18 @@ func (m *Manifest) check() []string {
 		}
 		// A remote trigger is verified with the secret the provider returned
 		// when Taskiem created the subscription, never a connection field.
-		if t := m.Triggers[name]; t.Remote() {
+		// A connection's subscription is too, and a subscription made by
+		// hand with the connection's secret_field.
+		if t := m.Triggers[name]; t.Registered() {
 			switch {
 			case t.Type != "webhook":
 				add("/triggers/%s/registration: only webhook triggers are registered remotely", name)
+			case t.PerConnection() && (t.Verify == nil || t.Verify.SecretField == ""):
+				add("/triggers/%s/verify/secret_field: a connection's subscription may also be made by hand, verified with this connection field", name)
 			case t.Verify == nil:
-			case t.Verify.SecretField != "":
+			case t.Remote() && t.Verify.SecretField != "":
 				add("/triggers/%s/verify/secret_field: a remote trigger is verified with the secret the provider returned", name)
-			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer"}, t.Verify.Scheme):
+			case !slices.Contains([]string{"hmac_sha256", "hmac_sha512", "hmac_sha1", "hmac_sha256_timestamped", "slack_v0", "header_secret", "bearer", "body_token", "svix"}, t.Verify.Scheme):
 				add("/triggers/%s/verify/scheme: %s cannot verify a remotely registered trigger", name, t.Verify.Scheme)
 			}
 		}
@@ -483,12 +637,9 @@ func (m *Manifest) check() []string {
 			}
 			if _, _, _, err := o.Resolve("https://provider.example"); err != nil {
 				add("/auth/oauth2/%s: %v", name, err)
-			} else if p, err := url.Parse(strings.Replace(u, ServerPlaceholder, "https://provider.example", 1)); err != nil || p.Scheme != "https" || p.Hostname() == "" || p.Fragment != "" {
+			} else if p, err := url.Parse(exampleOAuthURL(u)); err != nil || p.Scheme != "https" || p.Hostname() == "" || p.Fragment != "" {
 				add("/auth/oauth2/%s: must be an https URL without a fragment", name)
 			}
-		}
-		if len(o.Scopes) == 0 {
-			add("/auth/oauth2/scopes: name at least one scope")
 		}
 		if !o.PKCE {
 			add("/auth/oauth2/pkce: Taskiem always sends a PKCE challenge; declare pkce: true")
@@ -503,10 +654,43 @@ func (m *Manifest) check() []string {
 				add("/auth/oauth2/fields_from_token/%s: not an auth field", k)
 			}
 		}
-		for _, f := range m.Auth.Fields {
-			if _, ok := o.FieldsFromToken[f.Key]; !ok && (f.Required == nil || *f.Required) {
-				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token; a linked connection would be missing it", f.Key)
+		for _, k := range slices.Sorted(maps.Keys(o.FieldsFromCallback)) {
+			if !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == k }) {
+				add("/auth/oauth2/fields_from_callback/%s: not an auth field", k)
 			}
+		}
+		// A callback field passes through the person's browser, so linking
+		// checks it with the provider: there must be a test to do that with.
+		if len(o.FieldsFromCallback) > 0 && m.Auth.Test == nil {
+			add("/auth/oauth2/fields_from_callback: needs auth.test, which linking runs to check the fields with the provider")
+		}
+		for _, k := range o.LinkedFields {
+			if !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == k }) {
+				add("/auth/oauth2/linked_fields: %q is not an auth field", k)
+			}
+		}
+		if o.AccountField != "" && !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == o.AccountField }) {
+			add("/auth/oauth2/account_field: %q is not an auth field", o.AccountField)
+		}
+		for _, f := range m.Auth.Fields {
+			_, fromToken := o.FieldsFromToken[f.Key]
+			_, fromCallback := o.FieldsFromCallback[f.Key]
+			_, fromClient := o.PlatformClientFields[f.Key]
+			fromLink := slices.Contains(o.LinkedFields, f.Key)
+			if !fromToken && !fromCallback && !fromClient && !fromLink && (f.Required == nil || *f.Required) {
+				add("/auth/oauth2/fields_from_token: required field %q is not filled from the token or the callback; a linked connection would be missing it", f.Key)
+			}
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(m.Pickers)) {
+		pk := m.Pickers[name]
+		if a, ok := m.Actions[pk.Action]; !ok || a.Class.IsWrite() {
+			add("/pickers/%s/action: %q is not a read action", name, pk.Action)
+		}
+	}
+	for i, h := range m.Auth.HostModes {
+		if h.Client != "" && m.Auth.OAuth2 == nil {
+			add("/auth/modes/%d/client: a mode's platform app needs auth.oauth2", i)
 		}
 	}
 	return out
@@ -618,6 +802,66 @@ func (m *Manifest) Hosts() []string {
 	return out
 }
 
+// ConnectionHostAllowed reports whether a host a connection's fields name
+// is one the connector allows: an exact entry, or a subdomain of a *.
+// entry. A connector that lists none allows any.
+func (m *Manifest) ConnectionHostAllowed(host string) bool {
+	if len(m.ConnectionHosts) == 0 {
+		return true
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, p := range m.ConnectionHosts {
+		if sfx, ok := strings.CutPrefix(p, "*."); ok {
+			if strings.HasSuffix(host, "."+sfx) {
+				return true
+			}
+		} else if host == p {
+			return true
+		}
+	}
+	return false
+}
+
+// exampleOAuthURL is an OAuth URL with its placeholders filled, to check
+// its shape.
+func exampleOAuthURL(u string) string {
+	u = strings.Replace(u, ServerPlaceholder, "https://provider.example", 1)
+	if rest, ok := strings.CutPrefix(u, connectionPlaceholder); ok {
+		if _, path, ok := strings.Cut(rest, "}"); ok {
+			u = "https://account.provider.example" + path
+		}
+	}
+	return u
+}
+
+// connectionPlaceholder starts an OAuth URL taken from a connection's
+// field: ${connection.accounts_server}/oauth/v2/token.
+const connectionPlaceholder = "${connection."
+
+// OAuthURL resolves an OAuth URL that starts with ${connection.<field>}
+// from fields (Zoho's accounts server, which the callback names): the
+// field must be an https URL on a host connection_hosts allows. Other URLs
+// are returned as they are.
+func (m *Manifest) OAuthURL(u string, fields map[string]string) (string, error) {
+	rest, ok := strings.CutPrefix(u, connectionPlaceholder)
+	if !ok {
+		return u, nil
+	}
+	field, path, ok := strings.Cut(rest, "}")
+	if !ok {
+		return "", fmt.Errorf("%s: no closing }", u)
+	}
+	base := strings.TrimRight(strings.TrimSpace(fields[field]), "/")
+	p, err := url.Parse(base)
+	if base == "" || err != nil || p.Scheme != "https" || p.Hostname() == "" || (p.Path != "" && p.Path != "/") {
+		return "", fmt.Errorf("%s: %q is not an https server address", field, base)
+	}
+	if len(m.ConnectionHosts) == 0 || !m.ConnectionHostAllowed(p.Hostname()) {
+		return "", fmt.Errorf("%s: %s is not one of %s's servers", field, p.Hostname(), m.Name)
+	}
+	return base + path, nil
+}
+
 // HostsFor are the hosts this connector may reach for a connection: Hosts,
 // with "${connection.<field>}" standing for the connection's field (a
 // database host, or the host of a server URL the tenant configured, such
@@ -629,6 +873,9 @@ func (m *Manifest) HostsFor(creds map[string]string) []string {
 			h = strings.TrimSpace(creds[strings.TrimSuffix(f, "}")])
 			if u, err := url.Parse(h); err == nil && u.Hostname() != "" && strings.Contains(h, "://") {
 				h = u.Hostname()
+			}
+			if !m.ConnectionHostAllowed(h) {
+				continue // a field naming a host the connector does not allow
 			}
 		}
 		if h != "" && !slices.Contains(out, h) {
@@ -649,4 +896,13 @@ func (m *Manifest) OverrideBaseURL(base string) {
 	if u, err := url.Parse(base); err == nil && u.Hostname() != "" {
 		m.Egress = []string{u.Hostname()}
 	}
+}
+
+// PickerSpec is one of a connector's pickers: a read action, and
+// expressions over its output (items) and each item (id, label).
+type PickerSpec struct {
+	Action string `json:"action"`
+	Items  string `json:"items"`
+	ID     string `json:"id"`
+	Label  string `json:"label"`
 }

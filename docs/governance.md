@@ -120,9 +120,9 @@ Runs outside `dev` use the version deployed in their environment; pinning anothe
 
 ## Suspended tenants
 
-A tenant is suspended by its partner (a sub-tenant: `POST /v1/partner/sub-tenants/{sub}/suspend`) or by the operator (`tenants.status`). While suspended it does no new work:
+A tenant is suspended by its partner (a sub-tenant: `POST /v1/partner/sub-tenants/{sub}/suspend`) or by a Taskiem operator, any tenant, from the operator console (`POST /v1/ops/tenants/{id}/suspend` and `/resume`, with a reason and a passkey for that tenant, recorded in the platform's audit chain and the tenant's). While suspended it does no new work:
 
-- **Sign-in, sessions, API keys and end-user tokens** stop working (sessions and tokens of a sub-tenant are also revoked).
+- **Sign-in, sessions, API keys and end-user tokens** stop working (its sessions and end-user tokens are also revoked).
 - **Schedules** are not claimed, so they do not fire.
 - **Webhook and connector deliveries** are answered `423 Locked` (`"code": "suspended"`), before verification and before anything is stored, and counted per day and kind (`ingest_refusals`; `refused_while_suspended` in `GET /v1/limits`). Providers that retry deliver them again after the resume. An edge replica notices the suspension within a minute; until then the engine refuses the start, with the same answer.
 - **Runs**: the engine refuses to start any (`runtime.ErrTenantSuspended`, 423 from the API), whatever the path: webhooks, schedules, WhatsApp, USSD, resumes. Runs it queued (behind its rate or a workflow's concurrency) are not admitted. Runs already running carry on to their end; waits and timers keep their place.
@@ -146,7 +146,8 @@ Owners turn these on under **Secrets & settings → Four-eyes** (`PUT /v1/govern
 
 | Setting | Effect |
 | --- | --- |
-| Publishing needs a second publisher | Publish returns `202 pending_approval` and opens a publish request. Another member with `workflow.publish`, who neither asked nor wrote the version, publishes or rejects it (Approvals → Publishing to review) |
+| Publishing needs a second publisher, in every environment (`four_eyes_publish`) | Publish returns `202 pending_approval` and opens a publish request. Another member with `workflow.publish`, who neither asked nor wrote the version, publishes or rejects it (Approvals → Publishing to review). Promoting needs a second person too ([environments](environments.md)) |
+| Or only in these environments (`four_eyes_publish_environments`) | The same, for the environments ticked: a publish that would deploy to one of them waits as a whole, and promoting into one needs a second person. The usual set-up ticks `prod` and lets prod take versions only by promotion from `staging`: publishing to dev and staging then goes through at once, and prod needs its second person when a version is promoted to it |
 | A new policy version needs a second person | A saved policy version is `pending` until someone other than its author approves it; the previous version stays active meanwhile |
 
 The second person is a person, not an API key, and not the one behind the key that wrote the change. In a sub-tenant, an embed app's end user may ask to publish; a member of the sub-tenant or the partner (as its key's owner) decides ([embedding](embedding.md#end-users-and-four-eyes)).

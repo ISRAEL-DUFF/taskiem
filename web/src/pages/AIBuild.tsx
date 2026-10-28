@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Background, ReactFlow } from "@xyflow/react";
 import type { WorkflowDefinition } from "@sdk/wd";
-import { get, post, type Problem } from "../api";
+import { ApiError, get, post, type MergeConflict, type Problem } from "../api";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { toGraph } from "../lib/graph";
 import { Badge, ErrorBox, Field, Modal, useAction } from "../ui";
@@ -17,6 +17,7 @@ import {
 } from "../lib/aitables";
 import type { ReadyNeed, Readiness } from "../lib/readiness";
 import { NeedsList } from "./Readiness";
+import { MergeDialog } from "./MergeDialog";
 import { ProblemLine } from "../forms/ProblemLine";
 
 // "Build with AI" (docs/ai.md): describe a goal, the server drafts,
@@ -128,6 +129,11 @@ export function AIBuilder({
     version: number;
     troubles: TableResult[];
   }>();
+  // A version saved since the build started that changes the same parts.
+  const [merge, setMerge] = useState<{
+    conflicts: MergeConflict[];
+    latest: number;
+  }>();
   const { can } = useAuth();
   const act = useAction();
 
@@ -172,7 +178,7 @@ export function AIBuilder({
       });
     }, false);
 
-  const save = () =>
+  const save = (resolutions?: Record<string, "ours" | "theirs">) =>
     act.run(async () => {
       if (!build) return;
       const toMake = tablesToSave(tables);
@@ -184,11 +190,28 @@ export function AIBuilder({
         ? {}
         : { name: name || undefined };
       if (toMake.length > 0) body.tables = toMake;
-      const r = await post<{
-        id: string;
-        version: number;
-        tables?: TableResult[];
-      }>(`/v1/ai/builds/${build.id}/save`, body);
+      if (resolutions) body.resolutions = resolutions;
+      let r: { id: string; version: number; tables?: TableResult[] };
+      try {
+        r = await post(`/v1/ai/builds/${build.id}/save`, body);
+      } catch (e) {
+        if (
+          e instanceof ApiError &&
+          e.status === 409 &&
+          Array.isArray(e.body.conflicts)
+        ) {
+          setMerge({
+            conflicts: e.body.conflicts as MergeConflict[],
+            latest: Number(e.body.latest_version),
+          });
+          throw new Error(
+            `Version ${String(e.body.latest_version)} was saved after the AI started, and changes the same parts. Choose which to keep.`,
+            { cause: e },
+          );
+        }
+        throw e;
+      }
+      setMerge(undefined);
       const troubles = tableTroubles(r.tables);
       if (troubles.length > 0)
         setSaved({ id: r.id, version: r.version, troubles });
@@ -346,6 +369,16 @@ export function AIBuilder({
           </Review>
         )}
       </div>
+      {merge && (
+        <MergeDialog
+          conflicts={merge.conflicts}
+          latest={merge.latest}
+          busy={act.busy}
+          ours="The AI's proposal"
+          onClose={() => setMerge(undefined)}
+          onResolve={(res) => void save(res)}
+        />
+      )}
     </Modal>
   );
 }

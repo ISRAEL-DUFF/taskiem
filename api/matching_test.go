@@ -32,7 +32,7 @@ func TestMatchingAPI(t *testing.T) {
 	first, second := invoice("Bola Ade", 900000), invoice("Chidi Eze", 450000)
 	heard := func(ref string, kobo int64, payer string) {
 		if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
-			map[string]any{"reference": ref, "amount_kobo": kobo, "payer_name": payer}); err != nil {
+			map[string]any{"credit_id": "C-1", "reference": ref, "amount_kobo": kobo, "payer_name": payer}); err != nil {
 			t.Fatal(err)
 		}
 		if err := m.Tick(ctx); err != nil {

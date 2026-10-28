@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // The family page's inbox (docs/public-host.md): the public role, which
@@ -149,8 +151,14 @@ func (s *Schools) processAsk(ctx context.Context, id, tenant, family uuid.UUID, 
 			if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
 				return err
 			}
-			_, err := s.SendFamily(ctx, tx, tenant, family, FamilyMessage{Purpose: "link", Key: "link:" + id.String(), Text: func(link string) string {
+			days, err := FamilyLinkDays(ctx, tx, tenant)
+			if err != nil {
+				return err
+			}
+			_, err = s.SendFamily(ctx, tx, tenant, family, FamilyMessage{Purpose: "link", Key: "link:" + id.String(), Text: func(link string) string {
 				return business + ": here is a new link to your family's fees page. " + link
+			}, Template: &whatsapp.TplFamilyLink, Vars: func(link string) map[string]string {
+				return FamilyLinkVars("Here is a new link to your family's fees page.", days, link)
 			}}, "family:"+family.String())
 			return dropInvalid(s, id, err)
 		}

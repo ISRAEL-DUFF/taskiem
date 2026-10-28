@@ -120,6 +120,34 @@ func Repair(ctx context.Context, tx pgx.Tx, wf uuid.UUID) error {
 	return err
 }
 
+// DeclareConnection records, in the transaction that makes or checks a
+// connection, that the connection holds trigger's subscription at the
+// provider in env, for every event the trigger sends (connector/v1
+// registration: connection). One live already is kept, marked to be
+// applied again (which also repairs it). Nothing is sent here.
+func DeclareConnection(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, connector, trigger, connection string, events []string) (uuid.UUID, error) {
+	if events == nil {
+		events = []string{}
+	}
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `UPDATE remote_subscriptions SET events = $6, applied_hash = NULL, next_attempt_at = now(), attempts = 0, updated_at = now()
+		WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND trigger_name = $4 AND COALESCE(connection, '') = $5
+		  AND workflow_id IS NULL AND desired = 'present' RETURNING id`, tenant, env, connector, trigger, connection, events).Scan(&id)
+	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return id, err
+	}
+	id = uuid.Must(uuid.NewV7())
+	_, err = tx.Exec(ctx, `INSERT INTO remote_subscriptions (id, tenant_id, workflow_id, environment, connector, trigger_name, connection, version, events, options, desired, next_attempt_at)
+		VALUES ($1, $2, NULL, $3, $4, $5, NULLIF($6, ''), 0, $7, '{}', 'present', now())`, id, tenant, env, connector, trigger, connection, events)
+	return id, err
+}
+
+// ReleaseConnection records, in the transaction that removes a
+// connection, that its subscriptions should be deleted at the provider.
+func ReleaseConnection(ctx context.Context, tx pgx.Tx, env, connector, connection string) error {
+	return release(ctx, tx, `workflow_id IS NULL AND environment = $1 AND connector = $2 AND COALESCE(connection, '') = $3`, env, connector, connection)
+}
+
 // Retry makes a connector's failed subscriptions in env due now (a
 // connection was just added, so the refusal may be gone).
 func Retry(ctx context.Context, tx pgx.Tx, env, connector string) error {
@@ -130,8 +158,9 @@ func Retry(ctx context.Context, tx pgx.Tx, env, connector string) error {
 
 // Status is a subscription as people see it (no secret, no provider token).
 type Status struct {
-	ID           uuid.UUID  `json:"id"`
-	WorkflowID   uuid.UUID  `json:"workflow_id"`
+	ID uuid.UUID `json:"id"`
+	// WorkflowID is nil for a connection's own subscription.
+	WorkflowID   *uuid.UUID `json:"workflow_id"`
 	Environment  string     `json:"environment"`
 	Connector    string     `json:"connector"`
 	Trigger      string     `json:"trigger"`
@@ -195,7 +224,9 @@ func List(ctx context.Context, tx pgx.Tx, where string, args ...any) ([]Status, 
 
 // Subscription is what ingest needs to verify and route a delivery.
 type Subscription struct {
-	ID          uuid.UUID
+	ID uuid.UUID
+	// WorkflowID is the workflow it starts; uuid.Nil for a connection's
+	// own, whose events reach every workflow subscribed.
 	WorkflowID  uuid.UUID
 	Environment string
 	Connector   string
@@ -209,7 +240,8 @@ func Lookup(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Subscription, error)
 	var s Subscription
 	var conn *string
 	var desired string
-	err := tx.QueryRow(ctx, `SELECT id, workflow_id, environment, connector, trigger_name, connection, desired FROM remote_subscriptions WHERE id = $1`, id).
+	err := tx.QueryRow(ctx, `SELECT id, COALESCE(workflow_id, '00000000-0000-0000-0000-000000000000'), environment, connector, trigger_name, connection, desired
+		FROM remote_subscriptions WHERE id = $1`, id).
 		Scan(&s.ID, &s.WorkflowID, &s.Environment, &s.Connector, &s.Trigger, &conn, &desired)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -307,6 +339,14 @@ func (r *Reconciler) Tick(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// ReconcileTenant applies the tenant's pending subscriptions now (after a
+// connection was made, checked or removed). What it does not finish, the
+// next Tick does.
+func (r *Reconciler) ReconcileTenant(ctx context.Context, tenant uuid.UUID) error {
+	_, err := r.reconcileTenant(ctx, tenant, uuid.Nil)
+	return err
+}
+
 // ReconcileWorkflow applies wf's pending subscriptions now (after a
 // publish or undeploy), so the answer can show their state. What it does
 // not finish, the next Tick does.
@@ -342,7 +382,7 @@ func (r *Reconciler) claim(ctx context.Context, tenant, wf uuid.UUID) ([]row, er
 			   AND (lease_until IS NULL OR lease_until < now())
 			   AND ($1::uuid IS NULL OR workflow_id = $1)
 			 ORDER BY next_attempt_at NULLS LAST LIMIT $2 FOR UPDATE SKIP LOCKED)
-			RETURNING id, workflow_id, environment, connector, trigger_name, COALESCE(connection, ''), events, options, desired,
+			RETURNING id, COALESCE(workflow_id, '00000000-0000-0000-0000-000000000000'), environment, connector, trigger_name, COALESCE(connection, ''), events, options, desired,
 			  COALESCE(remote_id, ''), COALESCE(applied_hash, ''), attempts, next_attempt_at IS NULL OR next_attempt_at > now(), COALESCE(remote_status, ''), updated_at`,
 			nullUUID(wf), rowsPerTenant, lease.String(), time.Now().Add(-r.check()))
 		if err != nil {
@@ -382,9 +422,10 @@ type outcome struct {
 	appliedHash  string
 	remoteStatus string // "" leaves it unknown
 	reason       string
-	secret       string // a new signing secret to keep
-	deleted      bool   // the provider's subscription is gone and so is the row
-	audit        string // the audit action, if the provider changed
+	secret       string    // a new signing secret to keep
+	deleted      bool      // the provider's subscription is gone and so is the row
+	audit        string    // the audit action, if the provider changed
+	expiresAt    time.Time // when the provider lets it lapse; zero: never
 }
 
 // url is the ingest URL of a subscription.
@@ -428,6 +469,13 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 	}
 	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: secrets.PurposeRemoteRegister})
 	creds, err := r.Vault.Credentials(use, tenant, x.env, conn.Manifest.ID, x.connection)
+	if x.desired == "absent" && x.wf == uuid.Nil && errors.Is(err, secrets.ErrNotFound) {
+		// A connection's subscription whose connection is gone: nothing
+		// can reach the provider any more. The row goes; deliveries to it
+		// are refused, and the provider gives up on them.
+		out.deleted, out.audit = true, "remote_subscription.abandon"
+		return out, nil
+	}
 	if errors.Is(err, secrets.ErrNotFound) || errors.Is(err, secrets.ErrAmbiguous) {
 		return out, fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
@@ -439,7 +487,10 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		timeout = 20 * time.Second
 	}
 	call := connector.RemoteCall{Credentials: creds,
-		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout)}
+		HTTP: r.Egress.Client(egress.Policy{Tenant: tenant.String(), Hosts: conn.Manifest.HostsFor(creds), Purpose: "connector:" + conn.Manifest.ID + ":registration"}, timeout),
+		Rotate: func(ctx context.Context, fn connector.RotateFunc) (map[string]string, error) {
+			return r.Vault.RotateCredentials(use, tenant, x.env, conn.Manifest.ID, x.connection, fn)
+		}}
 	name := Name(x.id)
 
 	if x.desired == "absent" {
@@ -471,9 +522,12 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		st, err := registrar.Get(ctx, call, x.remoteID)
 		if errors.Is(err, connector.ErrNotFound) {
 			out.remoteStatus, out.reason, out.appliedHash = connector.RemoteMissing, "the provider no longer has this subscription; republish to create it again", h
+			if x.wf == uuid.Nil {
+				out.reason = "the provider no longer has this subscription; check the connection to create it again"
+			}
 			return out, nil
 		}
-		out.remoteStatus, out.reason, out.appliedHash = st.Status, st.Reason, h
+		out.remoteStatus, out.reason, out.appliedHash, out.expiresAt = st.Status, st.Reason, h, st.ExpiresAt
 		return out, err
 	}
 	var st connector.RemoteState
@@ -515,7 +569,7 @@ func (r *Reconciler) apply(ctx context.Context, tenant uuid.UUID, x row) (outcom
 		}
 		out.secret = st.Secret
 	}
-	out.remoteID, out.appliedHash, out.remoteStatus, out.reason = &st.ID, h, st.Status, st.Reason
+	out.remoteID, out.appliedHash, out.remoteStatus, out.reason, out.expiresAt = &st.ID, h, st.Status, st.Reason, st.ExpiresAt
 	return out, nil
 }
 
@@ -585,12 +639,22 @@ func (r *Reconciler) record(ctx context.Context, tenant uuid.UUID, x row, out ou
 		if out.reason != "" {
 			reason = &out.reason
 		}
-		// A row redeclared while this pass ran keeps its new intent, due at once.
+		// A row redeclared while this pass ran keeps its new intent, due at
+		// once. One that expires is due again before it lapses (a day
+		// before, or halfway for one lasting under two days): applying it
+		// then renews it.
+		var expires *time.Time
+		if !out.expiresAt.IsZero() {
+			expires = &out.expiresAt
+		}
+		// A check that reads no expiry keeps the one last applied.
 		_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET remote_id = COALESCE($2, remote_id), state = 'active', remote_status = $3, status_reason = $4,
-			last_error = NULL, attempts = 0, checked_at = now(), lease_until = NULL,
+			last_error = NULL, attempts = 0, checked_at = now(), lease_until = NULL, expires_at = COALESCE($7, expires_at),
 			applied_hash = CASE WHEN updated_at = $6 THEN $5 ELSE applied_hash END,
-			next_attempt_at = CASE WHEN updated_at = $6 THEN NULL ELSE next_attempt_at END
-			WHERE id = $1`, x.id, out.remoteID, status, reason, out.appliedHash, x.updatedAt)
+			next_attempt_at = CASE WHEN updated_at <> $6 THEN next_attempt_at
+				WHEN COALESCE($7, expires_at) IS NULL THEN NULL
+				ELSE greatest(now(), COALESCE($7, expires_at) - least(interval '1 day', (COALESCE($7, expires_at) - now()) / 2)) END
+			WHERE id = $1`, x.id, out.remoteID, status, reason, out.appliedHash, x.updatedAt, expires)
 		if err != nil || out.audit == "" {
 			return err
 		}

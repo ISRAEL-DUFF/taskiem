@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { get, post } from "../api";
 import { useAuth } from "../auth";
-import { ErrorBox, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { naira } from "../lib/invoices";
 import { studentPath, type SchoolSession, type SchoolTerm } from "../lib/schools";
 import { BUCKETS } from "../lib/schoolChasing";
@@ -16,7 +16,6 @@ import {
   closeSections,
   closeStatus,
   closesPath,
-  collectedLine,
   dueByNowLine,
   lastCloseLine,
   matchedLine,
@@ -207,19 +206,27 @@ export function SchoolOverviewPage() {
       {!o && !ov.error && <Skeleton rows={4} label="Reading the term's money…" />}
       {o && (
         <>
-          <section className="card" aria-label="Collected against expected" data-testid="overview-collected">
-            <div className="toolbar">
-              <strong className="grow">{collectedLine(o)}</strong>
-              <span className="hint">
-                {o.invoiced} of {o.enrolled} students invoiced
-              </span>
+          <section className="hero" aria-label="Collected against expected" data-testid="overview-collected">
+            <div className="hero-top">
+              <span className="hero-label">Collected this term</span>
             </div>
-            <div className="progress" aria-hidden="true">
-              <span style={{ width: `${o.collected_percent}%` }} />
-            </div>
-            <p className="hint" style={{ marginBottom: 0 }}>
-              {dueByNowLine(o)}
+            <div className="hero-amount">{naira(o.collected_kobo)}</div>{" "}
+            <p className="hero-sub">
+              of {naira(o.expected_kobo)} collected ({o.collected_percent}%) · {o.invoiced} of {o.enrolled} students invoiced
             </p>
+            <div className="hero-bar" role="img" aria-label={`${o.collected_percent}% collected`}>
+              <span style={{ width: `${Math.min(100, o.collected_percent)}%` }} />
+            </div>
+            <dl className="hero-foot">
+              <div>
+                <dt>Still owed</dt>
+                <dd>{naira(o.outstanding_kobo)}</dd>
+              </div>
+              <div>
+                <dt>Due by today</dt>
+                <dd className="hero-foot-words">{dueByNowLine(o)}</dd>
+              </div>
+            </dl>
           </section>
           <section className="stats" aria-label="The term's money" data-testid="overview-tiles">
             <Tile label="This week" value={naira(o.this_week_kobo)} hint="Counted since Monday" testid="overview-week" />
@@ -270,19 +277,20 @@ export function SchoolOverviewPage() {
             </h2>
             {o.top_debtors.length === 0 && <p className="hint">Nobody owes anything.</p>}
             {o.top_debtors.length > 0 && (
-              <ul className="list">
+              <Items label="Top debtors">
                 {o.top_debtors.map((d) => (
-                  <li key={d.student_id} className="list-row" data-testid="top-debtor">
-                    <div className="grow">
-                      <Link to={studentPath(d.student_id)}>{d.admission_number}</Link> <span>{d.name}</span>
-                      <div className="hint">
-                        {d.class}; {d.days_past_due > 0 ? `${d.days_past_due} days past due` : "not yet due"}
-                      </div>
-                    </div>
-                    <strong>{naira(d.balance_kobo)}</strong>
-                  </li>
+                  <Item
+                    key={d.student_id}
+                    testid="top-debtor"
+                    to={studentPath(d.student_id)}
+                    icon="schools"
+                    tone={d.days_past_due > 0 ? "danger" : "warn"}
+                    title={d.admission_number}
+                    side={naira(d.balance_kobo)}
+                    sub={`${d.name} · ${d.class} · ${d.days_past_due > 0 ? `${d.days_past_due} days past due` : "not yet due"}`}
+                  />
                 ))}
-              </ul>
+              </Items>
             )}
           </section>
           <Closes manage={manage} onTaken={ov.reload} />

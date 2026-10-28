@@ -1,0 +1,18 @@
+{
+ "action": "send_campaign",
+ "input": {
+  "campaign_id": 7
+ },
+ "credentials": {
+  "api_key": "xkeysib-test-123"
+ },
+ "exchanges": [
+  "campaign_sent"
+ ],
+ "expect": {
+  "output": {
+   "campaign_id": 7,
+   "status": "sent"
+  }
+ }
+}

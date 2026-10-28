@@ -1,8 +1,9 @@
 import { useId, useMemo, useState } from "react";
+import { ReceiveMoneyCard } from "./ReceiveMoney";
 import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorBox, Field, PageHeader, Skeleton, useAction, useLiveRefresh, useLoad } from "../ui";
+import { EmptyState, ErrorBox, Field, Items, PageHeader, Row, Skeleton, useAction, useLiveRefresh, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { MoneyBars, MoneySources } from "./MoneyParts";
 import { UNMATCHED_PATH, channelWords, dateLabel, naira, newRequestKey, plainMessage, type UnmatchedMoney } from "../lib/invoices";
@@ -22,6 +23,7 @@ import {
   addedLine,
   bpToPercent,
   collectedForLine,
+  riderDayLine,
   channelProblem,
   closeProblem,
   closeRequest,
@@ -168,6 +170,7 @@ export function MoneyOverview() {
     <>
       <PageHeader title="Money" description="Your business's money for a period: what came in and went out, settled and pending, the fees taken, invoices paid and leaks." />
       <MoneyTabs />
+      <ReceiveMoneyCard />
       <div className="period-bar">
         <div className="segmented" role="group" aria-label="Period">
           {QUICK_PERIODS.map((c) => (
@@ -345,6 +348,23 @@ export function MoneyOverview() {
                 ))}
               </tbody>
             </table>
+          )}
+          {s.riders && s.riders.length > 0 && (
+            <>
+              <h2>Riders</h2>
+              <Items label={`Riders, ${periodWords(p)}`}>
+                {s.riders.map((r) => (
+                  <Row
+                    key={r.rider_id}
+                    letter={r.rider}
+                    title={r.rider}
+                    side={r.owed_kobo > 0 ? <span className="badge warn">owes {naira(r.owed_kobo)}</span> : undefined}
+                    sub={<span className="sub">{riderDayLine(r)}</span>}
+                    testid="rider-day"
+                  />
+                ))}
+              </Items>
+            </>
           )}
         </>
       )}

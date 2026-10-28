@@ -1,0 +1,29 @@
+{
+  "trigger": "credit_event",
+  "body": {
+    "id": "evt_c2",
+    "event_type": "wallet.credit.posted",
+    "wallet_id": "6f1e",
+    "occurred_at": "2026-10-05T09:20:00Z",
+    "data": {
+      "txn_id": "t-9",
+      "provider_reference": "100004261005092000999999",
+      "amount": 2500000,
+      "amount_credited": 2465000,
+      "currency": "NGN",
+      "virtual_account": {
+        "reference": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
+        "account_number": "9907654321",
+        "status": "active"
+      }
+    }
+  },
+  "event": "payment.received",
+  "expect": {
+    "payment_id": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
+    "amount_kobo": 2500000,
+    "fee_kobo": 35000,
+    "currency": "NGN",
+    "paid_at": "2026-10-05T09:20:00Z"
+  }
+}

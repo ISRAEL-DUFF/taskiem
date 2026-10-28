@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Chasing (docs/spec/schools.md 11, B7; docs/schools.md#debtors):
@@ -175,6 +176,24 @@ type ReminderVars struct {
 func RenderReminder(text string, v ReminderVars) string {
 	r := strings.NewReplacer("{balance}", v.Balance, "{child}", v.Child, "{account_number}", v.AccountNumber, "{due_date}", v.DueDate, "{link}", v.Link)
 	return strings.Join(strings.Fields(r.Replace(text)), " ")
+}
+
+// ReminderTemplateVars are the variables of the taskiem_fee_reminder
+// WhatsApp template (docs/whatsapp.md#templates), which carries a
+// reminder outside the 24-hour window: Meta approves fixed wording, so
+// the school's own wording goes inside the window and by SMS only.
+func ReminderTemplateVars(rung int, v ReminderVars, link string) map[string]string {
+	words := fmt.Sprintf("reminder %d of 3", rung)
+	if rung >= 3 {
+		words = "final notice"
+	}
+	or := func(s string) string {
+		if s == "" {
+			return "-"
+		}
+		return s
+	}
+	return map[string]string{"rung": words, "balance": or(v.Balance), "child": or(v.Child), "due_date": or(v.DueDate), "account_number": or(v.AccountNumber), "link": link}
 }
 
 // ReminderSMS is the text an SMS gets: the wording with the naira sign
@@ -790,9 +809,12 @@ func (s *Schools) remind(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in Re
 			return out, err
 		}
 		text := wording[fs.rung]
+		rung := fs.rung
 		sent, err := s.SendFamily(ctx, tx, tenant, fs.family, FamilyMessage{Purpose: "reminder", Key: "reminder:" + in.Key + ":" + fs.family.String() + ":" + fmt.Sprint(fs.rung),
-			Text:  func(link string) string { v.Link = link; return RenderReminder(text, v) },
-			Short: func(link string) string { v.Link = link; return ReminderSMS(text, v) }}, by)
+			Text:     func(link string) string { v.Link = link; return RenderReminder(text, v) },
+			Short:    func(link string) string { v.Link = link; return ReminderSMS(text, v) },
+			Template: &whatsapp.TplFeeReminder,
+			Vars:     func(link string) map[string]string { return ReminderTemplateVars(rung, v, link) }}, by)
 		if err != nil {
 			return out, err
 		}

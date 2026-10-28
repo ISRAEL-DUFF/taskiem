@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/v3/company/9341453050298730/query",
+  "query": {
+   "minorversion": "75",
+   "query": "SELECT * FROM TaxRate MAXRESULTS 1000"
+  },
+  "headers": {
+   "Authorization": "Bearer eyJ-test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "QueryResponse": {
+    "TaxRate": [
+     {
+      "Id": "11",
+      "Name": "VAT 7.5% (sales)",
+      "RateValue": 7.5,
+      "Active": true
+     }
+    ],
+    "startPosition": 1,
+    "maxResults": 1
+   },
+   "time": "2026-10-26T09:00:00.000-07:00"
+  }
+ }
+}

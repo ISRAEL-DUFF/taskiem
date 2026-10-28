@@ -62,6 +62,24 @@ func (o *Orders) bookingBody(ord Order, autoConfirm bool) map[string]any {
 
 // linkOf is the customer's status link for an order (the storefront's page
 // when the key is not there).
+// StatusLink is an order's status page, with its key: where its customer
+// rates its delivery (dispatch D5); "" when it cannot be made.
+func (o *Orders) StatusLink(ctx context.Context, tenant uuid.UUID, reference string) string {
+	var link string
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		ord, err := o.GetOrder(ctx, tx, tenant, reference)
+		if err != nil {
+			return err
+		}
+		link, err = o.linkOf(ctx, tx, tenant, ord)
+		return err
+	})
+	if err != nil {
+		return ""
+	}
+	return link
+}
+
 func (o *Orders) linkOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ord Order) (string, error) {
 	var env map[string]any
 	var slug string
@@ -97,11 +115,12 @@ func (o *Orders) statusKeyOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, i
 	return key, err
 }
 
-// endBooking ends a booking's run, if it has one, and tells the customer
-// (text empty: nobody).
+// endBooking ends a booking's run, if it has one, reversing what it did as
+// any cancel does (decision 0054), and tells the customer (text empty:
+// nobody).
 func (o *Orders) endBooking(ctx context.Context, tenant uuid.UUID, reference string, run *uuid.UUID, text, key string) error {
 	if run != nil && o.Cancel != nil {
-		if err := o.Cancel(ctx, runtime.RunRef{ID: *run, TenantID: tenant}, "storefront"); err != nil {
+		if err := o.Cancel(ctx, runtime.RunRef{ID: *run, TenantID: tenant}, "storefront", true); err != nil {
 			return err
 		}
 	}

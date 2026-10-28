@@ -17,6 +17,7 @@ import {
   type SchoolIssuing,
   type StudentAccount,
 } from "../lib/schoolAccounts";
+import { sentLine, type FamilySent } from "../lib/schoolFamily";
 import { Copy } from "./Forms";
 
 // Students' account numbers (docs/spec/schools.md 6, B4;
@@ -28,6 +29,12 @@ export type SchoolSettingsWithIssuing = SchoolSettings & {
   issuing?: SchoolIssuing;
   issuers?: SchoolIssuer[];
 };
+
+/** The connection Taskiem holds for a business that receives money with it (decision 0052). */
+const TASKIEM_CHANNEL = "iswallet/taskiem";
+
+/** An issuer as the setting names it: Taskiem's own wallet by that name. */
+const issuerName = (i: SchoolIssuer) => (i.connection === TASKIEM_CHANNEL ? "Taskiem (your wallet with Taskiem)" : `${i.rail} (${i.connection})`);
 
 /** Runs a request and words the server's refusal as a sentence. */
 export async function plainly<T>(p: Promise<T>): Promise<T> {
@@ -60,8 +67,9 @@ export function IssuingSettings() {
       <ErrorBox error={settings.error} />
       {!settings.data && !settings.error && <Skeleton rows={2} label="Loading the settings…" />}
       {settings.data && issuers.length === 0 && (
-        <EmptyState icon="connections" action={<Link to="/connections">Connections</Link>}>
-          No connection here can issue account numbers yet. Connect iswallet, Paystack, Flutterwave or Moniepoint in prod first.
+        <EmptyState icon="connections" action={<Link to="/settings/payments">Receive money with Taskiem</Link>}>
+          No connection here can issue account numbers yet. Receive money with Taskiem (no account to sign up for), or connect iswallet, Paystack, Flutterwave or Moniepoint in
+          prod in <Link to="/connections">Connections</Link>.
         </EmptyState>
       )}
       {settings.data && issuers.length > 0 && (
@@ -82,19 +90,29 @@ export function IssuingSettings() {
           }}
         >
           <Field label="Issuing connection">
-            <select value={value.connection} onChange={(e) => setForm({ ...value, connection: e.target.value })}>
+            <select value={value.connection} onChange={(e) => setForm({ ...value, connection: e.target.value, account: "" })}>
               <option value="">None chosen</option>
               {issuers.map((i) => (
                 <option key={i.connection} value={i.connection}>
-                  {i.rail} ({i.connection})
+                  {issuerName(i)}
                 </option>
               ))}
             </select>
           </Field>
-          {chosen?.needs_account && (
+          {chosen?.needs_account && chosen.connection !== TASKIEM_CHANNEL && (
             <Field label="Wallet the numbers pay into" hint={`The wallet's id on ${chosen.rail}.`}>
               <input value={value.account ?? ""} onChange={(e) => setForm({ ...value, account: e.target.value })} placeholder="wal_…" />
             </Field>
+          )}
+          {chosen?.creates_wallet && chosen.connection !== TASKIEM_CHANNEL && !settings.data?.issuing?.account && (
+            <CreateWallet
+              connection={chosen.connection}
+              rail={chosen.rail}
+              onDone={() => {
+                setForm(undefined);
+                settings.reload();
+              }}
+            />
           )}
           <label className="row">
             <input type="checkbox" checked={!!value.siblings_share_credit} onChange={(e) => setForm({ ...value, siblings_share_credit: e.target.checked })} /> When a student's
@@ -117,9 +135,7 @@ export function IssuingSettings() {
           <ul className="plain-list" data-testid="issuers">
             {issuers.map((i) => (
               <li key={i.connection}>
-                <strong>
-                  {i.rail} ({i.connection})
-                </strong>
+                <strong>{issuerName(i)}</strong>
                 : {i.requirement} {feeLine(i)}{" "}
                 {i.look_back && (i.webhook ? "Payments arrive by its webhook, and are also read back every 15 minutes." : "Payments are read back every 15 minutes.")}
               </li>
@@ -129,6 +145,66 @@ export function IssuingSettings() {
       )}
       <ErrorBox error={act.error} />
     </section>
+  );
+}
+
+/** Creates the school's wallet on the issuing connection instead of
+ * pasting its id (POST /v1/settings/schools/wallet): the director's BVN and
+ * the business email go to the rail once, and Taskiem keeps neither. */
+function CreateWallet({ connection, rail, onDone }: { connection: string; rail: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [ownerType, setOwnerType] = useState("client_end_user_business");
+  const [email, setEmail] = useState("");
+  const [bvn, setBvn] = useState("");
+  const act = useAction();
+  if (!open)
+    return (
+      <p>
+        <button type="button" onClick={() => setOpen(true)}>
+          Create the school's wallet
+        </button>{" "}
+        <span className="hint">No wallet yet? {rail} can make one for the school now.</span>
+      </p>
+    );
+  return (
+    <fieldset className="card" data-testid="create-wallet">
+      <legend>The school's wallet on {rail}</legend>
+      <label className="row">
+        <input type="radio" name="owner-type" checked={ownerType === "client_end_user_business"} onChange={() => setOwnerType("client_end_user_business")} /> It holds
+        parents' fees: kept in the school's own account at {rail}'s bank. Payments show in the balance at once; the money itself reaches that account within minutes.
+      </label>
+      <label className="row">
+        <input type="radio" name="owner-type" checked={ownerType === "client_end_business"} onChange={() => setOwnerType("client_end_business")} /> It holds only the
+        school's own money: kept with {rail}'s, and counted as the school's.
+      </label>
+      <p className="hint">This cannot easily be changed later: ask {rail} first if you are unsure.</p>
+      <Field label="The school's business email">
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+      </Field>
+      <Field label="The director's BVN" hint={`11 digits. Sent to ${rail} once to open the wallet; Taskiem does not keep it.`}>
+        <input value={bvn} onChange={(e) => setBvn(e.target.value.replace(/\D/g, "").slice(0, 11))} inputMode="numeric" autoComplete="off" />
+      </Field>
+      <ErrorBox error={act.error} />
+      <div className="toolbar">
+        <button
+          type="button"
+          className="primary"
+          disabled={act.busy || bvn.length !== 11 || !email.includes("@")}
+          onClick={() =>
+            void act.run(async () => {
+              await plainly(post("/v1/settings/schools/wallet", { connection, owner_type: ownerType, business_email: email, bvn }));
+              setBvn("");
+              onDone();
+            }, "The school's wallet is ready: students' numbers will pay into it")
+          }
+        >
+          {act.busy ? "Creating…" : "Create the wallet"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </fieldset>
   );
 }
 
@@ -148,7 +224,9 @@ export function StudentAccountPanel({ studentID }: { studentID: string }) {
   );
   const [bvn, setBvn] = useState("");
   const [nin, setNin] = useState("");
+  const [sent, setSent] = useState<FamilySent>();
   const act = useAction();
+  const send = useAction();
   const data = accounts.data;
   const issuing = data?.issuing_connection ?? "";
   const mine = data?.accounts.find((a) => a.connection === issuing) ?? data?.accounts[0];
@@ -203,6 +281,30 @@ export function StudentAccountPanel({ studentID }: { studentID: string }) {
         <button type="button" onClick={() => setReveal(true)}>
           Show the account's name
         </button>
+      )}
+      {data && issued.length > 0 && may.manage && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="secondary"
+            disabled={send.busy}
+            onClick={() =>
+              void send.run(async () => {
+                setSent(await plainly(post<FamilySent>(`/v1/schools/students/${encodeURIComponent(studentID)}/account/send`, {})));
+              }, false)
+            }
+          >
+            Send the account number to the family
+          </button>
+          <div role="status">
+            {sent && (
+              <div className="notice" data-testid="student-account-sent">
+                {sentLine(sent).replace(" Copy the link below to pass it on.", "")}
+              </div>
+            )}
+          </div>
+          <ErrorBox error={send.error} />
+        </div>
       )}
       {mine && mine.status !== "issued" && (
         <div className="notice" data-testid="student-account-problem">

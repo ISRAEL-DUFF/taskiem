@@ -23,7 +23,7 @@ import (
 
 // chatBooking is a booking change being confirmed.
 type chatBooking struct {
-	Action    string    `json:"action"` // cancel, move, off or refund
+	Action    string    `json:"action"` // cancel, move, off, refund or refunded
 	Reference string    `json:"reference,omitempty"`
 	Start     time.Time `json:"start,omitempty"` // move: the new start; off: the day
 }
@@ -34,6 +34,8 @@ var (
 	bookingMove   = regexp.MustCompile(`^(?:move|move booking) ` + bookingRef + ` to (.+)$`)
 	bookingOff    = regexp.MustCompile(`^(?:off|day off|take off) (.+)$`)
 	orderRefund   = regexp.MustCompile(`^refund ` + bookingRef + `$`)
+	// orderRefunded marks an order refunded by hand (N3).
+	orderRefunded = regexp.MustCompile(`^refunded ` + bookingRef + `$`)
 )
 
 // waBookingCommand acts on a booking command; false when cmd is not one.
@@ -59,6 +61,8 @@ func (s *Server) waBookingCommand(ctx context.Context, c *chat, cmd string) (boo
 		b = &chatBooking{Action: "move", Reference: strings.ToUpper(m[1]), Start: at}
 	case orderRefund.MatchString(cmd):
 		b = &chatBooking{Action: "refund", Reference: strings.ToUpper(orderRefund.FindStringSubmatch(cmd)[1])}
+	case orderRefunded.MatchString(cmd):
+		b = &chatBooking{Action: "refunded", Reference: strings.ToUpper(orderRefunded.FindStringSubmatch(cmd)[1])}
 	case bookingOff.MatchString(cmd):
 		day, ok := parseWhen(bookingOff.FindStringSubmatch(cmd)[1], time.Now(), false)
 		if !ok {
@@ -135,17 +139,26 @@ func (s *Server) waBookingAsk(ctx context.Context, c *chat, b *chatBooking) erro
 			o, err = s.Orders.GetOrder(ctx, tx, c.tenant.ID, b.Reference)
 			return err
 		})
-		if b.Action == "refund" {
+		if b.Action == "refund" || b.Action == "refunded" {
 			if errors.Is(err, storefront.ErrNoOrder) || (err == nil && o.Status != "refund_due") {
 				return c.say(ctx, s, c.t("wa.booking.nothing_to_refund", "ref", b.Reference))
 			}
 			if err != nil {
 				return err
 			}
+			total := storefront.FormatNaira(o.Payable())
+			ask := c.t("wa.booking.confirm_refunded", "ref", b.Reference, "total", total)
+			if b.Action == "refund" {
+				if o.PaidBy != "card" {
+					// Paid by bank transfer: Taskiem cannot send it back (N3).
+					return c.say(ctx, s, c.t("wa.booking.refund_by_hand", "ref", b.Reference, "total", total))
+				}
+				ask = c.t("wa.booking.confirm_refund", "ref", b.Reference, "total", total)
+			}
 			if err := s.saveSession(ctx, c, stateConfirming, chatData{Booking: b}, waPendingTTL); err != nil {
 				return err
 			}
-			return c.say(ctx, s, c.t("wa.booking.confirm_refund", "ref", b.Reference, "total", storefront.FormatNaira(o.Payable())), bookingButtons(c)...)
+			return c.say(ctx, s, ask, bookingButtons(c)...)
 		}
 		if errors.Is(err, storefront.ErrNoOrder) || (err == nil && (o.Kind != "booking" || o.StartsAt == nil)) {
 			return c.say(ctx, s, c.t("wa.booking.not_found", "ref", b.Reference))
@@ -199,6 +212,14 @@ func (s *Server) waBookingApply(ctx context.Context, c *chat) error {
 		}
 		if errors.Is(err, storefront.ErrRefund) {
 			return c.say(ctx, s, c.t("wa.booking.refund_failed", "ref", b.Reference, "why", plainError(err)))
+		}
+		if errors.Is(err, storefront.ErrRefundByHand) {
+			return c.say(ctx, s, c.t("wa.booking.refund_by_hand", "ref", b.Reference, "total", storefront.FormatNaira(o.Payable())))
+		}
+	case "refunded":
+		var o storefront.Order
+		if o, err = s.Orders.MarkRefunded(ctx, c.tenant.ID, b.Reference, actor, ""); err == nil {
+			return c.say(ctx, s, c.t("wa.booking.marked_refunded", "ref", b.Reference, "total", storefront.FormatNaira(o.Payable())))
 		}
 	case "move":
 		if _, err = s.Orders.OwnerMove(ctx, c.tenant.ID, b.Reference, b.Start, actor); err == nil {

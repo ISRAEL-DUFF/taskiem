@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/104123456789012/conversations",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "platform": "messenger",
+   "user_id": "6789012345678901"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "data": []
+  }
+ }
+}

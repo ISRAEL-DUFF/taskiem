@@ -15,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -94,6 +95,13 @@ func (s *Server) waStartBuild(ctx context.Context, c *chat, goal string) error {
 	}
 	if s.AI == nil || s.AI.Provider == nil {
 		return c.say(ctx, s, c.t("wa.build.off"))
+	}
+	// The plan's ai feature, as on /v1/ai.
+	if err := s.Billing.Require(ctx, c.tenant.ID, billing.FeatureAI); err != nil {
+		if fe := (*billing.FeatureError)(nil); errors.As(err, &fe) {
+			return c.say(ctx, s, c.t("wa.build.plan", "org", c.tenant.Name))
+		}
+		return err
 	}
 	if goal == "" {
 		return c.say(ctx, s, c.t("wa.build.what"))
@@ -443,7 +451,7 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		var doc []byte
-		wf, version, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", func(action, target string, detail map[string]any) error {
+		wf, version, doc, err = s.saveAIBuildTx(ctx, tx, c.p, b.ID, "", nil, func(action, target string, detail map[string]any) error {
 			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		if err == nil {
@@ -465,6 +473,12 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	}
 	if errors.Is(err, errConflict) || errors.Is(err, pgx.ErrNoRows) {
 		return c.say(ctx, s, c.t("wa.build.gone"))
+	}
+	// A version saved since the build started changes the same parts:
+	// choosing between them is for the web app. Nothing was written, so
+	// the build is still a proposal.
+	if mc := (*mergeConflict)(nil); errors.As(err, &mc) {
+		return c.say(ctx, s, c.t("wa.build.changed", "version", strconv.Itoa(mc.latest), "link", s.waLink(c, "/workflows/"+wf.String())))
 	}
 	if err != nil {
 		return err

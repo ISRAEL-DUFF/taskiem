@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/contacts/lists/3/contacts/add",
+  "headers": {
+   "api-key": "xkeysib-test-123"
+  },
+  "body": {
+   "emails": [
+    "ada@example.com"
+   ]
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "code": "invalid_parameter",
+   "message": "Contact already in list and/or does not exist"
+  }
+ }
+}

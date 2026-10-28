@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/notices"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Payment plans, the effect half (docs/spec/schools.md 11.3 and 12.1,
@@ -335,8 +336,10 @@ func (s *Schools) tellPlan(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p P
 		return FamilySent{}, err
 	}
 	return s.SendFamily(ctx, tx, tenant, p.FamilyID, FamilyMessage{Purpose: "decision", Key: "plan:" + p.ID.String() + ":" + p.Status,
-		Text:  func(link string) string { return PlanDecisionText(business, p, link) },
-		Short: func(link string) string { return PlanDecisionShort(p, link) }}, p.DecidedBy)
+		Text:     func(link string) string { return PlanDecisionText(business, p, link) },
+		Short:    func(link string) string { return PlanDecisionShort(p, link) },
+		Template: &whatsapp.TplPlanDecision,
+		Vars:     func(link string) map[string]string { return PlanDecisionVars(p, link) }}, p.DecidedBy)
 }
 
 // PlanDecidedAfter tells the family of a decision, with a fresh link, in

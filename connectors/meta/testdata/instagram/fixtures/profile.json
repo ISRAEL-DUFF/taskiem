@@ -1,0 +1,21 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/5432109876543210",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "query": {
+   "fields": "name,username,profile_pic"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "name": "Adaeze Okafor",
+   "username": "ada.cakes",
+   "profile_pic": "https://scontent.example/p.jpg",
+   "id": "5432109876543210"
+  }
+ }
+}

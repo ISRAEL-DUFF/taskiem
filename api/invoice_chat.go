@@ -132,10 +132,12 @@ func lagos() *time.Location {
 var errInvoiceMoot = errors.New("the invoice is paid, void or gone")
 
 // sendInvoiceItem sends a queued invoice to a contact's chat app
-// (invoicing.OutboxInvoice). The SMS and email went when it was sent, so
-// when the chat cannot carry it (outside WhatsApp's 24-hour window, there
-// being no approved template with its buttons yet; the person stopped or
-// blocked the bot) it is dropped.
+// (invoicing.OutboxInvoice): with its buttons inside WhatsApp's 24-hour
+// window, outside it as the invoice template (Pay by transfer as a quick
+// reply carrying the same signed button, Open invoice opening its page)
+// once Meta approved it in the number's account. The SMS and email went
+// when it was sent, so when the chat cannot carry it (the template not
+// approved; the person stopped or blocked the bot) it is dropped.
 func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) error {
 	key := s.chatSigner().Key
 	if s.Invoices == nil || !s.Reach.Ready() || len(key) < 32 {
@@ -148,7 +150,7 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 	if err != nil {
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}
-	var business, addr string
+	var business, addr, link string
 	var x invoicing.Invoice
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, it.Tenant).Scan(&business); err != nil {
@@ -161,6 +163,9 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 		if !x.Payable() {
 			return errInvoiceMoot
 		}
+		if link, err = s.Invoices.PageLink(ctx, tx, it.Tenant, x); err != nil {
+			return err
+		}
 		addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, reach.Target{Channel: it.Channel, Contact: *it.Contact})
 		return err
 	})
@@ -172,13 +177,17 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 	}
 	l := s.chooseLang(ctx, it.Tenant, addr, "").Tag
 	b := invoiceButton{Tenant: it.Tenant, Invoice: x.ID, Contact: *it.Contact}
-	m := whatsapp.Message{Tenant: it.Tenant, Buttons: invoiceButtons(l, key, b, invoicePay, invoiceOpen),
-		Text: ch.Prefix(business) + tr(l, "invoice.chat.sent", "number", x.Number, "business", business, "amount", invoicing.Naira(x.DueKobo))}
+	buttons := invoiceButtons(l, key, b, invoicePay, invoiceOpen)
+	tpl := whatsapp.TplInvoice
+	m := whatsapp.Message{Tenant: it.Tenant, Buttons: buttons, Template: &tpl,
+		Vars:     map[string]string{"tenant": business, "number": x.Number, "amount": invoicing.Naira(x.DueKobo), "link": link},
+		Payloads: []string{buttons[0].ID},
+		Text:     ch.Prefix(business) + tr(l, "invoice.chat.sent", "number", x.Number, "business", business, "amount", invoicing.Naira(x.DueKobo))}
 	_, err = ch.Send(ctx, addr, m)
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, whatsapp.ErrWindowClosed):
+	case errors.Is(err, whatsapp.ErrWindowClosed), whatsapp.TemplateUnusable(err):
 		return fmt.Errorf("%w: outside WhatsApp's 24-hour window, the invoice went by SMS or email only: %w", whatsapp.ErrNothingToSend, err)
 	case errors.Is(err, telegram.ErrBlocked):
 		if berr := s.Reach.Blocked(ctx, it.Channel, addr); berr != nil {
@@ -208,7 +217,7 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 	if err != nil || (ch.OwnTenant() != uuid.Nil && ch.OwnTenant() != b.Tenant) {
 		return invalid()
 	}
-	var business, link string
+	var business, link, own, ownBank string
 	var x invoicing.Invoice
 	var ok bool
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{b.Tenant}, func(tx pgx.Tx) error {
@@ -224,6 +233,17 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 		case b.Action == invoiceOpen:
 			link, err = s.Invoices.PageLink(ctx, tx, b.Tenant, x)
 		default:
+			// A customer with a number of their own pays into it (W3).
+			if x.CustomerID() != "" {
+				err = tx.QueryRow(ctx, `SELECT account_number, COALESCE(bank_name, '') FROM customer_accounts WHERE customer_id = $1 ORDER BY created_at DESC, id LIMIT 1`,
+					x.CustomerID()).Scan(&own, &ownBank)
+				if err == nil {
+					return nil
+				}
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+			}
 			// The reply goes to the contact's channel: no address is kept.
 			reply, _ := json.Marshal(map[string]any{"contact": b.Contact.String()})
 			var id *uuid.UUID
@@ -247,6 +267,9 @@ func (s *Server) invoicePress(ctx context.Context, ch chatChannel, channel, addr
 		return true, s.waSay(ctx, ch, addr, business, tr(l, "invoice.chat.link", "number", x.Number, "link", link))
 	case b.Action == invoiceOpen:
 		return invalid()
+	case own != "":
+		return true, s.waSay(ctx, ch, addr, business, tr(l, "invoice.chat.own_account", "number", x.Number, "amount", invoicing.Naira(x.TotalKobo-x.PaidKobo),
+			"account", own, "bank", ownBank))
 	}
 	// The account number follows within seconds (InvoiceAnswered).
 	return true, nil

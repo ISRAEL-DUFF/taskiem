@@ -1,0 +1,126 @@
+{
+  "schema": "wd-test/v1",
+  "template": "zoho-crm-paid-invoices",
+  "params": {},
+  "cases": [
+    {
+      "name": "the customer is a contact and the invoice a won deal",
+      "trigger": {
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "id": "0192f0aa-0000-7000-8000-000000000042",
+          "number": "INV-0042",
+          "status": "paid",
+          "amount_kobo": 5375000,
+          "amount": "₦53,750",
+          "paid_kobo": 5375000,
+          "currency": "NGN",
+          "customer": {
+            "name": "Adaeze Okafor",
+            "email": "ada@example.com",
+            "phone": "+2348030000000"
+          },
+          "paid_at": "2026-10-26T14:05:00+01:00",
+          "link": "https://pay.example/i/x"
+        }
+      },
+      "mocks": {
+        "contact": {
+          "output": {
+            "id": "5843104000000425001",
+            "action": "update",
+            "duplicate_field": "Email"
+          }
+        },
+        "deal": {
+          "output": {
+            "id": "5843104000000425101",
+            "action": "insert"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "contact": {
+            "module": "Contacts",
+            "record": {
+              "Last_Name": "Adaeze Okafor",
+              "Email": "ada@example.com",
+              "Phone": "+2348030000000"
+            },
+            "duplicate_check_fields": [
+              "Email"
+            ]
+          },
+          "deal": {
+            "module": "Deals",
+            "record": {
+              "Deal_Name": "Invoice INV-0042",
+              "Stage": "Closed Won",
+              "Amount": 53750.0,
+              "Closing_Date": "2026-10-26",
+              "Contact_Name": {
+                "id": "5843104000000425001"
+              }
+            },
+            "duplicate_check_fields": [
+              "Deal_Name"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "a customer without email is matched by phone",
+      "trigger": {
+        "event": "paid",
+        "body": {
+          "event": "paid",
+          "id": "0192f0aa-0000-7000-8000-000000000042",
+          "number": "INV-0042",
+          "status": "paid",
+          "amount_kobo": 5375000,
+          "amount": "₦53,750",
+          "paid_kobo": 5375000,
+          "currency": "NGN",
+          "customer": {
+            "name": "Bola Ade",
+            "phone": "+2348030000001"
+          },
+          "paid_at": "2026-10-26T14:05:00+01:00",
+          "link": "https://pay.example/i/x"
+        }
+      },
+      "mocks": {
+        "contact": {
+          "output": {
+            "id": "5843104000000425002",
+            "action": "insert"
+          }
+        },
+        "deal": {
+          "output": {
+            "id": "5843104000000425102",
+            "action": "insert"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "contact": {
+            "record": {
+              "Last_Name": "Bola Ade",
+              "Phone": "+2348030000001"
+            },
+            "duplicate_check_fields": [
+              "Phone"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

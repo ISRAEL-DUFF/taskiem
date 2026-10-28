@@ -81,7 +81,7 @@ func TestSoftLimitQueuesThenDrainsInOrder(t *testing.T) {
 	if err != nil || n != 2 {
 		t.Fatalf("first admission: %d %v", n, err)
 	}
-	want := []string{"running", "running", "queued", "queued", "queued"}
+	want := []string{"waiting", "waiting", "queued", "queued", "queued"} // admitted, each on its wait step
 	if got := statuses(t, e, runs); !equal(got, want) {
 		t.Fatalf("after one admission %v, want %v", got, want)
 	}
@@ -103,7 +103,7 @@ func TestSoftLimitQueuesThenDrainsInOrder(t *testing.T) {
 	}
 	for i, r := range runs {
 		h := events(t, e, r.Ref)
-		if e.Status(t, r.Ref) != "running" || count(h, history.RunAdmitted, "") != 1 || count(h, history.StepScheduled, "w") != 1 {
+		if e.Status(t, r.Ref) != "waiting" || count(h, history.RunAdmitted, "") != 1 || count(h, history.StepScheduled, "w") != 1 {
 			t.Errorf("run %d: %s %s", i, e.Status(t, r.Ref), types(h))
 		}
 	}
@@ -281,13 +281,13 @@ func TestMaxRunningRunsQueues(t *testing.T) {
 	if n, _ := e.Store.AdmitQueued(ctx); n != 0 {
 		t.Fatalf("admitted %d while at the cap", n)
 	}
-	if err := e.Store.CancelRun(ctx, a.Ref, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, a.Ref, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := e.Store.AdmitQueued(ctx); n != 1 || err != nil {
 		t.Fatalf("after a ended: %d %v", n, err)
 	}
-	if e.Status(t, b.Ref) != "running" {
+	if e.Status(t, b.Ref) != "waiting" { // admitted, on its wait step
 		t.Errorf("b %s", e.Status(t, b.Ref))
 	}
 }
@@ -316,7 +316,7 @@ func TestMaxStepsPerRunFailsRun(t *testing.T) {
 	}
 	// Under the cap a run is untouched.
 	setLimits(t, e, e.Tenant, map[string]any{"max_steps_per_run": 100})
-	if ok := e.Start(t, wf, map[string]any{}); e.Status(t, ok) != "running" {
+	if ok := e.Start(t, wf, map[string]any{}); e.Status(t, ok) != "waiting" {
 		t.Errorf("under the cap: %s", e.Status(t, ok))
 	}
 }
@@ -340,7 +340,7 @@ func TestAdmissionFairAcrossTenants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Status(t, b.Ref) != "running" {
+	if e.Status(t, b.Ref) != "waiting" {
 		t.Fatal("tenant B's run waited behind tenant A's flood")
 	}
 	if n != 6 { // A's five tokens' worth, and B's one

@@ -1,0 +1,22 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/accounts/2560636000000008002/folders/2560636000000008014/messages/1761480000000100001/content",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": {
+    "code": 200,
+    "description": "success"
+   },
+   "data": {
+    "messageId": "1761480000000100001",
+    "content": "<div>Hello,<br>I would like 40 cupcakes &amp; a card.</div><style>p{}</style>"
+   }
+  }
+ }
+}

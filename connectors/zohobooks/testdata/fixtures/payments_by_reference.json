@@ -1,0 +1,44 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/customerpayments",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "customer_id": "460000000026049",
+   "reference_number": "ml_01JB8Z3K4M5N6P7Q8R9S0T"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "customerpayments": [
+    {
+     "payment_id": "460000000027101",
+     "customer_id": "460000000026049",
+     "amount": 53750.0,
+     "reference_number": "ml_01JB8Z3K4M5N6P7Q8R9S0T",
+     "date": "2026-10-26",
+     "currency_code": "NGN",
+     "payment_mode": "bank_transfer",
+     "created_time": "2026-10-26T14:05:00+0100",
+     "invoices": [
+      {
+       "invoice_id": "460000000027017",
+       "amount_applied": 53750.0
+      }
+     ]
+    }
+   ],
+   "page_context": {
+    "page": 1,
+    "per_page": 200,
+    "has_more_page": false
+   }
+  }
+ }
+}

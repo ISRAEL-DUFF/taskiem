@@ -1,0 +1,31 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/campaigns",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  },
+  "body": {
+   "type": "regular",
+   "recipients": {
+    "list_id": "a6b5da1054"
+   },
+   "settings": {
+    "title": "Win-back 2026-10",
+    "subject_line": "We miss you",
+    "from_name": "Ada Cakes",
+    "reply_to": "hello@adacakes.ng"
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "id": "42694e9e57",
+   "status": "save",
+   "settings": {
+    "title": "Win-back 2026-10"
+   }
+  }
+ }
+}

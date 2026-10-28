@@ -53,7 +53,7 @@ func newReachWorld(t *testing.T) *reachWorld {
 	ctx := context.Background()
 	g := whatsapptest.New(t, waPNID, waToken)
 	wa := whatsapp.New(e.Store.Pool, whatsapp.Config{PhoneNumberID: waPNID, AccessToken: waToken, AppSecret: waSecret, VerifyToken: waVerify,
-		TokenKey: waKey, GraphURL: g.URL, DisplayNumber: "+15550001111"}, e.Egress, slog.New(slog.DiscardHandler))
+		TokenKey: waKey, GraphURL: g.URL, DisplayNumber: "+15550001111", Hosts: whatsapp.Hosts{App: waPublicURL, Forms: "https://" + reachFormHost}}, e.Egress, slog.New(slog.DiscardHandler))
 	wa.Secrets = e.Vault
 	wa.Meter = &whatsapp.UsageMeter{Pool: e.Store.Pool, Allowance: func(ctx context.Context, t uuid.UUID) (int64, error) {
 		l, err := e.Store.LimitsFor(ctx, t)

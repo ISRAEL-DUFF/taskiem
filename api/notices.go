@@ -75,6 +75,26 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+business+"] ")
 	}
+	// A step that names a template of its own (a school's daily close)
+	// goes as that template, its variables from the step's input, and as
+	// the alert template until Meta approves it.
+	if name, _ := in["template"].(string); name != "" {
+		tpl, ok := whatsapp.TellTemplate(name)
+		if !ok {
+			return fmt.Errorf("%w: the template %q is not one a Tell me message can carry", whatsapp.ErrNothingToSend, name)
+		}
+		vars := map[string]string{"tenant": business}
+		if given, _ := in["template_vars"].(map[string]any); given != nil {
+			for k, v := range given {
+				vars[k] = strings.Join(strings.Fields(fmt.Sprint(v)), " ")
+			}
+		}
+		err := sendOwnTemplate(ctx, ch, addr, m.Text, it.Tenant, tpl, vars, m.Vars)
+		if err != nil && !errors.Is(err, whatsapp.ErrFellBack) {
+			return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
+		}
+		return err
+	}
 	if _, err := ch.Send(ctx, addr, m); err != nil {
 		return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
 	}

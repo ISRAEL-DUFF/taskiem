@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -128,7 +129,8 @@ func TestRules(t *testing.T) {
 	reg := registry(t)
 	good, bad := mustLoad(t, goodPayout), mustLoad(t, badPayout)
 	for _, name := range ruleNames() {
-		if name == "capability_when_unnamed" || name == "no_payment_with_product" {
+		switch name {
+		case "capability_when_unnamed", "no_payment_with_product", "reply_in_window", "opted_in_only", "invoice_copied_once", "books_by_capability":
 			continue // their good definitions are below
 		}
 		if ok, why := rules[name](good, reg); !ok {
@@ -139,6 +141,62 @@ func TestRules(t *testing.T) {
 		}
 	}
 }
+
+// The connector rules of business-connectors §10, each on a good
+// definition and on the ways it can go wrong.
+func TestConnectorRules(t *testing.T) {
+	reg := registry(t)
+	for _, c := range []struct {
+		rule, doc string
+		ok        bool
+	}{
+		// A reply to the person who wrote, at once.
+		{"reply_in_window", `{"schema":"wd/v1","id":"wf_r","version":1,"name":"R","trigger":{"type":"connector_event","config":{"connector":"instagram@1","trigger":"messages"}},
+		  "steps":[{"id":"reply","type":"connector","connector":"instagram@1","action":"send_message","input":{"recipient_id":"=trigger.body.sender_id","text":"Thanks"}}]}`, true},
+		// After a three-day wait.
+		{"reply_in_window", `{"schema":"wd/v1","id":"wf_r","version":1,"name":"R","trigger":{"type":"connector_event","config":{"connector":"instagram@1","trigger":"messages"}},
+		  "steps":[{"id":"later","type":"wait","config":{"duration":"72h"}},
+		  {"id":"reply","type":"connector","needs":["later"],"connector":"instagram@1","action":"send_message","input":{"recipient_id":"=trigger.body.sender_id","text":"Still keen?"}}]}`, false},
+		// To people who did not write, on a schedule.
+		{"reply_in_window", `{"schema":"wd/v1","id":"wf_r","version":1,"name":"R","trigger":{"type":"schedule","config":{"cron":"0 9 * * 1"}},
+		  "steps":[{"id":"reply","type":"connector","connector":"messenger@1","action":"send_message","input":{"recipient_id":"=env.psid","text":"Sale"}}]}`, false},
+		// The tag for a person replying by hand.
+		{"reply_in_window", `{"schema":"wd/v1","id":"wf_r","version":1,"name":"R","trigger":{"type":"connector_event","config":{"connector":"messenger@1","trigger":"messages"}},
+		  "steps":[{"id":"reply","type":"connector","connector":"messenger@1","action":"send_message","input":{"recipient_id":"=trigger.body.sender_id","text":"Hi","tag":"HUMAN_AGENT"}}]}`, false},
+		// Only customers who opted in, and saying so.
+		{"opted_in_only", `{"schema":"wd/v1","id":"wf_o","version":1,"name":"O","trigger":{"type":"manual"},
+		  "steps":[{"id":"add","type":"connector","connector":"mailchimp@1","action":"add_or_update_member","when":"=trigger.body.marketing_opt_in == true",
+		  "input":{"audience_id":"a6b5da1054","email":"=trigger.body.email","consent":{"opted_in":true,"source":"checkout"}}}]}`, true},
+		// Everyone, though each is said to have opted in.
+		{"opted_in_only", `{"schema":"wd/v1","id":"wf_o","version":1,"name":"O","trigger":{"type":"manual"},
+		  "steps":[{"id":"add","type":"connector","connector":"mailchimp@1","action":"add_or_update_member",
+		  "input":{"audience_id":"a6b5da1054","email":"=trigger.body.email","consent":{"opted_in":true,"source":"checkout"}}}]}`, false},
+		// Checked, with no consent given.
+		{"opted_in_only", `{"schema":"wd/v1","id":"wf_o","version":1,"name":"O","trigger":{"type":"manual"},
+		  "steps":[{"id":"add","type":"connector","connector":"brevo@1","action":"add_to_list","when":"=trigger.body.opted_in",
+		  "input":{"list_id":7,"emails":["=trigger.body.email"]}}]}`, false},
+		// One invoice, by its number, through the books capability.
+		{"invoice_copied_once", booksDoc, true},
+		{"books_by_capability", booksDoc, true},
+		// A fixed number.
+		{"invoice_copied_once", strings.Replace(booksDoc, `"number":"=trigger.body.number"`, `"number":"INV-1"`, 1), false},
+		// Recorded twice.
+		{"invoice_copied_once", strings.TrimSuffix(booksDoc, `]}`) + `,{"id":"again","type":"capability","uses":"books_invoice","needs":["invoice"],"input":{"number":"=trigger.body.number","customer_id":"=steps.customer.output.customer_id","lines":[{"description":"Cake","amount_kobo":500000}]}}]}`, false},
+		// QuickBooks' own invoice action.
+		{"books_by_capability", `{"schema":"wd/v1","id":"wf_b","version":1,"name":"B","trigger":{"type":"manual"},
+		  "steps":[{"id":"customer","type":"capability","uses":"books_customer","input":{"name":"=trigger.body.name"}},
+		  {"id":"invoice","type":"connector","needs":["customer"],"connector":"quickbooks@1","action":"create_invoice","input":{"customer_id":"=steps.customer.output.customer_id"}}]}`, false},
+	} {
+		got, why := rules[c.rule](mustLoad(t, c.doc), reg)
+		if got != c.ok {
+			t.Errorf("%s on %.140s: %v (%s), want %v", c.rule, c.doc, got, why, c.ok)
+		}
+	}
+}
+
+const booksDoc = `{"schema":"wd/v1","id":"wf_b","version":1,"name":"B","trigger":{"type":"invoice","config":{"event":"paid"}},
+ "steps":[{"id":"customer","type":"capability","uses":"books_customer","input":{"name":"=trigger.body.name"}},
+ {"id":"invoice","type":"capability","uses":"books_invoice","needs":["customer"],"input":{"number":"=trigger.body.number","customer_id":"=steps.customer.output.customer_id","lines":[{"description":"Cake","amount_kobo":500000}]}}]}`
 
 // A payment by capability runs on whichever rail is connected; one by a
 // connector the goal did not name does not.
@@ -432,5 +490,32 @@ func TestFormTriggerDedups(t *testing.T) {
 	 "steps":[{"id":"t","type":"transform","config":{"output":{}}}]}`)
 	if ok, why := rules["dedup"](def, registry(t)); !ok {
 		t.Errorf("dedup: %s", why)
+	}
+}
+
+// CI runs the suites when a change touches what the model is given or
+// what grades its answer: the AI layer, the suites and templates, and the
+// checks, masking, shadow runs and connector manifests the pipelines use.
+func TestCIRunsTheSuitesForTheAILayer(t *testing.T) {
+	raw, err := os.ReadFile("../../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`grep -qE '([^']+)'`).FindSubmatch(raw)
+	if m == nil {
+		t.Fatal("ci.yml: no path filter for the AI evaluation")
+	}
+	filter := regexp.MustCompile(string(m[1]))
+	for _, p := range []string{"engine/ai/builder/builder.go", "evals/builder/payouts.jsonl", "templates/library.go", "tools/aieval/main.go",
+		"api/ai.go", "api/repair.go", "engine/shadow/shadow.go", "engine/pii/mask.go", "engine/wd/model.go", "engine/wdcheck/check.go",
+		"engine/expansion/template.go", "connectors/paystack/manifest.yaml"} {
+		if !filter.MatchString(p) {
+			t.Errorf("a change to %s does not run the AI evaluation", p)
+		}
+	}
+	for _, p := range []string{"api/server.go", "connectors/paystack/paystack.go", "engine/runtime/worker.go", "web/src/App.tsx"} {
+		if filter.MatchString(p) {
+			t.Errorf("a change to %s runs the AI evaluation", p)
+		}
 	}
 }

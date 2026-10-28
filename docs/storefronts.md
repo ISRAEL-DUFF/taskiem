@@ -102,8 +102,8 @@ Under Storefront > Forms, **Set up** adds the form's default workflow from the t
   - after the owner accepts (the default);
   - when ordering;
   - no online payment.
-- **Fulfilment:** pickup and/or delivery, with a note.
-- **Paystack connection:** which of the organisation's connections takes payments (default `main`).
+- **Fulfilment:** pickup and/or delivery, with a note; with delivery, the **areas you deliver to**, each with its fee: the customer chooses one and its fee is added to the total ([dispatch](dispatch.md#delivery-areas)).
+- **Payments connection:** which of the organisation's connections takes payments (default `main`). A Paystack connection takes card payments and bank transfers; any other that opens account numbers for one payment (iswallet, including a business's wallet with Taskiem, Flutterwave, OPay) takes bank transfers only, named `connector/name` (`iswallet/taskiem`). With no other such rail, the page offers the Paystack connections as before.
 
 Saving a form re-publishes a published page, so its buttons match.
 
@@ -119,8 +119,9 @@ Saving a form re-publishes a published page, so its buttons match.
    - seals the customer's details under their personal-data subject (erasing the customer erases them);
    - records the order with a reference such as `AK-7QX4KD`;
    - deletes the inbox row.
-3. **Paid when ordering:** a Paystack checkout page is made at once. The customer's status page takes them to it, and Paystack sends them back.
+3. **Paid when ordering:** on a Paystack form, a checkout page is made at once. The customer's status page takes them to it, and Paystack sends them back.
    - Taskiem asks Paystack about waiting payments every 30 seconds, so no webhook needs setting up in the organisation's Paystack account. When the account does send its events, the payment is also in the [money log](money-log.md), and whichever Taskiem hears first marks the order paid: once ([payments and matching](#payments-and-matching)).
+   - **By bank transfer** ([below](#paying-by-bank-transfer)): the status page offers **Pay by bank transfer** beside the card page, or alone on another rail's form.
    - Once paid, the workflow starts. An order not paid within 30 minutes expires and starts nothing.
 4. **The workflow runs.** The default order workflow:
    - **Asks the owner to accept or decline**, in WhatsApp, Telegram or Approvals, showing the items, the total and how it is collected. No answer within a day declines it.
@@ -131,6 +132,7 @@ Saving a form re-publishes a published page, so its buttons match.
      - the workflow waits for the payment;
      - paid, the customer is told; not paid within a day, the order expires and the customer is told.
    - Then it **asks the owner to mark it delivered or collected**, which completes the order.
+   - **With riders of its own** ([dispatch](dispatch.md)), a business offers a confirmed order for delivery to a rider from its page or chat, or turns on deliveries so its workflow does. The rider's taps move the order to **With a rider**, **On the way** and **At the door**, tell the customer at each step, and their **Delivered** completes it. A customer may **pay at the door**, by an account number issued when the rider arrives, or in cash.
 
    The enquiry and call-back workflows acknowledge the customer by text, and ask the owner to mark them answered or called back.
 
@@ -183,13 +185,24 @@ Then cancel or [refund](#refunds) the order instead. Otherwise the order goes ba
 
 Money that reached a paid order by bank transfer has no Paystack payment to refund: an order declined after it is left refund due, to be refunded by the business itself.
 
+### Paying by bank transfer
+
+An order or booking waiting for its payment can be paid by transfer into a one-time account number on the form's rail ([plan N3](spec/iswallet-account-numbers.md#103-pay-by-transfer-on-the-storefront-n3)), as an invoice's page offers one:
+
+- **On the status page**, **Pay by bank transfer** (`POST /o/{reference}/pay`) asks for the number. The public host only queues the request; within a second the `api` role checks the order is still waiting, lengthens its hold so the customer has time (at least an hour for an order, 30 minutes for a booking's time; the page says until when), and issues the number with the business's connection, keyed to the order so a retry is the same number. The page shows the number, bank, name, amount and minutes left, refreshing itself until the money arrives. At most 5 numbers an hour and 20 in all per order.
+- **The numbers are the invoices' accounts** (`customer_invoice_accounts`, holding an order instead of an invoice): the payment id is recorded before the rail is asked, rails that can be asked are checked every 30 seconds, and the rail's payment event (in the money log) is matched exactly. Either way the order is paid along the path its card payment takes, once, and its workflow starts (or the waiting one is told).
+- **Paid after acceptance** on another rail's form: the workflow's payment link is the order's status page, held for 24 hours.
+- **Late or wrong amounts** are each rail's to return or report, as for invoices. A payment that reaches an order no longer waiting (expired, or paid another way) stays in the money log for a person (To match).
+
 ### Refunds
 
 A paid order or booking that is declined or cancelled is left **refund due**. Taskiem never refunds unasked: the owner confirms, and then Taskiem refunds the payment in full through the business's own Paystack connection, from its Paystack balance.
 
+**Paid by bank transfer** (or by money matched to it; the order's `paid_by` is `transfer` or `other`), there is no card payment to refund and Taskiem cannot send money back on those rails: the owner sends it back from their own bank and marks the order refunded (**Mark refunded** on the order page, `refunded AK-7QX4KD` in chat, or `POST /v1/storefront/orders/{reference}/refunded`, with an optional note). The customer is told. The workflow's refund step answers `by_hand: true` with what to do, and the order says so until it is marked.
+
 - **In the default workflows:** after a paid order or booking is declined, the owner is asked "Refund the customer?": approve to refund now, reject to refund it yourself.
 - **In chat:** `refund AK-7QX4KD`, confirmed with **yes** (audited; `storefront.manage`). Cancelling a paid booking in chat says so.
-- **In the web app:** the order page's **Refund through Paystack**.
+- **In the web app:** the order page's **Refund through Paystack**, or **Mark refunded** for one refunded outside Taskiem.
 - **In a workflow of your own:** `storefront@1` `refund`, after an approval.
 
 The order becomes **refunded** and the customer is told the money reaches them in about 5 to 10 working days. If Paystack refuses (most often, too little balance), the order stays refund due with Paystack's reason; try again later, or refund in Paystack. A second refund of the same payment is never made.
@@ -312,6 +325,7 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `order AK-7QX4KD` | One order, the customer masked |
 | `order AK-7QX4KD ready` | For an accepted or paid order: texts the customer that it is ready (by SMS, and email when they gave one), and leaves its status: it is not done until it is collected |
 | `order AK-7QX4KD delivered` (or `collected`, `done`) | Completes it, as the order workflow's "mark it delivered or collected" step does. A run still waiting on that step finds it completed |
+| `order AK-7QX4KD to Musa`, `release AK-7QX4KD`, `deliveries`, `turn on deliveries` | A business's own riders ([dispatch](dispatch.md#in-chat)) |
 
 Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
 

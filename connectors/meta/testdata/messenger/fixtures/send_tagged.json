@@ -1,0 +1,26 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/104123456789012/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "body": {
+   "recipient": {
+    "id": "6789012345678901"
+   },
+   "messaging_type": "MESSAGE_TAG",
+   "tag": "HUMAN_AGENT",
+   "message": {
+    "text": "Sorry for the wait: it ships today."
+   }
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "recipient_id": "6789012345678901",
+   "message_id": "m_tagged"
+  }
+ }
+}

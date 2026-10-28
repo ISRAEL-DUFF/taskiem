@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/invoices/999",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695"
+  }
+ },
+ "response": {
+  "status": 404,
+  "body": {
+   "code": 1002,
+   "message": "Invoice does not exist."
+  }
+ }
+}

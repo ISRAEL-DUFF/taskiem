@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/connectors/builtin"
 	"github.com/israel-duff/taskiem/connectors/gmail"
 	"github.com/israel-duff/taskiem/connectors/googlesheets"
 	"github.com/israel-duff/taskiem/connectors/notify"
@@ -42,7 +43,9 @@ func TestTemplatesListAndInstantiate(t *testing.T) {
 	for _, x := range list {
 		m := x.(map[string]any)
 		byID[m["id"].(string)] = m
-		if len(m["steps"].([]any)) < 2 || len(m["params"].([]any)) == 0 || m["definition"] != nil {
+		// Every template reads as plain steps and lists its parameters
+		// (school-receipt has none: its receipt is sent as it is).
+		if _, ok := m["params"].([]any); !ok || len(m["steps"].([]any)) < 2 || m["definition"] != nil {
 			t.Errorf("%s: steps %v params %v", m["id"], m["steps"], m["params"])
 		}
 	}
@@ -227,5 +230,45 @@ func TestTemplateMakesItsTables(t *testing.T) {
 	first = out["tables"].([]any)[0].(map[string]any)
 	if first["status"] == "created" || first["error"] == "" {
 		t.Errorf("without data tables: %v", first)
+	}
+}
+
+// A template works with the services a business connects (K9): the
+// Start page offers it once each is connected. The books are either
+// QuickBooks or Zoho Books, and their templates are available although
+// no rail records invoices.
+func TestTemplateServices(t *testing.T) {
+	w := newWorld(t)
+	if err := builtin.Register(w.env.Registry, builtin.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Ada Cakes", "owner@adacakes.test")
+	byID := map[string]map[string]any{}
+	for _, x := range owner.must(200, "GET", "/v1/templates", nil)["templates"].([]any) {
+		m := x.(map[string]any)
+		byID[m["id"].(string)] = m
+	}
+	for id, want := range map[string]string{
+		"books-copy-invoice":                  `[["quickbooks","zoho_books"]]`,
+		"books-school-daily-takings":          `[["quickbooks","zoho_books"]]`,
+		"slack-paid-invoices":                 `[["slack"]]`,
+		"messenger-away-reply":                `[["messenger"]]`,
+		"zoho-crm-paid-invoices":              `[["zoho_crm"]]`,
+		"mailchimp-unsubscribes-to-customers": `[["mailchimp"]]`,
+		"payrolla-payday-check":               `[["payrolla"]]`,
+		"resend-paid-receipt":                 `null`,
+		"debtor-reminder-sms":                 `null`,
+	} {
+		m, ok := byID[id]
+		if !ok {
+			t.Errorf("%s is not offered", id)
+			continue
+		}
+		if got := toJSON(m["services"]); got != want {
+			t.Errorf("%s: services %s, want %s", id, got, want)
+		}
+		if strings.HasPrefix(id, "books-") && m["available"] != true {
+			t.Errorf("%s is unavailable", id)
+		}
 	}
 }

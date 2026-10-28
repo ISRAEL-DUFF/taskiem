@@ -17,7 +17,7 @@
     <div class="group-head"><h2 class="h3">{{$g.Title}}</h2><span class="count">{{len $g.Items}}</span></div>
     <ul class="logos">
     {{- range $g.Items}}
-      <li>{{if .DocURL}}<a href="{{.DocURL}}"><b>{{.Name}}</b></a>{{else}}<b>{{.Name}}</b>{{end}}<span>{{.Description}}</span></li>
+      <li><a href="{{$.Base}}{{.Page}}"><b>{{.Name}}</b></a><span>{{.Description}}</span></li>
     {{- end}}
     </ul>
   </div>

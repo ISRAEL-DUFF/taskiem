@@ -42,10 +42,13 @@ const (
 	// FeatureStorefrontPayOnOrder: a storefront taking payment when the
 	// customer orders or books, rather than after the owner accepts.
 	FeatureStorefrontPayOnOrder = "storefront_pay_on_order"
+	// FeatureReceiveMoney: a wallet under Taskiem's own iswallet client
+	// (decision 0052), for a business with no payments account of its own.
+	FeatureReceiveMoney = "receive_money"
 )
 
 // AllFeatures in display order.
-var AllFeatures = []string{FeatureSSO, FeatureSCIM, FeatureCustomRoles, FeatureWhiteLabel, FeatureBYOK, FeatureGit, FeatureAI, FeatureEmbedded, FeatureStorefrontPayOnOrder}
+var AllFeatures = []string{FeatureSSO, FeatureSCIM, FeatureCustomRoles, FeatureWhiteLabel, FeatureBYOK, FeatureGit, FeatureAI, FeatureEmbedded, FeatureStorefrontPayOnOrder, FeatureReceiveMoney}
 
 // Tiers, cheapest first (spec 16.1). internal is the self-hosted plan.
 var Tiers = []string{"internal", "shop", "starter", "growth", "business", "enterprise"}

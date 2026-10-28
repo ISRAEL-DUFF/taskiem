@@ -8,11 +8,13 @@ import (
 	"mime/multipart"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
 )
 
@@ -102,6 +104,26 @@ func (s *Server) uploadTenantConnector(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The catalogue's lint, with tenant rules (findings 5 in Atlas part C):
+	// a write named as a read would be retried freely, and undeclared
+	// personal data would not be sealed in history. Errors refuse the
+	// upload; warnings go back to the author.
+	_, findings := catalogue.Lint(manifest, catalogue.LintOptions{})
+	if errs := catalogue.Errors(findings); len(errs) > 0 {
+		msgs := make([]string, 0, len(errs))
+		for _, f := range errs {
+			msgs = append(msgs, f.Path+": "+f.Message)
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "the manifest does not pass the connector lint: " + strings.Join(msgs, "; "), "code": "manifest_lint", "findings": errs})
+		return
+	}
+	if _, err := s.Connectors.Runtime.Inspect(r.Context(), module); err != nil {
+		if errors.Is(err, wasmconn.ErrInvalid) {
+			err = fmt.Errorf("%w: %w", errBadRequest, err)
+		}
+		s.fail(w, r, err)
+		return
+	}
 	c, err := s.Connectors.Runtime.Load(r.Context(), manifest, module)
 	if errors.Is(err, wasmconn.ErrInvalid) {
 		s.fail(w, r, fmt.Errorf("%w: %w", errBadRequest, err))
@@ -135,7 +157,13 @@ func (s *Server) uploadTenantConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Connectors.ForgetAll() // its sub-tenants may see it (shared connectors)
-	writeJSON(w, http.StatusCreated, map[string]any{"id": m.ID, "version": m.Version, "ref": c.Ref(), "digest": digest, "actions": actions, "hosts": m.Hosts()})
+	warnings := []catalogue.Finding{}
+	for _, f := range findings {
+		if f.Level != "error" {
+			warnings = append(warnings, f)
+		}
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": m.ID, "version": m.Version, "ref": c.Ref(), "digest": digest, "actions": actions, "hosts": m.Hosts(), "warnings": warnings})
 }
 
 func formFile(f *multipart.Form, name string, limit int64) ([]byte, error) {

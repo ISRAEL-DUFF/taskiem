@@ -182,7 +182,13 @@ func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind st
 	if kind == "transfer" {
 		in["expires_minutes"] = min(max(AccountMinutes, rail.Transfer.MinMinutes), rail.Transfer.MaxMinutes)
 	}
-	out, err := s.Rails.Call(ctx, tenant, rail, capab, in, PaymentKey(tenant, invoice, kind, a.Seq))
+	return s.ask(ctx, tenant, a, rail, capab, in, PaymentKey(tenant, invoice, kind, a.Seq))
+}
+
+// ask asks the rail for an account or link whose row is written
+// (requested), and records what it answered.
+func (s *Invoices) ask(ctx context.Context, tenant uuid.UUID, a Account, rail Rail, capab string, in map[string]any, key effects.KeyInput) (Account, error) {
+	out, err := s.Rails.Call(ctx, tenant, rail, capab, in, key)
 	if err != nil {
 		// Unknown outcome: the row stays requested and the checker looks
 		// the payment id up; anything else failed and says why.
@@ -199,7 +205,7 @@ func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind st
 		set["payment_id"] = v
 		a.PaymentID = v
 	}
-	if kind == "transfer" {
+	if a.Kind == "transfer" {
 		a.AccountNumber, a.BankName, a.AccountName = str("account_number"), str("bank_name"), str("account_name")
 		if t, err := time.Parse(time.RFC3339, str("expires_at")); err == nil {
 			a.ExpiresAt = &t
@@ -215,6 +221,90 @@ func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind st
 		return a, err
 	}
 	return a, nil
+}
+
+// OrderTransfer is what a storefront order's one-time account number is
+// asked for with (N3): the storefront checks the order and says how much,
+// on which connection, and for how long.
+type OrderTransfer struct {
+	Connection  string
+	AmountKobo  int64
+	Description string
+	Payer       map[string]any // name, phone, email
+	Minutes     int            // the window wanted, kept within the rail's range
+}
+
+// OrderPaymentKey is the key of an order's seq'th account number.
+func OrderPaymentKey(tenant, order uuid.UUID, seq int) effects.KeyInput {
+	return effects.KeyInput{TenantID: tenant.String(), Seed: "order:" + order.String(), StepID: fmt.Sprintf("transfer:%d", seq)}
+}
+
+// IssueForOrder gives a storefront order a one-time account number, as
+// Issue gives an invoice one: an open one for the same amount is given
+// again, the limits are the invoices', and the row with the payment id is
+// written before the rail is asked. The caller has checked the order.
+func (s *Invoices) IssueForOrder(ctx context.Context, tenant, order uuid.UUID, t OrderTransfer) (Account, error) {
+	if s.Rails == nil {
+		return Account{}, fmt.Errorf("%w: payments are not set up on this server", ErrNoRail)
+	}
+	if t.AmountKobo < 100 {
+		return Account{}, invalid("nothing to pay")
+	}
+	var a Account
+	var rail Rail
+	fresh := false
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		// One at a time for an order.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('order-accounts:' || $1::text))`, order); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT `+accountCols+` FROM customer_invoice_accounts WHERE order_id = $1 AND kind = 'transfer' ORDER BY seq DESC`, order)
+		if err != nil {
+			return err
+		}
+		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Account, error) { return scanAccount(r) })
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		hour := 0
+		for _, o := range list {
+			if o.AmountKobo == t.AmountKobo && (o.Open(now) || o.Status == "requested" && o.CreatedAt.After(now.Add(-time.Minute))) {
+				a = o
+				return nil
+			}
+			if o.CreatedAt.After(now.Add(-time.Hour)) {
+				hour++
+			}
+		}
+		if hour >= MaxPerHour || len(list) >= MaxPerInvoice {
+			return ErrLimit
+		}
+		if rail, err = s.Rails.Resolve(ctx, tenant, t.Connection); err != nil {
+			return err
+		}
+		if rail.Transfer == nil {
+			return fmt.Errorf("%w: %s cannot open account numbers for one payment", ErrNoRail, rail.Name)
+		}
+		seq := len(list) + 1
+		pid, err := s.Rails.Key(rail, "collect_transfer", OrderPaymentKey(tenant, order, seq))
+		if err != nil {
+			return err
+		}
+		a = Account{ID: uuid.New(), Seq: seq, Kind: "transfer", Connector: rail.Connector, Connection: rail.Connection, PaymentID: pid, AmountKobo: t.AmountKobo,
+			Status: "requested", OnLate: rail.Transfer.OnLate, OnWrongAmount: rail.Transfer.OnWrongAmount, CreatedAt: now}
+		fresh = true
+		_, err = tx.Exec(ctx, `INSERT INTO customer_invoice_accounts (id, tenant_id, order_id, seq, kind, connector, connection, payment_id, amount_kobo, on_late, on_wrong_amount)
+			VALUES ($1, $2, $3, $4, 'transfer', $5, $6, $7, $8, $9, $10)`,
+			a.ID, tenant, order, a.Seq, a.Connector, a.Connection, a.PaymentID, a.AmountKobo, nullable(a.OnLate), nullable(a.OnWrongAmount))
+		return err
+	})
+	if err != nil || !fresh {
+		return a, err
+	}
+	in := map[string]any{"amount_kobo": a.AmountKobo, "customer": t.Payer, "description": t.Description,
+		"expires_minutes": min(max(t.Minutes, rail.Transfer.MinMinutes), rail.Transfer.MaxMinutes)}
+	return s.ask(ctx, tenant, a, rail, "collect_transfer", in, OrderPaymentKey(tenant, order, a.Seq))
 }
 
 // payer is what the rail is told of the customer. Rails that need an
@@ -263,11 +353,13 @@ func (s *Invoices) setAccount(ctx context.Context, tenant, id uuid.UUID, set map
 	})
 }
 
-// Request is a request for an account or link waiting to be issued.
+// Request is a request for an account or link waiting to be issued:
+// for an invoice, or a storefront order's account number (Order set).
 type Request struct {
 	ID         uuid.UUID
 	Tenant     uuid.UUID
 	Invoice    uuid.UUID
+	Order      *uuid.UUID
 	Kind       string
 	AmountKobo int64
 	Channel    string // page, whatsapp or telegram
@@ -278,14 +370,18 @@ type Request struct {
 // second. A request that fails is dropped: the page shows the account's
 // state, and the customer can ask again.
 func (s *Invoices) Drain(ctx context.Context) error {
-	rows, err := s.Pool.Query(ctx, `SELECT id, tenant_id, invoice_id, kind, amount_kobo, channel, reply_to FROM taskiem_invoice_requests_claim(20)`)
+	rows, err := s.Pool.Query(ctx, `SELECT id, tenant_id, invoice_id, order_id, kind, amount_kobo, channel, reply_to FROM taskiem_invoice_requests_claim(20)`)
 	if err != nil {
 		return err
 	}
 	reqs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Request, error) {
 		var q Request
+		var invoice *uuid.UUID
 		var reply []byte
-		err := r.Scan(&q.ID, &q.Tenant, &q.Invoice, &q.Kind, &q.AmountKobo, &q.Channel, &reply)
+		err := r.Scan(&q.ID, &q.Tenant, &invoice, &q.Order, &q.Kind, &q.AmountKobo, &q.Channel, &reply)
+		if invoice != nil {
+			q.Invoice = *invoice
+		}
 		if len(reply) > 0 {
 			_ = json.Unmarshal(reply, &q.ReplyTo)
 		}
@@ -295,6 +391,18 @@ func (s *Invoices) Drain(ctx context.Context) error {
 		return err
 	}
 	for _, q := range reqs {
+		if q.Order != nil {
+			// A storefront order's: the storefront checks it and issues.
+			if s.OrderRequested != nil {
+				if err := s.OrderRequested(ctx, q.Tenant, *q.Order); err != nil {
+					s.log().Warn("order account", "tenant", q.Tenant, "order", *q.Order, "err", err)
+				}
+			}
+			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_invoice_requests_done($1)`, q.ID); err != nil {
+				return err
+			}
+			continue
+		}
 		a, err := s.Issue(ctx, q.Tenant, q.Invoice, q.Kind, q.AmountKobo)
 		if err != nil {
 			s.log().Warn("invoice account", "tenant", q.Tenant, "invoice", q.Invoice, "kind", q.Kind, "err", err)
@@ -334,14 +442,14 @@ func (s *Invoices) CheckPayments(ctx context.Context) error {
 
 type watched struct {
 	Account
-	invoice uuid.UUID
+	invoice, order *uuid.UUID
 }
 
 func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	now := s.now()
 	var list []watched
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id FROM customer_invoice_accounts
+		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id, order_id FROM customer_invoice_accounts
 			WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
 			ORDER BY checked_at NULLS FIRST LIMIT 50`, tenant, now.Add(-30*time.Second))
 		if err != nil {
@@ -351,7 +459,7 @@ func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 			var w watched
 			a := &w.Account
 			err := r.Scan(&a.ID, &a.Seq, &a.Kind, &a.Connector, &a.Connection, &a.PaymentID, &a.AmountKobo, &a.Status, &a.AccountNumber, &a.BankName,
-				&a.AccountName, &a.PaymentURL, &a.ExpiresAt, &a.OnLate, &a.OnWrongAmount, &a.Error, &a.CreatedAt, &w.invoice)
+				&a.AccountName, &a.PaymentURL, &a.ExpiresAt, &a.OnLate, &a.OnWrongAmount, &a.Error, &a.CreatedAt, &w.invoice, &w.order)
 			return w, err
 		})
 		return err
@@ -383,6 +491,12 @@ func (s *Invoices) check(ctx context.Context, tenant uuid.UUID, w watched) error
 	if err != nil {
 		return err
 	}
+	if rail.Caps != nil && !rail.Maps("get_payment") {
+		// A rail that cannot be asked (iswallet) says so by its webhook
+		// alone: payment.received counts the payment. Marked checked, so
+		// the other rails' accounts are polled in their turn.
+		return s.setAccount(ctx, tenant, w.ID, map[string]any{"checked_at": s.now()})
+	}
 	out, err := s.Rails.Call(ctx, tenant, rail, "get_payment", map[string]any{"payment_id": w.PaymentID}, effects.KeyInput{})
 	_ = s.setAccount(ctx, tenant, w.ID, map[string]any{"checked_at": s.now()})
 	if err != nil {
@@ -397,7 +511,14 @@ func (s *Invoices) check(ctx context.Context, tenant uuid.UUID, w watched) error
 	} else if v, ok := out["amount_kobo"].(float64); ok && v > 0 {
 		amount = int64(v)
 	}
-	return s.Received(ctx, tenant, w.invoice, Received{PaymentID: w.PaymentID, AmountKobo: amount, Connection: w.Connector + "/" + w.Connection, Account: w.ID})
+	r := Received{PaymentID: w.PaymentID, AmountKobo: amount, Connection: w.Connector + "/" + w.Connection, Account: w.ID}
+	switch {
+	case w.order != nil && s.OrderReceived != nil:
+		return s.OrderReceived(ctx, tenant, *w.order, r)
+	case w.invoice != nil:
+		return s.Received(ctx, tenant, *w.invoice, r)
+	}
+	return nil
 }
 
 // Received is a payment a rail reported for an account or link.

@@ -5,12 +5,14 @@
 # OpenAPI, read 23 October 2026 at
 # https://synledger.name.ng/iwallet/openapi.json (served as
 # /iwallet/docs/doc.json): "Bulk-issue virtual accounts" and "List
-# transactions" (docs/spec/schools-rail-facts.md).
+# transactions" (docs/spec/schools-rail-facts.md). Issuing, wallets,
+# providers and the credit webhook's fields follow iswallet's guide of 27
+# October 2026 (docs/spec/iswallet-account-numbers.md).
 manifest: connector/v1
 id: iswallet
-version: 1.4.0
+version: 1.5.0
 name: iswallet
-description: Wallet-to-wallet transfers, bank payouts, balances, customers' account numbers and wallet events on iswallet.
+description: Wallet-to-wallet transfers, bank payouts, balances, wallets, customers' account numbers and wallet events on iswallet.
 category: payments
 kind: rail
 regions: [NG]
@@ -18,7 +20,9 @@ auth:
   type: api_key
   fields:
     - { key: api_key, label: API key (client scope), secret: true }
-    - { key: webhook_secret, label: Webhook signing secret (from the subscription), secret: true, required: false }
+    # Taskiem subscribes each connection itself and keeps the secret iswallet
+    # returns; this is for a subscription made by hand instead.
+    - { key: webhook_secret, label: "Webhook signing secret, only for a subscription made by hand", secret: true, required: false }
     # A client key reaches every wallet of the client. When one client is
     # shared by several customers (a partner's sub-tenants), wallet_ids
     # limits the connection to the customer's own wallets (decision 0031).
@@ -31,7 +35,8 @@ auth:
   modes:
     - { mode: live, label: Live (real money), base_url: https://ispend.name.ng/iwallet }
     - { mode: test, label: Test (practice), base_url: https://synledger.name.ng/iwallet }
-  test: { action: list_banks }
+  # The key works, and which partners can issue account numbers.
+  test: { action: list_providers }
 # 100 requests a minute per API key (client scope).
 rate_limit: { requests: 100, per: 1m, scope: connection }
 # Where connections made before modes go: the sandbox, or
@@ -178,11 +183,12 @@ actions:
     title: Issue a customer's account number
     description: >-
       A permanent account number (NUBAN) on a wallet, one per reference
-      (POST /v1/wallets/{id}/virtual-accounts/batch with one account).
-      iswallet answers the account already issued for a reference again,
-      so a resend never opens a second. A business wallet needs its
-      director's BVN first (KYC_REQUIRED otherwise). Transfers into it
-      credit the wallet net of the provider's fee.
+      (POST /v1/wallets/{id}/virtual-account, type permanent). iswallet
+      answers the account already issued for a reference again, so a
+      resend never opens a second. Every wallet needs an email, and a
+      business wallet its director's BVN, first (KYC_REQUIRED otherwise,
+      naming the field). Transfers into it credit the wallet; the partner's
+      fee is passed to the payer by default.
     class: idempotent_write
     idempotency:
       field: reference
@@ -198,8 +204,9 @@ actions:
       required: [wallet_id]
       properties:
         wallet_id:    { type: string, description: The wallet the number pays into }
-        account_name: { type: string, description: "Asked for; iswallet says the name and bank are its partner's, so the number may show another" }
+        account_name: { type: string, description: What a payer's bank shows when it resolves the number }
         reference:    { type: string }
+        provider:     { type: string, description: "A partner from list_providers; iswallet chooses when it is left out" }
     output:
       type: object
       properties:
@@ -208,11 +215,167 @@ actions:
         account_number: { type: string }
         account_name:   { type: string }
         bank_name:      { type: string }
-        status:         { type: string, description: "created, or existing when the reference had an account already" }
+        status:         { type: string, description: "iswallet's status for the account (active)" }
+        request_id:     { type: string, description: "iswallet's X-Request-ID for the call, for a report to iswallet" }
     pii:
       - { field: account_name, category: name }
       - { field: output.account_name, category: name }
       - { field: output.account_number, category: account_number }
+  issue_virtual_accounts:
+    title: Issue many customers' account numbers
+    description: >-
+      Up to 500 permanent account numbers on one wallet in one call (POST
+      /v1/wallets/{id}/virtual-accounts/batch), for an enrolment sitting.
+      Idempotent per reference, so running it again after a partial failure
+      is safe; each account has its own result (created, existing or failed,
+      with iswallet's error code).
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 255 }
+    compensate: null
+    input:
+      type: object
+      required: [wallet_id, accounts]
+      properties:
+        wallet_id: { type: string }
+        accounts:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [reference]
+            properties:
+              reference:    { type: string, maxLength: 64 }
+              account_name: { type: string }
+    output:
+      type: object
+      properties:
+        wallet_id: { type: string }
+        created:   { type: integer }
+        existing:  { type: integer }
+        failed:    { type: integer }
+        accounts:  { type: array, items: { type: object }, description: "One per account: reference, status (created, existing, failed), account_number, account_name, bank_name, error_code, error_message" }
+        request_id: { type: string }
+    pii:
+      - { field: accounts, category: name }
+      - { field: output.accounts, category: account_number }
+  create_dynamic_account:
+    title: Open an account number for one payment
+    description: >-
+      A one-time account number (POST /v1/wallets/{id}/virtual-account, type
+      dynamic) for one amount, on the connection's wallet (its wallet_ids
+      must list exactly one). Every call opens another account, so the
+      action is unsafe: an unknown outcome parks rather than risk two.
+      iswallet's 30-minute expiry is advisory (it refuses neither a late
+      payment nor a second one), so expires_at is Taskiem's own window. The
+      payment arrives as wallet.credit.posted carrying the reference
+      (tot_ and the step's key).
+    class: unsafe_write
+    # The key is the reference, and tot_ marks a one-time number: the
+    # invoice records the payment id before asking, so money paid in is
+    # found even when the answer is lost. Not a promise of idempotency:
+    # iswallet opens another account on every call.
+    idempotency:
+      field: reference
+      encoding: base32_lower
+      length: 32
+      prefix: "tot_"
+      limits: { max_length: 64, charset: "a-z0-9_" }
+    compensate: null
+    input:
+      type: object
+      required: [amount]
+      properties:
+        reference:       { type: string }
+        amount:          { type: integer, minimum: 1, description: Kobo }
+        account_name:    { type: string, description: What a payer's bank shows when it resolves the number }
+        expires_minutes: { type: integer, minimum: 1, maximum: 1440 }
+    output:
+      type: object
+      properties:
+        wallet_id:      { type: string }
+        reference:      { type: string, description: The step's key; the payment's credit event carries it }
+        account_number: { type: string }
+        account_name:   { type: string }
+        bank_name:      { type: string }
+        amount:         { type: integer, description: Kobo }
+        expires_at:     { type: string, description: "RFC 3339: Taskiem's window, counted from when the request was sent" }
+        request_id:     { type: string }
+    pii:
+      - { field: account_name, category: name }
+      - { field: output.account_name, category: name }
+      - { field: output.account_number, category: account_number }
+  list_providers:
+    title: List the partners that issue account numbers
+    description: GET /v1/providers. Also the connection's check that its key works.
+    class: read
+    input: { type: object, properties: {} }
+    output:
+      type: object
+      properties:
+        providers:
+          type: array
+          items:
+            type: object
+            properties:
+              code:       { type: string }
+              currencies: { type: array, items: { type: string } }
+              permanent:  { type: boolean, description: Can issue permanent accounts }
+              dynamic:    { type: boolean, description: Can issue one-time accounts }
+        request_id: { type: string }
+  create_wallet:
+    title: Create a wallet
+    description: >-
+      A wallet for a customer or a business (POST /v1/wallets), one per
+      owner_ref and currency. Identity fields are flat, never a kyc_profile.
+      Every wallet needs an email; a business wallet its director's BVN
+      before it can issue account numbers. The wallet-level number iswallet
+      answers is its own handle and nobody can pay into it, so it is not
+      returned: internal_reference is. A retry with the same key never
+      makes a second wallet.
+    class: idempotent_write
+    idempotency:
+      field: header:Idempotency-Key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { max_length: 255 }
+    compensate: null
+    input:
+      type: object
+      required: [owner_type, owner_ref]
+      properties:
+        owner_type:
+          type: string
+          enum: [client_end_user, client_end_user_business, client_end_business]
+          description: "An individual; a business holding other people's money (a school's fees), its own segregated account; a business holding only its own money, pooled"
+        owner_ref:      { type: string, description: "Taskiem's key for the owner (tenant:<id> for a business's own wallet)" }
+        currency:       { type: string, default: NGN }
+        email:          { type: string }
+        business_email: { type: string }
+        bvn:            { type: string, description: The director's BVN, for a business wallet }
+        first_name:     { type: string }
+        last_name:      { type: string }
+        business_name:  { type: string }
+    output:
+      type: object
+      properties:
+        wallet_id:          { type: string }
+        internal_reference: { type: string, description: "iswallet's handle for the wallet; not an account number anyone can pay into" }
+        tier:               { type: string }
+        owner_type:         { type: string }
+        request_id:         { type: string }
+    pii:
+      - { field: email, category: email }
+      - { field: business_email, category: email }
+      - { field: bvn, category: bvn }
+      - { field: first_name, category: name }
+      - { field: last_name, category: name }
   list_transactions:
     title: List a wallet's transactions
     description: >-
@@ -240,7 +403,10 @@ triggers:
   outflow_event:
     type: webhook
     title: Payouts
-    where: "An iswallet webhook subscription for the outflow events; add its signing secret to this connection"
+    where: "Taskiem subscribes this connection itself; a subscription made by hand instead needs its signing secret on this connection"
+    # One subscription per connection and environment, made through
+    # iswallet's API when the connection is (docs/spec/iswallet-account-numbers.md I7).
+    registration: connection
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
     events: [wallet.outflow.confirmed, wallet.outflow.failed, wallet.outflow.reversed]
     event_type: =body.event_type
@@ -251,16 +417,30 @@ triggers:
     route: { key: =body.wallet_id, field: wallet_ids }
   credit_event:
     type: webhook
+    registration: connection
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
     events: [wallet.credit.posted, wallet.credit.reversed, wallet.credit.rejected]
     event_type: =body.event_type
     # By movement rather than envelope, as iswallet advises (12 October
-    # 2026): two events for one movement are then one event here.
-    dedup: '=has(body.data) && has(body.data.txn_id) ? body.event_type + ":" + body.data.txn_id + ":" + body.wallet_id : body.id'
-    correlation: =body.wallet_id
+    # 2026): two events for one movement are then one event here. An
+    # event naming no movement is kept once by the delivery key every
+    # retry of it carries (X-iSpend-Idempotency-Key, 27 October), else its
+    # envelope id.
+    dedup: >-
+      =has(body.data) && has(body.data.txn_id) ? body.event_type + ":" + body.data.txn_id + ":" + body.wallet_id
+      : has(body.data) && has(body.data.provider_reference) && body.data.provider_reference != '' ? body.event_type + ":" + body.data.provider_reference + ":" + body.wallet_id
+      : "x-ispend-idempotency-key" in headers ? string(headers["x-ispend-idempotency-key"]) : body.id
+    # What its event names: a credit by its account's reference (a
+    # one-time number's payment too), a reversed credit by its
+    # provider_reference; any other by its wallet.
+    correlation: >-
+      =!has(body.data) || !has(body.data.virtual_account) || !has(body.data.virtual_account.reference) || body.data.virtual_account.reference == '' ? body.wallet_id
+      : body.event_type == 'wallet.credit.reversed' && !string(body.data.virtual_account.reference).startsWith('tot_') ? (has(body.data.provider_reference) && body.data.provider_reference != '' ? string(body.data.provider_reference) : body.wallet_id)
+      : string(body.data.virtual_account.reference)
     route: { key: =body.wallet_id, field: wallet_ids }
   transfer_event:
     type: webhook
+    registration: connection
     verify: { scheme: hmac_sha256_timestamped, header: X-iSpend-Signature, timestamp_header: X-iSpend-Timestamp, tolerance: 5m, secret_field: webhook_secret }
     events: [wallet.transfer.completed, wallet.transfer.failed]
     event_type: =body.event_type
@@ -336,10 +516,34 @@ capabilities:
     requires: [account]
     ignores: [customer.email, customer.phone, customer.bvn, customer.nin]
     notes: >-
-      The wallet must belong to a business whose director's BVN iswallet holds. Transfers
-      into the number credit the wallet net of the provider's fee (1.4%, capped at NGN 2,000);
-      credits are read back with list_credits. iswallet's credit webhook is not mapped yet:
-      which of its fields names the account is not documented.
+      Every wallet needs an email, and a business wallet its director's BVN, before it can
+      issue (KYC_REQUIRED names the missing field). The partner's fee (1.4%, capped at
+      NGN 2,000) is passed to the payer by default: the credit event says what the payer sent
+      and what landed. Credits arrive by webhook (virtual_account.credited) and are read back
+      with list_credits.
+  collect_transfer:
+    # A one-time number on the connection's one wallet, for an invoice.
+    action: create_dynamic_account
+    input:
+      amount: =input.amount_kobo
+      account_name: =input.customer.?name
+      expires_minutes: =input.?expires_minutes
+    output:
+      payment_id: =output.reference
+      account_number: =output.account_number
+      bank_name: =output.bank_name
+      account_name: =output.?account_name
+      amount_kobo: =output.amount
+      expires_at: =output.expires_at
+    ignores: [customer.email, customer.phone, customer.bvn, customer.nin, description]
+    fixed: { currency: NGN }
+    unsafe: true
+    transfer: { on_late: credited, on_wrong_amount: unknown, min_minutes: 1, max_minutes: 1440, default_minutes: 60 }
+    notes: >-
+      Opened on the connection's wallet, so its wallet_ids must list exactly one. iswallet's
+      expiry is advisory: it refuses neither a late transfer nor a second one, so the window
+      is Taskiem's and a late transfer is credited. Every call opens another account: an
+      unknown outcome parks for a person.
   list_credits:
     # Credits into customers' numbers, from the wallet's transactions:
     # those that name a virtual account. amount (on this route the ledger
@@ -360,10 +564,62 @@ capabilities:
         ?'payer_name': has(t.counterparty) ? t.counterparty.?name : optional.none(),
         ?'payer_account': has(t.counterparty) ? t.counterparty.?account_number : optional.none(),
         ?'payer_bank': has(t.counterparty) ? t.counterparty.?bank_name : optional.none(),
-        ?'narration': t.?narration, ?'occurred_at': t.?occurred_at})
+        ?'narration': t.?narration, ?'occurred_at': t.?occurred_at,
+        ?'event': string(t.virtual_account.reference).startsWith('tot_') ? optional.of('payment.received') : optional.none()})
       truncated: "=output.?truncated"
     requires: [account]
 events:
+  virtual_account.credited:
+    # A transfer into a customer's permanent number (27 October 2026):
+    # data.virtual_account.reference is ours, data.amount what the payer
+    # sent and data.amount_credited what landed. credit_id is the
+    # provider_reference list_credits reads back, so a credit heard here
+    # and read back is one entry; an event without one is left to the
+    # look-back. A one-time number's credit (tot_) is payment.received.
+    trigger: credit_event
+    when: >-
+      =body.event_type == 'wallet.credit.posted' && has(body.data.virtual_account) && has(body.data.virtual_account.reference)
+      && body.data.virtual_account.reference != '' && !string(body.data.virtual_account.reference).startsWith('tot_')
+      && has(body.data.provider_reference) && body.data.provider_reference != '' && has(body.data.amount)
+    fields:
+      reference: =body.data.virtual_account.reference
+      credit_id: =body.data.provider_reference
+      amount_kobo: =int(body.data.amount)
+      settled_kobo: "=has(body.data.amount_credited) ? optional.of(int(body.data.amount_credited)) : optional.none()"
+      fee_kobo: "=has(body.data.amount_credited) ? optional.of(int(body.data.amount) - int(body.data.amount_credited)) : optional.none()"
+      currency: =body.data.?currency
+      account_number: =body.data.virtual_account.?account_number
+      payer_name: "=has(body.data.counterparty) ? body.data.counterparty.?name : optional.none()"
+      payer_account: "=has(body.data.counterparty) ? body.data.counterparty.?account_number : optional.none()"
+      payer_bank: "=has(body.data.counterparty) ? body.data.counterparty.?bank_name : optional.none()"
+      narration: =body.data.?narration
+      occurred_at: =body.data.?occurred_at.orValue(body.?occurred_at.orValue(''))
+  payment.received:
+    # The payment into a one-time number (create_dynamic_account), by the
+    # reference that opened it: amount what the payer sent, the fee what
+    # iswallet kept of it (amount less amount_credited), as for a credit.
+    trigger: credit_event
+    when: >-
+      =body.event_type == 'wallet.credit.posted' && has(body.data.virtual_account) && has(body.data.virtual_account.reference)
+      && string(body.data.virtual_account.reference).startsWith('tot_') && has(body.data.amount)
+    fields:
+      payment_id: =body.data.virtual_account.reference
+      amount_kobo: =int(body.data.amount)
+      fee_kobo: "=has(body.data.amount_credited) ? optional.of(int(body.data.amount) - int(body.data.amount_credited)) : optional.none()"
+      currency: =body.data.?currency
+      paid_at: =body.data.?occurred_at.orValue(body.?occurred_at.orValue(''))
+  payment.returned:
+    # A credit iswallet clawed back: the money log undoes what it counted
+    # towards (engine/matching), finding the credit by its credit_id, or a
+    # one-time number's payment by its reference.
+    trigger: credit_event
+    when: >-
+      =body.event_type == 'wallet.credit.reversed' && has(body.data.virtual_account) && has(body.data.virtual_account.reference)
+      && (string(body.data.virtual_account.reference).startsWith('tot_') || has(body.data.provider_reference) && body.data.provider_reference != '')
+    fields:
+      payment_id: "=string(body.data.virtual_account.reference).startsWith('tot_') ? body.data.virtual_account.reference : body.data.provider_reference"
+      amount_kobo: "=has(body.data.amount) ? optional.of(int(body.data.amount)) : optional.none()"
+      reason: other
   payout.settled:
     trigger: outflow_event
     when: "=body.event_type == 'wallet.outflow.confirmed'"

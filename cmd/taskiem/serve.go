@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
@@ -42,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
 	"github.com/israel-duff/taskiem/engine/embedsites"
@@ -57,6 +60,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
@@ -78,8 +82,11 @@ type config struct {
 	DSN, DBRole                       string
 	Listen, EdgeListen, MetricsListen string
 	KMS, LocalKey                     string
+	// AllowLocalKMS keeps the root key in the environment on a public
+	// HTTPS install (TASKIEM_ALLOW_LOCAL_KMS), which kms otherwise refuses.
+	AllowLocalKMS                     bool
 	OpenBaoAddr, OpenBaoToken, KMSKey string
-	ArchiveDir, WebDir                string
+	WebDir                            string
 	AnchorKey, AnchorDir              string
 	SecureCookies, TrustProxy, Signup bool
 	// PublicURL is where people reach the web app; passkeys are bound to it.
@@ -119,6 +126,9 @@ type config struct {
 	// ChatTokenKey signs approval tokens when WhatsApp is off
 	// (TASKIEM_CHAT_TOKEN_KEY; with WhatsApp on, its token key is used).
 	ChatTokenKey []byte
+	// SlackSigningSecret is Taskiem's Slack app's (TASKIEM_OAUTH_SLACK_WEBHOOK_SECRET):
+	// with it, approvals go to members' linked Slack (decision 0051).
+	SlackSigningSecret string
 	// AI is the model provider for AI building (TASKIEM_AI_*, docs/ai.md).
 	AI ai.Config
 	// Languages are languages beyond English and voice notes on WhatsApp,
@@ -130,6 +140,10 @@ type config struct {
 	// Xenibase is the platform's Xenibase for data tables
 	// (TASKIEM_XENIBASE_*, decision 0033); unset, tables answer 503.
 	Xenibase datatables.Platform
+	// ISWallet is Taskiem's own iswallet client (TASKIEM_ISWALLET_*,
+	// decision 0052): with a mode's key, any business can receive money
+	// with Taskiem in that mode.
+	ISWallet platformClient
 	// Keys tunes customer keys and the key job (TASKIEM_BYOK_*,
 	// TASKIEM_KEY_*; docs/byok.md).
 	Keys KeysConfig
@@ -302,10 +316,10 @@ func loadConfig() (config, error) {
 		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
 		KMS:           env("TASKIEM_KMS", "local"),
 		LocalKey:      os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
+		AllowLocalKMS: envBool("TASKIEM_ALLOW_LOCAL_KMS", false),
 		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
-		ArchiveDir:    os.Getenv("TASKIEM_ARCHIVE_DIR"),
 		PublicURL:     strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
 		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
 		HooksURL:      strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
@@ -328,6 +342,23 @@ func loadConfig() (config, error) {
 			// provider's sandbox by default.
 			IswalletTestURL: os.Getenv("TASKIEM_ISWALLET_TEST_URL"),
 			PayrollaTestURL: os.Getenv("TASKIEM_PAYROLLA_TEST_URL"),
+			// QuickBooks' production and sandbox hosts and Intuit's token
+			// endpoint (tests, a proxy).
+			QuickBooksURL:      os.Getenv("TASKIEM_QUICKBOOKS_URL"),
+			QuickBooksTestURL:  os.Getenv("TASKIEM_QUICKBOOKS_TEST_URL"),
+			QuickBooksTokenURL: os.Getenv("TASKIEM_QUICKBOOKS_TOKEN_URL"),
+			// Zoho Books' API and Zoho's accounts server for every
+			// connection, instead of each account's own (tests, a proxy).
+			ZohoBooksURL:    os.Getenv("TASKIEM_ZOHO_BOOKS_URL"),
+			ZohoAccountsURL: os.Getenv("TASKIEM_ZOHO_ACCOUNTS_URL"),
+			ZohoMailURL:     os.Getenv("TASKIEM_ZOHO_MAIL_URL"),
+			ZohoCRMURL:      os.Getenv("TASKIEM_ZOHO_CRM_URL"),
+			// The Graph API for Messenger and Instagram (tests).
+			MetaURL:              os.Getenv("TASKIEM_META_GRAPH_URL"),
+			ResendURL:            os.Getenv("TASKIEM_RESEND_URL"),
+			BrevoURL:             os.Getenv("TASKIEM_BREVO_URL"),
+			MailchimpURL:         os.Getenv("TASKIEM_MAILCHIMP_URL"),
+			MailchimpMetadataURL: os.Getenv("TASKIEM_MAILCHIMP_METADATA_URL"),
 			// Sandboxes and tests; Anchor and Lenco connections also pick
 			// their provider's sandbox with environment=sandbox.
 			FlutterwaveURL:    os.Getenv("TASKIEM_FLUTTERWAVE_URL"),
@@ -358,6 +389,7 @@ func loadConfig() (config, error) {
 	}
 	// The platform's Xenibase is also the connector's default server.
 	c.Connectors.XenibaseURL = c.Xenibase.URL
+	c.ISWallet = platformClientFrom("ISWALLET")
 	// Administrators are held to passkeys wherever passkeys can work.
 	if c.HooksURL == "" && c.PublicURL != "" {
 		c.HooksURL = c.PublicURL + "/hooks"
@@ -393,10 +425,13 @@ func loadConfig() (config, error) {
 	if c.Telegram, err = telegram.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
-	if c.Telegram != nil && c.WhatsApp == nil {
+	// Approvals in Slack (decision 0051): Taskiem's Slack app's signing
+	// secret verifies their clicks.
+	c.SlackSigningSecret = strings.TrimSpace(os.Getenv("TASKIEM_OAUTH_SLACK_WEBHOOK_SECRET"))
+	if (c.Telegram != nil || c.SlackSigningSecret != "") && c.WhatsApp == nil {
 		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(os.Getenv("TASKIEM_CHAT_TOKEN_KEY")))
 		if err != nil || len(key) < 32 {
-			return c, errors.New("TASKIEM_TELEGRAM_BOT_TOKEN is set without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
+			return c, errors.New("the Telegram bot or Taskiem's Slack app is set up without WhatsApp: TASKIEM_CHAT_TOKEN_KEY must be at least 32 bytes, base64 (openssl rand -base64 32); it signs approval buttons")
 		}
 		c.ChatTokenKey = key
 	}
@@ -442,6 +477,12 @@ func loadConfig() (config, error) {
 func (c config) kms() (secrets.KMS, error) {
 	switch c.KMS {
 	case "local":
+		// The root key wraps every tenant key; in the process environment it
+		// is as safe as the host's environment. A public install keeps it in
+		// OpenBao unless the operator says otherwise (Atlas part D findings).
+		if strings.HasPrefix(c.PublicURL, "https://") && !c.AllowLocalKMS {
+			return nil, errors.New("TASKIEM_KMS is local (the default) on a public install: keep the root key in OpenBao (TASKIEM_KMS=openbao, docs/operations.md), or set TASKIEM_ALLOW_LOCAL_KMS=true to keep it in the environment knowingly")
+		}
 		key, err := base64.StdEncoding.DecodeString(c.LocalKey)
 		if err != nil || len(key) != 32 {
 			return nil, errors.New("TASKIEM_LOCAL_KMS_KEY must be 32 bytes, base64 (openssl rand -base64 32); use TASKIEM_KMS=openbao in production")
@@ -502,6 +543,10 @@ type engine struct {
 	// invoices are the business's invoices to its customers (decision
 	// 0045, T3).
 	invoices *invoicing.Invoices
+	// riders are the businesses' own riders (dispatch D1); nil without
+	// the message hash key. dispatch is their deliveries (D2 to D5).
+	riders   *riders.Riders
+	dispatch *dispatch.Dispatch
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -552,6 +597,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// The storefront platform connector's actions are bound to the orders
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
+	riderOps := &ridersconn.Late{}
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
@@ -561,6 +607,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Invoices = invoiceOps
 	copts.Schools = schoolOps
 	copts.Storefront = orders
+	copts.Riders = riderOps
 	copts.Forms = formOps
 	copts.Email = emailOps
 	copts.Notify = tell
@@ -582,9 +629,11 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	src := &wasmconn.Source{Pool: srcPool, Runtime: wrt, Logger: log}
 	reg.SetTenantSource(src.Connectors)
+	reg.SetVersionSource(src.Version)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey,
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
-		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter}
+		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
+		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
@@ -609,6 +658,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		emailOps.Set(e.email)
 	}
 	if cfg.WhatsApp != nil {
+		// The templates' url buttons open the web app and the form host
+		// (docs/whatsapp.md#templates).
+		cfg.WhatsApp.Hosts = whatsappHosts(cfg)
 		e.wa = whatsapp.New(pool, *cfg.WhatsApp, &egress.Guard{Logger: log}, log)
 		// Tenants' own numbers (credentials in their vaults) and template
 		// cost accounting against their plans (spec 11.4, 16).
@@ -635,6 +687,27 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		n.Messages, n.Reach = e.messages, e.reach
 	}
 	tell.Set(n)
+	// Riders (dispatch D1): people outside the business, reached as its
+	// contacts are; the tap-in link goes by SMS to the form host's page.
+	if e.reach != nil {
+		e.riders = &riders.Riders{Pool: pool, Vault: vault, Book: e.reach}
+		if e.messages != nil {
+			e.riders.Messages = e.messages
+		}
+		if e.forms != nil && e.forms.FormHost != "" {
+			e.riders.PageBase = "https://" + e.forms.FormHost
+		}
+		riderOps.Set(e.riders)
+	}
+	// Their deliveries (dispatch D2 to D5): offers, the rider's taps, the
+	// door payment, told to the order's run.
+	if e.riders != nil && e.orders != nil {
+		e.dispatch = &dispatch.Dispatch{Pool: pool, Vault: vault, Riders: e.riders, Orders: e.orders, Chat: n.Chat,
+			MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Delivered: dispatch.TellRun(e.store), StatusLink: e.orders.StatusLink,
+			Logger: log.With("component", "dispatch")}
+		e.orders.AfterPaid = e.dispatch.OrderPaid
+		riderOps.SetDispatch(e.dispatch)
+	}
 	// Invoices (decision 0045): their pages are on the form host.
 	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Start: e.store.Start, Logger: log.With("component", "invoices")}
 	// A customer who asked for the business's updates on a chat app gets
@@ -647,6 +720,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// payments connection, its prod credentials.
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
+	wireOrderTransfers(e.invoices, e.orders)
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and
 	// one undone has it voided (B5).
@@ -684,31 +758,33 @@ func (e *engine) moneyLog() *moneylog.Log {
 func connectorLoopback(reg *connector.Registry, log *slog.Logger) map[string]string {
 	var out map[string]string
 	for _, c := range reg.List() {
-		// The base URL, or else a mode's address (TASKIEM_ISWALLET_TEST_URL
-		// at a local fake): one loopback port per connector.
-		var u *url.URL
+		// The base URL and the modes' addresses (TASKIEM_ISWALLET_TEST_URL
+		// at a local fake): each loopback port a connector points at.
+		var ports []string
 		for _, raw := range append([]string{c.Manifest.BaseURL}, modeURLs(c.Manifest)...) {
-			p, err := url.Parse(raw)
+			u, err := url.Parse(raw)
 			if err != nil {
 				continue
 			}
-			if ip, err := netip.ParseAddr(p.Hostname()); err == nil && ip.IsLoopback() {
-				u = p
-				break
+			if ip, err := netip.ParseAddr(u.Hostname()); err != nil || !ip.IsLoopback() {
+				continue
+			}
+			port := u.Port()
+			if port == "" {
+				port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+			}
+			if !slices.Contains(ports, port) {
+				ports = append(ports, port)
+				log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
 			}
 		}
-		if u == nil {
+		if len(ports) == 0 {
 			continue
-		}
-		port := u.Port()
-		if port == "" {
-			port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
 		}
 		if out == nil {
 			out = map[string]string{}
 		}
-		out["connector:"+c.Manifest.ID] = port
-		log.Warn("a connector points at this machine: for tests only", "connector", c.Manifest.ID, "url", u.String())
+		out["connector:"+c.Manifest.ID] = strings.Join(ports, ",")
 	}
 	return out
 }
@@ -723,7 +799,74 @@ func modeURLs(m *connector.Manifest) []string {
 
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
-		Egress: &egress.Guard{Logger: e.log}}
+		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry),
+		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}}}
+}
+
+// platformClient is Taskiem's own client at a provider (decision 0052),
+// by mode (live, test): its API key, and the signing secret of the
+// subscription `taskiem iswallet subscribe` made for the mode.
+type platformClient struct {
+	Keys           map[string]string
+	WebhookSecrets map[string]string
+	// PayoutFeeKobo is the room a sweep to the bank leaves for the
+	// payout's fee (TASKIEM_<NAME>_PAYOUT_FEE_KOBO; 0: the default).
+	PayoutFeeKobo int64
+}
+
+// platformClientFrom reads TASKIEM_<NAME>_CLIENT_KEY and _WEBHOOK_SECRET
+// (live), TASKIEM_<NAME>_TEST_CLIENT_KEY and _TEST_WEBHOOK_SECRET, and
+// TASKIEM_<NAME>_PAYOUT_FEE_KOBO.
+func platformClientFrom(name string) platformClient {
+	p := platformClient{Keys: map[string]string{}, WebhookSecrets: map[string]string{}}
+	if n, err := strconv.ParseInt(strings.TrimSpace(os.Getenv("TASKIEM_"+name+"_PAYOUT_FEE_KOBO")), 10, 64); err == nil && n >= 0 {
+		p.PayoutFeeKobo = n
+	}
+	for mode, infix := range map[string]string{"live": "", "test": "_TEST"} {
+		if k := strings.TrimSpace(os.Getenv("TASKIEM_" + name + infix + "_CLIENT_KEY")); k != "" {
+			p.Keys[mode] = k
+		}
+		if s := strings.TrimSpace(os.Getenv("TASKIEM_" + name + infix + "_WEBHOOK_SECRET")); s != "" {
+			p.WebhookSecrets[mode] = s
+		}
+	}
+	return p
+}
+
+// credentials are what a connection under the client is handed for each
+// mode: the key, as a shared client's, so its connector keeps to the
+// connection's own wallet (decision 0031).
+func (p platformClient) credentials() map[string]map[string]string {
+	out := map[string]map[string]string{}
+	for mode, k := range p.Keys {
+		out[mode] = map[string]string{"api_key": k, "shared_client": "true"}
+	}
+	return out
+}
+
+// platformApps reads the secrets of Taskiem's platform apps whose
+// connectors have app-delivered triggers (decision 0051):
+// TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET, the secret the provider signs
+// with, and _VERIFY_TOKEN for an endpoint check (Meta's). An app without
+// a webhook secret takes no deliveries: its URL answers 404.
+func platformApps(reg *connector.Registry) map[string]ingest.App {
+	out := map[string]ingest.App{}
+	for _, c := range reg.List() {
+		for _, t := range c.Manifest.Triggers {
+			if !t.AppDelivered() {
+				continue
+			}
+			// Each mode's own app too (Intuit's development app signs the
+			// sandbox companies' notifications: rule 20).
+			for _, client := range c.Manifest.Clients() {
+				key := "TASKIEM_OAUTH_" + strings.ToUpper(client)
+				if s := strings.TrimSpace(os.Getenv(key + "_WEBHOOK_SECRET")); s != "" {
+					out[client] = ingest.App{WebhookSecret: s, VerifyToken: strings.TrimSpace(os.Getenv(key + "_VERIFY_TOKEN"))}
+				}
+			}
+		}
+	}
+	return out
 }
 
 // remote keeps providers' subscriptions for remotely registered triggers
@@ -862,7 +1005,7 @@ func serve(ctx context.Context, args []string) error {
 		// would, so it reaches the same test fakes.
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
 			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
-			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}}
+			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}, ReceivePayoutFeeKobo: cfg.ISWallet.PayoutFeeKobo}
 		if signer := cfg.anchorSigner(nil); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}
@@ -948,6 +1091,10 @@ func serve(ctx context.Context, args []string) error {
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
+		if e.wa != nil {
+			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
+			tasks = append(tasks, func(ctx context.Context) error { e.wa.RunTemplatePolls(ctx, time.Hour); return nil })
+		}
 		// SMS and email to people outside a tenant (messages.go).
 		if w := cfg.senderWorker(e, alerter.Mailer, log); w != nil {
 			tasks = append(tasks, w.Run)
@@ -971,6 +1118,12 @@ func serve(ctx context.Context, args []string) error {
 		if e.tg != nil {
 			// The platform bot's webhook (docs/telegram.md).
 			mux.HandleFunc("/channels/telegram", git.TelegramHooks().ServeHTTP)
+		}
+		if git.Slack != nil {
+			// Taskiem's Slack app's clicks: approvals here, the rest on to
+			// /hooks/apps/slack@1/interactions (docs/integrations/slack.md).
+			git.Ingest = e.hooks()
+			mux.HandleFunc("/channels/slack/interactions", git.SlackHooks().ServeHTTP)
 		}
 		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
 		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))
@@ -998,10 +1151,8 @@ func serve(ctx context.Context, args []string) error {
 	}
 	if is("scheduler") {
 		s := &runtime.Scheduler{Store: e.store, Logger: log}
-		if cfg.ArchiveDir != "" {
-			s.Archiver = runtime.FileArchiver{Dir: cfg.ArchiveDir}
-		} else {
-			log.Warn("TASKIEM_ARCHIVE_DIR unset: runs past retention are kept, not purged")
+		if s.Archiver, err = archiver(os.Getenv, log); err != nil { // archive.go
+			return fmt.Errorf("serve: %w", err)
 		}
 		cron := &ingest.Cron{Store: e.store, Logger: log}
 		// Hourly digests of secret reads into each tenant's audit chain,
@@ -1094,7 +1245,8 @@ func serve(ctx context.Context, args []string) error {
 			}
 			if w.Queue == "ai" && cfg.AI.Provider != "" {
 				// AI steps (decision 0050): the deployment's model, the
-				// models steps may name, and a plan's AI overage.
+				// models steps may name, whether the plan has AI, and its
+				// AI overage.
 				w.AI = &runtime.AISteps{Config: cfg.AI}
 				if cfg.Billing.On {
 					bill, err := e.billingService(ctx, nil)
@@ -1102,6 +1254,13 @@ func serve(ctx context.Context, args []string) error {
 						return fmt.Errorf("serve: ai queue: %w", err)
 					}
 					w.AI.Overage = bill.AIOverage
+					w.AI.Plan = func(ctx context.Context, tenant uuid.UUID) (bool, error) {
+						err := bill.Require(ctx, tenant, billing.FeatureAI)
+						if fe := (*billing.FeatureError)(nil); errors.As(err, &fe) {
+							return false, nil
+						}
+						return err == nil, err
+					}
 				}
 			}
 			tasks = append(tasks, w.Run)
@@ -1239,6 +1398,8 @@ func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	if e.tg != nil {
 		a.Telegram = &api.TelegramAlerts{Pool: e.pool, Telegram: e.tg}
 	}
+	// Slack channels made from a business's Slack connection.
+	a.Slack = &api.SlackAlerts{Server: &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Egress: &egress.Guard{Logger: log}, Logger: log}}
 	if c.SMTPURL != "" {
 		m, err := alerts.NewSMTPMailer(c.SMTPURL)
 		if err != nil {
@@ -1280,15 +1441,21 @@ func oauthClients(reg *connector.Registry, log *slog.Logger) (map[string]api.OAu
 		if c.Manifest.Auth.OAuth2 == nil {
 			continue
 		}
-		key := "TASKIEM_OAUTH_" + strings.ToUpper(c.Manifest.ID)
-		id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
-		switch {
-		case id == "" && secret == "":
-			log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
-		case id == "" || secret == "":
-			return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
-		default:
-			out[c.Manifest.ID] = api.OAuthClient{ID: id, Secret: secret}
+		// The connector's app, and any mode's own (rule 20).
+		for _, client := range c.Manifest.Clients() {
+			if _, done := out[client]; done {
+				continue // one app serving several connectors (decision 0051)
+			}
+			key := "TASKIEM_OAUTH_" + strings.ToUpper(client)
+			id, secret := strings.TrimSpace(os.Getenv(key+"_CLIENT_ID")), strings.TrimSpace(os.Getenv(key+"_CLIENT_SECRET"))
+			switch {
+			case id == "" && secret == "":
+				log.Info("oauth: no client registered; connections are made by pasting credentials", "connector", c.Manifest.ID, "env", key+"_CLIENT_ID")
+			case id == "" || secret == "":
+				return nil, fmt.Errorf("%s_CLIENT_ID and %s_CLIENT_SECRET must both be set, or neither", key, key)
+			default:
+				out[client] = api.OAuthClient{ID: id, Secret: secret}
+			}
 		}
 	}
 	return out, nil
@@ -1317,12 +1484,16 @@ func (c config) relyingParty() (webauthn.Config, error) {
 // that signs approval buttons when WhatsApp is off.
 func (e *engine) chat(srv *api.Server) {
 	srv.Telegram = e.tg
+	if e.cfg.SlackSigningSecret != "" {
+		srv.Slack = &api.SlackApp{SigningSecret: e.cfg.SlackSigningSecret}
+	}
 	if e.wa == nil && len(e.cfg.ChatTokenKey) > 0 {
 		srv.ChatSigner = whatsapp.Signer{Key: e.cfg.ChatTokenKey}
 	}
 	// Updates for people outside a tenant (N11): links they send back,
 	// STOP, and messages to them.
 	srv.Reach, srv.Messages = e.reach, e.messages
+	srv.Riders, srv.Dispatch = e.riders, e.dispatch
 	if e.forms != nil {
 		keys := e.forms.Keys
 		srv.ReachKeys = &keys

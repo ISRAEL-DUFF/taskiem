@@ -55,6 +55,9 @@ tags:
 - name: Telegram
   description: Linking people to the platform's Telegram bot.
   x-taskiem-guide: telegram
+- name: Slack
+  description: Linking members to their Slack user, for approvals in the business's workspace.
+  x-taskiem-guide: integrations/slack
 - name: Notifications
   description: What each person needs to know, for the web app's bell, and how they hear beyond it.
   x-taskiem-guide: alerts
@@ -109,6 +112,9 @@ tags:
 - name: Storefront
   description: The organisation's one-page public storefront, its catalogue and its photos.
   x-taskiem-guide: storefronts
+- name: Riders
+  description: The business's own riders, who deliver its orders (dispatch).
+  x-taskiem-guide: dispatch
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
@@ -264,7 +270,7 @@ paths:
       tags:
       - AI
       summary: Save an AI build as a workflow
-      description: Saves the build's draft as a new workflow or a new version of one; the AI is recorded as co-author.
+      description: Saves the build's draft as a new workflow or a new version of one; the AI is recorded as co-author. A version saved since the build started is merged three ways with the proposal, as a version save with `parent_digest` is.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -306,7 +312,8 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: The build is not a proposal (still running, failed or already saved), or the workflow is
-            kept in Git.
+            kept in Git, or a version saved since the build started changed what the proposal changes (`conflicts`,
+            `latest_version` and `latest_digest`, as a version save answers; send `resolutions`).
           content:
             application/json:
               schema:
@@ -1511,7 +1518,7 @@ paths:
       tags:
       - Invoices
       summary: Match a payment to the invoice or order suggested
-      description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments)."
+      description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments). Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1551,6 +1558,8 @@ paths:
                 - $ref: '#/components/schemas/CustomerInvoice'
                 - $ref: '#/components/schemas/MatchedOrder'
                 - $ref: '#/components/schemas/MoneySplit'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/suggestions/{id}/reject:
@@ -1593,7 +1602,7 @@ paths:
       tags:
       - Invoices
       summary: Match a payment to an invoice or order by hand
-      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it; or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers."
+      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it; or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers. Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1641,6 +1650,8 @@ paths:
                 - $ref: '#/components/schemas/CustomerInvoice'
                 - $ref: '#/components/schemas/MatchedOrder'
                 - $ref: '#/components/schemas/MoneySplit'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/order-payments/{id}/undo:
@@ -3449,6 +3460,44 @@ paths:
                 $ref: '#/components/schemas/SchoolStudentAccount'
         default:
           $ref: '#/components/responses/Error'
+  /v1/schools/students/{id}/account/send:
+    post:
+      operationId: sendSchoolStudentAccount
+      tags:
+      - Schools
+      summary: Send the student's account number to the family
+      description: 'Sends the student''s family their own account number (the number, the bank, the name to expect when they transfer) with a fresh family page link, to each guardian on WhatsApp or Telegram where they get the business''s updates there (as the taskiem_account_number template outside the 24-hour window once approved), otherwise by SMS: what the school-issue-accounts template sends when the number is issued. Each call sends afresh. 409 when the student has no account number yet. Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: school.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Where the account number went
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/SchoolFamilySent'
+                - type: object
+                  required: [student_id, account_number]
+                  properties:
+                    student_id:
+                      type: string
+                      format: uuid
+                    account_number:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/schools/accounts/issue:
     post:
       operationId: issueSchoolAccounts
@@ -5209,7 +5258,7 @@ paths:
       tags:
       - Storefront
       summary: Refund a paid order or booking that was declined or cancelled
-      description: In full, through the business's Paystack connection, from its balance; the customer is told. Refunding an order already refunded does nothing more. 409 when there is nothing to refund, or Paystack refused (the reason is kept on the order, which stays refund_due).
+      description: In full, through the business's Paystack connection, from its balance; the customer is told. Refunding an order already refunded does nothing more. 409 when there is nothing to refund, Paystack refused (the reason is kept on the order, which stays refund_due), or it was paid by bank transfer (paid_by transfer or other), which the owner sends back from their bank and marks refunded.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -5234,6 +5283,825 @@ paths:
                 properties:
                   order:
                     $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/refunded:
+    post:
+      operationId: markStorefrontOrderRefunded
+      tags:
+      - Storefront
+      summary: Mark a refund_due order refunded by hand
+      description: The owner sent the money back themselves (an order paid by bank transfer, or any they chose to refund outside Taskiem); the order becomes refunded and the customer is told. An order already refunded is reported as it is. 409 when nothing is due back.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note:
+                  type: string
+                  maxLength: 300
+                  description: How it was sent back, kept on the order
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders:
+    get:
+      operationId: listRiders
+      tags:
+      - Riders
+      summary: The business's riders
+      description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: retired
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The riders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [riders, zones]
+                properties:
+                  riders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Rider'
+                  zones:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeliveryZone'
+                  tap_in_url:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addRider
+      tags:
+      - Riders
+      summary: Add a rider
+      description: By name and phone, with the areas they cover and their fee per delivery. The rider gets the tap-in link by SMS until they tap it. A retired rider added again comes back; 409 when the phone already rides for the business.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderInput'
+      responses:
+        '201':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}:
+    patch:
+      operationId: updateRider
+      tags:
+      - Riders
+      summary: Change a rider
+      description: Their name, areas, fee, or whether they are active. The phone cannot change; retire them and add the new number.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiderInput'
+      responses:
+        '200':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/retire:
+    post:
+      operationId: retireRider
+      tags:
+      - Riders
+      summary: Retire a rider
+      description: They are offered nothing more and keep their deliveries. Retiring one already retired changes nothing.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/invite:
+    post:
+      operationId: inviteRider
+      tags:
+      - Riders
+      summary: Send the tap-in link again
+      description: By SMS; 409 within ten minutes of the last.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The rider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rider]
+                properties:
+                  rider:
+                    $ref: '#/components/schemas/Rider'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/owed:
+    get:
+      operationId: ridersOwed
+      tags:
+      - Riders
+      summary: Cash riders owe
+      description: What each rider owes from cash they took at the door, most first.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: What is owed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [owed]
+                properties:
+                  owed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rider_id:
+                          type: string
+                          format: uuid
+                        rider:
+                          type: string
+                        owed_kobo:
+                          type: integer
+                        deliveries:
+                          type: integer
+                        since:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/pay:
+    get:
+      operationId: ridersPay
+      tags:
+      - Riders
+      summary: What riders are due
+      description: |
+        Each rider's fees for deliveries since their last payout, the cash they owe from the door, and what a payout pays them
+        (the fees less the cash, never below nothing); the recent payouts; and the pay-riders workflow once set up.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: What riders are due
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lines, payouts, workflow_id]
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rider_id:
+                          type: string
+                          format: uuid
+                        rider:
+                          type: string
+                        deliveries:
+                          type: integer
+                        fees_kobo:
+                          type: integer
+                        owed_kobo:
+                          type: integer
+                        net_kobo:
+                          type: integer
+                        bank:
+                          type: string
+                  payouts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RiderPayout'
+                  workflow_id:
+                    type: [string, 'null']
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: payRiders
+      tags:
+      - Riders
+      summary: Pay riders now
+      description: |
+        Starts the pay-riders workflow now, as its weekly schedule does: the bank checks each account's name, the approver approves
+        the batch, and each rider is paid once. 409 until it is set up and published.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,run.start
+      x-taskiem-all-environments: true
+      responses:
+        '202':
+          description: The run started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id, batch_id]
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  batch_id:
+                    type: string
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/pay/setup:
+    put:
+      operationId: setupRidersPay
+      tags:
+      - Riders
+      summary: Set up paying riders weekly
+      description: |
+        Makes the pay-riders workflow from the pay-riders-weekly template (a new version when it exists) and publishes it, which
+        four-eyes publishing holds for a second person. Riders are paid from the business's Taskiem wallet unless another payments
+        account is chosen; 409 with neither.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,workflow.publish
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pay_day, pay_time]
+              properties:
+                pay_day:
+                  type: integer
+                  minimum: 0
+                  maximum: 6
+                  description: 0 is Sunday, 5 Friday
+                pay_time:
+                  type: string
+                  pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                  description: Lagos time
+                rail_connection:
+                  type: string
+                  description: A connection that can pay a bank account; the Taskiem wallet when left out
+                funding_account:
+                  type: string
+                  description: The wallet the money comes from, for rails holding several
+                approver_role:
+                  type: string
+                  description: The role that approves each payout (owner when left out)
+      responses:
+        '200':
+          description: Set up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workflow_id, version, waiting]
+                properties:
+                  workflow_id:
+                    type: string
+                    format: uuid
+                  version:
+                    type: integer
+                  waiting:
+                    type: boolean
+                    description: True while four-eyes publishing waits for a second person
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/payouts/{id}/not-paid:
+    post:
+      operationId: riderPayoutNotPaid
+      tags:
+      - Riders
+      summary: Mark a payout not paid
+      description: |
+        For a payout stuck being paid, once the owner has checked their bank and the rider was not paid: the payout is marked
+        failed and its deliveries are paid in the next payout. 409 while the run that makes it is still going (it may yet pay,
+        or is checking a payment), and for a payout no longer being paid.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Marked not paid
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [failed]
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/bank:
+    put:
+      operationId: putRiderBank
+      tags:
+      - Riders
+      summary: Set a rider's bank account
+      description: |
+        The account their payouts go to, sealed under the rider's personal data; their bank confirms the name at the first
+        payout. Where a rider's money goes, so a person confirms it is them: a passkey assertion for a challenge from
+        `POST /v1/me/step-up/options` (operation `rider.bank`, the rider's id as target) or an authenticator code. Without one,
+        403 with `step_up: required`, the methods the person has and the operation and target to confirm; API keys cannot.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [bank_code, account_number]
+              properties:
+                bank_code:
+                  type: string
+                bank_name:
+                  type: string
+                  maxLength: 60
+                account_number:
+                  type: string
+                  pattern: '^[0-9]{10}$'
+                totp:
+                  type: string
+                  description: A current authenticator code (step-up)
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The account as it may be shown
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bank]
+                properties:
+                  bank:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/remit:
+    post:
+      operationId: riderRemit
+      tags:
+      - Riders
+      summary: Record cash a rider handed in
+      description: Cash handed in, or a transfer from them, counted against what they owe, oldest first; 400 for more than they owe.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo, how]
+              properties:
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                how:
+                  type: string
+                  enum: [cash, transfer]
+      responses:
+        '200':
+          description: What they still owe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [owed_kobo]
+                properties:
+                  owed_kobo:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/deliveries:
+    get:
+      operationId: listDeliveries
+      tags:
+      - Riders
+      summary: Deliveries
+      description: A day's deliveries (day, Lagos; default today) or the open ones (open=true), newest first, each with whether it is late.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: open
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Delivery'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/dispatch/workflow:
+    get:
+      operationId: getDeliveriesOn
+      tags:
+      - Riders
+      summary: Whether orders are offered to riders
+      description: On when the order form's workflow is made from the dispatch-orders template.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: Whether deliveries are on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveriesOn'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: turnOnDeliveries
+      tags:
+      - Riders
+      summary: Turn on deliveries
+      description: |
+        Makes the order form's workflow from the dispatch-orders template and publishes it in place of the one the form starts
+        now, in one change: each confirmed order for delivery is then offered to the business's riders. Again, nothing changes.
+        409 when the order form does not deliver, under four-eyes publishing, or when the workflow cannot be published; with
+        code replaces_workflow when the form starts a workflow other than the plain storefront-order one, until replace is sent.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,workflow.edit,workflow.publish
+      x-taskiem-all-environments: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                replace:
+                  type: boolean
+                  description: Take a workflow the business made or changed itself out of use
+      responses:
+        '200':
+          description: Deliveries are on
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveriesOn'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/dispatch/settings:
+    get:
+      operationId: getDispatchSettings
+      tags:
+      - Riders
+      summary: How orders are dispatched
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putDispatchSettings
+      tags:
+      - Riders
+      summary: Set how orders are dispatched
+      description: Rotation or ask the owner, the offer window, when quiet riders are raised, proof photos, the cash a rider may owe, the rating mark.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchSettings'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/deliveries:
+    get:
+      operationId: orderDeliveries
+      tags:
+      - Riders
+      summary: An order's deliveries
+      description: Who was offered the order and who holds it, with its photo's link while it may be seen; not_ready says why it cannot be offered now, if it cannot.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Delivery'
+                  not_ready:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/offer:
+    post:
+      operationId: offerOrder
+      tags:
+      - Riders
+      summary: Offer an order to a rider
+      description: To the rider named, or by rotation among riders covering its area, free ones first. 409 when the order is not ready (not accepted, not paid when paid online, for pickup).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                rider_id:
+                  type: string
+                  format: uuid
+                fee_kobo:
+                  type: integer
+                  minimum: 0
+                  maximum: 10000000
+      responses:
+        '200':
+          description: What came of it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [offered, held, asked_owner, no_rider]
+                  rider:
+                    type: string
+                  delivery:
+                    $ref: '#/components/schemas/Delivery'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/release:
+    post:
+      operationId: releaseOrder
+      tags:
+      - Riders
+      summary: Take an order back from its rider
+      description: The rider who holds it (or was offered it) is told; the order is ready to offer again.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivery]
+                properties:
+                  delivery:
+                    $ref: '#/components/schemas/Delivery'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/bookings:
@@ -8109,6 +8977,48 @@ paths:
                 $ref: '#/components/schemas/ConnectionInUse'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connections/{id}/check:
+    post:
+      operationId: checkSavedConnection
+      tags:
+      - Connectors
+      summary: Check a saved connection
+      description: |
+        Runs the service's own check with the connection's saved credentials and says in plain words whether it accepts them
+        (`ok` false with the service's reason otherwise; still 200). For a rail that lists the partners issuing account numbers
+        (iswallet's `list_providers`), `partners` are those that can issue permanent ones in naira.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: connection.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: What the service said.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+                  partners:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/connections/{id}/credentials:
     put:
       operationId: mergeConnectionCredentials
@@ -8638,6 +9548,12 @@ paths:
           type: string
           format: uuid
         description: Run id
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '200':
           description: Cancelled
@@ -10573,6 +11489,206 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/slack:
+    get:
+      operationId: getSlack
+      tags:
+      - Slack
+      summary: Get the caller's Slack link in this business
+      description: Approvals in Slack (decision 0051) come to a member's Slack user in the business's own workspace.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackLink'
+        '403':
+          description: An API key has no Slack account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startSlackLink
+      tags:
+      - Slack
+      summary: Link the caller's Slack user
+      description: Finds the caller in the business's connected Slack workspace by their email and sends them a Confirm button
+        there; the link holds once they press it. Takes the same proof as adding a passkey.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactorProof'
+        required: true
+      responses:
+        '201':
+          description: The Confirm button was sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlackLink'
+        '403':
+          description: An API key, or the proof is missing or wrong (`reauth`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slack approvals are not set up, Slack is not connected, or no one in the workspace has the caller's email.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many links asked for.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unlinkSlack
+      tags:
+      - Slack
+      summary: Unlink Slack in this business
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connections/choices:
+    get:
+      operationId: listConnectionChoices
+      tags:
+      - Connectors
+      summary: List what a connector's picker offers on a connection
+      description: |
+        For a template parameter with picker choice: runs the connector's picker (its manifest's pickers, a read action) on the
+        connection and answers each choice's id (the parameter's value) and label (what the person reads): a Mailchimp audience,
+        for example. 409 when there is no such active connection, or the provider did not answer.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connector
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The connector's id (mailchimp).
+      - name: picker
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The picker's name (audiences).
+      - name: connection
+        in: query
+        schema:
+          type: string
+        description: The connection's name; main when left out.
+      - name: environment
+        in: query
+        schema:
+          type: string
+        description: Defaults to prod.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - choices
+                properties:
+                  choices:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, label]
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/slack/channels:
+    get:
+      operationId: listSlackChannels
+      tags:
+      - Slack
+      summary: List a Slack connection's channels
+      description: The public and private channels a production Slack connection's bot can see, for choosing where a template
+        posts.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+        description: The Slack connection's name; main when left out.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - channels
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        is_private:
+                          type: boolean
+                        is_member:
+                          type: boolean
+        '409':
+          description: No such Slack connection, or Slack refused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/whatsapp:
@@ -12863,7 +13979,7 @@ paths:
       - Audit
       summary: Erase a data subject
       description: Destroys the subject's key, so every sealed copy of their data becomes unreadable. Cannot be
-        undone.
+        undone, so a person confirms it with a passkey or authenticator code.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -12886,6 +14002,13 @@ paths:
                 $ref: '#/components/schemas/Erased'
         '400':
           description: Neither a subject nor a category and value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Erasure cannot be undone: it needs a person who confirms with a passkey (a challenge for `pii.erase`
+            and the subject id) or an authenticator code (`step_up`). API keys cannot erase.'
           content:
             application/json:
               schema:
@@ -13243,7 +14366,10 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: The proposal cannot be accepted in its state, or its failure class is settled by resolving
-            the step.
+            the step, or another repair of the workflow waits for its publish request. `repair_superseded`, with
+            `latest_version` and `conflicts` or `failures`, when the patch cannot be merged onto the version
+            published since the run's (both changed the same step or field) or no longer passes its tests once
+            merged; the proposal is then `superseded`.
           content:
             application/json:
               schema:
@@ -13696,6 +14822,7 @@ paths:
       tags:
       - Runs
       summary: Cancel a run
+      description: 'By default the run''s completed steps are reversed by their compensations, newest first, and the answer''s status is `running` until they have run; `reverse: false` ends the run at once.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -13710,6 +14837,12 @@ paths:
           type: string
           format: uuid
         description: Run id
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '200':
           description: Cancelled
@@ -14322,6 +15455,351 @@ paths:
                 $ref: '#/components/schemas/AdvancedSetting'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/schools/wallet:
+    post:
+      operationId: createSchoolWallet
+      tags:
+      - Schools
+      summary: Create the school's wallet on the issuing connection
+      description: |
+        Owners only (403 otherwise). Creates the school's wallet on a connection whose service can (iswallet's `create_wallet`), and makes it the wallet
+        students' account numbers pay into (the issuing setting). The director's BVN and the business email go to the service once
+        and are kept nowhere in Taskiem. At most one wallet is made per business and connection: asking again (a lost answer) answers
+        the same wallet. The wallet-level number the service answers is its own handle, which nobody can pay into, and is never shown.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [connection, business_email, bvn]
+              properties:
+                connection:
+                  type: string
+                  description: The issuing connection as service/name, such as iswallet/main.
+                owner_type:
+                  type: string
+                  enum: [client_end_user_business, client_end_business]
+                  default: client_end_user_business
+                  description: Holding other people's money (fees) in the school's own account, or only its own money, pooled.
+                business_email:
+                  type: string
+                bvn:
+                  type: string
+                  description: The director's BVN, 11 digits.
+                business_name:
+                  type: string
+                  description: The business's name at the service; the business's own name when left out.
+      responses:
+        '201':
+          description: The wallet, and the issuing setting now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wallet_id, issuing]
+                properties:
+                  wallet_id:
+                    type: string
+                  issuing:
+                    $ref: '#/components/schemas/SchoolIssuing'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/receive-money:
+    get:
+      operationId: getReceiveMoney
+      tags:
+      - Invoices
+      summary: Receiving money with Taskiem
+      description: |
+        Whether this Taskiem offers a wallet under its own iswallet client (decision 0052), whether the business's plan includes it,
+        and, once it is on, the business's wallet as Taskiem shows it: where the money is held, the business's own account number
+        (or why iswallet has not issued it yet), and where withdrawals go.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: turnOnReceiveMoney
+      tags:
+      - Invoices
+      summary: Turn on receiving money with Taskiem
+      description: |
+        Owners only (403 otherwise); 402 when the plan does not include it; 409 when this Taskiem does not hold its own iswallet
+        client. Creates the business's wallet under Taskiem's client (at most once: asking again answers the same wallet), as the
+        connection iswallet/taskiem, which holds no key, and asks iswallet for the business's own account number. The director's BVN
+        and the business email go to iswallet once and are kept nowhere in Taskiem. Invoices are paid on it unless they already name
+        a payments connection; a school issues its students' numbers on it unless it already issues on another.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-plan-feature: [receive_money]
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                owner_type:
+                  type: string
+                  enum: [client_end_user_business, client_end_business]
+                  description: Holding other people's money (fees) in the business's own account (segregated), or only its own money, pooled. Segregated for a school by default, pooled otherwise; chosen once.
+                business_email:
+                  type: string
+                bvn:
+                  type: string
+                  description: The director's BVN, 11 digits.
+                business_name:
+                  type: string
+      responses:
+        '201':
+          description: Turned on.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        '200':
+          description: Already on (the account number asked for again when it was missing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/receive-money/withdrawals:
+    put:
+      operationId: putReceiveMoneyWithdrawals
+      tags:
+      - Invoices
+      summary: Where withdrawals go, and who approves them
+      description: |
+        Owners only. The bank account withdrawals go to, its name found by the bank and kept; and the amount at which a withdrawal
+        takes two owners instead of one (the approval rule taskiem_withdrawals). The first time, the workflow that withdraws is made
+        from the withdraw-to-bank template and published.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [bank_code, account_number]
+              properties:
+                bank_code:
+                  type: string
+                bank_name:
+                  type: string
+                account_number:
+                  type: string
+                two_approvers_above_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  description: Withdrawals of this much or more take two owners; 0 for one.
+      responses:
+        '200':
+          description: The setting now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/receive-money/sweep:
+    put:
+      operationId: putReceiveMoneySweep
+      tags:
+      - Invoices
+      summary: Send what the wallet holds to the bank automatically
+      description: |
+        Owners only. Weekly on a day and at a time, or whenever the wallet holds more than an amount (checked hourly), keeping an
+        amount; the rest, less room for the bank's fee and at least NGN 1,000, goes to the bank account saved for withdrawals, with
+        no approval. It needs that account. Turning it off takes it out of prod at once; turning it on or changing it publishes the
+        sweep's workflow, which four-eyes publishing holds for a second person.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: ["off", weekly, above]
+                day:
+                  type: string
+                  enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                time:
+                  type: string
+                  description: HH:MM, Lagos time
+                above_kobo:
+                  type: integer
+                  format: int64
+                  description: For above, at least 100000 (NGN 1,000)
+                keep_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 0
+      responses:
+        '200':
+          description: The setting now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/receive-money/balance:
+    get:
+      operationId: getReceiveMoneyBalance
+      tags:
+      - Invoices
+      summary: What the business's Taskiem wallet holds now
+      description: Asked of iswallet each time; 502 when it does not answer.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The balance.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available_kobo, ledger_kobo, currency, at]
+                properties:
+                  available_kobo:
+                    type: integer
+                    format: int64
+                  ledger_kobo:
+                    type: integer
+                    format: int64
+                  currency:
+                    type: string
+                  at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/receive-money/banks:
+    get:
+      operationId: listReceiveMoneyBanks
+      tags:
+      - Invoices
+      summary: The banks a withdrawal can go to
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The banks, as iswallet lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [banks]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/receive-money/withdraw:
+    post:
+      operationId: withdrawToBank
+      tags:
+      - Invoices
+      summary: Withdraw to the business's bank
+      description: |
+        Starts a run of the withdrawal workflow for the amount, to the kept bank account; nothing is paid until the approval rule's
+        approvers approve. The Idempotency-Key (one is made when it is left out) is the payment's key: asking again with it answers
+        the same run and never pays twice.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: run.start
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 80
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo]
+              properties:
+                amount_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 100
+      responses:
+        '201':
+          description: The withdrawal's run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+        '200':
+          description: The same withdrawal, asked for again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Withdrawal'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/settings/schools:
     get:
       operationId: getSchoolSettings
@@ -14913,7 +16391,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TenantConnectorUploaded'
         '400':
-          description: Missing fields, or a manifest or module that does not load.
+          description: Missing fields, a manifest that fails the connector lint (`code` `manifest_lint`, with `findings`), or a module that does not load.
           content:
             application/json:
               schema:
@@ -15349,6 +16827,109 @@ paths:
           - sent
           - dropped
           default: dead
+  /v1/whatsapp/number/templates:
+    get:
+      operationId: getWhatsAppTemplates
+      tags:
+      - WhatsApp
+      summary: The own number's WhatsApp templates
+      description: Each library template's status in the own number's WhatsApp Business Account (not submitted, pending, approved, rejected with the reason, paused, disabled), and what cannot go outside the 24-hour window until approved.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppTemplates'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/whatsapp/number/templates/check:
+    post:
+      operationId: checkWhatsAppTemplates
+      tags:
+      - WhatsApp
+      summary: Check the templates' statuses with Meta now
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppTemplates'
+        '400':
+          description: Meta did not list the account's templates (the token lacks whatsapp_business_management).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No own number is connected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/whatsapp/number/templates/{name}/submit:
+    post:
+      operationId: submitWhatsAppTemplate
+      tags:
+      - WhatsApp
+      summary: Submit a template to Meta
+      description: Submits one library template to Meta for approval from the own number's WhatsApp Business Account. Audited as whatsapp.template.submit.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The template's name (taskiem_…)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatsAppTemplateStatus'
+        '400':
+          description: Meta refused the submission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such template in the library.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No own number is connected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/whatsapp/outbox/{id}/retry:
     post:
       operationId: retryWhatsAppOutbox
@@ -15448,7 +17029,7 @@ paths:
       - Workflows
       summary: Create a workflow
       description: 'Creates a workflow with its first draft version. Drafts may be incomplete: the answer lists
-        their problems.'
+        their problems. A draft is still a definition: an object whose steps are a list of objects (400 otherwise).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15880,6 +17461,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TriggerList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/workflows/{wf}/try:
+    post:
+      operationId: tryDraft
+      tags:
+      - Workflows
+      summary: Test a draft with sample data
+      description: Runs a definition once on the real orchestrator over an in-memory history, every service step answered with a sample of its output (or the output kept for it), every approval approved and every form answered. Nothing is sent and nothing is stored. The workflow builder's Test.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.edit
+      parameters:
+      - name: wf
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Workflow id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TryDraftRequest'
+      responses:
+        '200':
+          description: What each step did
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TryDraftResult'
+        '422':
+          description: The definition cannot be read or uses itself
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/email:
@@ -19689,7 +21312,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [cash_posting, discount, discount_amendment, term_invoice]
+          enum: [cash_posting, cash_match, discount, discount_amendment, term_invoice]
         status:
           type: string
           enum: [pending, posted, declined]
@@ -19822,6 +21445,9 @@ components:
           type: integer
         balance_after_kobo:
           type: integer
+        fee_kobo:
+          type: integer
+          description: The bank's fee on the transfer, when the payments service reported one; the school received amount_kobo less it.
         how:
           type: string
           enum: [exact, suggested, suggested_auto, manual]
@@ -19843,6 +21469,121 @@ components:
         link:
           type: string
           description: The public verification page, /r/<token> on the form host
+    ReceiveMoney:
+      type: object
+      description: Receiving money with Taskiem (decision 0052).
+      required: [available, plan, "on", default_owner_type, two_approvers_above_kobo]
+      properties:
+        available:
+          type: boolean
+          description: This Taskiem holds its own iswallet client.
+        plan:
+          type: boolean
+          description: The business's plan includes it.
+        plan_note:
+          type: string
+        "on":
+          type: boolean
+        default_owner_type:
+          type: string
+          enum: [client_end_user_business, client_end_business]
+        mode:
+          type: string
+          enum: [live, test]
+        owner_type:
+          type: string
+          enum: [client_end_user_business, client_end_business]
+        connection:
+          type: string
+          description: iswallet/taskiem.
+        account:
+          type: object
+          description: The business's own account number; transfers to it reach To match.
+          required: [account_number]
+          properties:
+            account_number:
+              type: string
+            bank_name:
+              type: string
+            account_name:
+              type: string
+        account_problem:
+          type: string
+          description: Why iswallet has not issued the number yet, in its words.
+        withdraw_to:
+          type: object
+          required: [bank_code, account_number, account_name]
+          properties:
+            bank_code:
+              type: string
+            bank_name:
+              type: string
+            account_number:
+              type: string
+            account_name:
+              type: string
+        two_approvers_above_kobo:
+          type: integer
+          format: int64
+        withdraw_workflow_id:
+          type: string
+          format: uuid
+        withdraw_waiting:
+          type: string
+          description: What a change to withdrawals still waits for (a second person under four-eyes, a promotion to a gated prod); the account and rule before stay in force until then.
+        sweep:
+          $ref: '#/components/schemas/ReceiveMoneySweep'
+    ReceiveMoneySweep:
+      type: object
+      description: |
+        Sending what the wallet holds to the saved bank account automatically: weekly, or whenever the wallet holds more than an
+        amount (checked hourly). No approval: the money only goes to the account written into the sweep's workflow, which changes
+        with the withdrawal one.
+      required: [mode, above_kobo, keep_kobo, fee_allowance_kobo, minimum_kobo]
+      properties:
+        mode:
+          type: string
+          enum: ["off", weekly, above]
+        day:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        time:
+          type: string
+          description: HH:MM, Lagos time
+        above_kobo:
+          type: integer
+          format: int64
+        keep_kobo:
+          type: integer
+          format: int64
+        fee_allowance_kobo:
+          type: integer
+          format: int64
+          description: What each sweep leaves for the bank's fee on the transfer
+        minimum_kobo:
+          type: integer
+          format: int64
+          description: The least one sweep sends
+        workflow_id:
+          type: string
+          format: uuid
+        waiting:
+          type: string
+          description: What a change to the sweep still waits for (a second person under four-eyes, a promotion to a gated prod).
+    Withdrawal:
+      type: object
+      required: [run_id, workflow_id, request_id, created]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        workflow_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+        created:
+          type: boolean
     SchoolIssuing:
       type: object
       description: The connection that issues students' account numbers (and its wallet, on rails that hold several), and whether siblings share family credit.
@@ -19879,6 +21620,9 @@ components:
           type: boolean
         needs_bvn:
           type: boolean
+        creates_wallet:
+          type: boolean
+          description: Taskiem can create the school's wallet on this rail (POST /v1/settings/schools/wallet)
         needs_account:
           type: boolean
           description: The wallet the numbers pay into must be chosen
@@ -21193,11 +22937,13 @@ components:
           - key.byok.enable
           - key.byok.credentials
           - key.byok.disable
+          - rider.bank
+          - pii.erase
         target:
           type: string
           maxLength: 200
           description: 'What the passkey confirms: `{run}/{step}/{decision}` for an approval, the action (`passkey.add`,
-            `totp.setup`, `password.change`) for `account.reauth`.'
+            `totp.setup`, `password.change`) for `account.reauth`, the rider''s id for `rider.bank`, the subject id for `pii.erase`.'
       additionalProperties: false
     PasskeyLoginRequest:
       type: object
@@ -21804,6 +23550,14 @@ components:
           description: Data tables to make with the draft (the proposal's, as reviewed), as POST /v1/tables takes them. Needs table.edit; each is reported in the answer, and the draft is saved whatever becomes of them.
           items:
             $ref: '#/components/schemas/TableRequest'
+        resolutions:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+            - ours
+            - theirs
+          description: How to settle conflicts a previous save reported, by conflict path (ours is the proposal).
       additionalProperties: false
     AIProposedTable:
       type: object
@@ -21875,8 +23629,13 @@ components:
     AlertChannelConfig:
       type: object
       description: 'What the channel sends to: `to` for email; `url` for a webhook; `members` and `emails` for WhatsApp
-        and Telegram; nothing for Slack (its webhook URL is kept in the vault).'
+        and Telegram; for Slack, `connection` and `channel` when made from the Slack connection, else nothing (its webhook
+        URL is kept in the vault).'
       properties:
+        connection:
+          type: string
+        channel:
+          type: string
         to:
           type: array
           items:
@@ -22300,6 +24059,15 @@ components:
           type: boolean
         delivery_note:
           type: string
+        pay_on_delivery:
+          type: boolean
+          description: A customer choosing delivery may pay at the door, by a one-time account number when the rider arrives or in cash (dispatch D4)
+        zones:
+          type: array
+          maxItems: 30
+          description: The areas an order is delivered to, each with its fee (dispatch D1); the form asks for one with delivery and adds its fee to the total
+          items:
+            $ref: '#/components/schemas/DeliveryZone'
         deposit_percent:
           type: integer
           minimum: 0
@@ -22309,6 +24077,231 @@ components:
           type: string
           enum: [full, keep_deposit, '']
           description: What a customer cancelling a paid booking gets back (default full)
+    Delivery:
+      type: object
+      required: [id, order_id, reference, rider_id, rider, status, offered_at, fee_kobo]
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        rider_id:
+          type: string
+          format: uuid
+        rider:
+          type: string
+        rider_phone:
+          type: string
+        status:
+          type: string
+          enum: [offered, declined, passed, withdrawn, accepted, picked_up, arrived, delivered, released]
+        offered_by:
+          type: string
+        offered_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        answered_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        accepted_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        picked_up_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        arrived_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        delivered_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        released_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        fee_kobo:
+          type: integer
+        paid_how:
+          type: string
+          enum: [transfer, cash]
+        proof:
+          type: boolean
+          description: A photo was kept as proof
+        proof_url:
+          type: string
+          description: The photo, for ten minutes
+        location:
+          type: string
+        rating:
+          type:
+          - integer
+          - 'null'
+        late:
+          type: string
+          enum: [pickup, arrival]
+        zone:
+          type: string
+    DeliveriesOn:
+      type: object
+      required: ["on", workflow_id]
+      properties:
+        "on":
+          type: boolean
+        workflow_id:
+          type: [string, 'null']
+          format: uuid
+          description: The workflow the order form starts, if any
+    DispatchSettings:
+      type: object
+      additionalProperties: false
+      required: [mode, offer_minutes, pickup_minutes, arrive_minutes, proof, owe_limit_kobo, rating_mark]
+      properties:
+        mode:
+          type: string
+          enum: [rotation, ask]
+        offer_minutes:
+          type: integer
+          minimum: 1
+          maximum: 60
+        pickup_minutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+        arrive_minutes:
+          type: integer
+          minimum: 10
+          maximum: 600
+        proof:
+          type: boolean
+        owe_limit_kobo:
+          type: integer
+          minimum: 0
+        rating_mark:
+          type: number
+          minimum: 1
+          maximum: 5
+    DeliveryZone:
+      type: object
+      additionalProperties: false
+      required: [name, fee_kobo]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+        fee_kobo:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+    Rider:
+      type: object
+      required: [id, name, phone, zones, fee_kobo, active, reached, presence, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        zones:
+          type: array
+          items:
+            type: string
+        fee_kobo:
+          type: integer
+          description: Their fee per delivery
+        active:
+          type: boolean
+          description: False while on leave (kept, offered nothing)
+        reached:
+          type: string
+          enum: [whatsapp, telegram, sms]
+          description: The chat app they tapped in on, or sms until they do
+        not_answering:
+          type: boolean
+          description: Three offers unanswered today; passed over until they tap anything
+        bank:
+          type: string
+          description: The account their payouts go to, as it may be shown
+        rating:
+          type: [number, 'null']
+          description: The average customers gave their deliveries (1 to 5), null before any
+        ratings:
+          type: integer
+          description: How many of their deliveries were rated
+        presence:
+          type: object
+          required: [state]
+          description: What the rider said to Taskiem, and the deliveries they hold, whichever business they ride for (never which)
+          properties:
+            open:
+              type: integer
+              description: Deliveries they hold now, for any business
+            state:
+              type: string
+              enum: [free, busy, "off"]
+            until:
+              type: string
+              format: date-time
+            since:
+              type: string
+              format: date-time
+        invited_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        created_at:
+          type: string
+          format: date-time
+        retired_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+    RiderPayout:
+      type: object
+      properties:
+        payout_id:
+          type: string
+          format: uuid
+        rider_id:
+          type: string
+          format: uuid
+        rider:
+          type: string
+        deliveries:
+          type: integer
+        fees_kobo:
+          type: integer
+        owed_kobo:
+          type: integer
+          description: The cash they owed, netted from it
+        amount_kobo:
+          type: integer
+        status:
+          type: string
+          enum: [pending, paid, failed, cancelled]
+        created_at:
+          type: string
+          format: date-time
+    RiderInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 60
+        phone:
+          type: string
+          description: A Nigerian mobile number; set when adding, and cannot change
+        zones:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+          description: The delivery areas they cover (the order form's, when it has some)
+        fee_kobo:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+        active:
+          type: boolean
     StorefrontAvailability:
       type: object
       additionalProperties: false
@@ -22478,6 +24471,9 @@ components:
         created_at:
           type: string
           format: date-time
+        fee_kobo:
+          type: integer
+          description: The rail's fee on the transfer this payment was, when the rail reported it and the payment took the whole transfer; the business received amount_kobo less it
     CustomerInvoice:
       type: object
       description: An invoice the business sends a customer. Status and paid_kobo come only from the payments counted towards it.
@@ -23059,6 +25055,39 @@ components:
               payments:
                 type: integer
                 description: Settled payments in
+        riders:
+          type: array
+          description: Each rider with deliveries, cash or a rating in the period, and what they owe now (businesses with riders)
+          items:
+            type: object
+            required: [rider_id, rider, delivered, door_transfer_kobo, cash_kobo, remitted_kobo, owed_kobo, fees_kobo, ratings]
+            properties:
+              rider_id:
+                type: string
+                format: uuid
+              rider:
+                type: string
+              delivered:
+                type: integer
+              door_transfer_kobo:
+                type: integer
+                description: Paid by transfer at the customer's door
+              cash_kobo:
+                type: integer
+                description: Cash taken at the door
+              remitted_kobo:
+                type: integer
+                description: Cash handed in, or netted from a payout
+              owed_kobo:
+                type: integer
+                description: The cash they owe now
+              fees_kobo:
+                type: integer
+                description: Their fees for the deliveries
+              rating:
+                type: [number, 'null']
+              ratings:
+                type: integer
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
@@ -23093,7 +25122,7 @@ components:
           enum: [order, enquiry, callback, booking]
         status:
           type: string
-          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded]
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived]
         customer:
           type: object
           properties:
@@ -23105,6 +25134,11 @@ components:
               type: string
             address:
               type: string
+            landmark:
+              type: string
+            pin:
+              type: string
+              description: A maps link the customer gave
             message:
               type: string
             best_time:
@@ -23117,13 +25151,23 @@ components:
           type: integer
         fulfilment:
           type: string
+        zone:
+          type: string
+          description: The delivery area the customer chose (dispatch D1)
+        delivery_kobo:
+          type: integer
+          description: The area's delivery fee, part of total_kobo
         payment:
           type: string
-          enum: [after_accept, at_order, none]
+          enum: [after_accept, at_order, none, on_delivery]
         payment_url:
           type: string
         paid_at:
           $ref: '#/components/schemas/NullableTimestamp'
+        paid_by:
+          type: string
+          enum: [card, transfer, other]
+          description: How it was paid, once paid - card (its Paystack page, refunded through Paystack), transfer (the account number given for it), other (money matched to it). Only a card payment is refunded through Paystack; the others are sent back by hand and marked refunded.
         run_id:
           type:
           - string
@@ -23406,6 +25450,12 @@ components:
         url:
           type: string
           description: A Slack incoming webhook (`https://hooks.slack.com/services/…`), or an https webhook URL.
+        connection:
+          type: string
+          description: 'Slack, instead of `url`: the production Slack connection whose bot posts the alerts.'
+        channel:
+          type: string
+          description: 'Slack, with `connection`: the channel to post in (its id, `C…`).'
       additionalProperties: false
     AlertChannelCreated:
       type: object
@@ -23761,6 +25811,11 @@ components:
           description: A personal data category (`email`, `phone`, …).
         value:
           description: The value in that category.
+        totp:
+          type: string
+          description: A current authenticator code. Erasure needs it or a passkey, from a person.
+        passkey:
+          $ref: '#/components/schemas/PasskeyCredential'
       additionalProperties: false
     Erased:
       type: object
@@ -24207,6 +26262,16 @@ components:
         whatsapp_overage:
           type: integer
         ai_tokens:
+          type: integer
+        rail_credits:
+          type: integer
+          description: Payments received that day on the business's Taskiem wallet (decision 0052).
+        rail_credit_kobo:
+          type: integer
+        rail_payouts:
+          type: integer
+          description: Withdrawals and payouts that day from the business's Taskiem wallet.
+        rail_payout_kobo:
           type: integer
         limits:
           type: object
@@ -25119,6 +27184,11 @@ components:
         oauth_linkable:
           type: boolean
           description: For a connector that declares `auth.oauth2`, whether it can be connected by OAuth on this platform.
+        oauth_modes:
+          type: array
+          items:
+            type: string
+          description: For a connector whose modes are hosts, the modes it can be connected in by OAuth on this platform.
         capabilities:
           type: array
           items:
@@ -25309,11 +27379,14 @@ components:
           description: For a connection parameter instead of connector, the capabilities its rail must have (pay_bank); any rail that can is offered, and an empty value is the only one that can.
         picker:
           type: string
-          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language]
+          enum: [sheet, sheet_tab, table, column, role, whatsapp_template, whatsapp_language, slack_channel, choice]
           description: How the value is chosen instead of typed.
         from:
           type: string
-          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template).
+          description: The parameter the picker depends on (a tab's spreadsheet, a column's table, a language's template, a choice's connection).
+        choices:
+          type: string
+          description: With picker choice, the connector's picker it lists from (mailchimp:audiences), through GET /v1/connections/choices.
       additionalProperties: false
     TemplateNeed:
       type: object
@@ -25404,6 +27477,13 @@ components:
         product:
           type: string
           description: The product the template works around (payrolla); the Start page offers it to organisations that connected the product, and retrieval only for goals that name it.
+        services:
+          type: array
+          description: The services the template works with that an organisation connects, each the connectors that serve it, any one of which will do (the books are QuickBooks or Zoho Books); the Start page offers the template, first, once each is connected.
+          items:
+            type: array
+            items:
+              type: string
         callable:
           type: object
           description: For a template another workflow can use as a step (decision 0047), its interface.
@@ -25580,6 +27660,53 @@ components:
                 type: string
             additionalProperties: false
       additionalProperties: false
+    TryDraftRequest:
+      type: object
+      required:
+      - definition
+      properties:
+        definition:
+          $ref: '#/components/schemas/Definition'
+        trigger:
+          description: What starts the test run, as a trigger delivers it; a sample from the definition's inputs when absent.
+        kept:
+          type: object
+          description: Outputs the builder kept, by step id; they answer those steps instead of samples.
+          additionalProperties: true
+    TryDraftResult:
+      type: object
+      required:
+      - status
+      - steps
+      - inputs
+      - outputs
+      - errors
+      properties:
+        status:
+          type: string
+          description: How the run ended (completed, failed, waiting, ...).
+        trigger:
+          description: What started it.
+        steps:
+          type: object
+          description: Each step's state by id (completed, failed, skipped, ...).
+          additionalProperties:
+            type: string
+        inputs:
+          type: object
+          description: What each service step was given, by id.
+          additionalProperties: true
+        outputs:
+          type: object
+          description: What each completed step gave, by id.
+          additionalProperties: true
+        errors:
+          type: object
+          description: Why each failed step failed, by id.
+          additionalProperties:
+            type: string
+        run_error:
+          type: string
     Layout:
       type: object
       description: The canvas's positions for a version's steps; not part of the definition, stored as given.
@@ -25801,7 +27928,7 @@ components:
       additionalProperties: false
     RemoteSubscription:
       type: object
-      description: A subscription Taskiem keeps at a provider for a remotely registered trigger (decision 0021).
+      description: A subscription Taskiem keeps at a provider for a remotely registered trigger (decision 0021), for a workflow or, with no workflow, for a connection (registration connection).
       required:
       - id
       - workflow_id
@@ -25825,8 +27952,11 @@ components:
           type: string
           format: uuid
         workflow_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
+          description: Null for a connection's own subscription, whose events reach every workflow subscribed.
         environment:
           type: string
         connector:
@@ -25931,6 +28061,10 @@ components:
           - string
           - 'null'
           description: '`live` or `test`, when the key says which.'
+        platform:
+          type: string
+          enum: [taskiem]
+          description: "A connection under Taskiem's own client (decision 0052): the business's wallet with Taskiem, holding no key of its own."
         remote:
           type: object
           description: Its subscriptions at the provider, when it has any.
@@ -26065,6 +28199,10 @@ components:
         name:
           type: string
           description: Defaults to `default`.
+        mode:
+          type: string
+          description: Live or test, for a connector whose modes are hosts (QuickBooks' sandbox companies; connector/v1 rule 20). The
+            connection is made in it, through that mode's OAuth client; one of the connector's `oauth_modes`.
       additionalProperties: false
     OAuthStarted:
       type: object
@@ -26248,6 +28386,7 @@ components:
       - digest
       - actions
       - hosts
+      - warnings
       properties:
         id:
           type: string
@@ -26267,6 +28406,20 @@ components:
           - 'null'
           items:
             type: string
+        warnings:
+          type: array
+          description: Lint findings that do not block the upload, for the author to read.
+          items:
+            type: object
+            required: [level, path, message]
+            properties:
+              level:
+                type: string
+              path:
+                type: string
+              message:
+                type: string
+            additionalProperties: false
       additionalProperties: false
     Environment:
       type: object
@@ -27104,7 +29257,12 @@ components:
       properties:
         four_eyes_publish:
           type: boolean
-          description: Publishing (and promotion) needs a second person.
+          description: Publishing to, and promotion into, any environment needs a second person.
+        four_eyes_publish_environments:
+          type: array
+          items:
+            type: string
+          description: When `four_eyes_publish` is off, the environments that need a second person (spec 3.4). A publish whose environments include one waits for approval as a whole; promotion into one needs someone other than the version's author and whoever deployed it to the source environment. Make such an environment take versions by promotion (`promotion_from`) so publishing elsewhere is never held up.
         four_eyes_policies:
           type: boolean
           description: Approval policy changes need a second person.
@@ -27121,10 +29279,15 @@ components:
       additionalProperties: false
     GovernanceRequest:
       type: object
-      description: Replaces every setting; one left out is off (`false`, or no default retention), except `ai_steps`, which a request without it keeps.
+      description: Replaces every setting; one left out is off (`false`, or no default retention), except `ai_steps` and `four_eyes_publish_environments`, which a request without them keeps.
       properties:
         four_eyes_publish:
           type: boolean
+        four_eyes_publish_environments:
+          type: array
+          items:
+            type: string
+          description: Names of the business's environments; an unknown name is refused (400). Sorted and without repeats when saved.
         four_eyes_policies:
           type: boolean
         default_retention:
@@ -28732,6 +30895,7 @@ components:
       - dismissed_by
       - dismissed_at
       - resumed_run_id
+      - published_since
       properties:
         id:
           type: string
@@ -28788,6 +30952,7 @@ components:
           - published
           - resumed
           - dismissed
+          - superseded
         explanation:
           type: string
         action:
@@ -28800,7 +30965,7 @@ components:
         diff:
           description: The patch against the failed version.
         evidence:
-          description: The shadow run, regression and existing tests, attempts.
+          description: The shadow run, regression and existing tests, attempts; once accepted onto a newer version, `merged` holds that version (`onto`) and the change the published version makes to it (`diff`).
         test:
           description: The regression case (wd-test/v1), redacted.
         attempts:
@@ -28844,6 +31009,11 @@ components:
           $ref: '#/components/schemas/NullableTimestamp'
         resumed_run_id:
           $ref: '#/components/schemas/NullableUUID'
+        published_since:
+          type:
+          - integer
+          - 'null'
+          description: The latest version published after the run's, onto which accepting merges the patch; null when there is none.
       additionalProperties: false
     RepairList:
       type: object
@@ -28970,6 +31140,28 @@ components:
           type: boolean
           description: Whether WhatsApp forms are available.
       additionalProperties: false
+    SlackLink:
+      type: object
+      required:
+      - enabled
+      - linked
+      - pending
+      properties:
+        enabled:
+          type: boolean
+          description: Taskiem's Slack app is set up here.
+        linked:
+          type: boolean
+        pending:
+          type: boolean
+          description: A Confirm button was sent and not pressed yet.
+        workspace:
+          type: string
+          description: The Slack workspace's id.
+        verified_at:
+          type: string
+          format: date-time
+      additionalProperties: false
     TelegramLink:
       type: object
       required:
@@ -29083,6 +31275,65 @@ components:
         name:
           type: string
           description: The workflow's name (answers only).
+      additionalProperties: false
+    WhatsAppTemplateStatus:
+      type: object
+      required:
+      - name
+      - category
+      - language
+      - status
+      - purpose
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum:
+          - authentication
+          - utility
+          - marketing
+        language:
+          type: string
+        status:
+          type: string
+          enum:
+          - not_submitted
+          - pending
+          - approved
+          - rejected
+          - paused
+          - disabled
+        reason:
+          type: string
+          description: Meta's reason for a rejection, pause or disabling.
+        meta_id:
+          type: string
+          description: The template's id in Meta's account once submitted.
+        submitted_at:
+          $ref: '#/components/schemas/Timestamp'
+        checked_at:
+          $ref: '#/components/schemas/Timestamp'
+        purpose:
+          type: string
+          description: When the template is sent.
+      additionalProperties: false
+    WhatsAppTemplates:
+      type: object
+      required:
+      - tracked
+      - templates
+      properties:
+        tracked:
+          type: boolean
+          description: An own number is connected, so the statuses are its account's.
+        templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/WhatsAppTemplateStatus'
+        note:
+          type: string
+          description: What cannot go outside the 24-hour window until the templates named are approved.
       additionalProperties: false
     WhatsAppNumber:
       type: object
@@ -29211,6 +31462,8 @@ components:
                 - invoice
                 - match
                 - money_daily
+                - school_approval
+                - school_family
               status:
                 type: string
                 enum:
@@ -29573,6 +31826,14 @@ components:
         count:
           type: integer
       additionalProperties: false
+    CancelRunRequest:
+      type: object
+      properties:
+        reverse:
+          type: boolean
+          default: true
+          description: Run the compensations of the run's completed steps, newest first, before the run ends; it ends once writes already under way have settled. `false` ends the run now and leaves completed steps as they are.
+      additionalProperties: false
     ResolveRequest:
       type: object
       required:
@@ -29585,7 +31846,7 @@ components:
           - completed
           - failed
           - retry
-          description: What the provider shows happened.
+          description: What the provider shows happened. `retry` (it did not happen; send it again) re-issues the effect under a new idempotency key and does not count against the step's retries.
         output:
           description: The step's output, when it completed.
         note:

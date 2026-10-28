@@ -359,7 +359,7 @@ The capability and the `payment.returned` event in `schemas/capabilities-v1.json
 
 Differences from the plan above:
 
-- **iswallet is not mapped**: the request fields for a temporary account are not documented (§4.3).
+- **iswallet was not mapped** until its guide of 27 October documented one-time accounts (`type: dynamic`); they are now `collect_transfer` (unsafe: not idempotent; on late: credited; Taskiem's window, 1 to 1,440 minutes, default 60; `payment.received` by its `tot_` reference), in [iswallet account numbers](iswallet-account-numbers.md) I2.
 - **OPay's payment callback is not mapped** to `payment.received`: its amount's unit is unconfirmed, so a payment is confirmed with `get_payment` and `await_payment` does not run on OPay.
 - **Paystack's `bank.transfer.rejected` has no documented example body**: it is read like Paystack's other charge events (`data.reference`, `data.amount`) with reason `other`, to confirm in sandbox. Whether Paystack sends an event when it refunds a late transfer is not documented.
 - **Flutterwave's expiry** is counted from when the request was sent, since its `expiry_date` carries no time zone; amounts are sent in naira, as its examples show.
@@ -436,7 +436,7 @@ The first five leaks, their lifecycle and the amount recovered; statement upload
 - **The first statement formats are the common one and any bank's columns matched to it**; formats parsed from a bank's own export without matching (Tally's parsers) can follow.
 - **"Overpayment, and money for a void invoice" are two kinds** (overpaid, void_paid), and money for a void invoice is not also "money in with nothing to match".
 - **POS sales and cash are not "money in with nothing to match"**: they are takings, not money owed.
-- **A duplicate is one movement reported as two kinds of event** on one connection; the log already keeps each event once, and statement lines without a reference repeat by nature.
+- **A duplicate is one movement reported as two kinds of event** on one connection (a credit to a customer's account number is known by its `credit_id`, since the reference is the account's); the log already keeps each event once, and statement lines without a reference repeat by nature.
 - **Leaks use the invoice permissions** (`invoice.read`, `invoice.manage`) for now.
 - **Expenses in chat**: "spent 12k on diesel at Total", "expense 5000 fuel", "cash in 20,000 till", confirmed with Yes and recorded once; categories from a short word list.
 - **`invoice-paid-receipt` runs hourly** over invoices paid in the last 3 hours, because nothing starts a run when an invoice is paid (the `invoice.paid` signal only resumes runs waiting on it); `chase-overdue-invoices` runs daily. Both use a new read-only `invoices@1` action, `list`. Their keywords are only "chase" and "receipt" so the offline builder's other cases are not taken over.

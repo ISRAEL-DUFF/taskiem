@@ -31,6 +31,10 @@ const PaymentTTL = 30 * time.Minute
 // with the order's reference as the correlation key.
 const PaymentSignal = "storefront.payment"
 
+// DeliveredSignal is the signal an order's run hears when its rider
+// delivered it (dispatch D3), correlated by the reference.
+const DeliveredSignal = "storefront.delivered"
+
 var (
 	// ErrNoOrder is a reference the caller's tenant has no order for.
 	ErrNoOrder = errors.New("storefront: no such order")
@@ -77,11 +81,17 @@ type Orders struct {
 	Live Live
 	// Cancel cancels a run (runtime.Store.CancelRun), when a booking is
 	// moved or cancelled.
-	Cancel func(ctx context.Context, ref runtime.RunRef, by string) error
+	Cancel func(ctx context.Context, ref runtime.RunRef, by string, reverse bool) error
 	// MoneyLog, when set, records a payment the payment check finds, as
 	// the provider's event would, and the order's payment counts that
 	// entry (matched.go): one entry and one match whichever is heard first.
 	MoneyLog *moneylog.Log
+	// IssueTransfer asks the business's rail for a one-time account number
+	// for an order (N3; invoicing's IssueForOrder): nil offers none.
+	IssueTransfer IssueTransfer
+	// AfterPaid hears of an order a payment moved to paid, after the
+	// payment is counted (dispatch tells the rider at the door).
+	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
 	// PreviewDomain is where storefronts are served (<slug>.<domain>).
 	PreviewDomain string
 	Logger        *slog.Logger
@@ -104,23 +114,32 @@ func (o *Orders) log() *slog.Logger {
 
 // Order is an order as the owner sees it, the customer's details opened.
 type Order struct {
-	ID         uuid.UUID  `json:"id"`
-	Reference  string     `json:"reference"`
-	Kind       string     `json:"kind"`
-	Status     string     `json:"status"`
-	Customer   Customer   `json:"customer"`
-	Basket     []Line     `json:"basket"`
-	TotalKobo  int64      `json:"total_kobo"`
-	Fulfilment string     `json:"fulfilment,omitempty"`
-	Payment    string     `json:"payment"`
-	PaymentURL string     `json:"payment_url,omitempty"`
-	PaidAt     *time.Time `json:"paid_at"`
-	RunID      *uuid.UUID `json:"run_id"`
-	Note       string     `json:"note,omitempty"`
-	DecidedBy  string     `json:"decided_by,omitempty"`
-	DecidedAt  *time.Time `json:"decided_at"`
-	ExpiresAt  *time.Time `json:"expires_at"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	Reference  string    `json:"reference"`
+	Kind       string    `json:"kind"`
+	Status     string    `json:"status"`
+	Customer   Customer  `json:"customer"`
+	Basket     []Line    `json:"basket"`
+	TotalKobo  int64     `json:"total_kobo"`
+	Fulfilment string    `json:"fulfilment,omitempty"`
+	// Zone is the delivery area the customer chose and DeliveryKobo its
+	// fee, part of TotalKobo (dispatch D1).
+	Zone         string     `json:"zone,omitempty"`
+	DeliveryKobo int64      `json:"delivery_kobo,omitempty"`
+	Payment      string     `json:"payment"`
+	PaymentURL   string     `json:"payment_url,omitempty"`
+	PaidAt       *time.Time `json:"paid_at"`
+	// PaidBy is how it was paid: card (its Paystack checkout page),
+	// transfer (into the account number given for it, N3), other (money
+	// matched to it, or a manual match), or "" while unpaid. Only a card payment is refunded
+	// through Paystack; the others by hand.
+	PaidBy    string     `json:"paid_by,omitempty"`
+	RunID     *uuid.UUID `json:"run_id"`
+	Note      string     `json:"note,omitempty"`
+	DecidedBy string     `json:"decided_by,omitempty"`
+	DecidedAt *time.Time `json:"decided_at"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	CreatedAt time.Time  `json:"created_at"`
 	// A booking's service and time; Version counts its moves.
 	ServiceID   string     `json:"service_id,omitempty"`
 	ServiceName string     `json:"service_name,omitempty"`
@@ -147,14 +166,21 @@ func (x Order) CustomerID() string { return x.subject }
 
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
-	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change`
+	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0),
+	CASE WHEN paid_at IS NULL THEN ''
+	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
+	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
+	    AND p.by NOT LIKE 'system:paystack/%' AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)) THEN 'other'
+	  WHEN payment_ref IS NOT NULL THEN 'card'
+	  ELSE 'other' END`
 
 func scanOrder(r pgx.Row) (Order, error) {
 	var x Order
 	var basket, change []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
-		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change)
+		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -207,7 +233,7 @@ func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st
 	switch status {
 	case "":
 	case "open":
-		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed')`
+		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed', 'dispatched', 'on_the_way', 'arrived')`
 	default:
 		args = append(args, status)
 		q += fmt.Sprintf(` AND status = $%d`, len(args))
@@ -401,6 +427,9 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if (sub.Kind != "order" && sub.Kind != "booking") || payable < 100 {
 		payment = "none"
 	}
+	if payment == "on_delivery" && (sub.Kind != "order" || sub.Fulfilment != "delivery") {
+		payment = "after_accept"
+	}
 	if payment == "at_order" {
 		status = "awaiting_payment"
 		e := o.now().Add(PaymentTTL)
@@ -438,12 +467,20 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if note != "" {
 		noteArg = &note
 	}
+	var zone *string
+	var delivery *int64
+	if sub.Zone != "" && sub.Fulfilment == "delivery" {
+		zone = &sub.Zone
+		if sub.DeliveryKobo > 0 {
+			delivery = &sub.DeliveryKobo
+		}
+	}
 	id := uuid.Must(uuid.NewV7())
 	if _, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
-		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
-		key, deposit, serviceID, serviceName, starts, ends, change, noteArg); err != nil {
+		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery); err != nil {
 		return Order{}, err
 	}
 	if b != nil {
@@ -515,10 +552,16 @@ func (o *Orders) payerEmail(c Customer, reference string) string {
 }
 
 func (o *Orders) createPayment(ctx context.Context, tenant uuid.UUID, ord Order, c Customer, statusKey, slug, connection string) error {
+	name, card := paystackConnection(connection)
+	if !card {
+		// Another rail's form: the customer pays by bank transfer from the
+		// status page (N3), and no card page is made.
+		return nil
+	}
 	if o.Payments == nil {
 		return errors.New("storefront: no payment provider is configured")
 	}
-	url, ref, err := o.Payments.Create(ctx, tenant, connection, PaymentRequest{Reference: paymentKey(ord.ID), AmountKobo: ord.Payable(),
+	url, ref, err := o.Payments.Create(ctx, tenant, name, PaymentRequest{Reference: paymentKey(ord.ID), AmountKobo: ord.Payable(),
 		Email: o.payerEmail(c, ord.Reference), CallbackURL: o.statusURL(slug, ord.Reference, statusKey),
 		Metadata: map[string]any{"storefront_reference": ord.Reference}})
 	if err != nil {
@@ -584,9 +627,16 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 		paymentStatus = "paid"
 	case ord.Payment == "after_accept":
 		paymentStatus = "due_after_accept"
+	case ord.Payment == "on_delivery":
+		paymentStatus = "on_delivery"
 	}
 	body := map[string]any{"reference": ord.Reference, "kind": ord.Kind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
 		"total": FormatNaira(ord.TotalKobo), "summary": Summary(ord.Basket), "fulfilment": ord.Fulfilment, "payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}}
+	if ord.Zone != "" {
+		// The delivery area and its fee (dispatch D1), in the summary too.
+		body["zone"], body["delivery_kobo"], body["delivery_fee"] = ord.Zone, ord.DeliveryKobo, FormatNaira(ord.DeliveryKobo)
+		body["summary"] = Summary(ord.Basket) + ", delivery to " + ord.Zone + " " + FormatNaira(ord.DeliveryKobo)
+	}
 	dedup := ord.ID.String()
 	if ord.Kind == "booking" {
 		body["booking"] = o.bookingBody(ord, autoConfirm)
@@ -688,10 +738,10 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	for _, d := range list {
 		paid := false
 		var amount int64
-		if d.ref != "" && o.Payments != nil {
+		if name, card := paystackConnection(d.connection); card && d.ref != "" && o.Payments != nil {
 			var status string
 			var err error
-			status, amount, err = o.Payments.Verify(ctx, tenant, d.connection, d.ref)
+			status, amount, err = o.Payments.Verify(ctx, tenant, name, d.ref)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -804,7 +854,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "declined", "refund_due":
 				next = ord.Status
-			case "received", "accepted":
+			case "received", "accepted", "dispatched":
 				next = "declined"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -816,7 +866,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "completed":
 				next = ord.Status
-			case "received", "accepted", "paid":
+			case "received", "accepted", "paid", "dispatched", "on_the_way", "arrived":
 				next = "completed"
 			}
 		case "no_show":
@@ -832,7 +882,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "cancelled", "expired":
 				next = ord.Status
-			case "received", "accepted", "awaiting_payment":
+			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived":
 				next = "cancelled"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -851,6 +901,26 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			}
 			if err := audit(ctx, tx, tenant, "storefront.order_"+next, reference, map[string]any{"by": actor}); err != nil {
 				return err
+			}
+			// Its delivery (dispatch): completed by the owner, the rider who
+			// holds it delivered it; declined or cancelled, it is released
+			// and any offer withdrawn.
+			switch next {
+			case "completed":
+				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'delivered', delivered_at = now() WHERE tenant_id = $1 AND order_id = $2
+					AND status IN ('accepted', 'picked_up', 'arrived')`, tenant, ord.ID); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'withdrawn', answered_at = now() WHERE tenant_id = $1 AND order_id = $2 AND status = 'offered'`,
+					tenant, ord.ID); err != nil {
+					return err
+				}
+			case "declined", "cancelled", "refund_due":
+				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = CASE WHEN status = 'offered' THEN 'withdrawn' ELSE 'released' END,
+					released_at = CASE WHEN status = 'offered' THEN NULL ELSE now() END, answered_at = COALESCE(answered_at, now())
+					WHERE tenant_id = $1 AND order_id = $2 AND status IN ('offered', 'accepted', 'picked_up', 'arrived')`, tenant, ord.ID); err != nil {
+					return err
+				}
 			}
 			// A booking declined or cancelled frees its slot.
 			if ord.Kind == "booking" && (next == "declined" || next == "cancelled" || next == "refund_due") {
@@ -906,16 +976,33 @@ func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference st
 	if ord.PaymentURL != "" {
 		return map[string]any{"reference": reference, "url": ord.PaymentURL, "total": FormatNaira(ord.Payable())}, nil
 	}
+	name, card := paystackConnection(connection)
+	if !card && ord.Status == "awaiting_payment" && ord.Payment == "after_accept" {
+		// Asked again: the status page, where it is paid by transfer.
+		return o.statusLinkFor(ctx, tenant, ord)
+	}
 	if ord.Status != "accepted" || ord.Payment != "after_accept" || ord.TotalKobo < 100 {
 		return nil, fmt.Errorf("%w: %s needs no payment link while %s", ErrDecision, reference, ord.Status)
 	}
 	if ord.Payable() < 100 {
 		return nil, fmt.Errorf("%w: %s has nothing to pay online", ErrDecision, reference)
 	}
+	if !card {
+		// Another rail's form: the link is the order's status page, where
+		// the customer gets an account number to pay into (N3).
+		if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = 'awaiting_payment', expires_at = now() + interval '24 hours', updated_at = now()
+				WHERE tenant_id = $1 AND id = $2 AND status = 'accepted'`, tenant, ord.ID)
+			return err
+		}); err != nil {
+			return nil, err
+		}
+		return o.statusLinkFor(ctx, tenant, ord)
+	}
 	if o.Payments == nil {
 		return nil, errors.New("storefront: no payment provider is configured")
 	}
-	url, ref, err := o.Payments.Create(ctx, tenant, connection, PaymentRequest{Reference: paymentKey(ord.ID), AmountKobo: ord.Payable(),
+	url, ref, err := o.Payments.Create(ctx, tenant, name, PaymentRequest{Reference: paymentKey(ord.ID), AmountKobo: ord.Payable(),
 		Email: o.payerEmail(ord.Customer, reference), CallbackURL: "https://" + slug + "." + o.PreviewDomain + "/",
 		Metadata: map[string]any{"storefront_reference": reference}})
 	if err != nil {

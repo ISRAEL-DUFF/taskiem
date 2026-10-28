@@ -1,0 +1,25 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/lists/a6b5da1054/members/3e3417d7ef77d5932a6734b916515ed5/tags",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  },
+  "body": {
+   "tags": [
+    {
+     "name": "vip",
+     "status": "active"
+    },
+    {
+     "name": "lapsed",
+     "status": "inactive"
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 204,
+  "body": null
+ }
+}

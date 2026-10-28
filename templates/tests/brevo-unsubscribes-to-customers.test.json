@@ -1,0 +1,76 @@
+{
+  "schema": "wd-test/v1",
+  "template": "brevo-unsubscribes-to-customers",
+  "params": {},
+  "cases": [
+    {
+      "name": "an unsubscribe stops marketing",
+      "trigger": {
+        "event": "unsubscribed",
+        "body": {
+          "event": "unsubscribe",
+          "email": "ada@example.com",
+          "id": 21,
+          "camp_id": 7,
+          "ts_event": 1761480005
+        }
+      },
+      "mocks": {
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "mark": {
+            "filters": [
+              {
+                "column": "email",
+                "op": "ilike",
+                "value": "ada@example.com"
+              }
+            ],
+            "set": {
+              "marketing_opt_in": false,
+              "email_status": "unsubscribed"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "a hard bounce is noted",
+      "trigger": {
+        "event": "hardBounce",
+        "body": {
+          "event": "hard_bounce",
+          "email": "ada@example.com",
+          "id": 21,
+          "camp_id": 7,
+          "ts_event": 1761480005
+        }
+      },
+      "mocks": {
+        "mark": {
+          "output": {
+            "affected": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "mark": {
+            "set": {
+              "marketing_opt_in": false,
+              "email_status": "bounced"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

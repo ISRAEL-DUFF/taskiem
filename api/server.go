@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/forms"
@@ -42,6 +43,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -102,6 +104,9 @@ type Server struct {
 	// Invoices are the business's invoices to its customers (decision
 	// 0045); nil: their routes answer that they are not available.
 	Invoices *invoicing.Invoices
+	// ReceivePayoutFeeKobo is the room a sweep to the bank leaves for the
+	// payout's fee (TASKIEM_ISWALLET_PAYOUT_FEE_KOBO); 0 is ₦100.
+	ReceivePayoutFeeKobo int64
 	// Matcher matches money to invoices (T5); nil: one is made from
 	// Invoices.
 	Matcher *matching.Matcher
@@ -170,6 +175,9 @@ type Server struct {
 	WhatsAppPublic WhatsAppPublic
 	// Telegram is the platform bot (decision 0035); nil turns the channel off.
 	Telegram *telegram.Platform
+	// Slack is Taskiem's Slack app, for approvals in a business's workspace
+	// (decision 0051, slack.go); nil turns the channel off.
+	Slack *SlackApp
 	// Reach are the people outside each business who asked for updates on
 	// WhatsApp or Telegram (N11, decision 0039); ReachKeys open what a
 	// thank-you page's code carries, ReachHost is the form host their
@@ -179,6 +187,12 @@ type Server struct {
 	ReachKeys *forms.Keys
 	ReachHost string
 	Messages  *sender.Queue
+	// Riders are the businesses' own riders (dispatch D1); nil: none.
+	Riders *riders.Riders
+	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when
+	// set, keeps a rider's proof photo instead of Media (tests).
+	Dispatch   *dispatch.Dispatch
+	ProofStore func(ctx context.Context, tenant uuid.UUID, data []byte) (string, error)
 	// ChatSigner signs approval decision and hand-off tokens when WhatsApp
 	// is off (with WhatsApp on, its signer is used for both channels).
 	ChatSigner whatsapp.Signer
@@ -255,6 +269,9 @@ func (s *Server) Handler() http.Handler {
 		if s.Telegram != nil {
 			r.Post("/channels/telegram", s.tgReceive)
 		}
+		if s.Slack != nil {
+			r.Post("/channels/slack/interactions", s.slackInteractions)
+		}
 		r.Mount("/channels/ussd", s.USSDHooks())
 	}
 	r.Route("/v1", func(r chi.Router) {
@@ -314,9 +331,17 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)
 			r.Delete("/me/telegram", s.unlinkTelegram)
+			r.Get("/me/slack", s.getSlack)
+			r.Post("/me/slack", s.startSlackLink)
+			r.Delete("/me/slack", s.unlinkSlack)
+			r.With(s.need(PermWorkflowEdit)).Get("/slack/channels", s.listSlackChannels)
+			r.With(s.need(PermWorkflowEdit)).Get("/connections/choices", s.listChoices)
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number", s.getWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/whatsapp/number", s.putWhatsAppNumber)
 			r.With(s.need(PermSecretManage), s.tenantWide).Delete("/whatsapp/number", s.deleteWhatsAppNumber)
+			r.With(s.need(PermSecretManage)).Get("/whatsapp/number/templates", s.getWhatsAppTemplates) // the own number's templates (whatsapp_templates.go)
+			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/check", s.checkWhatsAppTemplates)
+			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/reach/page", s.newReachPage)
@@ -402,6 +427,29 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
+			// The business's own riders (riders.go, dispatch D1).
+			r.With(s.need(PermStorefrontManage)).Get("/riders", s.listRiders)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders", s.addRider)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/riders/{id}", s.updateRider)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/retire", s.retireRider)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/invite", s.inviteRider)
+			r.With(s.need(PermStorefrontManage)).Get("/riders/owed", s.ridersOwed)
+			r.With(s.need(PermStorefrontManage)).Get("/riders/pay", s.getRidersPay)
+			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowPublish), s.tenantWide).Put("/riders/pay/setup", s.setupRidersPay)
+			r.With(s.need(PermStorefrontManage), s.need(PermRunStart), s.tenantWide).Post("/riders/pay", s.payRiders)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/riders/{id}/bank", s.putRiderBank)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/payouts/{id}/not-paid", s.payoutNotPaid)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
+			// Deliveries with riders (dispatch.go, D2 to D4).
+			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
+			r.With(s.need(PermStorefrontManage)).Get("/dispatch/settings", s.getDispatchSettings)
+			r.With(s.need(PermStorefrontManage)).Get("/dispatch/workflow", s.getDeliveriesOn)
+			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.need(PermWorkflowPublish), s.tenantWide).Post("/dispatch/workflow", s.turnOnDeliveries)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/dispatch/settings", s.putDispatchSettings)
 			r.With(s.need(PermWorkflowRead)).Get("/forms", s.listForms)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)
 			r.With(s.need(PermFormLinks), s.tenantWide).Post("/forms/{id}/links", s.mintFormLinks)
@@ -444,6 +492,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/environments", s.createEnvironment)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/environments/{env}", s.putEnvironment)
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/validate", s.validate)
+			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/workflows/{wf}/try", s.tryDraft)
 			r.With(s.need(PermWorkflowRead)).Post("/readiness", s.draftReadiness)
 			r.With(s.need(PermWorkflowRead)).Get("/approver-roles", s.listApproverRoles)
 			r.With(s.feature(billing.FeatureAI, true)).Route("/ai", s.aiRoutes)
@@ -473,13 +522,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)
 			r.With(s.need(PermConnectionManage)).Post("/connections/check", s.checkConnection)
+			r.With(s.need(PermConnectionManage)).Post("/connections/{id}/check", s.checkSavedConnection)
 			r.With(s.need(PermWorkflowRead)).Get("/connection-names", s.listConnectionNames)
 			r.With(s.need(PermWorkflowEdit)).Post("/sheets/resolve", s.resolveSpreadsheet)
 			r.Get("/settings/advanced", s.getAdvanced) // the Advanced switch (advanced.go)
 			r.With(s.need(PermMemberManage)).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/schools", s.getSchoolSettings) // the Schools area's switch (schools.go)
 			r.With(s.tenantWide).Put("/settings/schools", s.putSchoolSettings)
-			r.Get("/settings/brand", s.getBrand) // how public pages look (brand.go)
+			r.With(s.tenantWide).Post("/settings/schools/wallet", s.createSchoolWallet) // the school's wallet (schools_wallet.go)
+			r.Group(s.receiveMoneyRoutes)                                               // receive money with Taskiem (receive_money.go)
+			r.Get("/settings/brand", s.getBrand)                                        // how public pages look (brand.go)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/brand", s.putBrand)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/settings/brand/preview", s.previewBrand)
 			r.With(s.need(PermWorkflowRead)).Get("/paystack/banks", s.listBanks) // pickers (lookups.go)
@@ -701,6 +753,17 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, "not found")
 	case errors.Is(err, runtime.ErrTenantSuspended):
 		writeErr(w, http.StatusLocked, err.Error())
+	case errors.Is(err, errUpstream):
+		// A provider that did not answer, or answered what cannot be read.
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": strings.TrimPrefix(err.Error(), "upstream: "), "code": "provider"})
+	case errors.Is(err, secrets.ErrPlatformConnection), errors.Is(err, secrets.ErrPlatformClient):
+		// Taskiem's own client (decision 0052): its details are Taskiem's,
+		// or this Taskiem does not hold it.
+		msg := err.Error()
+		if i := strings.LastIndex(msg, ": "); i > 0 {
+			msg = msg[:i]
+		}
+		writeErr(w, http.StatusConflict, msg)
 	case errors.Is(err, secrets.ErrKeyUnavailable):
 		// The tenant's customer key is revoked, disabled or unreachable (or
 		// the KMS is down): nothing can be encrypted or decrypted for it.

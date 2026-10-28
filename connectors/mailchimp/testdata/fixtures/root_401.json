@@ -1,0 +1,19 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/",
+  "headers": {
+   "Authorization": "Bearer mctestoauthtoken"
+  }
+ },
+ "response": {
+  "status": 401,
+  "body": {
+   "type": "https://mailchimp.com/developer/marketing/docs/errors/",
+   "title": "API Key Invalid",
+   "status": 401,
+   "detail": "Your API key may be invalid, or you've attempted to access the wrong datacenter.",
+   "instance": "a1b2"
+  }
+ }
+}

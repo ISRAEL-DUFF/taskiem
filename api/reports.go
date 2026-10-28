@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -123,34 +122,6 @@ func csvCell(v any) string {
 	return fmt.Sprint(v)
 }
 
-// amountOf finds the amount an approval was about, in naira: the first
-// number in its subject under a field named for an amount (fields ending
-// in _kobo are converted).
-func amountOf(subject []byte) (float64, bool) {
-	var m map[string]any
-	if json.Unmarshal(subject, &m) != nil {
-		return 0, false
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		n, ok := m[k].(float64)
-		lk := strings.ToLower(k)
-		named := strings.Contains(lk, "amount") || strings.Contains(lk, "total") || strings.HasSuffix(lk, "_kobo")
-		if !ok || !named {
-			continue
-		}
-		if strings.HasSuffix(lk, "kobo") {
-			n /= 100
-		}
-		return n, true
-	}
-	return 0, false
-}
-
 func band(naira float64, ok bool) string {
 	switch {
 	case !ok:
@@ -168,10 +139,11 @@ func band(naira float64, ok bool) string {
 // approvalsReport: every approval decision, with who, for whom, the level,
 // step-up, and the amount band; summarised by approver and band.
 func approvalsReport(ctx context.Context, tx pgx.Tx, _ *Server, _ uuid.UUID, from, to time.Time) (*report, error) {
+	// approval_history, not the run's own tables: those go when the run is
+	// purged, and the evidence must not.
 	rows, err := tx.Query(ctx, `SELECT d.decided_at, u.email, COALESCE(ob.email, ''), d.decision, d.level + 1, COALESCE(d.step_up, ''), d.channel,
-			w.name, d.run_id::text, d.step_id, COALESCE(a.policy, ''), a.subject
-		FROM approval_decisions d JOIN approvals a ON a.run_id = d.run_id AND a.step_id = d.step_id
-		JOIN runs r ON r.id = d.run_id JOIN workflows w ON w.id = r.workflow_id
+			w.name, d.run_id::text, d.step_id, COALESCE(d.policy, ''), d.amount_naira::float8
+		FROM approval_history d JOIN workflows w ON w.id = d.workflow_id
 		JOIN users u ON u.id = d.user_id LEFT JOIN users ob ON ob.id = d.on_behalf_of
 		WHERE d.decided_at >= $1 AND d.decided_at < $2 ORDER BY d.decided_at`, from, to)
 	if err != nil {
@@ -192,11 +164,14 @@ func approvalsReport(ctx context.Context, tx pgx.Tx, _ *Server, _ uuid.UUID, fro
 		var at time.Time
 		var approver, onBehalf, decision, stepUp, channel, wf, run, step, pol string
 		var level int
-		var subject []byte
-		if err := rows.Scan(&at, &approver, &onBehalf, &decision, &level, &stepUp, &channel, &wf, &run, &step, &pol, &subject); err != nil {
+		var naira *float64
+		if err := rows.Scan(&at, &approver, &onBehalf, &decision, &level, &stepUp, &channel, &wf, &run, &step, &pol, &naira); err != nil {
 			return nil, err
 		}
-		amount, ok := amountOf(subject)
+		amount, ok := 0.0, naira != nil
+		if ok {
+			amount = *naira
+		}
 		b := band(amount, ok)
 		row := map[string]any{"decided_at": at, "approver": approver, "on_behalf_of": onBehalf, "decision": decision, "level": level, "step_up": stepUp,
 			"channel": channel, "workflow": wf, "run": run, "step": step, "policy": pol, "band": b}

@@ -28,7 +28,15 @@ type statusData struct {
 	PayURL    string
 	PayLabel  string
 	NewTab    bool // embedded: payment opens outside the frame
-	Home      string
+	// Transfer is Pay by bank transfer (N3); RefreshAfter refreshes the
+	// page after that many seconds while an account is coming or open.
+	Transfer     *transferView
+	RefreshAfter int
+	// Rate asks how a delivered order's delivery was (dispatch D5).
+	Rate *rateView
+	// pay is the waiting order's transfer, read before the words.
+	pay  *OrderPayment
+	Home string
 	// Buttons post a change (each a form with Token); Links go to the
 	// change pages, or back.
 	Buttons  []changeButton
@@ -119,6 +127,15 @@ func (s *Server) statusPage(ctx context.Context, site Site, ref, key string, o O
 	if embed {
 		prefix = "/embed"
 	}
+	if o.Status == "awaiting_payment" && s.OrderPay != nil {
+		p, ok, err := s.OrderPay.Payment(ctx, ref, storefront.StatusHash(key))
+		if err != nil {
+			return d, err
+		}
+		if ok {
+			d.pay = &p
+		}
+	}
 	switch {
 	case o.Status == "price_changed":
 		if err := s.priceWords(ctx, &d, site, ref, key, o, prefix); err != nil {
@@ -151,6 +168,14 @@ func (s *Server) statusPage(ctx context.Context, site Site, ref, key string, o O
 		}
 	default:
 		statusWords(&d, o)
+	}
+	if o.Status == "awaiting_payment" {
+		s.payByTransfer(&d, ref, key, prefix)
+	}
+	if o.Kind == "order" && o.Status == "completed" {
+		if err := s.rateDelivery(ctx, &d, ref, key, prefix); err != nil {
+			return d, err
+		}
 	}
 	d.Title = d.Headline
 	return d, nil
@@ -193,7 +218,12 @@ func bookingWords(d *statusData, b BookingState) {
 		if u := payLink(b.PaymentURL); u != "" {
 			d.Headline = "Pay to book " + d.Reference
 			d.PayURL, d.PayLabel = u, "Pay "+storefront.FormatNaira(amount)
-			d.Lines = []string{what, "Your time is held for 30 minutes.", "You pay " + bn + " through their payment provider. Never share a PIN or one-time code with anyone."}
+			d.Lines = []string{what, d.heldLine(true), "You pay " + bn + " through their payment provider. Never share a PIN or one-time code with anyone."}
+			return
+		}
+		if d.transferOnly() {
+			d.Headline = "Pay to book " + d.Reference
+			d.Lines = []string{what, d.heldLine(true), "Pay " + storefront.FormatNaira(amount) + " by bank transfer to the account number " + bn + " gives you here."}
 			return
 		}
 		d.Headline, d.Refresh = "We have your booking "+d.Reference, true
@@ -285,7 +315,10 @@ func statusWords(d *statusData, o OrderState) {
 		if u := payLink(o.PaymentURL); u != "" {
 			d.Headline = "Pay for your order " + d.Reference
 			d.PayURL, d.PayLabel = u, "Pay "+total
-			d.Lines = []string{"Your order is held for 30 minutes.", "You pay " + b + " through their payment provider. Never share a PIN or one-time code with anyone."}
+			d.Lines = []string{d.heldLine(false), "You pay " + b + " through their payment provider. Never share a PIN or one-time code with anyone."}
+		} else if d.transferOnly() {
+			d.Headline = "Pay for your order " + d.Reference
+			d.Lines = []string{d.heldLine(false), "Pay " + total + " by bank transfer to the account number " + b + " gives you here."}
 		} else {
 			d.Headline, d.Refresh = "We have your order "+d.Reference, true
 			d.Lines = []string{"We are preparing your payment. This page will update in a moment."}
@@ -302,6 +335,18 @@ func statusWords(d *statusData, o OrderState) {
 	case "declined":
 		d.Headline = "Your order was declined"
 		d.Lines = []string{b + " could not take this order. Contact them directly if you have questions."}
+	case "dispatched":
+		d.Headline = "A rider has your order"
+		d.Lines = []string{"You will get an SMS when it is on its way."}
+	case "on_the_way":
+		d.Headline = "Your order is on its way"
+		d.Lines = []string{"The rider will be at your door soon."}
+	case "arrived":
+		d.Headline = "Your rider is at the door"
+		d.Lines = []string{"Collect your order from the rider."}
+		if o.Payment == "on_delivery" {
+			d.Lines = []string{"Pay the rider's account number by transfer (it is in your SMS too), or pay in cash, then collect your order."}
+		}
 	case "completed":
 		d.Headline = "Your order is complete"
 		d.Lines = []string{"Thank you for ordering from " + b + "."}
@@ -318,7 +363,7 @@ func statusWords(d *statusData, o OrderState) {
 		d.Headline = "Your order " + d.Reference
 		d.Lines = []string{b + " will be in touch by SMS."}
 	}
-	if total != "" && d.PayURL == "" && o.Status != "processing" {
+	if total != "" && d.PayURL == "" && o.Status != "processing" && (o.Status != "awaiting_payment" || !d.transferOnly()) {
 		d.Lines = append(d.Lines, "Total: "+total)
 	}
 }

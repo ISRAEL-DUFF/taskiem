@@ -32,3 +32,7 @@ The spike sustained 500 steps/s at p95 dispatch 4–5 ms and peaked at 1,302 ste
 ## Amendment — 2026-10-07, dedicated worker pools and failover (decision 0024)
 
 Claims take a worker pool: `taskiem_claim_tasks` keeps only the tenants routed to the claiming worker's pool (their own routing, their partner's, their plan's, else `shared`), read at claim time, with fair claiming within the pool unchanged. The five-argument claim claims for the shared pool only. Transactions that record a fenced outcome are retried through a failover; see [0024](0024-production-cloud.md).
+
+## Amendment — 2026-10-28, there is no queue interface to swap (engine findings 5b)
+
+The decision above says the queue "sits behind an interface" and could move to NATS JetStream "without changing `decide()`". As built it does not, and should not: tasks are inserted in the transaction that appends the event scheduling them, and workers claim and fence through SQL functions called directly. That shared transaction is the guarantee (no event without its task, no task without its event), and no external queue can join it. Postgres is the queue by design. If load ever outgrows a tuned, larger primary with worker pools and tenant moves, the change is a redesign of dispatch (an outbox table, a relay, fencing and deduplication against the new queue), planned as its own decision. Spec 2.3, 4.3, 17 and 18.1 now say so.

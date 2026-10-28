@@ -1,0 +1,93 @@
+<!--atlas
+{
+  "id": "data-model",
+  "title": "Data model and tenant isolation",
+  "part": "B",
+  "order": 4,
+  "summary": "The schema as the migrations leave it, row-level security driven by a tenant scope, the three database roles, the cross-tenant functions, and what the isolation does and does not protect against.",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
+  "sources": [
+    "engine/db/", "cmd/taskiem/serve.go", "engine/publicweb/hosts_db_test.go",
+    "docs/decisions/0004-tenant-isolation-rls.md", "docs/operations.md", "docs/spec/architecture.md"
+  ]
+}
+-->
+<h2>The schema at a glance</h2>
+<div class="stats">
+  <div class="stat"><x-stat name="tables"/><span class="stat-k">tables after every migration</span></div>
+  <div class="stat"><x-stat name="migrations"/><span class="stat-k">migrations, numbered up to <x-stat name="migrations-latest"/></span></div>
+  <div class="stat"><x-stat name="sql-functions"/><span class="stat-k">SQL functions</span></div>
+  <div class="stat"><x-stat name="definer-functions"/><span class="stat-k">of them <code>SECURITY DEFINER</code></span></div>
+</div>
+<p>All state is in one PostgreSQL database: definitions, runs, the queue, secrets, the audit log and every product module's records. Ids are UUIDv7, so they sort by creation time, and money is integer kobo with a currency code. Every tenant-owned table carries <code>tenant_id</code>. The counts above are read from the migrations by the build.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Group</th><th>Main tables</th><th>Covered in</th></tr></thead>
+  <tbody>
+    <tr><td>Identity and tenancy</td><td><code>tenants</code>, <code>users</code>, <code>memberships</code>, <code>roles</code>, <code>api_keys</code>, <code>sessions</code>, <code>webauthn_credentials</code>, <code>sso_*</code>, <code>scim_*</code>, <code>partners</code>, <code>end_users</code></td><td><x-page id="identity-tenancy"/></td></tr>
+    <tr><td>Definitions</td><td><code>workflows</code>, <code>workflow_versions</code>, <code>deployments</code>, <code>environments</code>, <code>triggers</code>, <code>variables</code>, <code>workflow_expansions</code></td><td><x-page id="workflow-definitions"/></td></tr>
+    <tr><td>Execution</td><td><code>runs</code>, <code>run_events</code>, <code>tasks</code>, <code>timers</code>, <code>signals</code>, <code>signal_waits</code>, <code>trigger_receipts</code>, <code>connector_rate_buckets</code>, <code>concurrency_slots</code>, <code>tenant_admission</code>, <code>run_replays</code></td><td><x-page id="durable-execution"/></td></tr>
+    <tr><td>Governance</td><td><code>approval_policies</code>, <code>approvals</code>, <code>approval_decisions</code>, <code>approval_history</code>, <code>publish_requests</code>, <code>audit_log</code>, <code>audit_chain_heads</code>, <code>audit_anchors</code>, <code>subject_keys</code></td><td><x-page id="governance"/></td></tr>
+    <tr><td>Secrets and connectors</td><td><code>secrets</code>, <code>tenant_keys</code>, <code>tenant_byok_keys</code>, <code>connections</code>, <code>tenant_connectors</code>, <code>connector_drift</code>, <code>catalogue_*</code>, <code>egress_rules</code></td><td><x-page id="security"/>, <x-page id="connectors"/></td></tr>
+    <tr><td>Channels</td><td><code>whatsapp_*</code> (17 tables), <code>telegram_*</code>, <code>ussd_*</code>, <code>email_*</code>, <code>reach_*</code>, <code>chat_sessions</code></td><td><x-page id="triggers-channels"/></td></tr>
+    <tr><td>Money</td><td><code>money_*</code>, <code>customer_invoice*</code>, <code>receive_money</code>, <code>payout_accounts</code></td><td><x-page id="business-modules"/></td></tr>
+    <tr><td>Products</td><td><code>school_*</code> (about 30 tables), <code>storefront_*</code>, <code>form_*</code>, <code>data_table*</code></td><td><x-page id="business-modules"/></td></tr>
+    <tr><td>Plans and operations</td><td><code>plans</code>, <code>subscriptions</code>, <code>tenant_limits</code>, <code>tenant_usage</code>, <code>usage_snapshots</code>, <code>worker_pool_*</code>, <code>alert_*</code>, <code>status_*</code>, <code>operators</code></td><td><x-page id="operations"/></td></tr>
+  </tbody>
+</table></div>
+<p>Two rules are enforced by the database itself rather than by convention. A trigger refuses any change to a published definition (<x-ref path="engine/db/migrations/00003_definitions.sql" symbol="-- Definitions are immutable once written">00003</x-ref>), so only layout and lifecycle fields can change and a new definition means a new version. And <code>run_events</code> and <code>audit_log</code> grant the application only <code>SELECT</code> and <code>INSERT</code> (<x-ref path="engine/db/migrations/00004_execution.sql" symbol="GRANT SELECT, INSERT ON run_events TO taskiem_app">00004</x-ref>).</p>
+
+<h2>Three roles, three ways in</h2>
+<figure class="diagram">
+<svg viewBox="0 0 760 260" role="img" aria-labelledby="dm-title">
+  <title id="dm-title">The three database roles and how each reaches tenant data</title>
+  <defs><marker id="dm-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0 0L10 5L0 10z"/></marker></defs>
+  <g class="d-core"><rect class="d-box" x="20" y="24" width="210" height="66" rx="7"/><text class="d-title" x="34" y="50">taskiem_app</text><text class="d-sub" x="34" y="70">every engine connection</text><text class="d-sub" x="34" y="84">(SET ROLE after connecting)</text></g>
+  <g><rect class="d-box" x="20" y="170" width="210" height="66" rx="7"/><text class="d-title" x="34" y="196">taskiem_public</text><text class="d-sub" x="34" y="216">public host and mail roles</text><text class="d-sub" x="34" y="230">own login, no table rights</text></g>
+  <g><rect class="d-box" x="290" y="97" width="200" height="66" rx="7"/><text class="d-title" x="304" y="123">taskiem_dispatch</text><text class="d-sub" x="304" y="143">owns the SECURITY DEFINER</text><text class="d-sub" x="304" y="157">functions; cannot log in</text></g>
+  <g><rect class="d-band" x="560" y="24" width="180" height="212" rx="8"/><text class="d-title" x="576" y="52">Tables</text><text class="d-sub" x="576" y="74">RLS enabled and forced</text><text class="d-sub" x="576" y="92">on every table</text><text class="d-mono" x="576" y="130">tenant_isolation</text><text class="d-sub" x="576" y="146">policy for taskiem_app</text><text class="d-mono" x="576" y="180">dispatch</text><text class="d-sub" x="576" y="196">policy on routing tables,</text><text class="d-sub" x="576" y="210">column grants only</text></g>
+  <path class="d-line" d="M230 46H558" marker-end="url(#dm-ah)"/><text class="d-msg" x="394" y="38" text-anchor="middle">tenant_id = ANY(app.tenant_scope)</text>
+  <path class="d-line" d="M200 90L320 97" marker-end="url(#dm-ah)"/><text class="d-msg" x="228" y="106">EXECUTE</text>
+  <path class="d-line" d="M200 170L320 163" marker-end="url(#dm-ah)"/><text class="d-msg" x="242" y="192">EXECUTE, allow-listed</text>
+  <path class="d-line" d="M490 130H558" marker-end="url(#dm-ah)"/>
+</svg>
+<figcaption class="d-caption">Neither application role can bypass row-level security. Work that must cross tenants goes through functions owned by <code>taskiem_dispatch</code>.</figcaption>
+</figure>
+<p>Migrations create the roles as <code>NOLOGIN NOBYPASSRLS</code> (<x-ref path="engine/db/migrations/00001_roles_and_helpers.sql" symbol="CREATE ROLE taskiem_app NOLOGIN NOBYPASSRLS">00001</x-ref>, <x-ref path="engine/db/migrations/00176_public_host.sql" symbol="CREATE ROLE taskiem_public NOLOGIN NOBYPASSRLS">00176</x-ref>). In production the engine logs in as a user that is a member of <code>taskiem_app</code> only. Every pooled connection then runs <code>SET ROLE taskiem_app</code> (<x-ref path="cmd/taskiem/serve.go" symbol="func afterConnect("><code>afterConnect</code></x-ref>), so RLS applies even when a development setup logs in as a superuser. Migrations run separately, as the schema owner.</p>
+
+<h2>Tenant scope</h2>
+<p>Every tenant table's policy compares <code>tenant_id</code> with the transaction's scope:</p>
+<x-code path="engine/db/migrations/00004_execution.sql" start="ALTER TABLE runs ENABLE ROW LEVEL SECURITY;" lines="4"/>
+<p>The scope is a transaction-local setting holding an array of tenant ids, read through <x-ref path="engine/db/migrations/00001_roles_and_helpers.sql" symbol="CREATE FUNCTION taskiem_tenant_scope()"><code>taskiem_tenant_scope()</code></x-ref>. When it is unset, the array is empty and every policy matches nothing, so forgetting to set it fails closed. All Go code enters the database through <x-ref path="engine/db/db.go" symbol="func InTenantTx("><code>db.InTenantTx</code></x-ref>, which sets the scope as the first statement of the transaction and refuses an empty list:</p>
+<x-code path="engine/db/db.go" start="func InTenantTx(" doc="true"/>
+<p><x-ref path="engine/db/retry.go" symbol="func InTenantTxRetry("><code>InTenantTxRetry</code></x-ref> is the same, plus retrying through a failover. It retries a transaction whose <code>COMMIT</code> outcome is unknown only when the caller says the transaction is idempotent, as fenced worker writes are.</p>
+<h3>Partners and sub-tenants</h3>
+<p>A partner, a SaaS company embedding Taskiem, never gets its sub-tenants in its own scope. To act inside one, the API calls <code>taskiem_partner_enter</code>. It checks the sub-tenant's parent is the caller, writes the access to both tenants' audit chains, and narrows the scope to that one sub-tenant for the rest of the transaction (decision 0015).</p>
+<x-code path="engine/db/migrations/00045_subtenants.sql" start="CREATE FUNCTION taskiem_partner_enter" end="$$;"/>
+
+<h2>The cross-tenant functions</h2>
+<p>Some work has to see every tenant: claiming tasks, firing timers, finding a user by email before anyone knows their tenant, routing an inbound WhatsApp message to its business. That work goes through <code>SECURITY DEFINER</code> functions owned by <code>taskiem_dispatch</code>. The dispatch role has policies of its own on the routing tables only, with column-level grants, so even its functions cannot read payloads:</p>
+<x-code path="engine/db/migrations/00006_dispatch.sql" start="-- taskiem_dispatch sees every row of the tables it routes" lines="16"/>
+<p>The rule each function follows: claim with <code>SKIP LOCKED</code>, return only routing columns, and let the caller open a normal tenant-scoped transaction to read anything else. Every definer function in the migrations pins <code>search_path</code>, which closes the classic hijack of an unqualified name.</p>
+<p>There are <strong><x-stat name="definer-functions"/></strong> of them, not the spec's original four. Grouped by name, the largest families are public pages (about 34), authentication (27), the operator console (25), WhatsApp and Telegram (32), the connector catalogue (14) and partners (11). Each is a doorway past row-level security. Spec 5.3 now describes them as built (<x-ref path="docs/spec/architecture.md" symbol="- *As built:* the dispatch path is not the only one.">spec 5.3</x-ref>).</p>
+<div class="callout risk"><span class="callout-label">Risk, partly resolved (findings 3)</span>
+  <p>What fences these functions now:</p>
+  <ul>
+    <li><x-ref path="engine/db/definers_test.go" symbol="func TestDefinersAllowList("><code>TestDefinersAllowList</code></x-ref> pins every definer function <code>taskiem_app</code> may execute to <x-ref path="engine/db/definers.tsv"><code>definers.tsv</code></x-ref>, each with an owner and a reason, and fails when one lacks <code>search_path</code> or is executable by <code>PUBLIC</code>. A new function cannot reach the API without a line there.</li>
+    <li><x-ref path="engine/db/definers_test.go" symbol="func TestDispatchColumnsAllowList("><code>TestDispatchColumnsAllowList</code></x-ref> turns the dispatch role's readable columns into an allow-list (<code>dispatch_columns.txt</code>).</li>
+    <li><x-ref path=".github/CODEOWNERS"><code>CODEOWNERS</code></x-ref> asks the named owner to review any change to those lists.</li>
+    <li><x-ref path="engine/db/db_test.go" symbol="func TestEveryTenantTableIsProtected("><code>TestEveryTenantTableIsProtected</code></x-ref> checks every table has RLS enabled and forced, and the public host's test pins what <code>taskiem_public</code> may execute.</li>
+  </ul>
+  <p>Still open: 82 reasons in <code>definers.tsv</code> only repeat their migration's heading; there is no lint against SQL built from strings; and the functions have not been reviewed family by family against the "routing columns only" rule. GitHub never asks a pull request's author to review it, so on the owner's own changes there is no second reviewer.</p>
+</div>
+
+<h2>What the isolation protects against, and what it does not</h2>
+<p>Row-level security here protects against <strong>query mistakes</strong>: a missing <code>WHERE tenant_id = …</code>, a join to the wrong table, a list endpoint that forgot a filter. Those return nothing from other tenants, and <x-ref path="engine/db/db_test.go" symbol="func TestTenantIsolation("><code>TestTenantIsolation</code></x-ref> checks it.</p>
+<p>It does <strong>not</strong> protect against code that sets the wrong scope, or against SQL injection. <code>app.tenant_scope</code> is an ordinary setting that the application role is allowed to change, so a statement running as <code>taskiem_app</code> can name any tenant. The real boundary is therefore <code>InTenantTx</code> and the authentication code that decides which tenant ids to pass it. Those deserve the same review as the definer functions. The scope itself is set with a bound parameter (<code>set_config('app.tenant_scope', $1, true)</code>). Any SQL built from strings elsewhere would be a way around the whole scheme, so string-built SQL deserves a lint rule.</p>
+
+<h2>Migrations</h2>
+<p>Migrations are plain SQL files embedded in the binary and applied by goose with <code>taskiem migrate</code>, as the schema owner (<x-ref path="engine/db/db.go" symbol="func migrate("><code>db.migrate</code></x-ref>). Each file has a Down section, but the CLI only migrates up. Roll back by restoring, or by writing a new migration. CI applies every migration to a fresh database on each push, and the database tests in <x-ref path="engine/db/db_test.go"><code>engine/db/db_test.go</code></x-ref> check the properties above: append-only tables, immutable versions, distinct sequence numbers under concurrent appends, disjoint claims, fencing, and timers firing once.</p>
+<p>Because a SQL function is replaced by a later migration with the same name, the current definition of anything (<code>taskiem_claim_tasks</code> has five) is the one in the highest-numbered migration. Search from the end.</p>
+
+<h2>The read replica</h2>
+<p>With <code>TASKIEM_DATABASE_READ_URL</code> set, run lists and dashboards read from a replica (decision 0024). The replica pool sets the same role and scope, so RLS applies there too. It is never used for anything that decides, leases or writes. When its lag goes past the limit, or it cannot be reached, reads fall back to the primary.</p>
+<x-code path="engine/db/replica.go" start="// Replica is an optional read replica" end="// replica cannot be reached, reads go to the primary."/>

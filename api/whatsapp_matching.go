@@ -189,18 +189,23 @@ func (s *Server) sendMatchItem(ctx context.Context, it whatsapp.OutboxItem) erro
 		return err
 	}
 	l := s.chooseLang(ctx, it.Tenant, addr, "").Tag
-	text, buttons, ok, err := s.matchAsk(ctx, it.Tenant, it.User, l, *it.Entry)
+	ask, ok, err := s.matchAsk(ctx, it.Tenant, it.User, l, *it.Entry)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return fmt.Errorf("%w: the payment was matched or its suggestions turned down", whatsapp.ErrNothingToSend)
 	}
-	_, err = ch.Send(ctx, addr, whatsapp.Message{Text: ch.Prefix(business) + text, Buttons: buttons, Tenant: it.Tenant})
+	// Outside WhatsApp's window the question template carries the same
+	// facts and the same signed buttons as quick replies, once approved.
+	tpl := whatsapp.TplMatchQuestion
+	ask.Vars["tenant"] = business
+	_, err = ch.Send(ctx, addr, whatsapp.Message{Text: ch.Prefix(business) + ask.Text, Buttons: ask.Buttons, Tenant: it.Tenant,
+		Template: &tpl, Vars: ask.Vars, Payloads: []string{ask.Buttons[0].ID, ask.Buttons[1].ID}})
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, whatsapp.ErrWindowClosed):
+	case errors.Is(err, whatsapp.ErrWindowClosed), whatsapp.TemplateUnusable(err):
 		return fmt.Errorf("%w: outside WhatsApp's 24-hour window; the suggestion waits in the web app: %w", whatsapp.ErrNothingToSend, err)
 	case errors.Is(err, telegram.ErrBlocked):
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
@@ -208,9 +213,18 @@ func (s *Server) sendMatchItem(ctx context.Context, it whatsapp.OutboxItem) erro
 	return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
 }
 
+// matchQuestion is the question about a payment: its text and buttons
+// inside the window, and the taskiem_match_question template's variables
+// outside it (the facts in English, as the matcher gives them).
+type matchQuestion struct {
+	Text    string
+	Buttons []whatsapp.Button
+	Vars    map[string]string
+}
+
 // matchAsk is the question about a payment's best open suggestion, in l,
 // with its buttons signed for user; false when none is open.
-func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Tag, entryID uuid.UUID) (string, []whatsapp.Button, bool, error) {
+func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Tag, entryID uuid.UUID) (matchQuestion, bool, error) {
 	var (
 		id             uuid.UUID
 		invoice, order *uuid.UUID
@@ -264,18 +278,28 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 		return nil
 	})
 	if err != nil || !found {
-		return "", nil, false, err
+		return matchQuestion{}, false, err
 	}
 	_ = json.Unmarshal(raw, &reasons)
 	var got int64
 	if amount != nil {
 		got = *amount
 	}
-	text := tr(l, ask, "amount", invoicing.Naira(got), "when", when.In(lagos()).Format("2 Jan 15:04"), "channel", matchChannelWords(l, channel, kind),
-		"number", number, "due", invoicing.Naira(due), "reasons", whatsapp.SafeText(sentence(reasons)), "parts", proposedParts(l, split))
+	whenWords, channelWords, why := when.In(lagos()).Format("2 Jan 15:04"), matchChannelWords(l, channel, kind), whatsapp.SafeText(sentence(reasons))
+	text := tr(l, ask, "amount", invoicing.Naira(got), "when", whenWords, "channel", channelWords,
+		"number", number, "due", invoicing.Naira(due), "reasons", why, "parts", proposedParts(l, split))
 	if open > 1 {
 		text += "\n" + tr(l, "wa.match.more")
 	}
+	reasonsVar := strings.TrimRight(why, ".") + "."
+	if split.Over {
+		reasonsVar = "It is more than that, so Yes splits it across the customer's open invoices, oldest first: " + proposedParts(lang.EN, split) + ". " + reasonsVar
+	}
+	if order != nil {
+		reasonsVar = "Storefront order " + number + ". " + reasonsVar
+	}
+	vars := map[string]string{"amount": invoicing.Naira(got), "when": whenWords, "channel": matchChannelWords(lang.EN, channel, kind),
+		"number": number, "due": invoicing.Naira(due), "reasons": reasonsVar}
 	key := s.chatSigner().Key
 	yes := matchButton{Action: matchYes, Tenant: tenant, Suggestion: id, User: user}
 	no := yes
@@ -284,7 +308,7 @@ func (s *Server) matchAsk(ctx context.Context, tenant, user uuid.UUID, l lang.Ta
 		yes.Action = matchSplit
 	}
 	buttons := []whatsapp.Button{{ID: signMatchButton(key, yes), Title: tr(l, "button.match_yes")}, {ID: signMatchButton(key, no), Title: tr(l, "button.match_no")}}
-	return text, buttons, true, nil
+	return matchQuestion{Text: text, Buttons: buttons, Vars: vars}, true, nil
 }
 
 // proposedParts says a split: "INV-0101 ₦20,000, INV-0104 ₦30,000", and
@@ -428,6 +452,8 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 	if b.Action == matchSplit {
 		sp, err := m.ConfirmSplit(ctx, tenant.ID, b.Suggestion, p.Actor())
 		switch {
+		case errors.Is(err, matching.ErrHeld):
+			return say(c.t("wa.match.needs_approval"))
 		case errors.Is(err, invoicing.ErrNotFound):
 			return say(c.t("wa.button_invalid"))
 		case errors.Is(err, invoicing.ErrState), errors.Is(err, invoicing.ErrInvalid):
@@ -446,6 +472,8 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 	if b.Action == matchYes {
 		x, err := m.Confirm(ctx, tenant.ID, b.Suggestion, p.Actor(), false)
 		switch {
+		case errors.Is(err, matching.ErrHeld):
+			return say(c.t("wa.match.needs_approval"))
 		case errors.Is(err, invoicing.ErrNotFound):
 			return say(c.t("wa.button_invalid"))
 		case errors.Is(err, invoicing.ErrState):
@@ -476,12 +504,12 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 	case err != nil:
 		return err
 	}
-	text, buttons, ok, err := s.matchAsk(ctx, tenant.ID, p.UserID, c.lang.Tag, entryID)
+	next, ok, err := s.matchAsk(ctx, tenant.ID, p.UserID, c.lang.Tag, entryID)
 	if err != nil {
 		return err
 	}
 	if ok {
-		return say(c.t("wa.match.rejected_next")+"\n\n"+text, buttons...)
+		return say(c.t("wa.match.rejected_next")+"\n\n"+next.Text, next.Buttons...)
 	}
 	if s.PublicURL == "" {
 		return say(c.t("wa.match.rejected_left"))

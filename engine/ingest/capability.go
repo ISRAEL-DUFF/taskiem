@@ -63,7 +63,7 @@ func checkCapabilityEvent(c map[string]any, reg connector.Lookup) error {
 func railsSending(reg connector.Lookup, id, ev string) []*connector.Connector {
 	var out []*connector.Connector
 	for _, k := range reg.List() {
-		if k.Manifest.KindOf() != "rail" || (id != "" && k.Manifest.ID != id) {
+		if id != "" && k.Manifest.ID != id {
 			continue
 		}
 		if _, ok := k.Manifest.Events[ev]; ok {

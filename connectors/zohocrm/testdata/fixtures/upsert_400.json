@@ -1,0 +1,34 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/Leads/upsert",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "body": {
+   "data": [
+    {
+     "First_Name": "Adaeze"
+    }
+   ],
+   "trigger": [
+    "workflow"
+   ]
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "data": [
+    {
+     "code": "MANDATORY_NOT_FOUND",
+     "details": {
+      "api_name": "Last_Name"
+     },
+     "message": "required field not found",
+     "status": "error"
+    }
+   ]
+  }
+ }
+}

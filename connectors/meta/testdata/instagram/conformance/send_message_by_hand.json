@@ -1,0 +1,25 @@
+{
+ "action": "send_message",
+ "input": {
+  "recipient_id": "5432109876543210",
+  "text": "Sorry for the wait: it ships today.",
+  "tag": "HUMAN_AGENT"
+ },
+ "credentials": {
+  "instagram_id": "17841400000000001",
+  "instagram_username": "ada.cakes",
+  "page_id": "104123456789012",
+  "page_name": "Ada's Cakes",
+  "page_token": "EAAtest-page-token"
+ },
+ "exchanges": [
+  "conversation_closed",
+  "send_tagged"
+ ],
+ "expect": {
+  "output": {
+   "message_id": "m_tagged",
+   "window_ends_at": "2026-10-31T09:00:00Z"
+  }
+ }
+}

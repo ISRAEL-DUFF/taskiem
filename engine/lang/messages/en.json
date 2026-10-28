@@ -204,6 +204,36 @@
       "reviewed": true,
       "context": "SMS to a customer who asked to be called back"
     },
+    "customer.delivery_arrived": {
+      "text": "Your rider is at the door with {reference}.",
+      "reviewed": true,
+      "context": "To the customer when the rider arrives"
+    },
+    "customer.delivery_done": {
+      "text": "{reference} is delivered. Thank you.",
+      "reviewed": true,
+      "context": "To the customer when delivered"
+    },
+    "customer.delivery_done_rate": {
+      "text": "{reference} is delivered. How was your delivery? Rate it here: {link}",
+      "reviewed": true,
+      "context": "To the customer when delivered, with the link to rate it"
+    },
+    "customer.delivery_on_way": {
+      "text": "Your order {reference} is on its way with {rider} ({phone}).",
+      "reviewed": true,
+      "context": "To the customer at pickup"
+    },
+    "customer.delivery_paid": {
+      "text": "Paid, thank you: {reference}.",
+      "reviewed": true,
+      "context": "To the customer when the door payment lands"
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Your rider is at the door with {reference}. Pay {total} by transfer to {account}, {bank}, {name}, by {until}.",
+      "reviewed": true,
+      "context": "To the customer at the door: the account number to pay into"
+    },
     "customer.enquiry_thanks": {
       "text": "We have your question ({reference}) and will reply soon.",
       "reviewed": true,
@@ -289,6 +319,11 @@
       "reviewed": true,
       "context": "A customer tapped Open invoice: the invoice's page"
     },
+    "invoice.chat.own_account": {
+      "text": "Pay {amount} for invoice {number} by bank transfer to your own account number:\nAccount number: {account}\nBank: {bank}\nIt is yours to keep: money paid into it is counted to your invoices.",
+      "reviewed": true,
+      "context": "Pay by transfer, for a customer the business gave an account number of their own (it does not expire)"
+    },
     "invoice.chat.paid": {
       "text": "Invoice {number} is paid. Thank you!",
       "reviewed": true,
@@ -303,6 +338,11 @@
       "text": "Your account number for invoice {number} is on its way. If it has not come in a minute, tap New account number.",
       "reviewed": true,
       "context": "The rail has not given the account yet"
+    },
+    "invoice.receipt.fee_line": {
+      "text": "You sent {sent}; {received} reached {business} after the bank's fee of {fee}.",
+      "reviewed": true,
+      "context": "A receipt to a customer who paid an invoice by transfer: what they sent, what reached the business, and the bank's fee kept from it"
     },
     "lang.current": {
       "text": "I write to you in {language}. Languages here: {languages}. Send *language* and a name to change.",
@@ -388,6 +428,41 @@
       "text": "Money page: {link}",
       "reviewed": true,
       "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: the link to the Money page in the web app"
+    },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": true,
+      "context": "The daily money summary: the heading before each rider's line (deliveries, cash, what they owe)"
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: how many deliveries they made"
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: paid by transfer at the customer's door"
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: cash they took at the door"
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: cash they handed in to the business"
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: the cash they still owe the business"
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: the average rating customers gave their deliveries"
     },
     "money.daily.school": {
       "text": "School fees ({term}): {collected} collected, {outstanding} outstanding, {cleared}% of students cleared.",
@@ -494,6 +569,206 @@
       "reviewed": true,
       "context": "Readiness: a setting (variable) the workflow reads is not set"
     },
+    "rider.arrived": {
+      "text": "At the door with {reference}: hand it over and tap Delivered.",
+      "reviewed": true,
+      "context": "At the door, the order paid"
+    },
+    "rider.btn.accept": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "A rider's button: take the offered delivery (20 characters at most)"
+    },
+    "rider.btn.arrived": {
+      "text": "Arrived",
+      "reviewed": true,
+      "context": "A rider's button: they are at the customer's door (20 characters at most)"
+    },
+    "rider.btn.cant": {
+      "text": "Can't",
+      "reviewed": true,
+      "context": "A rider's button: pass the offer on (20 characters at most)"
+    },
+    "rider.btn.cash": {
+      "text": "Cash received",
+      "reviewed": true,
+      "context": "A rider's button: the customer paid them cash (20 characters at most)"
+    },
+    "rider.btn.delivered": {
+      "text": "Delivered",
+      "reviewed": true,
+      "context": "A rider's button: handed over (20 characters at most)"
+    },
+    "rider.btn.new_number": {
+      "text": "New number",
+      "reviewed": true,
+      "context": "A rider's button: another account number for the customer (20 characters at most)"
+    },
+    "rider.btn.picked_up": {
+      "text": "Picked up",
+      "reviewed": true,
+      "context": "A rider's button: they have the order (20 characters at most)"
+    },
+    "rider.busy": {
+      "text": "You're busy until {time}. Send FREE when you can take deliveries again.",
+      "reviewed": true,
+      "context": "A rider said busy till a time (Lagos time, like 15:00); keep FREE in English"
+    },
+    "rider.button_invalid": {
+      "text": "That button no longer works.",
+      "reviewed": true,
+      "context": "A rider's button that does nothing now"
+    },
+    "rider.cant": {
+      "text": "OK: {reference} goes to another rider.",
+      "reviewed": true,
+      "context": "A rider passed an offer"
+    },
+    "rider.collect": {
+      "text": "The customer pays {total} at the door.",
+      "reviewed": true,
+      "context": "In an offer: the customer pays at the door"
+    },
+    "rider.collect_door": {
+      "text": "The customer pays {total} at the door: tap Arrived and Taskiem gives them an account number to pay into.",
+      "reviewed": true,
+      "context": "Once held: how the customer pays at the door"
+    },
+    "rider.customer": {
+      "text": "Customer: {customer}, {phone}",
+      "reviewed": true,
+      "context": "The customer's first name and phone, once held"
+    },
+    "rider.done": {
+      "text": "Thank you: {reference} is delivered.",
+      "reviewed": true,
+      "context": "Delivered"
+    },
+    "rider.done_proof": {
+      "text": "Thank you: {reference} is delivered. Send a photo of it at the door as proof.",
+      "reviewed": true,
+      "context": "Delivered, the business asks for a photo"
+    },
+    "rider.door": {
+      "text": "Ask the customer to transfer {total} to {account}, {bank}, {name}. Valid until {time}. I'll tell you when it lands.",
+      "reviewed": true,
+      "context": "At the door: the account number the customer pays into, valid until a Lagos time"
+    },
+    "rider.drop": {
+      "text": "Drop: {drop}",
+      "reviewed": true,
+      "context": "Where the order goes: the area, or once held the address"
+    },
+    "rider.fee": {
+      "text": "Your fee: {fee}",
+      "reviewed": true,
+      "context": "What the rider is paid for the delivery"
+    },
+    "rider.held": {
+      "text": "{reference} is yours.",
+      "reviewed": true,
+      "context": "A rider accepted: the delivery is theirs"
+    },
+    "rider.held_tail": {
+      "text": "Tap Picked up when you have it.",
+      "reviewed": true,
+      "context": "Last line once held; keep the button's words as on the button"
+    },
+    "rider.items": {
+      "text": "Items: {items}",
+      "reviewed": true,
+      "context": "What the order holds, in one line"
+    },
+    "rider.landmark": {
+      "text": "Landmark: {landmark}",
+      "reviewed": true,
+      "context": "A landmark the customer gave"
+    },
+    "rider.linked": {
+      "text": "You're set up as a rider for {business}. Their deliveries will come here. Send OFF when you're not working and ON when you are.",
+      "reviewed": true,
+      "context": "A rider of the business tapped its link: their deliveries come here; keep OFF and ON in English"
+    },
+    "rider.location_kept": {
+      "text": "Got your location: it is kept with the delivery.",
+      "reviewed": true,
+      "context": "A rider's location kept on their delivery"
+    },
+    "rider.no_delivery": {
+      "text": "You have no delivery that fits that now.",
+      "reviewed": true,
+      "context": "A rider's word with no delivery it fits"
+    },
+    "rider.off": {
+      "text": "You're off. No business will offer you deliveries until you send ON.",
+      "reviewed": true,
+      "context": "A rider said off: no business they ride for offers them deliveries; keep ON in English"
+    },
+    "rider.offer": {
+      "text": "A delivery for you: {reference}.",
+      "reviewed": true,
+      "context": "First line of a delivery offered to a rider"
+    },
+    "rider.offer_tail": {
+      "text": "Answer by {time}.",
+      "reviewed": true,
+      "context": "Last line of an offer: the time it stands until, Lagos time"
+    },
+    "rider.on": {
+      "text": "You're on. The businesses you ride for can offer you deliveries.",
+      "reviewed": true,
+      "context": "A rider said on or free: the businesses they ride for can offer them deliveries"
+    },
+    "rider.on_way": {
+      "text": "On your way with {reference}. Tap Arrived at the door.",
+      "reviewed": true,
+      "context": "After Picked up"
+    },
+    "rider.paid": {
+      "text": "Paid. Hand {reference} over and tap Delivered.",
+      "reviewed": true,
+      "context": "The door payment landed"
+    },
+    "rider.photo_failed": {
+      "text": "Sorry, that photo could not be kept. Try again in a moment.",
+      "reviewed": true,
+      "context": "A rider's photo that could not be kept"
+    },
+    "rider.photo_kept": {
+      "text": "Photo kept as proof of delivery. Thank you.",
+      "reviewed": true,
+      "context": "A rider's photo kept as proof"
+    },
+    "rider.pickup": {
+      "text": "Pick up: {pickup}",
+      "reviewed": true,
+      "context": "Where the rider picks the order up, with its directions link"
+    },
+    "rider.pin": {
+      "text": "Map: {pin}",
+      "reviewed": true,
+      "context": "The map link the customer gave"
+    },
+    "rider.refused": {
+      "text": "Not now: {reason}",
+      "reviewed": true,
+      "context": "A rider's tap that does not fit; reason is in English"
+    },
+    "rider.released": {
+      "text": "{business} took {reference} back: you don't need to deliver it.",
+      "reviewed": true,
+      "context": "The owner took the order back"
+    },
+    "rider.unpaid": {
+      "text": "{reference} is not paid yet: {total}. Ask the customer to pay, or take cash and tap Cash received.",
+      "reviewed": true,
+      "context": "At the door: not paid yet, no account number now"
+    },
+    "rider.withdrawn": {
+      "text": "The offer of {reference} has passed.",
+      "reviewed": true,
+      "context": "An offer the rider did not answer in time, or the owner gave to another"
+    },
     "run.status.cancelled": {
       "text": "cancelled",
       "reviewed": true,
@@ -528,6 +803,31 @@
       "text": "waiting",
       "reviewed": true,
       "context": "A run's status"
+    },
+    "slack.link.button": {
+      "text": "Confirm",
+      "reviewed": true,
+      "context": "The button under slack.link.confirm (20 characters at most)"
+    },
+    "slack.link.confirm": {
+      "text": "Is this your Slack account? Press Confirm to get the approvals you decide on Taskiem here, in Slack. If you did not ask for this, ignore it.",
+      "reviewed": true,
+      "context": "Sent in Slack when a member asks to link their Slack account; a Confirm button follows"
+    },
+    "slack.link.done": {
+      "text": "Linked. Approvals waiting for you will come here.",
+      "reviewed": true,
+      "context": "After Confirm was pressed and the Slack account is linked"
+    },
+    "slack.link.stale": {
+      "text": "This link is not valid any more. Ask for a new one on your Taskiem profile.",
+      "reviewed": true,
+      "context": "Confirm was pressed too late, twice, or by someone else"
+    },
+    "slack.not_linked": {
+      "text": "This Slack account is not linked to you on Taskiem, so it cannot decide this. Link it from your Taskiem profile.",
+      "reviewed": true,
+      "context": "An approval button pressed from a Slack account not linked in that business"
     },
     "sms.reconcile": {
       "text": "Your request {reference} is being checked. We will let you know.",
@@ -799,6 +1099,11 @@
       "reviewed": true,
       "context": "Asks to confirm a refund"
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Mark {ref} refunded? Only once you have sent {total} back to the customer. They will be told.",
+      "reviewed": true,
+      "context": "Asks to confirm an order was refunded by hand"
+    },
     "wa.booking.confirm_reminder": {
       "text": "Reply *yes* to save the change, or *cancel*.",
       "reviewed": true,
@@ -823,6 +1128,11 @@
       "text": "Bookings in the next 7 days:",
       "reviewed": true,
       "context": "Heading of the list of the week's bookings"
+    },
+    "wa.booking.marked_refunded": {
+      "text": "{ref} is marked refunded ({total}). The customer is told.",
+      "reviewed": true,
+      "context": "An order was marked refunded by hand"
     },
     "wa.booking.moved": {
       "text": "Booking {ref} is moved to {to}. The customer will be told.",
@@ -858,6 +1168,11 @@
       "text": "{day} is off: no times will be offered.",
       "reviewed": true,
       "context": "Done: a day off was added"
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "{ref} was paid by bank transfer, so Taskiem cannot send it back. Send {total} to the customer from your bank, then reply *refunded {ref}*.",
+      "reviewed": true,
+      "context": "An order paid by bank transfer is refunded by the owner from their bank"
     },
     "wa.booking.refund_failed": {
       "text": "Paystack did not refund {ref}: {why}. The refund is still due; you can try again, or refund it in Paystack.",
@@ -903,6 +1218,11 @@
       "text": "This month's AI budget ran out before the draft was ready. You can still build workflows in the web app.",
       "reviewed": true,
       "context": "AI budget ran out during the build"
+    },
+    "wa.build.changed": {
+      "text": "Someone changed this workflow since I started the build (version {version}), in the same places, so I did not save it. Make the change in the web app{link}.",
+      "reviewed": true,
+      "context": "Saving a chat build met a newer version that changes the same steps; nothing saved; {link} is ' at <url>' or empty"
     },
     "wa.build.denied": {
       "text": "You cannot build workflows in {org} (it takes workflow.edit).",
@@ -988,6 +1308,11 @@
       "text": "Publish *{name}* now, so it starts working? Reply *yes* or *no*.",
       "reviewed": true,
       "context": "Offering to publish a saved draft"
+    },
+    "wa.build.plan": {
+      "text": "The plan for {org} does not include building with AI, so I cannot build this here. You can still build workflows in the web app, or change plan under Billing.",
+      "reviewed": true,
+      "context": "The plan has no AI building"
     },
     "wa.build.publish_later": {
       "text": "When you are ready, send *publish {name}*.",
@@ -1109,6 +1434,96 @@
       "reviewed": true,
       "context": "Waiting for yes to start a run"
     },
+    "wa.dispatch.held": {
+      "text": "{rider} has {ref} already.",
+      "reviewed": true,
+      "context": "The order is with a rider already"
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "late to arrive",
+      "reviewed": true,
+      "context": "A late delivery"
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "late to pick up",
+      "reviewed": true,
+      "context": "A late delivery"
+    },
+    "wa.dispatch.no_rider": {
+      "text": "No rider is free to take {ref} now. Add riders, or name one: *order {ref} to Musa*",
+      "reviewed": true,
+      "context": "No rider to offer it to"
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "You have no rider called {name}. Send *riders* to see them.",
+      "reviewed": true,
+      "context": "The owner named no rider of theirs"
+    },
+    "wa.dispatch.none_today": {
+      "text": "No deliveries today yet.",
+      "reviewed": true,
+      "context": "No deliveries today"
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "No rider has {ref}.",
+      "reviewed": true,
+      "context": "No rider holds the order"
+    },
+    "wa.dispatch.offered": {
+      "text": "{ref} is offered to {rider}. I'll tell you if they can't take it.",
+      "reviewed": true,
+      "context": "The order was offered to a rider"
+    },
+    "wa.dispatch.refused": {
+      "text": "Not now: {reason}",
+      "reviewed": true,
+      "context": "An offer or release refused; reason is in English"
+    },
+    "wa.dispatch.released": {
+      "text": "{ref} is taken back from {rider}. Offer it again: *order {ref} to Musa*",
+      "reviewed": true,
+      "context": "The owner took an order back"
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "taken, not picked up",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "at the door",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "delivered",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.offered": {
+      "text": "offered",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "on the way",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.released": {
+      "text": "taken back",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.today": {
+      "text": "Today's deliveries:",
+      "reviewed": true,
+      "context": "Heading of today's deliveries"
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Which one: {names}?",
+      "reviewed": true,
+      "context": "Several riders fit the name"
+    },
     "wa.field.enter": {
       "text": "Enter {label}",
       "reviewed": true,
@@ -1224,6 +1639,11 @@
       "reviewed": true,
       "context": "Help line"
     },
+    "wa.help.dispatch": {
+      "text": "• *order* and a reference *to Musa*: give it to a rider; *release* and a reference: take it back; *deliveries*: today's; *turn on deliveries*: offer every confirmed order to your riders",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
+    },
     "wa.help.find": {
       "text": "• *find*, a table's name and a word: look up rows",
       "reviewed": true,
@@ -1248,6 +1668,11 @@
       "text": "• *spent* with an amount and what it was for (*spent 12,000 on diesel at Total*), or *cash in* or *cash out* and an amount (*cash in 20,000 till*): records it in your money log",
       "reviewed": true,
       "context": "Help line, with invoice.manage; keep the command words and the examples in English"
+    },
+    "wa.help.riders": {
+      "text": "• *riders*: your riders and who is free; *add rider* with a name, phone and areas: add one",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
     },
     "wa.help.run": {
       "text": "• *run* and a workflow's name: start it (you confirm first)",
@@ -1423,6 +1848,11 @@
       "text": "If not, No shows the next possible invoice.",
       "reviewed": true,
       "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), when more than one invoice could fit"
+    },
+    "wa.match.needs_approval": {
+      "text": "Not matched yet: this money was entered by hand and is at or above the school's cash threshold, so the match waits for a second person to approve it under Schools, Approvals.",
+      "reviewed": true,
+      "context": "Yes, match was pressed on money a person entered (cash, a statement line) at or above the school's cash threshold: the match is recorded for a second person"
     },
     "wa.match.other_person": {
       "text": "This button was sent to someone else.",
@@ -1669,6 +2099,101 @@
       "reviewed": true,
       "context": "Four-eyes publishing: a request was made"
     },
+    "wa.receive.account": {
+      "text": "Your account number with Taskiem:\nAccount number: {account}\nBank: {bank}\nAccount name: {name}\nAnyone can pay you into it at any time; each payment shows under Money, To match.",
+      "reviewed": true,
+      "context": "The business's own account number, for its owner to share"
+    },
+    "wa.receive.balance": {
+      "text": "Your Taskiem wallet holds {amount} now.",
+      "reviewed": true,
+      "context": "The business's wallet balance with Taskiem"
+    },
+    "wa.receive.balance_unknown": {
+      "text": "We could not get your balance just now. Please try again in a few minutes.",
+      "reviewed": true,
+      "context": "The wallet balance could not be read from the payments service"
+    },
+    "wa.receive.no_number": {
+      "text": "Your account number is not ready yet. Open Settings, Payments to see why: {link}",
+      "reviewed": true,
+      "context": "The business's own account number has not been issued yet"
+    },
+    "wa.receive.off": {
+      "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": true,
+      "context": "The owner asked for their account number or balance, but receiving money with Taskiem is off"
+    },
+    "wa.riders.add_how": {
+      "text": "Say it like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the areas are optional).",
+      "reviewed": true,
+      "context": "The owner's add rider was missing the name or phone; keep the command in English"
+    },
+    "wa.riders.added": {
+      "text": "{name} is now your rider. I sent them a link by SMS to get your deliveries on WhatsApp.",
+      "reviewed": true,
+      "context": "The owner added a rider, who got the link by SMS"
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} is now your rider, reached on {app}.",
+      "reviewed": true,
+      "context": "The owner added a rider who already gets the business's messages on a chat app"
+    },
+    "wa.riders.away": {
+      "text": "on leave",
+      "reviewed": true,
+      "context": "A rider the owner marked not active"
+    },
+    "wa.riders.busy": {
+      "text": "busy till {time}",
+      "reviewed": true,
+      "context": "A rider's state in the owner's list, with a Lagos time"
+    },
+    "wa.riders.by_sms": {
+      "text": "by SMS until they tap the link",
+      "reviewed": true,
+      "context": "A rider who has not tapped the link yet is reached by SMS"
+    },
+    "wa.riders.exists": {
+      "text": "{name} already rides for you.",
+      "reviewed": true,
+      "context": "The owner added a rider whose phone already rides for them"
+    },
+    "wa.riders.free": {
+      "text": "free",
+      "reviewed": true,
+      "context": "A rider's state in the owner's list"
+    },
+    "wa.riders.head": {
+      "text": "Your riders:",
+      "reviewed": true,
+      "context": "Heading of the owner's list of riders"
+    },
+    "wa.riders.none": {
+      "text": "You have no riders yet. Add one like this: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": true,
+      "context": "The owner asked for their riders and has none; keep the command in English"
+    },
+    "wa.riders.off": {
+      "text": "off",
+      "reviewed": true,
+      "context": "A rider's state in the owner's list: they said off"
+    },
+    "wa.riders.on_app": {
+      "text": "on {app}",
+      "reviewed": true,
+      "context": "Where a rider is reached: WhatsApp or Telegram"
+    },
+    "wa.riders.refused": {
+      "text": "I could not add that rider: {reason}",
+      "reviewed": true,
+      "context": "Adding a rider was refused; reason is in English"
+    },
+    "wa.riders.tail": {
+      "text": "Add one: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": true,
+      "context": "After the owner's list of riders; keep the command in English"
+    },
     "wa.run.bad_inputs": {
       "text": "The inputs do not fit {workflow}: {problems}. Send *run* again.",
       "reviewed": true,
@@ -1744,6 +2269,11 @@
       "reviewed": true,
       "context": "run: several workflows match"
     },
+    "wa.school.cash_match": {
+      "text": "{amount} entered by hand, matched to invoice {number} by {by}.",
+      "reviewed": true,
+      "context": "Money a person entered (cash, a statement line) matched to an invoice, waiting for a second person"
+    },
     "wa.school.cash_posting": {
       "text": "{amount} paid {how} for {student} ({class}), posted by {by}.",
       "reviewed": true,
@@ -1778,6 +2308,11 @@
       "text": "by transfer to the school's account",
       "reviewed": true,
       "context": "How money was paid at the desk"
+    },
+    "wa.school.kind.cash_match": {
+      "text": "a match of money entered by hand",
+      "reviewed": true,
+      "context": "The kind of a school approval request: money a person entered, matched to an invoice"
     },
     "wa.school.kind.cash_posting": {
       "text": "a cash posting",
@@ -2274,6 +2809,11 @@
       "reviewed": true,
       "context": "An order's status"
     },
+    "wa.shop.status.arrived": {
+      "text": "at the customer's door",
+      "reviewed": true,
+      "context": "An order's status"
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "waiting for payment",
       "reviewed": true,
@@ -2294,6 +2834,11 @@
       "reviewed": true,
       "context": "An order's status"
     },
+    "wa.shop.status.dispatched": {
+      "text": "with a rider",
+      "reviewed": true,
+      "context": "An order's status"
+    },
     "wa.shop.status.expired": {
       "text": "expired",
       "reviewed": true,
@@ -2303,6 +2848,11 @@
       "text": "did not come",
       "reviewed": true,
       "context": "A booking's status: the customer did not come"
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "on the way",
+      "reviewed": true,
+      "context": "An order's status"
     },
     "wa.shop.status.paid": {
       "text": "paid",
@@ -2348,6 +2898,21 @@
       "text": "Turn on orders now? Customers can then order from your page, and each order comes to you here to accept or decline.",
       "reviewed": true,
       "context": "Offered after the page is published from chat"
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": true,
+      "context": "Asked before the order workflow is replaced by the one that offers orders to riders"
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": true,
+      "context": "After deliveries are turned on from chat"
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
+      "reviewed": true,
+      "context": "Turning on deliveries from chat was refused, with the reason"
     },
     "wa.shop.which_item": {
       "text": "More than one matches. Which one?\n{list}\nReply with its number.",

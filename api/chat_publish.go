@@ -71,7 +71,11 @@ func (s *Server) publishFromChat(ctx context.Context, c *chat, wf uuid.UUID, v i
 		if err != nil {
 			return err
 		}
-		if g.FourEyesPublish {
+		wait, err := publishNeedsApproval(ctx, tx, g, nil)
+		if err != nil {
+			return err
+		}
+		if wait {
 			state = publishWaiting
 			if _, err := tx.Exec(ctx, `INSERT INTO publish_requests (tenant_id, workflow_id, version, requested_by) VALUES ($1, $2, $3, $4)
 				ON CONFLICT (workflow_id, version) DO UPDATE SET requested_by = EXCLUDED.requested_by, requested_at = now(), status = 'pending', decided_by = NULL, decided_at = NULL`,

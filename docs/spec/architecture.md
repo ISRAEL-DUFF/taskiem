@@ -112,7 +112,7 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 | --- | --- |
 | Dev and self-hosted single node | One binary with all roles, Postgres, SeaweedFS, OpenBao via Docker Compose |
 | Cloud v1 (Nigeria region) | 2× api/edge, 2× orchestrator, 1–2× scheduler (leader-elected), N× workers by queue; Postgres primary plus synchronous standby |
-| Cloud at scale | Workers split by queue (connector, sandbox, AI, dedicated tenants); read replicas for inspector queries; queue moved to NATS JetStream if needed |
+| Cloud at scale | Workers split by queue (connector, sandbox, AI, dedicated tenants); read replicas for inspector queries; a larger Postgres primary before any change of queue (section 4.3) |
 | Enterprise dedicated | Single-tenant stack in the customer's chosen region or on their infrastructure |
 
 Scheduler instances use a session-level Postgres advisory lock for leader election, so only one fires timers at a time while others stand by. The lock is held on a dedicated, direct connection (never through a transaction-pooling proxy such as PgBouncer), and the leader re-checks it before each batch so a lost connection cannot leave two leaders.
@@ -200,7 +200,7 @@ Strings starting with `=` are expressions. The language is CEL (Common Expressio
 
 - Every save creates an immutable version. Runs are pinned to the version they started on, so an edit never changes an in-flight run.
 - States: `draft` → `published` → `deprecated` → `archived`. Only published versions accept triggers.
-- Publishing can require approval (maker-checker on workflows themselves), configurable per environment.
+- Publishing can require approval (maker-checker on workflows themselves), configurable per environment: for every environment, or for the ones listed (`four_eyes_publish_environments`). A publish that deploys to a listed environment waits as a whole; promotion into one needs a second person.
 - Environments (`dev`, `staging`, `prod`) hold separate secrets and connector credentials; promotion copies a version, never edits in place.
 - A JSON Schema for `wd/v1` is published so external tools and the AI builder validate against the same contract.
 
@@ -225,12 +225,13 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 | `StepCompleted` | Worker reports success with output (or output reference) |
 | `StepFailed` | Worker reports a failure with error class |
 | `StepSkipped` | A step's `when` was false or a step it needs did not run |
-| `StepCancelled` | A step in a losing branch of a `join: any` parallel step is stopped before it finished |
+| `StepCancelled` | A step in a losing branch of a `join: any` parallel step, or of a run being cancelled, is stopped before it finished |
 | `RetryScheduled` | Failure is retryable; records next attempt time |
 | `TimerFired` | A `wait` or timeout elapses |
 | `SignalReceived` | External event matched the run (webhook, WhatsApp reply) |
 | `ApprovalRequested` / `ApprovalDecided` | Governance step opens and closes |
 | `CompensationStarted` / `CompensationCompleted` | Saga rollback runs |
+| `CancelRequested` | A person cancelled the run with its completed steps reversed ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)) |
 | `RunCompleted` / `RunFailed` / `RunCancelled` | Terminal states |
 
 ### 4.2 Orchestrator
@@ -251,7 +252,7 @@ PostgreSQL is the queue in v1, which removes a moving part and keeps events and 
 - Claiming is cross-tenant, so it runs through the narrow dispatch path in section 5.3, not as an ordinary tenant-scoped query.
 - `LISTEN/NOTIFY` wakes idle workers instantly; polling every 1 s is the fallback.
 - Tasks carry `tenant_id` and a queue name, so tenants and workload classes (connector calls, code sandbox, AI) can get dedicated worker pools.
-- Exit path: if sustained load exceeds what one primary handles, the queue interface swaps to NATS JetStream without changing the orchestrator.
+- **Postgres is the queue by design, not as a stopgap.** A task row is written in the same transaction as the event that schedules it, and a worker records its result and the next decision in one transaction too. That is what makes a lost step or an orphaned task impossible, and it is why there is no interface to swap: a separate queue (NATS JetStream or any other) cannot join a Postgres transaction. Moving off Postgres would mean a redesign of dispatch, not a configuration change: tasks written to an outbox table with the event, a relay publishing them, and fencing and deduplication rebuilt against the new queue. Before that, in order: tune the primary, a larger primary, the read replica for lists and dashboards, dedicated worker pools for heavy tenants (decision 0024), and moving a large tenant to its own database. The G0 spike sustained 500 steps/s and peaked at 1,302 on 4 vCPUs (decision 0002); load tests on production-sized hardware set the real ceiling.
 
 ### 4.4 Exactly-once effects
 
@@ -306,7 +307,9 @@ A step may declare a `compensate` action, for example `reverse_transfer` for `tr
 
 ### 4.9 Payloads
 
-Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant. PII fields are redacted in the copy shown in the UI and logs (section 9).
+Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant.
+
+*As built:* the object-storage copy is not built yet (`events.payload_ref` exists, unused). Until it is, no output over 256 KB is kept: an `http` step's response body is cut to 256 KB, a code step's output over it is a script error, a container step keeps to its own `limits.output_bytes` (up to 1 MB), and any other step (connector, capability, `ai`) whose output is over it fails saying so. A write, which has already happened, parks in `needs_reconciliation` instead, for an operator to record as completed with a smaller output. PII fields are redacted in the copy shown in the UI and logs (section 9).
 
 PII values are never stored in plaintext in either place. Before an event is written, every declared or detected PII field (section 9.3) is replaced by an envelope `{"$pii": "<category>", "subject": "<subject id>", "ct": "<ciphertext>"}` encrypted under that data subject's key in `subject_keys`. Non-PII fields stay plaintext JSONB so they remain queryable. Workers and the orchestrator decrypt envelopes in memory when an expression needs the value; this is what makes erasure by crypto-shredding possible (section 9.4).
 
@@ -314,7 +317,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 
 - **Replay** re-runs the orchestrator over the history to reconstruct state; it executes no effects.
 - **Fork from step** creates a new run that copies history up to a chosen step and continues from there on a newer WD version. This is the repair path for failed runs.
-- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured.
+- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing.
 
 ### 4.11 Initial performance targets
 
@@ -322,7 +325,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 | --- | --- |
 | Step dispatch latency (queue to worker) | p95 under 50 ms |
 | Sustained step throughput, one Postgres primary | 500 steps/s |
-| Run history retention | 90 days hot after the run ends, then archived to object storage |
+| Run history retention | 90 days hot after the run ends, then archived to object storage (an S3-compatible bucket, `TASKIEM_ARCHIVE_S3_BUCKET`; a mounted directory on single-node installs) |
 | Recovery after worker crash | Lease expiry, default 60 s |
 
 These are design targets to validate with load tests in Phase 1, not measured figures.
@@ -491,6 +494,7 @@ CREATE TABLE audit_chain_heads (
 - **Tenant hierarchy.** A partner reaches a sub-tenant only when the call comes through the partner admin API (section 13.4) with the `partner.read` or `partner.manage` permission. Each transaction enters one sub-tenant through a `SECURITY DEFINER` function that checks `tenants.parent_id`, writes the access to both the partner's and the sub-tenant's audit log, and narrows the scope to that sub-tenant alone (decision 0015). Partner users acting in the partner's own workspace never get sub-tenant ids in scope, which keeps sub-tenant data isolated from them by default.
 - The application role cannot bypass RLS. Only migrations and the platform-admin role can, and their use is itself audited.
 - **Dispatch path.** Workers, the orchestrator, and the scheduler must find work across all tenants. They do this only through a small set of `SECURITY DEFINER` functions owned by a `taskiem_dispatch` role: `claim_tasks(queue, worker_id, n)`, `claim_due_timers(n)`, `claim_runs_to_orchestrate(n)`, and `recover_expired_leases()`. Each function claims rows with `SKIP LOCKED`, returns only routing columns (ids, `tenant_id`, step id, lease epoch), and touches no payloads. The caller then opens a normal transaction with `app.tenant_scope` set to that row's single tenant before reading history, secrets, or payloads, so all data access stays under RLS. These functions are fixed in migrations, reviewed like security code, and covered by the RLS bypass tests.
+- *As built:* the dispatch path is not the only one. About 290 `SECURITY DEFINER` functions, all owned by `taskiem_dispatch`, serve every lookup that must happen before a tenant is known or across tenants: sign-in and sessions, the operator console, public pages and forms, inbound WhatsApp, Telegram and email routing, the connector catalogue, partners and platform apps, besides dispatch. Each pins `search_path`; none is executable by `PUBLIC`. The ones `taskiem_app` may call are listed in `engine/db/definers.tsv` with an owner and a reason, and the columns `taskiem_dispatch` may read in `engine/db/dispatch_columns.txt`; `TestDefinersAllowList` and `TestDispatchColumnsAllowList` fail when the database and those lists differ. Row-level security stops a query that forgets `tenant_id`; it does not stop code that sets the wrong scope, since `app.tenant_scope` is a setting the application role may change: the boundary there is `db.InTenantTx` and the code that chooses the tenant ids it is given.
 - `audit_log` and `run_events` grant `INSERT` and `SELECT` only; `UPDATE` and `DELETE` are revoked from every application role.
 - Large tenants can be moved to a dedicated database by tenant id; the data model never assumes tenants share a database.
 
@@ -558,7 +562,7 @@ triggers:
 - **Idempotency and reconcile hooks** tell the engine where to put the key, how to encode it within the provider's charset and length limits (section 4.4), and which action confirms an unknown outcome. Registration rejects an encoding whose output cannot satisfy the declared limits.
 - **Compensation** names the reversing action, if one exists.
 - **PII fields** feed the redaction engine in section 9.
-- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17).
+- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17). *As built:* `connector_rate_buckets` holds one bucket per connection (scope `connection`, the default: connector, environment and connection) or per tenant (scope `tenant`), of `requests` tokens refilled evenly over `per`. A worker takes a token in the same transaction that records the call's intent, so a call that must wait is neither sent nor open: its task goes back to the queue until a token is due, without spending a retry. Scope `global` is refused until a platform-wide quota is needed.
 - **Input and output schemas** (JSON Schema) power canvas forms, code SDK types, and AI builder validation.
 - **Trigger correlation** maps inbound webhooks to waiting runs.
 
@@ -590,7 +594,7 @@ The same interface is exported to WASM through a thin host ABI, so a third-party
 
 ### 6.4 Versioning and testing
 
-- Connectors follow semver. Workflows pin a major version (`paystack@1`); minor and patch upgrades apply automatically to **new** runs only. Each run records the exact resolved versions in `RunStarted` and executes every step on them, so a run waiting days on an approval never switches connector code midway. Workers keep every version still referenced by a live run loaded; a version is unloaded only once no non-terminal run pins it.
+- Connectors follow semver. Workflows pin a major version (`paystack@1`); minor and patch upgrades apply automatically to **new** runs only. Each run records the exact resolved versions in `RunStarted` and executes every step on them, so a run waiting days on an approval never switches connector code midway. Workers keep every version still referenced by a live run loaded; a version is unloaded only once no non-terminal run pins it. *As built:* a worker resolves each step's connector by the version in `RunStarted` (`connector.Registry.Pinned`) and loads an uploaded connector's (`x_`, `p_`) pinned version on demand, even when a newer one is enabled or the pinned one is disabled for new runs. A built-in has only the version in the running binary, so a deploy moves runs to it; and a catalogue version that was revoked or uninstalled, or a partner's version no longer shared, gives way to the newest of its major, with a warning in the worker's log.
 - A major version change never auto-applies. The platform flags affected workflows and the AI builder proposes migrations.
 - Each connector ships recorded fixtures. CI replays them against handlers, and a nightly job runs live sandbox calls where providers offer test modes.
 - A contract-drift monitor compares live responses against output schemas and raises an alert when a provider changes shape; this feeds AI repair (section 12).
@@ -1067,7 +1071,7 @@ AGPL services are limited to optional operational tooling: the core install (eng
 | JS in sandbox | QuickJS (WASM build) | MIT | Small, fast startup |
 | Object storage | Any S3-compatible API; SeaweedFS self-hosted | Apache 2.0 | Avoid AGPL storage in the core install |
 | Cache and rate limits | Valkey | BSD | Optional; Postgres works first |
-| Queue at scale | NATS JetStream | Apache 2.0 | Phase 4 option |
+| Queue at scale | PostgreSQL (the queue above) | PostgreSQL | Kept by design (section 4.3); another queue would mean redesigning dispatch |
 | Secrets service | OpenBao | MPL 2.0 | Run as a separate service |
 | Auth | go-webauthn, own OIDC/SAML integration | BSD | Passkeys first |
 | Telemetry | OpenTelemetry, Prometheus, Grafana stack | Apache 2.0 / AGPL 3.0 (separate-service tier) | Grafana, Loki, Tempo run as separate, unmodified, optional services; never linked |
@@ -1090,7 +1094,7 @@ The biggest risk is scope: eight pillars is several products' worth of work, so 
 | Scope overrun across eight pillars | Nothing ships | Strict phase gates; Phase 1 dogfooded inside holdco products before any external sale |
 | Exactly-once claims fail in production | Duplicate or lost payments, loss of trust | Action classes, reconcile hooks, chaos tests that kill workers mid-effect, external audit of the engine |
 | Partner APIs unavailable (NIBSS, tax portals) | Weaker connector moat | Prioritise providers with public APIs; pursue partnerships early; licensed aggregators as fallback |
-| Postgres-as-queue hits limits | Latency under load | Load tests in Phase 1; queue interface designed for a JetStream swap |
+| Postgres-as-queue hits limits | Latency under load | Load tests on production-sized hardware before launch; a larger primary, worker pools and tenant moves first; a queue redesign (an outbox and relay) only if those run out |
 | WhatsApp policy or pricing changes | Channel cost or features shift | Keep WhatsApp one channel among several; pass-through costs; templates kept minimal |
 | AI proposes unsafe changes | Bad workflows published | AI cannot publish or approve; shadow-sandbox validation; human review |
 | Flat pricing undercuts costs | Margin squeeze | Capacity caps per tier, daily usage snapshots, quarterly pricing review |

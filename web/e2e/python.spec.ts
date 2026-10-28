@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { addStep, newWorkflow } from "./builder";
 
 test("a Python code step runs", async ({ page }) => {
   test.setTimeout(90_000); // the worker may compile CPython first
@@ -7,13 +8,11 @@ test("a Python code step runs", async ({ page }) => {
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Workflows" }).click();
-  await page.getByRole("button", { name: "New workflow" }).click();
-  await page.getByLabel("Name").fill("Python flow");
-  await page.getByRole("button", { name: "Create" }).click();
-  await page.getByTestId("node-start").click();
-  await page.getByRole("button", { name: "+ code" }).click();
+  await newWorkflow(page, "Python flow");
+  await addStep(page, "code", "Run code");
   await page.getByLabel("Language").selectOption("python");
   await page.getByLabel("Source").fill('from decimal import Decimal\n\ndef main(input, host):\n    print("summing")\n    return {"total": Decimal("0.10") + Decimal("0.20")}\n');
+  await page.getByTestId("step-window").getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText(/is published; new runs use it/)).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Start run" }).click();

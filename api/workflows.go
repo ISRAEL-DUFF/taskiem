@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/embed"
@@ -44,7 +45,7 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 	}
 	out := append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
 	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
-	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc, s.callables(ctx, tenant))...)
 }
 
 // callables finds a template step's template for a definition not saved
@@ -89,7 +90,7 @@ func (s *Server) checkVersion(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UU
 	}
 	out = append(out, s.keptProblems(ctx, tenant, doc)...)
 	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
-	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc, find)...)
 }
 
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code
@@ -139,6 +140,154 @@ func canonical(doc json.RawMessage) ([]byte, error) {
 		return nil, fmt.Errorf("%w: definition is not JSON: %w", errBadRequest, err)
 	}
 	return buf.Bytes(), nil
+}
+
+// draftDoc is canonical for a draft saved to a workflow: a draft may be
+// incomplete (no trigger yet), but it is a wd/v1 document the builder can
+// draw: an object with a list of steps, each an object with an id and a
+// type, at every depth (the rules of web/src/lib/flow.ts definitionProblem).
+// Keys match exactly: "Steps" is not "steps", and a case variant of a wd/v1
+// key is refused rather than stored beside or instead of the key.
+func draftDoc(doc json.RawMessage) ([]byte, error) {
+	out, err := canonical(doc)
+	if err != nil {
+		return nil, err
+	}
+	if msg := draftProblem(out); msg != "" {
+		return nil, fmt.Errorf("%w: %s", errBadRequest, msg)
+	}
+	return out, nil
+}
+
+// wdTopKeys are the top-level keys of a wd/v1 document.
+var wdTopKeys = []string{"schema", "id", "version", "name", "description", "trigger", "inputs", "steps", "types", "settings", "outputs"}
+
+// jsonObject decodes raw as an object, its keys as written, or false.
+func jsonObject(raw json.RawMessage) (map[string]json.RawMessage, bool) {
+	if len(raw) == 0 || raw[0] != '{' {
+		return nil, false
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return nil, false
+	}
+	return m, true
+}
+
+// jsonList decodes raw as a list, or false.
+func jsonList(raw json.RawMessage) ([]json.RawMessage, bool) {
+	if len(raw) == 0 || raw[0] != '[' {
+		return nil, false
+	}
+	var l []json.RawMessage
+	if json.Unmarshal(raw, &l) != nil {
+		return nil, false
+	}
+	return l, true
+}
+
+// draftProblem is what keeps a draft from being drawn, or "".
+func draftProblem(doc []byte) string {
+	const shape = "definition must be a wd/v1 object with a steps list"
+	root, ok := jsonObject(doc)
+	if !ok {
+		return shape
+	}
+	for k := range root {
+		for _, want := range wdTopKeys {
+			if k != want && strings.EqualFold(k, want) {
+				return fmt.Sprintf("definition key %q must be written %q", k, want)
+			}
+		}
+	}
+	steps, ok := root["steps"]
+	if !ok {
+		return shape
+	}
+	return draftSteps(steps, `"steps"`)
+}
+
+// draftSteps checks a list of steps and the lists inside its containers.
+func draftSteps(raw json.RawMessage, where string) string {
+	list, ok := jsonList(raw)
+	if !ok {
+		return where + " must be a list of steps"
+	}
+	for i, item := range list {
+		st, ok := jsonObject(item)
+		if !ok {
+			return fmt.Sprintf("%s: step %d must be an object", where, i+1)
+		}
+		var id string
+		if json.Unmarshal(st["id"], &id) != nil || id == "" {
+			return fmt.Sprintf(`%s: step %d needs an "id"`, where, i+1)
+		}
+		var typ string
+		if raw := st["type"]; len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &typ) != nil {
+			return fmt.Sprintf(`step %q needs a "type"`, id)
+		}
+		if raw, ok := st["needs"]; ok {
+			var needs []string
+			if json.Unmarshal(raw, &needs) != nil || needs == nil {
+				return fmt.Sprintf(`step %q: "needs" must be a list of step ids`, id)
+			}
+		}
+		cfg := map[string]json.RawMessage{}
+		if raw, ok := st["config"]; ok {
+			if cfg, ok = jsonObject(raw); !ok {
+				return fmt.Sprintf(`step %q: "config" must be an object`, id)
+			}
+		}
+		var bad string
+		switch typ {
+		case "branch":
+			bad = draftInner(cfg, "paths", id)
+			if raw, ok := cfg["default"]; bad == "" && ok {
+				def, ok := jsonObject(raw)
+				if !ok {
+					return fmt.Sprintf(`step %q: "default" must be an object`, id)
+				}
+				if s, ok := def["steps"]; ok {
+					bad = draftSteps(s, fmt.Sprintf("step %q, otherwise", id))
+				}
+			}
+		case "parallel":
+			bad = draftInner(cfg, "branches", id)
+		case "foreach":
+			if s, ok := cfg["steps"]; ok {
+				bad = draftSteps(s, fmt.Sprintf("step %q", id))
+			}
+		}
+		if bad != "" {
+			return bad
+		}
+	}
+	return ""
+}
+
+// draftInner checks a container's paths or branches: a list of objects whose
+// steps, where given, are a list of steps.
+func draftInner(cfg map[string]json.RawMessage, key, id string) string {
+	raw, ok := cfg[key]
+	if !ok {
+		return ""
+	}
+	list, ok := jsonList(raw)
+	if !ok {
+		return fmt.Sprintf("step %q: %q must be a list", id, key)
+	}
+	for j, item := range list {
+		p, ok := jsonObject(item)
+		if !ok {
+			return fmt.Sprintf("step %q: %s %d must be an object", id, key, j+1)
+		}
+		if s, ok := p["steps"]; ok {
+			if bad := draftSteps(s, fmt.Sprintf("step %q, %s %d", id, key, j+1)); bad != "" {
+				return bad
+			}
+		}
+	}
+	return ""
 }
 
 func (p *Principal) id() uuid.UUID {
@@ -269,7 +418,7 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: name is required", errBadRequest))
 		return
 	}
-	doc, err := canonical(req.Definition)
+	doc, err := draftDoc(req.Definition)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -331,7 +480,7 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	doc, err := canonical(req.Definition)
+	doc, err := draftDoc(req.Definition)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -560,12 +709,17 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		if err := s.checkReady(r.Context(), tx, p.TenantID, wf, v); err != nil {
 			return err
 		}
-		// Four-eyes: a publish waits for a second person.
+		// Four-eyes: a publish to an environment that needs a second person
+		// waits for one.
 		g, err := governanceTx(r.Context(), tx)
 		if err != nil {
 			return err
 		}
-		if g.FourEyesPublish {
+		wait, err := publishNeedsApproval(r.Context(), tx, g, nil)
+		if err != nil {
+			return err
+		}
+		if wait {
 			var state string
 			if err := tx.QueryRow(r.Context(), `SELECT state FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&state); err != nil {
 				return err
@@ -693,7 +847,7 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 	if err != nil {
 		return nil, "", false, err
 	}
-	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, d, by); err != nil {
+	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, def, by); err != nil {
 		return nil, "", false, err
 	}
 	targets, err := deployTargets(ctx, tx, gitEnv)
@@ -734,6 +888,79 @@ func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"valid": len(probs) == 0, "problems": nonNil(probs)})
 }
 
+// tryDraft runs a draft once with sample data: the workflow builder's
+// Test (docs/workflow-builder.md#test-with-sample-data). It is the AI
+// builder's dry run: the real orchestrator over an in-memory history,
+// every service step answered with a sample of its output, every approval
+// approved and every form answered, so nothing is sent and nothing is
+// stored. The builder may give what starts it and outputs it kept for
+// steps; the answer is each step's state, what it was given and gave.
+func (s *Server) tryDraft(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Definition json.RawMessage `json:"definition"`
+		Trigger    any             `json:"trigger,omitempty"`
+		Kept       map[string]any  `json:"kept,omitempty"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	ctx := r.Context()
+	tenant := principalFrom(ctx).TenantID
+	if wf, err := uuid.Parse(chi.URLParam(r, "wf")); err == nil {
+		if p := usesItself(wf, req.Definition); p != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "invalid_definition", "error": p.Message, "problems": []problem{*p}})
+			return
+		}
+	}
+	reg, err := s.Registry.For(connector.ManifestsOnly(ctx), tenant.String())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	policies := map[string]json.RawMessage{}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT name, document FROM approval_policies WHERE state = 'active'`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			var doc json.RawMessage
+			if err := rows.Scan(&name, &doc); err != nil {
+				return err
+			}
+			policies[name] = doc
+		}
+		return rows.Err()
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	c, res, err := builder.TryDraft(req.Definition, reg, policies, s.callables(ctx, tenant), req.Trigger, req.Kept)
+	if err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "invalid_definition", "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    res.Status,
+		"trigger":   c.Trigger,
+		"steps":     nonNilMap(res.Steps),
+		"inputs":    nonNilMap(res.Inputs),
+		"outputs":   nonNilMap(res.Outputs),
+		"errors":    nonNilMap(res.Errors),
+		"run_error": res.RunError,
+	})
+}
+
+func nonNilMap[V any](m map[string]V) map[string]V {
+	if m == nil {
+		return map[string]V{}
+	}
+	return m
+}
+
 type connectorInfo struct {
 	Ref     string `json:"ref"`
 	ID      string `json:"id"`
@@ -753,6 +980,9 @@ type connectorInfo struct {
 	// can be connected by OAuth on this platform (a client is registered
 	// and the provider's server known); absent for the others.
 	OAuthLinkable *bool `json:"oauth_linkable,omitempty"`
+	// OAuthModes are the modes it can be linked in here (live, test), for
+	// a connector whose modes are hosts.
+	OAuthModes []string `json:"oauth_modes,omitempty"`
 }
 
 type connectorAction struct {
@@ -773,7 +1003,7 @@ func (s *Server) listConnectors(w http.ResponseWriter, r *http.Request) {
 	var out []connectorInfo
 	for _, c := range reg.List() {
 		m := c.Manifest
-		info := connectorInfo{Ref: c.Ref(), ID: m.ID, Version: m.Version, Name: m.Name, Kind: m.KindOf(), Category: m.Category, Description: m.Description, Auth: m.Auth, Actions: map[string]connectorAction{}, Triggers: []string{}, OAuthLinkable: s.oauthLinkable(c)}
+		info := connectorInfo{Ref: c.Ref(), ID: m.ID, Version: m.Version, Name: m.Name, Kind: m.KindOf(), Category: m.Category, Description: m.Description, Auth: m.Auth, Actions: map[string]connectorAction{}, Triggers: []string{}, OAuthLinkable: s.oauthLinkable(c), OAuthModes: s.oauthModes(c)}
 		for name, a := range m.Actions {
 			info.Actions[name] = connectorAction{Title: a.Title, Class: string(a.Class), Input: a.Input, Output: a.Output}
 		}

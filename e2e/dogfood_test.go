@@ -25,6 +25,7 @@ var ctx = context.Background()
 
 func TestTopupReconciliationExample(t *testing.T) {
 	e := rt.New(t)
+	e.CallTimeout = 5 * time.Second // four calls at once, under the suite's load
 	paystack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ref := strings.TrimPrefix(r.URL.Path, "/transaction/verify/")
 		status, amount := map[string]string{"PSK_paid": "success", "PSK_short": "success", "PSK_failed": "failed", "PSK_wait": "pending"}[ref], 50000
@@ -83,7 +84,7 @@ func TestTopupReconciliationExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rt.WaitFor(t, 30*time.Second, "reconciliation run", func() bool { e.Drain(t); return e.Status(t, ref) != "running" })
+	rt.WaitFor(t, 30*time.Second, "reconciliation run", func() bool { e.Drain(t); st := e.Status(t, ref); return st != "running" && st != "waiting" })
 	h, _ := e.Store.RunHistory(ctx, ref)
 	if st := e.Status(t, ref); st != "completed" {
 		var b strings.Builder

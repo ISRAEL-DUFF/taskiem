@@ -43,6 +43,12 @@ export TASKIEM_SMTP_URL=smtp://127.0.0.1:12525 TASKIEM_ALERT_FROM=taskiem@e2e.te
 export TASKIEM_WHATSAPP_PHONE_NUMBER_ID=106540352242922 TASKIEM_WHATSAPP_ACCESS_TOKEN=EAAe2e TASKIEM_WHATSAPP_APP_SECRET=e2e-app-secret \
   TASKIEM_WHATSAPP_VERIFY_TOKEN=e2e-verify TASKIEM_WHATSAPP_TOKEN_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY= \
   TASKIEM_WHATSAPP_GRAPH_URL=http://127.0.0.1:12626/v25.0 TASKIEM_WHATSAPP_DISPLAY_NUMBER="+1 555 000 1111"
+# Messages to people outside a business (customers, riders): their hash
+# key turns them on; riders.spec.ts adds riders, who get a link by SMS.
+export TASKIEM_MESSAGE_HASH_KEY=cnJycnJycnJycnJycnJycnJycnJycnJycnJycnJycnI=
+# The platform number's templates count as approved against the fake
+# (docs/whatsapp.md#the-template-registry: development and tests only).
+export TASKIEM_WHATSAPP_TEMPLATES_ASSUME_APPROVED=true
 # Every spec signs in from the same address.
 export TASKIEM_LOGIN_BURST=100
 # Self-serve signup, and Termii pointed at the fake onboarding.spec.ts runs
@@ -54,6 +60,9 @@ export TASKIEM_SIGNUP_PER_ADDRESS=100
 # Students' account numbers (accounts.spec.ts) are issued by a fake iswallet
 # (loopback is allowed only because the URL names it).
 export TASKIEM_ISWALLET_URL=http://127.0.0.1:12828
+# Receive money with Taskiem (receive-money.spec.ts): Taskiem's own iswallet
+# client in test mode, at a second fake.
+export TASKIEM_ISWALLET_TEST_CLIENT_KEY=isw_platform_e2e TASKIEM_ISWALLET_TEST_URL=http://127.0.0.1:12829
 # Storefront orders (storefront.spec.ts): the public host's key turns on the inbox.
 export TASKIEM_PUBLIC_KEY=ZTJlLXB1YmxpYy1rZXktMzItYnl0ZXMtbG9uZy0hISE=
 # The public host itself (family.spec.ts): school families' pages on the

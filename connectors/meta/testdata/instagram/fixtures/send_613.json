@@ -1,0 +1,41 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/104123456789012/messages",
+  "headers": {
+   "Authorization": "Bearer EAAtest-page-token"
+  },
+  "body": {
+   "recipient": {
+    "id": "5432109876543210"
+   },
+   "messaging_type": "RESPONSE",
+   "message": {
+    "text": "Here is your link: https://pay.example/l/abc",
+    "quick_replies": [
+     {
+      "content_type": "text",
+      "title": "Paid",
+      "payload": "paid"
+     },
+     {
+      "content_type": "text",
+      "title": "Later",
+      "payload": "Later"
+     }
+    ]
+   }
+  }
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "error": {
+    "message": "Calls to this api have exceeded the rate limit.",
+    "type": "OAuthException",
+    "code": 613,
+    "fbtrace_id": "AbCdEfGh"
+   }
+  }
+ }
+}

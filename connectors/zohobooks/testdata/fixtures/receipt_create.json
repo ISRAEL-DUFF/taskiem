@@ -1,0 +1,45 @@
+{
+ "request": {
+  "method": "POST",
+  "path": "/salesreceipts",
+  "headers": {
+   "Authorization": "Zoho-oauthtoken 1000.test-access-token"
+  },
+  "query": {
+   "organization_id": "10234695",
+   "ignore_auto_number_generation": "true"
+  },
+  "body": {
+   "customer_id": "460000000026200",
+   "payment_mode": "cash",
+   "receipt_number": "pos-2026-10-25",
+   "date": "2026-10-25",
+   "line_items": [
+    {
+     "name": "Card",
+     "description": "Card",
+     "rate": 300000.0,
+     "quantity": 1
+    },
+    {
+     "name": "Transfer",
+     "description": "Transfer",
+     "rate": 112500.0,
+     "quantity": 1
+    }
+   ]
+  }
+ },
+ "response": {
+  "status": 201,
+  "body": {
+   "code": 0,
+   "message": "success",
+   "salesreceipt": {
+    "sales_receipt_id": "460000000028001",
+    "receipt_number": "pos-2026-10-25",
+    "total": 412500.0
+   }
+  }
+ }
+}

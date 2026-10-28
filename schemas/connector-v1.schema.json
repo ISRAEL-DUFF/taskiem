@@ -48,6 +48,7 @@
         "ussd",
         "mobile_money",
         "tax",
+        "accounting",
         "database",
         "productivity",
         "storage",
@@ -104,6 +105,15 @@
         "type": "string"
       }
     },
+    "connection_hosts": {
+      "description": "The hosts a connection's fields may name (rule 19), where the provider keeps each account in one place (Zoho's data centres): exact hosts, or *.<domain> for its subdomains. A ${connection.<field>} egress host or OAuth URL naming any other is refused. Required for OAuth URLs that start with ${connection.<field>}.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(\\*\\.)?[a-z0-9.-]+$"
+      }
+    },
     "actions": {
       "type": "object",
       "minProperties": 1,
@@ -123,6 +133,22 @@
         "$ref": "#/$defs/trigger"
       }
     },
+    "pickers": {
+      "description": "Lists a person chooses from instead of typing an id (a Mailchimp audience): a read action, and expressions over its output (items) and each item (id, label). A template parameter names one with picker choice.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "items", "id", "label"],
+        "properties": {
+          "action": { "$ref": "#/$defs/name" },
+          "items": { "$ref": "#/$defs/expr" },
+          "id": { "$ref": "#/$defs/expr" },
+          "label": { "$ref": "#/$defs/expr" }
+        }
+      }
+    },
     "capabilities": {
       "description": "What this rail can do, in Taskiem's words (schemas/capabilities-v1.json): each entry maps one capability to this connector's own actions (rule 16). Rails only.",
       "type": "object",
@@ -138,7 +164,7 @@
       "type": "object",
       "propertyNames": {
         "type": "string",
-        "pattern": "^[a-z_]+\\.[a-z_]+$"
+        "pattern": "^[a-z_]+(\\.[a-z_]+){1,2}$"
       },
       "additionalProperties": {
         "$ref": "#/$defs/capabilityEvent"
@@ -495,6 +521,10 @@
                 "type": "string",
                 "pattern": "^https://",
                 "description": "The mode's host; left out when only the deployment knows it (a production address issued at go-live), so the mode is offered only once it is set."
+              },
+              "client": {
+                "$ref": "#/$defs/name",
+                "description": "The platform app connections in this mode are linked with by OAuth (rule 20), where it is not auth.oauth2.client: Intuit's development keys reach only sandbox companies."
               }
             }
           }
@@ -516,15 +546,15 @@
             },
             "token_url": {
               "type": "string",
-              "pattern": "^(https://|\\$\\{server\\}/)"
+              "pattern": "^(https://|\\$\\{server\\}/|\\$\\{connection\\.[a-z][a-z0-9_]*\\}/)"
             },
             "revoke_url": {
               "type": "string",
-              "pattern": "^(https://|\\$\\{server\\}/)"
+              "pattern": "^(https://|\\$\\{server\\}/|\\$\\{connection\\.[a-z][a-z0-9_]*\\}/)"
             },
             "scopes": {
               "type": "array",
-              "minItems": 1,
+              "minItems": 0,
               "uniqueItems": true,
               "items": {
                 "type": "string",
@@ -554,16 +584,56 @@
                 ]
               }
             },
-            "fields_from_token": {
-              "description": "Auth fields filled from the token answer: a field of the answer, one element of a list field (project_ids[0]), or ${server}.",
+            "client": {
+              "$ref": "#/$defs/name",
+              "description": "The platform app Taskiem registered with the provider (rule 18; decision 0051): TASKIEM_OAUTH_<CLIENT>_* in the environment. Several connectors may share one (zoho for Books, Mail and CRM). Default: the connector's id."
+            },
+            "account_field": {
+              "$ref": "#/$defs/name",
+              "description": "The auth field holding the provider account a connection is for (Slack's team id, a QuickBooks realm id): events Taskiem's app receives for that account are delivered to the connections that hold it (triggers with delivery: app)."
+            },
+            "fields_from_callback": {
+              "description": "Auth fields filled from the query parameters the provider sends the browser back with (QuickBooks' realmId; Zoho's location and accounts-server).",
               "type": "object",
               "propertyNames": {
                 "$ref": "#/$defs/name"
               },
               "additionalProperties": {
                 "type": "string",
-                "pattern": "^([a-z][a-z0-9_]*(\\[0\\])?|\\$\\{server\\})$"
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
               }
+            },
+            "fields_from_token": {
+              "description": "Auth fields filled from the token answer: a field of the answer, a field of an object in it (team.id), one element of a list field (project_ids[0]), or ${server}.",
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^([a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*(\\[0\\])?|\\$\\{server\\})$"
+              }
+            },
+            "scope_separator": {
+              "enum": [" ", ","],
+              "description": "What joins the scopes on the consent URL: a space (default, RFC 6749) or a comma (Slack)."
+            },
+            "client_auth": {
+              "enum": ["body", "basic"],
+              "description": "How Taskiem's client proves itself at the token URL (rule 20): body (default; client_id and client_secret in the form) or basic (HTTP Basic, RFC 6749 section 2.3.1; Intuit's)."
+            },
+            "token_method": {
+              "enum": ["post", "get"],
+              "description": "How the code is exchanged (rule 21): post (default, RFC 6749) or get (the parameters in the query; Meta's Graph API)."
+            },
+            "linked_fields": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/name" },
+              "description": "Auth fields the connector's Link handler fills when a connection is made by OAuth, before it is saved (rule 21: Meta's Page, its token and its Instagram account)."
+            },
+            "revoke_encoding": {
+              "enum": ["form", "json"],
+              "description": "The revoke request's body (rule 20): form (default, RFC 7009) or json ({\"token\": ...}; Intuit's)."
             }
           }
         },
@@ -833,9 +903,11 @@
                 "connector",
                 "bearer",
                 "basic",
+                "svix",
+                "body_token",
                 "none"
               ],
-              "description": "header_secret: the header carries the shared secret itself (compared in constant time). path_secret: the URL's path form /{env}/{connection}/{token} carries the shared secret (for providers whose callback URLs may not carry a query string). connector: the connector's own code verifies (for signatures no scheme describes). slack_v0: HMAC-SHA256 over 'v0:<timestamp>:<raw body>', the header carrying 'v0=<hex>'."
+              "description": "body_token: the JSON body's field (field) carries the shared secret itself, which the provider was given when the subscription was made (Zoho CRM's watch token; compared in constant time). svix: Svix's (Standard Webhooks) base64 HMAC-SHA256 of '<svix-id>.<svix-timestamp>.<raw body>' under the base64 key after the secret's whsec_, any of svix-signature's space-separated 'v1,<base64>' values matching; the timestamp within tolerance (default 5m). header_secret: the header carries the shared secret itself (compared in constant time). path_secret: the URL's path form /{env}/{connection}/{token} carries the shared secret (for providers whose callback URLs may not carry a query string). connector: the connector's own code verifies (for signatures no scheme describes). slack_v0: HMAC-SHA256 over 'v0:<timestamp>:<raw body>', the header carrying 'v0=<hex>'."
             },
             "encoding": {
               "enum": [
@@ -854,6 +926,10 @@
             },
             "header": {
               "type": "string"
+            },
+            "field": {
+              "type": "string",
+              "description": "body_token: the JSON body's top-level field carrying the shared secret."
             },
             "query": {
               "type": "string",
@@ -943,7 +1019,7 @@
         "handshake": {
           "type": "object",
           "additionalProperties": false,
-          "description": "How the provider proves the endpoint before (or while) delivering. GET: the provider sends token_query equal to the connection's secret_field and expects respond back as text (Meta). POST: a verified delivery for which when holds is answered with respond, not delivered (Slack url_verification).",
+          "description": "How the provider proves the endpoint before (or while) delivering. GET: the provider sends token_query equal to the connection's secret_field (for delivery: app, the app's verify token) and expects respond back as text (Meta). POST: a verified delivery for which when holds is answered with respond, not delivered (Slack url_verification).",
           "properties": {
             "method": {
               "enum": [
@@ -962,6 +1038,10 @@
             },
             "secret_field": {
               "$ref": "#/$defs/name"
+            },
+            "open": {
+              "type": "boolean",
+              "description": "GET only: the provider asks only whether the address answers (Mailchimp before it saves a webhook): 200 with nothing read or started, and no token or respond."
             }
           },
           "required": [
@@ -974,13 +1054,17 @@
                 "properties": {
                   "method": {
                     "const": "GET"
+                  },
+                  "open": {
+                    "not": {
+                      "const": true
+                    }
                   }
                 }
               },
               "then": {
                 "required": [
-                  "token_query",
-                  "secret_field"
+                  "token_query"
                 ]
               }
             },
@@ -1019,12 +1103,48 @@
         "correlation": {
           "$ref": "#/$defs/expr"
         },
+        "delivery": {
+          "enum": [
+            "connection",
+            "app",
+            "both"
+          ],
+          "description": "connection (default): deliveries come to each connection's own URL under a tenant's hooks. both: either, so a business may bring its own app (its connection's secret_field verifies) or connect through Taskiem's (Slack). app: the provider sends every business's events to the one URL of Taskiem's platform app, /hooks/apps/<connector>/<trigger>; they are verified with the app's secret (TASKIEM_OAUTH_<CLIENT>_WEBHOOK_SECRET) and delivered to the connections whose account_field holds account_key (rule 18)."
+        },
+        "example": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "An example delivery as a run sees it: its body and, for a split trigger, one item (dry runs and the docs).",
+          "properties": { "body": {}, "item": {} }
+        },
+        "pii": {
+          "type": "array",
+          "description": "Personal data in a delivery (rule 21): paths under the run's trigger (body.entry.*.messaging.*.message.text, item.message.text; * for every element) and their category, sealed in run history when a run starts.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "category"],
+            "properties": {
+              "field": { "type": "string", "pattern": "^(body|item)(\\.[A-Za-z0-9_*\\[\\]-]+)+$" },
+              "category": { "$ref": "#/$defs/pii/items/oneOf/1/properties/category" }
+            }
+          }
+        },
+        "account_key": {
+          "$ref": "#/$defs/expr",
+          "description": "delivery app: the provider account an event is for (=body.team_id; =item.realmId with split)."
+        },
+        "revokes": {
+          "$ref": "#/$defs/expr",
+          "description": "delivery app: true for an event saying the business took Taskiem's app away (Slack's app_uninstalled): the account's connections are marked expired, and the event is delivered."
+        },
         "registration": {
           "enum": [
             "manual",
-            "remote"
+            "remote",
+            "connection"
           ],
-          "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar."
+          "description": "manual (default): the provider is pointed at Taskiem's ingest URL by hand. remote: Taskiem creates, updates and deletes the provider's subscription as workflows using the trigger are deployed and removed, and verifies deliveries with the secret the provider returned (decision 0021); the connector supplies a registrar. connection: Taskiem holds one subscription per connection, made when the connection is and removed with it, for every event the trigger sends; its deliveries reach every workflow subscribed and the money log, as a pasted webhook's do. A delivery that names no subscription is verified with the connection's secret_field (a subscription made by hand), so verify needs one; the connector supplies a registrar."
         },
         "options": {
           "$ref": "#/$defs/jsonSchema",

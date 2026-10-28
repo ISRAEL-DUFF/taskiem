@@ -119,8 +119,16 @@ var (
 
 // checkCapabilities is rule 16.
 func (m *Manifest) checkCapabilities(add func(string, ...any)) {
-	if len(m.Capabilities)+len(m.Events) > 0 && m.KindOf() != "rail" {
-		add("/capabilities: only a rail (kind: rail) declares capabilities and events")
+	// Rails pay and collect; products keep the books (decision 0051).
+	for _, name := range sortedKeys(m.Capabilities) {
+		if spec, ok := capability.Get(name); ok && spec.Kind != m.KindOf() {
+			add("/capabilities/%s: only a connector of kind %s declares it (this one is %s)", name, spec.Kind, m.KindOf())
+		}
+	}
+	for _, name := range sortedKeys(m.Events) {
+		if ev, ok := capability.GetEvent(name); ok && ev.Kind != m.KindOf() {
+			add("/events/%s: only a connector of kind %s sends it (this one is %s)", name, ev.Kind, m.KindOf())
+		}
 	}
 	for _, name := range sortedKeys(m.Events) {
 		m.checkEvent(name, m.Events[name], add)

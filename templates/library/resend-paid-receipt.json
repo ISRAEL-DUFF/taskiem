@@ -1,0 +1,107 @@
+{
+  "id": "resend-paid-receipt",
+  "title": "Email a receipt through Resend",
+  "summary": "When an invoice is paid in full, email the customer a receipt from your own domain through Resend, once.",
+  "description": "Whenever one of your invoices is paid in full and the customer gave an email address, Taskiem emails them a receipt from your own domain through Resend: the invoice number, the amount and a thank-you. Resend sends it once however often the step is retried. Your domain must be verified in Resend.",
+  "category": "invoices",
+  "tags": [
+    "resend",
+    "email"
+  ],
+  "keywords": [
+    "resend",
+    "transactional",
+    "domain"
+  ],
+  "requires": [
+    "resend"
+  ],
+  "connectors": [
+    "resend@1"
+  ],
+  "params": [
+    {
+      "name": "resend_connection",
+      "type": "connection",
+      "connector": "resend",
+      "title": "Resend connection",
+      "description": "Your Resend account, by its API key.",
+      "required": false,
+      "default": "main",
+      "example": "main"
+    },
+    {
+      "name": "from",
+      "type": "string",
+      "title": "From",
+      "description": "The address receipts come from, on a domain verified in Resend: Ada Cakes <orders@adacakes.ng>.",
+      "required": true,
+      "example": "Ada Cakes <orders@adacakes.ng>",
+      "max_length": 200
+    },
+    {
+      "name": "business_name",
+      "type": "string",
+      "title": "Your business's name",
+      "description": "How the receipt is signed.",
+      "required": true,
+      "example": "Ada Cakes",
+      "max_length": 80
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_resendPaidReceipt",
+    "version": 1,
+    "name": "Email a receipt through Resend",
+    "trigger": {
+      "type": "invoice",
+      "config": {
+        "event": "paid"
+      }
+    },
+    "steps": [
+      {
+        "id": "settings",
+        "type": "transform",
+        "name": "Use your sender and name",
+        "config": {
+          "output": {
+            "from": "{{from}}",
+            "business_name": "{{business_name}}"
+          }
+        }
+      },
+      {
+        "id": "receipt",
+        "type": "connector",
+        "name": "Email the customer a receipt",
+        "connector": "resend@1",
+        "action": "send_email",
+        "connection": "{{resend_connection}}",
+        "needs": [
+          "settings"
+        ],
+        "when": "=has(trigger.body.customer.email) && trigger.body.customer.email != ''",
+        "input": {
+          "from": "=steps.settings.output.from",
+          "to": "=[trigger.body.customer.email]",
+          "subject": "='Receipt for invoice ' + trigger.body.number",
+          "text": "='Dear ' + trigger.body.customer.name + ',\\n\\nThank you: we have received ' + trigger.body.amount + ' for invoice ' + trigger.body.number + ', which is now paid in full.' + (has(trigger.body.fee) ? ' Of what you sent, the bank kept a fee of ' + trigger.body.fee + ' and ' + trigger.body.received + ' reached us.' : '') + '\\n\\n' + steps.settings.output.business_name",
+          "tags": [
+            {
+              "name": "kind",
+              "value": "receipt"
+            }
+          ]
+        },
+        "effect": {
+          "idempotency_seed": "='receipt:' + trigger.body.id"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "15m"
+    }
+  }
+}

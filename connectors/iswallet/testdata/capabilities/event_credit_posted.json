@@ -1,0 +1,46 @@
+{
+  "trigger": "credit_event",
+  "headers": {
+    "X-iSpend-Idempotency-Key": "wallet.credit.posted:t-2:6f1e:sub_1"
+  },
+  "body": {
+    "id": "evt_c1",
+    "idempotency_key": "wallet.credit.posted:t-2:6f1e:sub_1",
+    "event_type": "wallet.credit.posted",
+    "occurred_at": "2026-10-23T09:14:03Z",
+    "wallet_id": "6f1e",
+    "data": {
+      "txn_id": "t-2",
+      "provider_reference": "100004261023091402123456",
+      "amount": 5000000,
+      "amount_credited": 4930000,
+      "currency": "NGN",
+      "narration": "SCHOOL FEES EBUBE",
+      "occurred_at": "2026-10-23T09:14:02Z",
+      "counterparty": {
+        "name": "ADA EZE",
+        "account_number": "0123456789",
+        "bank_name": "GTBank"
+      },
+      "virtual_account": {
+        "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+        "account_number": "9901234567",
+        "status": "active"
+      }
+    }
+  },
+  "event": "virtual_account.credited",
+  "expect": {
+    "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "credit_id": "100004261023091402123456",
+    "amount_kobo": 5000000,
+    "settled_kobo": 4930000,
+    "fee_kobo": 70000,
+    "currency": "NGN",
+    "account_number": "9901234567",
+    "payer_name": "ADA EZE",
+    "payer_account": "0123456789",
+    "payer_bank": "GTBank",
+    "occurred_at": "2026-10-23T09:14:02Z"
+  }
+}

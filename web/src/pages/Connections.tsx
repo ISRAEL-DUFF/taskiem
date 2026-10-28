@@ -35,11 +35,13 @@ interface Conn {
   provisioned_by: string | null;
   /** live or test, when the connector has modes (a Paystack key's start, iswallet's host). */
   mode?: string | null;
+  /** "taskiem" for the wallet Taskiem holds for the business (decision 0052): no key of its own. */
+  platform?: string;
   /** Subscriptions Taskiem keeps at the provider through this connection (a Xenibase webhook per workflow). */
   remote?: {
     subscriptions: number;
     health: string;
-    problems: { workflow_id: string; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
+    problems: { workflow_id: string | null; environment: string; health: string; status_reason: string | null; last_error: string | null }[];
   };
   /** Addresses to set in the rail's dashboard so the money log hears this prod connection, workflow or not. */
   money_log_webhooks?: MoneyLogWebhook[];
@@ -51,10 +53,18 @@ interface Conn {
 function Remote({ remote }: { remote: Conn["remote"] }) {
   if (!remote) return <span className="hint">—</span>;
   const why = remote.problems.map((p) => `${p.environment}: ${p.health}${p.status_reason ? ` (${p.status_reason})` : ""}${p.last_error ? ` (${p.last_error})` : ""}`).join("\n");
+  // A connection's own subscriptions (Taskiem subscribes it, as for
+  // iswallet) are repaired by checking the connection; a workflow's by
+  // publishing it again.
+  const own = remote.problems.some((p) => p.workflow_id === null);
+  const first = remote.problems.find((p) => p.status_reason || p.last_error);
   return (
     <span title={why || undefined}>
       <Badge value={remote.health} /> <span className="hint">{remote.subscriptions === 1 ? "1 webhook" : `${remote.subscriptions} webhooks`}</span>
-      {remote.health !== "ok" && remote.health !== "pending" && <div className="hint">Publish the workflow again to repair it.</div>}
+      {first && <div className="hint">{first.status_reason ?? first.last_error}</div>}
+      {remote.health !== "ok" && remote.health !== "pending" && (
+        <div className="hint">{own ? "Press Check to repair it." : "Publish the workflow again to repair it."}</div>
+      )}
     </span>
   );
 }
@@ -167,6 +177,10 @@ export function Connections() {
                       <>
                         <Link to="/tables">Data tables</Link> ({c.name}, kept by Taskiem)
                       </>
+                    ) : c.platform === "taskiem" ? (
+                      <>
+                        <Link to="/settings/payments">Your wallet with Taskiem</Link> ({c.name}, kept by Taskiem)
+                      </>
                     ) : (
                       c.name
                     )}{" "}
@@ -185,6 +199,7 @@ export function Connections() {
                   {!c.provisioned_by && (
                     <span className="conn-actions">
                       {fields && <button onClick={() => setCompleting(c)}>Add fields</button>}
+                      {c.status === "active" && <CheckConnection id={c.id} />}
                       <button onClick={() => setRemoving(c)}>Disconnect</button>
                     </span>
                   )}
@@ -246,14 +261,17 @@ function forgetReturn() {
   }
 }
 
-export async function startLink(c: ConnectorInfo, environment = "prod", name = "") {
+export async function startLink(c: ConnectorInfo, environment = "prod", name = "", mode = "") {
   try {
     if (!window.location.pathname.startsWith("/connections")) sessionStorage.setItem(RETURN_KEY, window.location.pathname + window.location.search);
     else sessionStorage.removeItem(RETURN_KEY);
   } catch {
     // storage refused: the person comes back to Connections
   }
-  const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name });
+  // A connector with modes is linked in the one chosen, else the first this
+  // Taskiem can link (QuickBooks: live, or only the sandbox on a test server).
+  const m = mode || c.oauth_modes?.[0] || undefined;
+  const out = await post<{ url: string }>("/v1/connections/oauth/start", { connector: c.ref, environment, name, mode: m });
   window.location.assign(out.url);
 }
 
@@ -288,6 +306,27 @@ function CompleteConnection({ conn, fields, onClose, onDone }: { conn: Conn; fie
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Asks the service whether this connection's saved details still work,
+ * and, for a rail that issues account numbers through partners, which can. */
+function CheckConnection({ id }: { id: string }) {
+  const act = useAction();
+  const [said, setSaid] = useState<{ ok: boolean; message?: string; partners?: string[] }>();
+  return (
+    <>
+      <button onClick={() => void act.run(async () => setSaid(await post(`/v1/connections/${id}/check`)), false)} disabled={act.busy}>
+        {act.busy ? "Checking…" : "Check"}
+      </button>
+      <ErrorBox error={act.error} />
+      {said && (
+        <span className={said.ok ? "sub" : "sub warn"} role="status" data-testid="connection-check">
+          {said.message}
+          {said.partners && (said.partners.length > 0 ? ` Can issue account numbers through ${said.partners.join(", ")}.` : " No partner can issue account numbers in naira yet.")}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -549,7 +588,7 @@ export function NewConnection({
   connectors: ConnectorInfo[];
   onClose: () => void;
   onDone: () => void;
-  onLink: (c: ConnectorInfo, environment: string, name: string) => Promise<void>;
+  onLink: (c: ConnectorInfo, environment: string, name: string, mode?: string) => Promise<void>;
   preset?: { connector: string; environment: string; name: string };
 }) {
   const [ref, setRef] = useState((preset && connectors.find((x) => x.id === preset.connector)?.ref) ?? connectors[0]?.ref ?? "");
@@ -568,6 +607,9 @@ export function NewConnection({
   const act = useAction();
   const { main, more } = splitFields(c);
   const linkable = !!c?.auth.oauth2 && !!c.oauth_linkable;
+  // Linking in a mode needs this Taskiem's OAuth client for it.
+  const linkModes = modes.filter((m) => c?.oauth_modes?.includes(m.mode));
+  const linkMode = (linkModes.some((m) => m.mode === mode) ? mode : "") || linkModes[0]?.mode || "";
   const problems = Object.fromEntries((c?.auth.fields ?? []).map((f) => [f.key, keyProblem(f, creds[f.key] ?? "", chosen)]));
   const blocked = Object.values(problems).some(Boolean);
   const field = (f: AuthField) => (
@@ -691,7 +733,19 @@ export function NewConnection({
             {linkable ? (
               <>
                 <p style={{ marginTop: 0 }}>Connect {c.name} with one click: you sign in there and approve, and nothing is copied.</p>
-                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name), false)}>
+                {!paste && modes.length > 1 && linkModes.length > 0 && (
+                  <fieldset className="choice">
+                    <legend>Which kind?</legend>
+                    {modes.map((m) => (
+                      <label key={m.mode} className="inline">
+                        <input type="radio" name="link-mode" checked={linkMode === m.mode} disabled={!linkModes.includes(m)} onChange={() => setMode(m.mode)} />
+                        {m.label}
+                        {!linkModes.includes(m) && <span className="hint"> (not set up on this Taskiem yet)</span>}
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => onLink(c, env, name, linkMode), false)}>
                   Connect {c.name}
                 </button>{" "}
                 {!paste && main.length + more.length > 0 && (
