@@ -263,6 +263,28 @@ jobs:
       - run: pnpm licenses list --json > npm-licences.json
       - run: go run ./tools/licencecheck -npm npm-licences.json
 
+  # Migrations are forward-only (CONTRIBUTING.md#migrations): a pull request
+  # may add files under engine/db/migrations but not change, rename or
+  # delete one its base branch has. goose keeps no checksums, so nothing
+  # else would notice an edited migration that databases have already run.
+  migrations:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - name: Merged migrations are unchanged
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-status --diff-filter=MDRT "origin/$BASE_REF...HEAD" -- engine/db/migrations/)
+          if [ -n "$changed" ]; then
+            echo "::error title=Migrations are forward-only::This pull request changes migrations its base branch has. Add a new migration instead."
+            echo "$changed"
+            exit 1
+          fi
+
   # The AI evaluation report (spec 12.4, docs/ai.md#evaluation): the builder
   # and repair suites through the real pipelines with the offline heuristic
   # provider, compared with the committed baselines (no API key, no cost,

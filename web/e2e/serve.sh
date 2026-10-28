@@ -9,21 +9,23 @@ db=taskiem_e2e
 psql "$TASKIEM_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS $db WITH (FORCE)" -c "CREATE DATABASE $db"
 dsn=$(printf '%s' "$TASKIEM_TEST_DATABASE_URL" | sed -E "s#/[^/?]*(\?.*)?\$#/$db\1#")
 cd "$root"
-# -tags e2e builds in the test-only commands (the demo school below).
-go build -tags e2e -o bin/taskiem ./cmd/taskiem
+# -tags e2e builds in the test-only commands (the demo school below), into
+# a binary of its own so that bin/taskiem stays what make build made.
+taskiem=bin/taskiem-e2e
+go build -tags e2e -o "$taskiem" ./cmd/taskiem
 export TASKIEM_DATABASE_URL="$dsn"
 export TASKIEM_LOCAL_KMS_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-bin/taskiem migrate >/dev/null
-TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' bin/taskiem bootstrap --tenant "E2E" --email owner@e2e.test --name Owner >/dev/null
+"$taskiem" migrate >/dev/null
+TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' "$taskiem" bootstrap --tenant "E2E" --email owner@e2e.test --name Owner >/dev/null
 # The E2E tenant is also a partner (embed.spec.ts embeds the builder).
 tenant=$(psql "$dsn" -tAc "SELECT id FROM tenants WHERE name = 'E2E'")
-bin/taskiem tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
+"$taskiem" tenants partner "$tenant" --capabilities white_label,custom_domains >/dev/null
 # It builds by hand: the technical parts are shown (no-technical-steps N0-5).
 psql "$dsn" -qc "UPDATE tenants SET advanced = true WHERE id = '$tenant'"
 # It has the Schools area on (schools.spec.ts, accessibility.spec.ts).
 psql "$dsn" -qc "INSERT INTO school_settings (tenant_id, enabled, updated_by) VALUES ('$tenant', true, 'e2e')"
 # It also publishes a connector in the public catalogue (catalogue.spec.ts).
-bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant"
+bash "$root/web/e2e/seed-catalogue.sh" "$dsn" "$tenant" "$root/$taskiem"
 # A table Taskiem keeps, as the money log makes it (tables.spec.ts): its
 # record only, as the superuser may write it; no Xenibase serves its rows.
 psql "$dsn" -v ON_ERROR_STOP=1 -q \
@@ -31,8 +33,8 @@ psql "$dsn" -v ON_ERROR_STOP=1 -q \
   -c "INSERT INTO data_table_columns (tenant_id, table_id, name, type, required, position) VALUES ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'entry_id', 'text', true, 0), ('$tenant', '0192e2e0-0000-7000-8000-000000000001', 'amount_kobo', 'integer', false, 1)"
 # An operator for ops.spec.ts: on the reviewer list, with a one-time link
 # to enrol a passkey (bin/ is not committed).
-TASKIEM_PUBLIC_URL=http://localhost:18080 bin/taskiem operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"
-bin/taskiem catalogue reviewers add ops@taskiem.test >/dev/null
+TASKIEM_PUBLIC_URL=http://localhost:18080 "$taskiem" operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"
+"$taskiem" catalogue reviewers add ops@taskiem.test >/dev/null
 export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TASKIEM_WEB_DIR="$root/web/dist" TASKIEM_SECURE_COOKIES=false
 # Passkeys need a host name: the passkey test browses http://localhost:18080.
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false
@@ -74,5 +76,5 @@ export TASKIEM_MAIL_ENABLED=true TASKIEM_MAIL_DOMAIN=in.e2e.test TASKIEM_MAIL_LI
 # The demo school (pilot.spec.ts): a business of its own, seeded through the
 # engine on the demo rail by a command only this e2e build has, its people's
 # passwords kept beside the operator's link (bin/ is not committed).
-bin/taskiem demo school --create-tenant --name "Pilot Demo School" >"$root/bin/e2e-demo.txt"
-exec bin/taskiem serve --role all
+"$taskiem" demo school --create-tenant --name "Pilot Demo School" >"$root/bin/e2e-demo.txt"
+exec "$taskiem" serve --role all
