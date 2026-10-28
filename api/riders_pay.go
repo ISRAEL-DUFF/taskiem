@@ -86,7 +86,7 @@ func (s *Server) putRiderBank(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	// The account is checked and the rider found first, so nobody is asked
 	// to confirm a change that would be refused.
-	if _, err := in.Bank.Clean(); err != nil {
+	if _, err := in.Clean(); err != nil {
 		s.dispatchFail(w, r, err)
 		return
 	}
