@@ -183,7 +183,7 @@ func TestPartnerRoutesProviderEvents(t *testing.T) {
 		t.Errorf("acme's waiting run: %s", s)
 	}
 	for name, ref := range map[string]runtime.RunRef{"bolt": boltRun, "acme's other": acmeLater, "other partner's": otherRun} {
-		if s := w.Status(t, ref); s != "running" {
+		if s := w.Status(t, ref); s != "waiting" {
 			t.Errorf("%s run: %s, want still waiting", name, s)
 		}
 	}
@@ -245,14 +245,14 @@ func TestPartnerRoutesProviderEvents(t *testing.T) {
 	if s := w.Status(t, otherRun); s != "completed" {
 		t.Errorf("other partner's customer's run: %s", s)
 	}
-	if s := w.Status(t, acmeLater); s != "running" {
+	if s := w.Status(t, acmeLater); s != "waiting" {
 		t.Errorf("acme's run woken by another partner's event: %s", s)
 	}
 	// A forged delivery (wrong secret) routes nothing.
 	if st, _ := w.deliver(t, wagely, "whsec_wrong", "outflow_event", outflow("evt_6", "wallet.outflow.confirmed", "w_acme", "o_other")); st != 401 {
 		t.Errorf("forged delivery: %d", st)
 	}
-	if s := w.Status(t, acmeLater); s != "running" {
+	if s := w.Status(t, acmeLater); s != "waiting" {
 		t.Errorf("acme's run woken by a forged event: %s", s)
 	}
 
