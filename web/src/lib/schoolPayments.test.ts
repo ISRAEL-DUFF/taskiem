@@ -103,6 +103,10 @@ describe("words", () => {
     expect(kindWords("cash_match")).toBe("Money entered by hand, matched to an invoice");
     expect(requestDetails(req)[0]).toContain("INV-0101");
   });
+  it("says a line taken out is what waits", () => {
+    const req: Posting = { ...posting, kind: "discount_amendment", status: "pending", invoice_number: "INV-0101", details: { amendment: { kind: "remove", line: 0 }, reason: "Left the bus" } };
+    expect(requestDetails(req)[0]).toBe("A line taken out of invoice INV-0101: Left the bus");
+  });
 });
 
 describe("receipts", () => {

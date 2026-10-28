@@ -251,6 +251,24 @@ func (s *Schools) PostPayment(ctx context.Context, tenant uuid.UUID, in PostingI
 			return err
 		}
 		pending = threshold != nil && in.AmountKobo >= *threshold
+		if threshold != nil && !pending {
+			// With what desk and entered money already counts towards the
+			// student's open invoices without a second person: postings
+			// split under the threshold add up (docs/schools.md#the-second-person).
+			open, err := s.Invoices.OpenInvoicesOf(ctx, tx, tenant, "key:"+StudentKey(st.ID))
+			if err != nil {
+				return err
+			}
+			ids := make([]uuid.UUID, 0, len(open))
+			for _, x := range open {
+				ids = append(ids, x.ID)
+			}
+			prior, err := matching.EnteredUnapproved(ctx, tx, tenant, ids)
+			if err != nil {
+				return err
+			}
+			pending = prior+in.AmountKobo >= *threshold
+		}
 		status := StatePosted
 		if pending {
 			status = StatePending
@@ -382,23 +400,36 @@ func (s *Schools) requestDiscount(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return &ApprovalNeeded{Request: p}
 }
 
-// RequestDiscountAmendment looks at a discount amendment on a sent
-// invoice: under the school's threshold it returns nil and the caller
-// amends the invoice; at or above it, it records the amendment as a
-// request for a second person and returns ApprovalNeeded.
+// RequestDiscountAmendment looks at an amendment on a sent invoice that
+// lowers its total (a discount, or a line taken out, which is a discount
+// of the line's amount): under the school's discount threshold it returns
+// nil and the caller amends the invoice; at or above it, it records the
+// amendment as a request for a second person and returns ApprovalNeeded.
+// What is weighed is the reduction with those the invoice took already
+// without a second person (ReducedUnapproved): amendments split under the
+// threshold add up. An amendment that adds to the total returns nil.
 func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, in invoicing.AmendmentIn, by string) error {
-	if in.Kind != invoicing.AmendDiscount || s.Invoices == nil {
+	if s.Invoices == nil {
 		return nil
 	}
 	limit, err := DiscountThreshold(ctx, tx, tenant)
-	if err != nil || limit <= 0 || in.AmountKobo < limit {
+	if err != nil || limit <= 0 {
 		return err
 	}
 	x, err := s.Invoices.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
 		return err
 	}
-	if _, err := in.Plan(x); err != nil {
+	l, err := in.Plan(x)
+	if err != nil {
+		return err
+	}
+	reduction := -l.AmountKobo()
+	if reduction <= 0 {
+		return nil
+	}
+	prior, err := ReducedUnapproved(ctx, tx, tenant, x.ID)
+	if err != nil || prior+reduction < limit {
 		return err
 	}
 	var student *uuid.UUID
@@ -411,7 +442,7 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 	raw, _ := json.Marshal(in)
 	var am map[string]any
 	_ = json.Unmarshal(raw, &am)
-	id, err := s.request(ctx, tx, tenant, KindDiscountAmendment, StatePending, student, &x.ID, nil, in.AmountKobo, map[string]any{"amendment": am, "reason": in.Reason}, "", by)
+	id, err := s.request(ctx, tx, tenant, KindDiscountAmendment, StatePending, student, &x.ID, nil, reduction, map[string]any{"amendment": am, "reason": in.Reason}, "", by)
 	if err != nil {
 		return err
 	}
@@ -420,6 +451,17 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 		return err
 	}
 	return &ApprovalNeeded{Request: p}
+}
+
+// ReducedUnapproved is what amendments took off an invoice (discounts and
+// lines taken out) without a second person approving them.
+func ReducedUnapproved(ctx context.Context, tx pgx.Tx, tenant, invoice uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(-sum(a.amount_kobo), 0)::bigint FROM customer_invoice_amendments a
+		WHERE a.tenant_id = $1 AND a.invoice_id = $2 AND a.amount_kobo < 0
+		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = a.tenant_id AND r.kind = $3 AND r.status = 'posted'
+		                  AND r.result->>'amendment_id' = a.id::text)`, tenant, invoice, KindDiscountAmendment).Scan(&n)
+	return n, err
 }
 
 // requestTermInvoices records each student a term's plan held for a

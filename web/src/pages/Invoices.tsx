@@ -1319,9 +1319,13 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
             if (problem) return;
             void act.run(async () => {
               const out = await plainly(post<Record<string, unknown>>(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
-              // A school's discount at or above its threshold is recorded
-              // for a second person (202), not made yet.
-              setWaiting(out.code === "needs_approval" ? "This discount is at or above the school's threshold: it is recorded and waits for a second person to approve it before it changes the invoice." : "");
+              // A school's discount or line taken out at or above its
+              // threshold is recorded for a second person (202), not made yet.
+              setWaiting(
+                out.code === "needs_approval"
+                  ? `${f.kind === "remove" ? "Taking this line out" : "This discount"} lowers the invoice by as much as the school's threshold or more, with what it was lowered by before: it is recorded and waits for a second person to approve it before it changes the invoice.`
+                  : "",
+              );
               setF(emptyAmendment());
               setTried(false);
               setOpen(false);

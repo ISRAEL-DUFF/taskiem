@@ -60,6 +60,22 @@ func CashLimit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, source string) 
 	return limit, err
 }
 
+// EnteredUnapproved is what money a person entered (cash, a statement
+// line, cash posted at a school's desk) counts towards the invoices
+// without a second person having approved it: what a school's cash
+// threshold weighs a further such payment with, per invoice, so that
+// splitting the money does not pass under it.
+func EnteredUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, invoices []uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(p.amount_kobo), 0)::bigint FROM customer_invoice_payments p JOIN money_entries e ON e.id = p.entry_id
+		WHERE p.tenant_id = $1 AND p.invoice_id = ANY ($2) AND p.undoes IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
+		  AND e.source IN ('entered', 'upload')
+		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = p.tenant_id AND r.status = 'posted' AND r.decided_by IS NOT NULL
+		                  AND COALESCE(r.result->>'entry_id', r.details->>'entry_id') = e.id::text)`, tenant, invoices).Scan(&n)
+	return n, err
+}
+
 // heldRequest is what a held match asks for, as its request's details
 // keep it.
 type heldRequest struct {
@@ -81,23 +97,35 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 	if err != nil || limit == nil {
 		return nil, err
 	}
+	// Held when the money is at or above the threshold, or when a part
+	// with what money a person entered already counts towards its
+	// invoice without a second person is: two entries under it, matched
+	// to one invoice, are not let through.
 	var invoice *uuid.UUID
 	var towards int64
+	over := amount >= *limit
 	for _, p := range parts {
 		if p.Invoice == "" {
 			continue
 		}
 		towards += p.AmountKobo
+		x, err := m.Invoices.Get(ctx, tx, tenant, p.Invoice)
+		if err != nil {
+			return nil, err
+		}
 		if invoice == nil {
-			x, err := m.Invoices.Get(ctx, tx, tenant, p.Invoice)
-			if err != nil {
-				return nil, err
-			}
 			id := x.ID
 			invoice = &id
 		}
+		if !over {
+			prior, err := EnteredUnapproved(ctx, tx, tenant, []uuid.UUID{x.ID})
+			if err != nil {
+				return nil, err
+			}
+			over = prior+p.AmountKobo >= *limit
+		}
 	}
-	if invoice == nil || amount < *limit {
+	if invoice == nil || !over {
 		return nil, nil
 	}
 	if c.how == "suggested_auto" {

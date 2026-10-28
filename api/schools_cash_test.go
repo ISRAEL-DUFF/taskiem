@@ -187,6 +187,13 @@ func TestSchoolCashApprovalsAndReceipts(t *testing.T) {
 	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); len(x["amendments"].([]any)) != 1 || x["total_kobo"] != float64(8_000_000) {
 		t.Fatalf("amended %v", x)
 	}
+	// A line taken out lowers the invoice as a discount does: it waits too.
+	admin.must(201, "POST", "/v1/invoices/"+inv["number"].(string)+"/amendments", map[string]any{"kind": "add", "description": "School bus", "amount_kobo": 3_000_000, "reason": "Took the bus"})
+	code, out = admin.do("POST", "/v1/invoices/"+inv["number"].(string)+"/amendments", map[string]any{"kind": "remove", "line": 2, "reason": "Never took the bus"})
+	if code != 202 || out["request"].(map[string]any)["kind"] != "discount_amendment" || out["request"].(map[string]any)["amount_kobo"] != float64(3_000_000) {
+		t.Fatalf("removal at the threshold: %d %v", code, out)
+	}
+	second.must(200, "POST", "/v1/schools/approvals/"+out["request"].(map[string]any)["id"].(string), map[string]any{"decision": "declined", "reason": "The bus log has them"})
 
 	// Cash entered on Money and matched by hand at the threshold waits the
 	// same way: 202, nothing on the fees.

@@ -556,3 +556,102 @@ func TestEnteredMoneyMatchedByHandNeedsASecondPerson(t *testing.T) {
 		t.Fatalf("held money reached the fees: %+v", x)
 	}
 }
+
+// A line taken out lowers the invoice as a discount does, and waits for a
+// second person the same way, by the line's amount. Reductions of one
+// invoice add up: amendments split under the threshold are weighed with
+// those the invoice took already without a second person.
+func TestRemovalsAndSplitReductionsNeedASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	tn := w.env.Tenant
+	w.in(func(tx pgx.Tx) error {
+		_, err := schools.SetDiscountThreshold(ctx, tx, tn, 2_000_000, "user:owner")
+		return err
+	})
+	line := 0
+	amend := func(in invoicing.AmendmentIn) *schools.ApprovalNeeded {
+		t.Helper()
+		var needs *schools.ApprovalNeeded
+		err := w.try(func(tx pgx.Tx) error {
+			err := w.s.RequestDiscountAmendment(ctx, tx, tn, w.invA.Number, in, "user:ada")
+			if errors.As(err, &needs) {
+				return nil // the request commits
+			}
+			if err != nil {
+				return err
+			}
+			_, err = w.s.Invoices.Amend(ctx, tx, tn, w.invA.Number, in, "user:ada")
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return needs
+	}
+	// Taking out the ₦100,000 tuition line: a request for its amount.
+	needs := amend(invoicing.AmendmentIn{Kind: invoicing.AmendRemove, Line: &line, Reason: "Scholarship"})
+	if needs == nil || needs.Request.Kind != schools.KindDiscountAmendment || needs.Request.AmountKobo != 10_000_000 {
+		t.Fatalf("removal: %+v", needs)
+	}
+	if x := w.invoiceOf(w.invA.ID); x.TotalKobo != 11_800_000 {
+		t.Fatalf("removed before approval: %d", x.TotalKobo)
+	}
+	// ₦15,000 then ₦6,000: the second brings the invoice's reductions to
+	// the threshold.
+	if n := amend(invoicing.AmendmentIn{Kind: invoicing.AmendDiscount, AmountKobo: 1_500_000, Reason: "Sibling"}); n != nil {
+		t.Fatalf("under the threshold: %+v", n.Request)
+	}
+	split := amend(invoicing.AmendmentIn{Kind: invoicing.AmendDiscount, AmountKobo: 600_000, Reason: "Sibling, again"})
+	if split == nil || split.Request.AmountKobo != 600_000 {
+		t.Fatal("a reduction split under the threshold was not held")
+	}
+	// An added line lowers nothing.
+	if n := amend(invoicing.AmendmentIn{Kind: invoicing.AmendAdd, Description: "Lost textbook", AmountKobo: 300_000, Reason: "Lost it"}); n != nil {
+		t.Fatalf("an added line: %+v", n.Request)
+	}
+	// Approved reductions are the second person's: not weighed again.
+	if _, err := w.decide(split.Request.ID, true, "", "user:bola"); err != nil {
+		t.Fatal(err)
+	}
+	if n := amend(invoicing.AmendmentIn{Kind: invoicing.AmendDiscount, AmountKobo: 400_000, Reason: "Small"}); n != nil {
+		t.Fatalf("after approval: %+v", n.Request)
+	}
+	if _, err := w.decide(needs.Request.ID, false, "No scholarship this term", "user:bola"); err != nil {
+		t.Fatal(err)
+	}
+	if x := w.invoiceOf(w.invA.ID); x.TotalKobo != 11_800_000-1_500_000-600_000+300_000-400_000 {
+		t.Fatalf("amended %d", x.TotalKobo)
+	}
+}
+
+// Cash split under the threshold adds up per invoice: entered money
+// matched twice to one invoice, and desk postings for one student.
+func TestSplitCashNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	tn := w.env.Tenant
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	log := &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
+	m := &matching.Matcher{Invoices: w.s.Invoices, PII: w.env.Vault}
+	match := func(kobo int64) error {
+		t.Helper()
+		id, _, err := log.Enter(ctx, tn, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: kobo, Description: "School fees"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = m.Match(ctx, tn, id, w.invA.Number, "user:ada")
+		return err
+	}
+	if err := match(3_000_000); err != nil {
+		t.Fatalf("the first part: %v", err)
+	}
+	if err := match(3_000_000); !errors.Is(err, matching.ErrHeld) {
+		t.Fatalf("the second part: %v", err)
+	}
+	if p, err := w.post("GCA/002", 3_000_000, "cash", "user:ada"); err != nil || p.Status != schools.StatePosted {
+		t.Fatalf("the first posting: %v %+v", err, p)
+	}
+	if _, err := w.post("GCA/002", 3_000_000, "cash", "user:ada"); !errors.Is(err, schools.ErrNeedsApproval) {
+		t.Fatalf("the second posting: %v", err)
+	}
+}

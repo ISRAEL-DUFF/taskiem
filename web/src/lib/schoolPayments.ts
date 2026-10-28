@@ -199,9 +199,11 @@ export function requestDetails(p: Posting): string[] {
       out.push(`A ${kind} discount, ${as}: ${String(d.reason ?? "")}`);
       break;
     }
-    case "discount_amendment":
-      out.push(`A discount on invoice ${p.invoice_number ?? ""}: ${String(d.reason ?? "")}`);
+    case "discount_amendment": {
+      const removal = (d.amendment as { kind?: string } | undefined)?.kind === "remove";
+      out.push(`${removal ? "A line taken out of" : "A discount on"} invoice ${p.invoice_number ?? ""}: ${String(d.reason ?? "")}`);
       break;
+    }
     case "term_invoice":
       out.push(`The student's term invoice carries a discount at or above the school's threshold${d.send ? "; it is sent on approval" : "; it is kept as a draft on approval"}.`);
       break;
