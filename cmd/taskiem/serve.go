@@ -207,7 +207,11 @@ type KeysConfig struct {
 }
 
 func keysConfig() (KeysConfig, error) {
-	k := KeysConfig{CacheTTL: 5 * time.Minute, CheckInterval: time.Minute, DestroyAfter: 24 * time.Hour, AllowPrivate: envBool("TASKIEM_BYOK_ALLOW_PRIVATE", false)}
+	allowPrivate, err := envBool("TASKIEM_BYOK_ALLOW_PRIVATE", false)
+	if err != nil {
+		return KeysConfig{}, err
+	}
+	k := KeysConfig{CacheTTL: 5 * time.Minute, CheckInterval: time.Minute, DestroyAfter: 24 * time.Hour, AllowPrivate: allowPrivate}
 	for _, d := range []struct {
 		name     string
 		into     *time.Duration
@@ -298,16 +302,54 @@ func env(k, def string) string {
 	return def
 }
 
-func envBool(k string, def bool) bool {
-	v, ok := os.LookupEnv(k)
-	if !ok {
-		return def
+// envBool reads a boolean setting: true, false, 1, 0, yes, no, on or off,
+// in any case (and Go's t and f); unset or empty is def. Anything else is
+// an error naming the variable, so that a typo stops the process at start
+// instead of quietly turning a setting off (TASKIEM_SECURE_COOKIES=yes
+// once meant insecure cookies).
+func envBool(k string, def bool) (bool, error) {
+	v := strings.TrimSpace(os.Getenv(k))
+	switch strings.ToLower(v) {
+	case "":
+		return def, nil
+	case "true", "t", "1", "yes", "on":
+		return true, nil
+	case "false", "f", "0", "no", "off":
+		return false, nil
 	}
-	b, err := strconv.ParseBool(v)
-	return err == nil && b
+	return def, fmt.Errorf("%s must be true or false (1/0, yes/no, on/off), not %q", k, v)
+}
+
+// envBools returns a reader of boolean settings that keeps their errors in
+// *errs, for reading several in a struct literal; errors.Join(*errs...)
+// is nil when all of them parsed.
+func envBools(errs *[]error) func(k string, def bool) bool {
+	return func(k string, def bool) bool {
+		b, err := envBool(k, def)
+		if err != nil {
+			*errs = append(*errs, err)
+		}
+		return b
+	}
+}
+
+// envPositive reads a positive whole-number setting; unset or empty is
+// def, anything else an error naming the variable.
+func envPositive(k string, def int) (int, error) {
+	v := strings.TrimSpace(os.Getenv(k))
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return def, fmt.Errorf("%s must be a whole number above 0, not %q", k, v)
+	}
+	return n, nil
 }
 
 func loadConfig() (config, error) {
+	var bad []error
+	flag := envBools(&bad)
 	c := config{
 		DSN:           os.Getenv("TASKIEM_DATABASE_URL"),
 		DBRole:        env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
@@ -316,7 +358,7 @@ func loadConfig() (config, error) {
 		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
 		KMS:           env("TASKIEM_KMS", "local"),
 		LocalKey:      os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
-		AllowLocalKMS: envBool("TASKIEM_ALLOW_LOCAL_KMS", false),
+		AllowLocalKMS: flag("TASKIEM_ALLOW_LOCAL_KMS", false),
 		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
@@ -328,9 +370,9 @@ func loadConfig() (config, error) {
 		SMTPURL:       os.Getenv("TASKIEM_SMTP_URL"),
 		AlertFrom:     os.Getenv("TASKIEM_ALERT_FROM"),
 		WebDir:        os.Getenv("TASKIEM_WEB_DIR"),
-		SecureCookies: envBool("TASKIEM_SECURE_COOKIES", true),
-		TrustProxy:    envBool("TASKIEM_TRUST_PROXY", false),
-		Signup:        envBool("TASKIEM_ALLOW_SIGNUP", false),
+		SecureCookies: flag("TASKIEM_SECURE_COOKIES", true),
+		TrustProxy:    flag("TASKIEM_TRUST_PROXY", false),
+		Signup:        flag("TASKIEM_ALLOW_SIGNUP", false),
 		Queues:        strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
 		Connectors: builtin.Options{
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
@@ -394,9 +436,16 @@ func loadConfig() (config, error) {
 	if c.HooksURL == "" && c.PublicURL != "" {
 		c.HooksURL = c.PublicURL + "/hooks"
 	}
-	c.RequireAdminPasskeys = envBool("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
-	if n, err := strconv.Atoi(os.Getenv("TASKIEM_LOGIN_BURST")); err == nil && n > 0 {
-		c.LoginBurst = n
+	c.RequireAdminPasskeys = flag("TASKIEM_REQUIRE_ADMIN_PASSKEYS", c.PublicURL != "")
+	// Read here so a bad value stops every role, not only the one serving
+	// the profiler.
+	flag("TASKIEM_PPROF", false)
+	if err := errors.Join(bad...); err != nil {
+		return c, err
+	}
+	var err error
+	if c.LoginBurst, err = envPositive("TASKIEM_LOGIN_BURST", 0); err != nil {
+		return c, err
 	}
 	if v := os.Getenv("TASKIEM_SIGNUP_PER_ADDRESS"); v != "" {
 		n, err := strconv.Atoi(v)
@@ -411,8 +460,14 @@ func loadConfig() (config, error) {
 		}
 	}
 	c.DocsURL = strings.TrimRight(os.Getenv("TASKIEM_DOCS_URL"), "/")
-	if n, err := strconv.Atoi(os.Getenv("TASKIEM_DATABASE_POOL")); err == nil && n > 0 {
-		c.PoolSize = int32(n) //nolint:gosec // small operator-set value
+	pool, err := envPositive("TASKIEM_DATABASE_POOL", int(c.PoolSize))
+	if err != nil {
+		return c, err
+	}
+	c.PoolSize = int32(min(pool, 10000)) //nolint:gosec // bounded
+	// A bad anchor key used to be logged and anchoring left off.
+	if _, err := c.anchorSigner(); err != nil {
+		return c, err
 	}
 	limits, err := runtime.LimitsFromEnv(os.LookupEnv)
 	if err != nil {
@@ -967,19 +1022,7 @@ func serve(ctx context.Context, args []string) error {
 	is := func(r string) bool { return *role == r || *role == "all" }
 	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
-	ready := func(w http.ResponseWriter, r *http.Request) {
-		if draining.Load() {
-			http.Error(w, "draining", http.StatusServiceUnavailable)
-			return
-		}
-		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := e.pool.Ping(pctx); err != nil {
-			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	}
+	ready := readiness(draining, e.pool)
 	alerter, err := cfg.alerter(e, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -1006,7 +1049,7 @@ func serve(ctx context.Context, args []string) error {
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
 			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
 			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}, ReceivePayoutFeeKobo: cfg.ISWallet.PayoutFeeKobo}
-		if signer := cfg.anchorSigner(nil); signer != nil {
+		if signer, _ := cfg.anchorSigner(); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}
 		rp, err := cfg.relyingParty()
@@ -1134,19 +1177,19 @@ func serve(ctx context.Context, args []string) error {
 	var pub *publicweb.Server
 	if *role == "all" && cfg.Public.Enabled {
 		var task func(context.Context) error
-		var closePool func()
-		if pub, task, closePool, err = publicTask(ctx, cfg, log); err != nil {
+		var pubPool *pgxpool.Pool
+		if pub, task, pubPool, err = publicTask(ctx, cfg, log); err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
-		defer closePool()
+		defer pubPool.Close()
 		tasks = append(tasks, task)
 	}
 	if *role == "all" && cfg.Mail.Enabled {
-		task, closePool, err := mailTask(ctx, cfg, log)
+		task, mailPool, err := mailTask(ctx, cfg, log)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
-		defer closePool()
+		defer mailPool.Close()
 		tasks = append(tasks, task)
 	}
 	if is("scheduler") {
@@ -1212,7 +1255,7 @@ func serve(ctx context.Context, args []string) error {
 			tasks = append(tasks, func(ctx context.Context) error { return p.Run(ctx, cfg.Canary.Interval) })
 			log.Info("canary on", "interval", cfg.Canary.Interval.String())
 		}
-		if signer := cfg.anchorSigner(log); signer != nil && cfg.AnchorDir != "" {
+		if signer, _ := cfg.anchorSigner(); signer != nil && cfg.AnchorDir != "" {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)
 		} else {
@@ -1288,6 +1331,25 @@ func serve(ctx context.Context, args []string) error {
 // process keeps serving for the shutdown delay so load balancers stop
 // routing to it, and only then does runCtx end, stopping servers and
 // letting workers drain.
+// readiness answers /readyz: 503 while draining or while the database
+// does not answer a ping within 2 seconds, so load balancers stop sending
+// requests that could only fail.
+func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if draining.Load() {
+			http.Error(w, "draining", http.StatusServiceUnavailable)
+			return
+		}
+		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := pool.Ping(pctx); err != nil {
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}
+}
+
 func drainOnShutdown(ctx context.Context, cfg config, log *slog.Logger) (context.Context, context.CancelFunc, *atomic.Bool) {
 	draining := new(atomic.Bool)
 	telemetry.Draining.Set(0)
@@ -1377,8 +1439,6 @@ func redactAttr(_ []string, a slog.Attr) slog.Attr {
 	return a
 }
 
-// anchorSigner is the audit anchoring key, from TASKIEM_ANCHOR_KEY (a
-// base64 32-byte Ed25519 seed); nil when unset or invalid.
 // alerter delivers alerts; email needs TASKIEM_SMTP_URL and
 // TASKIEM_ALERT_FROM.
 func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
@@ -1413,21 +1473,21 @@ func (c config) alerter(e *engine, log *slog.Logger) (*alerts.Alerter, error) {
 	return a, nil
 }
 
-func (c config) anchorSigner(log *slog.Logger) *audit.Signer {
+// anchorSigner is the audit anchoring key, from TASKIEM_ANCHOR_KEY (a
+// base64 32-byte Ed25519 seed); nil when unset. loadConfig refuses an
+// invalid one.
+func (c config) anchorSigner() (*audit.Signer, error) {
 	if c.AnchorKey == "" {
-		return nil
+		return nil, nil
 	}
 	seed, err := base64.StdEncoding.DecodeString(c.AnchorKey)
 	if err == nil {
 		var s *audit.Signer
 		if s, err = audit.NewSigner(seed); err == nil {
-			return s
+			return s, nil
 		}
 	}
-	if log != nil {
-		log.Error("TASKIEM_ANCHOR_KEY must be 32 bytes, base64 (openssl rand -base64 32)", "err", err)
-	}
-	return nil
+	return nil, fmt.Errorf("TASKIEM_ANCHOR_KEY must be 32 bytes, base64 (openssl rand -base64 32): %w", err)
 }
 
 // oauthClients reads Taskiem's registrations with the providers whose

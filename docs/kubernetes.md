@@ -24,7 +24,7 @@ Every role also serves Prometheus metrics on 9090. `mode: all` runs every role i
 
 Alongside the Deployments the chart creates:
 
-- a Service per role;
+- a Service per role, of type `service.type` for `api`, `edge` and `all`, and for those three a `<release>-<role>-metrics` Service, always ClusterIP, for the metrics port (which also serves the profiler when `TASKIEM_PPROF` is on), so a LoadBalancer never exposes it;
 - an Ingress, if enabled, that sends `/hooks/`, `/git-hooks/` and `/channels/` to the edge role and everything else to the API;
 - a migration Job (a Helm pre-install and pre-upgrade hook);
 - a PersistentVolumeClaim for the scheduler;
@@ -33,12 +33,14 @@ Alongside the Deployments the chart creates:
 
 ## Install
 
-1. **Create the database and the Secret.** The chart never holds secrets. Put them in a Secret whose keys are environment variables:
+1. **Create the database and the Secrets.** The chart never holds secrets. Put them in two Secrets whose keys are environment variables: `taskiem-migrate`, read only by the migration Job, with the schema owner's login, and `taskiem`, given to every pod, with a login of the pods' own ([database logins](#database-logins)):
 
    ```sh
    kubectl create namespace taskiem
+   kubectl -n taskiem create secret generic taskiem-migrate \
+     --from-literal=TASKIEM_DATABASE_URL='postgres://taskiem:OWNER_PASSWORD@db.internal:5432/taskiem?sslmode=verify-full'
    kubectl -n taskiem create secret generic taskiem \
-     --from-literal=TASKIEM_DATABASE_URL='postgres://taskiem@db.internal:5432/taskiem?sslmode=verify-full' \
+     --from-literal=TASKIEM_DATABASE_URL='postgres://taskiem_login:APP_PASSWORD@db.internal:5432/taskiem?sslmode=verify-full' \
      --from-file=TASKIEM_OPENBAO_TOKEN=./openbao-token \
      --from-file=TASKIEM_ANCHOR_KEY=./anchor-key
    ```
@@ -48,7 +50,7 @@ Alongside the Deployments the chart creates:
    - `TASKIEM_LOCAL_KMS_KEY`, only with `TASKIEM_KMS=local`, which is not for production;
    - `TASKIEM_SMTP_URL`, for email alerts.
 
-   The database user must own the schema, because migrations run as it. Pods switch to `taskiem_app` on every connection, and row-level security applies to that role (`TASKIEM_DATABASE_ROLE`; see [operations.md](operations.md)).
+   The migration Secret's user owns the schema, because migrations run as it, and needs `CREATEROLE`. The pods' user must be a different one: the migration Job creates it (or updates its password) and makes it a member of `taskiem_app`, and nothing more. Pods switch to `taskiem_app` on every connection, and row-level security applies to that role (`TASKIEM_DATABASE_ROLE`; see [operations.md](operations.md)).
 
 2. **Write your values.** At minimum:
 
@@ -73,7 +75,7 @@ Alongside the Deployments the chart creates:
    helm install taskiem deploy/helm/taskiem -n taskiem -f values.yaml
    ```
 
-   The migration Job runs first. If it fails, the install stops and the old pods keep running. The schema only moves forward, and each release works with the schema of the release before it, so upgrades follow the same path: `helm upgrade` with the new tag.
+   The migration Job runs first. If it fails, the install stops and the old pods keep running. A migration that waits more than 10 seconds for a lock (a long transaction on the table it changes) fails rather than blocking the live pods' queries behind it, and the Job tries again. `migrations.lockTimeout` sets the wait. The schema only moves forward, and each release works with the schema of the release before it, so upgrades follow the same path: `helm upgrade` with the new tag.
 
 4. **Create the first tenant (once).** Add a `TASKIEM_BOOTSTRAP_PASSWORD` key (12 or more characters) to the Secret and restart the API pods. Then run:
 
@@ -83,9 +85,22 @@ Alongside the Deployments the chart creates:
 
    Remove the key afterwards. The image is distroless, so `exec` can only run `taskiem`; there is no shell.
 
-With the plain manifests the steps are the same, except that you run `taskiem migrate` yourself first. The Job's hook annotations mean nothing to `kubectl apply`, so the Job runs as soon as it is applied, and Kubernetes will not update the finished Job in place. Delete it before applying a new version.
+With the plain manifests the steps are the same, except that you run `taskiem migrate` yourself first, as the owner, with `TASKIEM_APP_DATABASE_URL` set to the pods' URL. The Job's hook annotations mean nothing to `kubectl apply`, so the Job runs as soon as it is applied, and Kubernetes will not update the finished Job in place. Delete it before applying a new version.
 
 **Partners' custom domains.** A partner can serve the embedded builder on its own host name once it has verified the domain through the partner API ([embedding](embedding.md#10-custom-domains)). Each such host needs a certificate at the ingress: list it under `ingress.embedHosts` (with `ingress.embedAnnotations` naming your cert-manager issuer, or a `secretName` holding a certificate you manage). The chart adds a `<release>-embed` Ingress that sends only `/embed/` and `/v1/embed/` on those hosts to the API; the application issues no certificates.
+
+## Database logins
+
+Taskiem uses two Postgres logins, as the [VM kit](vm.md) does:
+
+| Login | Secret | Who has it | Can |
+| --- | --- | --- | --- |
+| The schema owner | `migrations.existingSecret` (`taskiem-migrate`), key `TASKIEM_DATABASE_URL` | The migration Job only | Everything: it owns every table, so it is not held to row-level security and could change the append-only audit tables |
+| The pods' login | `existingSecret` (`taskiem`), key `TASKIEM_DATABASE_URL` | Every pod | Only what `taskiem_app` can; it owns nothing, so even after `RESET ROLE` row-level security still applies |
+
+The migration Job reads the pods' URL as `TASKIEM_APP_DATABASE_URL`. After migrating it creates that user if it does not exist, sets its password to the one in the URL, and grants it `taskiem_app` (`taskiem migrate`, run with both variables, does the same anywhere). To rotate the pods' password, change it in the `taskiem` Secret and upgrade. The Job refuses a pods' login that is the owner, a superuser, one that owns tables, or one named after Taskiem's own roles (`taskiem_app`, `taskiem_dispatch`, `taskiem_public`). The owner needs `CREATEROLE` for this, as in the VM kit; on a managed database, the user the provider creates for you usually has it.
+
+**Upgrading a release whose pods used the owner's login.** Before `helm upgrade`, move the owner's URL to a new `taskiem-migrate` Secret, and change `TASKIEM_DATABASE_URL` in the `taskiem` Secret to a new login's URL. The upgrade's migration Job creates that login, and the new pods sign in with it. Until the `taskiem-migrate` Secret exists, the Job cannot start and the upgrade waits.
 
 ## Security defaults
 
@@ -150,7 +165,7 @@ Install the pool first, then route tenants with `taskiem pools assign <name> --t
 
 The scheduler mounts the claim at `/var/lib/taskiem`:
 
-- `archive/` holds runs past retention, unless `TASKIEM_ARCHIVE_S3_BUCKET` sends them to a bucket ([operations](operations.md)). Use a bucket when the scheduler runs more than one replica or the volume is not backed up.
+- `archive/` holds runs past retention, unless `TASKIEM_ARCHIVE_S3_BUCKET` sends them to a bucket ([operations](operations.md)). Use a bucket when the volume is not backed up.
 - `anchors/` holds signed audit-chain heads.
 
 Anchors are only worth something as a copy outside the database. Use a storage class with write-once (object-lock) semantics where you can, and back the volume up.
@@ -162,6 +177,8 @@ If `storage.enabled` is false:
 - runs past retention are kept rather than purged;
 - audit heads are not anchored outside the database;
 - the scheduler logs a warning about both.
+
+**One scheduler, or a bucket and no volume.** The scheduler's database work is safe to run twice: timers, schedules and alerts are claimed with leases, `SKIP LOCKED` and conditional updates, and a run past retention is deleted once (two schedulers may both archive it, writing the same object twice). Its files are not. Each replica would archive to its own local directory and write its own anchors, and the default claim is `ReadWriteOnce` under a `Recreate` strategy, so a second replica on another node cannot mount it. The chart therefore refuses `roles.scheduler.replicas` above 1 unless the archive goes to a bucket (`config.TASKIEM_ARCHIVE_S3_BUCKET`, credentials in the Secret) and `storage.enabled` is false. Audit anchors are written only to a local directory, so that setup has no audit anchoring. There is no leader election: every replica also runs the canary.
 
 ## Dedicated single-tenant deployments
 

@@ -4,34 +4,59 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"embed"
 	"fmt"
+	"io/fs"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 )
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+// DefaultLockTimeout bounds how long each statement of a migration waits
+// for a lock (TASKIEM_MIGRATE_LOCK_TIMEOUT): a migration queued behind a
+// long transaction would otherwise block every query on that table, while
+// the old release's pods are live. It fails instead, and is retried.
+const DefaultLockTimeout = 10 * time.Second
+
 // Migrate applies all pending migrations. It must run as the schema owner.
 func Migrate(ctx context.Context, dsn string) ([]*goose.MigrationResult, error) {
+	return MigrateWith(ctx, dsn, DefaultLockTimeout)
+}
+
+// MigrateWith is Migrate with another lock timeout; 0 waits for ever.
+// Concurrent runs take turns, under goose's session-level advisory lock.
+func MigrateWith(ctx context.Context, dsn string, lockTimeout time.Duration) ([]*goose.MigrationResult, error) {
+	return migrate(ctx, dsn, lockTimeout, mustSub(migrations, "migrations"))
+}
+
+func migrate(ctx context.Context, dsn string, lockTimeout time.Duration, fsys fs.FS) ([]*goose.MigrationResult, error) {
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
+	if cfg.RuntimeParams == nil {
+		cfg.RuntimeParams = map[string]string{}
+	}
+	cfg.RuntimeParams["lock_timeout"] = strconv.FormatInt(lockTimeout.Milliseconds(), 10)
 	sqlDB := stdlib.OpenDB(*cfg)
 	defer func() { _ = sqlDB.Close() }()
-	return migrate(ctx, sqlDB)
-}
-
-func migrate(ctx context.Context, sqlDB *sql.DB) ([]*goose.MigrationResult, error) {
-	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	// Another run holding the lock is waited for, checking every second,
+	// for up to 5 minutes.
+	locker, err := lock.NewPostgresSessionLocker(lock.WithLockTimeout(1, 300))
+	if err != nil {
+		return nil, err
+	}
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, fsys, goose.WithSessionLocker(locker))
 	if err != nil {
 		return nil, err
 	}

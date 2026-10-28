@@ -155,6 +155,28 @@ spec:
     app.kubernetes.io/component: api
   ports:
     - { name: http, port: 80, targetPort: http }
+---
+# Source: taskiem/templates/service.yaml
+# Metrics (and the profiler, with TASKIEM_PPROF) on a Service of their own
+# that is always ClusterIP: service.type may make the one above public.
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-api-metrics
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: api
+  ports:
     - { name: metrics, port: 9090, targetPort: metrics }
 ---
 # Source: taskiem/templates/service.yaml
@@ -177,6 +199,28 @@ spec:
     app.kubernetes.io/component: edge
   ports:
     - { name: edge, port: 80, targetPort: edge }
+---
+# Source: taskiem/templates/service.yaml
+# Metrics (and the profiler, with TASKIEM_PPROF) on a Service of their own
+# that is always ClusterIP: service.type may make the one above public.
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskiem-edge-metrics
+  labels:
+    helm.sh/chart: taskiem-0.1.0
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: edge
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskiem
+    app.kubernetes.io/instance: taskiem
+    app.kubernetes.io/component: edge
+  ports:
     - { name: metrics, port: 9090, targetPort: metrics }
 ---
 # Source: taskiem/templates/service.yaml
@@ -785,14 +829,22 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
-          # The Secret is read directly: a pre-install hook runs before the
-          # chart's ConfigMap exists.
+          # The Secrets are read directly: a pre-install hook runs before
+          # the chart's ConfigMap exists. Only this Job holds the owner's
+          # login; it makes the pods' login a member of taskiem_app.
           env:
             - name: TASKIEM_DATABASE_URL
               valueFrom:
                 secretKeyRef:
+                  name: taskiem-migrate
+                  key: TASKIEM_DATABASE_URL
+            - name: TASKIEM_APP_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
                   name: taskiem
                   key: TASKIEM_DATABASE_URL
+            - name: TASKIEM_MIGRATE_LOCK_TIMEOUT
+              value: "10s"
           resources:
             limits:
               memory: 256Mi

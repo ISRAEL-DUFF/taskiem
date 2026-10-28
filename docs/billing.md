@@ -47,7 +47,7 @@ The tiers, cheapest first: `shop` (the storefront plans **Shop** and **Shop Plus
 | `whatsapp_template_kobo` | Meta's price per template beyond the allowance, by category (marketing, utility, authentication), passed through at cost |
 | `plans[].limits` | Any `tenant_limits` key, including `max_retention_days` (history kept at most this long after a run ends) |
 | `plans[].features` | `sso`, `scim`, `custom_roles`, `white_label`, `byok`, `git`, `ai`, `embedded`, `storefront_pay_on_order` (a storefront taking payment when customers order; every plan but Shop), `receive_money` (receiving money with Taskiem, [decision 0052](decisions/0052-taskiem-as-a-collection-rail.md); every plan for now, the founder's to set) |
-| `plans[].partner` | Embedded tiers: `subtenant_runs_per_day`, `subtenant_runs_per_month` (used when the operator set none with `taskiem tenants partner`), `max_subtenants` (a downgrade below the partner's count is refused) |
+| `plans[].partner` | Embedded tiers: `subtenant_runs_per_day`, `subtenant_runs_per_month` (used when the operator set none with `taskiem tenants partner`), `max_subtenants` (how many sub-tenants the partner may create when the operator set no cap with `taskiem tenants partner`; a downgrade below the partner's count is refused) |
 | `plans[].overage.ai_kobo_per_million_tokens` | Bill AI beyond the budget instead of refusing it (0: the budget is a hard cap) |
 | `plans[].public`, `active` | Offered self-serve; retired (subscribers keep it). A plan removed from the file is retired, never deleted |
 

@@ -348,7 +348,7 @@ No scheduler has finished a tick for 2 minutes. Timers, schedules, lease recover
 
 1. `kubectl get pods -l app.kubernetes.io/component=scheduler`: running? Crash-looping? Its volume (archives, anchors) mounted?
 2. Logs: `scheduler tick failed` every tick means the database or a migration problem; the error says which.
-3. Restart the scheduler pod. A second replica is safe if one is stuck.
+3. Restart the scheduler pod. Do not add a second replica with the chart's default volume: it cannot mount the `ReadWriteOnce` claim, and two schedulers may not share a local archive. A second scheduler needs the S3 archive and no volume ([Kubernetes](kubernetes.md#storage)).
 4. After recovery, overdue timers fire and lease recovery frees stuck tasks within a minute; nothing is lost.
 
 ### Runbook: TaskiemQueueBacklog
