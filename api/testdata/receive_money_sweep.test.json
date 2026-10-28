@@ -1,0 +1,166 @@
+{
+  "schema": "wd-test/v1",
+  "note": "Cases for the sweep made with: weekly on Friday at 17:00, keeping NGN 20,000, NGN 100 for the fee, to 058/0123456789 (receive_money_sweep_internal_test.go).",
+  "cases": [
+    {
+      "name": "the wallet's balance less what is kept and the fee's room goes to the bank, with no approval",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 15000000,
+            "currency": "NGN"
+          }
+        },
+        "check_name": {
+          "output": {
+            "account_name": "ADA CAKES LTD"
+          }
+        },
+        "sweep": {
+          "output": {
+            "payout_id": "po_1",
+            "status": "settled"
+          }
+        },
+        "tell_done": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "sweep": "completed",
+          "settle": "skipped",
+          "tell_done": "completed"
+        },
+        "inputs": {
+          "sweep": {
+            "amount_kobo": 12990000,
+            "bank_code": "058",
+            "account_number": "0123456789",
+            "account_name": "ADA CAKES LTD",
+            "narration": "Sent to my bank"
+          },
+          "tell_done": {
+            "message": "Sent NGN 129900 from your wallet to ADA CAKES LTD: paid"
+          }
+        }
+      }
+    },
+    {
+      "name": "a payout the bank confirms later is waited for and told",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 15000000,
+            "currency": "NGN"
+          }
+        },
+        "check_name": {
+          "output": {
+            "account_name": "ADA CAKES LTD"
+          }
+        },
+        "sweep": {
+          "output": {
+            "payout_id": "po_1",
+            "status": "pending"
+          }
+        },
+        "settle": {
+          "output": {
+            "status": "settled"
+          }
+        },
+        "tell_settled": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "settle": "completed",
+          "tell_done": "skipped",
+          "tell_settled": "completed"
+        },
+        "inputs": {
+          "tell_settled": {
+            "message": "Sent NGN 129900 from your wallet to ADA CAKES LTD: paid"
+          }
+        }
+      }
+    },
+    {
+      "name": "less than the smallest amount over what is kept: nothing is sent and nobody is told",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 2100000,
+            "currency": "NGN"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "check_name": "skipped",
+          "sweep": "skipped",
+          "tell_done": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a payout that fails tells the owner nothing left the wallet",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "balance": {
+          "output": {
+            "available_kobo": 15000000,
+            "currency": "NGN"
+          }
+        },
+        "check_name": {
+          "output": {
+            "account_name": "ADA CAKES LTD"
+          }
+        },
+        "sweep": {
+          "error": {
+            "kind": "fatal",
+            "message": "insufficient balance"
+          }
+        },
+        "tell_failed": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "steps": {
+          "tell_failed": "completed"
+        },
+        "inputs": {
+          "tell_failed": {
+            "message": "Sending NGN 129900 to your bank could not be paid; nothing left your wallet. It is tried again next time."
+          }
+        }
+      }
+    }
+  ]
+}

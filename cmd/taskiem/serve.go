@@ -680,6 +680,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// payments connection, its prod credentials.
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
+	wireOrderTransfers(e.invoices, e.orders)
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and
 	// one undone has it voided (B5).
@@ -768,12 +769,19 @@ func (e *engine) hooks() *ingest.Handler {
 type platformClient struct {
 	Keys           map[string]string
 	WebhookSecrets map[string]string
+	// PayoutFeeKobo is the room a sweep to the bank leaves for the
+	// payout's fee (TASKIEM_<NAME>_PAYOUT_FEE_KOBO; 0: the default).
+	PayoutFeeKobo int64
 }
 
 // platformClientFrom reads TASKIEM_<NAME>_CLIENT_KEY and _WEBHOOK_SECRET
-// (live) and TASKIEM_<NAME>_TEST_CLIENT_KEY and _TEST_WEBHOOK_SECRET.
+// (live), TASKIEM_<NAME>_TEST_CLIENT_KEY and _TEST_WEBHOOK_SECRET, and
+// TASKIEM_<NAME>_PAYOUT_FEE_KOBO.
 func platformClientFrom(name string) platformClient {
 	p := platformClient{Keys: map[string]string{}, WebhookSecrets: map[string]string{}}
+	if n, err := strconv.ParseInt(strings.TrimSpace(os.Getenv("TASKIEM_"+name+"_PAYOUT_FEE_KOBO")), 10, 64); err == nil && n >= 0 {
+		p.PayoutFeeKobo = n
+	}
 	for mode, infix := range map[string]string{"live": "", "test": "_TEST"} {
 		if k := strings.TrimSpace(os.Getenv("TASKIEM_" + name + infix + "_CLIENT_KEY")); k != "" {
 			p.Keys[mode] = k
@@ -957,7 +965,7 @@ func serve(ctx context.Context, args []string) error {
 		// would, so it reaches the same test fakes.
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
 			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
-			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}}
+			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}, ReceivePayoutFeeKobo: cfg.ISWallet.PayoutFeeKobo}
 		if signer := cfg.anchorSigner(nil); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}

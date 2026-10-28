@@ -253,8 +253,41 @@ func (s *Server) refundStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, storefront.ErrNoOrder):
 		err = pgx.ErrNoRows
-	case errors.Is(err, storefront.ErrDecision), errors.Is(err, storefront.ErrRefund):
+	case errors.Is(err, storefront.ErrDecision), errors.Is(err, storefront.ErrRefund), errors.Is(err, storefront.ErrRefundByHand):
 		err = fmt.Errorf("%w: %s", errConflict, plainError(err))
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	maskCustomer(&o.Customer)
+	writeJSON(w, http.StatusOK, map[string]any{"order": o})
+}
+
+// markStorefrontRefunded answers POST /v1/storefront/orders/{reference}/refunded:
+// the owner sent a refund_due order's money back themselves (one paid by
+// bank transfer, N3), so it is marked refunded and the customer told.
+func (s *Server) markStorefrontRefunded(w http.ResponseWriter, r *http.Request) {
+	if s.Orders == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	var req struct {
+		Note string `json:"note"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	o, err := s.Orders.MarkRefunded(r.Context(), p.TenantID, chi.URLParam(r, "reference"), p.Actor(), req.Note)
+	switch {
+	case errors.Is(err, storefront.ErrNoOrder):
+		err = pgx.ErrNoRows
+	case errors.Is(err, storefront.ErrDecision):
+		err = fmt.Errorf("%w: %s", errConflict, plainError(err))
+	case errors.Is(err, storefront.ErrInvalid):
+		err = fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	}
 	if err != nil {
 		s.fail(w, r, err)

@@ -87,7 +87,7 @@
           "from": "=steps.settings.output.from",
           "to": "=[trigger.body.customer.email]",
           "subject": "='Receipt for invoice ' + trigger.body.number",
-          "text": "='Dear ' + trigger.body.customer.name + ',\\n\\nThank you: we have received ' + trigger.body.amount + ' for invoice ' + trigger.body.number + ', which is now paid in full.\\n\\n' + steps.settings.output.business_name",
+          "text": "='Dear ' + trigger.body.customer.name + ',\\n\\nThank you: we have received ' + trigger.body.amount + ' for invoice ' + trigger.body.number + ', which is now paid in full.' + (has(trigger.body.fee) ? ' Of what you sent, the bank kept a fee of ' + trigger.body.fee + ' and ' + trigger.body.received + ' reached us.' : '') + '\\n\\n' + steps.settings.output.business_name",
           "tags": [
             {
               "name": "kind",

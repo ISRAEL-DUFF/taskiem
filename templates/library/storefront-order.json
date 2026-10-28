@@ -177,14 +177,14 @@
           "subject": {
             "order": "=trigger.body.reference",
             "total": "=trigger.body.total",
-            "action": "Approve to refund the customer now through Paystack; reject if you will refund them yourself"
+            "action": "Approve to refund the customer now (a card payment through Paystack; a bank transfer you send back from your bank and mark refunded); reject if you will refund them yourself"
           }
         }
       },
       {
         "id": "refund",
         "type": "connector",
-        "name": "Refund through Paystack",
+        "name": "Refund the customer",
         "connector": "storefront@1",
         "action": "refund",
         "needs": [

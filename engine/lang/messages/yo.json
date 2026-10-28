@@ -248,6 +248,10 @@
       "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
       "reviewed": false
     },
+    "invoice.receipt.fee_line": {
+      "text": "Ẹ fi {sent} ránṣẹ́; {received} ló dé ọ̀dọ̀ {business} lẹ́yìn owó báǹkì tí ó jẹ́ {fee}.",
+      "reviewed": false
+    },
     "lang.current": {
       "text": "Mò ń kọ̀wé sí yín ní {language}. Àwọn èdè tó wà níbí: {languages}. Ẹ fi *language* àti orúkọ kan ránṣẹ́ láti yí i padà.",
       "reviewed": false
@@ -664,6 +668,10 @@
       "text": "Dá {total} padà fún oníbàárà fún {ref}? Láti inú owó Paystack yín ni, yóò sì dé ọ̀dọ̀ wọn láàárín ọjọ́ iṣẹ́ 5 sí 10.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Ṣé kí a sàmì sí {ref} pé a ti dá owó padà? Kìkì tí ẹ bá ti fi {total} ránṣẹ́ padà sí oníbàárà. A ó sọ fún wọn.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Fèsì *yes* láti fi àyípadà náà pamọ́, tàbí *cancel*.",
       "reviewed": false
@@ -682,6 +690,10 @@
     },
     "wa.booking.list_week": {
       "text": "Àwọn ìfiṣúra ọjọ́ méje tó ń bọ̀:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "A ti sàmì sí {ref} pé a ti dá owó padà ({total}). A ti sọ fún oníbàárà.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -710,6 +722,10 @@
     },
     "wa.booking.off_done": {
       "text": "{day} jẹ́ ọjọ́ ìsinmi: a kò ní fún ẹnikẹ́ni ní àkókò.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "Wọ́n san {ref} nípa fífi owó ránṣẹ́ láti báǹkì, nítorí náà Taskiem kò lè dá a padà. Fi {total} ránṣẹ́ sí oníbàárà láti báǹkì yín, lẹ́yìn náà ẹ dáhùn *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {

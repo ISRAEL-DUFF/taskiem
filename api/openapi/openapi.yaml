@@ -5250,7 +5250,7 @@ paths:
       tags:
       - Storefront
       summary: Refund a paid order or booking that was declined or cancelled
-      description: In full, through the business's Paystack connection, from its balance; the customer is told. Refunding an order already refunded does nothing more. 409 when there is nothing to refund, or Paystack refused (the reason is kept on the order, which stays refund_due).
+      description: In full, through the business's Paystack connection, from its balance; the customer is told. Refunding an order already refunded does nothing more. 409 when there is nothing to refund, Paystack refused (the reason is kept on the order, which stays refund_due), or it was paid by bank transfer (paid_by transfer or other), which the owner sends back from their bank and marks refunded.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -5264,6 +5264,50 @@ paths:
         required: true
         schema:
           type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/refunded:
+    post:
+      operationId: markStorefrontOrderRefunded
+      tags:
+      - Storefront
+      summary: Mark a refund_due order refunded by hand
+      description: The owner sent the money back themselves (an order paid by bank transfer, or any they chose to refund outside Taskiem); the order becomes refunded and the customer is told. An order already refunded is reported as it is. 409 when nothing is due back.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note:
+                  type: string
+                  maxLength: 300
+                  description: How it was sent back, kept on the order
       responses:
         '200':
           description: The order
@@ -14784,6 +14828,58 @@ paths:
                 $ref: '#/components/schemas/ReceiveMoney'
         default:
           $ref: '#/components/responses/Error'
+  /v1/settings/receive-money/sweep:
+    put:
+      operationId: putReceiveMoneySweep
+      tags:
+      - Invoices
+      summary: Send what the wallet holds to the bank automatically
+      description: |
+        Owners only. Weekly on a day and at a time, or whenever the wallet holds more than an amount (checked hourly), keeping an
+        amount; the rest, less room for the bank's fee and at least NGN 1,000, goes to the bank account saved for withdrawals, with
+        no approval. It needs that account. Turning it off takes it out of prod at once; turning it on or changing it publishes the
+        sweep's workflow, which four-eyes publishing holds for a second person.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: ["off", weekly, above]
+                day:
+                  type: string
+                  enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                time:
+                  type: string
+                  description: HH:MM, Lagos time
+                above_kobo:
+                  type: integer
+                  format: int64
+                  description: For above, at least 100000 (NGN 1,000)
+                keep_kobo:
+                  type: integer
+                  format: int64
+                  minimum: 0
+      responses:
+        '200':
+          description: The setting now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiveMoney'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/receive-money/balance:
     get:
       operationId: getReceiveMoneyBalance
@@ -20629,6 +20725,45 @@ components:
         withdraw_waiting:
           type: string
           description: What a change to withdrawals still waits for (a second person under four-eyes, a promotion to a gated prod); the account and rule before stay in force until then.
+        sweep:
+          $ref: '#/components/schemas/ReceiveMoneySweep'
+    ReceiveMoneySweep:
+      type: object
+      description: |
+        Sending what the wallet holds to the saved bank account automatically: weekly, or whenever the wallet holds more than an
+        amount (checked hourly). No approval: the money only goes to the account written into the sweep's workflow, which changes
+        with the withdrawal one.
+      required: [mode, above_kobo, keep_kobo, fee_allowance_kobo, minimum_kobo]
+      properties:
+        mode:
+          type: string
+          enum: ["off", weekly, above]
+        day:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        time:
+          type: string
+          description: HH:MM, Lagos time
+        above_kobo:
+          type: integer
+          format: int64
+        keep_kobo:
+          type: integer
+          format: int64
+        fee_allowance_kobo:
+          type: integer
+          format: int64
+          description: What each sweep leaves for the bank's fee on the transfer
+        minimum_kobo:
+          type: integer
+          format: int64
+          description: The least one sweep sends
+        workflow_id:
+          type: string
+          format: uuid
+        waiting:
+          type: string
+          description: What a change to the sweep still waits for (a second person under four-eyes, a promotion to a gated prod).
     Withdrawal:
       type: object
       required: [run_id, workflow_id, request_id, created]
@@ -23286,6 +23421,9 @@ components:
         created_at:
           type: string
           format: date-time
+        fee_kobo:
+          type: integer
+          description: The rail's fee on the transfer this payment was, when the rail reported it and the payment took the whole transfer; the business received amount_kobo less it
     CustomerInvoice:
       type: object
       description: An invoice the business sends a customer. Status and paid_kobo come only from the payments counted towards it.
@@ -23932,6 +24070,10 @@ components:
           type: string
         paid_at:
           $ref: '#/components/schemas/NullableTimestamp'
+        paid_by:
+          type: string
+          enum: [card, transfer, other]
+          description: How it was paid, once paid - card (its Paystack page, refunded through Paystack), transfer (the account number given for it), other (money matched to it). Only a card payment is refunded through Paystack; the others are sent back by hand and marked refunded.
         run_id:
           type:
           - string

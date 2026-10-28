@@ -52,7 +52,7 @@
         "action": "notify_customer",
         "input": {
           "number": "=trigger.body.number",
-          "text": "Thank you: we have received your payment for invoice {number}. See it, marked paid: {link}",
+          "text": "Thank you: we have received your payment for invoice {number}.{fee_line} See it, marked paid: {link}",
           "subject": "=trigger.body.number + ' is paid: thank you'"
         },
         "effect": {

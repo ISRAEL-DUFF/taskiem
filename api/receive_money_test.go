@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/notify"
@@ -383,4 +386,89 @@ func TestReceiveMoneyRefusals(t *testing.T) {
 		t.Errorf("without the client: %v", st)
 	}
 	owner.must(409, "POST", "/v1/settings/receive-money", map[string]any{"business_email": "ada@obi.test", "bvn": "22212345678"})
+}
+
+// The sweep to the bank (N2): it needs the saved account, is published
+// with no approval on its schedule, follows a new account, stops at once
+// when turned off, and waits for a second person under four-eyes.
+func TestReceiveMoneySweeps(t *testing.T) {
+	w, _ := receiveWorld(t)
+	ctx := context.Background()
+	owner := w.tenant(t, "Ada Obi Stores", "ada@obi.test")
+	owner.must(201, "POST", "/v1/settings/receive-money", map[string]any{"business_email": "ada@obi.test", "bvn": "22212345678"})
+	weekly := map[string]any{"mode": "weekly", "day": "friday", "time": "17:00", "keep_kobo": 2000000}
+	owner.must(409, "PUT", "/v1/settings/receive-money/sweep", weekly)
+	owner.must(200, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0123456789"})
+	for _, bad := range []map[string]any{{"mode": "daily"}, {"mode": "weekly", "day": "friday"}, {"mode": "above", "above_kobo": 5000}} {
+		owner.must(400, "PUT", "/v1/settings/receive-money/sweep", bad)
+	}
+	dev := keyFor(t, owner, "dev", "run.start", "invoice.read")
+	dev.must(403, "PUT", "/v1/settings/receive-money/sweep", weekly)
+
+	st := owner.must(200, "PUT", "/v1/settings/receive-money/sweep", weekly)
+	sw, _ := st["sweep"].(map[string]any)
+	if sw == nil || sw["mode"] != "weekly" || sw["day"] != "friday" || sw["time"] != "17:00" || sw["keep_kobo"] != float64(2000000) ||
+		sw["fee_allowance_kobo"] != float64(10000) || sw["workflow_id"] == nil || sw["waiting"] != nil {
+		t.Fatalf("sweep: %v", st["sweep"])
+	}
+	wf := sw["workflow_id"].(string)
+	deployed := func() (string, string) {
+		t.Helper()
+		var def, cron string
+		err := w.env.DB.Admin.QueryRow(ctx, `SELECT v.definition::text, COALESCE((SELECT cron FROM triggers WHERE workflow_id = d.workflow_id AND environment = 'prod'), '')
+			FROM deployments d JOIN workflow_versions v ON v.workflow_id = d.workflow_id AND v.version = d.version WHERE d.workflow_id = $1 AND d.environment = 'prod'`, wf).Scan(&def, &cron)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ""
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		return def, cron
+	}
+	def, cron := deployed()
+	if cron != "0 17 * * 5" || !strings.Contains(def, `"0123456789"`) || strings.Contains(def, `"approval"`) || !strings.Contains(def, `"pay_bank"`) {
+		t.Errorf("the weekly sweep: %s %s", cron, def)
+	}
+	// Above an amount: the same workflow, hourly.
+	st = owner.must(200, "PUT", "/v1/settings/receive-money/sweep", map[string]any{"mode": "above", "above_kobo": 20000000})
+	if sw, _ := st["sweep"].(map[string]any); sw["workflow_id"] != wf || sw["above_kobo"] != float64(20000000) || sw["day"] != nil {
+		t.Errorf("above: %v", sw)
+	}
+	if _, cron := deployed(); !strings.HasSuffix(cron, " * * * *") {
+		t.Errorf("hourly: %q", cron)
+	}
+	// A new bank account goes into the sweep in the same change.
+	owner.must(200, "PUT", "/v1/settings/receive-money/withdrawals", map[string]any{"bank_code": "058", "account_number": "0123456780"})
+	if def, _ := deployed(); !strings.Contains(def, `"0123456780"`) || strings.Contains(def, `"0123456789"`) {
+		t.Errorf("the sweep kept the old account: %s", def)
+	}
+	// Off: out of prod at once; withdrawals untouched.
+	st = owner.must(200, "PUT", "/v1/settings/receive-money/sweep", map[string]any{"mode": "off"})
+	if sw, _ := st["sweep"].(map[string]any); sw["mode"] != "off" || st["withdraw_workflow_id"] == nil {
+		t.Errorf("off: %v", st)
+	}
+	if def, cron := deployed(); def != "" || cron != "" {
+		t.Errorf("still deployed when off: %q", cron)
+	}
+	// Under four-eyes, turning it on waits for a second person; turning it
+	// off again withdraws the request, so approving cannot start it.
+	owner.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish": true})
+	st = owner.must(200, "PUT", "/v1/settings/receive-money/sweep", weekly)
+	if sw, _ := st["sweep"].(map[string]any); !strings.Contains(fmt.Sprint(sw["waiting"]), "second person") {
+		t.Errorf("under four-eyes: %v", sw)
+	}
+	if def, _ := deployed(); def != "" {
+		t.Error("deployed before the second person approved")
+	}
+	// A second change under four-eyes: only the newest waits.
+	owner.must(200, "PUT", "/v1/settings/receive-money/sweep", map[string]any{"mode": "weekly", "day": "monday", "time": "08:00"})
+	var waiting int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM publish_requests WHERE workflow_id = $1 AND status = 'pending'`, wf).Scan(&waiting); err != nil || waiting != 1 {
+		t.Errorf("pending requests after a second change: %d %v", waiting, err)
+	}
+	owner.must(200, "PUT", "/v1/settings/receive-money/sweep", map[string]any{"mode": "off"})
+	var pending int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM publish_requests WHERE workflow_id = $1 AND status = 'pending'`, wf).Scan(&pending); err != nil || pending != 0 {
+		t.Errorf("pending requests after off: %d %v", pending, err)
+	}
 }

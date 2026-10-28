@@ -156,6 +156,30 @@ func summarise(conns []connectionInfo, subs []remote.Status) {
 	}
 }
 
+// undeployTx takes a workflow out of an environment in tx: its triggers,
+// its form and email addresses, its remote subscriptions (released for
+// deletion at the provider) and its deployment.
+func undeployTx(ctx context.Context, tx pgx.Tx, wf uuid.UUID, env string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = $2`, wf, env); err != nil {
+		return err
+	}
+	// Nothing runs there now: its form and email address stop taking
+	// submissions and mail (deploying again opens them).
+	for _, q := range []string{
+		`UPDATE form_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status IN ('live', 'paused')`,
+		`UPDATE email_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status = 'live'`,
+	} {
+		if _, err := tx.Exec(ctx, q, wf, env); err != nil {
+			return err
+		}
+	}
+	if err := remote.Release(ctx, tx, wf, []string{env}); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM deployments WHERE workflow_id = $1 AND environment = $2`, wf, env)
+	return err
+}
+
 // undeploy takes a workflow out of an environment: its deployment and
 // triggers go, and the subscriptions of a remotely registered trigger are
 // deleted at the provider. Runs already started carry on.
@@ -182,23 +206,7 @@ func (s *Server) undeploy(w http.ResponseWriter, r *http.Request) {
 		if v == 0 {
 			return fmt.Errorf("%w: workflow has no version deployed in %s", errConflict, env)
 		}
-		if _, err := tx.Exec(r.Context(), `DELETE FROM triggers WHERE workflow_id = $1 AND environment = $2`, wf, env); err != nil {
-			return err
-		}
-		// Nothing runs there now: its form and email address stop taking
-		// submissions and mail (deploying again opens them).
-		for _, q := range []string{
-			`UPDATE form_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status IN ('live', 'paused')`,
-			`UPDATE email_endpoints SET status = 'closed', updated_at = now() WHERE workflow_id = $1 AND environment = $2 AND status = 'live'`,
-		} {
-			if _, err := tx.Exec(r.Context(), q, wf, env); err != nil {
-				return err
-			}
-		}
-		if err := remote.Release(r.Context(), tx, wf, []string{env}); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(r.Context(), `DELETE FROM deployments WHERE workflow_id = $1 AND environment = $2`, wf, env); err != nil {
+		if err := undeployTx(r.Context(), tx, wf, env); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "workflow.undeploy", fmt.Sprintf("%s/%d", wf, v), map[string]any{"environment": env})

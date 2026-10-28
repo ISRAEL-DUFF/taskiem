@@ -102,6 +102,9 @@ type Server struct {
 	// Invoices are the business's invoices to its customers (decision
 	// 0045); nil: their routes answer that they are not available.
 	Invoices *invoicing.Invoices
+	// ReceivePayoutFeeKobo is the room a sweep to the bank leaves for the
+	// payout's fee (TASKIEM_ISWALLET_PAYOUT_FEE_KOBO); 0 is ₦100.
+	ReceivePayoutFeeKobo int64
 	// Matcher matches money to invoices (T5); nil: one is made from
 	// Invoices.
 	Matcher *matching.Matcher
@@ -416,6 +419,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
 			r.With(s.need(PermWorkflowRead)).Get("/forms", s.listForms)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)
 			r.With(s.need(PermFormLinks), s.tenantWide).Post("/forms/{id}/links", s.mintFormLinks)

@@ -18,10 +18,11 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 
 ## Getting paid
 
-- **Your own number.** Share it with anyone who pays you: on your receipts, your shop's page, your WhatsApp status. Each payment into it shows under **Invoices > To match**, where you say who it was from. On WhatsApp, send *my account number* to get it again.
+- **Your own number.** Share it with anyone who pays you: on your receipts, your WhatsApp status. Each payment into it shows under **Invoices > To match**, where you say who it was from. On WhatsApp, send *my account number* to get it again.
 - **Invoices.** An invoice you send gets a number of its own for that one payment, shown on the invoice's page and when the customer presses *Pay by transfer* on WhatsApp. It is counted to the invoice by itself. A customer who has a number of their own (below) is shown that one instead; the invoice's page still offers a one-time number too.
 - **Customers you bill often.** Give a customer a number of their own from their invoice (**Give this customer an account number**, then issue it with Taskiem): it never expires, and every payment into it counts to their invoices. A school's students each get one, issued on your wallet with nothing to choose.
-- **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt message says what the parent sent and what reached the school, when the transfer was for that receipt alone.
+- **Your storefront.** Choose your wallet with Taskiem as the order form's payments connection (Storefront > Forms): each order gets a number of its own for that payment on its page, and is paid the moment the money arrives. If you decline or cancel an order paid this way, send the money back from your bank, then press **Mark refunded** on the order.
+- **The fee.** The partner bank's fee is paid by whoever sends the money, as for any transfer. A school's receipt message, and an invoice's receipt (from the **Send a receipt when an invoice is paid** workflow and its email versions), say what the payer sent and what reached you, when the transfer was for that receipt alone.
 
 ## Your balance
 
@@ -33,6 +34,17 @@ Press **Turn it on**. Your account number appears straight away, with the bank's
 2. Type the amount and press **Withdraw**, leaving room for the bank's fee on the transfer. Nothing is paid until it is approved: the owner sees it, with the account it goes to, in **Approvals** (and on WhatsApp, if you use it). Once approved, the money is paid once, and Taskiem tells the owner when the bank confirms, or that it could not be paid.
 
 Every withdrawal and its outcome is in the money log, like any other payment.
+
+## Sending money to your bank automatically
+
+Under **Send money to your bank automatically**, an owner chooses:
+
+- **Every week**, on a day and at a time; or
+- **Whenever your wallet holds more than** an amount, checked every hour.
+
+You can also say how much to **keep in your wallet**. Each time, what the wallet holds, less what you keep and a little room for the bank's fee on the transfer, goes to the bank account you saved for withdrawals, when that is at least ₦1,000.
+
+Nobody approves these: they only ever pay your saved bank account, and changing that account is the same change, with the same second person if four-eyes is on. The owner is told each time money is sent, or that it could not be. Turn it off there at any time; it stops at once.
 
 ## What it costs
 

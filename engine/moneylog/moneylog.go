@@ -227,6 +227,9 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 	case "payment.received":
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "payment", "settled", str(fields, "payment_id")
 		e.OccurredAt = when(fields, "paid_at")
+		// The rail's fee where it settles net and says so (iswallet's
+		// one-time numbers): amount_kobo stays what the payer sent.
+		e.FeeKobo = kobo(fields, "fee_kobo")
 	case "payment.returned":
 		// Money that came in and was sent back to the payer by the rail.
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "payment", "reversed", str(fields, "payment_id")
@@ -300,7 +303,7 @@ func FromCredit(channel string, credit map[string]any) (Entry, bool) {
 		// the same movement, by the same key, as the webhook's
 		// payment.received, so heard both ways it is one entry.
 		e, ok := FromEvent(channel, "payment.received", map[string]any{"payment_id": credit["reference"], "amount_kobo": credit["amount_kobo"],
-			"currency": credit["currency"], "paid_at": credit["occurred_at"]})
+			"fee_kobo": credit["fee_kobo"], "currency": credit["currency"], "paid_at": credit["occurred_at"]})
 		if !ok {
 			return Entry{}, false
 		}
