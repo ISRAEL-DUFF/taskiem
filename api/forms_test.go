@@ -152,11 +152,21 @@ func TestForms(t *testing.T) {
 	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})
 	w.env.Drain(t)
 	finance := addMember(t, w, owner, "fin", "finance")
+	// More than a page of newer requests waiting for another role do not
+	// hide finance's.
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO form_requests (id, tenant_id, run_id, step_id, environment, recipient, title, schema, expires_at, created_at)
+		SELECT gen_random_uuid(), $1, gen_random_uuid(), 'ask', 'prod', '{"role": "approver"}', 'Other', '{}', now() + interval '1 day', now() + interval '1 minute'
+		FROM generate_series(1, 120)`, tenantIDNamed(t, w, "Acme")); err != nil {
+		t.Fatal(err)
+	}
 	reqs := finance.must(200, "GET", "/v1/form-requests", nil)["requests"].([]any)
 	if len(reqs) != 1 {
 		t.Fatalf("requests: %v", reqs)
 	}
 	rid := reqs[0].(map[string]any)["id"].(string)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE form_requests SET status = 'cancelled' WHERE title = 'Other'`); err != nil {
+		t.Fatal(err)
+	}
 	if len(approver.must(200, "GET", "/v1/form-requests", nil)["requests"].([]any)) != 0 {
 		t.Fatal("an approver sees finance's request")
 	}

@@ -976,6 +976,10 @@
       "text": "Ìnáwó AI oṣù yìí tán kí àkọsílẹ̀ náà tó ṣetán. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù.",
       "reviewed": false
     },
+    "wa.build.changed": {
+      "text": "Ẹnìkan ti yí iṣẹ́ yìí padà láti ìgbà tí mo bẹ̀rẹ̀ (ẹ̀yà {version}), ní àwọn ibi kan náà, nítorí náà n kò fi pamọ́. Ẹ ṣe àyípadà náà nínú ohun èlò wẹ́ẹ̀bù{link}.",
+      "reviewed": false
+    },
     "wa.build.denied": {
       "text": "Ẹ kò lè kọ́ iṣẹ́ nínú {org} (ó nílò workflow.edit).",
       "reviewed": false
@@ -1042,6 +1046,10 @@
     },
     "wa.build.offer_publish": {
       "text": "Ṣé kí n tẹ *{name}* jáde báyìí kí ó bẹ̀rẹ̀ iṣẹ́? Ẹ fèsì *yes* tàbí *no*.",
+      "reviewed": false
+    },
+    "wa.build.plan": {
+      "text": "Ètò {org} kò ní kíkọ́ pẹ̀lú AI, nítorí náà mi ò lè kọ́ ọ níbí. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù, tàbí kí ẹ yí ètò padà ní Billing.",
       "reviewed": false
     },
     "wa.build.publish_later": {
@@ -1472,6 +1480,10 @@
       "text": "Tí kì í bá ṣe é, Rárá yóò fi ìwé owó tó kàn hàn.",
       "reviewed": false
     },
+    "wa.match.needs_approval": {
+      "text": "Kò tíì so pọ̀: ọwọ́ ni a fi tẹ owó yìí sílẹ̀, ó sì tó ààlà owó ilé-ìwé, nítorí náà ẹlòmíràn gbọ́dọ̀ fọwọ́ sí i ní Schools, Approvals.",
+      "reviewed": false
+    },
     "wa.match.other_person": {
       "text": "Ẹlòmíràn ni a fi bọ́tìnnì yìí ránṣẹ́ sí.",
       "reviewed": false
@@ -1804,6 +1816,10 @@
       "text": "Èwo?\n{list}\nẸ fi *run* àti orúkọ rẹ̀ ní kíkún ránṣẹ́.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} tí a fi ọwọ́ tẹ̀ sílẹ̀, {by} so ó pọ̀ mọ́ invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} tí a san {how} fún {student} ({class}), {by} ló gbà á sílẹ̀.",
       "reviewed": false
@@ -1830,6 +1846,10 @@
     },
     "wa.school.how.transfer": {
       "text": "nípa gbígbé owó sí àkáǹtì ilé ẹ̀kọ́",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "owó tí a fi ọwọ́ tẹ̀ tí a so pọ̀",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {

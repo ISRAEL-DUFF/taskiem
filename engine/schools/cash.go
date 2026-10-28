@@ -34,11 +34,28 @@ import (
 // exactly once, under the row's lock) or declines it with a reason. A
 // standing discount or a discount amendment at or above the discount
 // threshold, and a term invoice held for such a discount, wait the same
-// way, and are applied on approval.
+// way, and are applied on approval. So does money a person entered on
+// Money, matched by hand to an invoice at or above the cash threshold
+// (KindCashMatch, recorded by engine/matching): approval makes the match.
+//
+// Both thresholds are weighed per student, not per request, so that
+// splitting does not pass under them: cash with the money a person
+// entered (desk, entered, uploaded) that already counts towards the
+// student's invoices without a second person (matching.EnteredUnapproved),
+// a discount or a reduction with the reductions of the student's
+// invoices and the standing discounts given them without one
+// (ReducedUnapproved), each within the window: since the current term
+// was started, and at least the last 24 hours (matching.SchoolWindowSQL).
+// What a second person approved is theirs and is not weighed again; a
+// rail's money is never counted.
 
 // Kinds of request.
 const (
-	KindCashPosting       = "cash_posting"
+	KindCashPosting = "cash_posting"
+	// KindCashMatch is money a person entered on Money (cash, or a
+	// statement line), matched by hand to an invoice at or above the cash
+	// threshold (matching.Held).
+	KindCashMatch         = matching.RequestKind
 	KindDiscount          = "discount"
 	KindDiscountAmendment = "discount_amendment"
 	KindTermInvoice       = "term_invoice"
@@ -137,7 +154,7 @@ func (e *ApprovalNeeded) Error() string {
 
 func (e *ApprovalNeeded) Unwrap() error { return ErrNeedsApproval }
 
-var kindWords = map[string]string{KindCashPosting: "a cash posting", KindDiscount: "a discount", KindDiscountAmendment: "a discount on an invoice", KindTermInvoice: "a term invoice with a discount"}
+var kindWords = map[string]string{KindCashPosting: "a cash posting", KindCashMatch: "a match of money entered by hand", KindDiscount: "a discount", KindDiscountAmendment: "a discount on an invoice", KindTermInvoice: "a term invoice with a discount"}
 
 // KindWords is a request's kind in plain words.
 func KindWords(kind string) string { return kindWords[kind] }
@@ -245,6 +262,25 @@ func (s *Schools) PostPayment(ctx context.Context, tenant uuid.UUID, in PostingI
 			return err
 		}
 		pending = threshold != nil && in.AmountKobo >= *threshold
+		if threshold != nil && !pending {
+			// With what desk and entered money already counts towards the
+			// student's invoices without a second person (their open ones,
+			// and any of theirs within the window): postings split under
+			// the threshold add up (docs/schools.md#the-second-person).
+			open, err := s.Invoices.OpenInvoicesOf(ctx, tx, tenant, "key:"+StudentKey(st.ID))
+			if err != nil {
+				return err
+			}
+			ids := make([]uuid.UUID, 0, len(open))
+			for _, x := range open {
+				ids = append(ids, x.ID)
+			}
+			prior, err := matching.EnteredUnapproved(ctx, tx, tenant, &st.ID, ids)
+			if err != nil {
+				return err
+			}
+			pending = prior+in.AmountKobo >= *threshold
+		}
 		status := StatePosted
 		if pending {
 			status = StatePending
@@ -376,24 +412,36 @@ func (s *Schools) requestDiscount(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return &ApprovalNeeded{Request: p}
 }
 
-// RequestDiscountAmendment looks at a discount amendment on a sent
-// invoice: under the school's threshold it returns nil and the caller
-// amends the invoice; at or above it, it records the amendment as a
-// request for a second person and returns ApprovalNeeded.
+// RequestDiscountAmendment looks at an amendment on a sent invoice that
+// lowers its total (a discount, or a line taken out, which is a discount
+// of the line's amount): under the school's discount threshold it returns
+// nil and the caller amends the invoice; at or above it, it records the
+// amendment as a request for a second person and returns ApprovalNeeded.
+// What is weighed is the reduction with those the invoice took already
+// without a second person and, on a student's invoice, with the student's
+// other reductions and standing discounts given without one within the
+// window (ReducedUnapproved): amendments and discounts split under the
+// threshold, on one invoice or several, add up. An amendment that adds to
+// the total returns nil.
 func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, in invoicing.AmendmentIn, by string) error {
-	if in.Kind != invoicing.AmendDiscount || s.Invoices == nil {
+	if s.Invoices == nil {
 		return nil
 	}
 	limit, err := DiscountThreshold(ctx, tx, tenant)
-	if err != nil || limit <= 0 || in.AmountKobo < limit {
+	if err != nil || limit <= 0 {
 		return err
 	}
 	x, err := s.Invoices.Get(ctx, tx, tenant, idOrNumber)
 	if err != nil {
 		return err
 	}
-	if _, err := in.Plan(x); err != nil {
+	l, err := in.Plan(x)
+	if err != nil {
 		return err
+	}
+	reduction := -l.AmountKobo()
+	if reduction <= 0 {
+		return nil
 	}
 	var student *uuid.UUID
 	var sid uuid.UUID
@@ -402,10 +450,14 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
+	prior, err := ReducedUnapproved(ctx, tx, tenant, student, &x.ID)
+	if err != nil || prior+reduction < limit {
+		return err
+	}
 	raw, _ := json.Marshal(in)
 	var am map[string]any
 	_ = json.Unmarshal(raw, &am)
-	id, err := s.request(ctx, tx, tenant, KindDiscountAmendment, StatePending, student, &x.ID, nil, in.AmountKobo, map[string]any{"amendment": am, "reason": in.Reason}, "", by)
+	id, err := s.request(ctx, tx, tenant, KindDiscountAmendment, StatePending, student, &x.ID, nil, reduction, map[string]any{"amendment": am, "reason": in.Reason}, "", by)
 	if err != nil {
 		return err
 	}
@@ -414,6 +466,26 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 		return err
 	}
 	return &ApprovalNeeded{Request: p}
+}
+
+// ReducedUnapproved is what was taken off without a second person
+// approving it: by amendments (discounts and lines taken out) of the
+// invoice given, whenever made, and, for a student, by amendments of any
+// of the student's invoices and the standing discounts given them (at
+// what each was worth when given, ended or not), within the window
+// (matching.SchoolWindowSQL). Either may be nil.
+func ReducedUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, student, invoice *uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT ((SELECT COALESCE(-sum(a.amount_kobo), 0) FROM customer_invoice_amendments a
+		WHERE a.tenant_id = $1 AND a.amount_kobo < 0
+		  AND (a.invoice_id = $2::uuid OR $3::uuid IS NOT NULL AND a.created_at >= `+matching.SchoolWindowSQL+` AND a.invoice_id IN (`+matching.StudentInvoicesSQL("$3")+`))
+		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = a.tenant_id AND r.kind = $4 AND r.status = 'posted'
+		                  AND r.result->>'amendment_id' = a.id::text))
+		+ (SELECT COALESCE(sum(COALESCE(d.worth_kobo, d.amount_kobo, 0)), 0) FROM school_discounts d
+		WHERE d.tenant_id = $1 AND d.student_id = $3::uuid AND d.created_at >= `+matching.SchoolWindowSQL+`
+		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = d.tenant_id AND r.kind = $5 AND r.status = 'posted'
+		                  AND r.result->>'discount_id' = d.id::text)))::bigint`, tenant, invoice, student, KindDiscountAmendment, KindDiscount).Scan(&n)
+	return n, err
 }
 
 // requestTermInvoices records each student a term's plan held for a
@@ -558,6 +630,8 @@ type Decision struct {
 	parts   []matching.CountedPart
 	paid    *invoicing.Invoice
 	send    *uuid.UUID
+	// matched is what an approved match does once it commits.
+	matched func(context.Context) error
 }
 
 // Decide approves or declines a pending request, once, by someone other
@@ -628,6 +702,24 @@ func (s *Schools) apply(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, d *Dec
 		}
 		d.parts, err = s.post(ctx, tx, tenant, p.ID, st, p.AmountKobo, str(p.Details, "how"), when, str(p.Details, "note"), p.RequestedBy)
 		return err
+	case KindCashMatch:
+		// The match as its requester asked for it, made now.
+		sp, after, err := s.matcher().ApproveHeld(ctx, tx, tenant, p.Details, p.RequestedBy)
+		if err != nil {
+			return err
+		}
+		d.matched = after
+		res := PostingResult{Parts: []PostedPart{}}
+		if id, err := uuid.Parse(str(p.Details, "entry_id")); err == nil {
+			res.EntryID = &id
+		}
+		for i, x := range sp.Parts {
+			if x.Invoice != nil {
+				res.Parts = append(res.Parts, PostedPart{InvoiceID: x.Invoice.ID, Number: x.Invoice.Number, AmountKobo: sp.PartKobo[i]})
+			}
+		}
+		res.CreditKobo = sp.CreditKobo
+		return s.finish(ctx, tx, tenant, p.ID, res)
 	case KindDiscount:
 		in := DiscountIn{Kind: str(p.Details, "kind"), Reason: str(p.Details, "reason")}
 		if v, ok := p.Details["percent"].(float64); ok {
@@ -638,7 +730,7 @@ func (s *Schools) apply(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, d *Dec
 			n := int64(v)
 			in.AmountKobo = &n
 		}
-		disc, _, err := s.giveDiscount(ctx, tx, tenant, *p.StudentID, in, p.RequestedBy)
+		disc, _, err := s.giveDiscount(ctx, tx, tenant, *p.StudentID, in, p.AmountKobo, p.RequestedBy)
 		if err != nil {
 			return err
 		}
@@ -760,6 +852,11 @@ func (s *Schools) tellRequester(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		n.Link = "/schools/students/" + p.StudentID.String()
 	case KindDiscountAmendment:
 		n.Link = "/invoices/" + p.InvoiceID.String()
+	case KindCashMatch:
+		n.Link = "/invoices/match"
+		if p.InvoiceID != nil {
+			n.Link = "/invoices/" + p.InvoiceID.String()
+		}
 	case KindTermInvoice:
 		n.Link = "/schools/terms/" + p.TermID.String() + "/invoices"
 	}
@@ -772,6 +869,11 @@ func (s *Schools) tellRequester(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 func (s *Schools) DecidedAfter(ctx context.Context, tenant uuid.UUID, d Decision) error {
 	if err := s.matcher().TellPaid(ctx, tenant, d.parts); err != nil {
 		return err
+	}
+	if d.matched != nil {
+		if err := d.matched(ctx); err != nil {
+			return err
+		}
 	}
 	if d.paid != nil {
 		if err := s.Invoices.Paid(ctx, tenant, *d.paid); err != nil {

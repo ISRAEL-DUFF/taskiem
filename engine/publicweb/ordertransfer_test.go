@@ -97,7 +97,12 @@ func TestStatusPagePayByTransfer(t *testing.T) {
 	if w.Code != 303 || w.Header().Get("Location") != loc || pay.requests != 1 {
 		t.Fatalf("ask: %d %q %d", w.Code, w.Header().Get("Location"), pay.requests)
 	}
-	if w := post(e.h, sfHost, "/o/"+ref+"/pay?k=x"+key[1:], ""); w.Code != 404 || pay.requests != 1 {
+	// Another key: its first character changed, never to itself.
+	wrong := "x" + key[1:]
+	if key[0] == 'x' {
+		wrong = "y" + key[1:]
+	}
+	if w := post(e.h, sfHost, "/o/"+ref+"/pay?k="+wrong, ""); w.Code != 404 || pay.requests != 1 {
 		t.Errorf("a wrong key: %d %d", w.Code, pay.requests)
 	}
 	if w := get(e.h, "GET", sfHost, "/o/"+ref+"/pay?k="+key); w.Code != 405 {

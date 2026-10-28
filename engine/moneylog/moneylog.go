@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
 )
@@ -288,6 +289,11 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 	if e.Reference == "" {
 		return Entry{}, false
 	}
+	if e.Kind == "account_credit" && e.Credit == "" {
+		// Keyed by the account alone, the next credit to it would be
+		// dropped as this one: refused, and RecordEvent says so.
+		return Entry{}, false
+	}
 	return e, true
 }
 
@@ -311,7 +317,7 @@ func FromCredit(channel string, credit map[string]any) (Entry, bool) {
 		return e, true
 	}
 	e, ok := FromEvent(channel, "virtual_account.credited", credit)
-	if !ok || e.Credit == "" {
+	if !ok {
 		return Entry{}, false
 	}
 	e.Source = "lookup"
@@ -421,8 +427,17 @@ func (l *Log) Channel(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, con
 	return connector + "/" + connection, nil
 }
 
+// AlertCreditWithoutID is the kind of the alert the owners get, once per
+// connection a day, when a rail's virtual_account.credited event carries
+// no credit_id: the credit is not recorded (keyed by the account alone,
+// it would hide the account's next credit), so the look-back or a hand
+// entry has to bring it.
+const AlertCreditWithoutID = "money_credit_without_id"
+
 // RecordEvent writes the entry for a normalised event heard on a
 // connection of a rail; ok is false for an event the log does not record.
+// A credit to a customer's account without its credit_id is not recorded
+// and raises AlertCreditWithoutID.
 func (l *Log) RecordEvent(ctx context.Context, tenant uuid.UUID, env, connector, connection, event string, fields map[string]any) (ok bool, err error) {
 	err = db.InTenantTx(ctx, l.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		channel, err := l.Channel(ctx, tx, tenant, env, connector, connection)
@@ -431,6 +446,14 @@ func (l *Log) RecordEvent(ctx context.Context, tenant uuid.UUID, env, connector,
 		}
 		e, yes := FromEvent(channel, event, fields)
 		if !yes {
+			if event == "virtual_account.credited" && str(fields, "reference") != "" && str(fields, "credit_id") == "" {
+				_, err := alerts.TellOwners(ctx, tx, tenant, alerts.Alert{Kind: AlertCreditWithoutID, Dedup: channel + ":" + l.now().In(lagos).Format(time.DateOnly),
+					Title: "A payment into a customer's account number was not recorded",
+					Body: fmt.Sprintf("%s told Taskiem of a payment into account %s without the id that tells one payment from the next, so Taskiem did not record it. "+
+						"Check the payment on %s and enter it by hand on Money if the look-back does not find it.", connector, clip(str(fields, "reference"), 100), connector),
+					Link: "/money", Detail: map[string]any{"channel": channel, "reference": clip(str(fields, "reference"), 200)}})
+				return err
+			}
 			return nil
 		}
 		ok = true

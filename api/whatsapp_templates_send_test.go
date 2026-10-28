@@ -162,7 +162,7 @@ func TestMatchTemplateOutsideWindow(t *testing.T) {
 	}
 	first := invoice("Bola Ade", 900000)
 	before := len(w.graph.Sent(on))
-	heard(map[string]any{"reference": "VA-1", "amount_kobo": int64(900000), "payer_name": "BOLA ADE"})
+	heard(map[string]any{"credit_id": "C-1", "reference": "VA-1", "amount_kobo": int64(900000), "payer_name": "BOLA ADE"})
 	if len(w.graph.Sent(on)) != before {
 		t.Fatalf("asked without an approved template: %+v", w.graph.Sent(on)[before:])
 	}
@@ -172,7 +172,7 @@ func TestMatchTemplateOutsideWindow(t *testing.T) {
 
 	approve(t, w.graph, w.wa, "taskiem_match_question")
 	second := invoice("Chidi Eze", 700000)
-	heard(map[string]any{"reference": "VA-2", "amount_kobo": int64(700000), "payer_name": "CHIDI EZE"})
+	heard(map[string]any{"credit_id": "C-1", "reference": "VA-2", "amount_kobo": int64(700000), "payer_name": "CHIDI EZE"})
 	q := w.graph.Last(t, on)
 	if q.Type != "template" || q.Template != "taskiem_match_question" || !strings.HasPrefix(q.Text, "[Ada Foods] ₦7,000 came in on ") ||
 		!strings.Contains(q.Text, "through Paystack (main). Is this for "+second["number"].(string)+", ₦7,000 due? ") ||

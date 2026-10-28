@@ -32,7 +32,7 @@ func TestMatchingOrdersAPI(t *testing.T) {
 
 	m := &matching.Matcher{Invoices: w.srv.Invoices, Orders: w.srv.Orders, PII: w.env.Vault}
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
-		map[string]any{"reference": "TRF " + ref, "amount_kobo": int64(300000), "payer_name": "BOLA ADE"}); err != nil {
+		map[string]any{"credit_id": "C-1", "reference": "TRF " + ref, "amount_kobo": int64(300000), "payer_name": "BOLA ADE"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Tick(ctx); err != nil {
@@ -97,7 +97,7 @@ func TestMatchingOrdersAPI(t *testing.T) {
 	}
 	next := another("Bola Ade", "+2348031234567", 500000)
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
-		map[string]any{"reference": "TRF-AGAIN", "amount_kobo": int64(500000), "payer_name": "ADE BOLA"}); err != nil {
+		map[string]any{"credit_id": "C-1", "reference": "TRF-AGAIN", "amount_kobo": int64(500000), "payer_name": "ADE BOLA"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Tick(ctx); err != nil {
@@ -185,7 +185,7 @@ func TestWhatsAppMatchingOrder(t *testing.T) {
 	log, tenant, ref, _ := orderToMatch(t, w.world, owner)
 	m := &matching.Matcher{Invoices: w.srv.Invoices, Orders: w.srv.Orders, PII: w.env.Vault, Suggested: w.srv.MatchSuggested}
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
-		map[string]any{"reference": "TRF " + ref, "amount_kobo": int64(300000)}); err != nil {
+		map[string]any{"credit_id": "C-1", "reference": "TRF " + ref, "amount_kobo": int64(300000)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Tick(ctx); err != nil {

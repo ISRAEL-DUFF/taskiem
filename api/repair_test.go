@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
@@ -333,6 +334,112 @@ func TestRepairFourEyes(t *testing.T) {
 	}
 }
 
+// A version published after the run's is kept: accepting merges the patch
+// onto it (three ways, the run's version the base), and a version that
+// changed the step the patch changes supersedes the proposal (409), so
+// accepting never drops what was published in between.
+func TestRepairAcceptAfterNewerVersion(t *testing.T) {
+	wfDoc := func(steps ...string) json.RawMessage {
+		return json.RawMessage(`{"schema":"wd/v1","id":"wf_orders","version":1,"name":"orders","trigger":{"type":"manual"},"steps":[` + strings.Join(steps, ",") + `]}`)
+	}
+	publishV2 := func(t *testing.T, rw *repairWorld, wf string, doc json.RawMessage) {
+		t.Helper()
+		rw.owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": doc})
+		rw.owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/2/publish", nil)
+	}
+	verifyRetried := strings.Replace(stepVerify, `"action":"verify"`, `"action":"verify","retry":{"max":2}`, 1)
+
+	t.Run("merged", func(t *testing.T) {
+		rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+		rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+		wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+		run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-20"}, "failed")
+		p := rw.only(t, run)
+		// Someone else publishes version 2, changing another step.
+		publishV2(t, rw, wf, wfDoc(stepCharge, verifyRetried, stepNotify))
+		acc := rw.owner.must(200, "POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+		if acc["draft_version"] != float64(3) || acc["status"] != "resumed" {
+			t.Fatalf("accept: %v", acc)
+		}
+		def := toJSON(rw.owner.must(200, "GET", "/v1/workflows/"+wf+"/versions/3", nil)["definition"])
+		if !strings.Contains(def, `"retry":{"max":2}`) || !strings.Contains(def, "has(trigger.body.customer)") {
+			t.Fatalf("version 3 lost a change: %s", def)
+		}
+		// The proposal says it was published as a merge, with the change
+		// against version 2.
+		merged, _ := acc["evidence"].(map[string]any)["merged"].(map[string]any)
+		if acc["published_since"] != float64(2) || merged["onto"] != float64(2) || !strings.Contains(toJSON(merged["diff"]), "notify") ||
+			strings.Contains(toJSON(merged["diff"]), "verify") {
+			t.Errorf("merge not shown: %v %v", acc["published_since"], merged)
+		}
+	})
+
+	// The merged definition gets the patch's whole check again: the shadow
+	// run over the recorded data, and the workflow's stored tests.
+	t.Run("merged changes a completed write", func(t *testing.T) {
+		rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+		rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+		wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+		run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-22"}, "failed")
+		p := rw.only(t, run)
+		if p["evidence"].(map[string]any)["resumable"] != true {
+			t.Fatalf("proposal: %v", toJSON(p["evidence"]))
+		}
+		// Version 2 changes what the completed charge sends; it merges
+		// cleanly with the patch to notify.
+		publishV2(t, rw, wf, wfDoc(strings.Replace(stepCharge, `"=trigger.body.amount"`, `"=trigger.body.amount + 1"`, 1), stepVerify, stepNotify))
+		st, out := rw.owner.do("POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+		if st != 409 || out["code"] != "repair_superseded" || !strings.Contains(toJSON(out["failures"]), "charge") {
+			t.Fatalf("accept: %d %v", st, out)
+		}
+		if n := len(rw.owner.must(200, "GET", "/v1/workflows/"+wf, nil)["versions"].([]any)); n != 2 {
+			t.Errorf("versions: %d", n)
+		}
+	})
+
+	t.Run("merged fails a stored test", func(t *testing.T) {
+		rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+		rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+		wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+		run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-23"}, "failed")
+		p := rw.only(t, run)
+		publishV2(t, rw, wf, wfDoc(stepCharge, verifyRetried, stepNotify))
+		// A test of the workflow, added since the analysis, that the merged
+		// definition does not pass: an order without a customer fails.
+		tenant := rw.owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string)
+		test := `{"name":"no customer, no notice","trigger":{"type":"manual","body":{"amount":1,"id":"x"}},"mocks":{"charge":{"output":{"reference":"r"}},"verify":{"output":{}},"notify":{"output":{}}},"expect":{"status":"failed"}}`
+		if _, err := rw.env.DB.Admin.Exec(context.Background(), `INSERT INTO workflow_tests (id, tenant_id, workflow_id, name, test, source, created_by)
+			VALUES ($1, $2, $3, 'no customer, no notice', $4, 'person', 'test')`, uuid.Must(uuid.NewV7()), tenant, wf, test); err != nil {
+			t.Fatal(err)
+		}
+		st, out := rw.owner.do("POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+		if st != 409 || out["code"] != "repair_superseded" || !strings.Contains(toJSON(out["failures"]), "no customer, no notice") {
+			t.Fatalf("accept: %d %v", st, out)
+		}
+	})
+
+	t.Run("superseded", func(t *testing.T) {
+		rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+		rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+		wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+		run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-21"}, "failed")
+		p := rw.only(t, run)
+		// Version 2 changes the step the patch changes.
+		publishV2(t, rw, wf, wfDoc(stepCharge, stepVerify, strings.Replace(stepNotify, `"retry":{"max":0}`, `"retry":{"max":1}`, 1)))
+		st, out := rw.owner.do("POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+		if st != 409 || out["code"] != "repair_superseded" || out["latest_version"] != float64(2) || !strings.Contains(toJSON(out["conflicts"]), "steps/notify") {
+			t.Fatalf("accept: %d %v", st, out)
+		}
+		if got := rw.owner.must(200, "GET", "/v1/repairs/"+p["id"].(string), nil); got["status"] != "superseded" || got["draft_version"] != nil {
+			t.Fatalf("proposal: %v", got)
+		}
+		if n := len(rw.owner.must(200, "GET", "/v1/workflows/"+wf, nil)["versions"].([]any)); n != 2 {
+			t.Errorf("versions: %d", n)
+		}
+		rw.owner.must(409, "POST", "/v1/repairs/"+p["id"].(string)+"/accept", nil)
+	})
+}
+
 // Transient: no model call, no change; retry resumes through the normal
 // path on the same version.
 func TestRepairTransientRetry(t *testing.T) {
@@ -471,6 +578,101 @@ func TestRepairBudgetExhausted(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status != "skipped" || !strings.Contains(detail, "budget") {
+		t.Errorf("job: %s %s", status, detail)
+	}
+}
+
+// Runs of a version that fail the same way are analysed once: the first
+// run's proposal covers them, and the model is not asked again.
+func TestRepairSameFailureAnalysedOnce(t *testing.T) {
+	rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+	rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+	wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+	var runs []string
+	for _, id := range []string{"o-30", "o-31", "o-32"} {
+		runs = append(runs, rw.owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"amount": 500, "id": id}})["run_id"].(string))
+	}
+	rw.env.Drain(t)
+	if n, err := rw.srv.RepairOnce(context.Background()); err != nil || n != 3 {
+		t.Fatalf("repair once: %d %v", n, err)
+	}
+	p := rw.only(t, runs[0])
+	if p["status"] != "proposed" || len(rw.fake.Requests()) != 1 {
+		t.Fatalf("proposal: %v (%d model calls)", p["status"], len(rw.fake.Requests()))
+	}
+	for _, run := range runs[1:] {
+		if list := rw.repairs(t, run); len(list) != 0 {
+			t.Errorf("run %s analysed again: %v", run, list)
+		}
+		var status, detail string
+		if err := rw.env.DB.Admin.QueryRow(context.Background(), `SELECT status, detail FROM repair_jobs WHERE run_id = $1`, uuid.MustParse(run)).Scan(&status, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if status != "skipped" || !strings.Contains(detail, p["id"].(string)) {
+			t.Errorf("job: %s %s", status, detail)
+		}
+	}
+}
+
+// The queue is worked one job per tenant per round: one tenant's backlog
+// does not hold another's repairs up.
+func TestRepairQueueRoundRobin(t *testing.T) {
+	rw := newRepairWorld(t, nil)
+	other := rw.tenant(t, "Other", "owner@other.test")
+	const doc = `{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":{"type":"manual"},"steps":[{"id":"t","type":"transform","config":{"output":{"x":1}}}]}`
+	bg := context.Background()
+	for _, c := range []*client{rw.owner, other} {
+		wf := publishFlow(t, c, doc)
+		for range 2 {
+			run := c.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+			rw.env.Drain(t)
+			// A job as the trigger queues one (the run completed: skipped).
+			if _, err := rw.env.DB.Admin.Exec(bg, `INSERT INTO repair_jobs (tenant_id, run_id, reason) SELECT tenant_id, id, 'run_failed' FROM runs WHERE id = $1`,
+				uuid.MustParse(run)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n, err := rw.srv.RepairOnce(bg); err != nil || n != 4 {
+		t.Fatalf("repair once: %d %v", n, err)
+	}
+	var order []uuid.UUID
+	if err := rw.env.DB.Admin.QueryRow(bg, `SELECT array_agg(tenant_id ORDER BY started_at) FROM repair_jobs`).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 4 || order[0] == order[1] || order[2] == order[3] {
+		t.Fatalf("one tenant's jobs ran back to back: %v", order)
+	}
+}
+
+// Repair is an AI feature of the plan: a plan without AI analyses nothing.
+func TestRepairNeedsThePlansAI(t *testing.T) {
+	rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+	cfg, err := billing.LoadConfig("../deploy/plans.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bg := context.Background()
+	if err := billing.Store(bg, rw.env.DB.App, cfg, "test"); err != nil {
+		t.Fatal(err)
+	}
+	rw.env.Store.Billing = true
+	rw.srv.Billing = &billing.Service{Pool: rw.env.DB.App, Store: rw.env.Store, Config: cfg, Enabled: true}
+	tenant := uuid.MustParse(rw.owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string))
+	if err := rw.srv.Billing.Grant(bg, tenant, "shop", nil, "test"); err != nil {
+		t.Fatal(err)
+	}
+	rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+	wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+	run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-33"}, "failed")
+	if list := rw.repairs(t, run); len(list) != 0 || len(rw.fake.Requests()) != 0 {
+		t.Fatalf("repairs: %v, model calls %d", list, len(rw.fake.Requests()))
+	}
+	var status, detail string
+	if err := rw.env.DB.Admin.QueryRow(bg, `SELECT status, detail FROM repair_jobs WHERE run_id = $1`, uuid.MustParse(run)).Scan(&status, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if status != "skipped" || !strings.Contains(detail, "plan") {
 		t.Errorf("job: %s %s", status, detail)
 	}
 }

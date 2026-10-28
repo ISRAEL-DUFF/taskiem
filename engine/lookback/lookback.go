@@ -12,7 +12,9 @@
 // rail with the event mapped, a credit more than Late old that the log did
 // not have), the owners are told once per connection a day that the
 // webhook may not be set up. A connection whose look-back fails Failing
-// times in a row raises an alert, once a day while it fails.
+// times in a row raises an alert, once a day while it fails; a read that
+// still had more credits than it could hold, read in quarters, counts as
+// a failure (list_credits has no pages to read the rest by).
 package lookback
 
 import (
@@ -144,7 +146,7 @@ func (l *Looker) Look(ctx context.Context, t Target) (Result, error) {
 		return res, nil // the wallet is not known: nothing to read
 	}
 	res.Ran = true
-	credits, err := l.read(ctx, t, rail, now.Add(-Window), now)
+	credits, short, err := l.read(ctx, t, rail, now.Add(-Window), now)
 	if err != nil {
 		return res, l.failed(ctx, t, err)
 	}
@@ -170,7 +172,14 @@ func (l *Looker) Look(ctx context.Context, t Target) (Result, error) {
 			}
 		}
 		var told *time.Time
-		if err := tx.QueryRow(ctx, `UPDATE money_lookbacks SET last_ok_at = $4, failures = 0, last_error = NULL, found = found + $5
+		if short != nil {
+			// What was read is recorded, but the run is not OK: failed
+			// counts it below.
+			if err := tx.QueryRow(ctx, `UPDATE money_lookbacks SET found = found + $4
+				WHERE tenant_id = $1 AND channel = $2 AND account = $3 RETURNING missed_on`, t.Tenant, t.Channel, t.Account, res.Found).Scan(&told); err != nil {
+				return err
+			}
+		} else if err := tx.QueryRow(ctx, `UPDATE money_lookbacks SET last_ok_at = $4, failures = 0, last_error = NULL, found = found + $5
 			WHERE tenant_id = $1 AND channel = $2 AND account = $3 RETURNING missed_on`, t.Tenant, t.Channel, t.Account, now, res.Found).Scan(&told); err != nil {
 			return err
 		}
@@ -188,30 +197,34 @@ func (l *Looker) Look(ctx context.Context, t Target) (Result, error) {
 			Link: "/connections", Detail: map[string]any{"channel": t.Channel, "missed": res.Missed}})
 		return err
 	})
+	if err == nil && short != nil {
+		err = l.failed(ctx, t, short)
+	}
 	return res, err
 }
 
 // read lists the rail's credits from since to until; when the rail says
 // it had more than it answered, the window is read again in quarters.
-func (l *Looker) read(ctx context.Context, t Target, rail invoicing.Rail, since, until time.Time) ([]map[string]any, error) {
+// short says a quarter still had more than the rail answered: those
+// credits were not read.
+func (l *Looker) read(ctx context.Context, t Target, rail invoicing.Rail, since, until time.Time) (all []map[string]any, short, err error) {
 	list, truncated, err := l.list(ctx, t, rail, since, until)
 	if err != nil || !truncated {
-		return list, err
+		return list, nil, err
 	}
 	step := until.Sub(since) / 4
-	var all []map[string]any
 	for i := range 4 {
 		from := since.Add(time.Duration(i) * step)
 		part, more, err := l.list(ctx, t, rail, from, from.Add(step))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if more {
-			l.log().Warn("look-back: still more credits than one read holds", "tenant", t.Tenant, "channel", t.Channel, "from", from)
+		if more && short == nil {
+			short = fmt.Errorf("%s had more payments from %s than one read holds, so some were not read back", rail.Name, from.UTC().Format(time.RFC3339))
 		}
 		all = append(all, part...)
 	}
-	return all, nil
+	return all, short, nil
 }
 
 func (l *Looker) list(ctx context.Context, t Target, rail invoicing.Rail, since, until time.Time) ([]map[string]any, bool, error) {

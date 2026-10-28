@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/intent"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
@@ -241,6 +242,11 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 		return lang.Match{}
 	}
 	if !s.limiter("wa-intent:"+c.addr, 6*time.Second, 10).Allow() {
+		return lang.Match{}
+	}
+	// The model call needs the plan's ai feature, as on /v1/ai; without
+	// it, the message is routed by keywords alone.
+	if s.Billing.Require(ctx, c.tenant.ID, billing.FeatureAI) != nil {
 		return lang.Match{}
 	}
 	limit, used, err := s.aiBudget(ctx, c.tenant.ID)

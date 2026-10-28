@@ -187,6 +187,28 @@ func TestSchoolCashApprovalsAndReceipts(t *testing.T) {
 	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); len(x["amendments"].([]any)) != 1 || x["total_kobo"] != float64(8_000_000) {
 		t.Fatalf("amended %v", x)
 	}
+	// A line taken out lowers the invoice as a discount does: it waits too.
+	admin.must(201, "POST", "/v1/invoices/"+inv["number"].(string)+"/amendments", map[string]any{"kind": "add", "description": "School bus", "amount_kobo": 3_000_000, "reason": "Took the bus"})
+	code, out = admin.do("POST", "/v1/invoices/"+inv["number"].(string)+"/amendments", map[string]any{"kind": "remove", "line": 2, "reason": "Never took the bus"})
+	if code != 202 || out["request"].(map[string]any)["kind"] != "discount_amendment" || out["request"].(map[string]any)["amount_kobo"] != float64(3_000_000) {
+		t.Fatalf("removal at the threshold: %d %v", code, out)
+	}
+	second.must(200, "POST", "/v1/schools/approvals/"+out["request"].(map[string]any)["id"].(string), map[string]any{"decision": "declined", "reason": "The bus log has them"})
+
+	// Cash entered on Money and matched by hand at the threshold waits the
+	// same way: 202, nothing on the fees.
+	entered := admin.must(201, "POST", "/v1/money/entries", map[string]any{"kind": "cash", "direction": "in", "amount_kobo": 5_000_000, "description": "Fees at the gate"})
+	code, out = admin.do("POST", "/v1/money/entries/"+entered["entry_id"].(string)+"/match", map[string]any{"invoice": inv["number"]})
+	if code != 202 || out["code"] != "needs_approval" || out["request"].(map[string]any)["kind"] != "cash_match" || out["request"].(map[string]any)["invoice_number"] != inv["number"] {
+		t.Fatalf("matched by hand at the threshold: %d %v", code, out)
+	}
+	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); x["paid_kobo"] != float64(2_000_000) {
+		t.Fatalf("held money reached the fees %v", x)
+	}
+	second.must(200, "POST", "/v1/schools/approvals/"+out["request"].(map[string]any)["id"].(string), map[string]any{"decision": "approved"})
+	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); x["paid_kobo"] != float64(7_000_000) {
+		t.Fatalf("after approval %v", x)
+	}
 
 	// Undoing Ebube's payment voids its receipt, which stays.
 	pid := inv["payments"].([]any)[0].(map[string]any)["id"].(string)

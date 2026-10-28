@@ -672,16 +672,17 @@ func (s *Server) listFormRequests(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var list []requestOut
 	err := s.tx(r, func(tx pgx.Tx) error {
+		// The caller's roles in the query, so a page of requests for
+		// other roles does not hide theirs.
 		rows, err := tx.Query(r.Context(), `SELECT id, run_id, title, description, schema, recipient->>'role', status, expires_at, created_at FROM form_requests
-			WHERE status = 'pending' AND expires_at > now() AND recipient ? 'role' ORDER BY created_at DESC LIMIT 100`)
+			WHERE status = 'pending' AND expires_at > now() AND recipient ? 'role' AND ($1 OR recipient->>'role' = ANY($2))
+			ORDER BY created_at DESC LIMIT 100`, p.HasRole("owner"), p.Roles)
 		if err != nil {
 			return err
 		}
 		all, err := pgx.CollectRows(rows, pgx.RowToStructByPos[requestOutRow])
 		for _, x := range all {
-			if x.Role != nil && p.HasRole(*x.Role) {
-				list = append(list, x.out())
-			}
+			list = append(list, x.out())
 		}
 		return err
 	})

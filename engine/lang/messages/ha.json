@@ -976,6 +976,10 @@
       "text": "Kasafin AI na wannan wata ya ƙare kafin daftarin ya shirya. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo.",
       "reviewed": false
     },
+    "wa.build.changed": {
+      "text": "Wani ya canza wannan aikin tun da na fara ginawa (sigar {version}), a wurare iri ɗaya, don haka ban adana shi ba. Yi canjin a manhajar yanar gizo{link}.",
+      "reviewed": false
+    },
     "wa.build.denied": {
       "text": "Ba za ka iya gina ayyuka a {org} ba (yana buƙatar workflow.edit).",
       "reviewed": false
@@ -1042,6 +1046,10 @@
     },
     "wa.build.offer_publish": {
       "text": "In buga *{name}* yanzu don ya fara aiki? Ku amsa *yes* ko *no*.",
+      "reviewed": false
+    },
+    "wa.build.plan": {
+      "text": "Tsarin {org} bai haɗa da gini da AI ba, don haka ba zan iya gina wannan a nan ba. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo, ko ka canza tsari a Billing.",
       "reviewed": false
     },
     "wa.build.publish_later": {
@@ -1472,6 +1480,10 @@
       "text": "Idan ba haka ba, A'a zai nuna takardar kuɗi ta gaba.",
       "reviewed": false
     },
+    "wa.match.needs_approval": {
+      "text": "Ba a haɗa ba tukuna: da hannu aka shigar da wannan kuɗin kuma ya kai iyakar kuɗin makaranta, don haka wani mutum na biyu zai amince a Schools, Approvals.",
+      "reviewed": false
+    },
     "wa.match.other_person": {
       "text": "An aika wannan maɓallin ga wani.",
       "reviewed": false
@@ -1804,6 +1816,10 @@
       "text": "Wanne?\n{list}\nAika *run* da cikakken suna.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} da aka shigar da hannu, {by} ya haɗa shi da invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "An biya {amount} {how} don {student} ({class}), {by} ya shigar.",
       "reviewed": false
@@ -1830,6 +1846,10 @@
     },
     "wa.school.how.transfer": {
       "text": "ta hanyar tura kuɗi zuwa asusun makarantar",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "haɗa kuɗin da aka shigar da hannu",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {

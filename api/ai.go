@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -186,9 +188,13 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// The version a change starts from: saving merges onto what was
+	// saved since (saveAIBuildTx).
+	var baseDigest []byte
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{who.tenant}, func(tx pgx.Tx) error {
 		if req.Workflow != nil {
-			if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, *req.Workflow).Scan(&breq.Base); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT definition, digest FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, *req.Workflow).
+				Scan(&breq.Base, &baseDigest); err != nil {
 				return err
 			}
 		}
@@ -198,9 +204,9 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 		}
 		// A plan without AI gets no ai steps proposed.
 		breq.Context.AISteps = breq.Context.AISteps && s.Billing.Require(ctx, who.tenant, billing.FeatureAI) == nil
-		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, who.tenant, who.actor, pii.Redact(req.Goal), req.Workflow, req.Environment,
-			s.AI.Provider.Name(), s.AI.Provider.Model(), channel)
+		_, err = tx.Exec(ctx, `INSERT INTO ai_builds (id, tenant_id, actor, goal, workflow_id, environment, provider, model, channel, base_digest)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, who.tenant, who.actor, pii.Redact(req.Goal), req.Workflow, req.Environment,
+			s.AI.Provider.Name(), s.AI.Provider.Model(), channel, baseDigest)
 		return err
 	})
 	if err != nil {
@@ -509,6 +515,26 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 		}
 		c.CallableWorkflows = append(c.CallableWorkflows, builder.CallableWorkflow{ID: x.ID.String(), Name: x.Name, Inputs: x.Inputs, Outputs: x.Outputs, Effect: x.Effect.Words()})
 	}
+	// The business's published workflows a subflow step may run as a
+	// child run (decision 0049): those started by hand or by another run,
+	// with their inputs.
+	rows, err = tx.Query(ctx, `SELECT w.id, w.name, v.definition->'inputs'->'schema' FROM workflows w
+		JOIN workflow_versions v ON v.workflow_id = w.id AND v.version = w.active_version
+		WHERE v.definition->'trigger'->>'type' IN ('manual', 'subflow') AND ($1::uuid IS NULL OR w.id <> $1) ORDER BY w.name LIMIT 100`, skip)
+	if err != nil {
+		return c, err
+	}
+	c.Startable, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (builder.StartableWorkflow, error) {
+		var x builder.StartableWorkflow
+		var id uuid.UUID
+		var inputs []byte
+		err := r.Scan(&id, &x.Name, &inputs)
+		x.ID, x.Inputs = id.String(), inputs
+		return x, err
+	})
+	if err != nil {
+		return c, err
+	}
 	rows, err = tx.Query(ctx, `SELECT name, document FROM approval_policies WHERE state = 'active' ORDER BY name LIMIT 100`)
 	if err != nil {
 		return c, err
@@ -673,6 +699,9 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 		// Tables are the new data tables to make with the draft: the
 		// proposal's, as the person reviewed them (changed or left out).
 		Tables []tableReq `json:"tables,omitempty"`
+		// Resolutions settle the conflicts a previous save reported, as
+		// a canvas save's do.
+		Resolutions map[string]wdmerge.Resolution `json:"resolutions,omitempty"`
 	}
 	if r.ContentLength != 0 {
 		if err := decodeBody(r, &req); err != nil {
@@ -686,11 +715,16 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 	var doc []byte
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		wf, version, doc, err = s.saveAIBuildTx(r.Context(), tx, p, id, req.Name, func(action, target string, detail map[string]any) error {
+		wf, version, doc, err = s.saveAIBuildTx(r.Context(), tx, p, id, req.Name, req.Resolutions, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
 		})
 		return err
 	})
+	var mc *mergeConflict
+	if errors.As(err, &mc) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": mc.Error(), "conflicts": mc.conflicts, "latest_version": mc.latest, "latest_digest": mc.digest})
+		return
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -757,18 +791,21 @@ func (b *bodyRecorder) WriteHeader(int)             {}
 
 // saveAIBuildTx saves build id's proposal as a draft version by p: a new
 // workflow (named name, or the definition's name), or the next version of
-// the workflow the build modified. It never publishes. audit records in
-// the caller's channel (the web app or WhatsApp).
-func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id uuid.UUID, name string,
+// the workflow the build modified. A version saved since the build read
+// its base is kept: the proposal is merged onto it three ways, as a canvas
+// save naming its parent_digest is (createVersion), and conflicts not
+// settled by resolutions are a *mergeConflict. It never publishes. audit
+// records in the caller's channel (the web app or WhatsApp).
+func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id uuid.UUID, name string, resolutions map[string]wdmerge.Resolution,
 	audit func(action, target string, detail map[string]any) error) (uuid.UUID, int, []byte, error) {
 	var wf uuid.UUID
 	var version int
 	var status, model string
 	var target *uuid.UUID
 	var templateID *string
-	var prop []byte
-	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, template_id FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
-		Scan(&status, &target, &prop, &model, &templateID); err != nil {
+	var prop, base []byte
+	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
+		Scan(&status, &target, &prop, &model, &templateID, &base); err != nil {
 		return wf, 0, nil, err
 	}
 	if status != "proposed" {
@@ -792,8 +829,31 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 		if err := s.refuseGitManaged(ctx, tx, wf); err != nil {
 			return wf, 0, nil, err
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM workflow_versions WHERE workflow_id = $1`, wf).Scan(&version); err != nil {
+		var latest int
+		var latestDigest []byte
+		var latestDef []byte
+		err := tx.QueryRow(ctx, `SELECT version, digest, definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, wf).
+			Scan(&latest, &latestDigest, &latestDef)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return wf, 0, nil, err
+		}
+		version = latest + 1
+		if base != nil && latestDigest != nil && !bytes.Equal(base, latestDigest) {
+			var baseDef []byte
+			if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND digest = $2 ORDER BY version DESC LIMIT 1`, wf, base).
+				Scan(&baseDef); err != nil {
+				return wf, 0, nil, err
+			}
+			out, conflicts, err := wdmerge.Merge(baseDef, doc, latestDef, resolutions)
+			if err != nil {
+				return wf, 0, nil, fmt.Errorf("%w: %w", errBadRequest, err)
+			}
+			if len(conflicts) > 0 {
+				return wf, 0, nil, &mergeConflict{conflicts: conflicts, latest: latest, digest: hex.EncodeToString(latestDigest)}
+			}
+			if doc, err = canonical(out); err != nil {
+				return wf, 0, nil, err
+			}
 		}
 	} else {
 		name = strings.TrimSpace(name)
