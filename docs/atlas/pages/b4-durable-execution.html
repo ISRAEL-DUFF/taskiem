@@ -87,8 +87,8 @@
     <tr><td>Shutdown</td><td>In-flight steps get the drain time, then leases are released at once instead of waiting to expire</td><td><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) releaseLeases()"><code>releaseLeases</code></x-ref></td></tr>
   </tbody>
 </table></div>
-<div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec promises that "the queue interface swaps to NATS JetStream without changing the orchestrator" (<x-ref path="docs/spec/architecture.md" symbol="Exit path: if sustained load exceeds">spec 4.3</x-ref>). There is no such interface. The worker calls the claim and fence SQL functions directly, and task rows are written inside the same transaction as the events that cause them. That transactional coupling is the point of using Postgres, and a move to another queue would mean redesigning the outbox, not swapping an implementation. Treat JetStream as a rewrite of the dispatch path, not a configuration change.</p>
+<div class="callout note"><span class="callout-label">By design</span>
+  <p>There is no queue interface to swap for another system, and the spec now says so (<x-ref path="docs/spec/architecture.md" symbol="**Postgres is the queue by design, not as a stopgap.**">spec 4.3</x-ref>, amending decision 0002). Task rows are written inside the same transaction as the events that cause them, which no external queue can join. Moving off Postgres would be a redesign of dispatch (an outbox table and a relay), not a configuration change. A tuned or larger primary, the read replica, worker pools and moving large tenants come first.</p>
 </div>
 
 <h2>Waiting: timers, signals, callbacks, approvals</h2>
