@@ -253,6 +253,15 @@ func (s *Store) vote(ctx context.Context, tx pgx.Tx, ref RunRef, step string, v 
 	if tag.RowsAffected() == 0 {
 		return ErrAlreadyDecided
 	}
+	// The evidence that outlives the run (approval_history, 00243).
+	if _, err := tx.Exec(ctx, `INSERT INTO approval_history (tenant_id, run_id, step_id, level, user_id, on_behalf_of, decision, step_up, channel,
+			self_approved, decided_at, workflow_id, policy, amount_naira)
+		SELECT d.tenant_id, d.run_id, d.step_id, d.level, d.user_id, d.on_behalf_of, d.decision, d.step_up, d.channel, d.self_approved, d.decided_at,
+			r.workflow_id, a.policy, taskiem_subject_amount(a.subject)
+		FROM approval_decisions d JOIN approvals a ON a.run_id = d.run_id AND a.step_id = d.step_id JOIN runs r ON r.id = d.run_id
+		WHERE d.run_id = $1 AND d.step_id = $2 AND d.level = $3 AND d.user_id = $4`, ref.ID, step, a.level, v.UserID); err != nil {
+		return err
+	}
 	if v.Decision == "rejected" {
 		res.Status = "rejected"
 		return s.decideApproval(ctx, tx, ref, step, "rejected", v.UserID.String(), v.Channel, false)
