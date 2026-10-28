@@ -26,7 +26,7 @@ const payRidersTemplate = "pay-riders-weekly"
 type ridersPayView struct {
 	Lines []dispatch.PayLine `json:"lines"`
 	// WorkflowID is the pay-riders workflow, once set up.
-	WorkflowID *uuid.UUID         `json:"workflow_id"`
+	WorkflowID *uuid.UUID        `json:"workflow_id"`
 	Payouts    []dispatch.Payout `json:"payouts"`
 }
 
