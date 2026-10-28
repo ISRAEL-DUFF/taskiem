@@ -1,4 +1,8 @@
 version: "2"
+run:
+  # Lint the files behind //go:build e2e too (cmd/taskiem/democmd.go and its
+  # test), as go test -tags e2e builds them.
+  build-tags: [e2e]
 linters:
   default: standard
   enable:
