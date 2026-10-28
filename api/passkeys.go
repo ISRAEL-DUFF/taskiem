@@ -512,6 +512,7 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 var stepUpOps = map[string]bool{
 	"approval.decide": true, "account.reauth": true,
 	keyOpRotate: true, keyOpEnable: true, keyOpCredentials: true, keyOpDisable: true,
+	"pii.erase": true,
 }
 
 // stepUpScope is what a step-up challenge is bound to.

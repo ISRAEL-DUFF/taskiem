@@ -530,6 +530,7 @@ type eraseReq struct {
 	Subject  string `json:"subject,omitempty"`
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value,omitempty"`
+	stepUpProof
 }
 
 // erase destroys a data subject's key (NDPA erasure, spec 9.4), named
@@ -553,6 +554,11 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
+	}
+	// Erasure cannot be undone: a person confirms it, for this subject, with
+	// a passkey or authenticator code (Atlas part D findings).
+	if !s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasing personal data") {
+		return
 	}
 	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {
 		if errors.Is(err, secrets.ErrNotFound) {

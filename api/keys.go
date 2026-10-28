@@ -52,12 +52,19 @@ func (s *Server) keyRoutes(r chi.Router) {
 // second factor. It answers the request and returns false when the proof
 // is missing or wrong.
 func (s *Server) keyStepUp(w http.ResponseWriter, r *http.Request, proof stepUpProof, op string) bool {
+	return s.personStepUp(w, r, proof, op, principalFrom(r.Context()).TenantID.String(), "changing encryption keys")
+}
+
+// personStepUp holds an operation that cannot be undone to a person who
+// confirms it with a passkey (for a challenge asked for op and target) or a
+// current authenticator code; what names it in the messages.
+func (s *Server) personStepUp(w http.ResponseWriter, r *http.Request, proof stepUpProof, op, target, what string) bool {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil {
-		writeJSON(w, http.StatusForbidden, map[string]any{"error": "encryption key changes are made by a person who confirms with a passkey or authenticator code, not with an API key", "step_up": "required"})
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": what + " is done by a person who confirms with a passkey or authenticator code, not with an API key", "step_up": "required"})
 		return false
 	}
-	method, ok := s.checkStepUp(w, r, proof, stepUpScope(op, p.TenantID.String()))
+	method, ok := s.checkStepUp(w, r, proof, stepUpScope(op, target))
 	if !ok {
 		return false
 	}
@@ -78,9 +85,9 @@ func (s *Server) keyStepUp(w http.ResponseWriter, r *http.Request, proof stepUpP
 	}
 	msg := "confirm with your passkey or authenticator code"
 	if len(methods) == 0 {
-		msg = "add a passkey or an authenticator app under Account first: changing encryption keys needs one"
+		msg = "add a passkey or an authenticator app under Account first: " + what + " needs one"
 	}
-	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "step_up": "required", "methods": nonNil(methods), "operation": op, "target": p.TenantID})
+	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "step_up": "required", "methods": nonNil(methods), "operation": op, "target": target})
 	return false
 }
 
