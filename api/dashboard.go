@@ -69,7 +69,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
 	// $1 since, $2 environment ('' for all), $3 workflow (NULL for all)
-	runFilter := `r.started_at >= $1 AND ($2 = '' OR r.environment = $2) AND ($3::uuid IS NULL OR r.workflow_id = $3)`
+	const runFilter = `r.started_at >= $1 AND ($2 = '' OR r.environment = $2) AND ($3::uuid IS NULL OR r.workflow_id = $3)`
 	args := []any{since, env, wf}
 
 	out := map[string]any{"days": days, "environment": env, "time_zone": tz}
@@ -120,6 +120,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		// A step failure is a failed attempt; retried ones count too, since
 		// they show a provider or step that is struggling.
 		failures := func(cols, where, group string) ([]failureCount, error) {
+			//sqlcheck:built cols, where and group are literals from the two calls below
 			rows, err := tx.Query(ctx, `SELECT `+cols+`, count(*) FROM run_events f JOIN runs r ON r.id = f.run_id AND f.run_started_at = r.started_at
 				JOIN workflows w ON w.id = r.workflow_id
 				LEFT JOIN run_events s ON s.run_id = f.run_id AND s.run_started_at = f.run_started_at AND s.type = 'StepScheduled' AND s.step_id = f.step_id AND s.attempt = f.attempt

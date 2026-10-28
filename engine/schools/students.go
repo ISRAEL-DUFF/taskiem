@@ -138,6 +138,7 @@ func (s *Schools) scanStudents(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 }
 
 func (s *Schools) listStudents(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, where string, args ...any) ([]Student, error) {
+	//sqlcheck:built studentCols and studentFrom are consts; where is a literal, or one of two, at every caller
 	rows, err := tx.Query(ctx, `SELECT `+studentCols+studentFrom+` WHERE s.tenant_id = $1 AND `+where+` ORDER BY upper(s.admission_number)`, append([]any{tenant}, args...)...)
 	if err != nil {
 		return nil, err

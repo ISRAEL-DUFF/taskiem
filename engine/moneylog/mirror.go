@@ -229,6 +229,7 @@ func (m *Mirror) Matches(ctx context.Context, tenant uuid.UUID) error {
 			if x.table == "storefront_order_payments" {
 				q = `UPDATE storefront_order_payments SET mirrored_at = now() WHERE tenant_id = $1 AND id = $2 AND mirrored_at IS NULL`
 			}
+			//sqlcheck:built q is one of two literals, chosen by the table name the query above gives
 			_, err := tx.Exec(ctx, q, tenant, x.id)
 			return err
 		}); err != nil {

@@ -52,4 +52,6 @@ make docs SITE_APP=https://app.example.ng SITE_WHATSAPP=2348000000000 SITE_EMAIL
 - Every dependency must pass the licence gate (`make licences`).
 - Migrations are forward-only. Never edit a migration that has been merged; add a new one.
 - Every tenant-owned table has `tenant_id` and an RLS policy; the integration tests check this.
+- SQL is never built from values: every `Exec`, `Query`, `QueryRow` and `Batch.Queue` call is given constant SQL, with values as `$n` arguments. A query assembled from fixed pieces (a column list, a choice of literal `WHERE` clauses) carries `//sqlcheck:built <why every piece is fixed>` on its line or the line above. `tools/sqlcheck` checks this (`go test ./tools/sqlcheck/`).
+- A `SECURITY DEFINER` function the app role may call is listed in `engine/db/definers.tsv` with an owner and a reason, and a column the dispatch role may read in `engine/db/dispatch_columns.txt`; `engine/db` tests fail until they are.
 - Contracts in `schemas/` change only through a new schema version and a decision-log entry.

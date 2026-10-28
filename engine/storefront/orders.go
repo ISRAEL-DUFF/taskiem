@@ -226,7 +226,9 @@ func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st
 		args = append(args, status)
 		q += fmt.Sprintf(` AND status = $%d`, len(args))
 	}
-	rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d`, max(1, min(limit, 200))), args...)
+	args = append(args, max(1, min(limit, 200)))
+	//sqlcheck:built orderCols is a const, conditions are literals, the limit goes in as $n and $n from a count
+	rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d`, len(args)), args...)
 	if err != nil {
 		return nil, err
 	}

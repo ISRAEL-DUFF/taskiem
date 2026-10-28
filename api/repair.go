@@ -821,6 +821,7 @@ func scanRepair(r pgx.CollectableRow) (repairView, error) {
 func (s *Server) listRepairs(w http.ResponseWriter, r *http.Request, where string, arg any) {
 	var out []repairView
 	err := s.tx(r, func(tx pgx.Tx) error {
+		//sqlcheck:built where is a literal from the two callers below
 		rows, err := tx.Query(r.Context(), `SELECT `+repairColumns+` FROM repair_proposals WHERE `+where+` ORDER BY created_at DESC LIMIT 50`, arg)
 		if err != nil {
 			return err

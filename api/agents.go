@@ -349,6 +349,7 @@ func (s *Server) agentNewBusiness(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, st := range stmts {
+			//sqlcheck:built the statements are literals in this function
 			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 				return err
 			}
@@ -1001,6 +1002,7 @@ func (s *Server) opsAddAgent(w http.ResponseWriter, r *http.Request) {
 				{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{workspace}},
 				{`SELECT taskiem_ops_agent_add($1, $2, $3, $4, $5, $6, $7, $8, $9)`, []any{id, user, workspace, code, name, phone, region, checks, o.Actor()}},
 			} {
+				//sqlcheck:built the statements are literals in this function
 				if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 					return err
 				}

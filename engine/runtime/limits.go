@@ -760,6 +760,7 @@ func countUpTo(ctx context.Context, tx pgx.Tx, from string, max int, args ...any
 	}
 	var n int
 	args = append(args, max)
+	//sqlcheck:built from is a literal at every caller (api/limits.go, admission.go, store.go, checkBacklog); $n from a count
 	err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM (SELECT 1 FROM %s LIMIT $%d) c`, from, len(args)), args...).Scan(&n)
 	return n, err
 }

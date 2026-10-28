@@ -298,6 +298,7 @@ func (d *Digester) daily(ctx context.Context, tenant uuid.UUID, day time.Time) (
 			if !d.runs(ch.name) || len(us) == 0 {
 				continue
 			}
+			//sqlcheck:built ch.q is one of the two literals in the list above
 			rows, err := tx.Query(ctx, ch.q, us)
 			if err != nil {
 				return err

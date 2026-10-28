@@ -67,6 +67,7 @@ func (n *Notifier) Tell(ctx context.Context, m Message) (Result, error) {
 			if ch == "telegram" {
 				q = `SELECT user_id FROM taskiem_tg_accounts($1)`
 			}
+			//sqlcheck:built q is one of two literals above
 			rows, err := tx.Query(ctx, q, ids)
 			if err != nil {
 				return err
@@ -273,6 +274,7 @@ func recipients(ctx context.Context, tx pgx.Tx, m Message) ([]person, error) {
 		q = `SELECT DISTINCT u.id, u.email FROM memberships ms JOIN users u ON u.id = ms.user_id WHERE u.status = 'active' AND lower(u.email) = ANY ($1)`
 		args = []any{lower}
 	}
+	//sqlcheck:built q is one of three literals above
 	rows, err := tx.Query(ctx, q+` ORDER BY u.email LIMIT 50`, args...)
 	if err != nil {
 		return nil, err

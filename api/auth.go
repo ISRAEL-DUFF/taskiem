@@ -598,6 +598,7 @@ func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
 		}
 		for _, st := range stmts {
+			//sqlcheck:built the statements are literals in this function
 			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 				return err
 			}

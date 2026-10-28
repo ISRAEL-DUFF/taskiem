@@ -455,6 +455,7 @@ func History(ctx context.Context, tx pgx.Tx, runID uuid.UUID) ([]history.Event, 
 }
 
 func queryHistory(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]history.Event, error) {
+	//sqlcheck:built sql is a literal at every caller (History, HistoryAfter, callbacks.go)
 	rows, err := tx.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
@@ -759,6 +760,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
 		} {
+			//sqlcheck:built q is one of the literals in the list above
 			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}

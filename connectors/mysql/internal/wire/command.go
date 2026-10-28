@@ -294,6 +294,7 @@ func (c *Conn) Query(ctx context.Context, sql string) (*Rows, error) {
 
 // Exec runs a statement with COM_QUERY and discards any rows.
 func (c *Conn) Exec(ctx context.Context, sql string) (Result, error) {
+	//sqlcheck:built Exec passes its caller's statement through to COM_QUERY by design
 	rows, err := c.Query(ctx, sql)
 	if err != nil {
 		return Result{}, err

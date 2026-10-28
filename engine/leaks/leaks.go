@@ -145,6 +145,7 @@ func (d *Detector) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 			if strings.Contains(f.query, "$2") {
 				args = append(args, now.Add(-UnmatchedAfter))
 			}
+			//sqlcheck:built f.query is one of the literals in found, with nairaSQL of literal expressions
 			rows, err := tx.Query(ctx, f.query, args...)
 			if err != nil {
 				return fmt.Errorf("%s: %w", f.kind, err)
@@ -254,6 +255,7 @@ func List(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status string, limit
 	case "all":
 		where = `true`
 	}
+	//sqlcheck:built cols is a const and where one of three literals
 	rows, err := tx.Query(ctx, `SELECT `+cols+` FROM money_leaks WHERE tenant_id = $1 AND `+where+` ORDER BY opened_at DESC, id LIMIT $2`, tenant, limit)
 	if err != nil {
 		return nil, err
@@ -331,6 +333,7 @@ func change(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, set func() (st
 		return Leak{}, fmt.Errorf("%w (%s)", ErrState, l.Status)
 	}
 	q, args := set()
+	//sqlcheck:built set returns a literal at every caller (Assign, Close)
 	if _, err := tx.Exec(ctx, `UPDATE money_leaks SET `+q+` WHERE tenant_id = $1 AND id = $2`, append([]any{tenant, id}, args...)...); err != nil {
 		return Leak{}, err
 	}

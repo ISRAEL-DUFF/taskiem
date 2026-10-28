@@ -508,9 +508,9 @@ func afterConnect(dbRole string) func(context.Context, *pgx.Conn) error {
 	if dbRole == "" {
 		return nil
 	}
-	role := pgx.Identifier{dbRole}.Sanitize() //nolint:misspell // pgx API
 	return func(ctx context.Context, conn *pgx.Conn) error {
-		_, err := conn.Exec(ctx, "SET ROLE "+role)
+		// SET ROLE, with the role as an argument rather than SQL text.
+		_, err := conn.Exec(ctx, `SELECT set_config('role', $1, false)`, dbRole)
 		return err
 	}
 }
