@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -23,6 +24,14 @@ import (
 
 const dispatchOrdersTemplate = "dispatch-orders"
 
+// replacesWorkflow refuses to take a workflow the business made or
+// changed itself out of the order form without its say-so.
+type replacesWorkflow struct{ name string }
+
+func (e replacesWorkflow) Error() string {
+	return fmt.Sprintf("your order form starts your own workflow %q; turning on deliveries takes it out of use", e.name)
+}
+
 // deliveriesView is whether the order form's workflow offers orders to
 // riders.
 type deliveriesView struct {
@@ -31,27 +40,35 @@ type deliveriesView struct {
 }
 
 // orderWorkflowTx is the workflow the order form starts in prod, and the
-// template its deployed version was made from.
+// template its deployed version was made from ("" for one the business
+// wrote or changed: a version from a template that was then edited has
+// none).
 func orderWorkflowTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, error) {
+	wf, tpl, _, err := orderWorkflowNamedTx(ctx, tx)
+	return wf, tpl, err
+}
+
+func orderWorkflowNamedTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, string, error) {
 	var wf uuid.UUID
-	var tpl string
-	err := tx.QueryRow(ctx, `SELECT t.workflow_id, COALESCE(v.template_id, '') FROM triggers t
-		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version
-		WHERE t.type = 'storefront' AND t.environment = 'prod' AND t.storefront_action = 'order'`).Scan(&wf, &tpl)
+	var tpl, name string
+	err := tx.QueryRow(ctx, `SELECT t.workflow_id, COALESCE(v.template_id, ''), w.name FROM triggers t
+		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version JOIN workflows w ON w.id = t.workflow_id
+		WHERE t.type = 'storefront' AND t.environment = 'prod' AND t.storefront_action = 'order'`).Scan(&wf, &tpl, &name)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, "", nil
+		return nil, "", "", nil
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
-	return &wf, tpl, nil
+	return &wf, tpl, name, nil
 }
 
 // turnOnDeliveriesTx makes the order form's workflow from dispatch-orders
 // and publishes it in place of the one it starts now. It needs the order
 // form to deliver; under four-eyes publishing it is refused, since the
-// form would start nothing while the new workflow waited.
-func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal, audit func(action, target string, detail map[string]any) error) (deliveriesView, error) {
+// form would start nothing while the new workflow waited. A workflow other
+// than the plain storefront-order one is replaced only with replace.
+func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal, replace bool, audit func(action, target string, detail map[string]any) error) (deliveriesView, error) {
 	actions, err := storefront.Actions(ctx, tx, p.TenantID)
 	if err != nil {
 		return deliveriesView{}, err
@@ -65,12 +82,15 @@ func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal
 	if !delivers {
 		return deliveriesView{}, fmt.Errorf("%w: turn on delivery on your order form first", errConflict)
 	}
-	old, tplID, err := orderWorkflowTx(ctx, tx)
+	old, tplID, oldName, err := orderWorkflowNamedTx(ctx, tx)
 	if err != nil {
 		return deliveriesView{}, err
 	}
 	if tplID == dispatchOrdersTemplate {
 		return deliveriesView{On: true, WorkflowID: old}, nil
+	}
+	if old != nil && tplID != "storefront-order" && !replace {
+		return deliveriesView{}, replacesWorkflow{name: oldName}
 	}
 	g, err := governanceTx(ctx, tx)
 	if err != nil {
@@ -142,15 +162,30 @@ func (s *Server) turnOnDeliveries(w http.ResponseWriter, r *http.Request) {
 	if !s.dispatchReady(w, r) {
 		return
 	}
+	var in struct {
+		// Replace takes a workflow the business made itself out of use.
+		Replace bool `json:"replace"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil && !errors.Is(err, io.EOF) {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	p := principalFrom(r.Context())
 	var out deliveriesView
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = s.turnOnDeliveriesTx(r.Context(), tx, p, func(action, target string, detail map[string]any) error {
+		out, err = s.turnOnDeliveriesTx(r.Context(), tx, p, in.Replace, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
 		})
 		return err
 	}); err != nil {
+		var rw replacesWorkflow
+		if errors.As(err, &rw) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": rw.Error() + ". Send replace to go ahead.", "code": "replaces_workflow", "workflow": rw.name})
+			return
+		}
 		s.fail(w, r, err)
 		return
 	}
@@ -164,11 +199,15 @@ func (s *Server) shopTurnOnDeliveries(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("wa.publish.denied", "org", c.tenant.Name))
 	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		_, err := s.turnOnDeliveriesTx(ctx, tx, c.p, func(action, target string, detail map[string]any) error {
+		_, err := s.turnOnDeliveriesTx(ctx, tx, c.p, false, func(action, target string, detail map[string]any) error {
 			return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 		})
 		return err
 	})
+	var rw replacesWorkflow
+	if errors.As(err, &rw) {
+		return c.say(ctx, s, c.t("wa.dispatch.on_failed", "reason", rw.Error()+"; turn deliveries on from the Deliveries page to replace it"))
+	}
 	if errors.Is(err, errConflict) {
 		return c.say(ctx, s, c.t("wa.dispatch.on_failed", "reason", strings.TrimPrefix(plainError(err), "conflict: ")))
 	}

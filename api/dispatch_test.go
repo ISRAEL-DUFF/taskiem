@@ -23,6 +23,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/telegram"
+	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 	"github.com/israel-duff/taskiem/templates"
@@ -349,14 +351,30 @@ func TestTurnOnDeliveries(t *testing.T) {
 	const adaWA = "+2348020000001"
 	ada.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": adaWA, "password": testPassword})
 	ada.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, adaWA).Text)})
-	got := w.whatsapp(t, adaWA, "turn on deliveries")
-	if len(got) != 1 || !strings.Contains(got[0].Text, "Turn on deliveries now?") || len(got[0].Buttons) != 2 {
-		t.Fatalf("asked: %+v", got)
+	turnOn := func() []whatsapptest.Sent {
+		t.Helper()
+		got := w.whatsapp(t, adaWA, "turn on deliveries")
+		if len(got) != 1 || !strings.Contains(got[0].Text, "Turn on deliveries now?") || len(got[0].Buttons) != 2 {
+			t.Fatalf("asked: %+v", got)
+		}
+		return w.press(t, adaWA, got[0].Buttons[0].ID)
 	}
-	if got = w.press(t, adaWA, got[0].Buttons[0].ID); len(got) != 1 || !strings.Contains(got[0].Text, "Deliveries are on") {
+	// The form's workflow here was written by the business, not made from
+	// the plain template: it is not replaced without its say-so.
+	if got := turnOn(); len(got) != 1 || !strings.Contains(got[0].Text, "starts your own workflow") {
+		t.Fatalf("own workflow in chat: %+v", got)
+	}
+	if e := ada.must(409, "POST", "/v1/dispatch/workflow", map[string]any{}); e["code"] != "replaces_workflow" || e["workflow"] == "" {
+		t.Fatalf("own workflow: %v", e)
+	}
+	// Made from the plain template, it is replaced.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE workflow_versions SET template_id = 'storefront-order' WHERE workflow_id = $1`, old); err != nil {
+		t.Fatal(err)
+	}
+	if got := turnOn(); len(got) != 1 || !strings.Contains(got[0].Text, "Deliveries are on") {
 		t.Fatalf("yes: %+v", got)
 	}
-	on := ada.must(200, "POST", "/v1/dispatch/workflow", nil)
+	on := ada.must(200, "POST", "/v1/dispatch/workflow", map[string]any{"replace": true})
 	wf, _ := on["workflow_id"].(string)
 	if on["on"] != true || wf == "" || wf == old {
 		t.Fatalf("on: %v", on)
@@ -365,7 +383,7 @@ func TestTurnOnDeliveries(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM triggers WHERE type = 'storefront' AND environment = 'prod' AND tenant_id = $1`, w.biz).Scan(&triggers); err != nil || triggers != 1 {
 		t.Fatalf("the form starts %d workflows: %v", triggers, err)
 	}
-	if again := ada.must(200, "POST", "/v1/dispatch/workflow", nil); again["workflow_id"] != wf {
+	if again := ada.must(200, "POST", "/v1/dispatch/workflow", nil); again["workflow_id"] != wf || again["on"] != true {
 		t.Fatalf("again: %v", again)
 	}
 
@@ -426,7 +444,56 @@ func TestTurnOnDeliveriesRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	ada.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish": true})
-	if e := ada.must(409, "POST", "/v1/dispatch/workflow", nil); !strings.Contains(fmt.Sprint(e["error"]), "four-eyes") {
+	if e := ada.must(409, "POST", "/v1/dispatch/workflow", map[string]any{"replace": true}); !strings.Contains(fmt.Sprint(e["error"]), "four-eyes") {
 		t.Fatalf("four-eyes: %v", e)
+	}
+}
+
+// A rider tapped in on Telegram gets the offer there with inline buttons,
+// and their taps work as on WhatsApp (dispatch D2, D3).
+func TestDispatchOnTelegram(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	const tunde = int64(7101)
+	path := strings.TrimPrefix(ada.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+	loc, _ := url.Parse(w.page(t, path+"/telegram", nil).Header().Get("Location"))
+	start := loc.Query().Get("start")
+	if start == "" {
+		t.Fatalf("telegram link %v", loc)
+	}
+	w.telegram(t, tunde, func(id int64) []byte { return telegramtest.Start(id, tunde, "", start) })
+	w.telegram(t, tunde, func(id int64) []byte { return telegramtest.ContactMessage(id, tunde, "+2348031110002", tunde) })
+	r := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Tunde Ade", "phone": "+2348031110002", "zones": []string{"Lekki"}})["rider"].(map[string]any)
+	if r["reached"] != "telegram" {
+		t.Fatalf("tunde %v", r)
+	}
+	ref := w.order(t, "none")
+	ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+	w.tick(t)
+	offer := w.bot.Last(t, tunde)
+	if !strings.Contains(offer.Text, "A delivery for you: "+ref) || len(offer.Keyboard) == 0 || offer.Keyboard[0][0].Text != "Accept" {
+		t.Fatalf("the offer on Telegram: %+v", offer)
+	}
+	tap := func(b telegram.InlineButton) []telegramtest.Call {
+		return w.telegram(t, tunde, func(id int64) []byte {
+			return telegramtest.Callback(id, tunde, offer.MessageID, fmt.Sprintf("q%d", id), b.Data)
+		})
+	}
+	got := tap(offer.Keyboard[0][0])
+	var held telegramtest.Call
+	for _, c := range got {
+		if c.Method == "sendMessage" {
+			held = c
+		}
+	}
+	if !strings.Contains(held.Text, ref+" is yours") || len(held.Keyboard) == 0 || held.Keyboard[0][0].Text != "Picked up" {
+		t.Fatalf("accepted on Telegram: %+v", got)
+	}
+	// Words work there too.
+	got = w.telegram(t, tunde, func(id int64) []byte { return telegramtest.Message(id, tunde, "", "picked up") })
+	if len(got) == 0 || !strings.Contains(got[len(got)-1].Text, "On your way with "+ref) {
+		t.Fatalf("picked up on Telegram: %+v", got)
+	}
+	if o := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil)["order"].(map[string]any); o["status"] != "on_the_way" {
+		t.Fatalf("order %v", o["status"])
 	}
 }

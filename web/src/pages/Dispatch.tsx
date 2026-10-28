@@ -213,6 +213,17 @@ export function StorefrontDeliveries() {
   const [settings, setSettings] = useState(false);
   const on = useLoad(() => get<{ on: boolean; workflow_id: string | null }>("/v1/dispatch/workflow"), []);
   const turnOn = useAction();
+  // A workflow the business made itself is replaced only once the owner says so.
+  const turnOnDeliveries = async () => {
+    try {
+      await post("/v1/dispatch/workflow");
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.body.code !== "replaces_workflow") throw e;
+      if (!confirm(`Your order form starts your own workflow "${String(e.body.workflow ?? "")}". Turning on deliveries takes it out of use. Go ahead?`)) return;
+      await post("/v1/dispatch/workflow", { replace: true });
+    }
+    on.reload();
+  };
   const off = dispatchOff(view.error);
   const list = view.data?.deliveries ?? [];
   return (
@@ -240,7 +251,7 @@ export function StorefrontDeliveries() {
             this, you offer each order from its page.
           </p>
           <ErrorBox error={turnOn.error} />
-          <button type="button" className="primary" disabled={turnOn.busy} onClick={() => void turnOn.run(async () => (await post("/v1/dispatch/workflow"), on.reload()), "Deliveries are on")}>
+          <button type="button" className="primary" disabled={turnOn.busy} onClick={() => void turnOn.run(turnOnDeliveries, "Deliveries are on")}>
             Turn on deliveries
           </button>
         </section>

@@ -376,6 +376,64 @@
             }
           ]
         }
+      },
+      {
+        "id": "tell_no_bank",
+        "type": "connector",
+        "name": "Tell the owner nobody was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "prepare"
+        ],
+        "when": "=size(steps.prepare.output.payouts) == 0 && size(steps.prepare.output.not_paid) > 0",
+        "input": {
+          "to": "owner",
+          "title": "Riders' payout",
+          "message": "='No rider was paid: add a bank account under Riders > Pay riders for ' + steps.prepare.output.not_paid.join(', ') + ', and they are paid next time.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_no_bank_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_unchecked",
+        "type": "connector",
+        "name": "Tell the owner nobody was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "release_unchecked"
+        ],
+        "when": "=true",
+        "input": {
+          "to": "owner",
+          "title": "Riders' payout",
+          "message": "='No rider was paid: their banks did not find the account of ' + string(size(steps.list.output.unchecked)) + (size(steps.list.output.unchecked) == 1 ? ' rider' : ' riders') + '. Check the account numbers under Riders > Pay riders; they are paid next time.' + (size(steps.prepare.output.not_paid) > 0 ? ' No bank account set for: ' + steps.prepare.output.not_paid.join(', ') + '.' : '')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_unchecked_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
       }
     ]
   }

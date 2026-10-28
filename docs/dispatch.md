@@ -138,7 +138,7 @@ Once an order is delivered, the customer's message and their status page ask **H
 
 Orders can be offered from their page or chat with any order workflow. **Turn on deliveries** (on the Deliveries page, or `turn on deliveries` in chat) goes further. It makes the order form's workflow from the [`dispatch-orders`](templates.md) template and publishes it in place of the one the form starts now, in one change. The form and its settings stay as they are.
 
-The workflow accepts, takes payment and confirms as the plain order workflow does. It then offers each confirmed order for delivery to the riders, and the rider's Delivered completes the run. An order for pickup still asks the owner to mark it collected. The order form must deliver. Under four-eyes publishing, it is refused: the business adds the template from Templates and a second person publishes it.
+The workflow accepts, takes payment and confirms as the plain order workflow does. It then offers each confirmed order for delivery to the riders, and the rider's Delivered completes the run. An order for pickup still asks the owner to mark it collected. The order form must deliver. When the form starts a workflow the business made or changed itself, Taskiem asks before taking it out of use (the API answers 409 `replaces_workflow` until `{"replace": true}`; in chat it is refused, pointing to the Deliveries page). Under four-eyes publishing, it is refused: the business adds the template from Templates and a second person publishes it.
 
 ## Money
 

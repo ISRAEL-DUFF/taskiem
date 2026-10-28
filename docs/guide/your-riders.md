@@ -6,7 +6,7 @@ If you deliver your shop's orders with riders of your own, Taskiem sends each or
 
 1. **Your delivery areas.** Open **Storefront > Forms > Order**, turn on delivery, and list the areas you deliver to with each one's delivery fee: "Lekki Phase 1, ₦1,500". Customers choose their area and see the fee before they order. Tick **Customers may pay at the door** if you take payment on delivery.
 2. **Your riders.** Open **Storefront > Riders** and press **Add a rider**: their name, mobile number, the areas they cover and what you pay them per delivery. They get a text with a link; one tap opens WhatsApp, and from then on your deliveries reach them there.
-3. **Deliveries by themselves.** Open **Storefront > Deliveries** and press **Turn on deliveries**. Every order for delivery you accept then goes to your riders by itself. Without it, you send each order from its page. On WhatsApp, send *turn on deliveries*.
+3. **Deliveries by themselves.** Open **Storefront > Deliveries** and press **Turn on deliveries**. Every order for delivery you accept then goes to your riders by itself. Without it, you send each order from its page. On WhatsApp, send *turn on deliveries*. If you changed your order workflow yourself, Taskiem asks before replacing it.
 
 Riders tell Taskiem when they are working: they send *off*, *on* or *busy till 3pm*. It counts for every business they ride for, and you never see which.
 

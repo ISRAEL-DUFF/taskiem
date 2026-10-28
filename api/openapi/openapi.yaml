@@ -5855,7 +5855,8 @@ paths:
       description: |
         Makes the order form's workflow from the dispatch-orders template and publishes it in place of the one the form starts
         now, in one change: each confirmed order for delivery is then offered to the business's riders. Again, nothing changes.
-        409 when the order form does not deliver, under four-eyes publishing, or when the workflow cannot be published.
+        409 when the order form does not deliver, under four-eyes publishing, or when the workflow cannot be published; with
+        code replaces_workflow when the form starts a workflow other than the plain storefront-order one, until replace is sent.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -5863,6 +5864,17 @@ paths:
       - apiKey: []
       x-taskiem-permission: storefront.manage,workflow.edit,workflow.publish
       x-taskiem-all-environments: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                replace:
+                  type: boolean
+                  description: Take a workflow the business made or changed itself out of use
       responses:
         '200':
           description: Deliveries are on
