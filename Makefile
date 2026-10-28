@@ -75,7 +75,7 @@ image:
 chart:
 	helm lint --strict deploy/helm/taskiem
 	{ echo "# Generated from deploy/helm/taskiem by: helm template taskiem deploy/helm/taskiem --namespace taskiem"; \
-	  echo "# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem Secret first."; \
+	  echo "# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem and taskiem-migrate Secrets first."; \
 	  helm template taskiem deploy/helm/taskiem --namespace taskiem --set ingress.enabled=true; } > deploy/kubernetes/taskiem.yaml
 
 # The public site: the product website and, under docs/, the docs and API

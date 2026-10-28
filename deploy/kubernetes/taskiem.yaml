@@ -1,5 +1,5 @@
 # Generated from deploy/helm/taskiem by: helm template taskiem deploy/helm/taskiem --namespace taskiem
-# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem Secret first.
+# Do not edit; change the chart and regenerate (docs/kubernetes.md). Create the taskiem and taskiem-migrate Secrets first.
 ---
 # Source: taskiem/templates/pdb.yaml
 apiVersion: policy/v1

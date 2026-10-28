@@ -76,6 +76,7 @@ Migrations are goose SQL files in `engine/db/migrations`, applied in order by `t
 
 - **Forward-only.** Never edit, rename or delete a migration that has been merged; add a new one. CI's `migrations` job fails a pull request that changes a file under `engine/db/migrations/` that its base branch has (adding files is fine).
 - **New indexes on large tables** are built with `CREATE INDEX CONCURRENTLY`, so writes to the table are not blocked while the index builds. `CONCURRENTLY` cannot run inside a transaction, so that migration starts with `-- +goose NO TRANSACTION` and holds only statements that may run outside one. A failed concurrent build leaves an invalid index behind: drop it before the migration runs again.
+- **Short locks.** `taskiem migrate` sets `lock_timeout` (10s by default, `TASKIEM_MIGRATE_LOCK_TIMEOUT`) and takes a session lock so two runs take turns. A migration that has to wait for a lock fails and is retried rather than blocking live pods, so take strong locks only briefly: add columns without a volatile default, and backfill in batches rather than in one `UPDATE`.
 
 ## Rules that CI enforces
 

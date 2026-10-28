@@ -166,7 +166,7 @@
   </tbody>
 </table></div>
 <div class="callout"><span class="callout-label">Resolved</span>
-  <p>The Business plan declares <x-ref path="deploy/plans.yaml" symbol="max_subtenants: 50"><code>max_subtenants: 50</code></x-ref>, but creating a sub-tenant used to check only <code>partners.max_subtenants</code>, which defaults to 0, meaning no cap, so a Business partner could create any number. <x-ref path="engine/db/migrations/00255_subtenant_plan_cap.sql" symbol="IF v_max = 0 THEN">00255</x-ref> falls back to the partner's plan's cap when the operator set none (<x-ref path="engine/db/subtenants_test.go" symbol="func TestSubtenantCapFallsBackToThePlan(">TestSubtenantCapFallsBackToThePlan</x-ref>). <code>GET /v1/partner</code> still shows only the operator's cap.</p>
+  <p>The Business plan declares <x-ref path="deploy/plans.yaml" symbol="max_subtenants: 50"><code>max_subtenants: 50</code></x-ref>, but creating a sub-tenant used to check only <code>partners.max_subtenants</code>, which defaults to 0, meaning no cap, so a Business partner could create any number. <x-ref path="engine/db/migrations/00255_subtenant_plan_cap.sql" symbol="IF v_max = 0 THEN">00255</x-ref> falls back to the partner's plan's cap when the operator set none (<x-ref path="engine/db/subtenants_test.go" symbol="func TestSubtenantCapFallsBackToThePlan(">TestSubtenantCapFallsBackToThePlan</x-ref>). <code>GET /v1/partner</code> reports the same cap.</p>
 </div>
 <div class="callout risk"><span class="callout-label">Risk</span>
   <p>The active but unlisted Business plan costs ₦250,000 a month, more than Enterprise at ₦180,000, which has more features. That is a pricing question for the founder.</p>
