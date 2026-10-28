@@ -71,6 +71,18 @@ type Store struct {
 	hitCount atomic.Int64
 }
 
+// settleStatus, appended to the UPDATE that ends a decision, sets a live
+// run's status from the work it has left: running while it has a task
+// queued or with a worker, waiting while all it has left are waits (an
+// approval, a timer, a signal, a form, a callback, a child run). Queued,
+// parked and ended runs keep their status.
+const settleStatus = `, status = CASE WHEN runs.status NOT IN ('running', 'waiting') THEN runs.status
+	WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.run_id = runs.id) THEN 'running' ELSE 'waiting' END`
+
+// liveStatuses are the statuses of a run that has started and not ended
+// or parked: what counts against a tenant's running-runs limit.
+const liveStatuses = `status IN ('running', 'waiting')`
+
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
 // (a buffered signal consumed by a new wait triggers another round).
 const maxInlineRounds = 16
@@ -359,7 +371,7 @@ func tenantHold(ctx context.Context, tx pgx.Tx, req StartRequest, l Limits) (str
 	if waiting {
 		return "backlog", nil
 	}
-	n, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND status = 'running'`, l.MaxRunningRuns, req.TenantID)
+	n, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND `+liveStatuses, l.MaxRunningRuns, req.TenantID)
 	if err != nil {
 		return "", err
 	}
@@ -569,7 +581,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			if scheduled > 0 {
 				return s.countSteps(ctx, tx, run, def, scheduled)
 			}
-			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
+			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, ref.ID)
 			return err
 		}
 	}
@@ -583,7 +595,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 // beyond the cap ever reaches a worker.
 func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
 	var total int
-	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2
+	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2`+settleStatus+`
 		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
 		return err
 	}
@@ -744,7 +756,6 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		for _, q := range []string{
 			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
-			`DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
 		} {
@@ -752,10 +763,29 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 				return nil, err
 			}
 		}
+		// A run cancelled with reversing reverses the child runs its subflow
+		// steps wait for first (decision 0054): the step keeps its wait, so
+		// it hears when each child has ended, and decide waits for that.
+		children, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
+		if err != nil {
+			return nil, err
+		}
+		if len(children) == 0 {
+			if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run.ref.ID, ev.StepID); err != nil {
+				return nil, err
+			}
+			break
+		}
+		// After decide's batch: a child with nothing to reverse ends at
+		// once and tells this step so, and that event must follow the
+		// batch and be decided in the next round.
+		return func() error { return s.reverseChildren(ctx, tx, run.ref.TenantID, children) }, nil
 	case history.RunCompleted:
 		return nil, s.endRun(ctx, tx, run, def, "completed")
 	case history.RunFailed:
 		return nil, s.endRun(ctx, tx, run, def, "failed")
+	case history.RunCancelled:
+		return nil, s.endRun(ctx, tx, run, def, "cancelled") // a reversed cancel, once its compensations ran
 	}
 	return nil, nil
 }
@@ -1096,27 +1126,53 @@ func (s *Store) DecideApproval(ctx context.Context, ref RunRef, step, decision, 
 	})
 }
 
-// CancelRun ends a run now. Steps a worker is executing still record their
-// results; nothing new starts (spec 4.10).
-func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string) error {
+// CancelRun cancels a run; nothing new starts (spec 4.10). With reverse
+// (decision 0054), decide withdraws its unfinished steps, waits for writes
+// already under way, runs its completed steps' compensations newest first
+// and then ends it, so the run may still be running when this returns.
+// Without, it ends now: steps a worker is executing still record their
+// results, and completed steps stay as they are.
+func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string, reverse bool) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
-		run, err := lockRun(ctx, tx, ref.ID)
-		if err != nil {
-			return err
-		}
-		switch run.status {
-		case "completed", "failed", "cancelled":
-			return nil
-		}
-		if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, history.OriginAPI); err != nil {
-			return err
-		}
-		def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
-		if err != nil {
-			return err
-		}
-		return s.endRun(ctx, tx, run, def, "cancelled")
+		return s.cancelTx(ctx, tx, ref, by, reverse, history.OriginAPI)
 	})
+}
+
+func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, reverse bool, origin string) error {
+	run, err := lockRun(ctx, tx, ref.ID)
+	if err != nil {
+		return err
+	}
+	switch run.status {
+	case "completed", "failed", "cancelled":
+		return nil
+	}
+	if reverse && run.status != "queued" {
+		// Decide ends the run once its writes under way have settled and
+		// its compensations have run (decision 0054); asked twice, the
+		// first request stands.
+		if asked, err := cancelRequested(ctx, tx, ref.ID); err != nil || asked {
+			return err
+		}
+		if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, origin); err != nil {
+			return err
+		}
+		return s.decideInline(ctx, tx, ref)
+	}
+	if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, origin); err != nil {
+		return err
+	}
+	def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
+	if err != nil {
+		return err
+	}
+	return s.endRun(ctx, tx, run, def, "cancelled")
+}
+
+func cancelRequested(ctx context.Context, tx pgx.Tx, run uuid.UUID) (bool, error) {
+	var asked bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND type = $2)`, run, history.CancelRequested).Scan(&asked)
+	return asked, err
 }
 
 // RunStatus reports a run's status.

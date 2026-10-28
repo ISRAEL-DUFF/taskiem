@@ -1,6 +1,6 @@
 # Dispatch: your own riders
 
-A business that delivers its storefront orders with riders of its own runs them in Taskiem. The riders are people outside the business, reached in chat. An order is offered to a rider, who taps **Accept**. The rider's own taps (**Picked up**, **Arrived**, **Delivered**) tell the customer and complete the order. A customer paying at the door gets a one-time account number for the order when the rider arrives, so the money never passes through the rider. Cash is recorded as the exception, owed by the rider until it is handed in. Riders are paid their fees each week under one approval, and customers rate each delivery. The plan is [dispatch](spec/dispatch.md) ([decision 0053](decisions/0053-dispatch-with-own-riders.md)).
+A business that delivers its storefront orders with riders of its own runs them in Taskiem. The riders are people outside the business, reached in chat. An order is offered to a rider, who taps **Accept**. The rider's own taps (**Picked up**, **Arrived**, **Delivered**) tell the customer and complete the order. A customer paying at the door gets a one-time account number for the order when the rider arrives, so the money never passes through the rider. Cash is recorded as the exception, owed by the rider until it is handed in. Riders are paid their fees each week under one approval, and customers rate each delivery. The plan is [dispatch](spec/dispatch.md) ([decision 0055](decisions/0055-dispatch-with-own-riders.md)).
 
 ## Delivery areas
 

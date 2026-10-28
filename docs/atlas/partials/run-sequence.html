@@ -1,0 +1,75 @@
+<figure class="diagram seq" aria-labelledby="cap-{{uid}}">
+<svg viewBox="0 0 520 540" role="img" aria-labelledby="t-{{uid}}">
+  <title id="t-{{uid}}">The life of a run as a sequence: a webhook reaches the edge, three transactions in PostgreSQL, a worker's call to Paystack, waits, and recovery</title>
+  <defs>
+    <marker id="rh-{{uid}}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <text class="d-lane" x="40" y="22" text-anchor="middle">Caller</text>
+  <text class="d-lane" x="150" y="22" text-anchor="middle">edge</text>
+  <text class="d-lane" x="265" y="22" text-anchor="middle">Postgres</text>
+  <text class="d-lane" x="380" y="22" text-anchor="middle">worker</text>
+  <text class="d-lane" x="480" y="22" text-anchor="middle">Paystack</text>
+  <path class="d-life" d="M40 34V530M150 34V530M265 34V530M380 34V530M480 34V530"/>
+
+  <g data-stage="s1">
+    <path class="d-line" d="M40 62H148" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="94" y="55" text-anchor="middle">POST /hooks/…</text>
+    <rect class="d-box" x="80" y="71" width="140" height="26" rx="4"/>
+    <text class="d-msg" x="150" y="88" text-anchor="middle">gate·verify·dedup</text>
+  </g>
+
+  <g data-stage="s2">
+    <rect class="d-tx" x="258" y="112" width="14" height="52" rx="2"/>
+    <path class="d-line" d="M150 124H256" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="204" y="117" text-anchor="middle">T1 start + decide</text>
+    <path class="d-line dash" d="M258 150H152" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="204" y="145" text-anchor="middle">commit</text>
+    <path class="d-line dash" d="M150 170H42" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="96" y="165" text-anchor="middle">202 {run_id}</text>
+  </g>
+
+  <g data-stage="s3">
+    <path class="d-line dash" d="M272 198H378" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="325" y="192" text-anchor="middle">NOTIFY</text>
+    <path class="d-line" d="M380 222H274" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="325" y="216" text-anchor="middle">claim · lease</text>
+  </g>
+
+  <g data-stage="s4">
+    <rect class="d-tx" x="258" y="242" width="14" height="28" rx="2"/>
+    <path class="d-line" d="M380 258H274" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="325" y="252" text-anchor="middle">T2 intent</text>
+  </g>
+
+  <g data-stage="s5">
+    <path class="d-line" d="M380 294H478" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="430" y="288" text-anchor="middle">transfer</text>
+    <path class="d-line dash" d="M480 318H382" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="430" y="312" text-anchor="middle">success</text>
+  </g>
+
+  <g data-stage="s6">
+    <rect class="d-tx" x="258" y="338" width="14" height="34" rx="2"/>
+    <path class="d-line" d="M380 356H274" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="325" y="350" text-anchor="middle">T3 done + decide</text>
+  </g>
+
+  <g data-stage="s7">
+    <path class="d-line" d="M40 404H256" marker-end="url(#rh-{{uid}})"/>
+    <text class="d-msg" x="148" y="398" text-anchor="middle">approve · signal · timer</text>
+  </g>
+
+  <g data-stage="s8">
+    <rect class="d-note" x="150" y="428" width="230" height="40" rx="5"/>
+    <text class="d-msg" x="265" y="445" text-anchor="middle">scheduler: timers · leases</text>
+    <text class="d-msg" x="265" y="460" text-anchor="middle">sweep · admit queued runs</text>
+  </g>
+
+  <g data-stage="s9">
+    <rect class="d-tx" x="258" y="488" width="14" height="28" rx="2"/>
+    <text class="d-msg" x="280" y="506">RunCompleted · endRun</text>
+  </g>
+</svg>
+<figcaption class="d-caption" id="cap-{{uid}}">T1, T2 and T3 are the transactions that matter. Nothing is sent to Paystack until T2 has committed its intent.</figcaption>
+</figure>

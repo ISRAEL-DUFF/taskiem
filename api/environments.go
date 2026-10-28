@@ -354,7 +354,7 @@ func (s *Server) promote(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(ctx, `SELECT definition, taskiem_actor_human(created_by) FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&def, &author); err != nil {
 			return err
 		}
-		if g.FourEyesPublish {
+		if g.approvalNeeded(req.To) {
 			if p.UserID == uuid.Nil {
 				return fmt.Errorf("%w: with four-eyes publishing, a person promotes", errForbidden)
 			}

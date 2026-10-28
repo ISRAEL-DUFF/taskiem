@@ -1,4 +1,4 @@
-# 0053 — Dispatch with a business's own riders: assignment and delivery in chat, payment at the door by a one-time account number, cash the exception
+# 0055 — Dispatch with a business's own riders: assignment and delivery in chat, payment at the door by a one-time account number, cash the exception
 
 Date: 2026-10-27 · Status: **Accepted** (built 28 October 2026) · Plan: [dispatch](../spec/dispatch.md)
 

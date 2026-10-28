@@ -1,4 +1,4 @@
-# The riders platform connector (docs/dispatch.md, decision 0053): the
+# The riders platform connector (docs/dispatch.md, decision 0055): the
 # business's own riders, the people who deliver its orders. It acts on
 # Taskiem's own records, for the run's tenant only, and needs no
 # connection. offer and release hand an order to a rider and take it back;

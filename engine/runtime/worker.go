@@ -508,6 +508,7 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 	if p.mode == modeSend {
 		result = w.send(ctx, p)
 	}
+	result = capOutput(p, result)
 	if w.Hooks != nil && w.Hooks.AfterCall != nil {
 		if err := w.Hooks.AfterCall(c.step, c.attempt); err != nil {
 			return nil
@@ -554,6 +555,37 @@ func failed(c claim, kind, msg, next string) history.Event {
 	return history.Event{Type: history.StepFailed, StepID: c.step, Attempt: c.attempt, Payload: raw}
 }
 
+// maxStepOutput bounds a step's output kept in its history (spec 4.9:
+// 256 KB inline). A larger one would be copied into the decision cache and
+// every replay of the run; until outputs over it move to object storage, a
+// step that returns one fails. http steps cut their response body to the
+// same size instead (maxHTTPBody), and container steps keep to their own
+// limits.output_bytes.
+const maxStepOutput = 256 << 10
+
+// capOutput turns a completion whose output is over maxStepOutput into a
+// failure that says so. A write has already happened, so it parks for an
+// operator, who records it as completed with a smaller output, rather than
+// failing in a way someone could take for "not paid".
+func capOutput(p *plan, ev history.Event) history.Event {
+	if ev.Type != history.StepCompleted || p.stepType == "http" || p.stepType == "container" {
+		return ev
+	}
+	var cp struct {
+		Output json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(ev.Payload, &cp); err != nil || len(cp.Output) <= maxStepOutput {
+		return ev
+	}
+	msg := fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10)
+	if !p.class.IsWrite() {
+		return failed(p.c, "output_too_large", msg, "fail")
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "output_too_large", Next: "park", MaybeApplied: true,
+		Message: msg + ". The provider accepted the call: record the step as completed with the output later steps need"}})
+	return history.Event{Type: history.StepFailed, StepID: ev.StepID, Attempt: ev.Attempt, Payload: raw}
+}
+
 func completedEvent(c claim, out any, reconciled bool) history.Event {
 	raw, _ := json.Marshal(history.CompletedPayload{Output: out, Reconciled: reconciled})
 	return history.Event{Type: history.StepCompleted, StepID: c.step, Attempt: c.attempt, Payload: raw}
@@ -586,7 +618,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		p.taint = taint
 		observeRunStart(hist, c, dbNow)
-		found, cancelled := false, false
+		found, cancelled, reissued := false, false, false
 		var intents []history.IntentPayload
 		var intentAttempts []int
 		var intentTimes []time.Time
@@ -611,6 +643,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				var fp history.FailedPayload
 				_ = json.Unmarshal(e.Payload, &fp)
 				outcomes[e.Attempt] = fp.Error
+				reissued = reissued || fp.Error.Reissue
 				if e.Attempt == c.attempt {
 					p.mode = modeDone
 				}
@@ -620,6 +653,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 					return err
 				}
 				intents = append(intents, ip)
+				reissued = false // an operator's re-issue moves only the key sent after it
 				intentAttempts = append(intentAttempts, e.Attempt)
 				intentTimes = append(intentTimes, e.RecordedAt)
 			}
@@ -668,6 +702,9 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup
+			if reissued {
+				p.group++
+			}
 			p.intentAt = intentTimes[n-1]
 			var next effects.Next
 			if prev, ok := outcomes[lastAttempt]; ok && lastAttempt != c.attempt {
@@ -749,8 +786,9 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 			p.spec = &defaultHTTPKey
 		}
 	case p.stepType == "code":
-		// Code has no external effects of its own; host.fetch goes through
-		// the egress guard. It is treated as a read for retries.
+		// Code has no external effects of its own: host.fetch goes through
+		// the egress guard and refuses every method but GET and HEAD, so a
+		// re-run after a crash cannot repeat a write. A read for retries.
 		p.class = effects.Read
 	case p.stepType == "ai":
 		// Asking a model changes nothing: a read, retried freely.

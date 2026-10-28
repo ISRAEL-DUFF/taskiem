@@ -1041,7 +1041,11 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 		if err != nil {
 			return err
 		}
-		if g.FourEyesPublish {
+		wait, err := publishNeedsApproval(ctx, tx, g, nil)
+		if err != nil {
+			return err
+		}
+		if wait {
 			if p.UserID == uuid.Nil {
 				return fmt.Errorf("%w: with four-eyes publishing, a person accepts a repair and another approves its publication", errForbidden)
 			}
@@ -1072,7 +1076,7 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 			model = *v.Model
 		}
 		return auditTx(r, tx, "ai.repair.accept", fmt.Sprintf("%s/%d", v.WorkflowID, version), map[string]any{"proposal": v.ID.String(),
-			"run": v.RunID.String(), "co_author": "ai:" + model, "created_by": repairCreatedBy, "four_eyes": g.FourEyesPublish})
+			"run": v.RunID.String(), "co_author": "ai:" + model, "created_by": repairCreatedBy, "four_eyes": wait})
 	})
 	if err == nil && published {
 		if g := s.proposeToGit(r, v.WorkflowID, version); g != nil {

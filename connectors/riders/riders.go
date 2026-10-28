@@ -1,5 +1,5 @@
 // Package riders is the riders platform connector (docs/dispatch.md,
-// decision 0053): what workflows read and do with the business's own
+// decision 0055): what workflows read and do with the business's own
 // riders (list, read, add, retire). Unlike provider connectors it acts on
 // Taskiem's own records, for the tenant of the run calling it
 // (connector.CallerFrom), never one named in its input.

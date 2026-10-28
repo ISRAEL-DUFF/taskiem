@@ -115,11 +115,12 @@ func (o *Orders) statusKeyOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, i
 	return key, err
 }
 
-// endBooking ends a booking's run, if it has one, and tells the customer
-// (text empty: nobody).
+// endBooking ends a booking's run, if it has one, reversing what it did as
+// any cancel does (decision 0054), and tells the customer (text empty:
+// nobody).
 func (o *Orders) endBooking(ctx context.Context, tenant uuid.UUID, reference string, run *uuid.UUID, text, key string) error {
 	if run != nil && o.Cancel != nil {
-		if err := o.Cancel(ctx, runtime.RunRef{ID: *run, TenantID: tenant}, "storefront"); err != nil {
+		if err := o.Cancel(ctx, runtime.RunRef{ID: *run, TenantID: tenant}, "storefront", true); err != nil {
 			return err
 		}
 	}

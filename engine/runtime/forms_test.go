@@ -60,7 +60,7 @@ func TestFormStep(t *testing.T) {
 	wf := e.Publish(t, strings.Replace(formFlow, `"ON"`, `"fail"`, 1))
 	run := e.Start(t, wf, map[string]any{"body": map[string]any{"phone": "+2348031234567", "name": "Bola"}})
 	e.Drain(t)
-	if err := e.Store.CancelRun(ctx, run, "test"); err != nil {
+	if err := e.Store.CancelRun(ctx, run, "test", true); err != nil {
 		t.Fatal(err)
 	}
 	var status string

@@ -1,0 +1,31 @@
+<!--atlas
+{
+  "id": "triggers-channels",
+  "title": "Triggers, ingest and channels",
+  "part": "C",
+  "order": 3,
+  "status": "planned",
+  "summary": "Webhooks, connector events, cron and polling, remote registration, back-pressure, and the WhatsApp, Telegram, USSD and email channels.",
+  "scope": [
+    "Every <code>/hooks</code> route",
+    "Trigger registration and environments (decisions 0012 and 0021)",
+    "Platform apps routed by account (decision 0051)",
+    "Polling providers that send no webhooks; cron",
+    "Ingest rates and back-pressure",
+    "The platform WhatsApp number: binding, sessions, templates",
+    "Telegram, the USSD fast path, inbound email",
+    "Languages and voice notes"
+  ],
+  "sources": [
+    "engine/ingest/",
+    "engine/remote/",
+    "engine/whatsapp/",
+    "engine/telegram/",
+    "engine/ussd/",
+    "engine/inmail/",
+    "engine/voice/",
+    "engine/lang/",
+    "engine/reach/"
+  ]
+}
+-->

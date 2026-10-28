@@ -2,6 +2,8 @@ package runtime_test
 
 import (
 	"compress/gzip"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +23,7 @@ func TestConcurrencyKeySerialisesRuns(t *testing.T) {
 	a := e.Start(t, wf, map[string]any{"borrower": "b1"})
 	b := e.Start(t, wf, map[string]any{"borrower": "b1"})
 	c := e.Start(t, wf, map[string]any{"borrower": "b2"})
-	if e.Status(t, a) != "running" || e.Status(t, b) != "queued" || e.Status(t, c) != "running" {
+	if e.Status(t, a) != "waiting" || e.Status(t, b) != "queued" || e.Status(t, c) != "waiting" { // admitted runs wait on their approval
 		t.Fatalf("statuses %s %s %s", e.Status(t, a), e.Status(t, b), e.Status(t, c))
 	}
 	e.Drain(t) // the sweep must not decide a queued run
@@ -31,7 +33,7 @@ func TestConcurrencyKeySerialisesRuns(t *testing.T) {
 	if err := e.Store.DecideApproval(ctx, a, "ok", "approved", "u", "web"); err != nil {
 		t.Fatal(err)
 	}
-	if e.Status(t, a) != "completed" || e.Status(t, b) != "running" {
+	if e.Status(t, a) != "completed" || e.Status(t, b) != "waiting" {
 		t.Fatalf("after a: %s %s", e.Status(t, a), e.Status(t, b))
 	}
 	h := events(t, e, b)
@@ -52,10 +54,10 @@ func TestMaxConcurrencyQueuesAndCancelPromotes(t *testing.T) {
 	if e.Status(t, b) != "queued" {
 		t.Fatalf("b %s", e.Status(t, b))
 	}
-	if err := e.Store.CancelRun(ctx, a, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, a, "u", true); err != nil {
 		t.Fatal(err)
 	}
-	if e.Status(t, b) != "running" {
+	if e.Status(t, b) != "waiting" {
 		t.Errorf("b should be admitted once a is cancelled: %s", e.Status(t, b))
 	}
 }
@@ -103,6 +105,91 @@ func TestOperatorResolvesParkedStep(t *testing.T) {
 	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'run.resolve'`).Scan(&audits)
 	if audits != 2 {
 		t.Errorf("audit entries %d", audits)
+	}
+}
+
+// intentsOf returns the EffectIntent payloads recorded for one step.
+func intentsOf(t *testing.T, e *rt.Env, ref runtime.RunRef, step string) []history.IntentPayload {
+	t.Helper()
+	var out []history.IntentPayload
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.EffectIntent && ev.StepID == step {
+			var ip history.IntentPayload
+			if err := json.Unmarshal(ev.Payload, &ip); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, ip)
+		}
+	}
+	return out
+}
+
+// An operator's retry is a person re-issuing the effect: the provider gets
+// a new key, not the one it may have cached a failure for (decision 0053).
+func TestOperatorRetryReissuesKey(t *testing.T) {
+	e := rt.New(t)
+	faulty := true
+	e.Provider.Faults = func(string) rt.Fault {
+		if faulty {
+			return rt.FailAfter
+		}
+		return rt.NoFault
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"fakepay@1","action":"transfer","retry":{"max":0},"input":{"amount":1,"logical_id":"=run.id"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "needs_reconciliation" {
+		t.Fatalf("setup: %s %s", st, types(events(t, e, ref)))
+	}
+	faulty = false
+	if err := e.Store.ResolveStep(ctx, ref, "pay", runtime.ResolveRetry, nil, "provider shows the transfer failed: insufficient balance", "ops"); err != nil {
+		t.Fatal(err)
+	}
+	rt.WaitFor(t, 10*time.Second, "retried run", func() bool { e.Drain(t); return e.Status(t, ref) != "running" })
+	if st := e.Status(t, ref); st != "completed" {
+		for _, ev := range events(t, e, ref) {
+			t.Logf("%s(%s)#%d %s", ev.Type, ev.StepID, ev.Attempt, ev.Payload)
+		}
+		t.Fatalf("after retry: %s %s", st, types(events(t, e, ref)))
+	}
+	in := intentsOf(t, e, ref, "pay")
+	if len(in) != 2 || in[0].AttemptGroup != 0 || in[1].AttemptGroup != 1 || in[0].Key == in[1].Key {
+		t.Fatalf("intents: %+v", in)
+	}
+	// The provider saw the new reference, so it acted on the re-issue
+	// instead of answering from the first reference's record.
+	if n := e.Provider.Executions(ref.ID.String()); n != 2 {
+		t.Errorf("provider executions: %d, want 2", n)
+	}
+}
+
+// A worker that dies after recording an unsafe write's intent leaves the
+// step parked; an operator's retry sends it, under a new key, instead of
+// parking it again over the old intent.
+func TestOperatorRetryAfterCrashSends(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"sms","type":"connector","connector":"fakepay@1","action":"notify","input":{"logical_id":"=run.id"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	w := e.Worker("crashy")
+	w.Lease = 300 * time.Millisecond
+	w.Hooks = &runtime.Hooks{AfterIntent: func(string, int) error { return errors.New("crash after intent") }}
+	if _, err := w.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond) // the lease expires
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "needs_reconciliation" || e.Provider.Executions(ref.ID.String()) != 0 {
+		t.Fatalf("setup: %s executions=%d %s", st, e.Provider.Executions(ref.ID.String()), types(events(t, e, ref)))
+	}
+	if err := e.Store.ResolveStep(ctx, ref, "sms", runtime.ResolveRetry, nil, "not in provider logs", "ops"); err != nil {
+		t.Fatal(err)
+	}
+	rt.WaitFor(t, 10*time.Second, "retried run", func() bool { e.Drain(t); return e.Status(t, ref) != "running" })
+	if st := e.Status(t, ref); st != "completed" || e.Provider.Executions(ref.ID.String()) != 1 {
+		t.Fatalf("after retry: %s executions=%d %s", st, e.Provider.Executions(ref.ID.String()), types(events(t, e, ref)))
+	}
+	if in := intentsOf(t, e, ref, "sms"); len(in) != 2 || in[1].AttemptGroup != 1 {
+		t.Errorf("intents: %+v", in)
 	}
 }
 

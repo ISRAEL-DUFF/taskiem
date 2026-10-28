@@ -1,4 +1,4 @@
--- Dispatch (docs/spec/dispatch.md D2 to D5, decision 0053): an order
+-- Dispatch (docs/spec/dispatch.md D2 to D5, decision 0055): an order
 -- offered to a business's own rider, the delivery the rider drives with
 -- their taps, payment at the door, cash and what each rider owes, their
 -- fees and payouts, and the customer's rating.

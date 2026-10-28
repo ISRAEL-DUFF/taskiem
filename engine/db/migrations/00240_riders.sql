@@ -1,4 +1,4 @@
--- Riders (docs/spec/dispatch.md D1, decision 0053): the people who deliver
+-- Riders (docs/spec/dispatch.md D1, decision 0055): the people who deliver
 -- for a business, outside it as its customers are (decision 0039). A rider
 -- is the business's, keyed as its contacts are by the keyed hash of their
 -- phone, with their name and phone sealed under the phone's personal-data

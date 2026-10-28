@@ -1,5 +1,5 @@
 // Package dispatch is a business's own riders delivering its storefront
-// orders (docs/spec/dispatch.md D2 to D5, decision 0053): an order ready
+// orders (docs/spec/dispatch.md D2 to D5, decision 0055): an order ready
 // to go is offered to one rider at a time with Accept and Can't, by
 // rotation among the riders who cover its area (free ones first) or by
 // the owner's hand; the rider who accepts holds it, and drives the

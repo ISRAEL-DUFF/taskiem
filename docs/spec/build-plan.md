@@ -200,7 +200,7 @@ Phase 4 turns a hand-held product into a self-serve cloud: Nigeria-hosted, highl
 | Area | Deliverable | Spec section |
 | --- | --- | --- |
 | Cloud | Nigeria-region production cloud: HA Postgres with synchronous standby, PITR, fixed egress IPs | 2.3, 15.4 |
-| Scale | Workers split by queue, dedicated worker pools for enterprise, read replicas for the inspector; JetStream migration only if load tests require it | 2.3, 4.3 |
+| Scale | Workers split by queue, dedicated worker pools for enterprise, read replicas for the inspector; Postgres stays the queue (a larger primary and tenant moves first; a redesigned dispatch only if load tests require it) | 2.3, 4.3 |
 | Billing | Plans, subscriptions, capacity enforcement (concurrency, throughput, retention), usage snapshots, naira payments | 16 |
 | Onboarding | Self-serve signup, guided first workflow, template gallery, in-product docs | — |
 | Docs | Public docs site, API reference, connector SDK guide, all written originally | — |

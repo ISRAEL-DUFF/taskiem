@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,6 +30,12 @@ const maxFetchBody = 1 << 20
 
 // maxFetches bounds host.fetch calls in one step.
 const maxFetches = 50
+
+// errFetchWrite refuses a write from a code step. The engine treats code as
+// a read: it records no effect intent, so a worker that dies after the call
+// would run the script, and send the write, again. Writes belong in an http
+// or connector step, which declares its class and carries a key.
+var errFetchWrite = errors.New("host.fetch allows only GET and HEAD in code steps; send writes from an http or connector step, which declares an action class")
 
 // runCode executes a code step in the sandbox.
 func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Result, error) {
@@ -65,13 +72,16 @@ func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Resul
 		if fetches.Add(1) > maxFetches {
 			return sandbox.FetchResponse{}, fmt.Errorf("more than %d fetches in one step", maxFetches)
 		}
-		hc, err := w.client(ctx, p, lim.Timeout)
-		if err != nil {
-			return sandbox.FetchResponse{}, err
-		}
 		method := strings.ToUpper(r.Method)
 		if method == "" {
 			method = http.MethodGet
+		}
+		if method != http.MethodGet && method != http.MethodHead {
+			return sandbox.FetchResponse{}, fmt.Errorf("%s: %w", method, errFetchWrite)
+		}
+		hc, err := w.client(ctx, p, lim.Timeout)
+		if err != nil {
+			return sandbox.FetchResponse{}, err
 		}
 		req, err := http.NewRequestWithContext(ctx, method, r.URL, strings.NewReader(r.Body))
 		if err != nil {

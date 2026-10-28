@@ -66,6 +66,7 @@ var internal = []struct{ pattern, why string }{
 	{"runbooks/*", "Taskiem's own runbooks for its environments, for the team"},
 	{"brand", "Taskiem's logo files and colour rules, for the team and its designers"},
 	{"brand/screens", "how the web app's screens use the brand, for the team and coding agents"},
+	{"atlas", "the engineering atlas's maintainer guide; the atlas itself is docs/atlas/site/index.html"},
 }
 
 // isInternal reports whether a docs page (path without ".md") stays out of the site.

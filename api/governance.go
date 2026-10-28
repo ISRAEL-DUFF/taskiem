@@ -27,8 +27,13 @@ import (
 // --- settings ---
 
 type governance struct {
-	FourEyesPublish  bool `json:"four_eyes_publish"`
-	FourEyesPolicies bool `json:"four_eyes_policies"`
+	// FourEyesPublish: publishing to, or promoting into, any environment
+	// needs a second person.
+	FourEyesPublish bool `json:"four_eyes_publish"`
+	// FourEyesPublishEnvironments: when FourEyesPublish is off, the
+	// environments that need one (spec 3.4): prod alone, typically.
+	FourEyesPublishEnvironments []string `json:"four_eyes_publish_environments"`
+	FourEyesPolicies            bool     `json:"four_eyes_policies"`
 	// DefaultRetention keeps run payloads this long after a run ends when
 	// its workflow sets no settings.retention (spec 9.4); empty is 90 days.
 	DefaultRetention string `json:"default_retention"`
@@ -44,12 +49,49 @@ func governanceTx(ctx context.Context, tx pgx.Tx) (governance, error) {
 	var g governance
 	on := true
 	g.AISteps = &on
-	err := tx.QueryRow(ctx, `SELECT four_eyes_publish, four_eyes_policies, COALESCE(default_retention, ''), ai_steps, updated_by, updated_at FROM governance_settings`).
-		Scan(&g.FourEyesPublish, &g.FourEyesPolicies, &g.DefaultRetention, g.AISteps, &g.UpdatedBy, &g.UpdatedAt)
+	err := tx.QueryRow(ctx, `SELECT four_eyes_publish, four_eyes_publish_environments, four_eyes_policies, COALESCE(default_retention, ''), ai_steps, updated_by, updated_at FROM governance_settings`).
+		Scan(&g.FourEyesPublish, &g.FourEyesPublishEnvironments, &g.FourEyesPolicies, &g.DefaultRetention, g.AISteps, &g.UpdatedBy, &g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return governance{AISteps: &on}, nil
+		return governance{AISteps: &on, FourEyesPublishEnvironments: []string{}}, nil
 	}
 	return g, err
+}
+
+// approvalNeeded reports whether deploying to any of envs needs a second
+// person.
+func (g governance) approvalNeeded(envs ...string) bool {
+	if g.FourEyesPublish {
+		return true
+	}
+	for _, e := range envs {
+		if slices.Contains(g.FourEyesPublishEnvironments, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// publishNeedsApproval reports whether publishing a version needs a second
+// person: whether any environment the publish deploys to (every ungated
+// one, or those in only) does. A publish waits as a whole; an environment
+// that takes versions by promotion is not among them, so making prod a
+// promotion target lets dev and staging publish freely while prod needs
+// its second person at promotion.
+func publishNeedsApproval(ctx context.Context, tx pgx.Tx, g governance, only []string) (bool, error) {
+	if g.FourEyesPublish {
+		return true, nil
+	}
+	if len(g.FourEyesPublishEnvironments) == 0 {
+		return false, nil
+	}
+	targets, err := deployTargets(ctx, tx, "")
+	if err != nil {
+		return false, err
+	}
+	if only != nil {
+		targets = slices.DeleteFunc(targets, func(env string) bool { return !slices.Contains(only, env) })
+	}
+	return g.approvalNeeded(targets...), nil
 }
 
 // aiStepsAllowed reports whether the business lets its workflows ask the
@@ -100,15 +142,23 @@ func (s *Server) putGovernance(w http.ResponseWriter, r *http.Request) {
 		if req.AISteps == nil {
 			req.AISteps = before.AISteps
 		}
-		if _, err := tx.Exec(r.Context(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, four_eyes_policies, default_retention, ai_steps, updated_by) VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6)
-			ON CONFLICT (tenant_id) DO UPDATE SET four_eyes_publish = EXCLUDED.four_eyes_publish, four_eyes_policies = EXCLUDED.four_eyes_policies,
-			  default_retention = EXCLUDED.default_retention, ai_steps = EXCLUDED.ai_steps, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-			p.TenantID, req.FourEyesPublish, req.FourEyesPolicies, req.DefaultRetention, *req.AISteps, p.Actor()); err != nil {
+		if req.FourEyesPublishEnvironments == nil {
+			req.FourEyesPublishEnvironments = before.FourEyesPublishEnvironments
+		}
+		envs, err := knownEnvironments(r.Context(), tx, req.FourEyesPublishEnvironments)
+		if err != nil {
+			return err
+		}
+		req.FourEyesPublishEnvironments = envs
+		if _, err := tx.Exec(r.Context(), `INSERT INTO governance_settings (tenant_id, four_eyes_publish, four_eyes_publish_environments, four_eyes_policies, default_retention, ai_steps, updated_by) VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7)
+			ON CONFLICT (tenant_id) DO UPDATE SET four_eyes_publish = EXCLUDED.four_eyes_publish, four_eyes_publish_environments = EXCLUDED.four_eyes_publish_environments,
+			  four_eyes_policies = EXCLUDED.four_eyes_policies, default_retention = EXCLUDED.default_retention, ai_steps = EXCLUDED.ai_steps, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+			p.TenantID, req.FourEyesPublish, req.FourEyesPublishEnvironments, req.FourEyesPolicies, req.DefaultRetention, *req.AISteps, p.Actor()); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "governance.change", "", map[string]any{
-			"before": map[string]any{"four_eyes_publish": before.FourEyesPublish, "four_eyes_policies": before.FourEyesPolicies, "default_retention": before.DefaultRetention, "ai_steps": *before.AISteps},
-			"after":  map[string]any{"four_eyes_publish": req.FourEyesPublish, "four_eyes_policies": req.FourEyesPolicies, "default_retention": req.DefaultRetention, "ai_steps": *req.AISteps},
+			"before": map[string]any{"four_eyes_publish": before.FourEyesPublish, "four_eyes_publish_environments": before.FourEyesPublishEnvironments, "four_eyes_policies": before.FourEyesPolicies, "default_retention": before.DefaultRetention, "ai_steps": *before.AISteps},
+			"after":  map[string]any{"four_eyes_publish": req.FourEyesPublish, "four_eyes_publish_environments": req.FourEyesPublishEnvironments, "four_eyes_policies": req.FourEyesPolicies, "default_retention": req.DefaultRetention, "ai_steps": *req.AISteps},
 		})
 	})
 	if err != nil {
@@ -116,6 +166,24 @@ func (s *Server) putGovernance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, req)
+}
+
+// knownEnvironments returns envs sorted and without repeats, refusing a
+// name that is not one of the business's environments.
+func knownEnvironments(ctx context.Context, tx pgx.Tx, envs []string) ([]string, error) {
+	out := slices.Clone(envs)
+	slices.Sort(out)
+	out = slices.Compact(out)
+	for _, e := range out {
+		var ok bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM environments WHERE name = $1)`, e).Scan(&ok); err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("%w: four_eyes_publish_environments names %q, which is not one of your environments", errBadRequest, e)
+		}
+	}
+	return out, nil
 }
 
 // --- approval policies ---

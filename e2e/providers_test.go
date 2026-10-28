@@ -25,8 +25,8 @@ func lose(w http.ResponseWriter) {
 	}
 }
 
-// runTo starts a manual run through the API and drives it until it leaves
-// "running" or deadline passes, returning the run as the API shows it.
+// runTo starts a manual run through the API and drives it until stop says
+// so or the deadline passes, returning the run as the API shows it.
 func runTo(t *testing.T, s *stack, owner, wf string, input map[string]any, stop func(map[string]any) bool) (string, map[string]any) {
 	t.Helper()
 	run := s.must(t, 201, owner, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": input})["run_id"].(string)
@@ -117,8 +117,8 @@ func TestLencoPayoutSurvivesALostResponse(t *testing.T) {
 	s.must(t, 200, owner, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
 
 	run, got := runTo(t, s, owner, wf, map[string]any{"amount": 200000, "account_number": "8144374977", "bank_code": "000014"},
-		func(r map[string]any) bool { return scheduled(r, "settle") || runStatus(r) != "running" })
-	if runStatus(got) != "running" {
+		func(r map[string]any) bool { return scheduled(r, "settle") || !live(r) })
+	if !live(got) {
 		t.Fatalf("run %s ended %s before the webhook:\n%s", run, runStatus(got), toJSON(got["events"]))
 	}
 	mu.Lock()
@@ -148,11 +148,18 @@ func TestLencoPayoutSurvivesALostResponse(t *testing.T) {
 	rt.WaitFor(t, 30*time.Second, "settled run", func() bool {
 		s.Drain(t)
 		got = s.must(t, 200, owner, "GET", "/v1/runs/"+run, nil)
-		return runStatus(got) != "running"
+		return !live(got)
 	})
 	if runStatus(got) != "completed" || !strings.Contains(toJSON(got), "transaction.successful") {
 		t.Fatalf("run %s: %s\n%s", run, runStatus(got), toJSON(got["events"]))
 	}
+}
+
+// live reports whether a run has started and not ended: running, or
+// waiting on a signal, a timer or a person.
+func live(r map[string]any) bool {
+	st := runStatus(r)
+	return st == "running" || st == "waiting"
 }
 
 const breetFlow = `{"schema":"wd/v1","id":"wf_breetWithdraw","version":1,"name":"Breet withdrawal","trigger":{"type":"manual"},
@@ -205,7 +212,7 @@ func TestBreetWithdrawalReconcilesInsteadOfResending(t *testing.T) {
 	wf := s.must(t, 201, owner, "POST", "/v1/workflows", map[string]any{"name": "withdraw", "definition": json.RawMessage(breetFlow)})["id"].(string)
 	s.must(t, 200, owner, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
 
-	run, got := runTo(t, s, owner, wf, map[string]any{"cents": 2500, "address": "TRecipient"}, func(r map[string]any) bool { return runStatus(r) != "running" })
+	run, got := runTo(t, s, owner, wf, map[string]any{"cents": 2500, "address": "TRecipient"}, func(r map[string]any) bool { return !live(r) })
 	if runStatus(got) != "completed" || !strings.Contains(toJSON(got), `"withdrawal_id":"w-1"`) {
 		t.Fatalf("run %s: %s\n%s", run, runStatus(got), toJSON(got["events"]))
 	}

@@ -14,7 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
-// The business's own riders (docs/dispatch.md D1, decision 0053):
+// The business's own riders (docs/dispatch.md D1, decision 0055):
 // Storefront > Riders lists them with where they are reached and their
 // state, adds them by name and phone (sending the tap-in link), changes
 // their areas and fee, and retires them.

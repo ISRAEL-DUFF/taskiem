@@ -1,0 +1,117 @@
+<!--atlas
+{
+  "id": "exactly-once",
+  "title": "Exactly-once effects",
+  "part": "B",
+  "order": 3,
+  "summary": "How Taskiem keeps a payment from happening twice when steps run at least once: action classes, derived idempotency keys and their encoding, intents, call deadlines, reconciliation, and parking for a person.",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
+  "sources": [
+    "engine/effects/", "engine/runtime/worker.go", "engine/runtime/operator.go", "engine/runtime/reconcilecheck.go", "engine/runtime/keyresume.go", "engine/runtime/fork.go",
+    "engine/decide/decide.go", "engine/history/history.go", "engine/sandbox/sandbox.go",
+    "docs/contracts/action-classes.md", "docs/contracts/idempotency.md", "docs/decisions/0009-write-call-deadlines.md", "docs/spec/architecture.md"
+  ]
+}
+-->
+<h2>What is promised, and on what terms</h2>
+<p>Delivery is at least once. Any step can run twice, because a worker can die after doing the work and before recording it. Taskiem makes the <em>effect</em> happen once by knowing, for every action, what is safe to do when it is unsure whether an earlier attempt reached the provider. That knowledge is the action's <strong>class</strong>, declared in the connector's manifest. The class alone decides retry behaviour.</p>
+<p>The guarantee therefore depends on the provider. With an idempotency key the provider honours, or a way to ask whether something happened, Taskiem can make an effect exactly-once. With neither, it guarantees at most once: it stops and asks a person rather than risk sending twice.</p>
+
+<h2>The four classes</h2>
+<div class="stats">
+  <div class="stat"><x-stat name="actions-read"/><span class="stat-k"><code>read</code> actions in first-party connectors</span></div>
+  <div class="stat"><x-stat name="actions-idempotent_write"/><span class="stat-k"><code>idempotent_write</code></span></div>
+  <div class="stat"><x-stat name="actions-reconcilable_write"/><span class="stat-k"><code>reconcilable_write</code></span></div>
+  <div class="stat"><x-stat name="actions-unsafe_write"/><span class="stat-k"><code>unsafe_write</code></span></div>
+</div>
+<div class="table-wrap"><table>
+  <thead><tr><th>Class</th><th>Meaning</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>read</code></td><td>Changes nothing</td><td>Paystack <code>verify_transfer</code></td></tr>
+    <tr><td><code>idempotent_write</code></td><td>The provider deduplicates on a key Taskiem sends</td><td>Paystack <code>transfer</code> with <code>reference</code></td></tr>
+    <tr><td><code>reconcilable_write</code></td><td>No reliable deduplication, but a <code>reconcile</code> action can ask whether it happened</td><td>Paystack <code>refund_transaction</code> (asks <code>refund_status</code>), Breet <code>withdraw_to_bank</code></td></tr>
+    <tr><td><code>unsafe_write</code></td><td>Neither. An unknown outcome is never sent again automatically</td><td>M-Pesa <code>stk_push</code> and <code>reversal</code>, Africa's Talking <code>send_airtime</code>, every chat message</td></tr>
+  </tbody>
+</table></div>
+<p>Failures are classified into five kinds. An error a handler does not classify counts as <code>unknown_outcome</code>, because assuming nothing was sent is the unsafe guess (<x-ref path="engine/effects/class.go" symbol="func Classify("><code>Classify</code></x-ref>). <code>not_sent</code> is special: it means no byte left the process, such as a DNS failure, a refused connection or a passed deadline. It is the only failure an <code>unsafe_write</code> may retry.</p>
+<h3>The decision table</h3>
+<p>This is <x-ref path="engine/effects/class.go" symbol="func AfterError("><code>effects.AfterError</code></x-ref> and <x-ref path="engine/effects/class.go" symbol="func OnOpenIntent("><code>OnOpenIntent</code></x-ref> written out. The last column is what a worker does when it finds an earlier attempt's intent with no outcome, the crash case.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Class</th><th>retryable</th><th>not_sent</th><th>unknown_outcome</th><th>fatal</th><th>indeterminate</th><th>Open intent</th></tr></thead>
+  <tbody>
+    <tr><td><code>read</code></td><td>retry</td><td>retry</td><td>retry</td><td>fail</td><td>park</td><td>(no intent)</td></tr>
+    <tr><td><code>idempotent_write</code></td><td>retry, same key</td><td>retry</td><td>retry, same key</td><td>fail</td><td>park</td><td>send again, same key</td></tr>
+    <tr><td><code>reconcilable_write</code></td><td>retry</td><td>retry</td><td>reconcile</td><td>fail</td><td>park</td><td>reconcile</td></tr>
+    <tr><td><code>unsafe_write</code></td><td>park</td><td>retry</td><td>park</td><td>fail</td><td>park</td><td>park</td></tr>
+  </tbody>
+</table></div>
+<x-code path="engine/effects/class.go" start="func AfterError(" doc="true"/>
+<p>When retries run out, a write that failed with a kind that <x-ref path="engine/effects/class.go" symbol="func (c Class) MayHaveApplied("><code>may have applied</code></x-ref> is parked, never failed. A failed run would invite someone to start it again, and the money may already have moved.</p>
+
+<h3>Steps that are not connector calls</h3>
+<p>The worker gives every step a class before running it (<x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) resolveExecutor("><code>resolveExecutor</code></x-ref>):</p>
+<ul>
+  <li><strong><code>http</code>:</strong> the workflow author must declare <code>class</code> for any method other than GET and HEAD, and may name an <code>idempotency_header</code>.</li>
+  <li><strong><code>container</code>:</strong> <code>unsafe_write</code> unless declared otherwise.</li>
+  <li><strong><code>ai</code>:</strong> a read.</li>
+  <li><strong><code>code</code>:</strong> a read. A code step can therefore only read: <code>host.fetch</code> sends GET and HEAD alone (below).</li>
+</ul>
+<div class="callout note"><span class="callout-label">Resolved: findings 1</span>
+  <p>A code step records no intent, so a worker that died after a POST from a script would run the script, and the POST, again. Since findings 1, <code>host.fetch</code> refuses every method but GET and HEAD before the request leaves the sandbox, in JavaScript and Python (<x-ref path="engine/runtime/codestep.go" symbol="var errFetchWrite"><code>errFetchWrite</code></x-ref>), with a message that points to an <code>http</code> or connector step, which declare a class and carry a key. <code>TestCodeStepWritesNeverSent</code> crashes, stalls and kills workers around a code step that tries a POST: none reaches the provider. Letting code steps declare a write class and record an intent is left for a later decision.</p>
+</div>
+
+<h2>Keys: derived, never random</h2>
+<p>An idempotency key is a function of where the effect sits, so every retry and every replay produces the same key:</p>
+<x-code path="engine/effects/idempotency.go" start="func (k KeyInput) Digest(" doc="true"/>
+<ul>
+  <li><strong>Seed:</strong> the step's <code>effect.idempotency_seed</code> if it declares one (say a loan id), otherwise the run id.</li>
+  <li><strong>Step:</strong> the step instance id (<code>pay_all[3].pay_employee</code> inside a <code>foreach</code>), or the plain step id when a seed is declared.</li>
+  <li><strong>Attempt group:</strong> starts at 0 and changes only when the engine knows the earlier key's effect did not happen (below).</li>
+</ul>
+<p>The digest is then encoded to fit the provider's reference field, as the manifest's <code>idempotency</code> block says: <code>base32_lower</code>, <code>hex_lower</code> or <code>base64url</code>, a length, a prefix and the provider's limits. <x-ref path="engine/effects/idempotency.go" symbol="func (s Spec) Validate("><code>Spec.Validate</code></x-ref> refuses an encoding that keeps fewer than <x-ref path="engine/effects/idempotency.go" symbol="const MinKeyBits">128 bits</x-ref>, or one whose prefix or alphabet the provider would reject. Paystack's <code>transfer</code> gets <code>tsk_</code> plus 32 base32 characters (160 bits). Fixed test vectors in <x-ref path="engine/effects/testdata/vectors.json"><code>engine/effects/testdata/vectors.json</code></x-ref> pin the derivation. Only the Go tests use them today. Any second implementation, such as a TypeScript one, should be checked against them too.</p>
+<p>Connectors without an <code>idempotency</code> block, and <code>http</code> and <code>container</code> steps, use a default encoding, which an <code>http</code> step can send in a header.</p>
+<div class="callout note"><span class="callout-label">Resolved: findings 2</span>
+  <p>When a step declares a seed, the key leaves out the instance id (<x-ref path="engine/decide/decide.go" symbol="p.KeyStep = s.ID">decide.go</x-ref>), so a seed the same for every item of a <code>foreach</code> would give every item one key, and the provider would pay only the first. Validation now refuses a seeded step inside a <code>foreach</code>, at any depth, whose seed reads neither <code>item</code> nor <code>index</code> (<x-ref path="engine/wd/exprcheck.go" symbol="func (c *exprChecker) seedPerItem("><code>seedPerItem</code></x-ref>), on save, publish and <code>taskiem validate</code>. Versions published before the rule are not re-checked; <x-ref path="docs/runbooks/write-safety-scan.md">a read-only scan</x-ref> lists them.</p>
+</div>
+<h3>Seeds across runs, forks and subflows</h3>
+<ul>
+  <li><strong>A business seed</strong> deduplicates across runs: a second run for the same loan produces the same key.</li>
+  <li><strong>A fork</strong> keeps its parent's seed, so a step the parent completed is never paid again. A step the parent attempted and failed for good starts a new attempt group in the fork, so the provider does not just return its cached failure.</li>
+  <li><strong>A subflow's</strong> seed is the parent's seed plus the step, so resuming the parent never repeats the child's writes.</li>
+</ul>
+
+<h2>Intent, deadline, reconcile</h2>
+<p><x-page id="life-of-a-run--intent">The life of a run</x-page> shows <code>recordIntent</code>. The intent records the key, its inputs and a digest of the request (<x-ref path="engine/history/history.go" symbol="type IntentPayload struct"><code>IntentPayload</code></x-ref>), and it commits before the call. Two time rules from decision 0009 make the next part safe:</p>
+<ul>
+  <li><strong>The call deadline.</strong> A write's call must start before the intent's time plus the call timeout (30 s), and it is cancelled at that deadline. A worker that stalls past its lease cannot wake up and send late.</li>
+  <li><strong>Reconcile waits for the deadline.</strong> A provider's "not found" is trusted only after the original call's deadline has passed. Before that, the task is put back without spending a retry.</li>
+</ul>
+<x-code path="docs/decisions/0009-write-call-deadlines.md" start="## Why" end="## Provenance" lang="" caption="decision 0009"/>
+<p>The flow when a reconcilable write has an open intent:</p>
+<ol>
+  <li>Wait until the earlier attempt's deadline has passed.</li>
+  <li>Call the <code>reconcile</code> action with the key.</li>
+  <li><em>Found:</em> record <span class="evt">StepCompleted</span> with the provider's answer, marked as reconciled.</li>
+  <li><em>Not found:</em> move to the next attempt group, which gives a new key, record a new intent, and send.</li>
+  <li><em>Error:</em> a retryable error reconciles again later. Anything else parks the step.</li>
+</ol>
+<x-code path="engine/runtime/worker.go" start="func (w *Worker) reconcile(" max="60"/>
+<p>Connectors also receive the time the current key was first sent (<code>KeyFirstSent</code>). A provider that only deduplicates for a limited window can then report <code>indeterminate</code> once the window has passed, which parks the step instead of re-sending under a key the provider has forgotten.</p>
+
+<h2>When a person has to decide</h2>
+<p>A parked step sets the run to <code>needs_reconciliation</code> and raises an alert. An operator has two tools:</p>
+<ul>
+  <li><x-ref path="engine/runtime/reconcilecheck.go" symbol="func (w *Worker) CheckReconcile("><code>CheckReconcile</code></x-ref> runs the action's read-only reconcile and shows what the provider says now, with personal data masked. It changes nothing.</li>
+  <li><x-ref path="engine/runtime/operator.go" symbol="func (s *Store) ResolveStep("><code>ResolveStep</code></x-ref> settles the step in one of three ways. <code>completed</code> means it happened, with an output recorded. <code>failed</code> means it did not happen and should not be retried. <code>retry</code> means it did not happen and should be sent again, under a new key. The resolution is appended to history and to the tenant's audit chain, then the run is decided again.</li>
+</ul>
+<div class="callout note"><span class="callout-label">Resolved: findings 4</span>
+  <p>An operator's <strong>retry</strong> is a person re-issuing the effect, so it sends under a new key, as the contract says (decision 0053). The resolution marks its event <code>reissue</code>, and the worker's next attempt moves to the next attempt group. A provider that kept a failure for the old reference cannot answer the new attempt from its cache. A re-issue does not count against the step's retry budget. The console asks the operator to confirm they checked with the provider first.</p>
+</div>
+<p>One more kind of parking has nothing to do with providers. When a tenant's own encryption key (bring your own key) cannot be unwrapped, steps that need secrets park as <code>key_unavailable</code>. When the key works again, <x-ref path="engine/runtime/keyresume.go" symbol="func (s *Store) ResumeKeyParked("><code>ResumeKeyParked</code></x-ref> resumes them, retrying or reconciling as the step had been doing, without spending its retry budget.</p>
+
+<h2>Where the guarantee ends</h2>
+<ul>
+  <li><strong>Unsafe writes are at most once.</strong> A dropped connection on an M-Pesa STK push or an airtime top-up becomes a person's job. That is correct, but at volume it is an operations cost to plan for.</li>
+  <li><strong>The class is only as good as its manifest.</strong> A connector that calls an action <code>idempotent_write</code> when the provider does not actually deduplicate on that field will pay twice. The <x-page id="connectors"/> page will cover how manifests are reviewed and tested.</li>
+  <li><strong>Calls already in flight at the deadline.</strong> Decision 0009 says it plainly: the deadline bounds when a call can start, not when the provider finishes processing it. <code>call_timeout</code> must exceed the provider's own processing time, and worker and database clocks must agree.</li>
+</ul>

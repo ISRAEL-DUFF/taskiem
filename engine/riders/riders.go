@@ -1,5 +1,5 @@
 // Package riders is a business's own riders (docs/spec/dispatch.md D1,
-// decision 0053): the people who deliver its orders, outside the business
+// decision 0055): the people who deliver its orders, outside the business
 // as its customers are (decision 0039). A rider has a name, a phone, the
 // delivery areas they cover and a fee per delivery; they are reached on
 // the chat app they tapped in on (their contact in the reach book, the
