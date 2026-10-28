@@ -195,12 +195,21 @@ func TestOperatorRetryAfterCrashSends(t *testing.T) {
 	}
 }
 
+// expire moves an ended run's retention date into the past: a workflow's
+// retention is at least a day.
+func expire(t *testing.T, e *rt.Env, ref runtime.RunRef) {
+	t.Helper()
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE runs SET retain_until = now() - interval '1 second' WHERE id = $1 AND retain_until IS NOT NULL`, ref.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRetentionArchivesThenPurges(t *testing.T) {
 	e := rt.New(t)
-	wf := e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, `{"retention":"1s"}`))
+	wf := e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, `{"retention":"1d"}`))
 	short := e.Start(t, wf, map[string]any{})
 	long := e.Start(t, e.Publish(t, wfDoc(`{"id":"x","type":"transform","config":{"output":1}}`, "")), map[string]any{})
-	time.Sleep(1200 * time.Millisecond)
+	expire(t, e, short)
 	dir := t.TempDir()
 	s := e.Scheduler()
 	if n, err := s.PurgeExpired(ctx, 10); err != nil || n != 0 {
@@ -237,14 +246,14 @@ func TestRetentionArchivesThenPurges(t *testing.T) {
 
 func TestRetentionPurgesApprovals(t *testing.T) {
 	e := rt.New(t)
-	wf := e.Publish(t, wfDoc(`{"id":"ok","type":"approval","config":{"role":"officer"}}`, `{"retention":"1s"}`))
+	wf := e.Publish(t, wfDoc(`{"id":"ok","type":"approval","config":{"role":"officer"}}`, `{"retention":"1d"}`))
 	ref := e.Start(t, wf, map[string]any{})
 	e.Drain(t)
 	checker := member(t, e, "officer")
 	if _, err := e.Store.VoteApproval(ctx, ref, "ok", runtime.Vote{UserID: checker, Roles: []string{"officer"}, Decision: "approved", Channel: "web"}); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(1200 * time.Millisecond)
+	expire(t, e, ref)
 	s := e.Scheduler()
 	s.Archiver = runtime.FileArchiver{Dir: t.TempDir()}
 	if n, err := s.PurgeExpired(ctx, 10); err != nil || n != 1 {

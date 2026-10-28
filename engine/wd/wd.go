@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/schemas"
@@ -51,7 +52,7 @@ func Validate(doc []byte) []Problem {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
 	var out []Problem
-	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkWebhook(d), checkSubflows(d), checkAI(d), checkOutputs(d)} {
+	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkWebhook(d), checkSubflows(d), checkAI(d), checkOutputs(d), checkSettings(d)} {
 		out = append(out, probs...)
 	}
 	return out
@@ -278,6 +279,20 @@ func findCycle(steps []any, graph map[string][]string) []string {
 		id := s.(map[string]any)["id"].(string)
 		if color[id] == white && visit(id) {
 			return cycle
+		}
+	}
+	return nil
+}
+
+// MinRetention is the shortest retention a workflow may set: a run's
+// history, and the approvals in it, are kept at least this long after it
+// ends (Atlas part D findings), as a tenant's default retention is.
+const MinRetention = 24 * time.Hour
+
+func checkSettings(d *Definition) []Problem {
+	if r := d.Settings.Retention; r != "" {
+		if dur, err := ParseDuration(r); err != nil || dur < MinRetention {
+			return []Problem{{Path: "/settings/retention", Message: fmt.Sprintf("retention %q is shorter than a day: runs are kept at least a day after they end", r)}}
 		}
 	}
 	return nil
