@@ -81,7 +81,7 @@ type config struct {
 	KMS, LocalKey                     string
 	// AllowLocalKMS keeps the root key in the environment on a public
 	// HTTPS install (TASKIEM_ALLOW_LOCAL_KMS), which kms otherwise refuses.
-	AllowLocalKMS bool
+	AllowLocalKMS                     bool
 	OpenBaoAddr, OpenBaoToken, KMSKey string
 	WebDir                            string
 	AnchorKey, AnchorDir              string
