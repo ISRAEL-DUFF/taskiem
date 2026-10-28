@@ -63,6 +63,30 @@ func TestMakerThroughAPIKeyCannotApprove(t *testing.T) {
 	}
 }
 
+// A vote and its audit entry commit together: when the audit entry cannot
+// be written, the vote is not recorded and the run does not move on.
+func TestVoteAndItsAuditCommitTogether(t *testing.T) {
+	e := rt.New(t)
+	checker := member(t, e, "officer")
+	wf := e.Publish(t, wfDoc(officerApproval, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	down := errors.New("audit chain unavailable")
+	vote := runtime.Vote{UserID: checker, Roles: []string{"officer"}, Decision: "approved", Channel: "web",
+		Audit: func(pgx.Tx, runtime.VoteResult) error { return down }}
+	if _, err := e.Store.VoteApproval(ctx, ref, "ok", vote); !errors.Is(err, down) {
+		t.Fatalf("vote with a failing audit: %v", err)
+	}
+	if st := e.Status(t, ref); st != "waiting" {
+		t.Fatalf("the run moved on without its audit entry: %s", st)
+	}
+	var audited runtime.VoteResult
+	vote.Audit = func(_ pgx.Tx, res runtime.VoteResult) error { audited = res; return nil }
+	if res, err := e.Store.VoteApproval(ctx, ref, "ok", vote); err != nil || res.Status != "approved" || audited.Status != "approved" {
+		t.Fatalf("the vote again: %v %v, audited %v", res, err, audited)
+	}
+}
+
 // A delegation stops counting once the delegator no longer holds the role.
 func TestDelegationNeedsTheDelegatorsRole(t *testing.T) {
 	e := rt.New(t)

@@ -662,7 +662,11 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims, stepUp, via string) error {
 	say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, tenant.Name, text) }
 	ref := runtime.RunRef{ID: cl.Run, TenantID: tenant.ID}
-	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp})
+	res, err := s.Store.VoteApproval(ctx, ref, cl.Step, runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: c.ch.Name(), StepUp: stepUp,
+		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
+			return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
+				"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via}, res))
+		}})
 	var su *runtime.StepUpError
 	switch {
 	case errors.As(err, &su):
@@ -688,12 +692,6 @@ func (s *Server) waVote(ctx context.Context, c *chat, tenant tenantRef, p *Princ
 	case errors.Is(err, runtime.ErrApprovalClosed):
 		return say(c.t("wa.approval.closed"))
 	case err != nil:
-		return err
-	}
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
-		return waAudit(ctx, tx, c.ch.Name(), p, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
-			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "via": via}, res))
-	}); err != nil {
 		return err
 	}
 	step := cl.Step
@@ -860,7 +858,11 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.Store.VoteApproval(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
-		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp})
+		runtime.Vote{UserID: p.UserID, Roles: p.Roles, Decision: cl.Decision, Channel: row.channel, IP: clientIP(r), StepUp: stepUp,
+			Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
+				return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
+					"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"}, res))
+			}})
 	var su *runtime.StepUpError
 	switch {
 	case errors.As(err, &su):
@@ -889,8 +891,7 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		addr = addrs[p.UserID]
-		return auditTx(r, tx, "approval.decide", cl.Run.String()+"/"+cl.Step, voteDetail(map[string]any{"decision": cl.Decision, "result": res.Status,
-			"level": res.Level + 1, "levels": res.Levels, "step_up": stepUp, "channel": row.channel, "via": "handoff"}, res))
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
