@@ -9,6 +9,7 @@ import { PUBLIC, familyLink, familySchool } from "./familyschool";
 test.use({ bypassCSP: true });
 
 const PAGES = [
+  "/home",
   "/workflows",
   "/runs",
   "/approvals",
@@ -84,6 +85,28 @@ async function plannedTerm(page: Page): Promise<string> {
   return id ?? "";
 }
 
+/** A run of a workflow that waits (made once, whichever theme runs first): its id. */
+async function aRun(page: Page): Promise<string> {
+  const h = { headers: { "X-Taskiem-Request": "1" } };
+  type List = { workflows: { id: string; name: string }[] };
+  let wf = ((await (await page.request.get("/v1/workflows")).json()) as List).workflows.find((w) => w.name === "Accessible run");
+  if (!wf) {
+    const definition = {
+      schema: "wd/v1", id: "wf_a11yrun", version: 1, name: "Accessible run", trigger: { type: "manual" },
+      steps: [
+        { id: "change", type: "transform", config: { output: { ok: true } } },
+        { id: "wait", type: "wait", needs: ["change"], config: { duration: "1h" } },
+      ],
+    };
+    const made = (await (await page.request.post("/v1/workflows", { ...h, data: { name: "Accessible run", definition } })).json()) as { id: string };
+    expect((await page.request.post(`/v1/workflows/${made.id}/versions/1/publish`, h)).ok(), "publish the accessibility workflow").toBeTruthy();
+    wf = { id: made.id, name: "Accessible run" };
+  }
+  const run = (await (await page.request.post(`/v1/workflows/${wf.id}/runs`, { ...h, data: { input: {} } })).json()) as { run_id?: string };
+  expect(run.run_id, "the accessibility run").toBeTruthy();
+  return run.run_id ?? "";
+}
+
 /** Opens a page and waits until it has drawn its data. */
 async function open(page: Page, path: string) {
   await page.goto(path);
@@ -115,6 +138,13 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, path);
       await check(path.replace(term, ":id"));
     }
+    // A run, live, on its canvas and its timeline.
+    const run = await aRun(page);
+    await open(page, `/runs/${run}`);
+    await expect(page.getByLabel("Run canvas").getByTestId("node-wait")).toHaveAttribute("data-status", "waiting", { timeout: 30_000 });
+    await check("/runs/:id");
+    await page.getByRole("tab", { name: "Timeline" }).click();
+    await check("/runs/:id (timeline)");
     // A dialog, and the workflow editor.
     await open(page, "/workflows");
     await page.getByRole("link", { name: "New workflow" }).click();
