@@ -48,8 +48,12 @@ type mailConfig struct {
 var mailDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
 func mailConfigFromEnv() (mailConfig, error) {
+	enabled, err := envBool("TASKIEM_MAIL_ENABLED", false)
+	if err != nil {
+		return mailConfig{}, err
+	}
 	c := mailConfig{
-		Enabled:  envBool("TASKIEM_MAIL_ENABLED", false),
+		Enabled:  enabled,
 		Domain:   strings.TrimSuffix(strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_DOMAIN"))), "."),
 		Listen:   env("TASKIEM_MAIL_LISTEN", ":2525"),
 		Hostname: strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_HOSTNAME"))),

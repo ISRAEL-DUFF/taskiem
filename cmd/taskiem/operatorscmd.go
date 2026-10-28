@@ -110,8 +110,8 @@ func printEnrol(ctx context.Context, stdout io.Writer, email, publicURL string, 
 // opsSettings is the operator console for the api role (TASKIEM_OPS_*);
 // nil when TASKIEM_OPS_CONSOLE is false.
 func opsSettings() (*api.OpsSettings, error) {
-	if !envBool("TASKIEM_OPS_CONSOLE", true) {
-		return nil, nil
+	if on, err := envBool("TASKIEM_OPS_CONSOLE", true); err != nil || !on {
+		return nil, err
 	}
 	s := &api.OpsSettings{}
 	if v := os.Getenv("TASKIEM_OPS_SESSION_TTL"); v != "" {
