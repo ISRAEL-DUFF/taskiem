@@ -108,11 +108,20 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 		if p.Invoice == "" {
 			continue
 		}
-		towards += p.AmountKobo
 		x, err := m.Invoices.Get(ctx, tx, tenant, p.Invoice)
 		if err != nil {
 			return nil, err
 		}
+		// Only a student's invoice is the school's to hold: a shop's or
+		// any other invoice of the business is matched as before.
+		var school bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM school_term_invoices WHERE invoice_id = $1)`, x.ID).Scan(&school); err != nil {
+			return nil, err
+		}
+		if !school {
+			continue
+		}
+		towards += p.AmountKobo
 		if invoice == nil {
 			id := x.ID
 			invoice = &id

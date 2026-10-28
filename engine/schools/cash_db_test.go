@@ -532,6 +532,19 @@ func TestEnteredMoneyMatchedByHandNeedsASecondPerson(t *testing.T) {
 	if x := w.invoiceOf(w.invA.ID); x.PaidKobo != 6_000_000 || x.Payments[0].By != "user:ada" {
 		t.Fatalf("after approval %+v", x)
 	}
+	// Another of the business's invoices, not a student's: not held.
+	var shop invoicing.Invoice
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		shop, err = w.s.Invoices.Create(ctx, tx, tn, invoicing.Draft{Customer: invoicing.Customer{Name: "Tuck shop", Phone: "+2348031234567"}, AmountKobo: 9_000_000}, "user:ada")
+		return err
+	})
+	if _, err := w.s.Invoices.Send(ctx, tn, shop.Number, "user:ada", "send:"+shop.Number); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Match(ctx, tn, enter(9_000_000), shop.Number, "user:ada"); err != nil {
+		t.Fatalf("a shop's invoice was held: %v", err)
+	}
 	// Under the threshold: matched at once.
 	if _, err := m.Match(ctx, tn, enter(100_000), w.invA.Number, "user:ada"); err != nil {
 		t.Fatalf("under the threshold: %v", err)
