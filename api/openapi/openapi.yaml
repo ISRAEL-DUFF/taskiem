@@ -8726,7 +8726,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CancelRequest'
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '200':
           description: Cancelled
@@ -14005,7 +14005,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CancelRequest'
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '200':
           description: Cancelled
@@ -30566,7 +30566,7 @@ components:
         count:
           type: integer
       additionalProperties: false
-    CancelRequest:
+    CancelRunRequest:
       type: object
       properties:
         reverse:
