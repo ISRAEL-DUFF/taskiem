@@ -7,10 +7,10 @@
 --    taskiem_ops_admin, which only the CLI's own login is a member of
 --    (TASKIEM_OPS_DATABASE_URL, docs/operator-console.md).
 -- 2. Definers run as taskiem_dispatch: thirteen were owned by whoever ran
---    the migrations, which on a superuser ignores every grant and policy,
---    and on a plain schema owner meets forced row-level security with no
---    policy for it. Nine move to taskiem_dispatch with the columns they
---    read. The two that create and drop run_events partitions need to own
+--    the migrations, so they ran with that role's privileges (every table
+--    it owns, and every grant and policy ignored on a superuser) rather
+--    than the columns dispatch is given. Nine move to taskiem_dispatch with
+--    the columns they read. The two that create and drop run_events partitions need to own
 --    the table, and two read columns dispatch is kept from: they stay.
 -- 3. Partners: a sub-tenant no longer sees its siblings' run counts; it gets
 --    the partner-wide totals its quota check needs. taskiem_partner_self and

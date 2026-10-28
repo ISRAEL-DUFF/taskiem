@@ -48,10 +48,10 @@ func TestDefinersAllowList(t *testing.T) {
 		t.Errorf("the definer %s does not set search_path", f)
 	}
 	// Every definer runs as taskiem_dispatch, whose grants and policies say
-	// what it may touch; one owned by the migrating user would ignore them
-	// on a superuser, or meet forced row-level security with no policy on
-	// a plain schema owner. Partitions are made and dropped only by the
-	// table's owner, and two read what dispatch may not.
+	// what it may touch; one owned by the migrating user runs with that
+	// role's privileges instead (on a superuser, past every grant and
+	// policy). Partitions are made and dropped only by the table's owner,
+	// and two read what dispatch may not.
 	ownedByTable := map[string]bool{
 		"taskiem_ensure_run_event_partitions(timestamp with time zone,integer)": true,
 		"taskiem_drop_empty_run_event_partitions()":                             true,
