@@ -123,6 +123,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Post("/agents/{id}/{action}", s.opsAgentAction)
 		r.Get("/tenants", s.opsTenants)
 		r.Get("/tenants/{id}", s.opsTenant)
+		r.Post("/tenants/{id}/{action}", s.opsTenantAction)
 		r.Get("/audit", s.opsAudit)
 		r.Get("/audit/verify", s.opsAuditVerify)
 		r.Get("/audit/export", s.opsAuditExport)
@@ -557,6 +558,8 @@ func (s *Server) opsEnrol(w http.ResponseWriter, r *http.Request) {
 //	                         <slug>
 //	ops.status.open          incident | maintenance
 //	ops.status.update        <incident id>/<status>
+//	ops.tenant.suspend, ops.tenant.resume
+//	                         <tenant id>
 var opsStepUpOps = map[string]bool{
 	"ops.catalogue.review": true, "ops.catalogue.revoke": true,
 	"ops.publisher.verify": true, "ops.publisher.suspend": true, "ops.publisher.reinstate": true,
@@ -564,6 +567,7 @@ var opsStepUpOps = map[string]bool{
 	"ops.storefront.review": true, "ops.storefront.suspend": true, "ops.storefront.restore": true,
 	"ops.report.dismiss": true, "ops.report.action": true, "ops.report.contact": true,
 	"ops.agent.add": true, "ops.agent.suspend": true, "ops.agent.reactivate": true, "ops.agent.retire": true,
+	"ops.tenant.suspend": true, "ops.tenant.resume": true,
 }
 
 func (s *Server) opsStepUpOptions(w http.ResponseWriter, r *http.Request) {

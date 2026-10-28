@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -499,6 +500,78 @@ func (s *Server) opsTenants(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tenants": nonNil(out)})
 }
+
+// opsTenantAction suspends or resumes a tenant (decision 0027; Atlas part D
+// findings): what a partner does for its own sub-tenants, for any tenant,
+// with a passkey for that tenant and a reason, recorded in the platform
+// chain and the tenant's own. Suspending ends its sessions and end-user
+// tokens; runs already under way carry on (docs/governance.md).
+func (s *Server) opsTenantAction(w http.ResponseWriter, r *http.Request) {
+	tenant, err := uuid.Parse(chi.URLParam(r, "id"))
+	action := chi.URLParam(r, "action")
+	if err != nil || (action != "suspend" && action != "resume") {
+		writeErr(w, http.StatusNotFound, "the action is suspend or resume")
+		return
+	}
+	var req struct {
+		Reason string     `json:"reason"`
+		StepUp *opsStepUp `json:"step_up,omitempty"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.Reason == "" || utf8.RuneCountInString(req.Reason) > 500 {
+		writeErr(w, http.StatusUnprocessableEntity, "give a reason (up to 500 characters): it is recorded in the platform's and the organisation's audit")
+		return
+	}
+	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.tenant."+action, tenant.String()) {
+		return
+	}
+	status := map[string]string{"suspend": "suspended", "resume": "active"}[action]
+	o := operatorFrom(r.Context())
+	err = s.opsTx(r, func(tx pgx.Tx, widen func(uuid.UUID) error) error {
+		ctx := r.Context()
+		if err := widen(tenant); err != nil {
+			return err
+		}
+		var was string
+		if err := tx.QueryRow(ctx, `SELECT status FROM tenants WHERE id = $1 FOR UPDATE`, tenant).Scan(&was); errors.Is(err, pgx.ErrNoRows) {
+			return errNotFoundTenant
+		} else if err != nil {
+			return err
+		}
+		if was == status || was != "active" && was != "suspended" {
+			return fmt.Errorf("%w: the organisation is %s", errConflict, was)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tenants SET status = $2 WHERE id = $1`, tenant, status); err != nil {
+			return err
+		}
+		if status == "suspended" {
+			if _, err := tx.Exec(ctx, `UPDATE end_user_tokens SET revoked_at = now() WHERE tenant_id = $1 AND revoked_at IS NULL`, tenant); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE tenant_id = $1 AND revoked_at IS NULL`, tenant); err != nil {
+				return err
+			}
+		}
+		if err := tenantAudit(r, tx, tenant, o.Actor(), "tenant."+action, tenant.String(), map[string]any{"reason": req.Reason}); err != nil {
+			return err
+		}
+		return ops.AuditTx(ctx, tx, o.Actor(), "ops.tenant."+action, tenant.String(), map[string]any{"reason": req.Reason})
+	})
+	switch {
+	case errors.Is(err, errNotFoundTenant):
+		writeErr(w, http.StatusNotFound, "no such organisation")
+	case err != nil:
+		s.fail(w, r, err)
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"id": tenant, "status": status})
+	}
+}
+
+var errNotFoundTenant = errors.New("no such organisation")
 
 // opsTenant is one tenant's plan, subscription state, limits, usage and
 // pool: what `taskiem tenants limits` and `taskiem pools` show, and no

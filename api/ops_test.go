@@ -372,6 +372,19 @@ func TestOperatorConsoleWork(t *testing.T) {
 	if st, _ := c.do("PUT", "/v1/ops/tenants/"+acmeID.String(), map[string]any{}); st != 405 {
 		t.Errorf("a write to tenants: %d", st)
 	}
+	// Suspending any tenant: a reason, a passkey for that tenant, both chains.
+	c.must(422, "POST", "/v1/ops/tenants/"+acmeID.String()+"/suspend", map[string]any{"step_up": c.stepUp(a, "ops.tenant.suspend", acmeID.String())})
+	c.must(403, "POST", "/v1/ops/tenants/"+acmeID.String()+"/suspend", map[string]any{"reason": "unpaid", "step_up": c.stepUp(a, "ops.tenant.suspend", uuid.NewString())})
+	c.must(200, "POST", "/v1/ops/tenants/"+acmeID.String()+"/suspend", map[string]any{"reason": "fraud report", "step_up": c.stepUp(a, "ops.tenant.suspend", acmeID.String())})
+	if st, _ := acme.do("GET", "/v1/me", nil); st != 401 {
+		t.Errorf("a suspended tenant's session still works: %d", st)
+	}
+	c.must(409, "POST", "/v1/ops/tenants/"+acmeID.String()+"/suspend", map[string]any{"reason": "again", "step_up": c.stepUp(a, "ops.tenant.suspend", acmeID.String())})
+	c.must(200, "POST", "/v1/ops/tenants/"+acmeID.String()+"/resume", map[string]any{"reason": "cleared", "step_up": c.stepUp(a, "ops.tenant.resume", acmeID.String())})
+	acme = w.login(t, "owner@acme.test", "correct horse battery")
+	if s := toJSON(acme.must(200, "GET", "/v1/audit?action=tenant.suspend", nil)); !strings.Contains(s, "fraud report") || !strings.Contains(s, "operator:reviewer@taskiem.test") {
+		t.Errorf("the tenant's own chain: %s", s)
+	}
 
 	// The platform chain records every write and view, verifies, and
 	// exports for the offline verifier.
@@ -385,7 +398,7 @@ func TestOperatorConsoleWork(t *testing.T) {
 		}
 	}
 	for _, want := range []string{"catalogue.publisher.verify", "catalogue.approve", "catalogue.publisher.suspend", "status.open", "status.update", "tenant.view",
-		"ops.view /v1/ops/tenants", "ops.view /v1/ops/catalogue/queue"} {
+		"ops.tenant.suspend", "ops.tenant.resume", "ops.view /v1/ops/tenants", "ops.view /v1/ops/catalogue/queue"} {
 		if !seen[want] {
 			t.Errorf("platform chain lacks %s: %v", want, seen)
 		}
