@@ -29,6 +29,7 @@ import { catalog, idFrom } from "../builder/catalog";
 import { TRIGGER_CHOICES } from "../builder/triggers";
 import { stepTitle } from "../builder/look";
 import { sourcesAnywhere, withStarted } from "../builder/sources";
+import { useLeaveWarning } from "../lib/leave";
 
 interface Loaded {
   workflow: WorkflowSummary;
@@ -84,6 +85,8 @@ export function Editor() {
   const [dirty, setDirty] = useState(false);
   // What keeps the JSON tab's text from being a definition the builder can draw.
   const [jsonProblem, setJsonProblem] = useState<string>();
+  // Warn before leaving with unsaved changes (the tab, or another page).
+  useLeaveWarning(dirty);
   // ?tab=settings opens on when it runs (a new form opens on its questions).
   const [tab, setTab] = useState<"build" | "runs" | "settings" | "code" | "json">(() => (params.get("tab") === "settings" ? "settings" : "build"));
   const [notice, setNotice] = useState("");

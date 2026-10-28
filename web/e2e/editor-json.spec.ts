@@ -55,3 +55,37 @@ test("a page that fails says so and leaves the rest of the console working", asy
   await page.getByRole("link", { name: "Go to Home" }).click();
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 });
+
+test("leaving the builder with unsaved changes asks first", async ({ page }) => {
+  await signIn(page);
+  const id = await workflow(page, "Leave flow", {
+    schema: "wd/v1", id: "wf_leave", version: 1, name: "Leave", trigger: { type: "manual" },
+    steps: [{ id: "start", type: "transform", config: { output: "first" } }],
+  });
+  await page.goto(`/workflows/${id}`);
+  await expect(page.getByTestId("node-start")).toBeVisible();
+  // Saved: leaving asks nothing.
+  const home = page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Home" });
+  await home.click();
+  await expect(page).toHaveURL(/\/home$/);
+  await page.goto(`/workflows/${id}`);
+  await page.getByRole("tab", { name: "JSON" }).click();
+  const json = page.locator("textarea.mono");
+  await json.fill((await json.inputValue()).replace('"first"', '"mine"'));
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+
+  // Another page of the console: asked, and staying keeps the edits.
+  const asked: string[] = [];
+  page.once("dialog", (d) => (asked.push(d.message()), void d.dismiss()));
+  await home.click();
+  await expect.poll(() => asked).toEqual([expect.stringContaining("unsaved changes")]);
+  await expect(page).toHaveURL(new RegExp(`/workflows/${id}$`));
+  await expect(page.locator("textarea.mono")).toHaveValue(/"mine"/);
+
+  // Closing the tab: the browser asks.
+  const kinds: string[] = [];
+  page.once("dialog", (d) => (kinds.push(d.type()), void d.dismiss()));
+  await page.close({ runBeforeUnload: true });
+  await expect.poll(() => kinds).toEqual(["beforeunload"]);
+  expect(page.isClosed()).toBe(false);
+});
