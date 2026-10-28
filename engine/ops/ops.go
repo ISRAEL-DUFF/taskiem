@@ -82,30 +82,38 @@ func Add(ctx context.Context, pool *pgxpool.Pool, email, name, by string) (uuid.
 		return uuid.Nil, errors.New("a name has at most 200 characters")
 	}
 	var id uuid.UUID
-	if err := pool.QueryRow(ctx, `SELECT taskiem_ops_operator_add($1, $2, $3)`, email, strings.TrimSpace(name), by).Scan(&id); err != nil {
-		return uuid.Nil, err
-	}
-	return id, Audit(ctx, pool, by, "operator.add", email, map[string]any{"operator": id})
+	err := inChain(ctx, pool, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_operator_add($1, $2, $3)`, email, strings.TrimSpace(name), by).Scan(&id); err != nil {
+			return err
+		}
+		return AuditTx(ctx, tx, by, "operator.add", email, map[string]any{"operator": id})
+	})
+	return id, err
 }
 
 // Disable stops an operator: their sessions and unused enrolment links end
 // at once.
 func Disable(ctx context.Context, pool *pgxpool.Pool, email, by string) error {
-	var id uuid.UUID
-	if err := pool.QueryRow(ctx, `SELECT taskiem_ops_operator_disable($1, $2)`, email, by).Scan(&id); err != nil {
-		return notFound(err)
-	}
-	return Audit(ctx, pool, by, "operator.disable", strings.ToLower(email), map[string]any{"operator": id})
+	return inChain(ctx, pool, func(tx pgx.Tx) error {
+		var id uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_operator_disable($1, $2)`, email, by).Scan(&id); err != nil {
+			return notFound(err)
+		}
+		return AuditTx(ctx, tx, by, "operator.disable", strings.ToLower(email), map[string]any{"operator": id})
+	})
 }
 
 // Reset removes an operator's passkeys (a lost device) and ends their
 // sessions; it returns how many passkeys were removed.
 func Reset(ctx context.Context, pool *pgxpool.Pool, email, by string) (int64, error) {
 	var n int64
-	if err := pool.QueryRow(ctx, `SELECT taskiem_ops_operator_reset($1)`, email).Scan(&n); err != nil {
-		return 0, notFound(err)
-	}
-	return n, Audit(ctx, pool, by, "operator.passkeys.reset", strings.ToLower(email), map[string]any{"removed": n})
+	err := inChain(ctx, pool, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_operator_reset($1)`, email).Scan(&n); err != nil {
+			return notFound(err)
+		}
+		return AuditTx(ctx, tx, by, "operator.passkeys.reset", strings.ToLower(email), map[string]any{"removed": n})
+	})
+	return n, err
 }
 
 // List returns every operator.
@@ -127,11 +135,14 @@ func Enrol(ctx context.Context, pool *pgxpool.Pool, email, publicURL string, ttl
 		ttl = EnrolTTL
 	}
 	tok := NewToken()
-	var id uuid.UUID
-	if err := pool.QueryRow(ctx, `SELECT taskiem_ops_enrol_issue($1, $2, make_interval(secs => $3), $4)`, email, HashToken(tok), ttl.Seconds(), by).Scan(&id); err != nil {
-		return "", notFound(err)
-	}
-	if err := Audit(ctx, pool, by, "operator.enrol.issue", strings.ToLower(email), map[string]any{"operator": id, "expires_in": ttl.String()}); err != nil {
+	err := inChain(ctx, pool, func(tx pgx.Tx) error {
+		var id uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_enrol_issue($1, $2, make_interval(secs => $3), $4)`, email, HashToken(tok), ttl.Seconds(), by).Scan(&id); err != nil {
+			return notFound(err)
+		}
+		return AuditTx(ctx, tx, by, "operator.enrol.issue", strings.ToLower(email), map[string]any{"operator": id, "expires_in": ttl.String()})
+	})
+	if err != nil {
 		return "", err
 	}
 	return EnrolURL(publicURL, tok), nil
@@ -153,6 +164,12 @@ func Audit(ctx context.Context, pool *pgxpool.Pool, actor, action, target string
 	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, func(tx pgx.Tx) error {
 		return AuditTx(ctx, tx, actor, action, target, detail)
 	})
+}
+
+// inChain runs an operator change and its audit entry in one transaction
+// scoped to the platform chain: no change is left unrecorded.
+func inChain(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
+	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, fn)
 }
 
 // AuditTx is Audit inside a transaction scoped to PlatformChain.

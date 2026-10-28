@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -73,6 +75,22 @@ func TestCodeLimitsFromEnv(t *testing.T) {
 	for _, v := range []string{"0", "-1", "many"} {
 		if _, err := codeLimitsFromEnv(lookupFrom(map[string]string{"TASKIEM_TENANT_CODE_CONCURRENCY": v})); err == nil {
 			t.Errorf("%q accepted", v)
+		}
+	}
+}
+
+// The root key stays out of the process environment on a public install
+// unless the operator says so (Atlas part D findings).
+func TestLocalKMSOnAPublicInstall(t *testing.T) {
+	key := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	for _, c := range []struct {
+		public string
+		allow  bool
+		ok     bool
+	}{{"", false, true}, {"http://localhost:8080", false, true}, {"https://app.example.com", false, false}, {"https://app.example.com", true, true}} {
+		_, err := config{KMS: "local", LocalKey: key, KMSKey: "taskiem", PublicURL: c.public, AllowLocalKMS: c.allow}.kms()
+		if (err == nil) != c.ok || err != nil && !strings.Contains(err.Error(), "TASKIEM_ALLOW_LOCAL_KMS") {
+			t.Errorf("public %q, allowed %v: %v", c.public, c.allow, err)
 		}
 	}
 }

@@ -205,6 +205,17 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vote.StepUp = method
+	// The audit entry commits with the vote, never after it.
+	vote.Audit = func(tx pgx.Tx, result runtime.VoteResult) error {
+		detail := map[string]any{"decision": req.Decision, "result": result.Status, "level": result.Level + 1, "levels": result.Levels, "step_up": vote.StepUp}
+		if result.SelfApproved {
+			detail["self_approved"] = true
+		}
+		if req.Comment != "" {
+			detail["comment"] = req.Comment
+		}
+		return auditTx(r, tx, "approval.decide", run.String()+"/"+step, detail)
+	}
 	result, err := s.Store.VoteApproval(r.Context(), ref, step, vote)
 	var stepUp *runtime.StepUpError
 	switch {
@@ -222,18 +233,5 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := result.Status
-	detail := map[string]any{"decision": req.Decision, "result": status, "level": result.Level + 1, "levels": result.Levels, "step_up": vote.StepUp}
-	if result.SelfApproved {
-		detail["self_approved"] = true
-	}
-	if req.Comment != "" {
-		detail["comment"] = req.Comment
-	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		return auditTx(r, tx, "approval.decide", run.String()+"/"+step, detail)
-	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": run, "step_id": step, "status": status, "level": result.Level + 1, "levels": result.Levels, "self_approved": result.SelfApproved})
 }

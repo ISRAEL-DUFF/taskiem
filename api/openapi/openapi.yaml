@@ -13974,7 +13974,7 @@ paths:
       - Audit
       summary: Erase a data subject
       description: Destroys the subject's key, so every sealed copy of their data becomes unreadable. Cannot be
-        undone.
+        undone, so a person confirms it with a passkey or authenticator code.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -13997,6 +13997,13 @@ paths:
                 $ref: '#/components/schemas/Erased'
         '400':
           description: Neither a subject nor a category and value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: 'Erasure cannot be undone: it needs a person who confirms with a passkey (a challenge for `pii.erase`
+            and the subject id) or an authenticator code (`step_up`). API keys cannot erase.'
           content:
             application/json:
               schema:
@@ -22923,11 +22930,12 @@ components:
           - key.byok.credentials
           - key.byok.disable
           - rider.bank
+          - pii.erase
         target:
           type: string
           maxLength: 200
           description: 'What the passkey confirms: `{run}/{step}/{decision}` for an approval, the action (`passkey.add`,
-            `totp.setup`, `password.change`) for `account.reauth`, the rider''s id for `rider.bank`.'
+            `totp.setup`, `password.change`) for `account.reauth`, the rider''s id for `rider.bank`, the subject id for `pii.erase`.'
       additionalProperties: false
     PasskeyLoginRequest:
       type: object
@@ -25787,6 +25795,11 @@ components:
           description: A personal data category (`email`, `phone`, …).
         value:
           description: The value in that category.
+        totp:
+          type: string
+          description: A current authenticator code. Erasure needs it or a passkey, from a person.
+        passkey:
+          $ref: '#/components/schemas/PasskeyCredential'
       additionalProperties: false
     Erased:
       type: object

@@ -718,14 +718,15 @@ func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeWithdrawPolicyTx keeps the approval rule withdrawals use: an owner
-// approves; at or above twoAbove kobo, two different owners do. The maker
-// may approve their own withdrawal (a one-owner business could not
-// otherwise withdraw at all). With four-eyes on approval rules, a changed
-// rule waits for a second person, as one written by hand does.
+// approves; at or above twoAbove kobo, two different owners do. Whoever
+// asked for a withdrawal does not approve it while another owner can; a
+// one-owner business, where nobody else can, approves its own, recorded as
+// self-approved (the sole-approver rule). With four-eyes on approval rules,
+// a changed rule waits for a second person, as one written by hand does.
 func writeWithdrawPolicyTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, twoAbove int64, fourEyes bool, by string) error {
 	ctx := r.Context()
-	no, yes := false, true
-	pol := policy.Policy{Constraints: policy.Constraints{ForbidSelfApproval: &no, DistinctApprovers: &yes}, Timeout: "48h", OnTimeout: "reject",
+	yes := true
+	pol := policy.Policy{Constraints: policy.Constraints{ForbidSelfApproval: &yes, DistinctApprovers: &yes, AllowSoleApprover: &yes}, Timeout: "48h", OnTimeout: "reject",
 		Description: "Withdrawals to the business's bank (Receive money with Taskiem)"}
 	if twoAbove > 0 {
 		pol.Rules = append(pol.Rules, policy.Rule{When: fmt.Sprintf("=subject.amount_kobo >= %d", twoAbove), Levels: []policy.Level{{Role: "owner"}, {Role: "owner"}}})
