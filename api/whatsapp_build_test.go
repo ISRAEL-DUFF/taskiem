@@ -11,6 +11,8 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/billing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -185,6 +187,47 @@ func TestWhatsAppBuild(t *testing.T) {
 	w.srv.WaitBackground()
 	if len(f.Requests()) != calls {
 		t.Error("the model was asked over budget")
+	}
+}
+
+// On a plan without AI, building over chat is refused and messages in
+// other languages are not sent to the model, as /v1/ai refuses.
+func TestWhatsAppAINeedsThePlan(t *testing.T) {
+	w := newWAWorld(t)
+	cfg, err := billing.LoadConfig("../deploy/plans.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := billing.Store(context.Background(), w.env.DB.App, cfg, "test"); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Store.Billing = true
+	w.srv.Billing = &billing.Service{Pool: w.env.DB.App, Store: w.env.Store, Config: cfg, Enabled: true}
+	f := waBuildModel(t, nil)
+	w.srv.AI = &api.AISettings{Provider: f}
+	intents := &ai.Fake{Respond: func(ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: `{"intent":"status","argument":""}`}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.YO}, Model: intents}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(200, "GET", "/v1/billing/status", nil) // the trial starts
+	tenant := uuid.MustParse(owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string))
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE subscriptions SET plan_id = 'shop' WHERE tenant_id = $1`, tenant); err != nil {
+		t.Fatal(err)
+	}
+	const on = "+2348010000024"
+	w.bind(t, owner, on)
+	w.say(t, on, "language yo")
+	w.say(t, on, "Ṣé nǹkan kan bàjẹ́?")
+	if n := len(intents.Requests()); n != 0 {
+		t.Errorf("a message was routed through the model on a plan without AI: %d", n)
+	}
+	if r := w.say(t, on, "build every Friday text my customers who owe me"); !strings.Contains(r, yo("wa.build.plan", "org", "Acme")) {
+		t.Errorf("build on a plan without AI: %q", r)
+	}
+	w.srv.WaitBackground()
+	if n := len(f.Requests()); n != 0 {
+		t.Errorf("the model was asked to build on a plan without AI: %d", n)
 	}
 }
 

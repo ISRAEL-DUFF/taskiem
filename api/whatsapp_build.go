@@ -15,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -94,6 +95,13 @@ func (s *Server) waStartBuild(ctx context.Context, c *chat, goal string) error {
 	}
 	if s.AI == nil || s.AI.Provider == nil {
 		return c.say(ctx, s, c.t("wa.build.off"))
+	}
+	// The plan's ai feature, as on /v1/ai.
+	if err := s.Billing.Require(ctx, c.tenant.ID, billing.FeatureAI); err != nil {
+		if fe := (*billing.FeatureError)(nil); errors.As(err, &fe) {
+			return c.say(ctx, s, c.t("wa.build.plan", "org", c.tenant.Name))
+		}
+		return err
 	}
 	if goal == "" {
 		return c.say(ctx, s, c.t("wa.build.what"))

@@ -45,7 +45,7 @@ func (s *Server) check(ctx context.Context, tenant uuid.UUID, doc []byte) []prob
 	}
 	out := append(s.checkWith(ctx, tenant, doc, reg), s.keptProblems(ctx, tenant, doc)...)
 	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
-	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc, s.callables(ctx, tenant))...)
 }
 
 // callables finds a template step's template for a definition not saved
@@ -90,7 +90,7 @@ func (s *Server) checkVersion(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UU
 	}
 	out = append(out, s.keptProblems(ctx, tenant, doc)...)
 	out = append(out, s.subflowProblems(ctx, tenant, doc)...)
-	return append(out, s.aiStepProblems(ctx, tenant, doc)...)
+	return append(out, s.aiStepProblems(ctx, tenant, doc, find)...)
 }
 
 // checkWith is wdcheck.Check holding a tenant-code slot: checking code
@@ -699,7 +699,7 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 	if err != nil {
 		return nil, "", false, err
 	}
-	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, d, by); err != nil {
+	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, def, by); err != nil {
 		return nil, "", false, err
 	}
 	targets, err := deployTargets(ctx, tx, gitEnv)

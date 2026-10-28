@@ -1044,6 +1044,10 @@
       "text": "Make I publish *{name}* now so e start work? Reply *yes* or *no*.",
       "reviewed": false
     },
+    "wa.build.plan": {
+      "text": "The plan wey {org} dey use no get building with AI, so I no fit build am here. You fit still build workflows for the web app, or change plan for Billing.",
+      "reviewed": false
+    },
     "wa.build.publish_later": {
       "text": "When you ready, send *publish {name}*.",
       "reviewed": false

@@ -1044,6 +1044,10 @@
       "text": "In buga *{name}* yanzu don ya fara aiki? Ku amsa *yes* ko *no*.",
       "reviewed": false
     },
+    "wa.build.plan": {
+      "text": "Tsarin {org} bai haɗa da gini da AI ba, don haka ba zan iya gina wannan a nan ba. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo, ko ka canza tsari a Billing.",
+      "reviewed": false
+    },
     "wa.build.publish_later": {
       "text": "Idan kun shirya, ku aika *publish {name}*.",
       "reviewed": false

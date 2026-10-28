@@ -19,7 +19,8 @@ import (
 //   - only strings are examined, and numbers only under a field name that
 //     says what they are (bvn, nin, phone, account ...);
 //   - phone numbers must be Nigerian mobile numbers (+234 or 0, then a
-//     70x/80x/81x/90x/91x prefix);
+//     70x/80x/81x/90x/91x prefix), however their digits are grouped, or
+//     numbers in international form (+ and 8 to 15 digits);
 //   - card numbers must pass the Luhn check and match a card scheme's
 //     prefix and length;
 //   - a 10-digit account number (NUBAN) is recognised by its field name, or
@@ -118,10 +119,10 @@ func Classify(key string, v any, siblings map[string]any) (string, bool) {
 	if emailRe.MatchString(s) {
 		return "email", true
 	}
-	compact := strings.NewReplacer(" ", "", "-", "").Replace(s)
-	if isPhone(compact) {
+	if p := phoneSep.Replace(s); isPhone(p) || isIntlPhone(s, p) {
 		return "phone", true
 	}
+	compact := strings.NewReplacer(" ", "", "-", "").Replace(s)
 	if !digits.MatchString(compact) {
 		if h != "" && h != "email" && digits.MatchString(strings.TrimPrefix(compact, "+")) {
 			return h, true
@@ -167,6 +168,15 @@ func isPhone(s string) bool {
 		return true
 	}
 	return false
+}
+
+// isIntlPhone reports whether s, compacted to p, is a whole number in
+// international form: "+", a country code, and 8 to 15 digits in all.
+func isIntlPhone(s, p string) bool {
+	if !strings.HasPrefix(p, "+") || len(p) < 9 || len(p) > 16 || p[1] == '0' || !digits.MatchString(p[1:]) {
+		return false
+	}
+	return textPhone.FindString(s) == s
 }
 
 // luhn reports whether a digit string passes the Luhn check.
@@ -305,17 +315,63 @@ func SealDetected(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v 
 // are masked: code step logs and provider error messages.
 var (
 	textEmail = regexp.MustCompile(`[^\s@"<>(),;:]+@[^\s@"<>(),;:]+\.[A-Za-z]{2,}`)
-	textPhone = regexp.MustCompile(`(?:\+234|\b234|\b0)[789][01]\d{8}\b`)
+	// Phone numbers as people write them: Nigerian mobiles with or without
+	// the country code, grouped by spaces, dashes, dots or a bracketed
+	// prefix ("0803 123 4567", "(0803) 123-4567", "+234 (0)803 123 4567"),
+	// and any number in international form ("+44 20 7946 0958"), whose
+	// digits replacePhones counts.
+	textPhone = regexp.MustCompile(`(?:\+|\b)234[ .-]?(?:\(0\)[ .-]?)?[789][01]\d[ .-]?\d{3}[ .-]?\d{4}\b` +
+		`|\(?\b0[789][01]\d\)?[ .-]?\d{3}[ .-]?\d{4}\b` +
+		`|\+[1-9]\d{0,3}(?:[ .-]?\(?\d{1,5}\)?)+`)
 	textDigit = regexp.MustCompile(`\b\d(?:[ -]?\d){9,18}\b`)
+	phoneSep  = strings.NewReplacer(" ", "", "-", "", ".", "", "(", "", ")", "")
 )
+
+// replacePhones replaces the phone numbers in free text with repl. A
+// number in international form ("+" and a country code) is one when it
+// has 8 to 15 digits (E.164); digits grouped after it that would make it
+// longer are left as they are.
+func replacePhones(s string, repl func(string) string) string {
+	return textPhone.ReplaceAllStringFunc(s, func(x string) string {
+		if !strings.HasPrefix(x, "+") || isPhone(phoneSep.Replace(x)) {
+			return repl(x)
+		}
+		rest := ""
+		for {
+			n := len(digitsOf(x))
+			if n < 8 {
+				return x + rest
+			}
+			if n <= 15 {
+				return repl(x) + rest
+			}
+			i := strings.LastIndexAny(x, " .-(")
+			if i <= 0 {
+				return x + rest
+			}
+			x, rest = x[:i], x[i:]+rest
+		}
+	})
+}
+
+func digitsOf(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, s)
+}
 
 // Redact masks personal values in free text.
 func Redact(s string) string {
 	s = textEmail.ReplaceAllString(s, "[email]")
-	s = textPhone.ReplaceAllString(s, "[phone]")
+	s = replacePhones(s, func(string) string { return "[phone]" })
 	return textDigit.ReplaceAllStringFunc(s, func(m string) string {
 		d := strings.NewReplacer(" ", "", "-", "").Replace(m)
 		switch {
+		case isPhone(d):
+			return "[phone]"
 		case len(d) == 11 && strings.HasPrefix(d, "22"):
 			return "[bvn]"
 		case len(d) == 11:

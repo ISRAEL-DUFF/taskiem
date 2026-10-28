@@ -515,6 +515,26 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 		}
 		c.CallableWorkflows = append(c.CallableWorkflows, builder.CallableWorkflow{ID: x.ID.String(), Name: x.Name, Inputs: x.Inputs, Outputs: x.Outputs, Effect: x.Effect.Words()})
 	}
+	// The business's published workflows a subflow step may run as a
+	// child run (decision 0049): those started by hand or by another run,
+	// with their inputs.
+	rows, err = tx.Query(ctx, `SELECT w.id, w.name, v.definition->'inputs'->'schema' FROM workflows w
+		JOIN workflow_versions v ON v.workflow_id = w.id AND v.version = w.active_version
+		WHERE v.definition->'trigger'->>'type' IN ('manual', 'subflow') AND ($1::uuid IS NULL OR w.id <> $1) ORDER BY w.name LIMIT 100`, skip)
+	if err != nil {
+		return c, err
+	}
+	c.Startable, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (builder.StartableWorkflow, error) {
+		var x builder.StartableWorkflow
+		var id uuid.UUID
+		var inputs []byte
+		err := r.Scan(&id, &x.Name, &inputs)
+		x.ID, x.Inputs = id.String(), inputs
+		return x, err
+	})
+	if err != nil {
+		return c, err
+	}
 	rows, err = tx.Query(ctx, `SELECT name, document FROM approval_policies WHERE state = 'active' ORDER BY name LIMIT 100`)
 	if err != nil {
 		return c, err
