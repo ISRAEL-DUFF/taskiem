@@ -18,7 +18,8 @@ let sub = "";
 async function call<T>(method: string, path: string, token: string, body?: unknown): Promise<T> {
   const res = await fetch(taskiem + path, {
     method,
-    headers: { ...(token && { Authorization: `Bearer ${token}` }), "Content-Type": "application/json", "X-Taskiem-Request": "1" },
+    // An end user's calls come from the partner's page (the app is not headless).
+    headers: { ...(token && { Authorization: `Bearer ${token}` }), ...(path.startsWith("/v1/embed/") && { Origin: partnerOrigin }), "Content-Type": "application/json", "X-Taskiem-Request": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await res.json()) as T;
@@ -134,4 +135,44 @@ test("a partner page embeds the builder and the run view, themed, and runs a wor
   await expect.poll(() => f.getByTestId("taskiem-root").evaluate((el) => getComputedStyle(el).getPropertyValue("--accent").trim())).toBe(primary);
   expect(page.url()).not.toContain("tsk_eut_");
   expect(await page.locator("#frame").getAttribute("src")).not.toContain("tsk_eut_");
+});
+
+test("the embedded builder checks a new id at every depth, and keeps edits through a conflicting save", async ({ page }) => {
+  const token = ((await (await fetch(`${partnerOrigin}/token`)).json()) as { token: string }).token;
+  const def = (output: string) => ({
+    schema: "wd/v1", id: "wf_embmerge", version: 1, name: "Embedded merge", trigger: { type: "manual" },
+    steps: [
+      { id: "start", type: "transform", config: { output } },
+      { id: "pick", type: "branch", needs: ["start"], config: { paths: [{ name: "yes", when: "=true", steps: [{ id: "inner", type: "transform", config: { output: "x" } }] }] } },
+    ],
+  });
+  const name = `Embedded merge ${Date.now()}`;
+  const wf = await call<{ id: string; digest: string }>("POST", `/v1/embed/${app}/workflows`, token, { name, definition: def("first") });
+
+  await page.goto(partnerOrigin + "/");
+  const b = page.locator("taskiem-builder");
+  await b.getByRole("cell", { name }).click();
+  await expect(b.getByTestId("node-start")).toBeVisible();
+  await b.getByTestId("node-start").click();
+  // No step may be renamed onto another's id, even one inside the choice.
+  const field = b.getByLabel("ID");
+  await field.fill("inner");
+  await field.blur();
+  await expect(b.getByText("That id is taken.")).toBeVisible();
+
+  // Meanwhile someone else saves version 2 from version 1.
+  await call("POST", `/v1/embed/${app}/workflows/${wf.id}/versions`, token, { definition: def("theirs"), parent_digest: wf.digest });
+  // This builder changes the same step from version 1, and saves.
+  await b.getByLabel("Name", { exact: true }).fill("Mine");
+  await b.getByRole("button", { name: "Save", exact: true }).click();
+  const merge = b.getByTestId("embed-merge");
+  await expect(merge).toBeVisible();
+  await expect(b.getByRole("alert").first()).toContainText("your changes are still here");
+  await expect(merge.getByTestId("conflict-steps/start")).toContainText('"theirs"');
+  await expect(b.getByLabel("Name", { exact: true })).toHaveValue("Mine");
+  await merge.getByRole("radio", { name: "Yours" }).check();
+  await merge.getByRole("button", { name: "Save merged version" }).click();
+  await expect(merge).toBeHidden();
+  const saved = await call<{ definition: { steps: { id: string; name?: string; config?: { output?: string } }[] } }>("GET", `/v1/embed/${app}/workflows/${wf.id}/versions/3`, token);
+  expect(saved.definition.steps[0]).toMatchObject({ id: "start", name: "Mine", config: { output: "first" } });
 });

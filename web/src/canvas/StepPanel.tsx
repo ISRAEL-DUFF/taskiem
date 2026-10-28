@@ -17,6 +17,7 @@ import type { Source } from "../lib/plaincanvas";
 import { DurationPicker, RulesBuilder, ValuePicker } from "./PlainPickers";
 import { ParamField } from "../pages/Templates";
 import { effectWords, toParams, type CallableWorkflow, type Template } from "../lib/templates";
+import { stepFromJson } from "../lib/flow";
 
 const ID = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -64,6 +65,7 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
   const advanced = useAdvanced();
   const [id, setId] = useState(step.id);
   const [idError, setIdError] = useState("");
+  const [jsonError, setJsonError] = useState("");
   const set = (patch: Any) => onChange(merge(step, patch));
   const cfg = ((step as { config?: Any }).config ?? {}) as Any;
   const setCfg = (patch: Any) => set({ config: merge(cfg, patch) });
@@ -307,7 +309,20 @@ export function StepPanel({ step, others, connectors, onChange, onRename, onDele
           </Field>
           <details>
             <summary>Edit this step as JSON</summary>
-            <JsonInput value={step} onChange={(v) => v && typeof v === "object" && onChange(v as Step)} rows={14} />
+            <JsonInput
+              value={step}
+              onChange={(v) => {
+                const next = stepFromJson(step, v);
+                setJsonError(typeof next === "string" ? next : "");
+                if (typeof next !== "string") onChange(next);
+              }}
+              rows={14}
+            />
+            {jsonError && (
+              <div className="error" role="alert" data-testid="step-json-problem">
+                {jsonError}
+              </div>
+            )}
           </details>
         </>
       )}

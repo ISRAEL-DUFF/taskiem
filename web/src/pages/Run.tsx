@@ -39,10 +39,10 @@ export function RunPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
   const [reveal, setReveal] = useState(false);
-  const [live, setLive] = useState(true);
-  // Revealed history is fetched (each fetch is audited); sealed history
-  // streams as it is recorded (spec 15.1, live view).
-  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal], live && reveal);
+  // Revealed history is fetched once, and again only when asked (each
+  // reveal is audited); sealed history streams as it is recorded (spec
+  // 15.1, live view).
+  const { data, error, reload } = useLoad(() => get<RunDoc>(`/v1/runs/${id}${reveal ? "?reveal=true" : ""}`), [id, reveal]);
   const [streamed, setStreamed] = useState<RunEvent[]>([]);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [resolving, setResolving] = useState<string | null>(null);
@@ -68,9 +68,6 @@ export function RunPage() {
     }
     return m;
   }, [reads.data]);
-  useEffect(() => {
-    if (status && TERMINAL.has(status)) setLive(false);
-  }, [status]);
   useEffect(() => {
     setStreamed([]);
     if (!data || reveal || TERMINAL.has(data.run.status) || typeof EventSource === "undefined") return;
@@ -221,6 +218,14 @@ export function RunPage() {
             <input type="checkbox" checked={reveal} onChange={(e) => setReveal(e.target.checked)} /> Reveal personal data
           </label>
         )}
+        {reveal && !TERMINAL.has(shownStatus) && (
+          <>
+            <span className="hint" data-testid="reveal-paused">
+              Not updating while personal data is shown.
+            </span>
+            <button onClick={reload}>Refresh</button>
+          </>
+        )}
       </div>
       <ErrorBox error={act.error} />
       <RepairPanel run={id} status={shownStatus} />
@@ -297,8 +302,8 @@ export function RunPage() {
           </tbody>
         </table>
       </details>
-      {resolving && <Resolve run={id} step={resolving} onClose={() => setResolving(null)} onDone={() => (setResolving(null), setLive(true), reload())} />}
-      {cancelling && <CancelRun run={id} onClose={() => setCancelling(false)} onDone={() => (setCancelling(false), setLive(true), reload())} />}
+      {resolving && <Resolve run={id} step={resolving} onClose={() => setResolving(null)} onDone={() => (setResolving(null), reload())} />}
+      {cancelling && <CancelRun run={id} onClose={() => setCancelling(false)} onDone={() => (setCancelling(false), reload())} />}
     </>
   );
 }

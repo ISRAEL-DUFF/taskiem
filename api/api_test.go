@@ -206,6 +206,13 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 		t.Fatal("expected problems for an unknown connector")
 	}
 	owner.must(422, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions/1/publish", nil)
+	// But it is a definition: an object with a list of steps, or the
+	// builder could not draw it.
+	for _, doc := range []string{`{"schema":"wd/v1","id":"x","name":"x"}`, `[]`, `"x"`, `{"steps":{}}`, `{"steps":null}`, `{"steps":[1]}`} {
+		owner.must(400, "POST", "/v1/workflows", map[string]any{"name": "draft", "definition": json.RawMessage(doc)})
+		owner.must(400, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions", map[string]any{"definition": json.RawMessage(doc)})
+	}
+	owner.must(201, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions", map[string]any{"definition": json.RawMessage(`{"schema":"wd/v1","steps":[]}`)})
 
 	wf := publishFlow(t, owner, loanFlow)
 	owner.must(204, "PUT", "/v1/workflows/"+wf+"/versions/1/layout", map[string]any{"ok": map[string]any{"x": 10, "y": 20}})
@@ -250,6 +257,19 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	open := owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
 	if !strings.Contains(toJSON(open), "22212345678") {
 		t.Error("revealed history should show the BVN")
+	}
+	// A page that refreshes what it revealed is audited once per window,
+	// not once per fetch; another run revealed is audited on its own.
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	other := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", in, "Idempotency-Key", "loan-2")["run_id"].(string)
+	owner.must(200, "GET", "/v1/runs/"+other+"?reveal=true", nil)
+	reveals := map[string]int{}
+	for _, e := range owner.must(200, "GET", "/v1/audit?action=pii.reveal", nil)["entries"].([]any) {
+		reveals[e.(map[string]any)["target"].(string)]++
+	}
+	if reveals["run:"+run] != 1 || reveals["run:"+other] != 1 {
+		t.Errorf("reveal audit entries: %v", reveals)
 	}
 
 	owner.must(200, "POST", "/v1/runs/"+run+"/cancel", nil)

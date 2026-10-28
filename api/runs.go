@@ -269,7 +269,7 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusForbidden, "requires "+PermPIIReveal)
 			return
 		}
-		if err := s.tx(r, func(tx pgx.Tx) error { return auditTx(r, tx, "pii.reveal", "run:"+ref.ID.String(), nil) }); err != nil {
+		if err := s.tx(r, func(tx pgx.Tx) error { return auditRevealOnce(r, tx, "run:"+ref.ID.String()) }); err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -291,6 +291,27 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 	forks.Children, forks.Subflows = nonNil(forks.Children), nonNil(forks.Subflows)
 	writeJSON(w, http.StatusOK, map[string]any{"run": sum, "events": nonNil(events), "revealed": reveal, "forks": forks,
 		"plain_errors": s.plainRunErrors(r, ref.ID, events)})
+}
+
+// revealWindow is how long one audited reveal covers the same person
+// revealing the same thing again: a page that refreshes a revealed run
+// must not write an entry per fetch.
+const revealWindow = 10 * time.Minute
+
+// auditRevealOnce audits a pii.reveal of target unless the same actor's
+// reveal of it is already in the chain within revealWindow.
+func auditRevealOnce(r *http.Request, tx pgx.Tx, target string) error {
+	p := principalFrom(r.Context())
+	var seen bool
+	if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM audit_log WHERE tenant_id = $1 AND action = 'pii.reveal' AND target = $2
+		AND actor_id = $3 AND actor_type = $4 AND at > now() - make_interval(secs => $5))`,
+		p.TenantID, target, p.Actor(), p.ActorType(), revealWindow.Seconds()).Scan(&seen); err != nil {
+		return err
+	}
+	if seen {
+		return nil
+	}
+	return auditTx(r, tx, "pii.reveal", target, nil)
 }
 
 type cancelRunReq struct {

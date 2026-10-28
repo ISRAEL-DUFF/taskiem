@@ -349,6 +349,13 @@ func TestHeadlessFlow(t *testing.T) {
 		u.call(403, "POST", "/validate", map[string]any{"definition": json.RawMessage(doc)})
 	}
 	u.call(403, "POST", "/workflows", map[string]any{"name": "x", "template": "other", "definition": json.RawMessage(transformFlow)})
+	// The handlers match field names regardless of case, so the check must
+	// not be passed by spelling a field another way.
+	for _, key := range []string{"Definition", "DEFINITION", "defInition"} {
+		u.call(400, "POST", "/workflows", map[string]any{"name": "x", key: json.RawMessage(httpFlow)})
+		u.call(400, "POST", "/validate", map[string]any{key: json.RawMessage(httpFlow)})
+	}
+	u.call(400, "POST", "/workflows", map[string]any{"name": "x", "Template": "other", "definition": json.RawMessage(transformFlow)})
 	// A template step uses its template's connectors, and its template
 	// must be one the app lists (decision 0047).
 	tplStep := `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trigger":{"type":"manual"},"steps":[{"id":"inv","type":"template","template":"send-invoice","input":{"name":"A","amount_naira":1,"for":"x"}}]}`
