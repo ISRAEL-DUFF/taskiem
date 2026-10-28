@@ -19,9 +19,18 @@ import (
 // unasked. Confirmed, the payment is refunded in full through the
 // business's Paystack connection, from its Paystack balance; a refund that
 // fails (too little balance) leaves the order refund_due with the reason.
+// An order paid by bank transfer, or by money matched to it, has no card
+// payment to refund: the owner sends it back and marks it refunded
+// (MarkRefunded, transfers.go; N3).
 
 // ErrRefund is a refund the provider refused; the order stays refund_due.
 var ErrRefund = errors.New("storefront: the refund was refused")
+
+// ErrRefundByHand is a refund Taskiem cannot make: the order was paid by
+// bank transfer (or by money matched to it), so the owner sends it back
+// from their bank and marks it refunded (MarkRefunded). The order stays
+// refund_due, with a note saying so.
+var ErrRefundByHand = errors.New("storefront: refund it by hand")
 
 // Refund refunds a refund_due order in full and tells the customer. A
 // second call on a refunded order reports it.
@@ -45,13 +54,19 @@ func (o *Orders) Refund(ctx context.Context, tenant uuid.UUID, reference, actor 
 	if ord.Status == "refunded" {
 		return ord, nil
 	}
-	if ord.Status != "refund_due" || ord.paymentRef == "" {
+	if ord.Status != "refund_due" {
 		return ord, fmt.Errorf("%w: %s has no payment to refund (%s)", ErrDecision, reference, ord.Status)
+	}
+	name, card := paystackConnection(connection)
+	if ord.PaidBy != "card" || !card || ord.paymentRef == "" {
+		// Paid by bank transfer, or by money matched to it: Taskiem cannot
+		// send it back (N3); the owner does, from their bank.
+		return ord, o.askRefundByHand(ctx, tenant, ord)
 	}
 	if o.Payments == nil {
 		return ord, errors.New("storefront: no payment provider is configured")
 	}
-	_, rerr := o.Payments.Refund(ctx, tenant, connection, ord.paymentRef, "Refund for "+reference)
+	_, rerr := o.Payments.Refund(ctx, tenant, name, ord.paymentRef, "Refund for "+reference)
 	if rerr != nil && !errors.Is(rerr, effects.ErrFatal) {
 		return ord, rerr // tried again
 	}

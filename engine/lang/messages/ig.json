@@ -668,6 +668,10 @@
       "text": "Laghachi {total} nye onye ahịa maka {ref}? Ọ si n'ego Paystack gị, ọ ga-eru ha n'ime ụbọchị ọrụ 5 ruo 10.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Kaa {ref} dị ka e weghachiri ego ya? Naanị mgbe i zigharala onye ahịa {total}. A ga-agwa ha.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Zaa *yes* iji chekwaa mgbanwe ahụ, ma ọ bụ *cancel*.",
       "reviewed": false
@@ -686,6 +690,10 @@
     },
     "wa.booking.list_week": {
       "text": "Ndebanye oge n'ụbọchị 7 na-abịa:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "Akaala {ref} dị ka e weghachiri ego ({total}). A gwala onye ahịa.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -714,6 +722,10 @@
     },
     "wa.booking.off_done": {
       "text": "{day} bụ ụbọchị izu ike: a gaghị enye oge.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "A kwụrụ {ref} site na nnyefe ego n'ụlọ akụ, ya mere Taskiem enweghị ike iweghachi ya. Zitere onye ahịa {total} site n'ụlọ akụ gị, wee zaa *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {

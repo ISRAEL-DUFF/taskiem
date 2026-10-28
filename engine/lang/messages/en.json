@@ -834,6 +834,11 @@
       "reviewed": true,
       "context": "Asks to confirm a refund"
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Mark {ref} refunded? Only once you have sent {total} back to the customer. They will be told.",
+      "reviewed": true,
+      "context": "Asks to confirm an order was refunded by hand"
+    },
     "wa.booking.confirm_reminder": {
       "text": "Reply *yes* to save the change, or *cancel*.",
       "reviewed": true,
@@ -858,6 +863,11 @@
       "text": "Bookings in the next 7 days:",
       "reviewed": true,
       "context": "Heading of the list of the week's bookings"
+    },
+    "wa.booking.marked_refunded": {
+      "text": "{ref} is marked refunded ({total}). The customer is told.",
+      "reviewed": true,
+      "context": "An order was marked refunded by hand"
     },
     "wa.booking.moved": {
       "text": "Booking {ref} is moved to {to}. The customer will be told.",
@@ -893,6 +903,11 @@
       "text": "{day} is off: no times will be offered.",
       "reviewed": true,
       "context": "Done: a day off was added"
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "{ref} was paid by bank transfer, so Taskiem cannot send it back. Send {total} to the customer from your bank, then reply *refunded {ref}*.",
+      "reviewed": true,
+      "context": "An order paid by bank transfer is refunded by the owner from their bank"
     },
     "wa.booking.refund_failed": {
       "text": "Paystack did not refund {ref}: {why}. The refund is still due; you can try again, or refund it in Paystack.",

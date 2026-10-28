@@ -82,7 +82,7 @@ actions:
         queued:    { type: array, items: { type: string } }
   refund:
     title: Refund the customer
-    description: Refunds a paid order or booking that was declined or cancelled (refund_due) in full, through the business's Paystack connection, and tells the customer. Put an approval before it so the owner confirms. A refund Paystack refuses (too little balance) fails the step and leaves the order refund due with the reason.
+    description: Refunds a paid order or booking that was declined or cancelled (refund_due) in full, through the business's Paystack connection, and tells the customer. Put an approval before it so the owner confirms. A refund Paystack refuses (too little balance) fails the step and leaves the order refund due with the reason. One paid by bank transfer (or by money matched to it) cannot be sent back by Taskiem; by_hand is true, note says what to do, and it stays refund due until the owner marks it refunded.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -101,6 +101,8 @@ actions:
         reference: { type: string }
         status:    { type: string }
         total:     { type: string }
+        by_hand:   { type: boolean, description: True when the owner refunds it from their bank and marks it refunded }
+        note:      { type: string }
   get_booking:
     title: Read a booking
     description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.

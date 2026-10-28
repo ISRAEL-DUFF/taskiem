@@ -668,6 +668,10 @@
       "text": "Refund {total} give di customer for {ref}? E go comot from your Paystack balance, and e go reach dem for like 5 to 10 working days.",
       "reviewed": false
     },
+    "wa.booking.confirm_refunded": {
+      "text": "Mark {ref} as refunded? Only when you don send {total} back give the customer. We go tell dem.",
+      "reviewed": false
+    },
     "wa.booking.confirm_reminder": {
       "text": "Reply *yes* make we save di change, or *cancel*.",
       "reviewed": false
@@ -686,6 +690,10 @@
     },
     "wa.booking.list_week": {
       "text": "Bookings for di next 7 days:",
+      "reviewed": false
+    },
+    "wa.booking.marked_refunded": {
+      "text": "{ref} don mark as refunded ({total}). We don tell the customer.",
       "reviewed": false
     },
     "wa.booking.moved": {
@@ -714,6 +722,10 @@
     },
     "wa.booking.off_done": {
       "text": "{day} na off day: we no go show any time.",
+      "reviewed": false
+    },
+    "wa.booking.refund_by_hand": {
+      "text": "{ref} pay by bank transfer, so Taskiem no fit send am back. Send {total} give the customer from your bank, then reply *refunded {ref}*.",
       "reviewed": false
     },
     "wa.booking.refund_failed": {

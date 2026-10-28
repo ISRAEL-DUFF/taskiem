@@ -36,6 +36,10 @@ type PaymentIn struct {
 	// counts towards (moneylog.Counting.Add): the order's own rule then
 	// decides (one payment, so it is refused while that one stands).
 	Add bool
+	// Account is the one-time account number given for the order that
+	// the money was paid into (N3): marked paid with the payment, which
+	// also says the order was paid by bank transfer (refunds by hand).
+	Account *uuid.UUID
 }
 
 // Counted is what counting a payment towards an order did. Pass it to
@@ -116,6 +120,12 @@ func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		}})
 	if err != nil {
 		return c, err
+	}
+	if p.Account != nil {
+		if _, err := tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND order_id = $3`,
+			tenant, *p.Account, c.Order.ID); err != nil {
+			return c, err
+		}
 	}
 	if k.Already {
 		return c, o.open(ctx, tx, tenant, &c.Order)
@@ -217,19 +227,36 @@ func ForCheckout(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, ref 
 	var reference string
 	err := tx.QueryRow(ctx, `SELECT o.reference FROM storefront_orders o
 		LEFT JOIN storefront_actions a ON a.storefront_id = o.storefront_id AND a.kind = o.kind
-		WHERE o.tenant_id = $1 AND o.payment_ref = $2 AND 'paystack/' || COALESCE(NULLIF(a.options->>'connection', ''), 'main') = $3`, tenant, ref, channel).Scan(&reference)
+		WHERE o.tenant_id = $1 AND o.payment_ref = $2 AND `+channelSQL+` = $3`, tenant, ref, channel).Scan(&reference)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoOrder
 	}
 	return reference, err
 }
 
-// checkoutChannel is the money log channel of a form's payments.
+// channelSQL is checkoutChannel in SQL, over a form's options (a).
+const channelSQL = `CASE WHEN COALESCE(a.options->>'connection', '') LIKE '%/%' THEN a.options->>'connection'
+	ELSE 'paystack/' || COALESCE(NULLIF(a.options->>'connection', ''), 'main') END`
+
+// checkoutChannel is the money log channel of a form's payments: its
+// connection as connector/name; a bare name is Paystack's, as forms named
+// it before any other rail could take their payments.
 func checkoutChannel(connection string) string {
+	if strings.Contains(connection, "/") {
+		return connection
+	}
 	if connection == "" {
 		connection = "main"
 	}
 	return "paystack/" + connection
+}
+
+// paystackConnection is the Paystack connection a form's card payments
+// use, and false when the form's connection is another rail's, which
+// takes payment by bank transfer only.
+func paystackConnection(connection string) (string, bool) {
+	c, name, ok := strings.Cut(checkoutChannel(connection), "/")
+	return name, ok && c == "paystack"
 }
 
 // Matchables lists the tenant's orders that can still be paid, newest

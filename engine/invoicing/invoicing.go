@@ -220,6 +220,13 @@ type Invoices struct {
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)
+	// OrderRequested issues what a storefront order's status page asked
+	// for (N3): the storefront checks the order and calls IssueForOrder.
+	// OrderReceived counts a payment the checker found into an order's
+	// account towards the order. Without them, orders' requests are
+	// dropped and their accounts only checked.
+	OrderRequested func(ctx context.Context, tenant, order uuid.UUID) error
+	OrderReceived  func(ctx context.Context, tenant, order uuid.UUID, r Received) error
 	// MoneyLog records the payments the checker finds (T2); nil records
 	// none.
 	MoneyLog *moneylog.Log
