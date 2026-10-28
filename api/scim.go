@@ -435,7 +435,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		var user uuid.UUID
 		invited := false
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
 			user = uuid.Must(uuid.NewV7())
 			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)`, user, email, displayName(&in)); err != nil {

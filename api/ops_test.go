@@ -119,7 +119,7 @@ func opsWorld(t *testing.T) *world {
 func enrolOperator(t *testing.T, w *world, email string) (*opsClient, *webauthntest.Authenticator) {
 	t.Helper()
 	ctx := context.Background()
-	pool := w.env.Store.Pool
+	pool := w.env.DB.OpsAdmin // the CLI's own login
 	if _, err := ops.Add(ctx, pool, email, "Op", "cli:test"); err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestOperatorSessionsAreSeparate(t *testing.T) {
 	c.csrf = true
 
 	// Disabling an operator ends their sessions at once.
-	if err := ops.Disable(context.Background(), w.env.Store.Pool, "ops@taskiem.test", "cli:test"); err != nil {
+	if err := ops.Disable(context.Background(), w.env.DB.OpsAdmin, "ops@taskiem.test", "cli:test"); err != nil {
 		t.Fatal(err)
 	}
 	c.must(401, "GET", "/v1/ops/me", nil)
@@ -426,7 +426,7 @@ func TestOperatorSSO(t *testing.T) {
 	idp := oidctest.New()
 	defer idp.Close()
 	w.srv.Ops.OIDC = &api.OpsOIDC{Name: "Okta", Issuer: idp.URL, ClientID: idp.ClientID, ClientSecret: idp.ClientSecret}
-	if _, err := ops.Add(context.Background(), w.env.Store.Pool, "ada@taskiem.test", "Ada", "cli:test"); err != nil {
+	if _, err := ops.Add(context.Background(), w.env.DB.OpsAdmin, "ada@taskiem.test", "Ada", "cli:test"); err != nil {
 		t.Fatal(err)
 	}
 	signIn := func() (string, string) {
@@ -469,4 +469,36 @@ func TestOperatorSSO(t *testing.T) {
 	c.http.Jar.SetCookies(mustURL(t, w.base+"/v1/ops/"), []*http.Cookie{{Name: "taskiem_ops_session", Value: tok, Path: "/v1/ops"}})
 	c.must(403, "POST", "/v1/ops/step-up/options", map[string]any{"operation": "ops.status.open", "target": "incident"})
 	c.must(403, "POST", "/v1/ops/status/incidents", map[string]any{"kind": "incident", "title": "x", "components": []string{"api"}, "message": "x"})
+}
+
+// Operator accounts are the CLI's alone (migration 00240): the API
+// server's role may not make, reset, disable, list or enrol operators, so
+// SQL that runs in the server cannot either; the CLI's role can, and each
+// change is in the platform audit chain.
+func TestOperatorAccountsNeedTheCLIRole(t *testing.T) {
+	w := opsWorld(t)
+	ctx := context.Background()
+	server := w.env.Store.Pool
+	if _, err := ops.Add(ctx, server, "eve@taskiem.test", "Eve", "api"); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("the server's role made an operator: %v", err)
+	}
+	if _, err := ops.List(ctx, server); err == nil {
+		t.Error("the server's role listed operators")
+	}
+	if _, err := ops.Enrol(ctx, server, "eve@taskiem.test", origin, time.Hour, "api"); err == nil {
+		t.Error("the server's role issued an enrolment link")
+	}
+	if _, err := ops.Add(ctx, w.env.DB.OpsAdmin, "ada@taskiem.test", "Ada", "cli:test"); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'operator.add' AND target = 'ada@taskiem.test'`, ops.PlatformChain).Scan(&n); err != nil || n != 1 {
+		t.Errorf("audit entries for the add: %d %v", n, err)
+	}
+	if err := ops.Disable(ctx, w.env.DB.OpsAdmin, "nobody@taskiem.test", "cli:test"); err == nil {
+		t.Error("disabled an operator that does not exist")
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'operator.disable'`, ops.PlatformChain).Scan(&n); err != nil || n != 0 {
+		t.Errorf("a refused change was audited: %d %v", n, err)
+	}
 }

@@ -737,7 +737,7 @@ func checkPartnerQuota(ctx context.Context, tx pgx.Tx, l Limits) error {
 		return nil
 	}
 	var today, month int64
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(runs_today), 0)::bigint, COALESCE(sum(runs_month), 0)::bigint FROM taskiem_partner_usage($1)`, l.partner).
+	if err := tx.QueryRow(ctx, `SELECT runs_today, runs_month FROM taskiem_partner_run_totals($1)`, l.partner).
 		Scan(&today, &month); err != nil {
 		return err
 	}

@@ -847,6 +847,12 @@ sso_requests.return_to
 sso_requests.state
 sso_requests.tenant_id
 sso_requests.verifier
+status_incidents.id
+status_incidents.kind
+status_probes.at
+status_updates.id
+status_updates.incident_id
+status_updates.status
 storefront_actions.enabled
 storefront_actions.kind
 storefront_actions.label

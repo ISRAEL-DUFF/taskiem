@@ -834,7 +834,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 // (taskiem passkeys reset). It is audited in each of their tenants.
 func ResetPasskeys(ctx context.Context, pool *pgxpool.Pool, email, operator string) (int64, error) {
 	var user uuid.UUID
-	if err := pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, email).Scan(&user); err != nil {
 		return 0, fmt.Errorf("no user %s: %w", email, err)
 	}
 	var tenants []uuid.UUID

@@ -364,7 +364,7 @@ func (s *Server) opsReviews(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) opsReviewOf(r *http.Request, id uuid.UUID) (opsReview, error) {
-	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_storefront_reviews('all') WHERE id = $1`, id)
+	rows, err := s.Store.Pool.Query(r.Context(), `SELECT * FROM taskiem_ops_storefront_review($1)`, id)
 	if err != nil {
 		return opsReview{}, err
 	}
@@ -668,7 +668,7 @@ func (s *Server) opsReportAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var tenant uuid.UUID
-	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id FROM taskiem_ops_page_reports('all') WHERE id = $1`, id).Scan(&tenant); err != nil {
+	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id FROM taskiem_ops_page_report($1)`, id).Scan(&tenant); err != nil {
 		s.opsDBFail(w, r, err)
 		return
 	}

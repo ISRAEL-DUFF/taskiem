@@ -47,6 +47,25 @@ func TestDefinersAllowList(t *testing.T) {
 		  AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%')`) {
 		t.Errorf("the definer %s does not set search_path", f)
 	}
+	// Every definer runs as taskiem_dispatch, whose grants and policies say
+	// what it may touch; one owned by the migrating user would ignore them
+	// on a superuser, or meet forced row-level security with no policy on
+	// a plain schema owner. Partitions are made and dropped only by the
+	// table's owner, and two read what dispatch may not.
+	ownedByTable := map[string]bool{
+		"taskiem_ensure_run_event_partitions(timestamp with time zone,integer)": true,
+		"taskiem_drop_empty_run_event_partitions()":                             true,
+		// They read usage figures and remote ids, which the dispatch role
+		// is kept from (TestDispatchRoleCannotReadPayloads).
+		"taskiem_partner_usage_snapshots(uuid,date,date)":          true,
+		"taskiem_remote_tenants(timestamp with time zone,integer)": true,
+	}
+	for _, f := range query(t, d, `SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+		WHERE n.nspname = 'public' AND p.prosecdef AND pg_get_userbyid(p.proowner) <> 'taskiem_dispatch'`) {
+		if !ownedByTable[f] {
+			t.Errorf("the definer %s is not owned by taskiem_dispatch: ALTER FUNCTION ... OWNER TO taskiem_dispatch, granting it what the function reads", f)
+		}
+	}
 	// None is left executable by every role (a function's default).
 	for _, f := range query(t, d, `SELECT p.oid::regprocedure::text FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 		WHERE n.nspname = 'public' AND p.prosecdef AND p.prorettype <> 'trigger'::regtype
