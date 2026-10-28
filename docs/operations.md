@@ -234,7 +234,7 @@ High availability Postgres (synchronous standby, failover, point-in-time recover
 
 ## Docker Compose
 
-`deploy/docker-compose.yml` runs Postgres, OpenBao (dev mode), and Taskiem with every role; see the comments at its top. OpenBao dev mode keeps keys in memory: restarting it loses every encrypted secret. Use a persistent, unsealed OpenBao in any shared environment.
+`deploy/docker-compose.yml` runs Postgres, OpenBao (dev mode), and Taskiem with every role; see the comments at its top. Only the web app (8080) is published on every interface; Postgres (5432, password `postgres`) and metrics (9090) are published on `127.0.0.1`, because Docker's published ports bypass a host firewall such as ufw. Taskiem gets 45 seconds to stop (`stop_grace_period`), longer than workers' 30-second drain. OpenBao dev mode keeps keys in memory: restarting it loses every encrypted secret. Use a persistent, unsealed OpenBao in any shared environment.
 
 For staging or a first production environment on one VM, use `deploy/vm` instead: one command installs it, and the server upgrades, rolls back, backs up and watches itself (persistent auto-unsealed OpenBao, HTTPS through Caddy, an external Postgres, container steps off) ([one VM](vm.md), [decision 0032](decisions/0032-deployment-target.md)).
 
