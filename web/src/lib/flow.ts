@@ -103,6 +103,16 @@ export function definitionProblem(v: unknown): string | undefined {
   return list(v.steps, '"steps"');
 }
 
+/** A step edited as JSON: the step to keep, or what is wrong. Its id is not
+ * changed here: renaming goes through the ID field, which checks the id is
+ * free and rewrites the steps that run after it. */
+export function stepFromJson(step: Step, v: unknown): Step | string {
+  if (!isObject(v)) return "A step must be an object ({ ... }).";
+  if (v.id !== step.id) return `The id stays "${step.id}" here: change it in the ID field.`;
+  const bad = definitionProblem({ trigger: {}, steps: [v] });
+  return bad ?? (v as unknown as Step);
+}
+
 /** Every step at every depth with the list it is in, outer lists first. */
 export function placed(steps: Step[], list: ListRef = ""): { step: Step; list: ListRef }[] {
   const out: { step: Step; list: ListRef }[] = [];

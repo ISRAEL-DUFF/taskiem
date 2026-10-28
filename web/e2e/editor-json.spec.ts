@@ -89,3 +89,38 @@ test("leaving the builder with unsaved changes asks first", async ({ page }) => 
   await expect.poll(() => kinds).toEqual(["beforeunload"]);
   expect(page.isClosed()).toBe(false);
 });
+
+test("a step edited as JSON keeps its id; the ID field renames it", async ({ page }) => {
+  await signIn(page);
+  const id = await workflow(page, "Step JSON flow", {
+    schema: "wd/v1", id: "wf_stepjson", version: 1, name: "Step JSON", trigger: { type: "manual" },
+    steps: [
+      { id: "first", type: "transform", config: { output: "one" } },
+      { id: "second", type: "transform", needs: ["first"], config: { output: "two" } },
+    ],
+  });
+  await page.goto(`/workflows/${id}`);
+  await page.getByTestId("node-first").click();
+  const win = page.getByTestId("step-window");
+  await win.getByText("Edit this step as JSON").click();
+  const json = win.locator("details textarea.mono");
+  await json.fill((await json.inputValue()).replace('"id": "first"', '"id": "second"').replace('"one"', '"uno"'));
+  await expect(win.getByTestId("step-json-problem")).toContainText('The id stays "first"');
+  // Nothing was taken: two steps, still called first and second.
+  await expect(page.getByTestId("node-first")).toHaveCount(1);
+  await expect(page.getByTestId("node-second")).toHaveCount(1);
+  await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+
+  // The ID field checks the id is free, and renames what runs after it.
+  const field = win.getByLabel("ID");
+  await field.fill("second");
+  await field.blur();
+  await expect(win.getByText("That id is taken.")).toBeVisible();
+  await field.fill("renamed");
+  await field.blur();
+  await expect(page.getByTestId("node-renamed")).toHaveCount(1);
+  await win.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("tab", { name: "JSON" }).click();
+  const whole = JSON.parse(await page.locator("textarea.mono").inputValue()) as { steps: { id: string; needs?: string[] }[] };
+  expect(whole.steps.map((s) => [s.id, s.needs ?? []])).toEqual([["renamed", []], ["second", ["renamed"]]]);
+});

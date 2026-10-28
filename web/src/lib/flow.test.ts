@@ -15,6 +15,7 @@ import {
   notesOf,
   removeAnywhere,
   renameAnywhere,
+  stepFromJson,
   tidy,
   withNotes,
   type FlowNode,
@@ -180,6 +181,15 @@ describe("saving an If", () => {
   it("names the paths that still need a step; an empty No is fine", () => {
     expect(emptyPaths([newChoice("ok")], (s) => s.name ?? s.id)).toEqual(["Yes of “Is it so?”"]);
     expect(emptyPaths(order(), (s) => s.id)).toEqual([]);
+  });
+});
+
+describe("a step edited as JSON", () => {
+  it("keeps its id: renaming goes through the ID field", () => {
+    expect(stepFromJson(t("a"), { id: "b", type: "transform" })).toMatch(/stays "a"/);
+    expect(stepFromJson(t("a"), [])).toMatch(/must be an object/);
+    expect(stepFromJson(t("a"), { id: "a" })).toMatch(/needs a "type"/);
+    expect(stepFromJson(t("a"), { id: "a", type: "transform", name: "Renamed" })).toEqual({ id: "a", type: "transform", name: "Renamed" });
   });
 });
 
