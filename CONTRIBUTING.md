@@ -42,7 +42,8 @@ The Makefile exports `TASKIEM_TEST_DATABASE_URL` (default `postgres://postgres:p
 
 Run `make check` before pushing. It covers the main steps of CI's `go` and `typescript` jobs and the licence gate. CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) also runs, on every pull request:
 
-- the public pages again under each theme, the secrets tests against OpenBao's transit engine, the docs site build, and `taskiem migrate` on a clean database (`go` job);
+- the public pages again under each theme, the secrets tests against OpenBao's transit engine, the Prometheus rule tests with `promtool`, the MySQL connector against a MySQL 8.4 server, the docs site build, and `taskiem migrate` on a clean database (`go` job); lint and tests of the QuickJS fork in `third_party/qjs`, a module of its own;
+- the race detector over `engine/runtime`, `engine/decide` and `engine/effects` (`race` job), and the database crash suite (`chaos` job, not yet a gate);
 - the website stylesheet check (`pnpm site:css`, then `git diff`) (`typescript` job);
 - the browser suite, as `make e2e` (`web` job);
 - the image, built once, then the Compose stack and the whole one-VM deployment on it (`docker` and `vps` jobs);
