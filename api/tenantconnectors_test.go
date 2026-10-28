@@ -74,9 +74,19 @@ func TestTenantConnectorUploadAndRun(t *testing.T) {
 		t.Errorf("bad module: %d %v", st, out)
 	}
 
+	// The connector lint applies: a change at the provider declared as a
+	// read would be retried freely, so it is refused with the finding.
+	dishonest := []byte(strings.Replace(string(manifest), "title: Get balance", "title: Send balance", 1))
+	if st, out := acme.upload(dishonest, module); st != 400 || out["code"] != "manifest_lint" || !strings.Contains(toJSON(out["findings"]), "reads like a change") {
+		t.Errorf("a write declared as a read: %d %v", st, out)
+	}
+
 	st, out := acme.upload(manifest, module)
 	if st != 201 || out["ref"] != "x_example_ledger@1" {
 		t.Fatalf("upload: %d %v", st, out)
+	}
+	if _, ok := out["warnings"].([]any); !ok {
+		t.Errorf("no warnings list: %v", out)
 	}
 	if st, out := acme.upload(manifest, module); st != 409 || !strings.Contains(toJSON(out), "raise the version") {
 		t.Errorf("same version again: %d %v", st, out)

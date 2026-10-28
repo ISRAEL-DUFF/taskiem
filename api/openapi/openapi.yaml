@@ -15598,7 +15598,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TenantConnectorUploaded'
         '400':
-          description: Missing fields, or a manifest or module that does not load.
+          description: Missing fields, a manifest that fails the connector lint (`code` `manifest_lint`, with `findings`), or a module that does not load.
           content:
             application/json:
               schema:
@@ -27300,6 +27300,7 @@ components:
       - digest
       - actions
       - hosts
+      - warnings
       properties:
         id:
           type: string
@@ -27319,6 +27320,20 @@ components:
           - 'null'
           items:
             type: string
+        warnings:
+          type: array
+          description: Lint findings that do not block the upload, for the author to read.
+          items:
+            type: object
+            required: [level, path, message]
+            properties:
+              level:
+                type: string
+              path:
+                type: string
+              message:
+                type: string
+            additionalProperties: false
       additionalProperties: false
     Environment:
       type: object
