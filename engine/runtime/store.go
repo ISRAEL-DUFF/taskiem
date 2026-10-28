@@ -76,6 +76,14 @@ type Store struct {
 // queued or with a worker, waiting while all it has left are waits (an
 // approval, a timer, a signal, a form, a callback, a child run). Queued,
 // parked and ended runs keep their status.
+// insertReceipt records a delivery's dedup key. A key seen within the
+// receipt window is a duplicate (no row affected); one older than that is a
+// new delivery and takes the receipt over. taskiem_purge_trigger_receipts
+// (migration 00240) deletes receipts past the same 30 days.
+const insertReceipt = `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4)
+	ON CONFLICT (tenant_id, trigger_id, dedup_key) DO UPDATE SET run_id = EXCLUDED.run_id, received_at = now()
+	WHERE trigger_receipts.received_at < now() - interval '30 days'`
+
 const settleStatus = `, status = CASE WHEN runs.status NOT IN ('running', 'waiting') THEN runs.status
 	WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.run_id = runs.id) THEN 'running' ELSE 'waiting' END`
 
@@ -224,7 +232,7 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			}
 		}
 		if req.DedupKey != "" {
-			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+			tag, err := tx.Exec(ctx, insertReceipt,
 				req.TenantID, req.TriggerID, req.DedupKey, ref.ID)
 			if err != nil {
 				return err
@@ -1017,7 +1025,7 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 		woke, fresh = woke[:0], true
 		if dedupKey != "" {
 			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
-			tag, err := tx.Exec(ctx, `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+			tag, err := tx.Exec(ctx, insertReceipt,
 				tenant, "signal/"+env+"/"+event, dedupKey, uuid.Nil)
 			if err != nil {
 				return err
