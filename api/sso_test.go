@@ -360,3 +360,37 @@ func requestID(t *testing.T, encoded string) string {
 	}
 	return req.ID
 }
+
+// An administrator who signs in through SSO is held to passkeys as one who
+// signs in with a password is (decision 0026): until they have a passkey,
+// the session can only enrol one.
+func TestSSOAdminsAreHeldToPasskeys(t *testing.T) {
+	w := ssoWorld(t)
+	idp := oidctest.New()
+	defer idp.Close()
+	owner := w.tenant(t, "Bank", "owner@bank.test")
+	conn := owner.must(201, "POST", "/v1/sso", map[string]any{"protocol": "oidc", "name": "Okta",
+		"oidc":          map[string]any{"issuer": idp.URL, "client_id": idp.ClientID, "client_secret": idp.ClientSecret, "groups_claim": "groups"},
+		"default_roles": []string{"viewer"}, "group_roles": map[string]any{"it": []string{"admin"}}})
+	id := conn["id"].(string)
+	dom := owner.must(201, "POST", "/v1/sso/"+id+"/domains", map[string]any{"domain": "bank.test"})
+	w.txt["_taskiem-verify.bank.test"] = []string{dom["txt_value"].(string)}
+	owner.must(204, "POST", "/v1/sso/domains/bank.test/verify", nil)
+	w.srv.RequireAdminPasskeys = true
+
+	idp.Claims = map[string]any{"sub": "u-ada", "email": "ada@bank.test", "email_verified": true, "groups": []any{"it"}}
+	_, ada := w.oidcSignIn(t, idp, id)
+	if ada == nil {
+		t.Fatal("not signed in")
+	}
+	if me := ada.must(200, "GET", "/v1/me", nil); me["enrol_passkey"] != true || me["auth_method"] != "sso" {
+		t.Fatalf("an SSO administrator without a passkey: %v", me)
+	}
+	if st, body := ada.do("GET", "/v1/workflows", nil); st != 403 || body["enrol_passkey"] != true {
+		t.Fatalf("enrol-only SSO session reached workflows: %d %v", st, body)
+	}
+	// A member without administrative permissions is not held.
+	idp.Claims = map[string]any{"sub": "u-bob", "email": "bob@bank.test", "email_verified": true}
+	_, bob := w.oidcSignIn(t, idp, id)
+	bob.must(200, "GET", "/v1/workflows", nil)
+}

@@ -346,6 +346,16 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return nil, errors.New("no membership")
 	}
 	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
+	if s.RequireAdminPasskeys && p.AuthMethod == "sso" && isAdmin(p.Permissions) {
+		// Held to passkeys after SSO too (decision 0026): an administrator
+		// who signed in through their identity provider and has no passkey
+		// enrols one before anything else.
+		var has bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, p.UserID).Scan(&has); err != nil {
+			return nil, err
+		}
+		p.EnrolOnly = !has
+	}
 	if h := r.Header.Get(agentSessionHeader); h != "" {
 		// A field agent acting in a business (agents.go).
 		return s.agentPrincipal(ctx, &p, h)
