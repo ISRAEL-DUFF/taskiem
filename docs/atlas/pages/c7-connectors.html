@@ -4,29 +4,92 @@
   "title": "Connector framework",
   "part": "C",
   "order": 1,
-  "status": "planned",
-  "summary": "The connector/v1 manifest, the Go handler interface, WebAssembly connectors, the registry, packaging and the catalogue.",
-  "scope": [
-    "Manifest fields: actions, classes, idempotency, reconcile, triggers, personal data, hosts",
-    "The Go handler interface and the registry",
-    "Built-in connectors and how they register",
-    "WebAssembly connectors (ABI <code>taskiem-connector/v1</code>) on wazero",
-    "Conformance suites and recorded fixtures",
-    "Packages, signing, and review for the public catalogue",
-    "Drift monitoring",
-    "A walk through Paystack and one SaaS connector"
-  ],
+  "summary": "The connector/v1 manifest and how it is checked, the Go handler interface and the registry, WebAssembly connectors, conformance suites, the signed public catalogue, drift monitoring, and Paystack and Zoho Books from manifest to call.",
+  "verified": "87ab02b24fce65796a376295c1c4e501cb723366",
   "sources": [
-    "engine/connector/",
-    "engine/wasmconn/",
-    "engine/conntest/",
-    "engine/connpkg/",
-    "engine/catalogue/",
-    "engine/drift/",
-    "connectors/",
-    "sdk/connectorsdk/",
-    "docs/contracts/connector-v1.md",
-    "docs/contracts/connector-wasm-v1.md"
+    "engine/connector/", "engine/wasmconn/", "engine/conntest/", "engine/connpkg/", "engine/catalogue/", "engine/drift/",
+    "engine/effects/", "connectors/builtin/builtin.go", "connectors/paystack/", "connectors/zohobooks/", "sdk/connectorsdk/",
+    "api/tenantconnectors.go", "schemas/connector-v1.schema.json",
+    "docs/contracts/connector-v1.md", "docs/contracts/connector-wasm-v1.md", "docs/spec/architecture.md"
   ]
 }
 -->
+<h2>What a connector is</h2>
+<p>A connector is how a workflow talks to a provider: Paystack, a bank, WhatsApp, Zoho, a database. It has two parts. The <strong>manifest</strong> is YAML that says what the connector can do: its actions, each action's class and idempotency key, the hosts it may reach, how a connection authenticates, and the webhooks it receives. The <strong>handlers</strong> are the code that does it. The engine reads only the manifest to decide how to retry, what to reconcile and where traffic may go. The handlers never decide that.</p>
+<div class="stats">
+  <div class="stat"><x-stat name="connectors"/><span class="stat-k">built-in connectors, all in Go</span></div>
+  <div class="stat"><x-stat name="actions-read"/><span class="stat-k">read actions</span></div>
+  <div class="stat"><x-stat name="actions-idempotent_write"/><span class="stat-k">idempotent writes</span></div>
+  <div class="stat"><x-stat name="actions-reconcilable_write"/><span class="stat-k">reconcilable writes</span></div>
+</div>
+<p>Connectors come from three places, and the id says which:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Source</th><th>Id</th><th>Code</th><th>Checked by</th></tr></thead>
+  <tbody>
+    <tr><td>Built in</td><td><code>paystack</code></td><td>Go, compiled into the binary from <x-ref path="connectors/"><code>connectors/</code></x-ref></td><td>Code review and the repository's tests</td></tr>
+    <tr><td>A tenant's own</td><td><code>x_ledger</code></td><td>A WebAssembly module the tenant uploads</td><td>Parsing and loading only</td></tr>
+    <tr><td>The public catalogue</td><td><code>p_acme_ledger</code></td><td>A signed WebAssembly package from a verified publisher</td><td>Seven automated checks and a human reviewer</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="connectors--manifest">The manifest</h2>
+<p><x-ref path="engine/connector/manifest.go" symbol="func Parse(src []byte) (*Manifest, []string) {"><code>Parse</code></x-ref> checks a manifest in two layers and returns every problem, not just the first. The JSON Schema (<x-ref path="schemas/connector-v1.schema.json"><code>connector-v1.schema.json</code></x-ref>) checks shape, and requires a class on every action, an idempotency key on every idempotent write and a reconcile action on every reconcilable one. Then <x-ref path="engine/connector/manifest.go" symbol="func (m *Manifest) check() []string {"><code>check</code></x-ref> applies the rules that span fields: a reconcile action must be a read, a compensating action must be a write, a read cannot compensate, and every personal-data path must exist in the action's input or output schema.</p>
+<p>This is Paystack's <code>transfer</code>. The class decides retries, the idempotency block says how the engine's key fits Paystack's <code>reference</code> field, and <code>reconcile</code> names the read that can find out after a crash whether a transfer happened:</p>
+<x-code path="connectors/paystack/manifest.yaml" start="  transfer:" end="      - { field: recipient, category: account_number }" lang="yaml" caption="one action in full"/>
+<p>The key itself is a SHA-256 of the tenant, the seed, the step and the attempt group, cut to the length the manifest asks for. <x-ref path="engine/effects/idempotency.go" symbol="func (s Spec) Validate() error {"><code>Spec.Validate</code></x-ref> refuses an encoding that would leave less than 128 bits, or a prefix and length that do not fit the provider's limits. The <x-page id="exactly-once">Exactly-once effects</x-page> page covers what the engine does with the class and the key.</p>
+<h3>Where traffic may go</h3>
+<p><x-ref path="engine/connector/manifest.go" symbol="func (m *Manifest) HostsFor(creds map[string]string) []string {"><code>HostsFor</code></x-ref> gives the hosts a call may reach: <code>egress_hosts</code>, or the base URL's host, plus each mode's host. A host can come from the connection, as <code>${connection.api_domain}</code> does for Zoho's data centres. Such a host is checked against <code>connection_hosts</code>, and a connector that lists none allows any (<x-ref path="engine/connector/manifest.go" symbol="func (m *Manifest) ConnectionHostAllowed(host string) bool {"><code>ConnectionHostAllowed</code></x-ref>). Whatever the list says, the egress guard still refuses private, loopback and metadata addresses.</p>
+
+<h2 id="connectors--handlers">Handlers and the registry</h2>
+<p>A handler is one method:</p>
+<x-code path="engine/connector/runtime.go" start="type Action interface {" lines="3"/>
+<p>The <x-ref path="engine/connector/runtime.go" symbol="type Request struct {"><code>Request</code></x-ref> carries the input with the key already in its field, the connection's credentials decrypted for this call only, an HTTP client and a TCP dialer that both go through the egress guard, and a way to refresh an OAuth token under a lock. A handler reports failure with one of the sentinels in <x-ref path="engine/effects/class.go"><code>effects</code></x-ref>: retryable, fatal, unknown outcome, not sent, or indeterminate. Most use <x-ref path="engine/connector/httpx.go" symbol="func DoJSON("><code>DoJSON</code></x-ref>, which maps a failed DNS lookup or refused connection to not sent, 429 and 503 to retryable, any other 5xx to unknown outcome, and other 4xx to fatal.</p>
+<p>Each built-in package embeds its manifest, parses it with <code>MustParse</code> and returns a <code>Connector</code> with one handler per action. <x-ref path="connectors/builtin/builtin.go" symbol="func Register(r *connector.Registry, o Options) error {"><code>builtin.Register</code></x-ref> registers the list at start-up:</p>
+<x-code path="engine/connector/runtime.go" start="func (r *Registry) Register(c *Connector) error {" caption="ids starting x_ and p_ are reserved"/>
+<p><x-ref path="engine/connector/runtime.go" symbol="func (c *Connector) Check() error {"><code>Check</code></x-ref> fails start-up if a manifest action has no handler or a handler has no action. For each call, <x-ref path="engine/connector/runtime.go" symbol="func (r *Registry) For(ctx context.Context, tenant string) (Lookup, error) {"><code>Registry.For</code></x-ref> adds the tenant's own and installed connectors to the built-ins. Because of the prefixes, a tenant's connector can never stand in for a built-in.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <ul>
+    <li><strong>Rate limits.</strong> The spec says they "are enforced by a token bucket per connection, shared across all workers via Postgres" (<x-ref path="docs/spec/architecture.md" symbol="**Rate limits** are enforced by a token bucket per connection">spec 6.2</x-ref>). Manifests declare <code>rate_limit</code>, Paystack's at 50 a second, but the engine does not read the field, and nothing enforces it. A provider's 429 is the only brake, handled as retryable with <code>Retry-After</code>.</li>
+    <li><strong>Version pinning.</strong> The spec says each run "executes every step on" the connector versions recorded in <span class="evt">RunStarted</span> (<x-ref path="docs/spec/architecture.md" symbol="Each run records the exact resolved versions">spec 6.4</x-ref>). The versions are recorded (<x-ref path="engine/runtime/store.go" symbol="pins = reg.Pins()"><code>Pins</code></x-ref>), but nothing reads them back. The worker looks up <code>id@major</code> at call time and gets the newest version. A run that is waiting while a new minor version is uploaded or deployed carries on with the new one.</li>
+    <li><strong>Out of process.</strong> The spec says third-party connectors "run out of process as WASM modules". They run in the worker's process, in wazero, with a fresh instance per call.</li>
+  </ul>
+</div>
+
+<h2 id="connectors--wasm">WebAssembly connectors</h2>
+<p>A tenant, or a catalogue publisher, writes a connector in any language that compiles to WebAssembly. With Go and <x-ref path="sdk/connectorsdk/"><code>connectorsdk</code></x-ref> it is a manifest, <code>Handle("action", fn)</code> per action, and <code>GOOS=wasip1</code>. The ABI is <code>taskiem-connector/v1</code> (<x-ref path="docs/contracts/connector-wasm-v1.md">contract</x-ref>). The module exports <code>taskiem_execute_v1</code> and may import four host functions and nothing else outside WASI:</p>
+<x-code path="engine/wasmconn/wasmconn.go" start="var hostFuncs = map[string]bool{" lines="1"/>
+<p><x-ref path="engine/wasmconn/wasmconn.go" symbol="func (a *action) Execute(ctx context.Context, req connector.Request) (connector.Response, error) {"><code>Execute</code></x-ref> passes the action, input, credentials and key as JSON. Each call gets a fresh instance with 128 MB of memory, 20 HTTP calls, 4 MB per response and 1 MB of output (<x-ref path="engine/wasmconn/wasmconn.go" symbol="func (l Limits) withDefaults() Limits {">defaults</x-ref>). HTTP goes through the worker's guarded client, so the manifest's hosts and the address checks apply exactly as for Go. The host also records whether anything was sent. A module that says "not sent" after the host sent a request is overruled to unknown outcome, so a buggy module cannot make the engine retry a write unsafely:</p>
+<x-code path="engine/wasmconn/wasmconn.go" start="func (c *call) classify(id, kind, msg string) error {" caption="the host's record of what was sent wins"/>
+<p>A tenant uploads to <code>POST /v1/tenant-connectors</code> (<x-ref path="api/tenantconnectors.go"><code>tenantconnectors.go</code></x-ref>). The upload is parsed, the id must start <code>x_</code>, every trigger must verify its deliveries, and the module must compile with only the allowed imports. It is stored with its digest and audited. Workers see it within 10 seconds (<x-ref path="engine/wasmconn/source.go" symbol="func (s *Source) Connectors(ctx context.Context, tenant string) ([]*connector.Connector, error) {"><code>Source.Connectors</code></x-ref>).</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>A tenant's upload gets none of the checks a catalogue package gets: no strict lint, no conformance run, no semantic-version check, and none of the memory checks in <x-ref path="engine/wasmconn/wasmconn.go" symbol="func (r *Runtime) Inspect("><code>Inspect</code></x-ref>. A tenant can therefore label a write as a <code>read</code>, which the engine will retry freely, or allow a wildcard host such as <code>*.com</code>, which only the catalogue refuses. Address checks still stop calls to private networks, and the harm stays within the tenant's own data and credentials. It is worth a lint pass on upload, with findings as warnings, so tenants see the problem before a payment goes out twice.</p>
+</div>
+
+<h2 id="connectors--conformance">Conformance suites</h2>
+<p>A connector's tests are recorded exchanges with the provider. <x-ref path="engine/conntest/conntest.go" symbol="func LoadDir(dir string) (*Suite, error) {"><code>conntest</code></x-ref> reads <code>testdata/fixtures</code> (a request and its response) and <code>testdata/conformance</code> (an action, an input and the output or error expected). <x-ref path="engine/conntest/conntest.go" symbol="func Run(ctx context.Context, c *connector.Connector, s *Suite, opt Options) Report {"><code>Run</code></x-ref> serves the exchanges from a local server, in order, and refuses any other host. As well as pass or fail, it reports three things a reviewer needs: actions no case calls, idempotent writes whose key never reached the provider, and reads that sent something other than GET or HEAD. Ten built-ins have conformance suites. Paystack and others test with fixtures and capability cases instead.</p>
+
+<h2 id="connectors--catalogue">The public catalogue</h2>
+<p>A publisher ships a package: the manifest, the module, a licence, a source URL, its conformance suite, and an attestation that it is original work. The package is signed with the publisher's Ed25519 key over its format, id, version and digest (<x-ref path="engine/connpkg/connpkg.go" symbol="func Message(id, version, digest string) []byte {"><code>connpkg</code></x-ref>). On submission, <x-ref path="engine/catalogue/checks.go" symbol="func (c *Checker) Run("><code>Checker.Run</code></x-ref> checks, within three minutes:</p>
+<ol>
+  <li>The signature.</li>
+  <li>A strict lint (<x-ref path="engine/catalogue/lint.go" symbol="func Lint(raw []byte, opt LintOptions) (*connector.Manifest, []Finding) {"><code>Lint</code></x-ref>): HTTPS only, no IPs, private names or wildcards, a read must not be named like a write, and personal fields must be declared.</li>
+  <li>The module loads and stays within its memory.</li>
+  <li>The licence is on the allow-list, and the attestation is given.</li>
+  <li>Every host resolves to public addresses only.</li>
+  <li>The version follows semantic versioning against the versions already published.</li>
+  <li>Every case passes, every action is covered, and every write's key reaches the provider.</li>
+</ol>
+<p>A package that passes waits for a reviewer, who must not belong to the publisher, must tick every item on the checklist, and must leave a note (<x-ref path="engine/db/migrations/00106_catalogue_submissions.sql" symbol="IF v.state &lt;&gt; 'in_review' THEN"><code>taskiem_catalogue_review</code></x-ref>). Installing it asks the tenant to consent to its hosts and writes, and an upgrade asks again when those grow (<x-ref path="engine/catalogue/diff.go" symbol="func Compare(a, b *connector.Manifest) Diff {"><code>Compare</code></x-ref>). A revoked version stops resolving within 10 seconds, and every tenant that installed it is told.</p>
+
+<h2 id="connectors--drift">Drift</h2>
+<p>After every successful call the worker compares the output with the action's output schema (<x-ref path="engine/drift/drift.go" symbol="func Check(m *connector.Manifest, action string, output any) []Finding {"><code>drift.Check</code></x-ref>). A wrong type, an enum value not listed or a missing required field is recorded in <code>connector_drift</code>, counted in a metric, raised as an alert, and offered to AI repair as a cause. The step still completes, because the output is what the provider said. The check is shallow on purpose: it ignores <code>oneOf</code>, formats, ranges and extra fields, and stops at 20 findings.</p>
+
+<h2 id="connectors--walkthrough">Two connectors, end to end</h2>
+<h3>Paystack, a payment rail</h3>
+<p>The manifest takes a secret key, accepts <code>sk_live_</code> and <code>sk_test_</code> as the two modes, refuses a public key, and tests a new connection by checking the balance. Its webhooks are verified with HMAC-SHA512 over the body, and are polled every five minutes too, so a missed delivery is caught. The handler for <code>transfer</code> sends the engine's key as the reference. If Paystack says the reference is a duplicate, the earlier attempt reached it, so the handler looks that transfer up and returns it as the result:</p>
+<x-code path="connectors/paystack/paystack.go" start="func (c *client) transfer(ctx context.Context, req connector.Request) (connector.Response, error) {" max="30"/>
+<h3>Zoho Books, a SaaS product</h3>
+<p>Zoho Books connects with OAuth through Taskiem's own Zoho app. The connection records the customer's data centre, and only Zoho's own data-centre hosts are accepted for it. Books has no idempotency key. Its writes are classed <code>idempotent_write</code> and made safe by looking first: creating a contact searches by email, phone and name, and returns the match if there is one.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>Look-then-create is safe only if a contact created a moment ago can already be found. If Zoho's search lags behind a create that succeeded but timed out, the retry can create a second contact. A match on display name alone can also pick up an unrelated contact with the same name. Neither was reproduced. Zoho's conformance test deliberately skips the "key reached the provider" check, since there is no key to send.</p>
+</div>
