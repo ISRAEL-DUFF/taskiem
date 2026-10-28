@@ -209,6 +209,10 @@ type Error struct {
 	// RetryAfterMS is how long the provider asked to wait (Retry-After) on
 	// a refusal; the next attempt waits at least this long.
 	RetryAfterMS int64 `json:"retry_after_ms,omitempty"`
+	// Reissue is set by an operator's retry of a parked step: the next
+	// attempt sends under a new key, the next attempt group (contract:
+	// idempotency.md), not the key the provider may have cached a failure for.
+	Reissue bool `json:"reissue,omitempty"`
 }
 
 // Failure kinds for a tenant key that could not be unwrapped (decision
@@ -222,10 +226,11 @@ const (
 	KindKeyRestoredReconcile = "key_restored_reconcile"
 )
 
-// Resumed reports whether a failure is a resumption after a parked key
-// failure, which does not count against the retry budget.
+// Resumed reports whether a failure resumes a parked step, after a parked
+// key failure or on an operator's retry, which does not count against the
+// retry budget: a person asked for the attempt.
 func (e Error) Resumed() bool {
-	return e.Kind == KindKeyRestored || e.Kind == KindKeyRestoredReconcile
+	return e.Kind == KindKeyRestored || e.Kind == KindKeyRestoredReconcile || e.Reissue
 }
 
 type FailedPayload struct {

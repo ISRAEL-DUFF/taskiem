@@ -586,7 +586,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		p.taint = taint
 		observeRunStart(hist, c, dbNow)
-		found, cancelled := false, false
+		found, cancelled, reissued := false, false, false
 		var intents []history.IntentPayload
 		var intentAttempts []int
 		var intentTimes []time.Time
@@ -611,6 +611,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				var fp history.FailedPayload
 				_ = json.Unmarshal(e.Payload, &fp)
 				outcomes[e.Attempt] = fp.Error
+				reissued = reissued || fp.Error.Reissue
 				if e.Attempt == c.attempt {
 					p.mode = modeDone
 				}
@@ -620,6 +621,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 					return err
 				}
 				intents = append(intents, ip)
+				reissued = false // an operator's re-issue moves only the key sent after it
 				intentAttempts = append(intentAttempts, e.Attempt)
 				intentTimes = append(intentTimes, e.RecordedAt)
 			}
@@ -668,6 +670,9 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup
+			if reissued {
+				p.group++
+			}
 			p.intentAt = intentTimes[n-1]
 			var next effects.Next
 			if prev, ok := outcomes[lastAttempt]; ok && lastAttempt != c.attempt {

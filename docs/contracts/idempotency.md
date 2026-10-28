@@ -11,7 +11,7 @@ digest   = SHA-256(material)
 - `tenant_id` and `run_id` are canonical lowercase UUID strings. `0x00` separators make the encoding unambiguous; a seed containing `0x00` is rejected.
 - `step_id` is the step **instance** id that decide records, such as `pay` or, inside a `foreach`, `pay_all[3].pay_employee` (nested loops chain: `outer[1].inner[2].pay`). When the step declares `effect.idempotency_seed`, it is the plain step id instead (`pay_employee`), because the seed is expected to identify the item and the key should stay stable across runs and forks. Validation enforces this inside a `foreach` (at any depth): a seed that reads neither `item` nor `index` is refused, since it would give every item the same key and the provider would answer all but the first as duplicates.
 - Compensating actions use `compensate:<instance id>`.
-- `attempt_group` starts at 0 and increments only when a reconcile returns `not_found` or a human explicitly re-issues the effect. Automatic retries keep it.
+- `attempt_group` starts at 0 and increments only when a reconcile returns `not_found` or a human explicitly re-issues the effect: an operator's **retry** of a parked step is a re-issue ([decision 0053](../decisions/0053-operator-retry-reissues-the-effect.md)). Automatic retries keep it.
 - Forked runs reuse the parent's `run_id` as the seed for steps copied from the parent, so a fork never re-pays a completed step.
 
 ## Encoding

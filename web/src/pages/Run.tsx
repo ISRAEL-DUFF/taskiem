@@ -367,16 +367,22 @@ function Resolve({ run, step, onClose, onDone }: { run: string; step: string; on
   const [resolution, setResolution] = useState("completed");
   const [note, setNote] = useState("");
   const [output, setOutput] = useState<unknown>({});
+  const [checked, setChecked] = useState(false);
   const act = useAction();
   return (
     <Modal title={`Resolve ${step}`} onClose={onClose}>
       <Field label="What the provider shows">
         <select value={resolution} onChange={(e) => setResolution(e.target.value)}>
           <option value="completed">It happened: record it as completed</option>
-          <option value="retry">It did not happen: send it again</option>
+          <option value="retry">It did not happen: send it again, under a new reference</option>
           <option value="failed">It did not happen: fail the step</option>
         </select>
       </Field>
+      {resolution === "retry" && (
+        <label className="inline">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /> I checked with the provider that this did not happen. It is sent again under a new reference, so if it did happen it happens twice.
+        </label>
+      )}
       {resolution === "completed" && (
         <Field data-technical label="Output to record (JSON)">
           <JsonInput value={output} onChange={setOutput} rows={5} />
@@ -389,7 +395,7 @@ function Resolve({ run, step, onClose, onDone }: { run: string; step: string; on
       <div className="toolbar">
         <button
           className="primary"
-          disabled={act.busy || !note}
+          disabled={act.busy || !note || (resolution === "retry" && !checked)}
           onClick={() => void act.run(async () => (await post(`/v1/runs/${run}/steps/${encodeURIComponent(step)}/resolve`, { resolution, note, ...(resolution === "completed" && { output }) }), onDone()), "Step resolved")}
         >
           Resolve
