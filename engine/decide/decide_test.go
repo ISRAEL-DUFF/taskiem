@@ -239,6 +239,31 @@ func TestCancelWaitsForWritesUnderWayThenReverses(t *testing.T) {
 	}
 }
 
+// A reversing cancel waits for the child run a subflow step waits on to
+// report how it ended (the runtime cancels it, reversing it) before the
+// parent reverses its own steps and ends.
+func TestCancelWaitsForChildRuns(t *testing.T) {
+	s := newSim(t, wdDoc(`
+	  {"id":"a","type":"connector","connector":"paystack@1","action":"transfer","compensate":{"action":"reverse_transfer","input":{"ref":"=steps.a.output.ref"}}},
+	  {"id":"sub","type":"subflow","needs":["a"],"config":{"workflow":"01a18039-c029-7707-964c-225a6fda0c6a"}}`, ""), map[string]any{})
+	s.complete("a", map[string]any{"ref": "ra"})
+	if !s.has(history.StepScheduled, "sub") {
+		t.Fatalf("setup: %s", s.types())
+	}
+	s.external(history.CancelRequested, "", 0, history.CancelPayload{By: "u1"}, history.OriginAPI)
+	if !s.has(history.StepCancelled, "sub") || s.has(history.CompensationStarted, "") {
+		t.Fatalf("the child has not ended, nothing may be reversed yet: %s", s.types())
+	}
+	s.external(history.SignalReceived, "sub", 0, map[string]any{"event": history.SubflowEvent, "payload": map[string]any{"status": "cancelled"}}, history.OriginSignal)
+	if got := s.pendingTasks(); !reflect.DeepEqual(got, []string{"compensate:a"}) {
+		t.Fatalf("pending %v: %s", got, s.types())
+	}
+	s.complete("compensate:a", nil)
+	if s.last().Type != history.RunCancelled {
+		t.Errorf("end: %s", s.types())
+	}
+}
+
 func TestForeachFailureStopsNewIterations(t *testing.T) {
 	s := newSim(t, wdDoc(`
 	  {"id":"f","type":"foreach","config":{"items":"=[1,2,3,4]","max_concurrency":2,"steps":[

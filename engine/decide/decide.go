@@ -976,6 +976,13 @@ func (d *decider) parallelSettle(sc scope, s *wd.Step, inst, winner string) stat
 	return completed
 }
 
+// waitsForChild reports whether a subflow step that waits for its child
+// run has not yet heard how the child ended.
+func waitsForChild(f *facts) bool {
+	p, ok := f.scheduled[1]
+	return ok && p.Kind == history.KindSubflow && p.Subflow != nil && p.Subflow.Wait && f.signal == nil && !f.completed && f.finalFailure == nil
+}
+
 // cancelledPending reports whether a cancelled step may still take effect:
 // a write whose intent was recorded and whose outcome is not yet known, or
 // one parked for an operator.
@@ -1112,8 +1119,10 @@ func (d *decider) compensate(why *history.Error) {
 
 // cancelRun ends a run a person cancelled with its effects reversed: it
 // withdraws the steps that have not finished, waits for writes already
-// under way (they may complete, and are then reversed too), runs the
-// compensations as a failure does, then cancels the run.
+// under way (they may complete, and are then reversed too) and for the
+// child runs it was waiting on (the runtime cancels them, reversing them
+// too, when their subflow step is withdrawn), runs the compensations as a
+// failure does, then cancels the run.
 func (d *decider) cancelRun() {
 	waiting := false
 	for _, inst := range append([]string(nil), d.order...) {
@@ -1125,7 +1134,7 @@ func (d *decider) cancelRun() {
 		if s := d.def.Step(id); !f.cancelled && s != nil && d.begun(s, f) {
 			d.emit(history.StepCancelled, inst, 0, map[string]any{"reason": "run cancelled by " + d.cancel.By})
 		}
-		if cancelledPending(f) {
+		if cancelledPending(f) || waitsForChild(f) {
 			waiting = true
 		}
 	}

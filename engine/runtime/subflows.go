@@ -179,6 +179,31 @@ func (s *Store) notifyParent(ctx context.Context, tx pgx.Tx, r runRow, status st
 	return err
 }
 
+// reverseChildren, when a run cancelled with reversing withdraws one of
+// its steps, cancels the child runs that step waits for with reversing
+// too, and reports whether there were any. Each child tells the step when
+// it has ended, as it would have anyway.
+func (s *Store) reverseChildren(ctx context.Context, tx pgx.Tx, r runRow, step string) (bool, error) {
+	if asked, err := cancelRequested(ctx, tx, r.ref.ID); err != nil || !asked {
+		return false, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 AND parent_step = $2 AND parent_waits
+		AND status NOT IN ('completed', 'failed', 'cancelled') ORDER BY started_at`, r.ref.ID, step)
+	if err != nil {
+		return false, err
+	}
+	children, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return false, err
+	}
+	for _, id := range children {
+		if err := s.cancelTx(ctx, tx, RunRef{ID: id, TenantID: r.ref.TenantID}, "the workflow that started it was cancelled", true, history.OriginScheduler); err != nil {
+			return false, err
+		}
+	}
+	return len(children) > 0, nil
+}
+
 // cancelChildren cancels the child runs a run was waiting for when it
 // ends; children it did not wait for finish on their own.
 func (s *Store) cancelChildren(ctx context.Context, tx pgx.Tx, r runRow) error {

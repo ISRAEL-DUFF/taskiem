@@ -10,7 +10,8 @@ The spec says cancelling a run "runs compensation if configured". It did not: `C
 
 1. **Cancel reverses by default.** `POST /v1/runs/{run}/cancel` (and the embed route, and a cancelled or moved storefront booking) records `CancelRequested`. Decide then:
    - withdraws every step that has started but not finished (`StepCancelled`), so nothing new starts and waiting approvals, timers, signals and forms are closed;
-   - waits for writes already under way (an intent recorded, no outcome yet), or parked for an operator, to settle; a write that completes is reversed with the rest;
+   - waits for writes already under way (an intent recorded, no outcome yet), or parked for an operator, to settle; a write that completes is reversed with the rest. The console says when the cancel is waiting for a parked step to be resolved;
+   - cancels, with reversing, the child runs its waiting `subflow` steps started, and waits until each has ended, so a child's payments are reversed before the parent's;
    - runs the compensations of the completed steps, newest first, exactly as a failed run does (`CompensationStarted` … `CompensationCompleted`);
    - ends the run with `RunCancelled`, naming who cancelled it and the steps it reversed.
    The run stays `running` (or `needs_reconciliation` while a write or a compensation is parked) until then. A second request changes nothing.

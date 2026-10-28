@@ -195,7 +195,11 @@ export function RunPage() {
           )}
         </dl>
         {reversing && !TERMINAL.has(shownStatus) && (
-          <div className="notice">Cancelling: steps already under way are finishing, then the steps this run completed are reversed, newest first.</div>
+          <div className="notice">
+            {r.status === "needs_reconciliation"
+              ? "Cancelling is waiting for the parked step below: resolve it first. Then the steps this run completed are reversed, newest first, and the run ends."
+              : "Cancelling: steps already under way and the workflows this run started are finishing, then the steps this run completed are reversed, newest first."}
+          </div>
         )}
         {r.status === "needs_reconciliation" && (
           <div className="notice">

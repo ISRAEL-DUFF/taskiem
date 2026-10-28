@@ -744,11 +744,22 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		for _, q := range []string{
 			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
-			`DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
 		} {
 			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
+				return nil, err
+			}
+		}
+		// A run cancelled with reversing reverses the child runs its subflow
+		// steps wait for first (decision 0054): the step keeps its wait, so
+		// it hears when each child has ended, and decide waits for that.
+		reversing, err := s.reverseChildren(ctx, tx, run, ev.StepID)
+		if err != nil {
+			return nil, err
+		}
+		if !reversing {
+			if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}
 		}
@@ -1106,36 +1117,45 @@ func (s *Store) DecideApproval(ctx context.Context, ref RunRef, step, decision, 
 // results, and completed steps stay as they are.
 func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string, reverse bool) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
-		run, err := lockRun(ctx, tx, ref.ID)
-		if err != nil {
-			return err
-		}
-		switch run.status {
-		case "completed", "failed", "cancelled":
-			return nil
-		}
-		if reverse && run.status != "queued" {
-			// Decide ends the run once its writes under way have settled and
-			// its compensations have run (decision 0054); asked twice, the
-			// first request stands.
-			var asked bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND type = $2)`, ref.ID, history.CancelRequested).Scan(&asked); err != nil || asked {
-				return err
-			}
-			if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, history.OriginAPI); err != nil {
-				return err
-			}
-			return s.decideInline(ctx, tx, ref)
-		}
-		if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, history.OriginAPI); err != nil {
-			return err
-		}
-		def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
-		if err != nil {
-			return err
-		}
-		return s.endRun(ctx, tx, run, def, "cancelled")
+		return s.cancelTx(ctx, tx, ref, by, reverse, history.OriginAPI)
 	})
+}
+
+func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, reverse bool, origin string) error {
+	run, err := lockRun(ctx, tx, ref.ID)
+	if err != nil {
+		return err
+	}
+	switch run.status {
+	case "completed", "failed", "cancelled":
+		return nil
+	}
+	if reverse && run.status != "queued" {
+		// Decide ends the run once its writes under way have settled and
+		// its compensations have run (decision 0054); asked twice, the
+		// first request stands.
+		if asked, err := cancelRequested(ctx, tx, ref.ID); err != nil || asked {
+			return err
+		}
+		if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, origin); err != nil {
+			return err
+		}
+		return s.decideInline(ctx, tx, ref)
+	}
+	if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, origin); err != nil {
+		return err
+	}
+	def, err := s.runDefinition(ctx, tx, run.workflowID, run.version, run.expansion)
+	if err != nil {
+		return err
+	}
+	return s.endRun(ctx, tx, run, def, "cancelled")
+}
+
+func cancelRequested(ctx context.Context, tx pgx.Tx, run uuid.UUID) (bool, error) {
+	var asked bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND type = $2)`, run, history.CancelRequested).Scan(&asked)
+	return asked, err
 }
 
 // RunStatus reports a run's status.
