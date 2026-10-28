@@ -596,7 +596,8 @@ events:
       occurred_at: =body.data.?occurred_at.orValue(body.?occurred_at.orValue(''))
   payment.received:
     # The payment into a one-time number (create_dynamic_account), by the
-    # reference that opened it.
+    # reference that opened it: amount what the payer sent, the fee what
+    # iswallet kept of it (amount less amount_credited), as for a credit.
     trigger: credit_event
     when: >-
       =body.event_type == 'wallet.credit.posted' && has(body.data.virtual_account) && has(body.data.virtual_account.reference)
@@ -604,6 +605,7 @@ events:
     fields:
       payment_id: =body.data.virtual_account.reference
       amount_kobo: =int(body.data.amount)
+      fee_kobo: "=has(body.data.amount_credited) ? optional.of(int(body.data.amount) - int(body.data.amount_credited)) : optional.none()"
       currency: =body.data.?currency
       paid_at: =body.data.?occurred_at.orValue(body.?occurred_at.orValue(''))
   payment.returned:

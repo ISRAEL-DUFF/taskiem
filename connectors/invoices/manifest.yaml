@@ -155,7 +155,7 @@ actions:
               paid_at:      { type: string }
   notify_customer:
     title: Message the invoice's customer
-    description: An SMS, and an email when there is one, to the invoice's customer. {link} becomes the invoice's page link, {number} its number and {due} what is still due.
+    description: An SMS, and an email when there is one, to the invoice's customer. {link} becomes the invoice's page link, {number} its number, {due} what is still due and {fee_line} a sentence on the bank's fee (what was sent and what reached the business) when the rail reported it, else nothing.
     class: idempotent_write
     idempotency:
       field: idempotency_key

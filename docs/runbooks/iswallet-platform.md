@@ -20,6 +20,7 @@ Set on every process (`api`, `worker`, `scheduler`, `edge`, `orchestrator`, or `
 | `TASKIEM_ISWALLET_TEST_CLIENT_KEY` | The test client's API key |
 | `TASKIEM_ISWALLET_TEST_WEBHOOK_SECRET` | The test subscription's signing secret |
 | `TASKIEM_HOOKS_URL` | The public https address of `/hooks` (iswallet refuses private and loopback addresses) |
+| `TASKIEM_ISWALLET_PAYOUT_FEE_KOBO` | The room a sweep to the bank leaves for iswallet's payout fee, in kobo (optional; ₦100 until iswallet says what it charges, needs-people RM-5) |
 
 Without a mode's key, receiving money with Taskiem is not offered in that mode, and the Payments page says it is not available on this Taskiem.
 
@@ -50,4 +51,5 @@ An event whose wallet no business's Taskiem connection holds in that mode is ack
 - The plan feature `receive_money` (`deploy/plans.yaml`) gates turning it on. Which plans include it, and any margin over iswallet's fee, are the founder's to set; every plan has it for now.
 - **Limits.** Every business shares the client's key and iswallet's limit on it (100 requests a minute). Taskiem's own calls for a business (its Payments page, chat answers) take at most 20 a minute; a business's own workflows that call iswallet are not limited beyond iswallet's answer (`RATE_LIMITED` is retried). Watch for 429s from iswallet in the logs.
 - **Turning it on again later.** The wallet is keyed by the business and what it sent. iswallet keeps one wallet per `owner_ref` (`tenant:<id>`): a business whose first attempt went unanswered and who asks again more than a day later is answered by iswallet's rule for that owner; if iswallet refuses, find the wallet by its `owner_ref` with iswallet and record it by hand.
-- A business closing its wallet: withdraw its balance first (Settings > Payments), then remove the `receive_money` row and the connection as an operator; iswallet closes the wallet on request.
+- **Sweeps to the bank.** A business may have its balance sent to its saved bank account weekly or above an amount, with no approval (decision 0052, As built). Each is a workflow "Send my money to my bank" in the business's account, on a schedule (the hourly checks at a minute per business, spread over the hour); a sweep that fails for the fee tells the owner, and the allowance above is what to raise.
+- A business closing its wallet: turn its sweep off and withdraw its balance first (Settings > Payments), then remove the `receive_money` row and the connection as an operator; iswallet closes the wallet on request.

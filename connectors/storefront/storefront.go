@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -133,6 +134,12 @@ func (a *actions) refund(ctx context.Context, req connector.Request) (connector.
 		return connector.Response{}, err
 	}
 	o, err := a.ops.Refund(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if errors.Is(err, sf.ErrRefundByHand) {
+		// Paid by bank transfer: the owner sends it back from their bank
+		// and marks it refunded; the order says so (N3).
+		return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.Payable()), "by_hand": true,
+			"note": strings.TrimSpace(strings.TrimPrefix(err.Error(), sf.ErrRefundByHand.Error()+":"))}}, nil
+	}
 	if err != nil {
 		return connector.Response{}, classify(err)
 	}

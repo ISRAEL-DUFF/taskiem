@@ -568,6 +568,10 @@ func TestWebhookAndLookBackOneTimePaymentAreOneEntry(t *testing.T) {
 	if *a.AmountKobo != 1500000 || *b.AmountKobo != 1500000 {
 		t.Errorf("webhook %d, look-back %d", *a.AmountKobo, *b.AmountKobo)
 	}
+	// Both ways the fee is what iswallet kept of what the payer sent.
+	if a.FeeKobo == nil || b.FeeKobo == nil || *a.FeeKobo != 21000 || *b.FeeKobo != 21000 {
+		t.Errorf("fee: webhook %v, look-back %v", a.FeeKobo, b.FeeKobo)
+	}
 }
 
 // The invoice path records a one-time number's payment id before asking

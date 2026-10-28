@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -37,4 +41,23 @@ func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orde
 		log.Warn("TASKIEM_MESSAGE_HASH_KEY is unset: storefront customers get no SMS or email")
 	}
 	return o, nil
+}
+
+// wireOrderTransfers lets storefront orders be paid by bank transfer (N3):
+// their account numbers are the invoices' accounts, issued on the form's
+// rail; the invoices' request queue hands an order's request to the
+// storefront, which checks the order, and its checker hands a payment it
+// finds back to it.
+func wireOrderTransfers(inv *invoicing.Invoices, o *storefront.Orders) {
+	if inv == nil || o == nil {
+		return
+	}
+	o.IssueTransfer = func(ctx context.Context, tenant, order uuid.UUID, connection string, amount int64, description string, payer map[string]any, minutes int) error {
+		_, err := inv.IssueForOrder(ctx, tenant, order, invoicing.OrderTransfer{Connection: connection, AmountKobo: amount, Description: description, Payer: payer, Minutes: minutes})
+		return err
+	}
+	inv.OrderRequested = o.TransferRequested
+	inv.OrderReceived = func(ctx context.Context, tenant, order uuid.UUID, r invoicing.Received) error {
+		return o.TransferReceived(ctx, tenant, order, r.PaymentID, r.Connection, r.AmountKobo, r.Account)
+	}
 }

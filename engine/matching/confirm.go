@@ -63,17 +63,22 @@ func (m *Matcher) orders() (*storefront.Orders, error) {
 	return m.Orders, nil
 }
 
-// exactOrder counts a payment through an order's checkout page towards
-// the order, along the path its own payment check takes, once.
-func (m *Matcher) exactOrder(ctx context.Context, tenant uuid.UUID, e entry, order string) error {
+// exactOrder counts a payment through an order's checkout page, or into
+// the account number given for it (account), towards the order, along
+// the path its own payment check takes, once.
+func (m *Matcher) exactOrder(ctx context.Context, tenant uuid.UUID, e entry, order string, account *uuid.UUID) error {
 	if e.AmountKobo <= 0 {
 		return m.mark(ctx, tenant, e.ID, "unmatched")
+	}
+	reason := "paid through the order's checkout page"
+	if account != nil {
+		reason = "paid into the account number given for this order"
 	}
 	var c storefront.Counted
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
 		c, err = m.Orders.CountPayment(ctx, tx, tenant, order, storefront.PaymentIn{EntryID: &e.ID, AmountKobo: e.AmountKobo, How: "exact",
-			By: "system:" + e.Channel, Reasons: []string{"paid through the order's checkout page"}})
+			By: "system:" + e.Channel, Reasons: []string{reason}, Account: account})
 		if err != nil {
 			return err
 		}

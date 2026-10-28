@@ -43,6 +43,7 @@ Sources: [Phase 0](phase-0-status.md), [Phase 1](phase-1-status.md), [Phase 2](p
 | RM-2 | [ ] Each mode's subscription made with `taskiem iswallet subscribe` against the public hooks URL, its secret stored as `TASKIEM_ISWALLET_WEBHOOK_SECRET` (or `_TEST_`) | Operations | Built | Payments reaching businesses in seconds |
 | RM-3 | [ ] Which plans include receiving money with Taskiem, and whether Taskiem charges a margin over iswallet's fee (`deploy/plans.yaml`: every plan for now) | Founder | Plan feature and metering built | Pricing |
 | RM-4 | [ ] Whether a business may move from pooled to segregated later, and the sweep's behaviour at volume | iswallet | The choice is made once; support changes it by hand | Businesses that grow into holding others' money |
+| RM-5 | [ ] What iswallet charges per payout, so the automatic sweep to the bank leaves enough in the wallet (`TASKIEM_ISWALLET_PAYOUT_FEE_KOBO`, ₦100 until answered) | iswallet | Built with a ₦100 allowance ([plan §10.2](spec/iswallet-account-numbers.md#102-the-sweep-to-the-bank-n2)) | Sweeps that never fail for the fee |
 
 ## Business connectors (K0)
 
