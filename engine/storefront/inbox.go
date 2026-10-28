@@ -42,8 +42,8 @@ type Submission struct {
 	// TotalKobo (dispatch D1).
 	Zone         string `json:"zone,omitempty"`
 	DeliveryKobo int64  `json:"delivery_kobo,omitempty"`
-	Payment    string   `json:"payment"`              // after_accept, at_order or none
-	Channel    string   `json:"channel"`              // direct or embed
+	Payment      string `json:"payment"` // after_accept, at_order or none
+	Channel      string `json:"channel"` // direct or embed
 	// StatusKey is the secret of the customer's status link, so a payment
 	// provider can send the customer back to it; it is not stored.
 	StatusKey string    `json:"status_key"`

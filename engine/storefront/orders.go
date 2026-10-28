@@ -107,21 +107,21 @@ func (o *Orders) log() *slog.Logger {
 
 // Order is an order as the owner sees it, the customer's details opened.
 type Order struct {
-	ID         uuid.UUID  `json:"id"`
-	Reference  string     `json:"reference"`
-	Kind       string     `json:"kind"`
-	Status     string     `json:"status"`
-	Customer   Customer   `json:"customer"`
-	Basket     []Line     `json:"basket"`
-	TotalKobo  int64      `json:"total_kobo"`
-	Fulfilment string     `json:"fulfilment,omitempty"`
+	ID         uuid.UUID `json:"id"`
+	Reference  string    `json:"reference"`
+	Kind       string    `json:"kind"`
+	Status     string    `json:"status"`
+	Customer   Customer  `json:"customer"`
+	Basket     []Line    `json:"basket"`
+	TotalKobo  int64     `json:"total_kobo"`
+	Fulfilment string    `json:"fulfilment,omitempty"`
 	// Zone is the delivery area the customer chose and DeliveryKobo its
 	// fee, part of TotalKobo (dispatch D1).
-	Zone         string `json:"zone,omitempty"`
-	DeliveryKobo int64  `json:"delivery_kobo,omitempty"`
-	Payment    string     `json:"payment"`
-	PaymentURL string     `json:"payment_url,omitempty"`
-	PaidAt     *time.Time `json:"paid_at"`
+	Zone         string     `json:"zone,omitempty"`
+	DeliveryKobo int64      `json:"delivery_kobo,omitempty"`
+	Payment      string     `json:"payment"`
+	PaymentURL   string     `json:"payment_url,omitempty"`
+	PaidAt       *time.Time `json:"paid_at"`
 	// PaidBy is how it was paid: card (its Paystack checkout page),
 	// transfer (into the account number given for it, N3), other (money
 	// matched to it, or a manual match), or "" while unpaid. Only a card payment is refunded
