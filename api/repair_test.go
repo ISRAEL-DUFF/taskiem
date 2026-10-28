@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
@@ -526,6 +527,101 @@ func TestRepairBudgetExhausted(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status != "skipped" || !strings.Contains(detail, "budget") {
+		t.Errorf("job: %s %s", status, detail)
+	}
+}
+
+// Runs of a version that fail the same way are analysed once: the first
+// run's proposal covers them, and the model is not asked again.
+func TestRepairSameFailureAnalysedOnce(t *testing.T) {
+	rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+	rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+	wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+	var runs []string
+	for _, id := range []string{"o-30", "o-31", "o-32"} {
+		runs = append(runs, rw.owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"amount": 500, "id": id}})["run_id"].(string))
+	}
+	rw.env.Drain(t)
+	if n, err := rw.srv.RepairOnce(context.Background()); err != nil || n != 3 {
+		t.Fatalf("repair once: %d %v", n, err)
+	}
+	p := rw.only(t, runs[0])
+	if p["status"] != "proposed" || len(rw.fake.Requests()) != 1 {
+		t.Fatalf("proposal: %v (%d model calls)", p["status"], len(rw.fake.Requests()))
+	}
+	for _, run := range runs[1:] {
+		if list := rw.repairs(t, run); len(list) != 0 {
+			t.Errorf("run %s analysed again: %v", run, list)
+		}
+		var status, detail string
+		if err := rw.env.DB.Admin.QueryRow(context.Background(), `SELECT status, detail FROM repair_jobs WHERE run_id = $1`, uuid.MustParse(run)).Scan(&status, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if status != "skipped" || !strings.Contains(detail, p["id"].(string)) {
+			t.Errorf("job: %s %s", status, detail)
+		}
+	}
+}
+
+// The queue is worked one job per tenant per round: one tenant's backlog
+// does not hold another's repairs up.
+func TestRepairQueueRoundRobin(t *testing.T) {
+	rw := newRepairWorld(t, nil)
+	other := rw.tenant(t, "Other", "owner@other.test")
+	const doc = `{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":{"type":"manual"},"steps":[{"id":"t","type":"transform","config":{"output":{"x":1}}}]}`
+	bg := context.Background()
+	for _, c := range []*client{rw.owner, other} {
+		wf := publishFlow(t, c, doc)
+		for range 2 {
+			run := c.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+			rw.env.Drain(t)
+			// A job as the trigger queues one (the run completed: skipped).
+			if _, err := rw.env.DB.Admin.Exec(bg, `INSERT INTO repair_jobs (tenant_id, run_id, reason) SELECT tenant_id, id, 'run_failed' FROM runs WHERE id = $1`,
+				uuid.MustParse(run)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if n, err := rw.srv.RepairOnce(bg); err != nil || n != 4 {
+		t.Fatalf("repair once: %d %v", n, err)
+	}
+	var order []uuid.UUID
+	if err := rw.env.DB.Admin.QueryRow(bg, `SELECT array_agg(tenant_id ORDER BY started_at) FROM repair_jobs`).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 4 || order[0] == order[1] || order[2] == order[3] {
+		t.Fatalf("one tenant's jobs ran back to back: %v", order)
+	}
+}
+
+// Repair is an AI feature of the plan: a plan without AI analyses nothing.
+func TestRepairNeedsThePlansAI(t *testing.T) {
+	rw := newRepairWorld(t, patcher{class: "data", replace: [2]string{missingCustomer, defaulted}}.respond)
+	cfg, err := billing.LoadConfig("../deploy/plans.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bg := context.Background()
+	if err := billing.Store(bg, rw.env.DB.App, cfg, "test"); err != nil {
+		t.Fatal(err)
+	}
+	rw.env.Store.Billing = true
+	rw.srv.Billing = &billing.Service{Pool: rw.env.DB.App, Store: rw.env.Store, Config: cfg, Enabled: true}
+	tenant := uuid.MustParse(rw.owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string))
+	if err := rw.srv.Billing.Grant(bg, tenant, "shop", nil, "test"); err != nil {
+		t.Fatal(err)
+	}
+	rw.owner.must(204, "PUT", "/v1/secrets/prod/charge_memo", map[string]any{"value": "m"})
+	wf := rw.publish(t, stepCharge+","+stepVerify+","+stepNotify)
+	run := rw.failRun(t, wf, map[string]any{"amount": 500, "id": "o-33"}, "failed")
+	if list := rw.repairs(t, run); len(list) != 0 || len(rw.fake.Requests()) != 0 {
+		t.Fatalf("repairs: %v, model calls %d", list, len(rw.fake.Requests()))
+	}
+	var status, detail string
+	if err := rw.env.DB.Admin.QueryRow(bg, `SELECT status, detail FROM repair_jobs WHERE run_id = $1`, uuid.MustParse(run)).Scan(&status, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if status != "skipped" || !strings.Contains(detail, "plan") {
 		t.Errorf("job: %s %s", status, detail)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
+	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/history"
@@ -93,33 +94,43 @@ type repairJob struct {
 	attempts        int
 }
 
-// RepairOnce analyses every repair job due now, one tenant at a time, and
-// reports how many it finished.
+// RepairOnce analyses the repair jobs due now and reports how many it
+// finished. It works in rounds, one job per tenant each round, so a
+// tenant with hundreds of failed runs does not hold the others' repairs
+// up (an analysis can take minutes); it returns once a round finds none.
 func (s *Server) RepairOnce(ctx context.Context) (int, error) {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_repair_due_tenants(50)`)
-	if err != nil {
-		return 0, err
-	}
-	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-	if err != nil {
-		return 0, err
-	}
 	n := 0
-	for _, tenant := range tenants {
-		for ctx.Err() == nil {
+	for ctx.Err() == nil {
+		rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_repair_due_tenants(50)`)
+		if err != nil {
+			return n, err
+		}
+		tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return n, err
+		}
+		round := 0
+		for _, tenant := range tenants {
+			if ctx.Err() != nil {
+				break
+			}
 			job, ok, err := s.claimRepairJob(ctx, tenant)
 			if err != nil {
 				return n, err
 			}
 			if !ok {
-				break
+				continue
 			}
 			status, detail := s.processRepairJob(ctx, job)
 			if err := s.finishRepairJob(ctx, job, status, detail); err != nil {
 				return n, err
 			}
-			n++
+			round++
 		}
+		if round == 0 {
+			break
+		}
+		n += round
 	}
 	return n, nil
 }
@@ -174,6 +185,14 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 	defer cancel()
 	if s.AI == nil || s.AI.Provider == nil {
 		return "skipped", "no model provider is configured"
+	}
+	// Repair is an AI feature of the plan, as building is (/v1/ai).
+	if err := s.Billing.Require(ctx, j.tenant, billing.FeatureAI); err != nil {
+		var fe *billing.FeatureError
+		if errors.As(err, &fe) {
+			return "skipped", "the plan does not include AI"
+		}
+		return "failed", err.Error()
 	}
 	on, err := s.repairEnabled(ctx, j.tenant)
 	if err != nil {
@@ -266,13 +285,26 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 	}
 
 	id := uuid.Must(uuid.NewV7())
+	var same uuid.UUID
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{j.tenant}, func(tx pgx.Tx) error {
+		// One analysis per failure: runs of a version that fail the same
+		// way (the same step, reason and class) are covered by the first
+		// one's proposal, so a burst of failures asks the model once.
+		if failure.Step != "" && (cl.Class.Patches() || !cl.Certain) {
+			var err error
+			if same, err = sameFailure(ctx, tx, wf, version, j.reason, failure.Step, cl.Class); err != nil || same != uuid.Nil {
+				return err
+			}
+		}
 		_, err := tx.Exec(ctx, `INSERT INTO repair_proposals (id, tenant_id, run_id, job_id, workflow_id, version, environment, reason, class, classified_by, step_id, provider, model)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'rules', NULLIF($10, ''), $11, $12)`,
 			id, j.tenant, j.run, j.id, wf, version, env, j.reason, cl.Class, failure.Step, s.AI.Provider.Name(), s.AI.Provider.Model())
 		return err
 	}); err != nil {
 		return "failed", err.Error()
+	}
+	if same != uuid.Nil {
+		return "skipped", "the same failure of this version is analysed in repair " + same.String()
 	}
 
 	ev := &repairEvidence{Classification: cl}
@@ -335,6 +367,46 @@ func (s *Server) processRepairJob(ctx context.Context, j repairJob) (string, str
 		return "failed", err.Error()
 	}
 	return "done", p.status
+}
+
+// sameFailure finds a proposal of the workflow's version for the same
+// failure: its step (any instance of it), reason and the class the rules
+// gave it (kept in the evidence once the model has classified). Analyses
+// that failed, were interrupted, ran out of budget or were superseded do
+// not count. It holds a lock on the failure until tx ends, so two workers
+// never both analyse it.
+func sameFailure(ctx context.Context, tx pgx.Tx, wf uuid.UUID, version int, reason, step string, class repair.Class) (uuid.UUID, error) {
+	_, sid := history.SplitInstance(step)
+	key := fmt.Sprintf("repair:%s:%d:%s:%s:%s", wf, version, reason, sid, class)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, key); err != nil {
+		return uuid.Nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id, step_id FROM repair_proposals
+		WHERE workflow_id = $1 AND version = $2 AND reason = $3 AND step_id IS NOT NULL
+		  AND COALESCE(evidence->'classification'->>'class', class) = $4
+		  AND status NOT IN ('failed', 'superseded') AND NOT (status = 'withheld' AND error IS NOT NULL)
+		  AND NOT (status = 'analysing' AND created_at < now() - $5::interval)
+		ORDER BY created_at`, wf, version, reason, string(class), (repairTimeout + time.Minute).String())
+	if err != nil {
+		return uuid.Nil, err
+	}
+	type row struct {
+		id   uuid.UUID
+		step string
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var x row
+		return x, r.Scan(&x.id, &x.step)
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	for _, x := range list {
+		if _, other := history.SplitInstance(x.step); other == sid {
+			return x.id, nil
+		}
+	}
+	return uuid.Nil, nil
 }
 
 // repairEvidence is what a proposal shows besides its diff.
