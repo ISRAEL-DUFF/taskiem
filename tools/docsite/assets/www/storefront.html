@@ -1,24 +1,42 @@
 {{define "content"}}
-<div class="legacy">
-<section class="page-head split">
-  <div>
-    <h1>A page for your business, from one message.</h1>
-    <p class="lead">Say <em>make my page</em>. Taskiem asks what you sell, your hours and how to reach you, and makes a page with your products or services, photos, a Pay button and a QR code to print.</p>
+<section class="page-hero">
+  <div class="wrap split">
+    <div class="head">
+      <p class="eyebrow">Your page</p>
+      <h1>A page for your business, from one message.</h1>
+      <p class="lead">Say <em>make my page</em>. Taskiem asks what you sell, your hours and how to reach you, and makes a page with your products or services, photos, a Pay button and a QR code to print.</p>
+    </div>
+    <div class="screen" role="img" aria-label="Ada’s Kitchen’s page: opening hours, three dishes with prices, and a Pay button.">
+      <div class="bar"><i></i><i></i><i></i><span>adas-kitchen</span></div>
+      <div class="shop">
+        <div><h3>Ada’s Kitchen</h3><p class="small">Jollof, soups and small chops · Open today 10:00–21:00</p></div>
+        <div class="item"><b>Party jollof with chicken</b><span>₦4,500</span></div>
+        <div class="item"><b>Egusi soup and pounded yam</b><span>₦5,200</span></div>
+        <div class="item"><b>Small chops, 20 pieces</b><span>₦8,000</span></div>
+        <span class="btn">Order and pay</span>
+      </div>
+    </div>
   </div>
-  <div>{{template "phone-storefront" .}}</div>
 </section>
-<section class="tight">
-  <div class="cards three">
-    <article class="card"><span class="tile">{{template "icon-wa"}}</span><h3>Orders come to you in chat.</h3><p>Each order or booking arrives on WhatsApp or Telegram to accept or decline. The customer is told by text, and paid orders are confirmed the moment the payment lands.</p></article>
-    <article class="card"><span class="tile">{{template "icon-chat"}}</span><h3>Change it from chat.</h3><p>Add a product with a photo and a price, change a price, mark something out of stock, close for the day: one message each.</p></article>
-    <article class="card"><span class="tile">{{template "icon-store"}}</span><h3>Your address, or ours.</h3><p>Use the address Taskiem gives you, put the page on a domain you own, or show it inside a website you already have. Your web designer gets the details by email.</p></article>
+<section class="section tight">
+  <div class="wrap grid g3">
+    <article class="card pine">{{template "i-chat"}}<h3>Orders come to you in chat</h3><p>Each order or booking arrives on WhatsApp or Telegram to accept or decline. The customer is told by text, and paid orders are confirmed the moment the payment lands.</p></article>
+    <article class="card">{{template "i-spark"}}<h3>Change it from chat</h3><p>Add a product with a photo and a price, change a price, mark something out of stock, close for the day: one message each.</p></article>
+    <article class="card">{{template "i-store"}}<h3>Your address, or ours</h3><p>Use the address Taskiem gives you, put the page on a domain you own, or show it inside a website you already have. Your web designer gets the details by email.</p></article>
   </div>
 </section>
-<section>
-  <h2>Bookings too</h2>
-  <p>A salon, a clinic or a tutor lists services with how long each takes. Customers pick a free slot; no slot is taken twice. Each booking comes to you to confirm, the customer is reminded the day before and two hours before, and you mark who came.</p>
-  <p><a class="more" href="{{.Docs}}guide/own-domain">Your own domain, step by step {{template "icon-arrow"}}</a> · <a class="more" href="{{.Docs}}guide/your-website">Your page on your website {{template "icon-arrow"}}</a></p>
+<section class="section paper">
+  <div class="wrap split">
+    <div class="stack">
+      <p class="eyebrow">Bookings too</p>
+      <h2>For salons, clinics and tutors.</h2>
+    </div>
+    <div class="stack">
+      <p class="lead">List your services with how long each takes. Customers pick a free slot, and no slot is taken twice. Each booking comes to you to confirm, the customer is reminded the day before and two hours before, and you mark who came.</p>
+      <p><a class="more" href="{{.Docs}}guide/own-domain">Your own domain, step by step {{template "i-arrow"}}</a></p>
+      <p><a class="more" href="{{.Docs}}guide/your-website">Your page on your website {{template "i-arrow"}}</a></p>
+    </div>
+  </div>
 </section>
-{{template "banner" .}}
-</div>
+{{template "closing" .}}
 {{end}}

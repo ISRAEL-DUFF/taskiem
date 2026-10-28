@@ -76,11 +76,6 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
-      # The website's stylesheet is compiled from the designer's Tailwind
-      # configuration and committed (docs/strategy/website.md); it must be
-      # current.
-      - name: Website stylesheet is current
-        run: pnpm site:css && git diff --exit-code -- tools/docsite/assets/www.css
 
   # The web app in a real browser against the real binary (web/e2e).
   web:

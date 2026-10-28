@@ -1,0 +1,432 @@
+<title>Taskiem Card Maker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a pine header band, then the form on the left and the live cards on the right; stacks on a phone.
+   The cards themselves are fixed brand colours in millimetres, so they print the same in either theme. */
+:root {
+  --pine: #0d3b2e; --pine-2: #164a3a; --lime: #c8f169; --white: #fbfcfa;
+  --bg: #f1f4ef; --panel: #ffffff; --ink: #13261f; --body: #4a5a53; --muted: #5b6b64; --line: #d9e2d9; --leaf: #2f6b55;
+  --field: #ffffff;
+  --sans: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+  --mono: "JetBrains Mono", "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1f19; --panel: #102a22; --ink: #e8efe9; --body: #c3d2ca; --muted: #93a79d; --line: #24443a; --leaf: #c8f169; --field: #0b1f19; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0b1f19; --panel: #102a22; --ink: #e8efe9; --body: #c3d2ca; --muted: #93a79d; --line: #24443a; --leaf: #c8f169; --field: #0b1f19; color-scheme: dark }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--body); font-family: var(--sans); font-size: 15px; line-height: 1.5 }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+header.band { background: var(--pine); color: var(--white); padding-block: 22px 24px }
+header .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap }
+header .logo { display: flex; align-items: center; gap: 10px; color: var(--white) }
+header .logo svg.m { width: 34px; height: 34px }
+header .logo svg.w { width: 96px; height: auto }
+header h1 { margin: 14px 0 4px; font-size: clamp(24px, 4vw, 34px); font-weight: 800; letter-spacing: -0.02em; text-wrap: balance }
+header p { margin: 0; color: #c9d8d0; max-width: 70ch }
+.eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--lime) }
+main { display: grid; gap: 24px; padding-block: 24px 40px }
+@media (min-width: 980px) { main { grid-template-columns: 380px 1fr; align-items: start } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 20px; min-width: 0 }
+form { display: grid; gap: 18px }
+fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 10px }
+legend { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--leaf); font-weight: 700; margin-bottom: 6px }
+label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink) }
+label small { font-weight: 500; color: var(--muted) }
+input[type=text], input[type=email], input[type=tel] { font: 500 15px var(--sans); color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; width: 100% }
+input:focus-visible, button:focus-visible { outline: 3px solid var(--lime); outline-offset: 2px }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.two > * { min-width: 0 }
+.photo-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
+.btn { font: 700 15px var(--sans); border-radius: 12px; padding: 11px 16px; border: 1.5px solid transparent; background: var(--pine); color: var(--white); cursor: pointer }
+.btn:hover { background: var(--pine-2) }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line) }
+.btn:disabled { opacity: 0.55; cursor: default }
+/* Dark theme: lime takes pine's place for the main button (docs/brand/screens.md). */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn:not(.ghost) { background: var(--lime); color: var(--pine) } }
+:root[data-theme="dark"] .btn:not(.ghost) { background: var(--lime); color: var(--pine) }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
+.status { font-size: 13px; color: var(--muted); min-height: 20px }
+.previews { display: grid; gap: 28px; min-width: 0 }
+.set > h2 { margin: 0 0 4px; font-size: 18px; color: var(--ink) }
+.set > p { margin: 0 0 12px; font-size: 13px; color: var(--muted) }
+.sides { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start }
+.side { display: grid; gap: 6px; min-width: 0 }
+.side .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted) }
+.frame { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 10px 30px rgba(13,59,46,0.18) }
+.frame > .page { position: absolute; left: 0; top: 0; transform-origin: 0 0 }
+.note { font-size: 13px; color: var(--muted) }
+#export-root { position: fixed; left: -20000px; top: 0 }
+[hidden] { display: none !important }
+
+/* ---------- The cards (millimetres; bleed included) ---------- */
+.page { position: relative; overflow: hidden; font-family: "Plus Jakarta Sans", Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact }
+.page * { margin: 0; padding: 0 }
+.page svg { display: block }
+.page .mono { font-family: "JetBrains Mono", "Courier New", monospace }
+/* Business card: 85 x 55 mm trim, 3 mm bleed */
+.bc { width: 91mm; height: 61mm }
+.bc.front { background: #0d3b2e; color: #fbfcfa }
+.bc .glow { position: absolute; inset: 0; background: radial-gradient(circle at 92% 18%, #1f5a47 0%, #0d3b2e 58%) }
+.bc .logo { position: absolute; left: 7.5mm; top: 7.5mm; display: flex; align-items: center; gap: 2.6mm; color: #fbfcfa }
+.bc .logo .m { width: 9mm; height: 9mm }
+.bc .logo .w { width: 24mm; height: 5.2mm }
+.bc .line { position: absolute; left: 7.5mm; bottom: 12.7mm; width: 52mm; font-size: 12.5pt; font-weight: 800; line-height: 1.08; letter-spacing: -0.02em; color: #fbfcfa }
+.bc .sub { position: absolute; left: 7.5mm; bottom: 7.5mm; font-size: 6pt; letter-spacing: 0.16em; text-transform: uppercase; color: #c8f169 }
+.bc .dot { position: absolute; right: 8.5mm; bottom: 8.1mm; width: 7mm; height: 7mm; border-radius: 50%; background: #fbfcfa }
+.bc.back { background: #fbfcfa; color: #13261f }
+.bc .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 5.2mm; background: #0d3b2e }
+.bc .bm { position: absolute; right: 7.5mm; top: 7.5mm; width: 7mm; height: 7mm }
+.bc .who { position: absolute; left: 9.5mm; top: 8mm; right: 17.5mm }
+.bc .name { font-size: 12pt; font-weight: 800; letter-spacing: -0.015em; color: #0d3b2e; line-height: 1.1 }
+.bc .role { margin-top: 1.1mm; font-size: 6.6pt; font-weight: 600; color: #2f6b55 }
+.bc .rows { position: absolute; left: 9.5mm; right: 7.5mm; bottom: 7.5mm; display: grid; grid-template-columns: 13mm 1fr; row-gap: 1.15mm; column-gap: 2mm; align-items: baseline }
+.bc .rule { grid-column: 1 / -1; border-top: 0.25mm solid #0d3b2e; margin-bottom: 1.6mm }
+.bc .k { font-size: 5pt; letter-spacing: 0.14em; text-transform: uppercase; color: #5b6b64 }
+.bc .v { font-size: 7pt; font-weight: 600; color: #13261f }
+/* Staff ID: CR80 54 x 85.6 mm portrait, 2 mm bleed */
+.id { width: 58mm; height: 89.6mm; background: #fbfcfa }
+.id .top { position: absolute; left: 0; right: 0; top: 0; height: 29mm; background: radial-gradient(circle at 90% 10%, #1f5a47 0%, #0d3b2e 62%) }
+.id .logo { position: absolute; left: 6mm; top: 6mm; display: flex; align-items: center; gap: 2mm; color: #fbfcfa }
+.id .logo .m { width: 7.5mm; height: 7.5mm }
+.id .logo .w { width: 19mm; height: 4.1mm }
+.id .tag { position: absolute; right: 6mm; top: 7.8mm; font-size: 5.4pt; letter-spacing: 0.2em; color: #c8f169; font-weight: 700 }
+.id .photo { position: absolute; left: 16mm; top: 17mm; width: 26mm; height: 31mm; border-radius: 4mm; background: #e3eae2; border: 0.8mm solid #fbfcfa; overflow: hidden; display: flex; align-items: flex-end; justify-content: center }
+.id .photo img { width: 100%; height: 100%; object-fit: cover; display: block }
+.id .photo svg { width: 20mm; height: 24mm }
+.id .name { position: absolute; left: 6mm; right: 6mm; top: 51.5mm; text-align: center; font-size: 11pt; font-weight: 800; line-height: 1.1; letter-spacing: -0.015em; color: #0d3b2e }
+.id .role { position: absolute; left: 6mm; right: 6mm; top: 57.6mm; text-align: center; font-size: 6.6pt; font-weight: 600; color: #2f6b55 }
+.id .facts { position: absolute; left: 6mm; right: 6mm; bottom: 11.5mm; display: grid; grid-template-columns: 1fr 1fr; gap: 2mm 3mm }
+.id .k { font-size: 4.6pt; letter-spacing: 0.16em; text-transform: uppercase; color: #5b6b64 }
+.id .v { font-size: 7pt; font-weight: 700; color: #13261f; margin-top: 0.4mm }
+.id .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 8mm; background: #0d3b2e; display: flex; align-items: center; justify-content: center; padding-bottom: 1mm }
+.id .foot span { font-size: 5pt; letter-spacing: 0.18em; color: #c8f169; font-weight: 700 }
+.id.back { background: #0d3b2e; color: #c9d8d0 }
+.id .bigmark { position: absolute; right: -12mm; top: -10mm; width: 34mm; height: 34mm; opacity: 0.07 }
+.id .bigmark svg, .id .col .m svg { width: 100%; height: 100% }
+.id .col { position: absolute; left: 6mm; right: 6mm; top: 6mm; bottom: 20mm; display: flex; flex-direction: column; gap: 2.2mm }
+.id .col .m { width: 9mm; height: 9mm; flex: none }
+.id .col h2 { margin-top: 1mm; font-size: 9.5pt; font-weight: 800; line-height: 1.15; color: #fbfcfa }
+.id .col p { font-size: 6pt; line-height: 1.45; color: #c9d8d0 }
+.id .col b { color: #fbfcfa }
+.id .box { margin-top: auto; background: #164a3a; border-radius: 2.5mm; padding: 2.6mm 3mm; display: grid; gap: 1.6mm }
+.id .box .k { color: #c8f169 }
+.id .box .v { font-size: 6.4pt; font-weight: 600; color: #fbfcfa; margin-top: 0.3mm }
+.id .sig { position: absolute; left: 6mm; right: 6mm; bottom: 7mm; border-top: 0.25mm solid #9fb8ad; padding-top: 1mm; font-size: 4.8pt; letter-spacing: 0.16em; text-transform: uppercase; color: #9fb8ad }
+
+/* Print mode, used by make-cards.mjs: only the chosen cards, full size, one side per page. */
+body[data-print] > :not(#print-root) { display: none !important }
+#print-root .page { break-after: page; page-break-after: always }
+body[data-print] { background: #fff }
+</style>
+
+<header class="band">
+  <div class="wrap">
+    <div class="row">
+      <div class="logo"><svg class="m" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#c8f169"/><path d="M27 40H61" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#0d3b2e"/></svg><svg class="w" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 -771 3673 795"><path fill="#ffffff" d="M318 6Q219 6 164.5 -47.5Q110 -101 110 -197V-416H18V-546H23Q65 -546 87.5 -567.0Q110 -588 110 -630V-670H260V-546H388V-416H260V-207Q260 -179 270.0 -160.5Q280 -142 301.0 -133.0Q322 -124 353 -124Q360 -124 369.0 -125.0Q378 -126 388 -127V0Q373 2 354.0 4.0Q335 6 318 6Z M610.0 12Q551.0 12 508.0 -7.0Q465.0 -26 442.0 -61.5Q419.0 -97 419.0 -146Q419.0 -192 440.0 -227.5Q461.0 -263 504.5 -287.0Q548.0 -311 613.0 -321L780.0 -348V-238L640.0 -213Q608.0 -207 591.0 -192.5Q574.0 -178 574.0 -151Q574.0 -126 593.0 -112.0Q612.0 -98 640.0 -98Q677.0 -98 705.0 -114.0Q733.0 -130 748.5 -157.5Q764.0 -185 764.0 -218V-360Q764.0 -391 739.5 -412.0Q715.0 -433 673.0 -433Q633.0 -433 602.5 -411.0Q572.0 -389 558.0 -353L438.0 -410Q454.0 -456 489.0 -489.0Q524.0 -522 573.0 -540.0Q622.0 -558 680.0 -558Q749.0 -558 802.0 -533.0Q855.0 -508 884.5 -463.5Q914.0 -419 914.0 -360V0H774.0V-88L808.0 -94Q784.0 -58 755.0 -34.5Q726.0 -11 690.0 0.5Q654.0 12 610.0 12Z M1203.0 12Q1113.0 12 1046.5 -30.5Q980.0 -73 956.0 -145L1066.0 -197Q1087.0 -153 1123.0 -128.0Q1159.0 -103 1203.0 -103Q1235.0 -103 1252.0 -116.0Q1269.0 -129 1269.0 -152Q1269.0 -164 1263.0 -172.5Q1257.0 -181 1245.0 -188.0Q1233.0 -195 1215.0 -200L1122.0 -226Q1055.0 -245 1019.0 -287.5Q983.0 -330 983.0 -388Q983.0 -439 1009.0 -477.0Q1035.0 -515 1082.0 -536.5Q1129.0 -558 1190.0 -558Q1270.0 -558 1330.5 -520.5Q1391.0 -483 1416.0 -415L1305.0 -363Q1293.0 -397 1261.5 -417.5Q1230.0 -438 1190.0 -438Q1161.0 -438 1144.5 -426.0Q1128.0 -414 1128.0 -393Q1128.0 -382 1134.0 -373.0Q1140.0 -364 1153.5 -357.0Q1167.0 -350 1187.0 -344L1274.0 -318Q1342.0 -298 1378.0 -257.5Q1414.0 -217 1414.0 -158Q1414.0 -107 1387.5 -69.0Q1361.0 -31 1314.0 -9.5Q1267.0 12 1203.0 12Z M1469.0 0V-757H1619.0V-272L1563.0 -290L1804.0 -546H1989.0L1791.0 -326L1988.0 0H1818.0L1653.0 -277L1740.0 -299L1573.0 -117L1619.0 -204V0Z M2009.0 0V-546H2159.0V0Z M2486.0 12Q2399.0 12 2335.0 -26.5Q2271.0 -65 2236.0 -130.0Q2201.0 -195 2201.0 -274Q2201.0 -356 2237.5 -420.0Q2274.0 -484 2336.0 -521.0Q2398.0 -558 2476.0 -558Q2541.0 -558 2591.0 -537.5Q2641.0 -517 2675.5 -480.0Q2710.0 -443 2728.0 -394.5Q2746.0 -346 2746.0 -289Q2746.0 -273 2744.5 -257.5Q2743.0 -242 2739.0 -231H2330.0V-341H2654.0L2583.0 -289Q2593.0 -332 2582.0 -365.5Q2571.0 -399 2543.5 -418.5Q2516.0 -438 2476.0 -438Q2437.0 -438 2409.0 -419.0Q2381.0 -400 2367.0 -363.0Q2353.0 -326 2356.0 -273Q2352.0 -227 2367.0 -192.0Q2382.0 -157 2413.0 -137.5Q2444.0 -118 2488.0 -118Q2528.0 -118 2556.5 -134.0Q2585.0 -150 2601.0 -178L2721.0 -121Q2705.0 -81 2670.5 -51.0Q2636.0 -21 2589.0 -4.5Q2542.0 12 2486.0 12Z M2799.0 0V-546H2939.0V-413L2924.0 -435Q2936.0 -498 2982.0 -528.0Q3028.0 -558 3092.0 -558Q3160.0 -558 3211.5 -523.5Q3263.0 -489 3276.0 -431L3233.0 -427Q3260.0 -494 3310.0 -526.0Q3360.0 -558 3427.0 -558Q3486.0 -558 3531.5 -532.0Q3577.0 -506 3603.0 -459.5Q3629.0 -413 3629.0 -351V0H3479.0V-319Q3479.0 -351 3467.5 -374.0Q3456.0 -397 3435.0 -410.0Q3414.0 -423 3384.0 -423Q3355.0 -423 3333.5 -410.0Q3312.0 -397 3300.5 -374.0Q3289.0 -351 3289.0 -319V0H3139.0V-319Q3139.0 -351 3127.5 -374.0Q3116.0 -397 3095.0 -410.0Q3074.0 -423 3044.0 -423Q3015.0 -423 2993.5 -410.0Q2972.0 -397 2960.5 -374.0Q2949.0 -351 2949.0 -319V0Z"/><circle cx="2084" cy="-671" r="90" fill="#c8f169"/></svg></div>
+      <span class="eyebrow">Business card · Staff ID</span>
+    </div>
+    <h1>Card maker</h1>
+    <p>Type a person’s details and add a photo. Both cards update as you type. Download print-ready PDFs with 3 mm bleed (2 mm on the ID card): page 1 is the front, page 2 the back.</p>
+  </div>
+</header>
+
+<div class="wrap">
+<main>
+  <section class="panel" aria-label="Details">
+    <form id="form" autocomplete="off">
+      <fieldset>
+        <legend>The person</legend>
+        <label>Full name<input type="text" id="name" maxlength="40"></label>
+        <label>Job title<input type="text" id="title" maxlength="48"></label>
+      </fieldset>
+      <fieldset>
+        <legend>Business card</legend>
+        <div class="two">
+          <label>Phone<input type="tel" id="phone" maxlength="24"></label>
+          <label>WhatsApp<input type="tel" id="whatsapp" maxlength="24"></label>
+        </div>
+        <label>Email<input type="email" id="email" maxlength="48"></label>
+        <div class="two">
+          <label>Website<input type="text" id="web" maxlength="32"></label>
+          <label>Office<input type="text" id="office" maxlength="32"></label>
+        </div>
+        <p class="note">Leave a line empty to take it off the card.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Staff ID</legend>
+        <div class="two">
+          <label>Staff no.<input type="text" id="staffNo" maxlength="14"></label>
+          <label>Team<input type="text" id="team" maxlength="20"></label>
+          <label>Issued <small>(MM/YYYY)</small><input type="text" id="issued" maxlength="10"></label>
+          <label>Expires <small>(MM/YYYY)</small><input type="text" id="expires" maxlength="10"></label>
+        </div>
+        <div class="photo-row">
+          <label class="btn ghost" for="photo" style="display:inline-block">Add a photo</label>
+          <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
+          <button type="button" class="btn ghost" id="photo-clear" hidden>Remove photo</button>
+        </div>
+        <p class="note">A passport-style photo, head and shoulders. It is cropped to fit.</p>
+        <label>Return to <small>(on the back)</small><input type="text" id="returnTo" maxlength="48"></label>
+        <label>Return phone<input type="tel" id="returnPhone" maxlength="24"></label>
+        <label>In an emergency <small>(optional)</small><input type="text" id="emergency" maxlength="44"></label>
+      </fieldset>
+      <div class="actions">
+        <button type="button" class="btn" id="dl-bc" hidden>Download business card PDF</button>
+        <button type="button" class="btn" id="dl-id" hidden>Download staff ID PDF</button>
+        <button type="button" class="btn ghost" id="reset">Start again</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
+    </form>
+  </section>
+
+  <section class="previews" aria-label="Preview">
+    <div class="set">
+      <h2>Business card</h2>
+      <p>85 × 55 mm. The outer 3 mm is bleed: the printer trims it off.</p>
+      <div class="sides">
+        <div class="side"><span class="lbl">Front</span><div class="frame" data-for="bc-front"></div></div>
+        <div class="side"><span class="lbl">Back</span><div class="frame" data-for="bc-back"></div></div>
+      </div>
+    </div>
+    <div class="set">
+      <h2>Staff ID card</h2>
+      <p>CR80, 54 × 85.6 mm, the size PVC ID printers take. The outer 2 mm is bleed.</p>
+      <div class="sides">
+        <div class="side"><span class="lbl">Front</span><div class="frame" data-for="id-front"></div></div>
+        <div class="side"><span class="lbl">Back</span><div class="frame" data-for="id-back"></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+</div>
+
+<!-- The four sides, filled from the form. Text is set with textContent only. -->
+<template id="sides">
+  <div class="page bc front" data-side="bc-front"><div class="glow"></div>
+    <div class="logo"><svg class="m" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#c8f169"/><path d="M27 40H61" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#0d3b2e"/></svg><div class="w"><svg aria-hidden="true" style="width:100%;height:100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 -771 3673 795"><path fill="#ffffff" d="M318 6Q219 6 164.5 -47.5Q110 -101 110 -197V-416H18V-546H23Q65 -546 87.5 -567.0Q110 -588 110 -630V-670H260V-546H388V-416H260V-207Q260 -179 270.0 -160.5Q280 -142 301.0 -133.0Q322 -124 353 -124Q360 -124 369.0 -125.0Q378 -126 388 -127V0Q373 2 354.0 4.0Q335 6 318 6Z M610.0 12Q551.0 12 508.0 -7.0Q465.0 -26 442.0 -61.5Q419.0 -97 419.0 -146Q419.0 -192 440.0 -227.5Q461.0 -263 504.5 -287.0Q548.0 -311 613.0 -321L780.0 -348V-238L640.0 -213Q608.0 -207 591.0 -192.5Q574.0 -178 574.0 -151Q574.0 -126 593.0 -112.0Q612.0 -98 640.0 -98Q677.0 -98 705.0 -114.0Q733.0 -130 748.5 -157.5Q764.0 -185 764.0 -218V-360Q764.0 -391 739.5 -412.0Q715.0 -433 673.0 -433Q633.0 -433 602.5 -411.0Q572.0 -389 558.0 -353L438.0 -410Q454.0 -456 489.0 -489.0Q524.0 -522 573.0 -540.0Q622.0 -558 680.0 -558Q749.0 -558 802.0 -533.0Q855.0 -508 884.5 -463.5Q914.0 -419 914.0 -360V0H774.0V-88L808.0 -94Q784.0 -58 755.0 -34.5Q726.0 -11 690.0 0.5Q654.0 12 610.0 12Z M1203.0 12Q1113.0 12 1046.5 -30.5Q980.0 -73 956.0 -145L1066.0 -197Q1087.0 -153 1123.0 -128.0Q1159.0 -103 1203.0 -103Q1235.0 -103 1252.0 -116.0Q1269.0 -129 1269.0 -152Q1269.0 -164 1263.0 -172.5Q1257.0 -181 1245.0 -188.0Q1233.0 -195 1215.0 -200L1122.0 -226Q1055.0 -245 1019.0 -287.5Q983.0 -330 983.0 -388Q983.0 -439 1009.0 -477.0Q1035.0 -515 1082.0 -536.5Q1129.0 -558 1190.0 -558Q1270.0 -558 1330.5 -520.5Q1391.0 -483 1416.0 -415L1305.0 -363Q1293.0 -397 1261.5 -417.5Q1230.0 -438 1190.0 -438Q1161.0 -438 1144.5 -426.0Q1128.0 -414 1128.0 -393Q1128.0 -382 1134.0 -373.0Q1140.0 -364 1153.5 -357.0Q1167.0 -350 1187.0 -344L1274.0 -318Q1342.0 -298 1378.0 -257.5Q1414.0 -217 1414.0 -158Q1414.0 -107 1387.5 -69.0Q1361.0 -31 1314.0 -9.5Q1267.0 12 1203.0 12Z M1469.0 0V-757H1619.0V-272L1563.0 -290L1804.0 -546H1989.0L1791.0 -326L1988.0 0H1818.0L1653.0 -277L1740.0 -299L1573.0 -117L1619.0 -204V0Z M2009.0 0V-546H2159.0V0Z M2486.0 12Q2399.0 12 2335.0 -26.5Q2271.0 -65 2236.0 -130.0Q2201.0 -195 2201.0 -274Q2201.0 -356 2237.5 -420.0Q2274.0 -484 2336.0 -521.0Q2398.0 -558 2476.0 -558Q2541.0 -558 2591.0 -537.5Q2641.0 -517 2675.5 -480.0Q2710.0 -443 2728.0 -394.5Q2746.0 -346 2746.0 -289Q2746.0 -273 2744.5 -257.5Q2743.0 -242 2739.0 -231H2330.0V-341H2654.0L2583.0 -289Q2593.0 -332 2582.0 -365.5Q2571.0 -399 2543.5 -418.5Q2516.0 -438 2476.0 -438Q2437.0 -438 2409.0 -419.0Q2381.0 -400 2367.0 -363.0Q2353.0 -326 2356.0 -273Q2352.0 -227 2367.0 -192.0Q2382.0 -157 2413.0 -137.5Q2444.0 -118 2488.0 -118Q2528.0 -118 2556.5 -134.0Q2585.0 -150 2601.0 -178L2721.0 -121Q2705.0 -81 2670.5 -51.0Q2636.0 -21 2589.0 -4.5Q2542.0 12 2486.0 12Z M2799.0 0V-546H2939.0V-413L2924.0 -435Q2936.0 -498 2982.0 -528.0Q3028.0 -558 3092.0 -558Q3160.0 -558 3211.5 -523.5Q3263.0 -489 3276.0 -431L3233.0 -427Q3260.0 -494 3310.0 -526.0Q3360.0 -558 3427.0 -558Q3486.0 -558 3531.5 -532.0Q3577.0 -506 3603.0 -459.5Q3629.0 -413 3629.0 -351V0H3479.0V-319Q3479.0 -351 3467.5 -374.0Q3456.0 -397 3435.0 -410.0Q3414.0 -423 3384.0 -423Q3355.0 -423 3333.5 -410.0Q3312.0 -397 3300.5 -374.0Q3289.0 -351 3289.0 -319V0H3139.0V-319Q3139.0 -351 3127.5 -374.0Q3116.0 -397 3095.0 -410.0Q3074.0 -423 3044.0 -423Q3015.0 -423 2993.5 -410.0Q2972.0 -397 2960.5 -374.0Q2949.0 -351 2949.0 -319V0Z"/><circle cx="2084" cy="-671" r="90" fill="#c8f169"/></svg></div></div>
+    <p class="line">Run your business<br>from WhatsApp.</p>
+    <p class="sub mono">Automation you can trust with money</p>
+    <div class="dot"></div>
+  </div>
+  <div class="page bc back" data-side="bc-back"><div class="bar"></div>
+    <div class="bm"><svg viewBox="0 0 100 100" aria-hidden="true" style="width:100%;height:100%"><rect width="100" height="100" rx="26" fill="#0d3b2e"/><path d="M27 40H61" stroke="#c8f169" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#ffffff"/></svg></div>
+    <div class="who"><p class="name" data-f="name"></p><p class="role" data-f="title"></p></div>
+    <div class="rows"><div class="rule"></div>
+      <span class="k mono" data-row="phone">Phone</span><span class="v" data-f="phone" data-row="phone"></span>
+      <span class="k mono" data-row="whatsapp">WhatsApp</span><span class="v" data-f="whatsapp" data-row="whatsapp"></span>
+      <span class="k mono" data-row="email">Email</span><span class="v" data-f="email" data-row="email"></span>
+      <span class="k mono" data-row="web">Web</span><span class="v" data-f="web" data-row="web"></span>
+      <span class="k mono" data-row="office">Office</span><span class="v" data-f="office" data-row="office"></span>
+    </div>
+  </div>
+  <div class="page id front" data-side="id-front">
+    <div class="top">
+      <div class="logo"><svg class="m" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#c8f169"/><path d="M27 40H61" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#0d3b2e"/></svg><div class="w"><svg aria-hidden="true" style="width:100%;height:100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 -771 3673 795"><path fill="#ffffff" d="M318 6Q219 6 164.5 -47.5Q110 -101 110 -197V-416H18V-546H23Q65 -546 87.5 -567.0Q110 -588 110 -630V-670H260V-546H388V-416H260V-207Q260 -179 270.0 -160.5Q280 -142 301.0 -133.0Q322 -124 353 -124Q360 -124 369.0 -125.0Q378 -126 388 -127V0Q373 2 354.0 4.0Q335 6 318 6Z M610.0 12Q551.0 12 508.0 -7.0Q465.0 -26 442.0 -61.5Q419.0 -97 419.0 -146Q419.0 -192 440.0 -227.5Q461.0 -263 504.5 -287.0Q548.0 -311 613.0 -321L780.0 -348V-238L640.0 -213Q608.0 -207 591.0 -192.5Q574.0 -178 574.0 -151Q574.0 -126 593.0 -112.0Q612.0 -98 640.0 -98Q677.0 -98 705.0 -114.0Q733.0 -130 748.5 -157.5Q764.0 -185 764.0 -218V-360Q764.0 -391 739.5 -412.0Q715.0 -433 673.0 -433Q633.0 -433 602.5 -411.0Q572.0 -389 558.0 -353L438.0 -410Q454.0 -456 489.0 -489.0Q524.0 -522 573.0 -540.0Q622.0 -558 680.0 -558Q749.0 -558 802.0 -533.0Q855.0 -508 884.5 -463.5Q914.0 -419 914.0 -360V0H774.0V-88L808.0 -94Q784.0 -58 755.0 -34.5Q726.0 -11 690.0 0.5Q654.0 12 610.0 12Z M1203.0 12Q1113.0 12 1046.5 -30.5Q980.0 -73 956.0 -145L1066.0 -197Q1087.0 -153 1123.0 -128.0Q1159.0 -103 1203.0 -103Q1235.0 -103 1252.0 -116.0Q1269.0 -129 1269.0 -152Q1269.0 -164 1263.0 -172.5Q1257.0 -181 1245.0 -188.0Q1233.0 -195 1215.0 -200L1122.0 -226Q1055.0 -245 1019.0 -287.5Q983.0 -330 983.0 -388Q983.0 -439 1009.0 -477.0Q1035.0 -515 1082.0 -536.5Q1129.0 -558 1190.0 -558Q1270.0 -558 1330.5 -520.5Q1391.0 -483 1416.0 -415L1305.0 -363Q1293.0 -397 1261.5 -417.5Q1230.0 -438 1190.0 -438Q1161.0 -438 1144.5 -426.0Q1128.0 -414 1128.0 -393Q1128.0 -382 1134.0 -373.0Q1140.0 -364 1153.5 -357.0Q1167.0 -350 1187.0 -344L1274.0 -318Q1342.0 -298 1378.0 -257.5Q1414.0 -217 1414.0 -158Q1414.0 -107 1387.5 -69.0Q1361.0 -31 1314.0 -9.5Q1267.0 12 1203.0 12Z M1469.0 0V-757H1619.0V-272L1563.0 -290L1804.0 -546H1989.0L1791.0 -326L1988.0 0H1818.0L1653.0 -277L1740.0 -299L1573.0 -117L1619.0 -204V0Z M2009.0 0V-546H2159.0V0Z M2486.0 12Q2399.0 12 2335.0 -26.5Q2271.0 -65 2236.0 -130.0Q2201.0 -195 2201.0 -274Q2201.0 -356 2237.5 -420.0Q2274.0 -484 2336.0 -521.0Q2398.0 -558 2476.0 -558Q2541.0 -558 2591.0 -537.5Q2641.0 -517 2675.5 -480.0Q2710.0 -443 2728.0 -394.5Q2746.0 -346 2746.0 -289Q2746.0 -273 2744.5 -257.5Q2743.0 -242 2739.0 -231H2330.0V-341H2654.0L2583.0 -289Q2593.0 -332 2582.0 -365.5Q2571.0 -399 2543.5 -418.5Q2516.0 -438 2476.0 -438Q2437.0 -438 2409.0 -419.0Q2381.0 -400 2367.0 -363.0Q2353.0 -326 2356.0 -273Q2352.0 -227 2367.0 -192.0Q2382.0 -157 2413.0 -137.5Q2444.0 -118 2488.0 -118Q2528.0 -118 2556.5 -134.0Q2585.0 -150 2601.0 -178L2721.0 -121Q2705.0 -81 2670.5 -51.0Q2636.0 -21 2589.0 -4.5Q2542.0 12 2486.0 12Z M2799.0 0V-546H2939.0V-413L2924.0 -435Q2936.0 -498 2982.0 -528.0Q3028.0 -558 3092.0 -558Q3160.0 -558 3211.5 -523.5Q3263.0 -489 3276.0 -431L3233.0 -427Q3260.0 -494 3310.0 -526.0Q3360.0 -558 3427.0 -558Q3486.0 -558 3531.5 -532.0Q3577.0 -506 3603.0 -459.5Q3629.0 -413 3629.0 -351V0H3479.0V-319Q3479.0 -351 3467.5 -374.0Q3456.0 -397 3435.0 -410.0Q3414.0 -423 3384.0 -423Q3355.0 -423 3333.5 -410.0Q3312.0 -397 3300.5 -374.0Q3289.0 -351 3289.0 -319V0H3139.0V-319Q3139.0 -351 3127.5 -374.0Q3116.0 -397 3095.0 -410.0Q3074.0 -423 3044.0 -423Q3015.0 -423 2993.5 -410.0Q2972.0 -397 2960.5 -374.0Q2949.0 -351 2949.0 -319V0Z"/><circle cx="2084" cy="-671" r="90" fill="#c8f169"/></svg></div></div>
+      <span class="tag mono">STAFF</span>
+    </div>
+    <div class="photo" data-photo><svg viewBox="0 0 40 48" aria-hidden="true"><circle cx="20" cy="17" r="9" fill="#b9c9bd"/><path d="M2 48c1.5-11 8.5-17 18-17s16.5 6 18 17z" fill="#b9c9bd"/></svg></div>
+    <p class="name" data-f="name"></p>
+    <p class="role" data-f="title"></p>
+    <div class="facts">
+      <div><p class="k mono">Staff no.</p><p class="v mono" data-f="staffNo"></p></div>
+      <div><p class="k mono">Team</p><p class="v" data-f="team"></p></div>
+      <div><p class="k mono">Issued</p><p class="v mono" data-f="issued"></p></div>
+      <div><p class="k mono">Expires</p><p class="v mono" data-f="expires"></p></div>
+    </div>
+    <div class="foot"><span class="mono">MADE IN LAGOS</span></div>
+  </div>
+  <div class="page id back" data-side="id-back">
+    <div class="bigmark"><svg class="m" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#c8f169"/><path d="M27 40H61" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#0d3b2e"/></svg></div>
+    <div class="col">
+      <div class="m"><svg class="m" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="26" fill="#c8f169"/><path d="M27 40H61" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#0d3b2e"/></svg></div>
+      <h2>This card belongs to Taskiem.</h2>
+      <p>It identifies <b data-f="name"></b> as a member of staff. It is not transferable and must be shown on request.</p>
+      <p>If you find it, please return it to the address below or call the number. Thank you.</p>
+      <div class="box">
+        <div><p class="k mono">Return to</p><p class="v" data-f="returnTo"></p></div>
+        <div><p class="k mono">Phone</p><p class="v mono" data-f="returnPhone"></p></div>
+        <div data-row="emergency"><p class="k mono">In an emergency</p><p class="v" data-f="emergency"></p></div>
+      </div>
+    </div>
+    <p class="sig mono">Authorised signature</p>
+  </div>
+</template>
+
+<div id="export-root" aria-hidden="true"></div>
+<div id="print-root" aria-hidden="true"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function () {
+  var FIELDS = ["name", "title", "phone", "whatsapp", "email", "web", "office", "staffNo", "team", "issued", "expires", "returnTo", "returnPhone", "emergency"];
+  // Example details, shown until someone types their own.
+  var EXAMPLE = {
+    name: "Full Name", title: "Job title",
+    phone: "+234 000 000 0000", whatsapp: "+234 000 000 0000", email: "name@yourdomain.ng", web: "yourdomain.ng", office: "Lagos, Nigeria",
+    staffNo: "TKM-0000", team: "Team", issued: "01/2027", expires: "12/2028",
+    returnTo: "Taskiem, office address, Lagos", returnPhone: "+234 000 000 0000", emergency: "Name · +234 000 000 0000"
+  };
+  var SIZES = { "bc": [91, 61], "id": [58, 89.6] };
+  var PX_PER_MM = 96 / 25.4;
+  var KEY = "taskiem-card-maker";
+  var state = Object.assign({}, EXAMPLE, { photo: "" });
+  var tpl = document.getElementById("sides");
+  var status = document.getElementById("status");
+
+  function load() {
+    try { var s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && typeof s === "object") Object.assign(state, s); } catch (e) { /* storage unavailable */ }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* too large or unavailable: keep going */ }
+  }
+
+  function fill(root, data) {
+    root.querySelectorAll("[data-f]").forEach(function (el) { el.textContent = data[el.getAttribute("data-f")] || ""; });
+    root.querySelectorAll("[data-row]").forEach(function (el) { el.hidden = !(data[el.getAttribute("data-row")] || "").trim(); });
+    root.querySelectorAll("[data-photo]").forEach(function (el) {
+      var img = el.querySelector("img");
+      if (data.photo) {
+        if (!img) { img = document.createElement("img"); img.alt = ""; el.innerHTML = ""; el.appendChild(img); }
+        img.src = data.photo;
+      } else if (img) {
+        el.innerHTML = '<svg viewBox="0 0 40 48" aria-hidden="true"><circle cx="20" cy="17" r="9" fill="#b9c9bd"/><path d="M2 48c1.5-11 8.5-17 18-17s16.5 6 18 17z" fill="#b9c9bd"/></svg>';
+      }
+    });
+  }
+  function sides(kind) {
+    var frag = tpl.content.cloneNode(true);
+    var out = [];
+    frag.querySelectorAll(".page").forEach(function (p) { if (!kind || p.classList.contains(kind)) out.push(p); });
+    return out;
+  }
+
+  // Previews: one full-size side per frame, scaled to the frame's width.
+  var frames = {};
+  document.querySelectorAll(".frame").forEach(function (f) {
+    var side = sides().filter(function (p) { return p.getAttribute("data-side") === f.getAttribute("data-for"); })[0];
+    f.appendChild(side);
+    frames[f.getAttribute("data-for")] = f;
+  });
+  function layout() {
+    var col = document.querySelector(".previews").clientWidth;
+    Object.keys(frames).forEach(function (k) {
+      var f = frames[k], kind = k.slice(0, 2), mm = SIZES[kind];
+      var w = mm[0] * PX_PER_MM, h = mm[1] * PX_PER_MM;
+      var target = kind === "bc" ? Math.min(420, (col - 16) / (col > 700 ? 2 : 1)) : Math.min(250, (col - 16) / 2);
+      var s = target / w;
+      f.style.width = (w * s) + "px"; f.style.height = (h * s) + "px";
+      f.firstElementChild.style.transform = "scale(" + s + ")";
+    });
+  }
+  function render() {
+    Object.keys(frames).forEach(function (k) { fill(frames[k], state); });
+  }
+
+  function bindForm() {
+    FIELDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      el.value = state[id] || "";
+      el.addEventListener("input", function () { state[id] = el.value; render(); save(); });
+    });
+    document.getElementById("photo").addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { shrink(reader.result, function (url) { state.photo = url; render(); save(); document.getElementById("photo-clear").hidden = false; }); };
+      reader.readAsDataURL(file);
+    });
+    document.getElementById("photo-clear").addEventListener("click", function () {
+      state.photo = ""; document.getElementById("photo").value = ""; this.hidden = true; render(); save();
+    });
+    document.getElementById("photo-clear").hidden = !state.photo;
+    document.getElementById("reset").addEventListener("click", function () {
+      state = Object.assign({}, EXAMPLE, { photo: "" });
+      FIELDS.forEach(function (id) { document.getElementById(id).value = state[id]; });
+      document.getElementById("photo-clear").hidden = true;
+      render(); save(); status.textContent = "Back to the example details.";
+    });
+  }
+  // Photos are scaled to at most 1200 px tall: enough for print, small enough to remember.
+  function shrink(dataUrl, done) {
+    var img = new Image();
+    img.onload = function () {
+      var s = Math.min(1, 1200 / img.height), c = document.createElement("canvas");
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      done(c.toDataURL("image/jpeg", 0.9));
+    };
+    img.onerror = function () { status.textContent = "That file could not be read as a picture. Try a JPEG or PNG."; };
+    img.src = dataUrl;
+  }
+
+  function slug(s) { return (s || "card").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "card"; }
+
+  // A PDF of one card: each side drawn at about 770 dpi, on a page the size of the card with its bleed.
+  async function pdfFor(kind) {
+    var root = document.getElementById("export-root");
+    root.innerHTML = "";
+    var pages = sides(kind);
+    pages.forEach(function (p) { fill(p, state); root.appendChild(p); });
+    await document.fonts.ready;
+    await Promise.all(Array.prototype.map.call(root.querySelectorAll("img"), function (i) { return i.decode ? i.decode().catch(function () {}) : null; }));
+    var mm = SIZES[kind];
+    var doc = new window.jspdf.jsPDF({ unit: "mm", format: [mm[0], mm[1]], orientation: mm[0] > mm[1] ? "landscape" : "portrait", compress: true });
+    for (var i = 0; i < pages.length; i++) {
+      var canvas = await window.html2canvas(pages[i], { scale: 8, backgroundColor: null, useCORS: true, logging: false });
+      if (i > 0) doc.addPage([mm[0], mm[1]], mm[0] > mm[1] ? "landscape" : "portrait");
+      doc.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, mm[0], mm[1]);
+    }
+    root.innerHTML = "";
+    return doc.output("blob");
+  }
+
+  async function wireDownloads() {
+    var claude = window.claude;
+    var downloads = claude && claude.use ? await claude.use("downloads") : null;
+    if (!downloads || !window.jspdf || !window.html2canvas) {
+      status.textContent = "Downloads are not available in this view. Ask engineering to make the PDFs with make-cards.mjs in the repository.";
+      return;
+    }
+    [["dl-bc", "bc", "business-card"], ["dl-id", "id", "staff-id"]].forEach(function (b) {
+      var btn = document.getElementById(b[0]);
+      btn.hidden = false;
+      btn.addEventListener("click", async function () {
+        btn.disabled = true; status.textContent = "Making the PDF…";
+        try {
+          var blob = await pdfFor(b[1]);
+          await downloads.save({ filename: "taskiem-" + b[2] + "-" + slug(state.name) + ".pdf", data: blob });
+          status.textContent = "Saved. Send it to the printer as it is.";
+        } catch (e) {
+          var code = e && e.code;
+          status.textContent = code === "declined" ? "Not saved." : code === "rate_limited" ? "Another save is waiting. Try again in a moment." : "The PDF could not be saved here.";
+        } finally { btn.disabled = false; }
+      });
+    });
+  }
+
+  // For make-cards.mjs: put one card type, full size, in the print root.
+  window.cardMaker = {
+    printMode: function (kind, data) {
+      var root = document.getElementById("print-root");
+      root.innerHTML = "";
+      var d = Object.assign({}, EXAMPLE, data || {});
+      ["phone", "whatsapp", "email", "web", "office", "emergency"].forEach(function (k) { if (data && !(k in data)) d[k] = ""; });
+      sides(kind).forEach(function (p) { fill(p, d); root.appendChild(p); });
+      document.body.setAttribute("data-print", kind);
+      return SIZES[kind];
+    }
+  };
+
+  load();
+  bindForm();
+  render();
+  layout();
+  window.addEventListener("resize", layout);
+  document.fonts && document.fonts.ready.then(layout);
+  if (!window.__cardMakerHeadless) wireDownloads();
+})();
+</script>
