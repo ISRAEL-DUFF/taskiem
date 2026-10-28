@@ -150,12 +150,15 @@ jobs:
       - run: pnpm licenses list --json > npm-licences.json
       - run: go run ./tools/licencecheck -npm npm-licences.json
 
-  # The AI evaluation gate (spec 12.4, docs/ai.md#evaluation): the builder
+  # The AI evaluation report (spec 12.4, docs/ai.md#evaluation): the builder
   # and repair suites through the real pipelines with the offline heuristic
   # provider, compared with the committed baselines (no API key, no cost,
-  # deterministic). Runs on main and on pull requests touching the AI
-  # layer, the suites, the template library or the runner. The real-model
-  # run is .github/workflows/ai-eval.yml.
+  # deterministic), written to the job summary and kept as an artifact. This
+  # job is not the gate: TestBaselinesHold (tools/aieval) makes the same two
+  # comparisons inside the go job's go test ./..., on every pull request. This
+  # job runs on main and on pull requests touching the AI layer, the suites,
+  # the template library or the runner, so its path filter may miss changes
+  # the gate still catches. The real-model run is .github/workflows/ai-eval.yml.
   ai-eval:
     runs-on: ubuntu-latest
     steps:
