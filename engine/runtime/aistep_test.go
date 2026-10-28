@@ -217,6 +217,40 @@ func TestAIStepNeedsThePlan(t *testing.T) {
 	}
 }
 
+// A call that cannot be recorded is neither audited nor counted, so its
+// answer is not used: the attempt is tried again.
+func TestAIStepUnrecordedCallIsRetried(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, aiFlow)
+	e.AI = &ai.Fake{Respond: func(ai.Request) (*ai.Response, error) {
+		r := aiAnswer(`{"greeting":"Hi","priority":"low"}`)
+		return &r, nil
+	}}
+	if _, err := e.DB.Admin.Exec(ctx, `CREATE FUNCTION test_no_ai_record() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no room'; END $$;
+		CREATE TRIGGER test_no_ai_record BEFORE INSERT ON ai_interactions FOR EACH ROW EXECUTE FUNCTION test_no_ai_record()`); err != nil {
+		t.Fatal(err)
+	}
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": "n"}})
+	e.Drain(t)
+	if f := failureOf(t, e, ref, "ask"); f["kind"] != "retryable" || !strings.Contains(f["message"].(string), "recording") {
+		t.Errorf("an unrecorded call: %v", f)
+	}
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepCompleted && ev.StepID == "ask" {
+			t.Fatalf("the answer of an unrecorded call was used: %s", types(events(t, e, ref)))
+		}
+	}
+	// Once it can be recorded, the retry completes the step.
+	if _, err := e.DB.Admin.Exec(ctx, `DROP TRIGGER test_no_ai_record ON ai_interactions`); err != nil {
+		t.Fatal(err)
+	}
+	ref = e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": "n"}})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Errorf("recorded: %s", st)
+	}
+}
+
 var errSlowDown = slowDown{}
 
 type slowDown struct{}

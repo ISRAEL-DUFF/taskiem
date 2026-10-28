@@ -205,7 +205,13 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 				answer, _ = decodeAnswer(raw)
 			}
 		}
-		w.recordAIStep(ctx, p, model, prov.Name(), digest, round, sent, resp, outcome, err)
+		if rerr := w.recordAIStep(ctx, p, model, prov.Name(), digest, round, sent, resp, outcome, err); rerr != nil {
+			// A call not recorded is neither audited nor counted against
+			// the budget: the answer is not used, and the attempt is tried
+			// again.
+			w.Logger.Error("recording an ai step's call", "run", p.c.run, "step", p.c.step, "err", rerr)
+			return failed(p.c, "retryable", "recording the AI model's call: "+pii.Redact(rerr.Error()), "retry")
+		}
 		switch outcome {
 		case "valid":
 			out := masker.Unmask(answer)
@@ -338,7 +344,7 @@ func closeObjects(schema map[string]any) map[string]any {
 // the same masked question (only the input fields let through are
 // redacted, so the record never holds them in the clear), the answer, and
 // the tokens.
-func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, digest string, round int, msgs []ai.Message, resp *ai.Response, outcome string, callErr error) {
+func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, digest string, round int, msgs []ai.Message, resp *ai.Response, outcome string, callErr error) error {
 	ctx = context.WithoutCancel(ctx)
 	rawMsgs, _ := json.Marshal(msgs)
 	var text *string
@@ -359,7 +365,7 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 	if round > 1 {
 		kind = "step_correct"
 	}
-	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, run_id, step_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), $14, NULLIF($15, ''), $16, $17, $18, $19, $20)`,
@@ -367,7 +373,4 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 			text, stop, outcome, errText, u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
 		return err
 	})
-	if err != nil {
-		w.Logger.Error("recording an ai step's call", "run", p.c.run, "step", p.c.step, "err", err)
-	}
 }
