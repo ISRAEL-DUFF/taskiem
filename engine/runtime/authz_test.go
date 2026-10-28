@@ -87,6 +87,27 @@ func TestVoteAndItsAuditCommitTogether(t *testing.T) {
 	}
 }
 
+// After an escalation reopens a step at its first level, someone who
+// approved another level of it cannot approve again (distinct approvers).
+func TestEscalatedApprovalKeepsApproversDistinct(t *testing.T) {
+	e := rt.New(t)
+	earlier, fresh := member(t, e, "officer"), member(t, e, "officer")
+	wf := e.Publish(t, wfDoc(officerApproval, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	// As an escalation leaves it: a decision at level 2 kept, level 1 open.
+	inTenant(t, e, `INSERT INTO approval_decisions (tenant_id, run_id, step_id, level, user_id, decision, channel)
+		VALUES ($1, $2, 'ok', 1, $3, 'approved', 'web')`, e.Tenant, ref.ID, earlier)
+	vote := runtime.Vote{UserID: earlier, Roles: []string{"officer"}, Decision: "approved", Channel: "web"}
+	if _, err := e.Store.VoteApproval(ctx, ref, "ok", vote); !errors.Is(err, runtime.ErrNotAllowed) {
+		t.Fatalf("an approver of another level approved the escalated one: %v", err)
+	}
+	vote.UserID = fresh
+	if res, err := e.Store.VoteApproval(ctx, ref, "ok", vote); err != nil || res.Status != "approved" {
+		t.Fatalf("a new approver: %v %v", res, err)
+	}
+}
+
 // A delegation stops counting once the delegator no longer holds the role.
 func TestDelegationNeedsTheDelegatorsRole(t *testing.T) {
 	e := rt.New(t)

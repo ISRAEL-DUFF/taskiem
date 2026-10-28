@@ -225,14 +225,17 @@ func (s *Store) vote(ctx context.Context, tx pgx.Tx, ref RunRef, step string, v 
 	if voiced {
 		return ErrAlreadyDecided
 	}
-	if distinct && a.level > 0 {
-		var earlier bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM approval_decisions WHERE run_id = $1 AND step_id = $2 AND level < $3
-			AND (user_id::text = ANY ($4) OR on_behalf_of::text = ANY ($4)))`, ref.ID, step, a.level, people).Scan(&earlier); err != nil {
+	if distinct {
+		// Any other level, not only earlier ones: an escalation reopens the
+		// step at its first level with its decisions kept, and someone who
+		// approved a later level then must not approve the escalated one.
+		var other bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM approval_decisions WHERE run_id = $1 AND step_id = $2 AND level <> $3
+			AND (user_id::text = ANY ($4) OR on_behalf_of::text = ANY ($4)))`, ref.ID, step, a.level, people).Scan(&other); err != nil {
 			return err
 		}
-		if earlier {
-			return fmt.Errorf("an approver of an earlier level cannot approve this one too: %w", ErrNotAllowed)
+		if other {
+			return fmt.Errorf("an approver of another level cannot approve this one too: %w", ErrNotAllowed)
 		}
 	}
 	// Step-up last: nobody is asked for a second factor to cast a vote
