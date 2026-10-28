@@ -50,6 +50,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.existingSecret }}
                   key: TASKIEM_DATABASE_URL
+            - name: TASKIEM_MIGRATE_LOCK_TIMEOUT
+              value: {{ .Values.migrations.lockTimeout | quote }}
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

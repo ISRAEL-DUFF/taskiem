@@ -148,6 +148,9 @@ migrations:
   # TASKIEM_DATABASE_URL) up as a member of taskiem_app, and refuses the
   # owner's (docs/kubernetes.md#database-logins).
   existingSecret: taskiem-migrate
+  # How long a migration statement waits for a lock before the Job fails
+  # and retries, rather than stalling live pods' queries behind it.
+  lockTimeout: 10s
   resources:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 256Mi }

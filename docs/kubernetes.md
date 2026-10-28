@@ -75,7 +75,7 @@ Alongside the Deployments the chart creates:
    helm install taskiem deploy/helm/taskiem -n taskiem -f values.yaml
    ```
 
-   The migration Job runs first. If it fails, the install stops and the old pods keep running. The schema only moves forward, and each release works with the schema of the release before it, so upgrades follow the same path: `helm upgrade` with the new tag.
+   The migration Job runs first. If it fails, the install stops and the old pods keep running. A migration that waits more than 10 seconds for a lock (a long transaction on the table it changes) fails rather than blocking the live pods' queries behind it, and the Job tries again. `migrations.lockTimeout` sets the wait. The schema only moves forward, and each release works with the schema of the release before it, so upgrades follow the same path: `helm upgrade` with the new tag.
 
 4. **Create the first tenant (once).** Add a `TASKIEM_BOOTSTRAP_PASSWORD` key (12 or more characters) to the Secret and restart the API pods. Then run:
 

@@ -843,6 +843,8 @@ spec:
                 secretKeyRef:
                   name: taskiem
                   key: TASKIEM_DATABASE_URL
+            - name: TASKIEM_MIGRATE_LOCK_TIMEOUT
+              value: "10s"
           resources:
             limits:
               memory: 256Mi

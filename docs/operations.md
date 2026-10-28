@@ -6,7 +6,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 
 | Command | What it does |
 | --- | --- |
-| `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. |
+| `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. Two runs at once take turns (goose's session-level advisory lock; a second run waits up to 5 minutes), and a statement that waits longer than `TASKIEM_MIGRATE_LOCK_TIMEOUT` for a lock fails the run instead of stalling live pods behind it; run it again once the long transaction is gone. |
 | `taskiem bootstrap --tenant NAME --email EMAIL [--name NAME]` | Creates the first tenant, its owner, a Default workspace, and the `dev` and `prod` environments. Password from `TASKIEM_BOOTSTRAP_PASSWORD` (12+ characters). |
 | `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, `public`, or `all` (default; also `TASKIEM_ROLE`). |
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
@@ -43,6 +43,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). For `taskiem serve`, a login that is a member of `taskiem_app` and owns nothing; for `taskiem migrate`, the schema owner ([database roles](#database-roles)). |
+| `TASKIEM_MIGRATE_LOCK_TIMEOUT` | `10s` | `taskiem migrate` only: how long a statement waits for a lock before the migration fails (`0`: for ever). |
 | `TASKIEM_APP_DATABASE_URL` | — | `taskiem migrate` only: the engine's login, which it creates or updates and grants `taskiem_app` after migrating ([database roles](#database-roles)). |
 | `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
 | `TASKIEM_PUBLIC_DATABASE_URL`, `TASKIEM_PUBLIC_DATABASE_ROLE`, `TASKIEM_PUBLIC_DATABASE_POOL` | `TASKIEM_DATABASE_URL`, `taskiem_public`, `5` | The [public host](public-host.md)'s own login (a member of `taskiem_public` only), the role it sets, and its pool's size |

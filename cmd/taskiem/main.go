@@ -208,7 +208,17 @@ func migrate(args []string, stdout io.Writer) error {
 	if *dsn == "" {
 		return errors.New("migrate: --dsn or TASKIEM_DATABASE_URL is required")
 	}
-	results, err := db.Migrate(context.Background(), *dsn)
+	// How long each statement may wait for a lock before the migration
+	// fails (and the Job retries): never long enough to stall live pods.
+	lockTimeout := db.DefaultLockTimeout
+	if v := os.Getenv("TASKIEM_MIGRATE_LOCK_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 || d > time.Hour {
+			return fmt.Errorf("TASKIEM_MIGRATE_LOCK_TIMEOUT must be a duration from 0 (no limit) to 1h, not %q", v)
+		}
+		lockTimeout = d
+	}
+	results, err := db.MigrateWith(context.Background(), *dsn, lockTimeout)
 	if err != nil {
 		return err
 	}
