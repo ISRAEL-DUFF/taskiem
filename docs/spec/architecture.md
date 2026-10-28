@@ -562,7 +562,7 @@ triggers:
 - **Idempotency and reconcile hooks** tell the engine where to put the key, how to encode it within the provider's charset and length limits (section 4.4), and which action confirms an unknown outcome. Registration rejects an encoding whose output cannot satisfy the declared limits.
 - **Compensation** names the reversing action, if one exists.
 - **PII fields** feed the redaction engine in section 9.
-- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17).
+- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17). *As built:* `connector_rate_buckets` holds one bucket per connection (scope `connection`, the default: connector, environment and connection) or per tenant (scope `tenant`), of `requests` tokens refilled evenly over `per`. A worker takes a token in the same transaction that records the call's intent, so a call that must wait is neither sent nor open: its task goes back to the queue until a token is due, without spending a retry. Scope `global` is refused until a platform-wide quota is needed.
 - **Input and output schemas** (JSON Schema) power canvas forms, code SDK types, and AI builder validation.
 - **Trigger correlation** maps inbound webhooks to waiting runs.
 
@@ -594,7 +594,7 @@ The same interface is exported to WASM through a thin host ABI, so a third-party
 
 ### 6.4 Versioning and testing
 
-- Connectors follow semver. Workflows pin a major version (`paystack@1`); minor and patch upgrades apply automatically to **new** runs only. Each run records the exact resolved versions in `RunStarted` and executes every step on them, so a run waiting days on an approval never switches connector code midway. Workers keep every version still referenced by a live run loaded; a version is unloaded only once no non-terminal run pins it.
+- Connectors follow semver. Workflows pin a major version (`paystack@1`); minor and patch upgrades apply automatically to **new** runs only. Each run records the exact resolved versions in `RunStarted` and executes every step on them, so a run waiting days on an approval never switches connector code midway. Workers keep every version still referenced by a live run loaded; a version is unloaded only once no non-terminal run pins it. *As built:* a worker resolves each step's connector by the version in `RunStarted` (`connector.Registry.Pinned`) and loads an uploaded connector's (`x_`, `p_`) pinned version on demand, even when a newer one is enabled or the pinned one is disabled for new runs. A built-in has only the version in the running binary, so a deploy moves runs to it; and a catalogue version that was revoked or uninstalled, or a partner's version no longer shared, gives way to the newest of its major, with a warning in the worker's log.
 - A major version change never auto-applies. The platform flags affected workflows and the AI builder proposes migrations.
 - Each connector ships recorded fixtures. CI replays them against handlers, and a nightly job runs live sandbox calls where providers offer test modes.
 - A contract-drift monitor compares live responses against output schemas and raises an alert when a provider changes shape; this feeds AI repair (section 12).

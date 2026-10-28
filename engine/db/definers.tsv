@@ -160,6 +160,7 @@ taskiem_platform_route_event(text,text,text)	@ISRAEL-DUFF (connectors)	part of: 
 taskiem_poll_targets()	@ISRAEL-DUFF (connectors)	The connector event triggers deployed in prod, one row per tenant, connector, trigger and connection (00189)
 taskiem_pool_stats()	@ISRAEL-DUFF (engine)	Queue depth by pool and queue, for metrics and `taskiem pools` (00120)
 taskiem_purge_run(uuid)	@ISRAEL-DUFF (engine)	part of: Triggers registered from published workflow versions (spec 8), and retention for approvals (00012)
+taskiem_purge_trigger_receipts()	@ISRAEL-DUFF (engine)	deletes trigger receipts older than the fixed 30-day dedup window, for every tenant; reads only received_at and takes no arguments, so it cannot clear a fresh receipt (00240)
 taskiem_put_plan(jsonb,text)	@ISRAEL-DUFF (engine)	Operators load a plan (taskiem billing plans --load) (00090)
 taskiem_queue_stats()	@ISRAEL-DUFF (engine)	Queue depth and age for metrics (spec 15.2), across tenants (00013)
 taskiem_reach_blocked(text,bytea)	@ISRAEL-DUFF (messaging)	Telegram told the bot it may not write to an account (the person blocked it) (00193)

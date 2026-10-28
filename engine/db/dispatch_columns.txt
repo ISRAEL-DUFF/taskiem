@@ -1082,6 +1082,7 @@ timers.lease_until
 timers.run_id
 timers.step_id
 timers.tenant_id
+trigger_receipts.received_at
 triggers.connection
 triggers.connector
 triggers.environment

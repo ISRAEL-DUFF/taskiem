@@ -199,7 +199,13 @@ func Run(ctx context.Context, script string, input any, host Host, lim Limits) (
 		}
 	}()
 
-	rt, err := qjs.New(qjs.Option{Context: ctx, CloseOnContextDone: true, MemoryLimit: lim.Memory, MaxStackSize: 1 << 20, Stdout: logs, Stderr: logs})
+	opt := qjs.Option{Context: ctx, CloseOnContextDone: true, MemoryLimit: lim.Memory, MaxStackSize: 1 << 20, Stdout: logs, Stderr: logs}
+	if t := host.Now; !t.IsZero() {
+		// Date is the run's logical time, as host.now() is, so a retry or a
+		// fork sees the same clock.
+		opt.Walltime = func() (int64, int32) { return t.Unix(), int32(t.Nanosecond()) } //nolint:gosec // nanoseconds fit
+	}
+	rt, err := qjs.New(opt)
 	if err != nil {
 		return res, fmt.Errorf("%w: %w", ErrScript, err)
 	}

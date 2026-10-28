@@ -36,6 +36,12 @@ func TestQuickBooksLinksInItsMode(t *testing.T) {
 		case "/revoke":
 			revokeType, revokeBody = r.Header.Get("Content-Type"), string(body)
 			revokeID, _, _ = r.BasicAuth()
+		case "/v3/company/9341453050298730/companyinfo/9341453050298730":
+			// The token is for this company only.
+			_, _ = io.WriteString(rw, `{"CompanyInfo":{"CompanyName":"Ledger Ltd","Country":"NG"}}`)
+		case "/v3/company/1111111111111111/companyinfo/1111111111111111":
+			rw.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(rw, `{"Fault":{"Error":[{"Message":"ApplicationAuthorizationFailed","code":"3100"}],"type":"AUTHORIZATION"}}`)
 		default:
 			http.NotFound(rw, r)
 		}
@@ -71,6 +77,24 @@ func TestQuickBooksLinksInItsMode(t *testing.T) {
 	if q.Get("client_id") != "ABdevclient" || q.Get("scope") != "com.intuit.quickbooks.accounting" {
 		t.Fatalf("consent query %v", q)
 	}
+	// A realmId changed on the way back names a company the token is not
+	// for: QuickBooks refuses it, nothing is saved, and the token goes back.
+	q = ow.startFor(t, owner, map[string]any{"connector": "quickbooks@1", "environment": "prod", "mode": "test"})
+	if back := ow.callback(t, url.Values{"code": {"intuit-code-0"}, "state": {q.Get("state")}, "realmId": {"1111111111111111"}}); back.Get("linked") != "" || back.Get("error") == "" {
+		t.Fatalf("another company's realm was linked: %v", back)
+	}
+	var routed int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM connection_app_accounts WHERE account_key = '1111111111111111'`).Scan(&routed); err != nil || routed != 0 {
+		t.Fatalf("the other company routes here: %d %v", routed, err)
+	}
+	mu.Lock()
+	if revokeBody == "" {
+		t.Error("the refused grant's token was not given back")
+	}
+	revokeType, revokeBody, revokeID = "", "", ""
+	mu.Unlock()
+
+	q = ow.startFor(t, owner, map[string]any{"connector": "quickbooks@1", "environment": "prod", "mode": "test"})
 	back := ow.callback(t, url.Values{"code": {"intuit-code-1"}, "state": {q.Get("state")}, "realmId": {"9341453050298730"}})
 	id := back.Get("linked")
 	if id == "" {

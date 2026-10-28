@@ -106,3 +106,15 @@ func (s *Scheduler) PurgeExpired(ctx context.Context, limit int) (int, error) {
 	}
 	return purged, nil
 }
+
+// purgeReceipts deletes trigger receipts past the 30-day dedup window, a
+// day of them per call, up to a month of backlog per pass.
+func (s *Scheduler) purgeReceipts(ctx context.Context) error {
+	for range 31 {
+		var n int64
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_purge_trigger_receipts()`).Scan(&n); err != nil || n == 0 {
+			return err
+		}
+	}
+	return nil
+}
