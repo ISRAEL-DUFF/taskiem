@@ -37,6 +37,8 @@ type Ops interface {
 type Dispatcher interface {
 	Offer(ctx context.Context, tenant uuid.UUID, reference string, in dispatch.OfferIn) (dispatch.OfferOut, error)
 	Release(ctx context.Context, tenant uuid.UUID, reference, actor string) (dispatch.Delivery, error)
+	PrepareBatch(ctx context.Context, tenant, batch uuid.UUID) (dispatch.Batch, error)
+	FinishBatch(ctx context.Context, tenant, batch uuid.UUID, results []dispatch.Result, cancel bool) (int, int, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly. ops
@@ -45,12 +47,14 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"list_riders":  connector.ActionFunc(a.list),
-		"get_rider":    connector.ActionFunc(a.get),
-		"add_rider":    connector.ActionFunc(a.add),
-		"retire_rider": connector.ActionFunc(a.retire),
-		"offer":        connector.ActionFunc(a.offer),
-		"release":      connector.ActionFunc(a.release),
+		"list_riders":     connector.ActionFunc(a.list),
+		"get_rider":       connector.ActionFunc(a.get),
+		"add_rider":       connector.ActionFunc(a.add),
+		"retire_rider":    connector.ActionFunc(a.retire),
+		"offer":           connector.ActionFunc(a.offer),
+		"release":         connector.ActionFunc(a.release),
+		"prepare_payouts": connector.ActionFunc(a.prepare),
+		"finish_payouts":  connector.ActionFunc(a.finish),
 	}}
 }
 
@@ -97,6 +101,67 @@ func (a *actions) offer(ctx context.Context, req connector.Request) (connector.R
 		res["delivery_id"] = out.Delivery.ID.String()
 	}
 	return connector.Response{Output: res}, nil
+}
+
+// prepare makes the payout batch (the one named, or this run's) and
+// answers who is paid what, with their bank accounts.
+func (a *actions) prepare(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, d, err := a.dispatcher(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	batch := c.Run
+	if s, ok := req.Input["batch_id"].(string); ok && s != "" {
+		if batch, err = uuid.Parse(s); err != nil {
+			return connector.Response{}, fmt.Errorf("batch_id is a payout batch's id: %w", effects.ErrFatal)
+		}
+	}
+	b, err := d.PrepareBatch(ctx, c.Tenant, batch)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	payouts := make([]any, len(b.Payouts))
+	for i, p := range b.Payouts {
+		payouts[i] = map[string]any{"payout_id": p.ID.String(), "rider": p.Rider, "amount_kobo": p.AmountKobo, "fees_kobo": p.FeesKobo, "owed_kobo": p.OwedKobo,
+			"deliveries": p.Deliveries, "bank_code": p.BankCode, "account_number": p.AccountNumber, "account_name": p.AccountName}
+	}
+	notPaid := make([]any, len(b.NotPaid))
+	for i, n := range b.NotPaid {
+		notPaid[i] = n
+	}
+	return connector.Response{Output: map[string]any{"batch_id": b.ID.String(), "payouts": payouts, "not_paid": notPaid, "total_kobo": b.TotalKobo,
+		"count": len(payouts)}}, nil
+}
+
+// finish records how each payout went, or that the batch was not approved.
+func (a *actions) finish(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, d, err := a.dispatcher(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	s, _ := req.Input["batch_id"].(string)
+	batch, err := uuid.Parse(s)
+	if err != nil {
+		return connector.Response{}, fmt.Errorf("batch_id is a payout batch's id: %w", effects.ErrFatal)
+	}
+	cancel, _ := req.Input["cancel"].(bool)
+	var results []dispatch.Result
+	list, _ := req.Input["results"].([]any)
+	for _, x := range list {
+		m, _ := x.(map[string]any)
+		id, err := uuid.Parse(fmt.Sprint(m["payout_id"]))
+		if err != nil {
+			continue
+		}
+		status, _ := m["status"].(string)
+		name, _ := m["account_name"].(string)
+		results = append(results, dispatch.Result{PayoutID: id, Status: status, AccountName: name})
+	}
+	paid, failed, err := d.FinishBatch(ctx, c.Tenant, batch, results, cancel)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"batch_id": batch.String(), "paid": paid, "failed": failed}}, nil
 }
 
 func (a *actions) release(ctx context.Context, req connector.Request) (connector.Response, error) {
@@ -274,6 +339,26 @@ func (l *Late) Offer(ctx context.Context, tenant uuid.UUID, reference string, in
 		return dispatch.OfferOut{}, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
 	}
 	return d.Offer(ctx, tenant, reference, in)
+}
+
+func (l *Late) PrepareBatch(ctx context.Context, tenant, batch uuid.UUID) (dispatch.Batch, error) {
+	l.mu.RLock()
+	d := l.dis
+	l.mu.RUnlock()
+	if d == nil {
+		return dispatch.Batch{}, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return d.PrepareBatch(ctx, tenant, batch)
+}
+
+func (l *Late) FinishBatch(ctx context.Context, tenant, batch uuid.UUID, results []dispatch.Result, cancel bool) (int, int, error) {
+	l.mu.RLock()
+	d := l.dis
+	l.mu.RUnlock()
+	if d == nil {
+		return 0, 0, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return d.FinishBatch(ctx, tenant, batch, results, cancel)
 }
 
 func (l *Late) Release(ctx context.Context, tenant uuid.UUID, reference, actor string) (dispatch.Delivery, error) {

@@ -54,6 +54,14 @@ theme. Forms only: the page refreshes itself, with no script. */}}
 
 {{/* Paying an order or booking by bank transfer from its status page
 (N3); the same in every theme. A form only: the page refreshes itself. */}}
+{{define "orderrate"}}<section class="rate" aria-labelledby="sf-rate-h">
+{{if .Given}}<p class="notice" role="status" id="sf-rate-h">Thank you. You rated the delivery {{.Given}} of 5.</p>
+{{else}}<h2 id="sf-rate-h">How was the delivery?</h2>
+<form method="post" action="{{.Action}}" class="rate-row">
+{{range .Stars}}<button class="btn" type="submit" name="rating" value="{{.}}" aria-label="{{.}} of 5">{{.}}</button>
+{{end}}</form>
+<p class="hint">1 is poor, 5 is very good. Only {{.Business}} sees it.</p>{{end}}
+</section>{{end}}
 {{define "ordertransfer"}}<section class="inv-pay" aria-labelledby="sf-pay-h">
 <h2 id="sf-pay-h">Pay by bank transfer</h2>
 {{with .Account}}<div class="inv-acct" role="status">

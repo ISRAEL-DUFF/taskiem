@@ -32,6 +32,8 @@ type statusData struct {
 	// page after that many seconds while an account is coming or open.
 	Transfer     *transferView
 	RefreshAfter int
+	// Rate asks how a delivered order's delivery was (dispatch D5).
+	Rate *rateView
 	// pay is the waiting order's transfer, read before the words.
 	pay  *OrderPayment
 	Home string
@@ -169,6 +171,11 @@ func (s *Server) statusPage(ctx context.Context, site Site, ref, key string, o O
 	}
 	if o.Status == "awaiting_payment" {
 		s.payByTransfer(&d, ref, key, prefix)
+	}
+	if o.Kind == "order" && o.Status == "completed" {
+		if err := s.rateDelivery(ctx, &d, ref, key, prefix); err != nil {
+			return d, err
+		}
 	}
 	d.Title = d.Headline
 	return d, nil

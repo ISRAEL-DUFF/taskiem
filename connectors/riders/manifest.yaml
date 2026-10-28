@@ -130,3 +130,68 @@ actions:
         reference: { type: string }
         status:    { type: string }
         rider:     { type: string }
+  prepare_payouts:
+    title: Add up what each rider is due
+    description: Makes a payout batch once (the one named, or this run's) with each rider's fees for deliveries since their last payout, less the cash they owe; riders whose cash covers their fees are settled with nothing to pay, and riders with no bank account are named in not_paid. Each payout carries the rider's bank details for name enquiry and payment. The same batch again answers the same payouts.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        batch_id: { type: string, description: "A batch Riders > Pay made; empty for this run's" }
+    output:
+      type: object
+      properties:
+        batch_id:   { type: string }
+        payouts:
+          type: array
+          items:
+            type: object
+            properties:
+              payout_id:      { type: string }
+              rider:          { type: string }
+              amount_kobo:    { type: integer }
+              fees_kobo:      { type: integer }
+              owed_kobo:      { type: integer }
+              deliveries:     { type: integer }
+              bank_code:      { type: string }
+              account_number: { type: string }
+              account_name:   { type: string }
+        not_paid:   { type: array, items: { type: string } }
+        total_kobo: { type: integer }
+        count:      { type: integer }
+  finish_payouts:
+    title: Record how the payout went
+    description: Records each payout as paid (the cash the rider owed is netted from it), failed, or pending (the bank has not confirmed); a failed payout's deliveries, or the whole batch's when cancel (not approved), are paid next time. The bank's name for an account is kept.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [batch_id]
+      properties:
+        batch_id: { type: string }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              payout_id:    { type: string }
+              status:       { type: string, enum: [paid, failed, pending] }
+              account_name: { type: string }
+        cancel:   { type: boolean }
+    output:
+      type: object
+      properties:
+        batch_id: { type: string }
+        paid:     { type: integer }
+        failed:   { type: integer }

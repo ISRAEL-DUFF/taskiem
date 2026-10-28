@@ -36,6 +36,8 @@ CREATE TABLE dispatch_settings (
   proof                boolean NOT NULL DEFAULT false,
   owe_limit_kobo       bigint NOT NULL DEFAULT 2000000 CHECK (owe_limit_kobo >= 0),
   rating_mark          numeric(2,1) NOT NULL DEFAULT 3.0 CHECK (rating_mark BETWEEN 1 AND 5),
+  -- The pay-riders workflow Riders > Pay made (from pay-riders-weekly).
+  payout_workflow_id   uuid REFERENCES workflows(id),
   updated_at           timestamptz NOT NULL DEFAULT now()
 );
 

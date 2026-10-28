@@ -12,10 +12,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/connectors/iswallet"
+	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
@@ -228,4 +232,80 @@ func TestDispatchInChat(t *testing.T) {
 		t.Fatalf("accept after release: %+v", got)
 	}
 	_ = ctx
+}
+
+// TestRidersPay (dispatch D5): Riders > Pay shows what each rider is due,
+// keeps their bank account sealed and shown by its last digits, sets up
+// the weekly payout from its template and starts it now.
+func TestRidersPay(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	// Riders are paid from the Taskiem wallet.
+	f := newFakeWallets(t)
+	ops := &ridersconn.Late{}
+	ops.Set(w.srv.Riders)
+	ops.SetDispatch(w.srv.Dispatch)
+	for _, c := range []*connector.Connector{iswallet.New(iswallet.Options{BaseURL: f.srv.URL, TestURL: f.srv.URL}), ridersconn.New(ops)} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.env.Vault.Platform = secrets.PlatformClients{"iswallet": {"test": {"api_key": "isw_platform_test", "shared_client": "true"}}}
+	ada.must(201, "POST", "/v1/settings/receive-money", map[string]any{"business_email": "ada@ada.test", "bvn": "22212345678"})
+	if v := ada.must(200, "GET", "/v1/riders/pay", nil); len(v["lines"].([]any)) != 0 || v["workflow_id"] != nil {
+		t.Fatalf("nothing yet: %v", v)
+	}
+	const musa = "+2348031110001"
+	path := strings.TrimPrefix(ada.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+	loc, _ := url.Parse(w.page(t, path+"/whatsapp", nil).Header().Get("Location"))
+	w.whatsapp(t, musa, loc.Query().Get("text"))
+	m := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})["rider"].(map[string]any)
+
+	ref := w.order(t, "none")
+	ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+	d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any)
+	id := uuid.MustParse(d["id"].(string))
+	for _, a := range []string{dispatch.Accept, dispatch.PickedUp, dispatch.Arrived, dispatch.Delivered} {
+		if _, err := w.srv.Dispatch.Press(ctx, w.biz, id, a); err != nil {
+			t.Fatalf("%s: %v", a, err)
+		}
+	}
+	v := ada.must(200, "GET", "/v1/riders/pay", nil)
+	lines := v["lines"].([]any)
+	if len(lines) != 1 || lines[0].(map[string]any)["net_kobo"] != float64(100000) || lines[0].(map[string]any)["rider"] != "Musa Bello" {
+		t.Fatalf("lines %v", v)
+	}
+
+	ada.must(400, "PUT", "/v1/riders/"+m["id"].(string)+"/bank", map[string]any{"bank_code": "058", "account_number": "12"})
+	ada.must(404, "PUT", "/v1/riders/"+uuid.NewString()+"/bank", map[string]any{"bank_code": "058", "account_number": "0123456789"})
+	if b := ada.must(200, "PUT", "/v1/riders/"+m["id"].(string)+"/bank", map[string]any{"bank_code": "058", "bank_name": "GTBank", "account_number": "0123456789"}); b["bank"] != "GTBank, ending 6789" {
+		t.Fatalf("bank %v", b)
+	}
+	if r := ada.must(200, "GET", "/v1/riders", nil)["riders"].([]any)[0].(map[string]any); r["bank"] != "GTBank, ending 6789" {
+		t.Fatalf("rider %v", r)
+	}
+
+	// Paying now waits for the setup.
+	ada.must(409, "POST", "/v1/riders/pay", nil)
+	ada.must(400, "PUT", "/v1/riders/pay/setup", map[string]any{"pay_day": 9, "pay_time": "17:00"})
+	ada.must(400, "PUT", "/v1/riders/pay/setup", map[string]any{"pay_day": 5, "pay_time": "5pm"})
+	st := ada.must(200, "PUT", "/v1/riders/pay/setup", map[string]any{"pay_day": 5, "pay_time": "17:30"})
+	wf := st["workflow_id"].(string)
+	var cron string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT cron FROM triggers WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&cron); err != nil || cron != "30 17 * * 5" {
+		t.Fatalf("the weekly payout: %q %v", cron, err)
+	}
+	// Changing it is a new version of the same workflow.
+	if again := ada.must(200, "PUT", "/v1/riders/pay/setup", map[string]any{"pay_day": 1, "pay_time": "09:00"}); again["workflow_id"] != wf || again["version"] != float64(2) {
+		t.Fatalf("again %v", again)
+	}
+	if v := ada.must(200, "GET", "/v1/riders/pay", nil); v["workflow_id"] != wf {
+		t.Fatalf("view %v", v)
+	}
+	run := ada.must(202, "POST", "/v1/riders/pay", nil)
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs r JOIN trigger_receipts t ON t.run_id = r.id
+		WHERE r.id = $1 AND r.workflow_id = $2 AND t.dedup_key = $3`, run["run_id"], wf, "riders-pay:"+run["batch_id"].(string)).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("the run: %d %v", n, err)
+	}
 }

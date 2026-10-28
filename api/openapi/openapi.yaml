@@ -5542,6 +5542,204 @@ paths:
                           format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/riders/pay:
+    get:
+      operationId: ridersPay
+      tags:
+      - Riders
+      summary: What riders are due
+      description: |
+        Each rider's fees for deliveries since their last payout, the cash they owe from the door, and what a payout pays them
+        (the fees less the cash, never below nothing); the recent payouts; and the pay-riders workflow once set up.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: What riders are due
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lines, payouts, workflow_id]
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rider_id:
+                          type: string
+                          format: uuid
+                        rider:
+                          type: string
+                        deliveries:
+                          type: integer
+                        fees_kobo:
+                          type: integer
+                        owed_kobo:
+                          type: integer
+                        net_kobo:
+                          type: integer
+                        bank:
+                          type: string
+                  payouts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RiderPayout'
+                  workflow_id:
+                    type: [string, 'null']
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: payRiders
+      tags:
+      - Riders
+      summary: Pay riders now
+      description: |
+        Starts the pay-riders workflow now, as its weekly schedule does: the bank checks each account's name, the approver approves
+        the batch, and each rider is paid once. 409 until it is set up and published.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,run.start
+      x-taskiem-all-environments: true
+      responses:
+        '202':
+          description: The run started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id, batch_id]
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  batch_id:
+                    type: string
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/pay/setup:
+    put:
+      operationId: setupRidersPay
+      tags:
+      - Riders
+      summary: Set up paying riders weekly
+      description: |
+        Makes the pay-riders workflow from the pay-riders-weekly template (a new version when it exists) and publishes it, which
+        four-eyes publishing holds for a second person. Riders are paid from the business's Taskiem wallet unless another payments
+        account is chosen; 409 with neither.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,workflow.publish
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pay_day, pay_time]
+              properties:
+                pay_day:
+                  type: integer
+                  minimum: 0
+                  maximum: 6
+                  description: 0 is Sunday, 5 Friday
+                pay_time:
+                  type: string
+                  pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+                  description: Lagos time
+                rail_connection:
+                  type: string
+                  description: A connection that can pay a bank account; the Taskiem wallet when left out
+                funding_account:
+                  type: string
+                  description: The wallet the money comes from, for rails holding several
+                approver_role:
+                  type: string
+                  description: The role that approves each payout (owner when left out)
+      responses:
+        '200':
+          description: Set up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workflow_id, version, waiting]
+                properties:
+                  workflow_id:
+                    type: string
+                    format: uuid
+                  version:
+                    type: integer
+                  waiting:
+                    type: boolean
+                    description: True while four-eyes publishing waits for a second person
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/bank:
+    put:
+      operationId: putRiderBank
+      tags:
+      - Riders
+      summary: Set a rider's bank account
+      description: The account their payouts go to, sealed under the rider's personal data; their bank confirms the name at the first payout.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [bank_code, account_number]
+              properties:
+                bank_code:
+                  type: string
+                bank_name:
+                  type: string
+                  maxLength: 60
+                account_number:
+                  type: string
+                  pattern: '^[0-9]{10}$'
+      responses:
+        '200':
+          description: The account as it may be shown
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bank]
+                properties:
+                  bank:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/riders/{id}/remit:
     post:
       operationId: riderRemit
@@ -23873,6 +24071,12 @@ components:
         bank:
           type: string
           description: The account their payouts go to, as it may be shown
+        rating:
+          type: [number, 'null']
+          description: The average customers gave their deliveries (1 to 5), null before any
+        ratings:
+          type: integer
+          description: How many of their deliveries were rated
         presence:
           type: object
           required: [state]
@@ -23897,6 +24101,29 @@ components:
           format: date-time
         retired_at:
           $ref: '#/components/schemas/NullableTimestamp'
+    RiderPayout:
+      type: object
+      properties:
+        payout_id:
+          type: string
+          format: uuid
+        rider_id:
+          type: string
+          format: uuid
+        rider:
+          type: string
+        deliveries:
+          type: integer
+        fees_kobo:
+          type: integer
+        owed_kobo:
+          type: integer
+          description: The cash they owed, netted from it
+        amount_kobo:
+          type: integer
+        status:
+          type: string
+          enum: [pending, paid, failed, cancelled]
     RiderInput:
       type: object
       additionalProperties: false

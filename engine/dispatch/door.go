@@ -165,7 +165,13 @@ func (d *Dispatch) RemitTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UU
 	if how != "cash" && how != "transfer" {
 		return 0, fmt.Errorf("%w: a remittance is cash or transfer", ErrInvalid)
 	}
-	if entry == nil && d.MoneyLog != nil {
+	return d.remitTx(ctx, tx, tenant, rider, amount, how, entry, nil, by)
+}
+
+// remitTx counts amount against what a rider owes, oldest first: a money
+// log entry's (cash handed in, a transfer), or netted from a payout.
+func (d *Dispatch) remitTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UUID, amount int64, how string, entry, payout *uuid.UUID, by string) (int64, error) {
+	if payout == nil && entry == nil && d.MoneyLog != nil {
 		// Notes handed in are cash in the money log, as a school's are.
 		id, _, err := d.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "cash", Status: "settled", Channel: "cash",
 			Reference: "remittance:" + uuid.Must(uuid.NewV7()).String(), AmountKobo: &amount, Source: "entered", Description: "Cash handed in by a rider",
@@ -204,8 +210,8 @@ func (d *Dispatch) RemitTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UU
 			break
 		}
 		part := min(left, o.left)
-		if _, err := tx.Exec(ctx, `INSERT INTO rider_remittance_parts (id, tenant_id, remittance_id, entry_id, how, amount_kobo, by) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			uuid.Must(uuid.NewV7()), tenant, o.id, entry, how, part, by); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO rider_remittance_parts (id, tenant_id, remittance_id, entry_id, payout_id, how, amount_kobo, by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			uuid.Must(uuid.NewV7()), tenant, o.id, entry, payout, how, part, by); err != nil {
 			return 0, err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE rider_remittances SET paid_kobo = paid_kobo + $2, settled_at = CASE WHEN paid_kobo + $2 = amount_kobo THEN now() END

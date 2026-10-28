@@ -34,6 +34,8 @@ type world struct {
 	delivered []string
 	issued    int
 	n         int
+	// keys are the orders' status keys, by reference.
+	keys map[string]string
 }
 
 func newWorld(t *testing.T) *world {
@@ -41,7 +43,7 @@ func newWorld(t *testing.T) *world {
 	ctx := context.Background()
 	hash := bytes.Repeat([]byte{8}, 32)
 	msgs := &sender.Queue{Vault: env.Vault, HashKey: hash}
-	w := &world{t: t, env: env}
+	w := &world{t: t, env: env, keys: map[string]string{}}
 	w.key, _ = storefront.InboxKey(bytes.Repeat([]byte{4}, 32))
 	w.orders = &storefront.Orders{Pool: env.DB.App, Vault: env.Vault, InboxKey: w.key, PreviewDomain: "shops.test", Messages: msgs,
 		Start: env.Store.Start, Signal: env.Store.DeliverSignalOnce, MoneyLog: &moneylog.Log{Pool: env.DB.App, PII: env.Vault}}
@@ -104,6 +106,7 @@ func (w *world) order(zone, payment string) string {
 	ctx := context.Background()
 	ref := storefront.NewReference("ada-stores")
 	key, hash := storefront.NewStatusKey()
+	w.keys[ref] = key
 	w.n++
 	phone := fmt.Sprintf("+23480399%05d", w.n+int(time.Now().UnixNano()%50000)*2)
 	sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola Ade", Phone: phone, Address: "12 Admiralty Way",

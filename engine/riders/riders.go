@@ -99,6 +99,9 @@ type Rider struct {
 	// Bank is the account their payouts go to, as it may be shown ("Wema
 	// Bank, ending 4567, MUSA BELLO"); "" until set.
 	Bank string `json:"bank,omitempty"`
+	// Rating is the average customers gave their deliveries, of Ratings.
+	Rating  *float64 `json:"rating"`
+	Ratings int      `json:"ratings"`
 	// InvitedAt is when the tap-in link was last sent.
 	InvitedAt *time.Time `json:"invited_at"`
 	CreatedAt time.Time  `json:"created_at"`
@@ -160,6 +163,8 @@ type In struct {
 
 const riderCols = `r.id, r.phone_hash, r.phone, r.name, r.zones, r.fee_kobo, r.active, r.invited_at, r.created_at, r.retired_at,
 	r.not_answering_since IS NOT NULL, COALESCE(r.bank_shown, ''),
+	(SELECT avg(x.rating)::float8 FROM deliveries x WHERE x.rider_id = r.id AND x.rating IS NOT NULL),
+	(SELECT count(*) FROM deliveries x WHERE x.rider_id = r.id AND x.rating IS NOT NULL),
 	COALESCE((SELECT ch.channel FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
 	  WHERE c.tenant_id = r.tenant_id AND c.phone_hash = r.phone_hash AND ch.stopped_at IS NULL
 	  ORDER BY ch.linked_at DESC LIMIT 1), 'sms')`
@@ -174,7 +179,7 @@ func (r *Riders) scan(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows pgx
 	list, err := pgx.CollectRows(rows, func(c pgx.CollectableRow) (row, error) {
 		var v row
 		err := c.Scan(&v.x.ID, &v.x.phoneHash, &v.phone, &v.name, &v.x.Zones, &v.x.FeeKobo, &v.x.Active, &v.x.InvitedAt, &v.x.CreatedAt,
-			&v.x.RetiredAt, &v.x.NotAnswering, &v.x.Bank, &v.x.Reached)
+			&v.x.RetiredAt, &v.x.NotAnswering, &v.x.Bank, &v.x.Rating, &v.x.Ratings, &v.x.Reached)
 		return v, err
 	})
 	if err != nil {
