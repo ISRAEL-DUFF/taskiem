@@ -18,7 +18,7 @@ Taskiem has the pieces: the owner's own tables in their Xenibase project, **kept
 4. **The low list comes from the table, every morning**, from each item's reorder level, and the Google Sheet template is kept for businesses that keep stock in a sheet.
 5. **Suppliers are people outside the business.** A purchase order is drafted from the low list (quantities up to each item's target, the last cost paid), the owner approves it under the business's policy, and it goes to the supplier in chat with **Confirm** and **Change**; receiving the goods (`received 50 cartons of Indomie`) raises stock with a movement and closes the order; what was paid is an expense in the money log, or a payout under approval when paid through Taskiem.
 6. **Counts and shrinkage are first-class.** A stock count by chat posts each difference as an adjustment with a reason; the daily close and summary show takings against stock movements and the shrinkage; leaks open for a sale with no stock, a negative count, and a count difference above the owner's limit.
-7. **Nothing here needs a storefront**: a shop with no public page gets the products table from `add 50 cartons of Indomie at 8,500` and works entirely in chat.
+7. **Nothing here needs a storefront, and nothing needs turning on**: a shop with no public page gets the products table from `add 50 cartons of Indomie at 8,500` or from the Stock page, and has stock from then on; chat and the web app's Stock page are two doors to one engine path.
 
 ## Alternatives considered
 

@@ -6,6 +6,10 @@ Status: **Draft** 28 October 2026, for review · Decision: [0056](../decisions/0
 
 A shop keeps its stock from WhatsApp: `add 50 cartons of Indomie at 8,500` puts an item in the catalogue table or tops it up, `sold 3 bags of rice 45,000 cash` records the sale in the money log and lowers the stock, `how many bags of rice do I have?` answers from the table, every morning the owner gets the items at or below their reorder level, a purchase order is drafted to the supplier and sent on WhatsApp after the owner approves, `received 50 cartons of Indomie` raises the stock and closes the order, and a stock count posts the differences. Every change is a movement Taskiem keeps beside the owner's table, so a count can always be explained. Nothing needs a storefront or a laptop.
 
+Chat is the first door; everything is also on the web, on a **Stock** page in the Storefront section, through the same engine path, so the two never disagree.
+
+**Availability.** Stock is a feature of the catalogue, not an area to turn on: a business has it the moment it has items with a count, from chat or from the Stock page, which makes the products table when there is none. The Start page offers **Keep my stock** to a business with no items, as it offers **Make my page**. Its only switches are settings with defaults (reorder levels, the evening total's time, the leak limits). On every plan unless billing says otherwise.
+
 Five milestones, K1 to K5, one PR each.
 
 ## 2. Words used here
@@ -37,7 +41,7 @@ Five milestones, K1 to K5, one PR each.
 - **Movements**: a kept table `stock_movements` (`item_id`, `item`, `change`, `after`, `reason` one of `order`, `sale`, `received`, `adjustment`, `count`, `by`, `at`, `reference` naming the order, sale, purchase or count), written by Taskiem alone in the same transaction as the table change, once per change under an idempotency key; the table is changed only while it still holds the count that was read (the storefront's rule, lifted into `engine/stock`). The storefront's `decide` writes an `order` movement.
 - `stock@1` platform connector: `list_items` (low, by supplier, by name), `get_item`, `adjust` (change, reason, note), `receive`, `count`, `movements` (item, since). Permissions: `table.edit` on the catalogue's table for changes, `table.read` to see, as the catalogue has today.
 - **Chat**: `add 50 cartons of Indomie at 8,500` (an item, or stock on an item, with the cost price); `stock indomie`, `how many bags of rice do I have?` (the count, the unit, the last movement); `stock` (the low list); `adjust rice -2 spoilt`. Items are found as `price` and `hide` find them today, with a numbered list when several match. Each change is shown and written on **yes**.
-- **Web**: the catalogue page shows the stock columns and each item's movements.
+- **Web**: a **Stock** page (Storefront > Stock): items with stock, unit, cost price, reorder level, target and supplier, edited inline (each edit a movement with a reason, written through `engine/stock`); the low list at the top; each item's movements, and a movements list filtered by item, reason and day; **Add items** making the products table when there is none. The catalogue page shows the stock columns too.
 
 ## 5. Sales (K2)
 
@@ -45,6 +49,7 @@ Five milestones, K1 to K5, one PR each.
 - **Voice notes**: where the beta is on, a note is transcribed and read as the same sentence, and the reply says what was heard before **yes**.
 - **The day's total**: at the business's closing time (the storefront's hours, else 21:00 Lagos), the owner is told today's sales: the total, by cash, transfer and POS, how many sales, the top items, and the items that went below their reorder level; in the daily summary the next morning the same line sits beside the money log's takings.
 - **POS sales without items**: a terminal's sale is money, not items. When the business has stock, a `pos.sale` with no sale by chat within the day is listed in the evening ("3 terminal sales, ₦21,500, with no items recorded") so the owner can say what was sold or leave it; nothing is guessed.
+- **Web**: **Record a sale** on the Stock page (items, quantities, amount, how paid), today's sales and the evening total, and the terminal sales with no items beside them with **Say what was sold**.
 - `stock@1` `record_sale` for workflows; the storefront's orders unchanged.
 
 ## 6. Reorders, suppliers and purchase orders (K3)
@@ -54,11 +59,12 @@ Five milestones, K1 to K5, one PR each.
 - **Purchase orders**: from the low list, the owner (or the template) drafts an order per supplier: items, quantities, the last cost price, the total; it is an approval under the business's policy (the owner approves their own small ones; four-eyes above a limit the owner sets); approved, it goes to the supplier in chat ("[Ada Stores] Order: 50 cartons Indomie, 20 bags rice. Confirm?") with **Confirm** and **Change** (a counter-offer by text), or by SMS with the words. The order's status: drafted, sent, confirmed, part received, received, cancelled.
 - **Receiving**: `received 50 cartons of Indomie` (against the open order from that supplier, else a plain receipt) raises the stock with a `received` movement, updates the cost price, closes the order or leaves it part received; `received` from the web too.
 - **Paying**: a purchase paid in cash or by transfer is an **expense** in the money log naming the supplier and the order (recorded with the receipt, or when the owner says `paid Dangote 425,000 transfer`); a purchase paid through Taskiem is a payout to the supplier's bank account under approval, matched to the order. Supplier credit (buy now, pay later) shows as owed to the supplier in the summary.
+- **Web**: **Suppliers** (beside Riders) and **Purchase orders** on the Stock page: draft from the low list, approve, send, receive in part or full, mark paid.
 - `stock@1`: `low_items`, `draft_purchase`, `send_purchase`, `receive`, `list_purchases`.
 
 ## 7. Counts, shrinkage and leaks (K4)
 
-- **A count by chat**: `count rice 12, indomie 40` (or `count` to be asked item by item, or a CSV on the web): each difference from the table becomes a `count` movement with the owner's reason, shown first and written on **yes**; a count of everything closes a counting period.
+- **A count by chat**: `count rice 12, indomie 40` (or `count` to be asked item by item, or **Count** on the Stock page: a sheet to fill item by item, or a CSV): each difference from the table becomes a `count` movement with the owner's reason, shown first and written on **yes**; a count of everything closes a counting period.
 - **Shrinkage**: the daily close and the monthly email show, per period, stock received against sold and counted out, in units and at cost; a line per item with the largest loss.
 - **Leaks** (as money leaks, closed with a reason): a sale of more than the stock; a negative count; a count difference above the owner's limit; an item below its reorder level for more than a week with no order; a purchase order confirmed and not received after its expected days.
 
@@ -72,7 +78,7 @@ Five milestones, K1 to K5, one PR each.
 
 | Id | Milestone | Size | Done when |
 | --- | --- | --- | --- |
-| K1 | The stock record: the mapped columns, `stock_movements`, `engine/stock` with the once-only rule lifted from orders, `stock@1` reads and adjustments, `add`/`stock`/`how many`/`adjust` in chat, the catalogue page's stock and movements | M | `add 50 cartons of Indomie at 8,500` makes or tops up the item with a movement; an order accepted writes an `order` movement; a retried adjustment moves stock once; the count is always the sum of its movements |
+| K1 | The stock record: the mapped columns, `stock_movements`, `engine/stock` with the once-only rule lifted from orders, `stock@1` reads and adjustments, `add`/`stock`/`how many`/`adjust` in chat, the Stock page with inline edits and movements, **Keep my stock** on the Start page | M | `add 50 cartons of Indomie at 8,500` makes or tops up the item with a movement; an order accepted writes an `order` movement; a retried adjustment moves stock once; the count is always the sum of its movements |
 | K2 | Sales: `sold …` by chat and voice note, the money log entry and the movements in one transaction, transfer and POS sales matched to the rail's money, the evening total, terminal sales with no items listed | M | A cash sale lowers stock and is in the money log; a POS sale by chat matches the terminal's event once; the evening message totals the day by cash, transfer and POS |
 | K3 | Reorders, suppliers and purchase orders: reorder levels, the morning low list, suppliers, orders drafted, approved and sent with Confirm, received in part or full, paid as an expense or a payout | M | A low item becomes a drafted order, approved, sent, confirmed by the supplier's tap, received with the stock raised and the cost updated, and paid as an expense |
 | K4 | Counts, shrinkage and leaks: counts by chat and CSV, adjustments with reasons, shrinkage in the close and the monthly email, the five leaks | S | A count posts the differences with reasons; the close shows shrinkage at cost; a sale beyond stock raises a leak |
@@ -89,7 +95,7 @@ Order: K1 to K5, one PR each.
 | Money | A cash sale is one money log entry; a POS sale by chat matches one `pos.sale` once; a purchase paid is one expense naming the order | `engine/moneylog`, `api` |
 | Chat | The sentences in the five languages, forgiving numbers and units, the numbered list on ambiguity, voice notes with the fake transcriber | `api`, `engine/plain` |
 | Suppliers | A Confirm works once from the supplier's contact only; Change carries the counter-offer back | `api` |
-| Web | The catalogue's stock columns and movements, Suppliers, purchase orders, the count upload | Playwright |
+| Web | The Stock page: items and inline edits as movements, the low list, Record a sale, Suppliers, purchase orders, Count by sheet and CSV, movements; the Start page's offer | Playwright |
 
 ## 11. Risks and open questions
 
