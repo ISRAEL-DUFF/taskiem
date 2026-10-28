@@ -204,7 +204,7 @@ The owner sets two thresholds under **Schools > Settings**, in naira:
 
 | Threshold | Applies to | Meaning |
 | --- | --- | --- |
-| **Cash threshold** | Cash and transfer postings | At or above it a posting waits for a second person. **0 makes every posting wait**; "no second person needed" (empty) lets the bursar post anything |
+| **Cash threshold** | Cash and transfer postings, and money a person entered on Money (cash, or a statement line uploaded) matched to an invoice | At or above it a posting, or such a match, waits for a second person. **0 makes every posting wait**; "no second person needed" (empty) lets the bursar post anything |
 | **Discount threshold** | Standing discounts, discount amendments and term invoices carrying such a discount | At or above it a discount waits ([discounts](#discounts)); 0 or empty: none |
 
 A posting or discount at or above its threshold is **recorded as a request** and nothing else: it is not on the child's fees, not in the money log, not on the invoice. The request goes to everyone who may approve for the school (`school.approve`: owners, and custom roles given it) under **Approvals** in the web app, and on the WhatsApp or Telegram they linked to Taskiem, with **Approve** and **Decline** buttons, as a run's approval does ([governance](governance.md#school-requests)). Each request shows what was asked (the amount, the student by admission number and class, how the money was paid, the discount's kind and reason) and who asked.
@@ -212,6 +212,7 @@ A posting or discount at or above its threshold is **recorded as a request** and
 - **Four-eyes, always.** The person who asked never decides their own request, whatever their role: an owner who posts ₦60,000 at the desk waits for another owner. The request says "You asked for this, so a second person decides it".
 - **Approve** does exactly what was asked, once: the cash is posted (entry, parts, receipts), the discount given, the invoice amended, the held term invoice made. A request decided twice, or by two people at once, is refused the second time.
 - **Decline** needs a reason, and changes nothing; the reason is kept with the request.
+- **Money entered by hand is the same money.** Cash entered on Money, or a line of a bank statement uploaded there, is a person's word, not the bank's: matched by hand (or by confirming a suggestion, in the web app or in chat) to one of the school's invoices when it is at or above the cash threshold, the match is recorded as a request (`cash_match`; the API answers 202, `code: needs_approval`) and nothing counts towards the invoice until a second person approves it; approved, the match is made as it was asked. Automatic matching never counts such money on its own, and it is never matched to an invoice's account number without a person. Money a payment service reported (its notice, the look-back) is not held.
 - Either way the requester is told in their notifications, and the decision is in the audit log (`school.approval.decide`, with who, what and how it was decided; `school.approval.request` records the asking).
 
 A pending request is listed on Payments (and, for a discount, under the student) until it is decided. One not decided within a week stops being sent to approvers' phones; it still waits in the web app.

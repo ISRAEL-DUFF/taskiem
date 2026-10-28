@@ -34,11 +34,17 @@ import (
 // exactly once, under the row's lock) or declines it with a reason. A
 // standing discount or a discount amendment at or above the discount
 // threshold, and a term invoice held for such a discount, wait the same
-// way, and are applied on approval.
+// way, and are applied on approval. So does money a person entered on
+// Money, matched by hand to an invoice at or above the cash threshold
+// (KindCashMatch, recorded by engine/matching): approval makes the match.
 
 // Kinds of request.
 const (
-	KindCashPosting       = "cash_posting"
+	KindCashPosting = "cash_posting"
+	// KindCashMatch is money a person entered on Money (cash, or a
+	// statement line), matched by hand to an invoice at or above the cash
+	// threshold (matching.Held).
+	KindCashMatch         = matching.RequestKind
 	KindDiscount          = "discount"
 	KindDiscountAmendment = "discount_amendment"
 	KindTermInvoice       = "term_invoice"
@@ -137,7 +143,7 @@ func (e *ApprovalNeeded) Error() string {
 
 func (e *ApprovalNeeded) Unwrap() error { return ErrNeedsApproval }
 
-var kindWords = map[string]string{KindCashPosting: "a cash posting", KindDiscount: "a discount", KindDiscountAmendment: "a discount on an invoice", KindTermInvoice: "a term invoice with a discount"}
+var kindWords = map[string]string{KindCashPosting: "a cash posting", KindCashMatch: "a match of money entered by hand", KindDiscount: "a discount", KindDiscountAmendment: "a discount on an invoice", KindTermInvoice: "a term invoice with a discount"}
 
 // KindWords is a request's kind in plain words.
 func KindWords(kind string) string { return kindWords[kind] }
@@ -558,6 +564,8 @@ type Decision struct {
 	parts   []matching.CountedPart
 	paid    *invoicing.Invoice
 	send    *uuid.UUID
+	// matched is what an approved match does once it commits.
+	matched func(context.Context) error
 }
 
 // Decide approves or declines a pending request, once, by someone other
@@ -628,6 +636,24 @@ func (s *Schools) apply(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, d *Dec
 		}
 		d.parts, err = s.post(ctx, tx, tenant, p.ID, st, p.AmountKobo, str(p.Details, "how"), when, str(p.Details, "note"), p.RequestedBy)
 		return err
+	case KindCashMatch:
+		// The match as its requester asked for it, made now.
+		sp, after, err := s.matcher().ApproveHeld(ctx, tx, tenant, p.Details, p.RequestedBy)
+		if err != nil {
+			return err
+		}
+		d.matched = after
+		res := PostingResult{Parts: []PostedPart{}}
+		if id, err := uuid.Parse(str(p.Details, "entry_id")); err == nil {
+			res.EntryID = &id
+		}
+		for i, x := range sp.Parts {
+			if x.Invoice != nil {
+				res.Parts = append(res.Parts, PostedPart{InvoiceID: x.Invoice.ID, Number: x.Invoice.Number, AmountKobo: sp.PartKobo[i]})
+			}
+		}
+		res.CreditKobo = sp.CreditKobo
+		return s.finish(ctx, tx, tenant, p.ID, res)
 	case KindDiscount:
 		in := DiscountIn{Kind: str(p.Details, "kind"), Reason: str(p.Details, "reason")}
 		if v, ok := p.Details["percent"].(float64); ok {
@@ -760,6 +786,11 @@ func (s *Schools) tellRequester(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		n.Link = "/schools/students/" + p.StudentID.String()
 	case KindDiscountAmendment:
 		n.Link = "/invoices/" + p.InvoiceID.String()
+	case KindCashMatch:
+		n.Link = "/invoices/match"
+		if p.InvoiceID != nil {
+			n.Link = "/invoices/" + p.InvoiceID.String()
+		}
 	case KindTermInvoice:
 		n.Link = "/schools/terms/" + p.TermID.String() + "/invoices"
 	}
@@ -772,6 +803,11 @@ func (s *Schools) tellRequester(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 func (s *Schools) DecidedAfter(ctx context.Context, tenant uuid.UUID, d Decision) error {
 	if err := s.matcher().TellPaid(ctx, tenant, d.parts); err != nil {
 		return err
+	}
+	if d.matched != nil {
+		if err := d.matched(ctx); err != nil {
+			return err
+		}
 	}
 	if d.paid != nil {
 		if err := s.Invoices.Paid(ctx, tenant, *d.paid); err != nil {

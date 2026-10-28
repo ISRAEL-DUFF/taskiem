@@ -1839,6 +1839,11 @@
       "reviewed": true,
       "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), when more than one invoice could fit"
     },
+    "wa.match.needs_approval": {
+      "text": "Not matched yet: this money was entered by hand and is at or above the school's cash threshold, so the match waits for a second person to approve it under Schools, Approvals.",
+      "reviewed": true,
+      "context": "Yes, match was pressed on money a person entered (cash, a statement line) at or above the school's cash threshold: the match is recorded for a second person"
+    },
     "wa.match.other_person": {
       "text": "This button was sent to someone else.",
       "reviewed": true,
@@ -2254,6 +2259,11 @@
       "reviewed": true,
       "context": "run: several workflows match"
     },
+    "wa.school.cash_match": {
+      "text": "{amount} entered by hand, matched to invoice {number} by {by}.",
+      "reviewed": true,
+      "context": "Money a person entered (cash, a statement line) matched to an invoice, waiting for a second person"
+    },
     "wa.school.cash_posting": {
       "text": "{amount} paid {how} for {student} ({class}), posted by {by}.",
       "reviewed": true,
@@ -2288,6 +2298,11 @@
       "text": "by transfer to the school's account",
       "reviewed": true,
       "context": "How money was paid at the desk"
+    },
+    "wa.school.kind.cash_match": {
+      "text": "a match of money entered by hand",
+      "reviewed": true,
+      "context": "The kind of a school approval request: money a person entered, matched to an invoice"
     },
     "wa.school.kind.cash_posting": {
       "text": "a cash posting",

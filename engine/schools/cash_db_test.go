@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/matching"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/schools"
 )
 
@@ -477,5 +479,80 @@ func TestReceiptNumbersUnderConcurrency(t *testing.T) {
 	}
 	if top := w.count(`SELECT max(next) FROM school_receipt_counters`); top != 13 {
 		t.Fatalf("counter at %d", top)
+	}
+}
+
+// Money a person entered on Money (cash, or a statement line) is the same
+// money as cash posted at the desk: matched by hand to a school's invoice
+// at or above the cash threshold, it waits for a second person, and
+// automatic matching never counts it on its own.
+func TestEnteredMoneyMatchedByHandNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	tn := w.env.Tenant
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	log := &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
+	m := &matching.Matcher{Invoices: w.s.Invoices, PII: w.env.Vault}
+	enter := func(kobo int64) uuid.UUID {
+		t.Helper()
+		id, _, err := log.Enter(ctx, tn, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: kobo, Description: "School fees"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	big := enter(6_000_000)
+	_, err := m.Match(ctx, tn, big, w.invA.Number, "user:ada")
+	var held *matching.Held
+	if !errors.As(err, &held) || held.AmountKobo != 6_000_000 {
+		t.Fatalf("matched by hand at the threshold: %v", err)
+	}
+	if x := w.invoiceOf(w.invA.ID); x.PaidKobo != 0 {
+		t.Fatalf("held money reached the fees: %+v", x)
+	}
+	if _, err := m.Match(ctx, tn, big, w.invA.Number, "user:ada"); !errors.Is(err, invoicing.ErrState) {
+		t.Fatalf("matched again while it waits: %v", err)
+	}
+	var req schools.Posting
+	w.in(func(tx pgx.Tx) error {
+		list, err := w.s.Postings(ctx, tx, tn, schools.PostingFilter{Status: schools.StatePending, Kind: schools.KindCashMatch})
+		if err != nil || len(list) != 1 || list[0].ID != held.RequestID || list[0].InvoiceNumber != w.invA.Number || list[0].StudentID == nil || *list[0].StudentID != w.a.ID {
+			t.Fatalf("pending %v %+v", err, list)
+		}
+		req = list[0]
+		return nil
+	})
+	if _, err := w.decide(req.ID, true, "", "user:ada"); !errors.Is(err, schools.ErrState) {
+		t.Fatalf("self-approval: %v", err)
+	}
+	d, err := w.decide(req.ID, true, "", "user:bola")
+	if err != nil || d.Request.Status != schools.StatePosted || d.Request.Result == nil || len(d.Request.Result.Parts) != 1 {
+		t.Fatalf("approved %v %+v", err, d.Request)
+	}
+	if x := w.invoiceOf(w.invA.ID); x.PaidKobo != 6_000_000 || x.Payments[0].By != "user:ada" {
+		t.Fatalf("after approval %+v", x)
+	}
+	// Under the threshold: matched at once.
+	if _, err := m.Match(ctx, tn, enter(100_000), w.invA.Number, "user:ada"); err != nil {
+		t.Fatalf("under the threshold: %v", err)
+	}
+	// Suggested by matching: not confirmed on its own; a person's
+	// confirmation waits for a second person.
+	enter(11_800_000)
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var sug uuid.UUID
+	w.in(func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT s.id FROM money_suggestions s JOIN money_entries e ON e.id = s.entry_id WHERE e.amount_kobo = 11800000 AND s.invoice_id = $1`, w.invB.ID).Scan(&sug)
+	})
+	if _, err := m.Confirm(ctx, tn, sug, "system:matching", true); !errors.Is(err, invoicing.ErrState) {
+		t.Fatalf("confirmed on its own: %v", err)
+	}
+	if _, err := m.Confirm(ctx, tn, sug, "user:ada", false); !errors.As(err, &held) {
+		t.Fatalf("confirmed by a person: %v", err)
+	}
+	if x := w.invoiceOf(w.invB.ID); x.PaidKobo != 0 {
+		t.Fatalf("held money reached the fees: %+v", x)
 	}
 }

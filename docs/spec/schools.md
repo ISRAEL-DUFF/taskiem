@@ -373,6 +373,7 @@ Cash postings, thresholds and approvals for cash and discounts; receipts as reco
 
 - **B3's refusals became requests**: a discount or posting at or above a threshold answers 202 with the recorded request, and approving a held term invoice creates it under the same once-only key.
 - **The cash threshold is unset by default** (no second person); 0 means every posting waits for one. Four-eyes is strict, with no exception for a one-person business.
+- **Money a person entered is held too** (migration 00250): matching an `entered` cash entry or an `upload` statement line to an invoice of a school with a cash threshold, at or above it, records a `cash_match` request instead (`engine/matching/approval.go`); approval makes the match as asked, by its requester. Automatic matching neither confirms such money nor matches it exactly. Before this, anyone with `invoice.manage` could enter cash on Money and match it by hand past the two-person rule.
 - **Receipt numbers** are `RCT-<session's first year>T<term's ordinal>-<sequence>`; the PDF shows the student's name to anyone with `school.read`, audited per render, while lists stay masked.
 - **The font is a subset of Liberation Sans** renamed "Taskiem Receipt Sans" under the OFL, two small files committed with their licence: the one exception to the rule against binaries in the repository, accepted by the founder on 2026-10-24.
 - **`/r/<token>` shares its path with form links**: a receipt token is tried first; a guess gets the form link's not-found.

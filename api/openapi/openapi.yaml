@@ -1517,7 +1517,7 @@ paths:
       tags:
       - Invoices
       summary: Match a payment to the invoice or order suggested
-      description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments)."
+      description: "With no body, what is left of the payment (all of it, unless part of it counts elsewhere) counts towards the invoice or storefront order; the payment's other suggestions close, and the payer is remembered for the invoice's customer. With parts, the payment is split: each part counts towards its invoice or order (the suggested one among them, or not), never more in all than is left of the payment; credit_rest leaves what the parts do not count as the customer's credit (every part must then be for one customer's invoices), else it waits in To match. split: true splits it as the suggestion's split offers (the customer's open invoices oldest first, the rest as their credit). Undo each part as any payment of its invoice, or with /v1/money/order-payments/{id}/undo (docs/matching.md#split-payments). Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1557,6 +1557,8 @@ paths:
                 - $ref: '#/components/schemas/CustomerInvoice'
                 - $ref: '#/components/schemas/MatchedOrder'
                 - $ref: '#/components/schemas/MoneySplit'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/suggestions/{id}/reject:
@@ -1599,7 +1601,7 @@ paths:
       tags:
       - Invoices
       summary: Match a payment to an invoice or order by hand
-      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it; or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers."
+      description: "For money in that no suggestion fits. {id} is the money log entry. Give invoice or order, not both, and what is left of the payment counts towards it; or give parts to split the payment across invoices and orders (credit_rest leaves the rest as the customer's credit). The parts of a payment never add up to more than it; an order takes one payment of at least what is due. The payer is remembered for the invoices' customers. Where the business runs Schools with a cash threshold, money a person entered (cash, or a statement line uploaded) counted towards an invoice when it is at or above the threshold is recorded for a second person instead (202, code needs_approval, with the request, kind cash_match): nothing is counted until someone with school.approve who is not the requester approves it."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -1647,6 +1649,8 @@ paths:
                 - $ref: '#/components/schemas/CustomerInvoice'
                 - $ref: '#/components/schemas/MatchedOrder'
                 - $ref: '#/components/schemas/MoneySplit'
+        '202':
+          $ref: '#/components/responses/SchoolApprovalNeeded'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/order-payments/{id}/undo:
@@ -21304,7 +21308,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [cash_posting, discount, discount_amendment, term_invoice]
+          enum: [cash_posting, cash_match, discount, discount_amendment, term_invoice]
         status:
           type: string
           enum: [pending, posted, declined]

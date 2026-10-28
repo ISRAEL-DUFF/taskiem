@@ -188,6 +188,21 @@ func TestSchoolCashApprovalsAndReceipts(t *testing.T) {
 		t.Fatalf("amended %v", x)
 	}
 
+	// Cash entered on Money and matched by hand at the threshold waits the
+	// same way: 202, nothing on the fees.
+	entered := admin.must(201, "POST", "/v1/money/entries", map[string]any{"kind": "cash", "direction": "in", "amount_kobo": 5_000_000, "description": "Fees at the gate"})
+	code, out = admin.do("POST", "/v1/money/entries/"+entered["entry_id"].(string)+"/match", map[string]any{"invoice": inv["number"]})
+	if code != 202 || out["code"] != "needs_approval" || out["request"].(map[string]any)["kind"] != "cash_match" || out["request"].(map[string]any)["invoice_number"] != inv["number"] {
+		t.Fatalf("matched by hand at the threshold: %d %v", code, out)
+	}
+	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); x["paid_kobo"] != float64(2_000_000) {
+		t.Fatalf("held money reached the fees %v", x)
+	}
+	second.must(200, "POST", "/v1/schools/approvals/"+out["request"].(map[string]any)["id"].(string), map[string]any{"decision": "approved"})
+	if x := owner.must(200, "GET", "/v1/invoices/"+inv["number"].(string), nil)["invoice"].(map[string]any); x["paid_kobo"] != float64(7_000_000) {
+		t.Fatalf("after approval %v", x)
+	}
+
 	// Undoing Ebube's payment voids its receipt, which stays.
 	pid := inv["payments"].([]any)[0].(map[string]any)["id"].(string)
 	owner.must(200, "POST", "/v1/invoices/"+inv["number"].(string)+"/payments/"+pid+"/undo", nil)

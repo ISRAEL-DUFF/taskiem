@@ -5,7 +5,7 @@ import { naira } from "./invoices";
 // checks the Payments, Receipts and Approvals pages use, kept here so
 // they can be tested.
 
-export type PostingKind = "cash_posting" | "discount" | "discount_amendment" | "term_invoice";
+export type PostingKind = "cash_posting" | "cash_match" | "discount" | "discount_amendment" | "term_invoice";
 export type PostingStatus = "pending" | "posted" | "declined";
 export type PaymentHow = "cash" | "transfer" | "pos" | "other";
 
@@ -96,6 +96,7 @@ export const howWords = (how: string): string => HOWS.find((h) => h.value === ho
 
 export const KIND_WORDS: Record<PostingKind, string> = {
   cash_posting: "Cash posting",
+  cash_match: "Money entered by hand, matched to an invoice",
   discount: "Standing discount",
   discount_amendment: "Discount on an invoice",
   term_invoice: "Term invoice with a discount",
@@ -154,6 +155,12 @@ export function isApprovalNeeded(v: unknown): v is ApprovalNeeded {
   return typeof v === "object" && v !== null && (v as { code?: string }).code === "needs_approval" && typeof (v as { request?: unknown }).request === "object";
 }
 
+/** What a match answered when it waits for a second person (202): the sentence to show, else null. */
+export function heldMatchLine(v: unknown): string | null {
+  if (!isApprovalNeeded(v)) return null;
+  return `Not matched yet: this money was entered by hand and ${naira(v.request.amount_kobo)} is at or above the school's cash threshold, so the match waits for a second person to approve it under Schools, Approvals.`;
+}
+
 /** What posting did, in a sentence. */
 export function postedLine(p: Posting): string {
   const r = p.result;
@@ -182,6 +189,9 @@ export function requestDetails(p: Posting): string[] {
     case "cash_posting":
       out.push(`Paid ${howWords(String(d.how ?? "")).toLowerCase()}${d.date ? ` on ${String(d.date)}` : ""}.`);
       if (d.note) out.push(`Note: ${String(d.note)}`);
+      break;
+    case "cash_match":
+      out.push(`Money entered by hand on Money, matched to invoice ${p.invoice_number ?? ""}. It counts towards the invoice once approved.`);
       break;
     case "discount": {
       const kind = String(d.kind ?? "").replace(/_/g, " ");

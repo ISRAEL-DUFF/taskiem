@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/matching"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -174,6 +175,9 @@ func (s *Server) confirmSuggestion(w http.ResponseWriter, r *http.Request) {
 		} else {
 			sp, err = s.matcher().ConfirmSplit(r.Context(), p.TenantID, id, p.Actor())
 		}
+		if s.matchHeld(w, r, err) {
+			return
+		}
 		if err != nil {
 			s.fail(w, r, invoiceErr(err))
 			return
@@ -222,6 +226,9 @@ func (s *Server) decideSuggestion(w http.ResponseWriter, r *http.Request, do fun
 	}
 	p := principalFrom(r.Context())
 	x, err := do(r.Context(), p.TenantID, id, p.Actor())
+	if s.matchHeld(w, r, err) {
+		return
+	}
 	if err != nil {
 		s.fail(w, r, invoiceErr(err))
 		return
@@ -283,6 +290,9 @@ func (s *Server) matchEntry(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sp, err := s.matcher().MatchParts(r.Context(), p.TenantID, id, req.Parts, req.CreditRest, p.Actor())
+		if s.matchHeld(w, r, err) {
+			return
+		}
 		if err != nil {
 			s.fail(w, r, invoiceErr(err))
 			return
@@ -299,11 +309,38 @@ func (s *Server) matchEntry(w http.ResponseWriter, r *http.Request) {
 		target = matching.OrderTarget(req.Order)
 	}
 	x, err := s.matcher().Match(r.Context(), p.TenantID, id, target, p.Actor())
+	if s.matchHeld(w, r, err) {
+		return
+	}
 	if err != nil {
 		s.fail(w, r, invoiceErr(err))
 		return
 	}
 	s.writeMatched(w, r, x)
+}
+
+// matchHeld answers a match of money a person entered that waits for a
+// second person (a school's cash threshold, matching.Held): 202
+// needs_approval with the request, as a cash posting at the desk does.
+// ok is false for other errors.
+func (s *Server) matchHeld(w http.ResponseWriter, r *http.Request, err error) bool {
+	var held *matching.Held
+	if !errors.As(err, &held) {
+		return false
+	}
+	var req schools.Posting
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if req, err = s.schoolsSvc().Posting(r.Context(), tx, principalFrom(r.Context()).TenantID, held.RequestID); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "school.approval.request", req.ID.String(), map[string]any{"kind": req.Kind, "amount_kobo": req.AmountKobo, "invoice": req.InvoiceNumber})
+	}); err != nil {
+		s.fail(w, r, err)
+		return true
+	}
+	approvalNeeded(w, &schools.ApprovalNeeded{Request: req})
+	return true
 }
 
 // undoOrderPayment serves POST /v1/money/order-payments/{id}/undo: a

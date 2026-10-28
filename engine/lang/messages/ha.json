@@ -1472,6 +1472,10 @@
       "text": "Idan ba haka ba, A'a zai nuna takardar kuɗi ta gaba.",
       "reviewed": false
     },
+    "wa.match.needs_approval": {
+      "text": "Ba a haɗa ba tukuna: da hannu aka shigar da wannan kuɗin kuma ya kai iyakar kuɗin makaranta, don haka wani mutum na biyu zai amince a Schools, Approvals.",
+      "reviewed": false
+    },
     "wa.match.other_person": {
       "text": "An aika wannan maɓallin ga wani.",
       "reviewed": false
@@ -1804,6 +1808,10 @@
       "text": "Wanne?\n{list}\nAika *run* da cikakken suna.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} da aka shigar da hannu, {by} ya haɗa shi da invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "An biya {amount} {how} don {student} ({class}), {by} ya shigar.",
       "reviewed": false
@@ -1830,6 +1838,10 @@
     },
     "wa.school.how.transfer": {
       "text": "ta hanyar tura kuɗi zuwa asusun makarantar",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "haɗa kuɗin da aka shigar da hannu",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {
