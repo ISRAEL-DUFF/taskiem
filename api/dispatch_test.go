@@ -426,6 +426,11 @@ func TestTurnOnDeliveries(t *testing.T) {
 func TestTurnOnDeliveriesRefused(t *testing.T) {
 	w, ada := newDispatchWorld(t, "Ada Stores")
 	ctx := context.Background()
+	// A business with no page yet is told what to do first.
+	other := w.tenant(t, "Bola Foods", "bola@bola.test")
+	if e := other.must(409, "POST", "/v1/dispatch/workflow", nil); !strings.Contains(fmt.Sprint(e["error"]), "turn on delivery on your order form first") {
+		t.Fatalf("no page: %v", e)
+	}
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
 		_, err := storefront.SaveAction(ctx, tx, w.biz, storefront.Action{Kind: "order", Enabled: true, Payment: "after_accept",
 			Options: storefront.ActionOptions{Pickup: true}})

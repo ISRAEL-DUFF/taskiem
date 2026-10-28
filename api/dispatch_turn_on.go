@@ -70,6 +70,9 @@ func orderWorkflowNamedTx(ctx context.Context, tx pgx.Tx) (*uuid.UUID, string, s
 // than the plain storefront-order one is replaced only with replace.
 func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal, replace bool, audit func(action, target string, detail map[string]any) error) (deliveriesView, error) {
 	actions, err := storefront.Actions(ctx, tx, p.TenantID)
+	if errors.Is(err, storefront.ErrNotFound) {
+		return deliveriesView{}, fmt.Errorf("%w: set up your page and turn on delivery on your order form first", errConflict)
+	}
 	if err != nil {
 		return deliveriesView{}, err
 	}
