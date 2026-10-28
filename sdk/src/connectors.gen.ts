@@ -2365,6 +2365,66 @@ export const resend = {
   send_email: (input: ResendSendEmailInput, extra?: ConnectorExtra): StepSpec => connector("resend@1", "send_email", input, extra),
 };
 
+// Riders (riders@1)
+export interface RidersAddRiderInput {
+  /** Their fee per delivery in kobo */
+  fee_kobo?: Val<number>;
+  name: Val<string>;
+  /** A Nigerian mobile number */
+  phone: Val<string>;
+  zones?: Value;
+}
+export interface RidersFinishPayoutsInput {
+  batch_id: Val<string>;
+  cancel?: Val<boolean>;
+  results?: Value;
+}
+export interface RidersGetRiderInput {
+  id: Val<string>;
+}
+export interface RidersListRidersInput {
+  /** Riders on leave too */
+  include_inactive?: Val<boolean>;
+  /** A delivery area, as on the order form (Lekki Phase 1) */
+  zone?: Val<string>;
+}
+export interface RidersOfferInput {
+  /** This delivery's fee for the rider (default the rider's) */
+  fee_kobo?: Val<number>;
+  /** The order's reference (trigger.body.reference) */
+  reference: Val<string>;
+  /** A rider to offer it to; omit for rotation */
+  rider_id?: Val<string>;
+}
+export interface RidersPreparePayoutsInput {
+  /** A batch Riders > Pay made; empty for this run's */
+  batch_id?: Val<string>;
+}
+export interface RidersReleaseInput {
+  reference: Val<string>;
+}
+export interface RidersRetireRiderInput {
+  id: Val<string>;
+}
+export const riders = {
+  /** Add a rider (idempotent_write) */
+  add_rider: (input: RidersAddRiderInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "add_rider", input, extra),
+  /** Record how the payout went (idempotent_write) */
+  finish_payouts: (input: RidersFinishPayoutsInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "finish_payouts", input, extra),
+  /** Read a rider (read) */
+  get_rider: (input: RidersGetRiderInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "get_rider", input, extra),
+  /** List riders (read) */
+  list_riders: (input?: RidersListRidersInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "list_riders", input, extra),
+  /** Offer an order to a rider (idempotent_write) */
+  offer: (input: RidersOfferInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "offer", input, extra),
+  /** Add up what each rider is due (idempotent_write) */
+  prepare_payouts: (input?: RidersPreparePayoutsInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "prepare_payouts", input, extra),
+  /** Take an order back from its rider (idempotent_write) */
+  release: (input: RidersReleaseInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "release", input, extra),
+  /** Retire a rider (idempotent_write) */
+  retire_rider: (input: RidersRetireRiderInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "retire_rider", input, extra),
+};
+
 // Amazon S3 (s3@1)
 export interface S3CopyObjectInput {
   /** Destination; defaults to the connection's bucket */
@@ -3605,6 +3665,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "quickbooks@1": "quickbooks",
   "remita@1": "remita",
   "resend@1": "resend",
+  "riders@1": "riders",
   "s3@1": "s3",
   "schools@1": "schools",
   "sftp@1": "sftp",
@@ -3655,6 +3716,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "resend@1": ["get_email", "list_domains", "send_email"],
+  "riders@1": ["add_rider", "finish_payouts", "get_rider", "list_riders", "offer", "prepare_payouts", "release", "retire_rider"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],

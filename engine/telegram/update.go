@@ -46,6 +46,8 @@ type Update struct {
 	// is the sender's own, shared with Telegram's "share my number"
 	// button: then Telegram vouches for the number.
 	Contact *Contact
+	// Location is a shared location (message.location) as a maps link.
+	Location string
 }
 
 // Contact is a shared phone contact.
@@ -114,6 +116,10 @@ type tgMessage struct {
 		Phone  string `json:"phone_number"`
 		UserID int64  `json:"user_id"`
 	} `json:"contact"`
+	Location *struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	} `json:"location"`
 }
 
 // imageTypes are the files read as photos when sent uncompressed.
@@ -181,6 +187,9 @@ func Parse(body []byte) (Update, error) {
 			u.Photo = &Photo{FileID: m.Document.FileID, MimeType: m.Document.MimeType, Size: m.Document.Size}
 		case m.Contact != nil && m.Contact.Phone != "":
 			u.Contact = &Contact{Phone: m.Contact.Phone, Own: m.Contact.UserID == u.FromID}
+		}
+		if m.Location != nil {
+			u.Location = fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", m.Location.Latitude, m.Location.Longitude)
 		}
 	case d.Callback != nil:
 		c := d.Callback

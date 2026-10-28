@@ -1,0 +1,462 @@
+{
+  "id": "dispatch-orders",
+  "title": "Storefront orders delivered by your riders",
+  "summary": "Each order from your storefront comes to you in WhatsApp or Telegram to accept or decline; once it is confirmed it is offered to your riders, and the rider's taps tell the customer and complete it.",
+  "description": "Starts when a customer sends the order form on your storefront. You get the order (items and total) to accept or decline; if nobody answers in a day it is declined. A declined order is texted to the customer (with a note that a payment will be refunded, when they had paid). An accepted order paid on ordering, or paid at the door, is confirmed at once; one paid after acceptance gets a payment link by text, and is confirmed when paid or told when the link expires after a day. A confirmed order for delivery is then offered to your riders in turn (or you are asked who takes it, as your deliveries are set), each with a few minutes to tap Accept. The rider's Picked up, Arrived and Delivered tell the customer, a customer paying at the door gets an account number for the order when the rider arrives, and Delivered completes the order. An order for pickup asks you to mark it collected. Messages go from your business's name, by SMS, and by email when the customer gave one.",
+  "category": "storefront",
+  "tags": [
+    "storefront",
+    "delivery"
+  ],
+  "keywords": [
+    "storefront",
+    "storefront order",
+    "delivery",
+    "deliveries",
+    "riders",
+    "dispatch",
+    "dispatch riders",
+    "pay on delivery",
+    "tell my rider",
+    "send to rider"
+  ],
+  "connectors": [
+    "storefront@1",
+    "riders@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who accepts orders",
+      "description": "The role that accepts or declines orders.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_dispatchOrders",
+    "version": 1,
+    "name": "Storefront orders with deliveries",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "order"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference",
+          "customer",
+          "total",
+          "summary",
+          "payment"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              },
+              "email": {
+                "type": "string",
+                "x-pii": "email"
+              },
+              "address": {
+                "type": "string",
+                "x-pii": "address"
+              },
+              "message": {
+                "type": "string",
+                "x-pii": "free_text"
+              }
+            }
+          },
+          "basket": {
+            "type": "array"
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "fulfilment": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "decide",
+        "type": "approval",
+        "name": "Accept or decline the order",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "24h",
+          "subject": {
+            "order": "=trigger.body.reference",
+            "items": "=trigger.body.summary",
+            "total": "=trigger.body.total",
+            "fulfilment": "=trigger.body.fulfilment",
+            "paid": "=trigger.body.payment.status == 'paid'"
+          }
+        }
+      },
+      {
+        "id": "decline",
+        "type": "connector",
+        "name": "Record the order as declined",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "decide"
+        ],
+        "when": "=steps.decide.output.decision != 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "decline",
+          "note": "=steps.decide.output.decision == 'rejected' && has(steps.decide.output.reason) ? 'No answer within a day' : 'Declined'"
+        }
+      },
+      {
+        "id": "tell_declined",
+        "type": "connector",
+        "name": "Tell the customer",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "decline"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "=steps.decline.output.refund_due ? 'order_declined_refund' : 'order_declined'",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "total": "=trigger.body.total"
+          }
+        }
+      },
+      {
+        "id": "ask_refund",
+        "type": "approval",
+        "name": "Refund the customer?",
+        "needs": [
+          "decline"
+        ],
+        "when": "=steps.decline.output.refund_due",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "72h",
+          "on_timeout": "reject",
+          "subject": {
+            "order": "=trigger.body.reference",
+            "total": "=trigger.body.total",
+            "action": "Approve to refund the customer now (a card payment through Paystack; a bank transfer you send back from your bank and mark refunded); reject if you will refund them yourself"
+          }
+        }
+      },
+      {
+        "id": "refund",
+        "type": "connector",
+        "name": "Refund the customer",
+        "connector": "storefront@1",
+        "action": "refund",
+        "needs": [
+          "ask_refund"
+        ],
+        "when": "=steps.ask_refund.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "accept_paid",
+        "type": "connector",
+        "name": "Record the order as accepted",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "decide"
+        ],
+        "when": "=steps.decide.output.decision == 'approved' && trigger.body.payment.mode != 'after_accept'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "accept"
+        }
+      },
+      {
+        "id": "tell_confirmed",
+        "type": "connector",
+        "name": "Tell the customer it is confirmed",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "accept_paid"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "=trigger.body.fulfilment == 'delivery' ? 'order_confirmed_delivery' : 'order_confirmed_pickup'",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "offer",
+        "type": "connector",
+        "name": "Offer it to a rider",
+        "connector": "riders@1",
+        "action": "offer",
+        "needs": [
+          "tell_confirmed"
+        ],
+        "when": "=trigger.body.fulfilment == 'delivery'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "offer_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.offer.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "done",
+        "type": "approval",
+        "name": "Delivered by the rider, or collected",
+        "needs": [
+          "tell_confirmed"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "168h",
+          "subject": {
+            "order": "=trigger.body.reference",
+            "items": "=trigger.body.summary",
+            "action": "=trigger.body.fulfilment == 'delivery' ? 'Your rider\\'s Delivered approves this; approve it yourself if you delivered it another way' : 'Approve when it is collected'"
+          }
+        }
+      },
+      {
+        "id": "complete",
+        "type": "connector",
+        "name": "Record the order as completed",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "done"
+        ],
+        "when": "=steps.done.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      },
+      {
+        "id": "accept_unpaid",
+        "type": "connector",
+        "name": "Record the order as accepted",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "decide"
+        ],
+        "when": "=steps.decide.output.decision == 'approved' && trigger.body.payment.mode == 'after_accept'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "accept"
+        }
+      },
+      {
+        "id": "link",
+        "type": "connector",
+        "name": "Make the payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "accept_unpaid"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_pay",
+        "type": "connector",
+        "name": "Send the customer the payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "order_pay",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "total": "=steps.link.output.total",
+            "url": "=steps.link.output.url"
+          }
+        }
+      },
+      {
+        "id": "wait_pay",
+        "type": "signal",
+        "name": "Wait for the payment",
+        "needs": [
+          "tell_pay"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "25h"
+        }
+      },
+      {
+        "id": "tell_paid",
+        "type": "connector",
+        "name": "Tell the customer it is paid and confirmed",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_pay"
+        ],
+        "when": "=steps.wait_pay.output.status == 'paid'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "=trigger.body.fulfilment == 'delivery' ? 'order_paid_delivery' : 'order_paid_pickup'",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "offer_paid",
+        "type": "connector",
+        "name": "Offer it to a rider",
+        "connector": "riders@1",
+        "action": "offer",
+        "needs": [
+          "tell_paid"
+        ],
+        "when": "=trigger.body.fulfilment == 'delivery'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "offer_paid_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "reason": "=steps.offer_paid.error.message"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "done_paid",
+        "type": "approval",
+        "name": "Delivered by the rider, or collected",
+        "needs": [
+          "tell_paid"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "168h",
+          "subject": {
+            "order": "=trigger.body.reference",
+            "items": "=trigger.body.summary",
+            "action": "=trigger.body.fulfilment == 'delivery' ? 'Your rider\\'s Delivered approves this; approve it yourself if you delivered it another way' : 'Approve when it is collected'"
+          }
+        }
+      },
+      {
+        "id": "complete_paid",
+        "type": "connector",
+        "name": "Record the order as completed",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "done_paid"
+        ],
+        "when": "=steps.done_paid.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      },
+      {
+        "id": "tell_expired",
+        "type": "connector",
+        "name": "Tell the customer the link expired",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_pay"
+        ],
+        "when": "=steps.wait_pay.output.status == 'expired'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "order_link_expired",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "240h"
+    }
+  }
+}

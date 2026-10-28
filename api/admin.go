@@ -557,7 +557,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	}
 	// Erasure cannot be undone: a person confirms it, for this subject, with
 	// a passkey or authenticator code (Atlas part D findings).
-	if !s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasing personal data") {
+	if _, ok := s.personStepUp(w, r, req.stepUpProof, "pii.erase", subject, "erasures", "erasing personal data"); !ok {
 		return
 	}
 	if err := s.Vault.Erase(r.Context(), p.TenantID, subject, p.Actor()); err != nil {

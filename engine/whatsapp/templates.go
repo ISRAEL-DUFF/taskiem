@@ -159,6 +159,16 @@ var (
 			{Type: "url", Text: "Open invoice", Host: HostForms, Path: "/i/{{1}}", Var: "link", Example: "abc123"}},
 		Purpose: "An invoice to a customer who gets the business's updates on WhatsApp, outside the window; the quick reply carries the signed invoice button, the url button opens the invoice's page.",
 	}
+	// Dispatch (docs/dispatch.md): an offer to a business's rider outside
+	// the window; the quick replies carry the signed Accept and Can't.
+	TplDeliveryOffer = Template{
+		Name: "taskiem_delivery_offer", Category: "UTILITY",
+		Body:     "[{{1}}] A delivery for you: {{2}}. Tap Accept to take it or Can't to pass it on.",
+		Vars:     []string{"tenant", "summary"},
+		Examples: []string{"Ada Stores", "AK-7QX4KD to Lekki, 2 × Jollof rice, your fee ₦1,500"},
+		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Accept"}, {Type: "quick_reply", Text: "Can't"}},
+		Purpose:  "An order offered to one of the business's riders outside the window; the quick replies carry the signed Accept and Can't.",
+	}
 	TplMatchQuestion = Template{
 		Name: "taskiem_match_question", Category: "UTILITY",
 		Body:     "[{{1}}] {{2}} came in on {{3}} through {{4}}. Is this for {{5}}, {{6}} due? {{7}} Tap Yes, match or No, or decide in Taskiem.",
@@ -229,7 +239,7 @@ var (
 
 // AllTemplates lists the library, for documentation, submission and tests.
 var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate,
-	TplInvoice, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose}
+	TplInvoice, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

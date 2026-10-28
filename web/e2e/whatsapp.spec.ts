@@ -136,7 +136,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({ p
   // Nothing submitted yet: every template waits, and the page says what
   // cannot go out until then.
   const tpls = section.getByTestId("whatsapp-templates");
-  await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText("0 of 18 templates approved");
+  await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText("0 of 19 templates approved");
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText("taskiem_invoice");
   const invoice = tpls.getByTestId("whatsapp-template-taskiem_invoice");
   await expect(invoice.getByTestId("status")).toHaveText("Not submitted");
@@ -157,7 +157,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({ p
   expect(hook.status()).toBe(200);
   await page.reload();
   await expect(section.getByTestId("whatsapp-template-taskiem_invoice").getByTestId("status")).toHaveText("Approved");
-  await expect(section.getByTestId("whatsapp-templates-summary")).toContainText("1 of 18 templates approved");
+  await expect(section.getByTestId("whatsapp-templates-summary")).toContainText("1 of 19 templates approved");
 
   // Check now asks Meta: a rejection comes with its reason.
   templates.set("taskiem_receipt", { id: "930000000000001", status: "REJECTED", reason: "INVALID_FORMAT" });

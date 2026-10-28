@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
 )
 
@@ -65,16 +66,27 @@ func (s *Server) moneySummary(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var sum moneyreport.Summary
+	// Riders' days (dispatch D4): deliveries, cash at the door, what each
+	// owes; left out with no riders' activity.
+	var out struct {
+		moneyreport.Summary
+		Riders []dispatch.RiderDay `json:"riders,omitempty"`
+	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		tenant := principalFrom(r.Context()).TenantID
 		var err error
-		sum, err = moneyreport.Summarise(r.Context(), tx, principalFrom(r.Context()).TenantID, from, to)
+		if out.Summary, err = moneyreport.Summarise(r.Context(), tx, tenant, from, to); err != nil {
+			return err
+		}
+		if s.Dispatch != nil {
+			out.Riders, err = s.Dispatch.RiderDaysTx(r.Context(), tx, tenant, from, to)
+		}
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, sum)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // moneyExport serves GET /v1/money/exports/{log|invoices|journal} as a
