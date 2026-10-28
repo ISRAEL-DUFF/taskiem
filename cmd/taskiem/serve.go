@@ -1022,19 +1022,7 @@ func serve(ctx context.Context, args []string) error {
 	is := func(r string) bool { return *role == r || *role == "all" }
 	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
-	ready := func(w http.ResponseWriter, r *http.Request) {
-		if draining.Load() {
-			http.Error(w, "draining", http.StatusServiceUnavailable)
-			return
-		}
-		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := e.pool.Ping(pctx); err != nil {
-			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	}
+	ready := readiness(draining, e.pool)
 	alerter, err := cfg.alerter(e, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -1189,19 +1177,19 @@ func serve(ctx context.Context, args []string) error {
 	var pub *publicweb.Server
 	if *role == "all" && cfg.Public.Enabled {
 		var task func(context.Context) error
-		var closePool func()
-		if pub, task, closePool, err = publicTask(ctx, cfg, log); err != nil {
+		var pubPool *pgxpool.Pool
+		if pub, task, pubPool, err = publicTask(ctx, cfg, log); err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
-		defer closePool()
+		defer pubPool.Close()
 		tasks = append(tasks, task)
 	}
 	if *role == "all" && cfg.Mail.Enabled {
-		task, closePool, err := mailTask(ctx, cfg, log)
+		task, mailPool, err := mailTask(ctx, cfg, log)
 		if err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
-		defer closePool()
+		defer mailPool.Close()
 		tasks = append(tasks, task)
 	}
 	if is("scheduler") {
@@ -1343,6 +1331,25 @@ func serve(ctx context.Context, args []string) error {
 // process keeps serving for the shutdown delay so load balancers stop
 // routing to it, and only then does runCtx end, stopping servers and
 // letting workers drain.
+// readiness answers /readyz: 503 while draining or while the database
+// does not answer a ping within 2 seconds, so load balancers stop sending
+// requests that could only fail.
+func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if draining.Load() {
+			http.Error(w, "draining", http.StatusServiceUnavailable)
+			return
+		}
+		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := pool.Ping(pctx); err != nil {
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}
+}
+
 func drainOnShutdown(ctx context.Context, cfg config, log *slog.Logger) (context.Context, context.CancelFunc, *atomic.Bool) {
 	draining := new(atomic.Bool)
 	telemetry.Draining.Set(0)
