@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -450,23 +452,24 @@ func (d *Dispatch) RiderDaysTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 }
 
 // RiderLine is a rider's day in one line, for the daily close: "Musa: 4
-// delivered, ₦8,500 at the door, ₦3,000 cash, owes ₦3,000".
-func RiderLine(x RiderDay) string {
-	parts := []string{fmt.Sprintf("%d delivered", x.Delivered)}
+// delivered, ₦8,500 paid at the door, ₦3,000 cash, owes ₦3,000".
+func RiderLine(l lang.Tag, x RiderDay) string {
+	t := lang.Default().Text
+	parts := []string{t(l, "money.rider.delivered", "count", strconv.Itoa(x.Delivered))}
 	if x.DoorKobo > 0 {
-		parts = append(parts, storefront.FormatNaira(x.DoorKobo)+" paid at the door")
+		parts = append(parts, t(l, "money.rider.door", "amount", storefront.FormatNaira(x.DoorKobo)))
 	}
 	if x.CashKobo > 0 {
-		parts = append(parts, storefront.FormatNaira(x.CashKobo)+" cash")
+		parts = append(parts, t(l, "money.rider.cash", "amount", storefront.FormatNaira(x.CashKobo)))
 	}
 	if x.RemittedKobo > 0 {
-		parts = append(parts, storefront.FormatNaira(x.RemittedKobo)+" remitted")
+		parts = append(parts, t(l, "money.rider.remitted", "amount", storefront.FormatNaira(x.RemittedKobo)))
 	}
 	if x.OwedKobo > 0 {
-		parts = append(parts, "owes "+storefront.FormatNaira(x.OwedKobo))
+		parts = append(parts, t(l, "money.rider.owes", "amount", storefront.FormatNaira(x.OwedKobo)))
 	}
 	if x.Rating != nil {
-		parts = append(parts, fmt.Sprintf("rated %.1f", *x.Rating))
+		parts = append(parts, t(l, "money.rider.rated", "rating", fmt.Sprintf("%.1f", *x.Rating)))
 	}
 	return x.Rider + ": " + strings.Join(parts, ", ")
 }

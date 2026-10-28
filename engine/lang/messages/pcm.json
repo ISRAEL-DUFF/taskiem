@@ -344,6 +344,34 @@
       "text": "Money page: {link}",
       "reviewed": false
     },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} pay for door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} don hand over",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "still owe {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rating {rating} of 5",
+      "reviewed": false
+    },
     "money.daily.school": {
       "text": "School fees ({term}): {collected} don enter, {outstanding} still dey remain, {cleared}% of students don clear.",
       "reviewed": false

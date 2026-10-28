@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
@@ -37,6 +38,7 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	var business string
 	var sum moneyreport.Summary
 	var school *moneydigest.SchoolSummary
+	var riderDays []dispatch.RiderDay
 	var period time.Time
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		var sentAt time.Time
@@ -60,7 +62,12 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 		if sum, err = moneyreport.Summarise(ctx, tx, it.Tenant, from, to); err != nil {
 			return err
 		}
-		school, err = moneydigest.SchoolSummarise(ctx, tx, s.schoolsSvc(), it.Tenant, from, to)
+		if school, err = moneydigest.SchoolSummarise(ctx, tx, s.schoolsSvc(), it.Tenant, from, to); err != nil {
+			return err
+		}
+		if s.Dispatch != nil {
+			riderDays, err = s.Dispatch.RiderDaysTx(ctx, tx, it.Tenant, from, to)
+		}
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -95,7 +102,17 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 		tplLink = "-"
 	}
 	day := time.Date(period.Year(), period.Month(), period.Day(), 12, 0, 0, 0, moneyreport.Lagos).Format("2 Jan 2006")
-	text := ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, link)
+	text := ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, "")
+	// Each rider's day (dispatch D4), before the link.
+	if len(riderDays) > 0 {
+		text += "\n\n" + tr(l, "money.daily.riders")
+		for _, x := range riderDays {
+			text += "\n" + dispatch.RiderLine(l, x)
+		}
+	}
+	if link != "" {
+		text += "\n\n" + tr(l, "money.daily.link", "link", link)
+	}
 	// With the summary template not approved yet, the alert template
 	// carries the first line, as before it existed.
 	err = sendOwnTemplate(ctx, ch, addr, text, it.Tenant, whatsapp.TplDailySummary, map[string]string{"tenant": business, "day": day, "summary": strings.TrimPrefix(full, "Yesterday: ")},

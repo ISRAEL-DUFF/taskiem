@@ -2,12 +2,14 @@ package dispatch_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/leaks"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -275,4 +277,47 @@ func TestRateDelivery(t *testing.T) {
 		}
 		return err
 	})
+}
+
+// Cash a rider owes beyond the business's limit is a leak, which resolves
+// itself when they hand it in.
+func TestRiderOwesLeak(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	musa := w.rider("Musa", "+2348031110001", "Lekki")
+	w.deliver(musa.ID, 50000, true)
+	owed := w.lines()["Musa"].OwedKobo
+	det := &leaks.Detector{Pool: w.env.DB.App}
+	if n, err := det.Tenant(ctx, w.env.Tenant); err != nil || n != 0 {
+		t.Fatalf("under the default limit: %d %v", n, err)
+	}
+	w.in(func(tx pgx.Tx) error {
+		s, err := dispatch.GetSettings(ctx, tx, w.env.Tenant)
+		if err != nil {
+			return err
+		}
+		s.OweLimitKobo = owed - 100
+		_, err = dispatch.SaveSettings(ctx, tx, w.env.Tenant, s, "user:ada")
+		return err
+	})
+	if n, err := det.Tenant(ctx, w.env.Tenant); err != nil || n != 1 {
+		t.Fatalf("over the limit: %d %v", n, err)
+	}
+	var amount int64
+	var detail string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT amount_kobo, detail FROM money_leaks WHERE kind = 'rider_owes' AND subject = $1 AND status = 'open'`, musa.ID.String()).
+		Scan(&amount, &detail); err != nil || amount != owed || !strings.Contains(detail, "a rider owes ₦6,500 in cash taken at the door") {
+		t.Fatalf("leak %d %q %v", amount, detail, err)
+	}
+	w.in(func(tx pgx.Tx) error {
+		_, err := w.d.RemitTx(ctx, tx, w.env.Tenant, musa.ID, owed, "cash", nil, "user:ada")
+		return err
+	})
+	if _, err := det.Tenant(ctx, w.env.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM money_leaks WHERE kind = 'rider_owes'`).Scan(&status); err != nil || status != "resolved" {
+		t.Fatalf("after handing it in: %q %v", status, err)
+	}
 }

@@ -344,6 +344,34 @@
       "text": "Ojú-ìwé owó: {link}",
       "reviewed": false
     },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
+      "reviewed": false
+    },
     "money.daily.school": {
       "text": "Owó ilé-ìwé ({term}): {collected} ti wọlé, {outstanding} ṣì kù, {cleared}% àwọn akẹ́kọ̀ọ́ ti parí ìsanwó.",
       "reviewed": false

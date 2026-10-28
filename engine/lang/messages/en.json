@@ -429,6 +429,41 @@
       "reviewed": true,
       "context": "The daily money summary sent to a business's owners on WhatsApp or Telegram each morning: the link to the Money page in the web app"
     },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": true,
+      "context": "The daily money summary: the heading before each rider's line (deliveries, cash, what they owe)"
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: how many deliveries they made"
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: paid by transfer at the customer's door"
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: cash they took at the door"
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: cash they handed in to the business"
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: the cash they still owe the business"
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
+      "reviewed": true,
+      "context": "A rider's line in the daily money summary: the average rating customers gave their deliveries"
+    },
     "money.daily.school": {
       "text": "School fees ({term}): {collected} collected, {outstanding} outstanding, {cleared}% of students cleared.",
       "reviewed": true,

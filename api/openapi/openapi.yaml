@@ -24899,6 +24899,39 @@ components:
               payments:
                 type: integer
                 description: Settled payments in
+        riders:
+          type: array
+          description: Each rider with deliveries, cash or a rating in the period, and what they owe now (businesses with riders)
+          items:
+            type: object
+            required: [rider_id, rider, delivered, door_transfer_kobo, cash_kobo, remitted_kobo, owed_kobo, fees_kobo, ratings]
+            properties:
+              rider_id:
+                type: string
+                format: uuid
+              rider:
+                type: string
+              delivered:
+                type: integer
+              door_transfer_kobo:
+                type: integer
+                description: Paid by transfer at the customer's door
+              cash_kobo:
+                type: integer
+                description: Cash taken at the door
+              remitted_kobo:
+                type: integer
+                description: Cash handed in, or netted from a payout
+              owed_kobo:
+                type: integer
+                description: The cash they owe now
+              fees_kobo:
+                type: integer
+                description: Their fees for the deliveries
+              rating:
+                type: [number, 'null']
+              ratings:
+                type: integer
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]

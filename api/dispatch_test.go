@@ -276,6 +276,11 @@ func TestRidersPay(t *testing.T) {
 		t.Fatalf("lines %v", v)
 	}
 
+	// The day's money shows Musa's.
+	sum := ada.must(200, "GET", "/v1/money/summary", nil)
+	if rs, _ := sum["riders"].([]any); len(rs) != 1 || rs[0].(map[string]any)["delivered"] != float64(1) || rs[0].(map[string]any)["fees_kobo"] != float64(100000) {
+		t.Fatalf("money summary riders: %v", sum["riders"])
+	}
 	ada.must(400, "PUT", "/v1/riders/"+m["id"].(string)+"/bank", map[string]any{"bank_code": "058", "account_number": "12"})
 	ada.must(404, "PUT", "/v1/riders/"+uuid.NewString()+"/bank", map[string]any{"bank_code": "058", "account_number": "0123456789"})
 	if b := ada.must(200, "PUT", "/v1/riders/"+m["id"].(string)+"/bank", map[string]any{"bank_code": "058", "bank_name": "GTBank", "account_number": "0123456789"}); b["bank"] != "GTBank, ending 6789" {

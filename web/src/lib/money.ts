@@ -9,7 +9,7 @@
 import { dateLabel, koboInput, naira, plainMessage, toKobo } from "./invoices";
 import type { MoneyBucket } from "./moneyChart";
 
-export type LeakKind = "unmatched" | "overdue" | "duplicate" | "overpaid" | "void_paid" | "fee";
+export type LeakKind = "unmatched" | "overdue" | "duplicate" | "overpaid" | "void_paid" | "fee" | "rider_owes";
 export type LeakStatus = "open" | "recovered" | "written_off" | "not_a_leak" | "resolved";
 export type CloseStatus = "recovered" | "written_off" | "not_a_leak";
 
@@ -108,6 +108,7 @@ const LEAK_KINDS: Record<LeakKind, string> = {
   overpaid: "Invoice paid too much",
   void_paid: "Paid for a void invoice",
   fee: "Fee above the agreed rate",
+  rider_owes: "Cash a rider owes",
 };
 
 /** A leak's kind in words. */

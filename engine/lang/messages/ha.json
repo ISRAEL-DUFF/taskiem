@@ -344,6 +344,34 @@
       "text": "Shafin kuɗi: {link}",
       "reviewed": false
     },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
+      "reviewed": false
+    },
     "money.daily.school": {
       "text": "Kuɗin makaranta ({term}): {collected} sun shigo, {outstanding} sun rage, {cleared}% na ɗalibai sun kammala biya.",
       "reviewed": false
