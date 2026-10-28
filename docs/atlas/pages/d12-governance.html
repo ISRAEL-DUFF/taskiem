@@ -4,23 +4,108 @@
   "title": "Governance and compliance",
   "part": "D",
   "order": 3,
-  "status": "planned",
-  "summary": "Maker-checker approvals and policies, the hash-chained audit log and its anchoring, retention, erasure and compliance reports.",
-  "scope": [
-    "Approval policies and levels",
-    "Separation of duties",
-    "The audit log's hash chain, offline verification and anchoring",
-    "Retention and erasure",
-    "Suspended tenants",
-    "Compliance reporting"
-  ],
+  "summary": "Approval policies and levels, separation of duties everywhere it is enforced, the hash-chained audit log and its anchors, retention and erasure, suspended tenants, and the compliance reports.",
+  "verified": "2668902126c7eea4efd8c63007ff591671dfae76",
   "sources": [
-    "engine/policy/",
-    "engine/audit/",
-    "engine/runtime/approvals.go",
-    "engine/runtime/retention.go",
-    "docs/governance.md",
-    "docs/compliance.md"
+    "engine/policy/", "engine/audit/", "engine/runtime/approvals.go", "engine/runtime/retention.go", "engine/decide/decide.go",
+    "api/approvals.go", "api/governance.go", "api/reports.go", "api/partner.go", "engine/ingest/hooks.go",
+    "engine/db/migrations/00005_governance.sql", "engine/db/migrations/00030_audit_append_only.sql", "engine/db/migrations/00088_suspended_tenants.sql",
+    "docs/governance.md", "docs/compliance.md", "docs/spec/architecture.md"
   ]
 }
 -->
+<h2>What governance means here</h2>
+<p>A lender or a payroll company has to show a regulator, and itself, that money moved only when the right people agreed, that nobody approved their own work, and that the record of it cannot be quietly changed. Taskiem builds that into the engine rather than leaving it to each workflow: approvals follow policies, separation of duties is checked in the database transaction that records a decision, and every privileged action goes into a hash chain that is signed outside the database.</p>
+
+<h2 id="governance--policies">Approval policies</h2>
+<p>An approval step names a policy, a versioned object a tenant keeps apart from its workflows (<x-ref path="engine/policy/policy.go"><code>engine/policy</code></x-ref>). A policy is a list of rules; the first whose condition matches the approval's subject decides how many levels of approval it needs, from which roles, and whether each approver must step up:</p>
+<x-code path="engine/policy/policy.go" start="// Package policy defines approval policies (spec 9.1): reusable objects an" end="// governed each decision." caption="a policy, from its package comment"/>
+<p>Amount thresholds are just conditions, such as <code>=subject.amount_kobo &gt;= 50000000</code>. Each run keeps the policy versions that were active when it started (<x-ref path="engine/runtime/store.go" symbol="func policySnapshots("><code>policySnapshots</code></x-ref>), so editing a policy never changes an approval already waiting. A subject that matches no rule fails the step rather than letting it through.</p>
+<p>An approval can time out. On timeout it is rejected, fails, or escalates once to another role with a fresh deadline (<x-ref path="engine/decide/decide.go" symbol="func (d *decider) approvalProgress("><code>approvalProgress</code></x-ref>). There is no default timeout: without one, an approval waits as long as the run may.</p>
+
+<h2 id="governance--separation">Separation of duties</h2>
+<p><x-ref path="engine/runtime/approvals.go" symbol="func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vote) (VoteResult, error) {"><code>VoteApproval</code></x-ref> checks a vote in one transaction, with the run locked, in this order:</p>
+<ol>
+  <li>The voter holds the level's role, or acts under a delegation from someone who still holds it. An owner holds every role. Delegations last at most 90 days, and owner and admin cannot be delegated.</li>
+  <li>The voter is not a maker: not whoever started the run, wrote the version or published it, each traced through an API key to the person behind it, and not acting for one. A policy can allow a business with one person to approve its own work; such a decision is recorded as self-approved.</li>
+  <li>One vote per person per level, and nobody who approved an earlier level approves a later one.</li>
+  <li>The step-up the rule asks for, last.</li>
+</ol>
+<x-code path="engine/runtime/approvals.go" start="SELECT taskiem_actor_human(r.started_by), taskiem_actor_human(wv.created_by), taskiem_actor_human(wv.published_by::text) FROM runs r" lines="3" caption="who counts as a maker"/>
+<p>The final approval continues the run in the same transaction. API keys never vote. The same rule, that whoever asks does not decide, holds elsewhere:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Where</th><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>Publishing, when four-eyes is on for the environment</td><td>A person other than the requester and the version's author (<x-ref path="api/governance.go" symbol="if requester == approver || (author != nil &amp;&amp; *author == approver.String()) {">governance.go</x-ref>)</td></tr>
+    <tr><td>Promoting into a gated environment</td><td>Not the version's author, nor whoever deployed it to the source</td></tr>
+    <tr><td>A new approval policy version, when four-eyes covers policies</td><td>Not its author, and not an API key</td></tr>
+    <tr><td>Connecting Git to a governed environment</td><td>A second person</td></tr>
+    <tr><td>Catalogue review</td><td>A reviewer outside the publisher's tenant</td></tr>
+    <tr><td>School cash and discount requests</td><td>Never the person who asked, with no single-person exception</td></tr>
+  </tbody>
+</table></div>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <ul>
+    <li><strong>After an escalation, an earlier approver can approve again.</strong> Escalating reopens the approval at its first level without clearing the decisions already made, and the check against approving two levels applies only above the first. Someone who approved level 2 can then take the escalated approval. Found by reading the code; not reproduced.</li>
+    <li><strong>The approval's audit entry is written after the vote, in its own transaction</strong> (<x-ref path="api/approvals.go" symbol="return auditTx(r, tx, &quot;approval.decide&quot;, run.String()+&quot;/&quot;+step, detail)">approvals.go</x-ref>). A failure between the two leaves an approved, continuing run with no <code>approval.decide</code> in the chain. The run's own history still records the decision until retention removes it. One WhatsApp path discards the error from that second write altogether.</li>
+    <li>The built-in withdrawal policy for receive-money lets the person who asked approve their own withdrawal, even in a business with several owners.</li>
+    <li>Separation compares accounts, so one person with two accounts in a tenant can make with one and approve with the other. Erasing personal data and operator writes need one person only.</li>
+  </ul>
+</div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Spec 9.1 says rotating secrets "can each require approval" like publishing and policies (<x-ref path="docs/spec/architecture.md" symbol="Publishing to production, editing approval policies, and rotating secrets can each require approval.">spec 9.1</x-ref>); there is no four-eyes setting for secrets. A policy's <code>channels</code> list is parsed and then ignored.</p>
+</div>
+
+<h2 id="governance--audit">The audit log</h2>
+<p>Every privileged action appends an entry to its tenant's chain: who, as what kind of actor, did what to what, with details that never hold raw personal data. Each entry's hash is the SHA-256 of the previous hash and the entry in a canonical form, so changing, inserting or removing any entry breaks every hash after it. The application cannot write to the table directly. It calls a function that checks the caller's tenant, locks the chain's head and links the new entry:</p>
+<x-code path="engine/db/migrations/00030_audit_append_only.sql" start="CREATE OR REPLACE FUNCTION taskiem_audit_append(" end="$$;" lang="sql" caption="the only way into the chain"/>
+<p>A chain that only the database checks proves little against someone who controls the database. So once a day, for each tenant whose chain moved, the scheduler recomputes the chain from the last anchor, signs the head with Ed25519, and writes it to a directory outside the database before recording it inside (<x-ref path="engine/audit/anchor.go"><code>anchor.go</code></x-ref>). A tenant can also have each anchor emailed to them. <code>taskiem audit verify</code> checks an export offline against those anchors with the public key, and names the first entry that differs, if any.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <ul>
+    <li>Anchoring is off unless <code>TASKIEM_ANCHOR_KEY</code> and <code>TASKIEM_ANCHOR_DIR</code> are both set, with only a warning in the log. Without it the chain is checked only by the database it lives in.</li>
+    <li>Between anchors, up to about a day, someone with write access to the database can rewrite recent entries and recompute their hashes. That is inherent in daily anchoring; anchoring more often narrows it.</li>
+    <li>Offline verification checks signatures only when given <code>--key</code>, and the documented recipe takes that key from the same API it is verifying. It does not check that the anchors belong to the export's tenant.</li>
+    <li>The chain proves that entries were not changed, not who acted: the actor is whatever the application passes.</li>
+  </ul>
+</div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec stores anchors "in write-once object storage" (<x-ref path="docs/spec/architecture.md" symbol="A daily job computes the chain head and anchors it outside the database">spec 9.2</x-ref>). They go to a local directory, which is write-once only if it is mounted that way. Export to a SIEM is not built.</p>
+</div>
+
+<h2 id="governance--retention">Retention and erasure</h2>
+<p>A run is kept for its workflow's <code>retention</code>, else the tenant's default, else 90 days, counted from when it ends and capped by the plan. Every 10 minutes the scheduler archives up to 500 runs past their date and then deletes them, writing <code>run.purge</code> to the chain (<x-ref path="engine/runtime/retention.go" symbol="func (s *Scheduler) PurgeExpired(ctx context.Context, limit int) (int, error) {"><code>PurgeExpired</code></x-ref>). The audit log is never deleted. Erasing a person is covered on the <x-page id="security--personal-data">Security</x-page> page.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <ul>
+    <li><strong>Approval evidence goes with the run.</strong> The purge deletes the run's approvals and decisions, and the approvals report reads only those. After 90 days, or less, the report no longer shows who approved what; only the chain does.</li>
+    <li>A workflow's <code>settings.retention</code> is not validated. A value that does not parse is ignored, and a very short one, minutes, is accepted, which would purge runs and their approval evidence almost at once.</li>
+    <li>Without an archive configured, nothing is purged and personal data stays in the database for good (still erasable).</li>
+  </ul>
+</div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec keeps the audit log for a "minimum 7 years, configurable" (<x-ref path="docs/spec/architecture.md" symbol="separate from the audit log (minimum 7 years, configurable)">spec 9.4</x-ref>). There is no setting: it is kept for ever.</p>
+</div>
+
+<h2 id="governance--suspension">Suspended tenants</h2>
+<p>A partner can suspend its own sub-tenant, which also revokes its sessions (<x-ref path="api/partner.go" symbol="s.setSubTenantStatus(&quot;suspended&quot;)">partner.go</x-ref>). Suspension stops new work everywhere:</p>
+<ul>
+  <li>sign-in, sessions and API keys stop resolving;</li>
+  <li>webhooks get <code>423</code>, so providers deliver again later;</li>
+  <li>starting a run is refused;</li>
+  <li>schedules are not fired, and the ones missed are skipped on resume.</li>
+</ul>
+<p>Runs already under way carry on to their end, including their payments, as <x-ref path="docs/governance.md">the governance guide</x-ref> says: stopping one halfway would be worse.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>Only a partner can suspend, and only its sub-tenants. For any other tenant, the guide's "by the operator" means an SQL update by hand: there is no command, console action or audit entry for it.</p>
+</div>
+
+<h2 id="governance--reports">Compliance reports</h2>
+<p><code>GET /v1/reports/{kind}</code> gives anyone with <code>audit.read</code> six reports, as JSON or CSV, over the last three months by default (<x-ref path="api/reports.go"><code>reports.go</code></x-ref>):</p>
+<ul>
+  <li><strong>approvals</strong>, by amount band;</li>
+  <li><strong>effects</strong>: writes that needed a person or a provider check, parked or settled by reconciliation;</li>
+  <li><strong>pii</strong>: reveals and erasures;</li>
+  <li><strong>changes</strong>: every workflow version, who wrote and published it, its commit, and what changed;</li>
+  <li><strong>chain</strong>: the audit chain verified, and each anchor checked against it;</li>
+  <li><strong>secret-use</strong>: who read which secret, and why.</li>
+</ul>
+<p>Viewing a report is itself audited, and CSV cells that a spreadsheet would run as formulas are written as text. Nothing maps these to SOC 2, ISO 27001 or the NDPA yet; <x-ref path="docs/compliance.md">the compliance guide</x-ref> lists that as work for people.</p>
