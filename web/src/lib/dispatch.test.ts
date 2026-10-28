@@ -109,3 +109,13 @@ describe("riders on the Money page", () => {
     ).toBe("4 delivered · ₦8,500 paid at the door · ₦3,000 cash · fees ₦4,000 · rated 4.5");
   });
 });
+
+describe("payouts stuck being paid", () => {
+  it("say a payout and ask before marking it not paid", async () => {
+    const { payoutSub, notPaidQuestion } = await import("./dispatch");
+    const x = { payout_id: "p1", rider_id: "r1", rider: "Musa", deliveries: 2, fees_kobo: 200000, owed_kobo: 50000, amount_kobo: 150000, status: "pending" as const };
+    expect(payoutSub(x)).toBe("2 deliveries, ₦500 cash taken off");
+    expect(payoutSub({ ...x, created_at: "2026-10-28T09:00:00Z" })).toMatch(/^2 deliveries, ₦500 cash taken off · started .+, 10:00$/);
+    expect(notPaidQuestion(x)).toMatch(/^Mark Musa's payout of ₦1,500 as not paid\? Only once your bank shows it did not go/);
+  });
+});

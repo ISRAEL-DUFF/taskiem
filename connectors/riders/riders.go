@@ -37,7 +37,7 @@ type Ops interface {
 type Dispatcher interface {
 	Offer(ctx context.Context, tenant uuid.UUID, reference string, in dispatch.OfferIn) (dispatch.OfferOut, error)
 	Release(ctx context.Context, tenant uuid.UUID, reference, actor string) (dispatch.Delivery, error)
-	PrepareBatch(ctx context.Context, tenant, batch uuid.UUID) (dispatch.Batch, error)
+	PrepareBatch(ctx context.Context, tenant, batch, run uuid.UUID) (dispatch.Batch, error)
 	FinishBatch(ctx context.Context, tenant, batch uuid.UUID, results []dispatch.Result, cancel bool) (int, int, error)
 }
 
@@ -116,7 +116,7 @@ func (a *actions) prepare(ctx context.Context, req connector.Request) (connector
 			return connector.Response{}, fmt.Errorf("batch_id is a payout batch's id: %w", effects.ErrFatal)
 		}
 	}
-	b, err := d.PrepareBatch(ctx, c.Tenant, batch)
+	b, err := d.PrepareBatch(ctx, c.Tenant, batch, c.Run)
 	if err != nil {
 		return connector.Response{}, classify(err)
 	}
@@ -341,14 +341,14 @@ func (l *Late) Offer(ctx context.Context, tenant uuid.UUID, reference string, in
 	return d.Offer(ctx, tenant, reference, in)
 }
 
-func (l *Late) PrepareBatch(ctx context.Context, tenant, batch uuid.UUID) (dispatch.Batch, error) {
+func (l *Late) PrepareBatch(ctx context.Context, tenant, batch, run uuid.UUID) (dispatch.Batch, error) {
 	l.mu.RLock()
 	d := l.dis
 	l.mu.RUnlock()
 	if d == nil {
 		return dispatch.Batch{}, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
 	}
-	return d.PrepareBatch(ctx, tenant, batch)
+	return d.PrepareBatch(ctx, tenant, batch, run)
 }
 
 func (l *Late) FinishBatch(ctx context.Context, tenant, batch uuid.UUID, results []dispatch.Result, cancel bool) (int, int, error) {

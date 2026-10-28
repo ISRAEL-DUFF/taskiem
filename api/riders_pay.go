@@ -58,8 +58,14 @@ func (s *Server) getRidersPay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// riderOpBank is the step-up operation for a rider's bank account, bound
+// to the rider.
+const riderOpBank = "rider.bank"
+
 // putRiderBank is PUT /v1/riders/{id}/bank: the account a rider's payouts
-// go to; their bank confirms the name at the first payout.
+// go to; their bank confirms the name at the first payout. Where riders'
+// money goes, so the person changing it confirms it is them (a passkey or
+// authenticator code), and an API key cannot.
 func (s *Server) putRiderBank(w http.ResponseWriter, r *http.Request) {
 	if !s.dispatchReady(w, r) {
 		return
@@ -69,25 +75,64 @@ func (s *Server) putRiderBank(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	var in dispatch.Bank
+	var in struct {
+		dispatch.Bank
+		stepUpProof
+	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
+	// The account is checked and the rider found first, so nobody is asked
+	// to confirm a change that would be refused.
+	if _, err := in.Bank.Clean(); err != nil {
+		s.dispatchFail(w, r, err)
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		_, err := s.Riders.GetTx(r.Context(), tx, p.TenantID, id)
+		return err
+	}); err != nil {
+		s.dispatchFail(w, r, err)
+		return
+	}
+	method, ok := s.personStepUp(w, r, in.stepUpProof, riderOpBank, id.String(), "changes to a rider's bank account", "changing a rider's bank account")
+	if !ok {
+		return
+	}
 	var shown string
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if _, err := s.Riders.GetTx(r.Context(), tx, p.TenantID, id); err != nil {
-			return err
-		}
 		var err error
-		shown, err = s.Dispatch.SetBankTx(r.Context(), tx, p.TenantID, id, in, p.Actor())
+		shown, err = s.Dispatch.SetBankTx(r.Context(), tx, p.TenantID, id, in.Bank, p.Actor(), method)
 		return err
 	}); err != nil {
 		s.dispatchFail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"bank": shown})
+}
+
+// payoutNotPaid is POST /v1/riders/payouts/{id}/not-paid: the owner, having
+// checked their bank, says a payout stuck being paid was not paid; its
+// deliveries are paid in the next payout. Refused while its run is going.
+func (s *Server) payoutNotPaid(w http.ResponseWriter, r *http.Request) {
+	if !s.dispatchReady(w, r) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		return s.Dispatch.MarkNotPaidTx(r.Context(), tx, p.TenantID, id, p.Actor())
+	}); err != nil {
+		s.dispatchFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "failed"})
 }
 
 var payTime = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)

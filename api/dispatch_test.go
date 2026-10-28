@@ -293,13 +293,48 @@ func TestRidersPay(t *testing.T) {
 	if rs, _ := sum["riders"].([]any); len(rs) != 1 || rs[0].(map[string]any)["delivered"] != float64(1) || rs[0].(map[string]any)["fees_kobo"] != float64(100000) {
 		t.Fatalf("money summary riders: %v", sum["riders"])
 	}
-	ada.must(400, "PUT", "/v1/riders/"+m["id"].(string)+"/bank", map[string]any{"bank_code": "058", "account_number": "12"})
-	ada.must(404, "PUT", "/v1/riders/"+uuid.NewString()+"/bank", map[string]any{"bank_code": "058", "account_number": "0123456789"})
-	if b := ada.must(200, "PUT", "/v1/riders/"+m["id"].(string)+"/bank", map[string]any{"bank_code": "058", "bank_name": "GTBank", "account_number": "0123456789"}); b["bank"] != "GTBank, ending 6789" {
+	// A rider's bank account is where their money goes: the person changing
+	// it confirms it is them, and needs a second factor to.
+	bankPath := "/v1/riders/" + m["id"].(string) + "/bank"
+	gtb := map[string]any{"bank_code": "058", "bank_name": "GTBank", "account_number": "0123456789"}
+	ada.must(404, "PUT", "/v1/riders/"+uuid.NewString()+"/bank", gtb)
+	if e := ada.must(403, "PUT", bankPath, gtb); e["step_up"] != "required" || !strings.Contains(fmt.Sprint(e["error"]), "add a passkey or an authenticator app") {
+		t.Fatalf("no second factor: %v", e)
+	}
+	secret := enrol(t, ada)
+	if e := ada.must(403, "PUT", bankPath, gtb); e["operation"] != "rider.bank" || e["target"] != m["id"] || fmt.Sprint(e["methods"]) != "[totp]" {
+		t.Fatalf("step-up asked: %v", e)
+	}
+	ada.must(403, "PUT", bankPath, map[string]any{"bank_code": "058", "account_number": "0123456789", "totp": "000000"})
+	// A wrong account is refused before anyone is asked to confirm.
+	ada.must(400, "PUT", bankPath, map[string]any{"bank_code": "058", "account_number": "12"})
+	gtb["totp"] = codeAfter(secret, 1)
+	if b := ada.must(200, "PUT", bankPath, gtb); b["bank"] != "GTBank, ending 6789" {
 		t.Fatalf("bank %v", b)
+	}
+	var confirmed string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT detail->>'confirmed' FROM audit_log WHERE tenant_id = $1 AND action = 'dispatch.rider_bank_set'`, w.biz).Scan(&confirmed); err != nil || confirmed != "totp" {
+		t.Fatalf("audit: %q %v", confirmed, err)
 	}
 	if r := ada.must(200, "GET", "/v1/riders", nil)["riders"].([]any)[0].(map[string]any); r["bank"] != "GTBank, ending 6789" {
 		t.Fatalf("rider %v", r)
+	}
+
+	// A payout stuck being paid (its run gone): the owner marks it not paid
+	// and Musa's delivery is due again.
+	b, err := w.srv.Dispatch.PrepareBatch(ctx, w.biz, uuid.New(), uuid.Nil)
+	if err != nil || len(b.Payouts) != 1 {
+		t.Fatalf("batch %+v %v", b, err)
+	}
+	if v := ada.must(200, "GET", "/v1/riders/pay", nil); len(v["lines"].([]any)) != 0 || v["payouts"].([]any)[0].(map[string]any)["status"] != "pending" {
+		t.Fatalf("while being paid: %v", v)
+	}
+	notPaid := "/v1/riders/payouts/" + b.Payouts[0].ID.String() + "/not-paid"
+	ada.must(200, "POST", notPaid, nil)
+	ada.must(409, "POST", notPaid, nil)
+	ada.must(404, "POST", "/v1/riders/payouts/"+uuid.NewString()+"/not-paid", nil)
+	if v := ada.must(200, "GET", "/v1/riders/pay", nil); len(v["lines"].([]any)) != 1 || v["payouts"].([]any)[0].(map[string]any)["status"] != "failed" {
+		t.Fatalf("after marking it: %v", v)
 	}
 
 	// Paying now waits for the setup.

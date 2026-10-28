@@ -439,6 +439,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowPublish), s.tenantWide).Put("/riders/pay/setup", s.setupRidersPay)
 			r.With(s.need(PermStorefrontManage), s.need(PermRunStart), s.tenantWide).Post("/riders/pay", s.payRiders)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/riders/{id}/bank", s.putRiderBank)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/payouts/{id}/not-paid", s.payoutNotPaid)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
 			// Deliveries with riders (dispatch.go, D2 to D4).
 			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)

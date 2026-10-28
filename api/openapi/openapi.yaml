@@ -5689,13 +5689,55 @@ paths:
                     description: True while four-eyes publishing waits for a second person
         default:
           $ref: '#/components/responses/Error'
+  /v1/riders/payouts/{id}/not-paid:
+    post:
+      operationId: riderPayoutNotPaid
+      tags:
+      - Riders
+      summary: Mark a payout not paid
+      description: |
+        For a payout stuck being paid, once the owner has checked their bank and the rider was not paid: the payout is marked
+        failed and its deliveries are paid in the next payout. 409 while the run that makes it is still going (it may yet pay,
+        or is checking a payment), and for a payout no longer being paid.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Marked not paid
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [failed]
+        default:
+          $ref: '#/components/responses/Error'
   /v1/riders/{id}/bank:
     put:
       operationId: putRiderBank
       tags:
       - Riders
       summary: Set a rider's bank account
-      description: The account their payouts go to, sealed under the rider's personal data; their bank confirms the name at the first payout.
+      description: |
+        The account their payouts go to, sealed under the rider's personal data; their bank confirms the name at the first
+        payout. Where a rider's money goes, so a person confirms it is them: a passkey assertion for a challenge from
+        `POST /v1/me/step-up/options` (operation `rider.bank`, the rider's id as target) or an authenticator code. Without one,
+        403 with `step_up: required`, the methods the person has and the operation and target to confirm; API keys cannot.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -5727,6 +5769,11 @@ paths:
                 account_number:
                   type: string
                   pattern: '^[0-9]{10}$'
+                totp:
+                  type: string
+                  description: A current authenticator code (step-up)
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
       responses:
         '200':
           description: The account as it may be shown
@@ -22875,11 +22922,12 @@ components:
           - key.byok.enable
           - key.byok.credentials
           - key.byok.disable
+          - rider.bank
         target:
           type: string
           maxLength: 200
           description: 'What the passkey confirms: `{run}/{step}/{decision}` for an approval, the action (`passkey.add`,
-            `totp.setup`, `password.change`) for `account.reauth`.'
+            `totp.setup`, `password.change`) for `account.reauth`, the rider''s id for `rider.bank`.'
       additionalProperties: false
     PasskeyLoginRequest:
       type: object
@@ -24205,6 +24253,9 @@ components:
         status:
           type: string
           enum: [pending, paid, failed, cancelled]
+        created_at:
+          type: string
+          format: date-time
     RiderInput:
       type: object
       additionalProperties: false

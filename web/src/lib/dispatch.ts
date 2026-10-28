@@ -2,7 +2,7 @@
 // the API's shapes, how a delivery reads in a row and on an order's page,
 // the dispatch settings form, and what riders are owed and paid.
 
-import { lagosTime } from "./bookings";
+import { lagosTime, whenLabel } from "./bookings";
 import { feeInput, feeKobo } from "./orders";
 import { formatPrice } from "./storefront";
 
@@ -201,6 +201,7 @@ export interface Payout {
   owed_kobo: number;
   amount_kobo: number;
   status: "pending" | "paid" | "failed" | "cancelled";
+  created_at?: string;
 }
 
 export interface RidersPay {
@@ -216,6 +217,18 @@ export function payLineSub(l: PayLine): string {
   parts.push(l.bank || "No bank account yet");
   return parts.join(" · ");
 }
+
+/** A payout underneath the rider's name: its deliveries, the cash taken off, and when it started. */
+export function payoutSub(x: Payout): string {
+  let s = `${x.deliveries} ${x.deliveries === 1 ? "delivery" : "deliveries"}`;
+  if (x.owed_kobo) s += `, ${formatPrice(x.owed_kobo)} cash taken off`;
+  if (x.created_at) s += ` · started ${whenLabel(x.created_at)}`;
+  return s;
+}
+
+/** What the owner is asked before marking a payout stuck being paid as not paid. */
+export const notPaidQuestion = (x: Payout) =>
+  `Mark ${x.rider}'s payout of ${formatPrice(x.amount_kobo)} as not paid? Only once your bank shows it did not go: their deliveries are then paid in the next payout, so marking a payment that went through pays them twice.`;
 
 export const PAYOUT_STATUS: Record<Payout["status"], { label: string; tone: "ok" | "warn" | "muted" | "danger" }> = {
   pending: { label: "Being paid", tone: "warn" },

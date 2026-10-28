@@ -32,7 +32,7 @@ If a rider owes more than your limit (₦20,000 unless you change it), it shows 
 
 ## Paying your riders
 
-Open **Riders > Pay riders**. You see what each rider is due (their fees, less any cash they owe), and add each rider's bank account.
+Open **Riders > Pay riders**. You see what each rider is due (their fees, less any cash they owe), and add each rider's bank account. Adding or changing one asks you to confirm it is you, with your passkey or authenticator app; if you have neither, add one under **Account** first.
 
 Press **Set up weekly pay** and choose a day and time. Each week:
 
@@ -41,6 +41,8 @@ Press **Set up weekly pay** and choose a day and time. Each week:
 3. It pays each rider once, from your Taskiem wallet.
 
 **Pay riders now** does the same at once. A rider with no bank account is left out and named, and paid next time.
+
+If a payout stays **Being paid** because its run was stopped, check your bank. If the rider was not paid, press **Mark not paid** on it, and they are paid in the next payout. Only do this once the bank shows the money did not go, or they are paid twice.
 
 ## Ratings
 

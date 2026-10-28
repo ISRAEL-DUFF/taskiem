@@ -16,7 +16,9 @@ import {
   deliverySub,
   isHeld,
   offerOutcome,
+  notPaidQuestion,
   payLineSub,
+  payoutSub,
   remitProblem,
   settingsForm,
   settingsProblem,
@@ -30,6 +32,7 @@ import {
   type SettingsForm,
 } from "../lib/dispatch";
 import { StorefrontTabs } from "./Storefront";
+import { useStepUp, type StepUpProof } from "../stepup";
 
 // Deliveries by the business's riders (dispatch D2 to D5; docs/dispatch.md):
 // an order's delivery on its page, the day's deliveries with how they are
@@ -364,6 +367,9 @@ export function RidersPayPage() {
   const pay = useLoad(() => get<RidersPay>("/v1/riders/pay"), []);
   const [remitting, setRemitting] = useState<Owed | null>(null);
   const [banking, setBanking] = useState<PayLine | null>(null);
+  // A rider's bank account is where their money goes: changing it asks the
+  // person to confirm it is them.
+  const step = useStepUp();
   const [setup, setSetup] = useState(false);
   const act = useAction();
   const reload = () => {
@@ -451,7 +457,7 @@ export function RidersPayPage() {
             </Items>
           )}
           {p.payouts.length > 0 && (
-            <details>
+            <details open={p.payouts.some((x) => x.status === "pending")}>
               <summary>Recent payouts</summary>
               <Items label="Recent payouts">
                 {p.payouts.map((x) => (
@@ -459,9 +465,24 @@ export function RidersPayPage() {
                     key={x.payout_id}
                     letter={x.rider}
                     title={`${x.rider} · ${formatPrice(x.amount_kobo)}`}
-                    sub={<span className="sub">{`${x.deliveries} ${x.deliveries === 1 ? "delivery" : "deliveries"}${x.owed_kobo ? `, ${formatPrice(x.owed_kobo)} cash taken off` : ""}`}</span>}
+                    sub={<span className="sub">{payoutSub(x)}</span>}
                     side={<span className={`badge ${PAYOUT_STATUS[x.status].tone}`}>{PAYOUT_STATUS[x.status].label}</span>}
-                  />
+                    testid="rider-payout"
+                  >
+                    {x.status === "pending" && (
+                      <button
+                        type="button"
+                        className="small"
+                        disabled={act.busy}
+                        onClick={() =>
+                          confirm(notPaidQuestion(x)) &&
+                          void act.run(async () => (await post(`/v1/riders/payouts/${x.payout_id}/not-paid`), reload()), "Marked not paid: paid in the next payout")
+                        }
+                      >
+                        Mark not paid<span className="sr-only"> for {x.rider}</span>
+                      </button>
+                    )}
+                  </Row>
                 ))}
               </Items>
             </details>
@@ -470,7 +491,8 @@ export function RidersPayPage() {
       )}
       {!owed.data && !owed.error && <Skeleton rows={4} label="Loading riders' pay…" />}
       {remitting && <RemitModal owed={remitting} onClose={() => setRemitting(null)} onDone={() => (setRemitting(null), reload())} />}
-      {banking && <BankModal line={banking} onClose={() => setBanking(null)} onDone={() => (setBanking(null), reload())} />}
+      {banking && <BankModal line={banking} request={step.request} onClose={() => setBanking(null)} onDone={() => (setBanking(null), reload())} />}
+      {step.modal}
       {setup && <PaySetupModal onClose={() => setSetup(false)} onDone={() => (setSetup(false), reload())} />}
     </>
   );
@@ -507,7 +529,17 @@ function RemitModal({ owed, onClose, onDone }: { owed: Owed; onClose: () => void
   );
 }
 
-function BankModal({ line, onClose, onDone }: { line: PayLine; onClose: () => void; onDone: () => void }) {
+function BankModal({
+  line,
+  request,
+  onClose,
+  onDone,
+}: {
+  line: PayLine;
+  request: <T>(title: string, send: (p: StepUpProof) => Promise<T>) => Promise<T>;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const banks = useLoad(() => get<{ banks: Bank[] }>("/v1/receive-money/banks"), []);
   const list = useMemo(() => (banks.data?.banks ?? []).map(bankOf).filter((b) => b.code), [banks.data]);
   const [code, setCode] = useState("");
@@ -520,13 +552,17 @@ function BankModal({ line, onClose, onDone }: { line: PayLine; onClose: () => vo
         onSubmit={(e) => {
           e.preventDefault();
           const bank = list.find((b) => b.code === code);
+          const body = { bank_code: code.trim(), bank_name: bank?.name ?? "", account_number: number };
           void act.run(
-            async () => (await put(`/v1/riders/${line.rider_id}/bank`, { bank_code: code.trim(), bank_name: bank?.name ?? "", account_number: number }), onDone()),
+            async () => (await request(`${line.rider}'s bank account`, (p) => put(`/v1/riders/${line.rider_id}/bank`, { ...body, ...p })), onDone()),
             "Saved",
           );
         }}
       >
-        <p className="hint">Their payouts go here. Their bank confirms the name before the first payout, and you see it when you approve.</p>
+        <p className="hint">
+          Their payouts go here. You confirm it is you with your passkey or authenticator code. Their bank confirms the name before the first payout, and you see
+          it when you approve.
+        </p>
         {list.length > 0 ? (
           <Field label="Bank">
             <select value={code} onChange={(e) => setCode(e.target.value)}>

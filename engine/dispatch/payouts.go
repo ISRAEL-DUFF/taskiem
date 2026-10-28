@@ -97,19 +97,30 @@ func (b Bank) Shown() string {
 	return s
 }
 
-// SetBankTx keeps the account a rider's payouts go to; the bank confirms
-// its name when they are first paid.
-func (d *Dispatch) SetBankTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UUID, b Bank, actor string) (string, error) {
+// Clean is the account trimmed, without the bank's name for it (the bank
+// gives that at the first payout), or why it is refused.
+func (b Bank) Clean() (Bank, error) {
 	b.BankCode, b.AccountNumber, b.BankName = strings.TrimSpace(b.BankCode), strings.TrimSpace(b.AccountNumber), strings.TrimSpace(b.BankName)
 	switch {
 	case len(b.BankCode) < 3 || len(b.BankCode) > 6 || strings.Trim(b.BankCode, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") != "":
-		return "", fmt.Errorf("%w: choose the rider's bank", ErrInvalid)
+		return b, fmt.Errorf("%w: choose the rider's bank", ErrInvalid)
 	case len(b.AccountNumber) != 10 || strings.Trim(b.AccountNumber, "0123456789") != "":
-		return "", fmt.Errorf("%w: an account number is 10 digits", ErrInvalid)
+		return b, fmt.Errorf("%w: an account number is 10 digits", ErrInvalid)
 	case len(b.BankName) > 60:
-		return "", fmt.Errorf("%w: a bank's name is up to 60 characters", ErrInvalid)
+		return b, fmt.Errorf("%w: a bank's name is up to 60 characters", ErrInvalid)
 	}
 	b.AccountName = ""
+	return b, nil
+}
+
+// SetBankTx keeps the account a rider's payouts go to; the bank confirms
+// its name when they are first paid. confirmed is how the person confirmed
+// it was them (passkey, totp), kept in the audit log.
+func (d *Dispatch) SetBankTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UUID, b Bank, actor, confirmed string) (string, error) {
+	b, err := b.Clean()
+	if err != nil {
+		return "", err
+	}
 	sealed, err := d.sealBank(ctx, tx, tenant, rider, b)
 	if err != nil {
 		return "", err
@@ -117,7 +128,7 @@ func (d *Dispatch) SetBankTx(ctx context.Context, tx pgx.Tx, tenant, rider uuid.
 	if _, err := tx.Exec(ctx, `UPDATE riders SET bank = $3, bank_shown = $4, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, rider, sealed, b.Shown()); err != nil {
 		return "", err
 	}
-	return b.Shown(), audit(ctx, tx, tenant, "dispatch.rider_bank_set", rider.String(), map[string]any{"by": actor})
+	return b.Shown(), audit(ctx, tx, tenant, "dispatch.rider_bank_set", rider.String(), map[string]any{"by": actor, "confirmed": confirmed})
 }
 
 func (d *Dispatch) sealBank(ctx context.Context, tx pgx.Tx, tenant, rider uuid.UUID, b Bank) (map[string]any, error) {
@@ -165,6 +176,8 @@ type Payout struct {
 	BankCode      string    `json:"bank_code"`
 	AccountNumber string    `json:"account_number"`
 	AccountName   string    `json:"account_name"`
+	// CreatedAt is when the payout was made (lists only).
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 }
 
 // Batch is a payout run: the riders to pay, and those not paid for want
@@ -179,8 +192,14 @@ type Batch struct {
 // PrepareBatch makes a batch with this id, once: a payout for each rider
 // due fees with a bank account (their deliveries bound to it, so they
 // are paid once); those whose cash owed covers their fees are settled at
-// once with nothing to pay. Again, the same batch is read back.
-func (d *Dispatch) PrepareBatch(ctx context.Context, tenant, batch uuid.UUID) (Batch, error) {
+// once with nothing to pay. Again, the same batch is read back. run is the
+// workflow run making it (uuid.Nil for none), kept so a payout stuck being
+// paid can be marked not paid once that run has ended.
+func (d *Dispatch) PrepareBatch(ctx context.Context, tenant, batch, run uuid.UUID) (Batch, error) {
+	var runID *uuid.UUID
+	if run != uuid.Nil {
+		runID = &run
+	}
 	b := Batch{ID: batch, Payouts: []Payout{}, NotPaid: []string{}}
 	err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
 		// One batch is made at a time.
@@ -213,8 +232,8 @@ func (d *Dispatch) PrepareBatch(ctx context.Context, tenant, batch uuid.UUID) (B
 				if l.NetKobo == 0 {
 					status = "paid"
 				}
-				if _, err := tx.Exec(ctx, `INSERT INTO rider_payouts (id, tenant_id, batch_id, rider_id, deliveries, fees_kobo, owed_kobo, net_kobo, status)
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, tenant, batch, l.RiderID, l.Deliveries, l.FeesKobo, min(l.OwedKobo, l.FeesKobo), l.NetKobo, status); err != nil {
+				if _, err := tx.Exec(ctx, `INSERT INTO rider_payouts (id, tenant_id, batch_id, rider_id, deliveries, fees_kobo, owed_kobo, net_kobo, status, run_id)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, tenant, batch, l.RiderID, l.Deliveries, l.FeesKobo, min(l.OwedKobo, l.FeesKobo), l.NetKobo, status, runID); err != nil {
 					return err
 				}
 				if _, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = $3 WHERE tenant_id = $1 AND rider_id = $2 AND status = 'delivered' AND payout_id IS NULL`,
@@ -342,6 +361,44 @@ func (d *Dispatch) FinishBatch(ctx context.Context, tenant, batch uuid.UUID, res
 	return paid, failed, err
 }
 
+// MarkNotPaidTx is the owner's word that a payout stuck being paid was not
+// paid, once they checked their bank: its deliveries are due again, in the
+// next payout. Refused while the run that makes it is still going (it may
+// yet pay, or is checking a payment whose outcome is unknown), and for a
+// payout no longer being paid.
+func (d *Dispatch) MarkNotPaidTx(ctx context.Context, tx pgx.Tx, tenant, payout uuid.UUID, actor string) error {
+	var status string
+	var run *uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT status, run_id FROM rider_payouts WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, payout).Scan(&status, &run)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNoDelivery
+	}
+	if err != nil {
+		return err
+	}
+	if status != "pending" {
+		return fmt.Errorf("%w: only a payout still being paid can be marked not paid", ErrMove)
+	}
+	if run != nil {
+		var state string
+		err := tx.QueryRow(ctx, `SELECT status FROM runs WHERE id = $1`, *run).Scan(&state)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		switch state {
+		case "queued", "running", "waiting", "needs_reconciliation":
+			return fmt.Errorf("%w: the payout is still running and may yet pay; wait for it to finish, or stop its run first", ErrMove)
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE rider_payouts SET status = 'failed', settled_at = now() WHERE id = $1`, payout); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = NULL WHERE tenant_id = $1 AND payout_id = $2`, tenant, payout); err != nil {
+		return err
+	}
+	return audit(ctx, tx, tenant, "dispatch.payout_marked_not_paid", payout.String(), map[string]any{"by": actor})
+}
+
 // settlePayoutTx nets the cash a rider owed from their paid payout,
 // oldest first. Cash they handed in since the payout was made is not
 // taken twice: what they owe now caps it, and what the rider is due back
@@ -369,14 +426,14 @@ func (d *Dispatch) settlePayoutTx(ctx context.Context, tx pgx.Tx, tenant, payout
 
 // Payouts lists the batches' payouts, newest first.
 func (d *Dispatch) PayoutsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Payout, error) {
-	rows, err := tx.Query(ctx, `SELECT id, rider_id, deliveries, fees_kobo, owed_kobo, net_kobo, status FROM rider_payouts
+	rows, err := tx.Query(ctx, `SELECT id, rider_id, deliveries, fees_kobo, owed_kobo, net_kobo, status, created_at FROM rider_payouts
 		WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2`, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Payout, error) {
 		var p Payout
-		return p, r.Scan(&p.ID, &p.RiderID, &p.Deliveries, &p.FeesKobo, &p.OwedKobo, &p.AmountKobo, &p.Status)
+		return p, r.Scan(&p.ID, &p.RiderID, &p.Deliveries, &p.FeesKobo, &p.OwedKobo, &p.AmountKobo, &p.Status, &p.CreatedAt)
 	})
 	if err != nil {
 		return nil, err

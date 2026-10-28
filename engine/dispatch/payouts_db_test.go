@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -81,20 +82,20 @@ func TestRiderPayouts(t *testing.T) {
 
 	// Bank accounts: checked, sealed, shown by the last four digits.
 	w.in(func(tx pgx.Tx) error {
-		if _, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", AccountNumber: "12345"}, "user:ada"); err == nil {
+		if _, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", AccountNumber: "12345"}, "user:ada", "totp"); err == nil {
 			t.Error("a short account number was kept")
 		}
 		return nil
 	})
 	w.in(func(tx pgx.Tx) error {
-		shown, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", BankName: "Wema Bank", AccountNumber: "0123456789"}, "user:ada")
+		shown, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", BankName: "Wema Bank", AccountNumber: "0123456789"}, "user:ada", "totp")
 		if shown != "Wema Bank, ending 6789" {
 			t.Errorf("shown %q", shown)
 		}
 		if err != nil {
 			return err
 		}
-		_, err = w.d.SetBankTx(ctx, tx, w.env.Tenant, ngozi.ID, dispatch.Bank{BankCode: "058", AccountNumber: "0987654321"}, "user:ada")
+		_, err = w.d.SetBankTx(ctx, tx, w.env.Tenant, ngozi.ID, dispatch.Bank{BankCode: "058", AccountNumber: "0987654321"}, "user:ada", "totp")
 		return err
 	})
 	var plain int
@@ -105,14 +106,14 @@ func TestRiderPayouts(t *testing.T) {
 	// Musa's cash owed is less than his fees but he has no account: named,
 	// left for next time.
 	batch := uuid.New()
-	b, err := w.d.PrepareBatch(ctx, w.env.Tenant, batch)
+	b, err := w.d.PrepareBatch(ctx, w.env.Tenant, batch, uuid.Nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(b.Payouts) != 2 || len(b.NotPaid) != 1 || b.NotPaid[0] != "Musa" || b.TotalKobo != 130000 {
 		t.Fatalf("batch %+v", b)
 	}
-	again, err := w.d.PrepareBatch(ctx, w.env.Tenant, batch)
+	again, err := w.d.PrepareBatch(ctx, w.env.Tenant, batch, uuid.Nil)
 	if err != nil || len(again.Payouts) != 2 || again.Payouts[0].ID != b.Payouts[0].ID {
 		t.Fatalf("again %+v %v", again, err)
 	}
@@ -154,10 +155,10 @@ func TestRiderPayouts(t *testing.T) {
 	// Musa's account set: his fees are paid less what he owes, which the
 	// payout settles.
 	w.in(func(tx pgx.Tx) error {
-		_, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, musa.ID, dispatch.Bank{BankCode: "044", AccountNumber: "1112223334"}, "user:ada")
+		_, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, musa.ID, dispatch.Bank{BankCode: "044", AccountNumber: "1112223334"}, "user:ada", "totp")
 		return err
 	})
-	b2, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New())
+	b2, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func TestRiderPayouts(t *testing.T) {
 	if l := w.lines(); l["Musa"].Deliveries != 2 || l["Musa"].OwedKobo != m.OwedKobo {
 		t.Fatalf("Musa after a cancelled payout %+v", l["Musa"])
 	}
-	b3, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New())
+	b3, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +216,7 @@ func TestPayoutAllNetted(t *testing.T) {
 	musa := w.rider("Musa", "+2348031110001", "Lekki")
 	w.deliver(musa.ID, 50000, true)
 	owed := w.lines()["Musa"].OwedKobo
-	b, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New())
+	b, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
 	if err != nil || len(b.Payouts) != 0 || len(b.NotPaid) != 0 {
 		t.Fatalf("batch %+v %v", b, err)
 	}
@@ -319,5 +320,67 @@ func TestRiderOwesLeak(t *testing.T) {
 	var status string
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM money_leaks WHERE kind = 'rider_owes'`).Scan(&status); err != nil || status != "resolved" {
 		t.Fatalf("after handing it in: %q %v", status, err)
+	}
+}
+
+// A payout stuck being paid is marked not paid by the owner once its run
+// has ended, never while the run may yet pay; its deliveries are then due
+// again.
+func TestPayoutMarkedNotPaid(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	musa := w.rider("Musa", "+2348031110001", "Lekki")
+	w.deliver(musa.ID, 100000, false)
+	w.in(func(tx pgx.Tx) error {
+		_, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, musa.ID, dispatch.Bank{BankCode: "058", AccountNumber: "0123456789"}, "user:ada", "totp")
+		return err
+	})
+	// The run making the payout waits on an approval.
+	wf := w.env.Publish(t, `{"schema":"wd/v1","id":"wf_pay","version":1,"name":"Pay riders","trigger":{"type":"manual"},
+		"steps":[{"id":"approve","type":"approval","config":{"role":"owner","count":1,"timeout":"48h","subject":{"x":"=1"}}}]}`)
+	run := w.env.Start(t, wf, map[string]any{})
+	b, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), run.ID)
+	if err != nil || len(b.Payouts) != 1 {
+		t.Fatalf("batch %+v %v", b, err)
+	}
+	id := b.Payouts[0].ID
+	mark := func() error {
+		var err error
+		w.in(func(tx pgx.Tx) error {
+			err = w.d.MarkNotPaidTx(ctx, tx, w.env.Tenant, id, "user:ada")
+			return nil
+		})
+		return err
+	}
+	if err := mark(); !errors.Is(err, dispatch.ErrMove) || !strings.Contains(err.Error(), "still running") {
+		t.Fatalf("while its run waits: %v", err)
+	}
+	if l := w.lines()["Musa"]; l.Deliveries != 0 {
+		t.Fatalf("due while being paid: %+v", l)
+	}
+	// The run is stopped, the payout left pending: the owner marks it.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE runs SET status = 'cancelled', ended_at = now() WHERE id = $1`, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := mark(); err != nil {
+		t.Fatalf("after its run ended: %v", err)
+	}
+	if l := w.lines()["Musa"]; l.Deliveries != 1 || l.NetKobo != 100000 {
+		t.Fatalf("due again: %+v", l)
+	}
+	if err := mark(); !errors.Is(err, dispatch.ErrMove) {
+		t.Fatalf("marked twice: %v", err)
+	}
+	w.in(func(tx pgx.Tx) error {
+		err := w.d.MarkNotPaidTx(ctx, tx, w.env.Tenant, uuid.New(), "user:ada")
+		if !errors.Is(err, dispatch.ErrNoDelivery) {
+			t.Errorf("no such payout: %v", err)
+		}
+		return nil
+	})
+	// The next payout pays it.
+	b2, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
+	if err != nil || len(b2.Payouts) != 1 || b2.Payouts[0].AmountKobo != 100000 {
+		t.Fatalf("next payout %+v %v", b2, err)
 	}
 }
