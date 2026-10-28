@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -300,6 +301,11 @@ func classify(path, name string) []string {
 	text, err := os.ReadFile(path)
 	if err != nil {
 		return []string{"UNKNOWN(" + name + ")"}
+	}
+	// licensecheck has no PSF License Agreement; CPython's LICENSE is its
+	// history and that agreement, named by its heading (decision 0056).
+	if bytes.Contains(text, []byte("PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2")) {
+		return []string{"Python-2.0"}
 	}
 	cov := licensecheck.Scan(text)
 	if cov.Percent < 75 {

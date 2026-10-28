@@ -12,7 +12,7 @@ Names: the index uses today's names. Xenibase was called PGDock until October 20
 | [0004](0004-tenant-isolation-rls.md) | RLS with tenant scope arrays and a dispatch role | Accepted |
 | [0005](0005-idempotency-keys.md) | Derived and per-connector encoded idempotency keys | Accepted |
 | [0006](0006-working-name.md) | Working name Taskiem | Accepted, pending trademark search |
-| [0007](0007-licence-policy.md) | Two-tier licence policy | Accepted |
+| [0007](0007-licence-policy.md) | Two-tier licence policy | Accepted; amended by 0056 |
 | [0008](0008-wd-v1-control-flow.md) | Nested sub-flows for branch, parallel and foreach | Accepted |
 | [0009](0009-write-call-deadlines.md) | Call deadlines for writes | Accepted |
 | [0010](0010-secret-only-expressions.md) | Expressions that read secrets read nothing else | Accepted |
@@ -61,3 +61,4 @@ Names: the index uses today's names. Xenibase was called PGDock until October 20
 | [0053](0053-operator-retry-reissues-the-effect.md) | An operator's retry of a parked write re-issues it: the next attempt sends under a new idempotency key (the next attempt group), does not count against the retry budget, and the console makes the operator confirm the provider shows it did not happen | Accepted |
 | [0054](0054-cancel-reverses-the-run.md) | Cancelling a run reverses it by default: unfinished steps are withdrawn, writes under way settle, completed steps' compensations run newest first, then `RunCancelled`; `reverse: false` cancels at once without reversing | Accepted |
 | [0055](0055-dispatch-with-own-riders.md) | Dispatch with a business's own riders: riders as people outside the business reached in chat, an order offered with Accept and Can't, the delivery driven by the rider's taps (picked up, arrived, delivered, a photo as proof) with the customer told each step, payment at the door by a one-time account number issued on arrival so money never passes through the rider, cash the recorded exception with a remittance due per rider, riders paid through the existing payout path, ratings; fleets and platforms later | Accepted |
+| [0056](0056-vendored-cpython-licence.md) | The vendored CPython is allowed under the PSF licence (amends 0007) | Accepted |

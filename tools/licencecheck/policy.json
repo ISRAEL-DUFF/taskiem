@@ -84,7 +84,7 @@
     "engine/sandbox/pywasm": {
       "ecosystem": "vendored",
       "licence": "Python-2.0",
-      "reason": "CPython 3.12 built for WebAssembly (PROVENANCE.md), embedded in the binary for code steps. The build is Apache-2.0; CPython itself is under the PSF licence stack (Python-2.0), which decision 0007 allows only in TypeScript's dependency tree. Python-2.0 is permissive and was on the allow-list for every ecosystem when this module was vendored; this exception keeps the gate passing as it did. NOT YET APPROVED: it needs a decision-log entry or founder approval, or the module removed."
+      "reason": "CPython 3.12 built for WebAssembly (PROVENANCE.md), embedded in the binary for code steps. The build is Apache-2.0; CPython is under the PSF licence (Python-2.0), allowed for this module by decision 0056; its notice ships as LICENSE-CPython."
     },
     "tools/docsite/assets/fonts": {
       "ecosystem": "vendored",
@@ -97,7 +97,7 @@
       "licences": [
         "Python-2.0"
       ],
-      "reason": "CPython for WebAssembly, taken unmodified from @antonz/python-wasi@3.12.0 (PROVENANCE.md). LICENSE covers the build (Apache-2.0); CPython is under the PSF licence stack, which no file in the directory shows."
+      "reason": "CPython for WebAssembly, taken unmodified from @antonz/python-wasi@3.12.0 (PROVENANCE.md). LICENSE covers the build (Apache-2.0); LICENSE-CPython is CPython 3.12.0's own licence (PSF, Python-2.0), allowed by decision 0056."
     },
     "third_party/qjs": {
       "licences": [],

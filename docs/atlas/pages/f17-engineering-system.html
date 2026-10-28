@@ -162,11 +162,11 @@
   <ul>
     <li><strong>The gate could be loosened unseen.</strong> <code>CODEOWNERS</code> covered only the database definer files and itself. It now covers <code>tools/licencecheck/</code>, the workflows and <code>dependabot.yml</code> (<x-ref path=".github/CODEOWNERS" symbol="/tools/licencecheck/"><code>CODEOWNERS</code></x-ref>).</li>
     <li><strong>Code copied into the repository was never checked</strong>, since the checker skips the main module, and <code>Python-2.0</code>, which decision 0007 allows for "TypeScript's dependency tree only" (<x-ref path="docs/decisions/0007-licence-policy.md" symbol="Python-2.0 (TypeScript's dependency tree only)">0007</x-ref>), was allowed for Go too. Vendored directories are now checked and <code>Python-2.0</code> is allowed only for npm.</li>
+    <li><strong>The vendored CPython had no approved basis.</strong> <x-ref path="docs/decisions/0056-vendored-cpython-licence.md">Decision 0056</x-ref> allows the PSF licence for <code>engine/sandbox/pywasm</code> alone, and CPython's own licence now ships beside the build's as <code>LICENSE-CPython</code>, recognised by its heading since licensecheck has no PSF text (<x-ref path="tools/licencecheck/main.go" symbol="PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2"><code>classify</code></x-ref>).</li>
   </ul>
 </div>
 <div class="callout risk"><span class="callout-label">Risk</span>
   <ul>
-    <li><strong>The vendored CPython has an unapproved exception.</strong> <code>engine/sandbox/pywasm</code> is embedded in the binary and CPython is under the PSF licence stack, which 0007 does not allow outside npm. Its exception keeps the gate passing as before and says it is not yet approved (<x-ref path="tools/licencecheck/policy.json" symbol="NOT YET APPROVED">policy.json</x-ref>): it needs a decision-log entry or founder approval, or the module removed.</li>
     <li>Code-owner review counts only if branch protection on <code>main</code> requires it, which the repository cannot show.</li>
   </ul>
 </div>
