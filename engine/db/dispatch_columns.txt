@@ -168,6 +168,7 @@ customer_invoice_accounts.invoice_id
 customer_invoice_accounts.kind
 customer_invoice_accounts.on_late
 customer_invoice_accounts.on_wrong_amount
+customer_invoice_accounts.order_id
 customer_invoice_accounts.payment_id
 customer_invoice_accounts.payment_url
 customer_invoice_accounts.seq
@@ -204,6 +205,7 @@ customer_invoice_requests.created_at
 customer_invoice_requests.id
 customer_invoice_requests.invoice_id
 customer_invoice_requests.kind
+customer_invoice_requests.order_id
 customer_invoice_requests.reply_to
 customer_invoice_requests.tenant_id
 customer_invoices.allow_part_payments

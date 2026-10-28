@@ -26,5 +26,5 @@ The spec says cancelling a run "runs compensation if configured". It did not: `C
 ## Consequences
 
 - An API client that cancels and reads the status in the answer may see `running`; the run ends when its compensations have run, and its events stream says so.
-- A new event type, `CancelRequested` (migration 00236). Histories without it replay as before.
+- A new event type, `CancelRequested` (migration 00238). Histories without it replay as before.
 - Reversing is only as good as each step's `compensate`: a step with none is left as it is, as on failure.
