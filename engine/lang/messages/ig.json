@@ -1044,6 +1044,10 @@
       "text": "Ka m bipụta *{name}* ugbu a ka ọ malite ọrụ? Zaa *yes* ma ọ bụ *no*.",
       "reviewed": false
     },
+    "wa.build.plan": {
+      "text": "Atụmatụ {org} enweghị iwu site na AI, ya mere enweghị m ike iwu ya ebe a. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ, ma ọ bụ gbanwee atụmatụ na Billing.",
+      "reviewed": false
+    },
     "wa.build.publish_later": {
       "text": "Mgbe ị dị njikere, ziga *publish {name}*.",
       "reviewed": false

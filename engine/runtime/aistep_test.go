@@ -1,10 +1,13 @@
 package runtime_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/history"
@@ -192,6 +195,25 @@ func TestAIStepMasksKeysAndRecordsWhatWasSent(t *testing.T) {
 	}
 	if want := strings.ReplaceAll(q, phone, "[phone]"); len(msgs) != 1 || msgs[0].Text != want {
 		t.Errorf("recorded:\n%v\nwant:\n%s", msgs, want)
+	}
+}
+
+// A business moved to a plan without AI after publishing an ai step: the
+// step fails for good, without asking the model.
+func TestAIStepNeedsThePlan(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, aiFlow)
+	fake := &ai.Fake{Script: []ai.Response{aiAnswer(`{"greeting":"Hi","priority":"low"}`)}}
+	e.AI = fake
+	e.AIPlan = func(_ context.Context, tenant uuid.UUID) (bool, error) { return tenant != e.Tenant, nil }
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": "n"}})
+	e.Drain(t)
+	f := failureOf(t, e, ref, "ask")
+	if f["kind"] != "disabled" || !strings.Contains(f["message"].(string), "plan") || e.Status(t, ref) != "failed" {
+		t.Errorf("without the plan: %v %s", f, e.Status(t, ref))
+	}
+	if len(fake.Requests()) != 0 {
+		t.Error("the model was asked without the plan")
 	}
 }
 

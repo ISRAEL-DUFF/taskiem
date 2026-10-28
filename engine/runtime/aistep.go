@@ -22,13 +22,14 @@ import (
 
 // AI steps (decision 0050, wd-v1 AI steps) ask the deployment's model at
 // run time, on the "ai" queue. Before anything leaves, the worker checks
-// that the business allows AI steps and has budget left, and swaps the
-// run's personal data in the prompt and input for placeholders, except in
-// the input fields the step lets through. The answer must match the
-// step's output_schema; one that does not is sent back once with its
-// problems. The placeholders in the answer are swapped back, and the
-// output is sealed like any output that repeats personal data. Every call
-// is an ai_interactions row, counted against the monthly AI budget.
+// that the business allows AI steps, that its plan includes AI, and that
+// it has budget left, and swaps the run's personal data in the prompt and
+// input for placeholders, except in the input fields the step lets
+// through. The answer must match the step's output_schema; one that does
+// not is sent back once with its problems. The placeholders in the answer
+// are swapped back, and the output is sealed like any output that repeats
+// personal data. Every call is an ai_interactions row, counted against
+// the monthly AI budget.
 
 // AISteps is how a worker runs ai steps.
 type AISteps struct {
@@ -38,6 +39,10 @@ type AISteps struct {
 	// For returns the provider for a model; nil uses ai.New with the
 	// model put in Config.
 	For func(model string) (ai.Provider, error)
+	// Plan reports whether the tenant's plan includes AI (the billing
+	// feature "ai"); an error is a failure to tell, retried. Nil: every
+	// plan does (billing off).
+	Plan func(ctx context.Context, tenant uuid.UUID) (bool, error)
 	// Overage reports a plan's AI overage rate: a tenant whose plan bills
 	// tokens beyond the budget is not stopped by it. Nil: no overage.
 	Overage func(ctx context.Context, tenant uuid.UUID) (int64, error)
@@ -96,6 +101,15 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	}
 	if !allowed {
 		return fail("disabled", "the business has turned AI steps off (Secrets & settings, AI steps)")
+	}
+	if w.AI.Plan != nil {
+		ok, err := w.AI.Plan(ctx, p.c.tenant)
+		if err != nil {
+			return failed(p.c, "retryable", "reading the business's plan: "+err.Error(), "retry")
+		}
+		if !ok {
+			return fail("disabled", "the business's plan does not include AI, which AI steps need; change plan under Billing")
+		}
 	}
 	if limit > 0 && used >= limit && w.AI.Overage != nil {
 		if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {

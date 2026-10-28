@@ -157,7 +157,7 @@ A workflow can ask the model at run time with an `ai` step ([contract](contracts
 Three controls sit with the business and the deployment:
 
 - **The switch.** Owners turn AI steps off under **Secrets & settings → AI steps** (`ai_steps`); saving a workflow with one is then refused, and one already published fails when it starts.
-- **The plan.** AI steps need a plan with the `ai` feature, as AI building does.
+- **The plan.** AI steps need a plan with the `ai` feature, as AI building does (on the web, over WhatsApp and Telegram, and for routing chat messages in other languages). It is checked when a workflow is saved and again before each call: a step of a business moved to a plan without it fails for good (`disabled`), without asking the model.
 - **What the provider keeps.** `GET /v1/ai/status` and the **AI steps** box under **Secrets & settings** show the model, the models steps may use, and the deployment's statement of what the provider retains (`TASKIEM_AI_RETENTION`).
 
 Each call is recorded in `ai_interactions` against the run and step, built from the same masked question that was sent (so the record shows exactly what the model saw; only the fields let through are redacted in it), and counts against the monthly budget below. The builder proposes an ai step only when the business may use one (rule 21).

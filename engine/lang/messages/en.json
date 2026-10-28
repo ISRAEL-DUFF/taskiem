@@ -1304,6 +1304,11 @@
       "reviewed": true,
       "context": "Offering to publish a saved draft"
     },
+    "wa.build.plan": {
+      "text": "The plan for {org} does not include building with AI, so I cannot build this here. You can still build workflows in the web app, or change plan under Billing.",
+      "reviewed": true,
+      "context": "The plan has no AI building"
+    },
     "wa.build.publish_later": {
       "text": "When you are ready, send *publish {name}*.",
       "reviewed": true,

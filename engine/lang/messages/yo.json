@@ -1044,6 +1044,10 @@
       "text": "Ṣé kí n tẹ *{name}* jáde báyìí kí ó bẹ̀rẹ̀ iṣẹ́? Ẹ fèsì *yes* tàbí *no*.",
       "reviewed": false
     },
+    "wa.build.plan": {
+      "text": "Ètò {org} kò ní kíkọ́ pẹ̀lú AI, nítorí náà mi ò lè kọ́ ọ níbí. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù, tàbí kí ẹ yí ètò padà ní Billing.",
+      "reviewed": false
+    },
     "wa.build.publish_later": {
       "text": "Nígbà tí ẹ bá ṣetán, ẹ fi *publish {name}* ránṣẹ́.",
       "reviewed": false
