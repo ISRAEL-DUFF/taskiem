@@ -67,7 +67,12 @@ func TestStatusPageRatesDelivery(t *testing.T) {
 	if w := get(e.h, "GET", sfHost, rateURL); w.Code != 405 {
 		t.Errorf("GET /rate: %d", w.Code)
 	}
-	if w := post(e.h, sfHost, "/o/"+ref+"/rate?k=x"+key[1:], "rating=4"); w.Code != 404 || len(rate.rated) != 0 {
+	// Another key: its first character changed, never to itself.
+	wrong := "x" + key[1:]
+	if key[0] == 'x' {
+		wrong = "y" + key[1:]
+	}
+	if w := post(e.h, sfHost, "/o/"+ref+"/rate?k="+url.QueryEscape(wrong), "rating=4"); w.Code != 404 || len(rate.rated) != 0 {
 		t.Errorf("a wrong key: %d %v", w.Code, rate.rated)
 	}
 	w := post(e.h, sfHost, rateURL, "rating=4")
