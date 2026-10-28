@@ -23,7 +23,7 @@ The workflow page shows the version each environment runs, with **Promote** wher
 
 - Promotion copies the version that runs in the source environment; it never edits it, and a different version cannot be named (`409`). The definition and its policies are checked again.
 - A gated environment runs only the version promoted to it: a run there cannot pin another version. A newer publish leaves it alone, so what runs in `prod` changes only by promotion.
-- With **four-eyes publishing** on, promoting needs a person who neither wrote the version nor deployed it to the source environment; API keys cannot promote then. Every promotion is audited (`workflow.promote`, with both environments).
+- With **four-eyes publishing** on for every environment, or for the environment promoted into ([governance](governance.md#four-eyes-on-change)), promoting needs a person who neither wrote the version nor deployed it to the source environment; API keys cannot promote then. Every promotion is audited (`workflow.promote`, with both environments).
 - A key limited to one environment can promote only into it.
 - An environment connected to Git in Git-led mode deploys from its branch, not by promotion; Git review is its gate. Gates cannot form a circle.
 - Changing a gate changes nothing that is running; it applies to the next publish or promotion.

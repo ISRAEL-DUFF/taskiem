@@ -229,7 +229,7 @@ func (s *Server) putGit(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM environments WHERE name = $1 AND promotion_from IS NOT NULL)`, env).Scan(&gated); err != nil {
 			return err
 		}
-		governed = g.FourEyesPublish || g.FourEyesPolicies || gated
+		governed = g.approvalNeeded(env) || g.FourEyesPolicies || gated
 		return nil
 	})
 	if err != nil {

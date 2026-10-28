@@ -28156,7 +28156,12 @@ components:
       properties:
         four_eyes_publish:
           type: boolean
-          description: Publishing (and promotion) needs a second person.
+          description: Publishing to, and promotion into, any environment needs a second person.
+        four_eyes_publish_environments:
+          type: array
+          items:
+            type: string
+          description: When `four_eyes_publish` is off, the environments that need a second person (spec 3.4). A publish whose environments include one waits for approval as a whole; promotion into one needs someone other than the version's author and whoever deployed it to the source environment. Make such an environment take versions by promotion (`promotion_from`) so publishing elsewhere is never held up.
         four_eyes_policies:
           type: boolean
           description: Approval policy changes need a second person.
@@ -28173,10 +28178,15 @@ components:
       additionalProperties: false
     GovernanceRequest:
       type: object
-      description: Replaces every setting; one left out is off (`false`, or no default retention), except `ai_steps`, which a request without it keeps.
+      description: Replaces every setting; one left out is off (`false`, or no default retention), except `ai_steps` and `four_eyes_publish_environments`, which a request without them keeps.
       properties:
         four_eyes_publish:
           type: boolean
+        four_eyes_publish_environments:
+          type: array
+          items:
+            type: string
+          description: Names of the business's environments; an unknown name is refused (400). Sorted and without repeats when saved.
         four_eyes_policies:
           type: boolean
         default_retention:

@@ -686,12 +686,16 @@ func (s *Server) putWithdrawals(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		to := withdrawTo{BankCode: req.BankCode, AccountNumber: req.AccountNumber, AccountName: name}
-		wf, v, err := s.withdrawWorkflowTx(r, tx, tpl, m.WalletID, m.WithdrawWorkflow, to, g.FourEyesPublish)
+		wait, err := publishNeedsApproval(ctx, tx, g, nil)
+		if err != nil {
+			return err
+		}
+		wf, v, err := s.withdrawWorkflowTx(r, tx, tpl, m.WalletID, m.WithdrawWorkflow, to, wait)
 		if err != nil {
 			return err
 		}
 		// A sweep that is on pays the new account too, from the same change.
-		if err := s.resweepTx(r, tx, m.WalletID, to, g.FourEyesPublish); err != nil {
+		if err := s.resweepTx(r, tx, m.WalletID, to, wait); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE receive_money SET payout_bank_code = $2, payout_bank_name = NULLIF($3, ''), payout_account_number = $4, payout_account_name = $5,

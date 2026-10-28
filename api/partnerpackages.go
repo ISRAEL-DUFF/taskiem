@@ -368,7 +368,11 @@ func (s *Server) installPackage(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
-			if g.FourEyesPublish {
+			wait, err := publishNeedsApproval(ctx, tx, g, envs)
+			if err != nil {
+				return err
+			}
+			if wait {
 				// The partner asks; a second person decides (a member of the
 				// sub-tenant with workflow.publish, or another of the partner's
 				// people through their own key).

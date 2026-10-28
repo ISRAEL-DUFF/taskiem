@@ -200,7 +200,7 @@ Strings starting with `=` are expressions. The language is CEL (Common Expressio
 
 - Every save creates an immutable version. Runs are pinned to the version they started on, so an edit never changes an in-flight run.
 - States: `draft` → `published` → `deprecated` → `archived`. Only published versions accept triggers.
-- Publishing can require approval (maker-checker on workflows themselves), configurable per environment.
+- Publishing can require approval (maker-checker on workflows themselves), configurable per environment: for every environment, or for the ones listed (`four_eyes_publish_environments`). A publish that deploys to a listed environment waits as a whole; promotion into one needs a second person.
 - Environments (`dev`, `staging`, `prod`) hold separate secrets and connector credentials; promotion copies a version, never edits in place.
 - A JSON Schema for `wd/v1` is published so external tools and the AI builder validate against the same contract.
 

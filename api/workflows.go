@@ -561,12 +561,17 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		if err := s.checkReady(r.Context(), tx, p.TenantID, wf, v); err != nil {
 			return err
 		}
-		// Four-eyes: a publish waits for a second person.
+		// Four-eyes: a publish to an environment that needs a second person
+		// waits for one.
 		g, err := governanceTx(r.Context(), tx)
 		if err != nil {
 			return err
 		}
-		if g.FourEyesPublish {
+		wait, err := publishNeedsApproval(r.Context(), tx, g, nil)
+		if err != nil {
+			return err
+		}
+		if wait {
 			var state string
 			if err := tx.QueryRow(r.Context(), `SELECT state FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&state); err != nil {
 				return err
