@@ -30895,6 +30895,7 @@ components:
       - dismissed_by
       - dismissed_at
       - resumed_run_id
+      - published_since
       properties:
         id:
           type: string
@@ -30964,7 +30965,7 @@ components:
         diff:
           description: The patch against the failed version.
         evidence:
-          description: The shadow run, regression and existing tests, attempts.
+          description: The shadow run, regression and existing tests, attempts; once accepted onto a newer version, `merged` holds that version (`onto`) and the change the published version makes to it (`diff`).
         test:
           description: The regression case (wd-test/v1), redacted.
         attempts:
@@ -31008,6 +31009,11 @@ components:
           $ref: '#/components/schemas/NullableTimestamp'
         resumed_run_id:
           $ref: '#/components/schemas/NullableUUID'
+        published_since:
+          type:
+          - integer
+          - 'null'
+          description: The latest version published after the run's, onto which accepting merges the patch; null when there is none.
       additionalProperties: false
     RepairList:
       type: object

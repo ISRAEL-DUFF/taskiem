@@ -27,6 +27,9 @@ interface Evidence {
   existing_tests?: TestOutcome[];
   attempts?: number;
   feedback?: string[];
+  // Once accepted onto a version published after the run's: that version,
+  // and what the published merge changes in it.
+  merged?: { onto: number; diff: string[] };
 }
 
 interface Repair {
@@ -53,6 +56,7 @@ interface Repair {
   draft_version: number | null;
   accepted_by: string | null;
   resumed_run_id: string | null;
+  published_since: number | null;
 }
 
 const CLASS: Record<string, string> = {
@@ -118,6 +122,27 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
             <summary>Patched definition</summary>
             <Json value={r.definition} />
           </details>
+        </>
+      )}
+      {r.status === "proposed" && r.published_since != null && (
+        <div className="notice">
+          Version {r.published_since} was published after this run's version {r.version}. Accepting merges this fix onto version {r.published_since} and checks the merge again; the
+          version published is that merge, not version {r.version} with the change above.
+        </div>
+      )}
+      {ev.merged && (
+        <>
+          <h3>Published as a merge</h3>
+          <p className="hint">
+            Version {r.draft_version} is this fix merged onto version {ev.merged.onto}. What it changes in version {ev.merged.onto}:
+          </p>
+          <ul>
+            {ev.merged.diff.map((d) => (
+              <li key={d}>
+                <code>{d}</code>
+              </li>
+            ))}
+          </ul>
         </>
       )}
 
@@ -193,7 +218,7 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
       <ErrorBox error={act.error} />
       <div className="toolbar">
         {r.status === "proposed" && canAccept && (
-          <button className="primary" disabled={act.busy} onClick={() => confirm(`Publish the patched version and resume this run from ${r.step ?? "the failed step"}? Publishing follows your organisation's approval rules.`) && decide("accept")}>
+          <button className="primary" disabled={act.busy} onClick={() => confirm(`${r.published_since != null ? `Merge this fix onto version ${r.published_since}, publish the merge` : "Publish the patched version"} and resume this run from ${r.step ?? "the failed step"}? Publishing follows your organisation's approval rules.`) && decide("accept")}>
             Accept: publish and resume
           </button>
         )}
