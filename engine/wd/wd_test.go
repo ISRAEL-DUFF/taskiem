@@ -206,3 +206,15 @@ func TestSecretInTriggerRejected(t *testing.T) {
 		t.Errorf("got %v", probs)
 	}
 }
+
+// A workflow keeps its runs at least a day: a retention of minutes would
+// purge a run, and the approvals in it, almost as soon as it ends.
+func TestRetentionIsAtLeastADay(t *testing.T) {
+	for r, ok := range map[string]bool{"1d": true, "24h": true, "90d": true, "23h": false, "10m": false, "1s": false} {
+		src := strings.Replace(string(doc(`{"id":"a","type":"transform","config":{"output":1}}`)), `"steps"`, `"settings":{"retention":"`+r+`"},"steps"`, 1)
+		probs := Validate([]byte(src))
+		if ok != (len(probs) == 0) || !ok && !strings.Contains(probs[0].Message, "shorter than a day") {
+			t.Errorf("retention %s: %v", r, probs)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package runtime_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -319,5 +320,55 @@ func TestKnownPIIIsMaskedInErrorText(t *testing.T) {
 	}
 	if !strings.Contains(failed, "no customer named [name] at this bank") {
 		t.Errorf("the failure should keep its text with the name masked: %s", failed)
+	}
+}
+
+// A string built from personal values ("ref-" + a BVN, "Dear " + a name)
+// is sealed under each person it names, so it is never stored in the clear
+// and erasing any of them erases it (Atlas part D findings).
+func TestDerivedPIIIsSealedAndErased(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, `{"schema":"wd/v1","id":"wf_d","version":1,"name":"d","trigger":{"type":"manual"},
+  "inputs":{"schema":{"type":"object","properties":{"bvn":{"type":"string","x-pii":"bvn"},"name":{"type":"string","x-pii":"name"}}}},
+  "steps":[{"id":"copy","type":"transform","config":{"output":{"tag":"='ref-' + trigger.body.bvn","greet":"='Dear ' + trigger.body.name",
+    "both":"=trigger.body.name + ' / ' + trigger.body.bvn","plain":"='no personal data here'"}}}]}`)
+	const bvn, name = "22298765432", "Adaeze Okafor"
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"bvn": bvn, "name": name}})
+	e.Drain(t)
+	for _, ev := range events(t, e, ref) {
+		if p := string(ev.Payload); strings.Contains(p, bvn) || strings.Contains(p, "Adaeze") {
+			t.Errorf("plaintext personal data in stored %s(%s): %s", ev.Type, ev.StepID, p)
+		}
+	}
+	output := func() map[string]any {
+		t.Helper()
+		opened, err := e.Store.OpenedHistory(ctx, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ev := range opened {
+			if ev.Type == history.StepCompleted && ev.StepID == "copy" {
+				var c history.CompletedPayload
+				if err := json.Unmarshal(ev.Payload, &c); err != nil {
+					t.Fatal(err)
+				}
+				return c.Output.(map[string]any)
+			}
+		}
+		t.Fatal("no output")
+		return nil
+	}
+	if o := output(); o["tag"] != "ref-"+bvn || o["greet"] != "Dear "+name || o["both"] != name+" / "+bvn || o["plain"] != "no personal data here" {
+		t.Fatalf("opened output %v", o)
+	}
+	subject, err := e.Vault.SubjectFor(ctx, e.Tenant, "bvn", bvn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Vault.Erase(ctx, e.Tenant, subject, "dpo"); err != nil {
+		t.Fatal(err)
+	}
+	if o := output(); o["tag"] != pii.Erased || o["both"] != pii.Erased || o["greet"] != "Dear "+name {
+		t.Errorf("after erasing the BVN: %v", o)
 	}
 }

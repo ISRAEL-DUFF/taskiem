@@ -1,0 +1,475 @@
+{
+  "schema": "wd-test/v1",
+  "template": "pay-riders-weekly",
+  "params": {
+    "rail_connection": "taskiem",
+    "funding_account": "wal_ada"
+  },
+  "cases": [
+    {
+      "name": "pays the riders whose names their banks gave, once each, after one approval",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "prepare": {
+          "output": {
+            "batch_id": "b1",
+            "payouts": [
+              {
+                "payout_id": "p1",
+                "rider": "Musa",
+                "amount_kobo": 150000,
+                "bank_code": "058",
+                "account_number": "0123456789"
+              },
+              {
+                "payout_id": "p2",
+                "rider": "Tunde",
+                "amount_kobo": 80000,
+                "bank_code": "044",
+                "account_number": "1112223334"
+              },
+              {
+                "payout_id": "p3",
+                "rider": "Ngozi",
+                "amount_kobo": 50000,
+                "bank_code": "035",
+                "account_number": "9998887776"
+              }
+            ],
+            "not_paid": [
+              "Bola"
+            ],
+            "total_kobo": 280000
+          }
+        },
+        "names[0].check_name": {
+          "output": {
+            "account_name": "MUSA BELLO"
+          }
+        },
+        "names[1].check_name": {
+          "output": {
+            "account_name": "TUNDE ADE"
+          }
+        },
+        "names[2].check_name": {
+          "error": {
+            "kind": "fatal",
+            "code": "invalid_account",
+            "message": "no such account"
+          }
+        },
+        "finish": {
+          "output": {
+            "paid": 1,
+            "failed": 1
+          }
+        },
+        "cancel": {
+          "output": {
+            "paid": 0,
+            "failed": 2
+          }
+        },
+        "release_unchecked": {
+          "output": {
+            "paid": 0,
+            "failed": 1
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "pay_all[0].pay": {
+          "output": {
+            "payout_id": "po1",
+            "status": "settled"
+          }
+        },
+        "pay_all[1].pay": {
+          "output": {
+            "payout_id": "po2",
+            "status": "pending"
+          }
+        },
+        "pay_all[1].settle": {
+          "output": {
+            "status": "failed"
+          }
+        },
+        "tell_no_bank": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_unchecked": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "cancel": "skipped",
+          "release_unchecked": "skipped",
+          "pay_all[0].settle": "skipped",
+          "pay_all[1].settle": "completed",
+          "tell_owner": "completed",
+          "tell_no_bank": "skipped",
+          "tell_unchecked": "skipped"
+        },
+        "inputs": {
+          "pay_all[0].pay": {
+            "amount_kobo": 150000,
+            "bank_code": "058",
+            "account_number": "0123456789",
+            "account_name": "MUSA BELLO"
+          },
+          "finish": {
+            "batch_id": "b1",
+            "results": [
+              {
+                "payout_id": "p1",
+                "account_name": "MUSA BELLO",
+                "status": "paid"
+              },
+              {
+                "payout_id": "p2",
+                "account_name": "TUNDE ADE",
+                "status": "failed"
+              },
+              {
+                "payout_id": "p3",
+                "status": "failed"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "not approved: the deliveries wait for next time",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "prepare": {
+          "output": {
+            "batch_id": "b1",
+            "payouts": [
+              {
+                "payout_id": "p1",
+                "rider": "Musa",
+                "amount_kobo": 150000,
+                "bank_code": "058",
+                "account_number": "0123456789"
+              },
+              {
+                "payout_id": "p2",
+                "rider": "Tunde",
+                "amount_kobo": 80000,
+                "bank_code": "044",
+                "account_number": "1112223334"
+              },
+              {
+                "payout_id": "p3",
+                "rider": "Ngozi",
+                "amount_kobo": 50000,
+                "bank_code": "035",
+                "account_number": "9998887776"
+              }
+            ],
+            "not_paid": [
+              "Bola"
+            ],
+            "total_kobo": 280000
+          }
+        },
+        "names[0].check_name": {
+          "output": {
+            "account_name": "MUSA BELLO"
+          }
+        },
+        "names[1].check_name": {
+          "output": {
+            "account_name": "TUNDE ADE"
+          }
+        },
+        "names[2].check_name": {
+          "error": {
+            "kind": "fatal",
+            "code": "invalid_account",
+            "message": "no such account"
+          }
+        },
+        "finish": {
+          "output": {
+            "paid": 1,
+            "failed": 1
+          }
+        },
+        "cancel": {
+          "output": {
+            "paid": 0,
+            "failed": 2
+          }
+        },
+        "release_unchecked": {
+          "output": {
+            "paid": 0,
+            "failed": 1
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_no_bank": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_unchecked": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "rejected",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "pay_all": "skipped",
+          "finish": "skipped",
+          "cancel": "completed"
+        },
+        "inputs": {
+          "cancel": {
+            "batch_id": "b1",
+            "cancel": true
+          }
+        }
+      }
+    },
+    {
+      "name": "nothing due: nothing is asked",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "prepare": {
+          "output": {
+            "batch_id": "b2",
+            "payouts": [],
+            "not_paid": [],
+            "total_kobo": 0
+          }
+        },
+        "finish": {
+          "output": {
+            "paid": 0,
+            "failed": 0
+          }
+        },
+        "cancel": {
+          "output": {
+            "paid": 0,
+            "failed": 0
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_no_bank": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_unchecked": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "skipped",
+          "tell_no_bank": "skipped",
+          "tell_unchecked": "skipped"
+        }
+      }
+    },
+    {
+      "name": "no account found: those riders wait for next time",
+      "trigger": {
+        "body": {
+          "batch_id": "0193a6f0-0000-7000-8000-000000000001"
+        }
+      },
+      "mocks": {
+        "prepare": {
+          "output": {
+            "batch_id": "0193a6f0-0000-7000-8000-000000000001",
+            "payouts": [
+              {
+                "payout_id": "p3",
+                "rider": "Ngozi",
+                "amount_kobo": 50000,
+                "bank_code": "035",
+                "account_number": "9998887776"
+              }
+            ],
+            "not_paid": [],
+            "total_kobo": 50000
+          }
+        },
+        "names[0].check_name": {
+          "error": {
+            "kind": "fatal",
+            "code": "invalid_account",
+            "message": "no such account"
+          }
+        },
+        "release_unchecked": {
+          "output": {
+            "paid": 0,
+            "failed": 1
+          }
+        },
+        "finish": {
+          "output": {
+            "paid": 0,
+            "failed": 1
+          }
+        },
+        "cancel": {
+          "output": {
+            "paid": 0,
+            "failed": 0
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_no_bank": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_unchecked": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "skipped",
+          "release_unchecked": "completed",
+          "tell_unchecked": "completed"
+        },
+        "inputs": {
+          "prepare": {
+            "batch_id": "0193a6f0-0000-7000-8000-000000000001"
+          },
+          "release_unchecked": {
+            "results": [
+              {
+                "payout_id": "p3",
+                "status": "failed"
+              }
+            ]
+          },
+          "tell_unchecked": {
+            "to": "owner",
+            "title": "Riders' payout",
+            "message": "No rider was paid: their banks did not find the account of 1 rider. Check the account numbers under Riders > Pay riders; they are paid next time."
+          }
+        }
+      }
+    },
+    {
+      "name": "riders due with no bank account: the owner is told whom to add",
+      "trigger": {
+        "scheduled_time": "2026-10-30T16:00:00Z"
+      },
+      "mocks": {
+        "prepare": {
+          "output": {
+            "batch_id": "b3",
+            "payouts": [],
+            "not_paid": [
+              "Musa",
+              "Tunde"
+            ],
+            "total_kobo": 0
+          }
+        },
+        "tell_no_bank": {
+          "output": {
+            "people": 1
+          }
+        },
+        "finish": {
+          "output": {
+            "paid": 0,
+            "failed": 0
+          }
+        },
+        "cancel": {
+          "output": {
+            "paid": 0,
+            "failed": 0
+          }
+        },
+        "tell_owner": {
+          "output": {
+            "people": 1
+          }
+        },
+        "tell_unchecked": {
+          "output": {
+            "people": 1
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "skipped",
+          "tell_no_bank": "completed"
+        },
+        "inputs": {
+          "tell_no_bank": {
+            "to": "owner",
+            "title": "Riders' payout",
+            "message": "No rider was paid: add a bank account under Riders > Pay riders for Musa, Tunde, and they are paid next time."
+          }
+        }
+      }
+    }
+  ]
+}

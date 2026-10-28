@@ -59,6 +59,7 @@ func (s *Server) reachStart(ctx context.Context, ch chatChannel, channel, addr, 
 	if channel == reach.WhatsApp {
 		proven = addr
 	}
+	rider := false
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.Tenant}, func(tx pgx.Tx) error {
 		if t.Reference != "" {
 			if err := s.Reach.LinkRequestTx(ctx, tx, t.Tenant, t.Reference, channel, addr, p.Phones); err != nil {
@@ -67,6 +68,10 @@ func (s *Server) reachStart(ctx context.Context, ch chatChannel, channel, addr, 
 		}
 		if proven != "" {
 			if _, err := s.Reach.LinkTx(ctx, tx, t.Tenant, proven, channel, addr); err != nil && !errors.Is(err, sender.ErrInvalid) {
+				return err
+			}
+			var err error
+			if rider, err = s.isRiderTx(ctx, tx, t.Tenant, proven); err != nil {
 				return err
 			}
 		}
@@ -78,7 +83,7 @@ func (s *Server) reachStart(ctx context.Context, ch chatChannel, channel, addr, 
 		if err := s.Reach.Done(ctx, t.Hash); err != nil {
 			return err
 		}
-		return s.waSay(ctx, ch, addr, "", tr(l, "reach.linked", "business", t.Business))
+		return s.waSay(ctx, ch, addr, "", tr(l, linkedKey(rider), "business", t.Business))
 	}
 	// A Telegram account proves its phone with Telegram's own button.
 	id, _ := telegram.ParseAddress(addr)
@@ -112,8 +117,13 @@ func (s *Server) reachContact(ctx context.Context, u telegram.Update) (bool, err
 		}
 		return true, tg.Client.SendClearing(ctx, u.FromID, tr(l, "reach.number_unreachable", "business", t.Business))
 	}
+	rider := false
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.Tenant}, func(tx pgx.Tx) error {
 		if _, err := s.Reach.LinkTx(ctx, tx, t.Tenant, phone, reach.Telegram, addr); err != nil {
+			return err
+		}
+		var err error
+		if rider, err = s.isRiderTx(ctx, tx, t.Tenant, phone); err != nil {
 			return err
 		}
 		return reachAudit(ctx, tx, t.Tenant, "reach.linked", map[string]any{"channel": reach.Telegram, "proven": true, "submission": t.Reference})
@@ -123,7 +133,25 @@ func (s *Server) reachContact(ctx context.Context, u telegram.Update) (bool, err
 	if err := s.Reach.Done(ctx, t.Hash); err != nil {
 		return true, err
 	}
-	return true, tg.Client.SendClearing(ctx, u.FromID, tr(l, "reach.linked", "business", t.Business))
+	return true, tg.Client.SendClearing(ctx, u.FromID, tr(l, linkedKey(rider), "business", t.Business))
+}
+
+// isRiderTx reports whether a person who just tapped in is one of the
+// business's riders (dispatch D1), who are told what the link is for.
+func (s *Server) isRiderTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string) (bool, error) {
+	if !s.Riders.Ready() {
+		return false, nil
+	}
+	return s.Riders.IsRiderTx(ctx, tx, tenant, phone)
+}
+
+// linkedKey is what a person who tapped in is told: a rider that their
+// deliveries come here, anyone else that updates do.
+func linkedKey(rider bool) string {
+	if rider {
+		return "rider.linked"
+	}
+	return "reach.linked"
 }
 
 // reachStopStart handles STOP and START from an address linked to no

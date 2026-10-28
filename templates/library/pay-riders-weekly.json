@@ -1,0 +1,440 @@
+{
+  "id": "pay-riders-weekly",
+  "title": "Pay your riders every week",
+  "summary": "Once a week, pay each of your riders their fees for the deliveries they made, less any cash they still owe you, after one approval.",
+  "description": "On the day and at the time you choose, adds up each rider's fees for the deliveries they made since their last payout, takes off the cash from doorstep payments they still owe you, and checks each rider's bank account name with their bank. The approver sees every rider, the name their bank gave and the amount, and nothing is paid until it is approved. Each rider is then paid once, however often anything is retried, from the payments account you choose, and you are told how it went. A rider with no bank account set is left out and named, and is paid next time. Riders > Pay starts the same payout whenever you need it.",
+  "category": "payments",
+  "tags": [
+    "payments",
+    "approval",
+    "delivery"
+  ],
+  "keywords": [
+    "pay riders",
+    "riders",
+    "delivery",
+    "dispatch",
+    "rider fees",
+    "weekly",
+    "dispatch riders",
+    "pay my riders"
+  ],
+  "connectors": [
+    "riders@1",
+    "notify@1",
+    "capability:resolve_account",
+    "capability:pay_bank"
+  ],
+  "params": [
+    {
+      "name": "pay_day",
+      "type": "integer",
+      "title": "Day",
+      "description": "The day of the week riders are paid: 1 is Monday, 5 Friday, 0 Sunday.",
+      "required": false,
+      "default": 5,
+      "example": 5,
+      "minimum": 0,
+      "maximum": 6
+    },
+    {
+      "name": "pay_time",
+      "type": "time",
+      "title": "Time",
+      "description": "When the payout starts that day, Lagos time.",
+      "required": false,
+      "default": "17:00",
+      "example": "17:00"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank",
+        "resolve_account"
+      ],
+      "title": "Pay from",
+      "description": "The payments account riders are paid from: your Taskiem wallet, or any you connected that can pay a bank account.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one the money comes out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    },
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves the payout.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payRidersWeekly",
+    "version": 1,
+    "name": "Pay riders",
+    "description": "Pays each rider their delivery fees less the cash they owe, after one approval.",
+    "trigger": {
+      "type": "schedule",
+      "config": {
+        "cron": "{{pay_time:minute}} {{pay_time:hour}} * * {{pay_day}}",
+        "timezone": "Africa/Lagos"
+      }
+    },
+    "settings": {
+      "timeout": "96h"
+    },
+    "steps": [
+      {
+        "id": "prepare",
+        "type": "connector",
+        "name": "Add up what each rider is due",
+        "connector": "riders@1",
+        "action": "prepare_payouts",
+        "input": {
+          "batch_id": "=has(trigger.body) && has(trigger.body.batch_id) ? trigger.body.batch_id : ''"
+        }
+      },
+      {
+        "id": "names",
+        "type": "foreach",
+        "name": "Check each rider's bank account",
+        "needs": [
+          "prepare"
+        ],
+        "when": "=size(steps.prepare.output.payouts) > 0",
+        "config": {
+          "items": "=steps.prepare.output.payouts",
+          "max_concurrency": 5,
+          "max_items": 500,
+          "steps": [
+            {
+              "id": "to_check",
+              "type": "transform",
+              "name": "The rider",
+              "config": {
+                "output": {
+                  "payout_id": "=item.payout_id",
+                  "rider": "=item.rider",
+                  "amount_kobo": "=item.amount_kobo",
+                  "bank_code": "=item.bank_code",
+                  "account_number": "=item.account_number"
+                }
+              }
+            },
+            {
+              "id": "check_name",
+              "type": "capability",
+              "uses": "resolve_account",
+              "name": "Find the name on the rider's account",
+              "connection": "{{rail_connection}}",
+              "input": {
+                "bank_code": "=item.bank_code",
+                "account_number": "=item.account_number"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "check_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "=steps.check_name.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "list",
+        "type": "transform",
+        "name": "List who is paid what",
+        "needs": [
+          "names"
+        ],
+        "when": "=size(steps.prepare.output.payouts) > 0",
+        "config": {
+          "output": {
+            "to_pay": "=steps.names.output.filter(o, !has(o.check_failed)).map(o, {'payout_id': o.to_check.payout_id, 'rider': o.to_check.rider, 'amount_kobo': o.to_check.amount_kobo, 'bank_code': o.to_check.bank_code, 'account_number': o.to_check.account_number, 'account_name': o.check_name.account_name})",
+            "unchecked": "=steps.names.output.filter(o, has(o.check_failed)).map(o, {'payout_id': o.to_check.payout_id, 'status': 'failed'})",
+            "lines": "=steps.names.output.filter(o, !has(o.check_failed)).map(o, o.to_check.rider + ' (' + o.check_name.account_name + '): NGN ' + string(double(o.to_check.amount_kobo) / 100.0))"
+          }
+        }
+      },
+      {
+        "id": "approve",
+        "type": "approval",
+        "name": "Get the riders' payout approved",
+        "needs": [
+          "list"
+        ],
+        "when": "=size(steps.list.output.to_pay) > 0",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "48h",
+          "on_timeout": "reject",
+          "subject": {
+            "riders": "=size(steps.list.output.to_pay)",
+            "total_naira": "=double(sum(steps.list.output.to_pay.map(p, p.amount_kobo))) / 100.0",
+            "pay": "=steps.list.output.lines.join('; ')",
+            "not_paid": "=steps.prepare.output.not_paid.join(', ')"
+          }
+        }
+      },
+      {
+        "id": "pay_all",
+        "type": "foreach",
+        "name": "Pay each rider",
+        "needs": [
+          "list",
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision == 'approved'",
+        "config": {
+          "items": "=steps.list.output.to_pay",
+          "max_concurrency": 5,
+          "max_items": 500,
+          "steps": [
+            {
+              "id": "payee",
+              "type": "transform",
+              "name": "The rider",
+              "config": {
+                "output": {
+                  "payout_id": "=item.payout_id",
+                  "account_name": "=item.account_name"
+                }
+              }
+            },
+            {
+              "id": "pay",
+              "type": "capability",
+              "uses": "pay_bank",
+              "name": "Pay the rider",
+              "connection": "{{rail_connection}}",
+              "input": {
+                "amount_kobo": "=item.amount_kobo",
+                "bank_code": "=item.bank_code",
+                "account_number": "=item.account_number",
+                "account_name": "=item.account_name",
+                "narration": "='Delivery fees ' + steps.prepare.output.batch_id",
+                "source": "{{funding_account}}"
+              },
+              "effect": {
+                "idempotency_seed": "='riders:' + item.payout_id"
+              },
+              "retry": {
+                "max": 8,
+                "backoff": "exponential",
+                "initial": "5s",
+                "max_delay": "10m",
+                "max_duration": "6h"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "pay_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "=steps.pay.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "settle",
+              "type": "capability",
+              "uses": "await_settlement",
+              "name": "Wait for the bank to confirm",
+              "needs": [
+                "pay"
+              ],
+              "timeout": "72h",
+              "when": "=steps.pay.output.status == 'pending'",
+              "input": {
+                "payout_id": "=steps.pay.output.payout_id"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "settle_failed",
+                    "type": "transform",
+                    "config": {
+                      "output": {
+                        "reason": "the payment was not confirmed"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "results",
+        "type": "transform",
+        "name": "Work out how each payout went",
+        "needs": [
+          "pay_all"
+        ],
+        "config": {
+          "output": {
+            "rows": "=steps.pay_all.output.map(o, {'payout_id': o.payee.payout_id, 'account_name': o.payee.account_name, 'status': (has(o.pay_failed) ? 'failed' : o.pay.status == 'settled' ? 'paid' : o.pay.status == 'failed' ? 'failed' : has(o.settle) ? (o.settle.status == 'settled' ? 'paid' : o.settle.status == 'failed' ? 'failed' : 'pending') : has(o.settle_failed) ? 'pending' : 'pending')}) + steps.list.output.unchecked"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Record how the payout went",
+        "connector": "riders@1",
+        "action": "finish_payouts",
+        "needs": [
+          "results"
+        ],
+        "input": {
+          "batch_id": "=steps.prepare.output.batch_id",
+          "results": "=steps.results.output.rows"
+        }
+      },
+      {
+        "id": "cancel",
+        "type": "connector",
+        "name": "Leave the deliveries for next time",
+        "connector": "riders@1",
+        "action": "finish_payouts",
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision != 'approved'",
+        "input": {
+          "batch_id": "=steps.prepare.output.batch_id",
+          "cancel": true
+        }
+      },
+      {
+        "id": "release_unchecked",
+        "type": "connector",
+        "name": "Leave riders whose account was not found for next time",
+        "connector": "riders@1",
+        "action": "finish_payouts",
+        "needs": [
+          "list"
+        ],
+        "when": "=size(steps.list.output.to_pay) == 0 && size(steps.list.output.unchecked) > 0",
+        "input": {
+          "batch_id": "=steps.prepare.output.batch_id",
+          "results": "=steps.list.output.unchecked"
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell the owner how the payout went",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "finish"
+        ],
+        "input": {
+          "to": "owner",
+          "title": "Riders' payout",
+          "message": "='Riders paid: ' + string(steps.finish.output.paid) + (steps.finish.output.failed > 0 ? ', not paid: ' + string(steps.finish.output.failed) + ' (they are paid next time)' : '') + (size(steps.prepare.output.not_paid) > 0 ? '. No bank account set for: ' + steps.prepare.output.not_paid.join(', ') : '') + '.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_owner_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_no_bank",
+        "type": "connector",
+        "name": "Tell the owner nobody was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "prepare"
+        ],
+        "when": "=size(steps.prepare.output.payouts) == 0 && size(steps.prepare.output.not_paid) > 0",
+        "input": {
+          "to": "owner",
+          "title": "Riders' payout",
+          "message": "='No rider was paid: add a bank account under Riders > Pay riders for ' + steps.prepare.output.not_paid.join(', ') + ', and they are paid next time.'"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_no_bank_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tell_unchecked",
+        "type": "connector",
+        "name": "Tell the owner nobody was paid",
+        "connector": "notify@1",
+        "action": "tell",
+        "needs": [
+          "release_unchecked"
+        ],
+        "when": "=true",
+        "input": {
+          "to": "owner",
+          "title": "Riders' payout",
+          "message": "='No rider was paid: their banks did not find the account of ' + string(size(steps.list.output.unchecked)) + (size(steps.list.output.unchecked) == 1 ? ' rider' : ' riders') + '. Check the account numbers under Riders > Pay riders; they are paid next time.' + (size(steps.prepare.output.not_paid) > 0 ? ' No bank account set for: ' + steps.prepare.output.not_paid.join(', ') + '.' : '')"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "tell_unchecked_failed",
+              "type": "transform",
+              "config": {
+                "output": {
+                  "told": false
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

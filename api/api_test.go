@@ -386,8 +386,12 @@ func TestAdminAndErasure(t *testing.T) {
 
 	wf := publishFlow(t, owner, loanFlow)
 	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22299999999", "amount": 5}})["run_id"].(string)
-	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"})
-	owner.must(404, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"})
+	// Erasure cannot be undone: a person confirms it with a second factor.
+	if st, body := owner.do("POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999"}); st != 403 || body["step_up"] != "required" {
+		t.Fatalf("erasure without step-up: %d %v", st, body)
+	}
+	secret := enrol(t, owner)
+	owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "22299999999", "totp": codeAfter(secret, 1)})
 	if s := toJSON(owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)); strings.Contains(s, "22299999999") {
 		t.Error("erased BVN still readable")
 	}

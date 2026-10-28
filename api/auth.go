@@ -80,6 +80,8 @@ type Principal struct {
 	KeyOwner uuid.UUID
 	// AuthMethod is how the session signed in: password, passkey or sso.
 	AuthMethod string
+	// SignedInAt is when the session signed in (sessions only).
+	SignedInAt time.Time
 	// EnrolOnly marks a password session of an administrator held to
 	// passkeys: it may only enrol one.
 	EnrolOnly bool
@@ -330,7 +332,7 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return &p, nil
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod); err != nil {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod, &p.SignedInAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Perhaps someone with no membership answering invitations.
 			return s.resolveInvitee(r, tok, viaCookie)
@@ -344,6 +346,16 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return nil, errors.New("no membership")
 	}
 	p.EnrolOnly = s.RequireAdminPasskeys && p.AuthMethod == "password" && isAdmin(p.Permissions)
+	if s.RequireAdminPasskeys && p.AuthMethod == "sso" && isAdmin(p.Permissions) {
+		// Held to passkeys after SSO too (decision 0026): an administrator
+		// who signed in through their identity provider and has no passkey
+		// enrols one before anything else.
+		var has bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, p.UserID).Scan(&has); err != nil {
+			return nil, err
+		}
+		p.EnrolOnly = !has
+	}
 	if h := r.Header.Get(agentSessionHeader); h != "" {
 		// A field agent acting in a business (agents.go).
 		return s.agentPrincipal(ctx, &p, h)

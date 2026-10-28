@@ -164,6 +164,30 @@
       "text": "Na gode. Za mu kira ku nan ba da daɗewa ba ({reference}).",
       "reviewed": false
     },
+    "customer.delivery_arrived": {
+      "text": "Mai kawo kayanka ya iso bakin ƙofa da {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_done": {
+      "text": "An kai {reference}. Na gode.",
+      "reviewed": false
+    },
+    "customer.delivery_done_rate": {
+      "text": "An kai {reference}. Yaya kawowar ta kasance? Ba ta maki a nan: {link}",
+      "reviewed": false
+    },
+    "customer.delivery_on_way": {
+      "text": "Odar ka {reference} tana zuwa tare da {rider} ({phone}).",
+      "reviewed": false
+    },
+    "customer.delivery_paid": {
+      "text": "An karɓi kuɗinka, na gode: {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Mai kawo kayanka ya iso da {reference}. Biya {total} zuwa {account}, {bank}, {name}, kafin {until}.",
+      "reviewed": false
+    },
     "customer.enquiry_thanks": {
       "text": "Mun karɓi tambayar ku ({reference}) kuma za mu amsa nan ba da daɗewa ba.",
       "reviewed": false
@@ -320,6 +344,34 @@
       "text": "Shafin kuɗi: {link}",
       "reviewed": false
     },
+    "money.daily.riders": {
+      "text": "Riders yesterday:",
+      "reviewed": false
+    },
+    "money.rider.delivered": {
+      "text": "{count} delivered",
+      "reviewed": false
+    },
+    "money.rider.door": {
+      "text": "{amount} paid at the door",
+      "reviewed": false
+    },
+    "money.rider.cash": {
+      "text": "{amount} cash",
+      "reviewed": false
+    },
+    "money.rider.remitted": {
+      "text": "{amount} handed in",
+      "reviewed": false
+    },
+    "money.rider.owes": {
+      "text": "owes {amount}",
+      "reviewed": false
+    },
+    "money.rider.rated": {
+      "text": "rated {rating} of 5",
+      "reviewed": false
+    },
     "money.daily.school": {
       "text": "Kuɗin makaranta ({term}): {collected} sun shigo, {outstanding} sun rage, {cleared}% na ɗalibai sun kammala biya.",
       "reviewed": false
@@ -402,6 +454,166 @@
     },
     "ready.variable": {
       "text": "Cika {name}.",
+      "reviewed": false
+    },
+    "rider.arrived": {
+      "text": "Ka iso da {reference}: ba su kuma ka taɓa Na kai.",
+      "reviewed": false
+    },
+    "rider.btn.accept": {
+      "text": "Karɓa",
+      "reviewed": false
+    },
+    "rider.btn.arrived": {
+      "text": "Na iso",
+      "reviewed": false
+    },
+    "rider.btn.cant": {
+      "text": "Ba zan iya ba",
+      "reviewed": false
+    },
+    "rider.btn.cash": {
+      "text": "An biya kuɗi",
+      "reviewed": false
+    },
+    "rider.btn.delivered": {
+      "text": "Na kai",
+      "reviewed": false
+    },
+    "rider.btn.new_number": {
+      "text": "Sabuwar lamba",
+      "reviewed": false
+    },
+    "rider.btn.picked_up": {
+      "text": "Na ɗauka",
+      "reviewed": false
+    },
+    "rider.busy": {
+      "text": "Kana da aiki har zuwa {time}. Aika FREE idan za ka iya karɓar kaya kuma.",
+      "reviewed": false
+    },
+    "rider.button_invalid": {
+      "text": "Wannan maɓallin baya aiki yanzu.",
+      "reviewed": false
+    },
+    "rider.cant": {
+      "text": "To: {reference} zai tafi wurin wani.",
+      "reviewed": false
+    },
+    "rider.collect": {
+      "text": "Abokin ciniki zai biya {total} a bakin ƙofa.",
+      "reviewed": false
+    },
+    "rider.collect_door": {
+      "text": "Abokin ciniki zai biya {total} a bakin ƙofa: taɓa Na iso, Taskiem zai ba su lambar asusu da za su biya.",
+      "reviewed": false
+    },
+    "rider.customer": {
+      "text": "Abokin ciniki: {customer}, {phone}",
+      "reviewed": false
+    },
+    "rider.done": {
+      "text": "Na gode: an kai {reference}.",
+      "reviewed": false
+    },
+    "rider.done_proof": {
+      "text": "Na gode: an kai {reference}. Aika hotonsa a bakin ƙofa a matsayin shaida.",
+      "reviewed": false
+    },
+    "rider.door": {
+      "text": "Ka gaya wa abokin ciniki ya tura {total} zuwa {account}, {bank}, {name}. Yana aiki har {time}. Zan gaya maka idan ya shigo.",
+      "reviewed": false
+    },
+    "rider.drop": {
+      "text": "Kai shi: {drop}",
+      "reviewed": false
+    },
+    "rider.fee": {
+      "text": "Kuɗinka: {fee}",
+      "reviewed": false
+    },
+    "rider.held": {
+      "text": "{reference} naka ne.",
+      "reviewed": false
+    },
+    "rider.held_tail": {
+      "text": "Taɓa Na ɗauka idan ya shiga hannunka.",
+      "reviewed": false
+    },
+    "rider.items": {
+      "text": "Abubuwa: {items}",
+      "reviewed": false
+    },
+    "rider.landmark": {
+      "text": "Alama: {landmark}",
+      "reviewed": false
+    },
+    "rider.linked": {
+      "text": "An saka ka a matsayin mai kai kaya na {business}. Kayan da za a kai za su zo nan. Aika OFF idan ba ka aiki, da ON idan kana aiki.",
+      "reviewed": false
+    },
+    "rider.location_kept": {
+      "text": "Na samu wurinka: an ajiye shi tare da kayan.",
+      "reviewed": false
+    },
+    "rider.no_delivery": {
+      "text": "Ba ka da kayan da ya dace da wannan yanzu.",
+      "reviewed": false
+    },
+    "rider.off": {
+      "text": "Ka tsaya. Babu kasuwancin da zai ba ka kaya ka kai har sai ka aika ON.",
+      "reviewed": false
+    },
+    "rider.offer": {
+      "text": "Kaya don ka kai: {reference}.",
+      "reviewed": false
+    },
+    "rider.offer_tail": {
+      "text": "Ka amsa kafin {time}.",
+      "reviewed": false
+    },
+    "rider.on": {
+      "text": "Ka dawo. Kasuwancin da kake kai wa kaya za su iya ba ka kaya ka kai.",
+      "reviewed": false
+    },
+    "rider.on_way": {
+      "text": "Kana kan hanya da {reference}. Taɓa Na iso a bakin ƙofa.",
+      "reviewed": false
+    },
+    "rider.paid": {
+      "text": "An biya. Ba su {reference} ka taɓa Na kai.",
+      "reviewed": false
+    },
+    "rider.photo_failed": {
+      "text": "Yi haƙuri, ba a iya ajiye hoton ba. Sake gwadawa.",
+      "reviewed": false
+    },
+    "rider.photo_kept": {
+      "text": "An ajiye hoton a matsayin shaida. Na gode.",
+      "reviewed": false
+    },
+    "rider.pickup": {
+      "text": "Ɗauka a: {pickup}",
+      "reviewed": false
+    },
+    "rider.pin": {
+      "text": "Taswira: {pin}",
+      "reviewed": false
+    },
+    "rider.refused": {
+      "text": "Ba yanzu ba: {reason}",
+      "reviewed": false
+    },
+    "rider.released": {
+      "text": "{business} ya karɓe {reference}: ba sai ka kai ba.",
+      "reviewed": false
+    },
+    "rider.unpaid": {
+      "text": "Ba a biya {reference} ba tukuna: {total}. Ka gaya abokin ciniki ya biya, ko ka karɓi kuɗi ka taɓa An biya kuɗi.",
+      "reviewed": false
+    },
+    "rider.withdrawn": {
+      "text": "Tayin {reference} ya wuce.",
       "reviewed": false
     },
     "run.status.cancelled": {
@@ -928,6 +1140,78 @@
       "text": "Ka amsa da *yes* don fara {workflow}, ko *cancel*.",
       "reviewed": false
     },
+    "wa.dispatch.held": {
+      "text": "{rider} yana da {ref} tun da.",
+      "reviewed": false
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "ya makara wajen isa",
+      "reviewed": false
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "ya makara wajen ɗauka",
+      "reviewed": false
+    },
+    "wa.dispatch.no_rider": {
+      "text": "Babu mai kai kaya da zai ɗauki {ref} yanzu. Ƙara wasu, ko ka ambaci ɗaya: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "Ba ka da mai kai kaya mai suna {name}. Aika *riders* don ganin su.",
+      "reviewed": false
+    },
+    "wa.dispatch.none_today": {
+      "text": "Babu kayan da aka kai yau tukuna.",
+      "reviewed": false
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "Babu mai kai kaya da ke da {ref}.",
+      "reviewed": false
+    },
+    "wa.dispatch.offered": {
+      "text": "An ba {rider} tayin {ref}. Zan gaya maka idan ba zai iya ba.",
+      "reviewed": false
+    },
+    "wa.dispatch.refused": {
+      "text": "Ba yanzu ba: {reason}",
+      "reviewed": false
+    },
+    "wa.dispatch.released": {
+      "text": "An karɓe {ref} daga {rider}. Sake bayarwa: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "ya karɓa, bai ɗauka ba",
+      "reviewed": false
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "yana bakin ƙofa",
+      "reviewed": false
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "an kai",
+      "reviewed": false
+    },
+    "wa.dispatch.state.offered": {
+      "text": "an ba da tayi",
+      "reviewed": false
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "yana kan hanya",
+      "reviewed": false
+    },
+    "wa.dispatch.state.released": {
+      "text": "an karɓe",
+      "reviewed": false
+    },
+    "wa.dispatch.today": {
+      "text": "Kayan da aka kai yau:",
+      "reviewed": false
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Wanne: {names}?",
+      "reviewed": false
+    },
     "wa.field.enter": {
       "text": "Shigar da {label}",
       "reviewed": false
@@ -1020,6 +1304,10 @@
       "text": "• *cancel*: bar abin da ke gudana",
       "reviewed": false
     },
+    "wa.help.dispatch": {
+      "text": "• *order* da lamba *to Musa*: ba mai kai kaya; *release* da lamba: karɓe shi; *deliveries*: na yau",
+      "reviewed": false
+    },
     "wa.help.find": {
       "text": "• *find*, sunan tebur da kalma: nemo layuka",
       "reviewed": false
@@ -1038,6 +1326,10 @@
     },
     "wa.help.money": {
       "text": "• *spent* (ko *na kashe*) tare da adadin kuɗi da abin da aka kashe a kai (*spent 12,000 on diesel at Total*), ko *cash in* (*kuɗi ya shigo*) ko *cash out* (*kuɗi ya fita*) da adadi (*cash in 20,000 till*): zan rubuta shi a littafin kuɗinku",
+      "reviewed": false
+    },
+    "wa.help.riders": {
+      "text": "• *riders*: masu kai maka kaya da wanda ba shi da aiki; *add rider* da suna, waya da yankuna: ƙara ɗaya",
       "reviewed": false
     },
     "wa.help.run": {
@@ -1394,6 +1686,62 @@
     },
     "wa.receive.off": {
       "text": "You don't receive money with Taskiem yet. Turn it on in Settings, Payments: {link}",
+      "reviewed": false
+    },
+    "wa.riders.add_how": {
+      "text": "Faɗa haka: *add rider Musa 0803 123 4567 Lekki Ajah* (yankunan ba dole ba ne).",
+      "reviewed": false
+    },
+    "wa.riders.added": {
+      "text": "{name} ya zama mai kai maka kaya. Na aika masa mahaɗi ta SMS don ya riƙa samun kayanka a WhatsApp.",
+      "reviewed": false
+    },
+    "wa.riders.added_reached": {
+      "text": "{name} ya zama mai kai maka kaya, za a same shi a {app}.",
+      "reviewed": false
+    },
+    "wa.riders.away": {
+      "text": "yana hutu",
+      "reviewed": false
+    },
+    "wa.riders.busy": {
+      "text": "yana aiki har {time}",
+      "reviewed": false
+    },
+    "wa.riders.by_sms": {
+      "text": "ta SMS har sai sun taɓa mahaɗin",
+      "reviewed": false
+    },
+    "wa.riders.exists": {
+      "text": "{name} yana kai maka kaya tun da.",
+      "reviewed": false
+    },
+    "wa.riders.free": {
+      "text": "ba shi da aiki",
+      "reviewed": false
+    },
+    "wa.riders.head": {
+      "text": "Masu kai maka kaya:",
+      "reviewed": false
+    },
+    "wa.riders.none": {
+      "text": "Ba ka da mai kai kaya tukuna. Ƙara ɗaya haka: *add rider Musa 0803 123 4567 Lekki*",
+      "reviewed": false
+    },
+    "wa.riders.off": {
+      "text": "baya aiki",
+      "reviewed": false
+    },
+    "wa.riders.on_app": {
+      "text": "a {app}",
+      "reviewed": false
+    },
+    "wa.riders.refused": {
+      "text": "Ban iya ƙara wannan mai kai kaya ba: {reason}",
+      "reviewed": false
+    },
+    "wa.riders.tail": {
+      "text": "Ƙara ɗaya: *add rider Musa 0803 123 4567 Lekki*",
       "reviewed": false
     },
     "wa.run.bad_inputs": {
@@ -1880,6 +2228,10 @@
       "text": "an karɓa",
       "reviewed": false
     },
+    "wa.shop.status.arrived": {
+      "text": "yana bakin ƙofar abokin ciniki",
+      "reviewed": false
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "ana jiran biya",
       "reviewed": false
@@ -1896,12 +2248,20 @@
       "text": "an ƙi",
       "reviewed": false
     },
+    "wa.shop.status.dispatched": {
+      "text": "yana hannun mai kai kaya",
+      "reviewed": false
+    },
     "wa.shop.status.expired": {
       "text": "ya ƙare",
       "reviewed": false
     },
     "wa.shop.status.no_show": {
       "text": "bai zo ba",
+      "reviewed": false
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "yana kan hanya",
       "reviewed": false
     },
     "wa.shop.status.paid": {
@@ -1938,6 +2298,18 @@
     },
     "wa.shop.turn_on_orders": {
       "text": "In kunna odar yanzu? Abokan ciniki za su iya yin odar daga shafinku, kuma kowace odar za ta zo nan don ku karɓa ko ƙi.",
+      "reviewed": false
+    },
+    "wa.shop.turn_on_deliveries": {
+      "text": "Turn on deliveries now? Each confirmed order for delivery is then offered to your riders in turn, and their Delivered completes it. Your order form stays as it is.",
+      "reviewed": false
+    },
+    "wa.dispatch.on": {
+      "text": "Deliveries are on. Confirmed orders for delivery now go to your riders; reply *deliveries* to see today's.",
+      "reviewed": false
+    },
+    "wa.dispatch.on_failed": {
+      "text": "Deliveries are not on: {reason}.",
       "reviewed": false
     },
     "wa.shop.which_item": {

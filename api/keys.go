@@ -52,22 +52,33 @@ func (s *Server) keyRoutes(r chi.Router) {
 // second factor. It answers the request and returns false when the proof
 // is missing or wrong.
 func (s *Server) keyStepUp(w http.ResponseWriter, r *http.Request, proof stepUpProof, op string) bool {
+	_, ok := s.personStepUp(w, r, proof, op, principalFrom(r.Context()).TenantID.String(), "encryption key changes", "changing encryption keys")
+	return ok
+}
+
+// personStepUp holds a change to a person who confirms it with a passkey
+// (for a challenge asked for op on target) or a current authenticator
+// code; what names the changes ("encryption key changes") and doing them
+// ("changing encryption keys") in the refusals. API keys cannot: a key is
+// not a person and has no second factor. It returns the method that passed;
+// on a missing or wrong proof it answers the request and returns false.
+func (s *Server) personStepUp(w http.ResponseWriter, r *http.Request, proof stepUpProof, op, target, what, doing string) (string, bool) {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil {
-		writeJSON(w, http.StatusForbidden, map[string]any{"error": "encryption key changes are made by a person who confirms with a passkey or authenticator code, not with an API key", "step_up": "required"})
-		return false
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": what + " are made by a person who confirms with a passkey or authenticator code, not with an API key", "step_up": "required"})
+		return "", false
 	}
-	method, ok := s.checkStepUp(w, r, proof, stepUpScope(op, p.TenantID.String()))
+	method, ok := s.checkStepUp(w, r, proof, stepUpScope(op, target))
 	if !ok {
-		return false
+		return "", false
 	}
 	if method != "" {
-		return true
+		return method, true
 	}
 	f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID)
 	if err != nil {
 		s.fail(w, r, err)
-		return false
+		return "", false
 	}
 	var methods []string
 	if f.Passkey {
@@ -78,10 +89,10 @@ func (s *Server) keyStepUp(w http.ResponseWriter, r *http.Request, proof stepUpP
 	}
 	msg := "confirm with your passkey or authenticator code"
 	if len(methods) == 0 {
-		msg = "add a passkey or an authenticator app under Account first: changing encryption keys needs one"
+		msg = "add a passkey or an authenticator app under Account first: " + doing + " needs one"
 	}
-	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "step_up": "required", "methods": nonNil(methods), "operation": op, "target": p.TenantID})
-	return false
+	writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "step_up": "required", "methods": nonNil(methods), "operation": op, "target": target})
+	return "", false
 }
 
 func (s *Server) getKeys(w http.ResponseWriter, r *http.Request) {

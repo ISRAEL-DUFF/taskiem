@@ -10,6 +10,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/xenibase/xenibasetest"
+	"github.com/israel-duff/taskiem/engine/connector"
 )
 
 // A connection made through Taskiem's platform app (decision 0051) is
@@ -27,6 +28,16 @@ func TestOAuthThroughAPlatformApp(t *testing.T) {
 	o.Client, o.AccountField = "platformapp", "project_id"
 	o.FieldsFromCallback = map[string]string{"api_url": "api_url"}
 	t.Cleanup(func() { o.Client, o.AccountField, o.FieldsFromCallback = "", "", nil })
+	// Linking asks the provider about a field from the callback before
+	// saving it: the test action sees the credentials as they will be kept.
+	// (The fake Xenibase is plain http, which the real test refuses.)
+	var tested string
+	real := c.Actions["test_connection"]
+	c.Actions["test_connection"] = connector.ActionFunc(func(_ context.Context, req connector.Request) (connector.Response, error) {
+		tested = req.Credentials["api_url"]
+		return connector.Response{Output: map[string]any{}}, nil
+	})
+	t.Cleanup(func() { c.Actions["test_connection"] = real })
 	// Registered under the app's name, not the connector's.
 	w.srv.OAuthClients = map[string]api.OAuthClient{"platformapp": {ID: "xbapp_taskiem", Secret: "xbc_secret"}}
 	owner := w.tenant(t, "Acme", "owner@acme.test")
@@ -37,6 +48,9 @@ func TestOAuthThroughAPlatformApp(t *testing.T) {
 	id := back.Get("linked")
 	if id == "" {
 		t.Fatalf("not linked: %s", back.Get("error"))
+	}
+	if tested != "https://shop.data.example" {
+		t.Errorf("the provider was not asked about the callback's field: %q", tested)
 	}
 	var client, account string
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT client, account_key FROM connection_app_accounts WHERE connection_id = $1`, uuid.MustParse(id)).Scan(&client, &account); err != nil || client != "platformapp" || account != oauthProject {

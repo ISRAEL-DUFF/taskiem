@@ -1,6 +1,6 @@
 # Definer review, October 2026
 
-`SECURITY DEFINER` functions run as `taskiem_dispatch`, past row-level security, for lookups that must happen before a tenant is known or across tenants (spec 5.3). The engine review of 27 October 2026 (findings 3) asked for each to be checked once against one rule, **return routing columns only**, starting with sign-in, operator and partner functions, and for any that a tenant-scoped query could do instead to be retired. This page records that review and what changed (migration 00240).
+`SECURITY DEFINER` functions run as `taskiem_dispatch`, past row-level security, for lookups that must happen before a tenant is known or across tenants (spec 5.3). The engine review of 27 October 2026 (findings 3) asked for each to be checked once against one rule, **return routing columns only**, starting with sign-in, operator and partner functions, and for any that a tenant-scoped query could do instead to be retired. This page records that review and what changed (migration 00246).
 
 ## How
 

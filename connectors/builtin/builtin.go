@@ -35,6 +35,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/quickbooks"
 	"github.com/israel-duff/taskiem/connectors/remita"
 	"github.com/israel-duff/taskiem/connectors/resend"
+	"github.com/israel-duff/taskiem/connectors/riders"
 	"github.com/israel-duff/taskiem/connectors/s3"
 	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
@@ -102,6 +103,9 @@ type Options struct {
 	// Storefront binds the storefront platform connector's actions to the
 	// deployment's orders (docs/storefronts.md); nil: they fail plainly.
 	Storefront storefront.Ops
+	// Riders binds the riders platform connector (docs/dispatch.md); nil:
+	// its actions fail plainly.
+	Riders riders.Ops
 	// Forms binds the forms platform connector (docs/forms.md); nil: its
 	// actions fail plainly.
 	Forms form.Ops
@@ -163,6 +167,7 @@ func Register(r *connector.Registry, o Options) error {
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),
 		storefront.New(o.Storefront),
+		riders.New(o.Riders),
 		invoices.New(o.Invoices),
 		schools.New(o.Schools),
 		form.New(o.Forms),

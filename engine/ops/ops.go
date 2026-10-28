@@ -83,7 +83,7 @@ func Add(ctx context.Context, pool *pgxpool.Pool, email, name, by string) (uuid.
 		return uuid.Nil, errors.New("a name has at most 200 characters")
 	}
 	var id uuid.UUID
-	err := admin(ctx, pool, func(tx pgx.Tx) error {
+	err := inChain(ctx, pool, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_operator_add($1, $2, $3)`, email, strings.TrimSpace(name), by).Scan(&id); err != nil {
 			return err
 		}
@@ -92,18 +92,10 @@ func Add(ctx context.Context, pool *pgxpool.Pool, email, name, by string) (uuid.
 	return id, err
 }
 
-// admin runs an account change and its audit entry in one transaction,
-// so neither is kept without the other. The pool is the CLI's own login
-// as taskiem_ops_admin (TASKIEM_OPS_DATABASE_URL): the API server's role
-// may not call the account functions (migration 00240).
-func admin(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
-	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, fn)
-}
-
 // Disable stops an operator: their sessions and unused enrolment links end
 // at once.
 func Disable(ctx context.Context, pool *pgxpool.Pool, email, by string) error {
-	return admin(ctx, pool, func(tx pgx.Tx) error {
+	return inChain(ctx, pool, func(tx pgx.Tx) error {
 		var id uuid.UUID
 		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_operator_disable($1, $2)`, email, by).Scan(&id); err != nil {
 			return notFound(err)
@@ -116,7 +108,7 @@ func Disable(ctx context.Context, pool *pgxpool.Pool, email, by string) error {
 // sessions; it returns how many passkeys were removed.
 func Reset(ctx context.Context, pool *pgxpool.Pool, email, by string) (int64, error) {
 	var n int64
-	err := admin(ctx, pool, func(tx pgx.Tx) error {
+	err := inChain(ctx, pool, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_operator_reset($1)`, email).Scan(&n); err != nil {
 			return notFound(err)
 		}
@@ -144,7 +136,7 @@ func Enrol(ctx context.Context, pool *pgxpool.Pool, email, publicURL string, ttl
 		ttl = EnrolTTL
 	}
 	tok := NewToken()
-	err := admin(ctx, pool, func(tx pgx.Tx) error {
+	err := inChain(ctx, pool, func(tx pgx.Tx) error {
 		var id uuid.UUID
 		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_enrol_issue($1, $2, make_interval(secs => $3), $4)`, email, HashToken(tok), ttl.Seconds(), by).Scan(&id); err != nil {
 			return notFound(err)
@@ -173,6 +165,15 @@ func Audit(ctx context.Context, pool *pgxpool.Pool, actor, action, target string
 	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, func(tx pgx.Tx) error {
 		return AuditTx(ctx, tx, actor, action, target, detail)
 	})
+}
+
+// inChain runs an operator change and its audit entry in one transaction
+// scoped to the platform chain: no change is left unrecorded. For account
+// changes the pool is the CLI's own login as taskiem_ops_admin
+// (TASKIEM_OPS_DATABASE_URL): the API server's role may not call the
+// account functions (migration 00246).
+func inChain(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
+	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, fn)
 }
 
 // AuditTx is Audit inside a transaction scoped to PlatformChain.

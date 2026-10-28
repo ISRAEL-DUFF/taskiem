@@ -4,24 +4,98 @@
   "title": "Sandboxed code and containers",
   "part": "C",
   "order": 2,
-  "status": "planned",
-  "summary": "Code steps in QuickJS and CPython on WebAssembly, their limits and host functions, and container steps for heavy work.",
-  "scope": [
-    "The QuickJS fork and CPython compiled to WebAssembly on wazero",
-    "Limits per execution, pooling and cold start",
-    "Host functions, and what a script cannot reach",
-    "Secrets in code steps, and scrubbing",
-    "Container steps: runners, the shim, the egress proxy",
-    "Workflow code compiled in the same sandbox"
-  ],
+  "summary": "Code steps in QuickJS and CPython on WebAssembly, their limits and host functions, how secrets are kept out of history, container steps on Kubernetes with gVisor, and workflow code compiled in the same sandbox.",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
   "sources": [
-    "engine/sandbox/",
-    "engine/container/",
-    "cmd/taskiem-shim/",
-    "third_party/qjs/",
-    "engine/runtime/codestep.go",
-    "engine/runtime/containerstep.go",
-    "docs/decisions/0011-sandbox-quickjs-fork.md"
+    "engine/sandbox/", "engine/container/", "cmd/taskiem-shim/", "third_party/qjs/runtime.go",
+    "engine/runtime/codestep.go", "engine/runtime/containerstep.go", "engine/runtime/scrub.go",
+    "engine/egress/", "engine/flowcode/", "cmd/taskiem/containers.go", "engine/wd/container.go",
+    "docs/decisions/0011-sandbox-quickjs-fork.md", "docs/spec/architecture.md"
   ]
 }
 -->
+<h2>Two ways to run tenant code</h2>
+<p>A tenant's own code runs in one of two places. A <code>code</code> step runs JavaScript, TypeScript or Python inside the worker process, as WebAssembly on wazero. It is fast, holds no state between runs, and can read the network only through the host. A <code>container</code> step runs any image the tenant names, pinned by digest, in a Pod on Kubernetes under gVisor. It is for heavy work: PDF rendering, a binary the tenant already has, a long computation.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th></th><th>Code step</th><th>Container step</th></tr></thead>
+  <tbody>
+    <tr><td>Runs in</td><td>The worker, queue <code>sandbox</code>, 4 at a time per worker</td><td>A Pod per attempt, queue <code>container</code>, 2 per tenant by default</td></tr>
+    <tr><td>Isolation</td><td>WebAssembly: no filesystem, sockets or environment</td><td>gVisor RuntimeClass, non-root, read-only root, no service-account token, no DNS</td></tr>
+    <tr><td>Network</td><td><code>host.fetch</code>, GET and HEAD only, to the environment's allow-list</td><td>Optional: an authenticated egress proxy, to hosts on both the step's and the environment's list</td></tr>
+    <tr><td>Limits</td><td>Up to 256 MB and 60 s; output 256 KB</td><td>Up to 4 CPUs, 4 GB, 30 minutes; output 1 MB</td></tr>
+    <tr><td>Action class</td><td>Always <code>read</code></td><td><code>unsafe_write</code> unless the step says otherwise</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="sandbox--quickjs">JavaScript and TypeScript in QuickJS</h2>
+<p>JavaScript runs in QuickJS compiled to WebAssembly, from a vendored copy of <code>fastschema/qjs</code> (<x-ref path="docs/decisions/0011-sandbox-quickjs-fork.md">decision 0011</x-ref>). The fork makes four changes, each marked "Taskiem fork": a hard memory cap, an interrupt whenever the context is cancelled, no filesystem at all, and the run's logical time as the script's clock (<x-ref path="third_party/qjs/runtime.go"><code>runtime.go</code></x-ref>).</p>
+<x-code path="third_party/qjs/runtime.go" start="// Taskiem fork: always interrupt on context cancellation, and cap memory." end="WithMemoryCapacityFromMax(true)" caption="the cap and the interrupt"/>
+<p>When a workflow is validated, <x-ref path="engine/sandbox/sandbox.go" symbol="func Compile(source, language string) (string, error) {"><code>Compile</code></x-ref> strips TypeScript with esbuild into a single function and refuses anything that still calls <code>require(</code>, so a script cannot import a package. Compiled scripts are cached, 2,048 per process, keyed by a hash of the source.</p>
+<p><x-ref path="engine/sandbox/sandbox.go" symbol="func Run(ctx context.Context, script string, input any, host Host, lim Limits) (res Result, err error) {"><code>Run</code></x-ref> builds a fresh runtime for every execution, so nothing a script does to globals or prototypes reaches the next one (<x-ref path="engine/sandbox/sandbox_test.go" symbol="func TestRunsAreIsolated("><code>TestRunsAreIsolated</code></x-ref>). Before the script runs, a prelude removes QuickJS's own <code>std</code> and <code>os</code> modules and installs the one object a script may use:</p>
+<x-code path="engine/sandbox/sandbox.go" start="const prelude = `" end="delete globalThis.__taskiem_host_installed;" lang="js" caption="what a script can see"/>
+<p>Errors come out in four kinds (<x-ref path="engine/sandbox/sandbox.go" symbol="func classify(ctx context.Context, err error) error {"><code>classify</code></x-ref>): timeout, out of memory, output too large, and a script error with its first line. All are fatal. A code step is not retried, because running the same code on the same input gives the same failure.</p>
+
+<h2 id="sandbox--python">Python in CPython</h2>
+<p>Python runs CPython 3.12 built for WASI, embedded gzipped with its SHA-256 checked on load (<x-ref path="engine/sandbox/pywasm/pywasm.go" symbol="const SHA256 ="><code>pywasm</code></x-ref>). Each run is a new instance of the module, started with <code>-I -S</code> so it reads no environment, with no directories mounted and the run's logical time as its wall clock:</p>
+<x-code path="engine/sandbox/python.go" start="cfg := wazero.NewModuleConfig().WithName(&quot;&quot;)" end="mod, runErr := py.rt.InstantiateModule(ctx, py.mod, cfg)" caption="a Python run"/>
+<p>The script and the host talk over JSON lines on stdin and stdout (<x-ref path="engine/sandbox/python.go" symbol="func (p *pyIO) handle(line []byte) {"><code>pyIO.handle</code></x-ref>), and <code>print</code> goes to the step's logs. An import hook refuses <code>socket</code>, <code>subprocess</code>, <code>threading</code> and others (<x-ref path="engine/sandbox/python.go" symbol="var pythonBlocked = []string{"><code>pythonBlocked</code></x-ref>). That hook only gives a clearer error. The boundary is WASI, which has no sockets to open.</p>
+
+<h2 id="sandbox--limits">Limits and start-up</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Limit</th><th>Value</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>Default per run (JS)</td><td>64 MB heap, 10 s, 256 KB output, 16 KB logs</td><td><x-ref path="engine/sandbox/sandbox.go" symbol="var DefaultLimits = Limits{"><code>DefaultLimits</code></x-ref></td></tr>
+    <tr><td>Most a step may ask for</td><td>256 MB, 60 s</td><td><x-ref path="engine/wd/model.go" symbol="MaxCodeMemoryMB = 256"><code>MaxCodeMemoryMB</code></x-ref></td></tr>
+    <tr><td>WebAssembly memory, JS</td><td>128 MB for every run in the process</td><td><x-ref path="third_party/qjs/runtime.go" symbol="var MemoryLimitPages uint32 = 2048"><code>MemoryLimitPages</code></x-ref></td></tr>
+    <tr><td>WebAssembly memory, Python</td><td>256 MB for every run in the process</td><td><x-ref path="engine/sandbox/python.go" symbol="var PythonMemory = 256 &lt;&lt; 20"><code>PythonMemory</code></x-ref></td></tr>
+    <tr><td><code>host.fetch</code></td><td>50 calls a step, 1 MB a response</td><td><x-ref path="engine/runtime/codestep.go" symbol="const maxFetches = 50"><code>maxFetches</code></x-ref></td></tr>
+    <tr><td>Recorded output</td><td>256 KB</td><td><x-ref path="engine/runtime/worker.go" symbol="const maxStepOutput = 256 &lt;&lt; 10"><code>maxStepOutput</code></x-ref></td></tr>
+  </tbody>
+</table></div>
+<p>Time is wall-clock: the run's context has a deadline and the fork interrupts QuickJS when it passes. There is no pool. The compiled WebAssembly module is shared, and every run instantiates it afresh, which the decision record measured at under 10 ms for a trivial script once the module is compiled. Compiling it takes about 0.7 s, so a sandbox worker does that when it starts (<x-ref path="engine/runtime/worker.go" symbol="if w.Queue == &quot;sandbox&quot; {">worker start</x-ref>) and compiles Python in the background.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <ul>
+    <li>Memory is "128 MB (plan-dependent)" in the spec (<x-ref path="docs/spec/architecture.md" symbol="| Memory | 128 MB (plan-dependent) |">spec 7.2</x-ref>). Nothing depends on the plan. A JS step that asks for more than 128 MB reaches the process-wide WebAssembly cap first, and Python ignores the step's limit and uses its 256 MB.</li>
+    <li>CPU time is "metered by fuel". No fuel exists in the code: a script that waits on <code>fetch</code> uses its whole timeout.</li>
+    <li>"A warm pool of instantiated QuickJS runtimes per worker" is not built; each run starts fresh, as above.</li>
+    <li>Uploaded WebAssembly modules as code steps are accepted by the schema and refused by the worker (<x-ref path="engine/runtime/codestep.go" symbol="func compileStep(c *wd.CodeConfig) (string, error) {"><code>compileStep</code></x-ref>).</li>
+  </ul>
+</div>
+
+<h2 id="sandbox--host">What a script can reach</h2>
+<p>The host gives a script four things (<x-ref path="engine/sandbox/sandbox.go" symbol="type Host struct {"><code>Host</code></x-ref>): <code>log</code>, <code>now</code> (the run's logical time), <code>secret</code> (only the secrets the step declares) and <code>fetch</code>. <x-ref path="engine/runtime/codestep.go" symbol="func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Result, error) {"><code>runCode</code></x-ref> wires <code>fetch</code> through the same egress guard as connectors. The guard allows only the environment's hosts, resolves the name and refuses any private, loopback or metadata address before it dials the address it checked, so a DNS answer cannot change between the check and the call (<x-ref path="engine/egress/egress.go" symbol="func (g *Guard) DialContext("><code>Guard.DialContext</code></x-ref>). Redirects are checked the same way.</p>
+<p>Since findings 1, <code>fetch</code> refuses anything but GET and HEAD. A code step is recorded as a read, with no intent before it, so a write from one would be sent again whenever a worker died mid-step:</p>
+<x-code path="engine/runtime/codestep.go" start="// errFetchWrite refuses a write from a code step." end="var errFetchWrite = errors.New(" caption="writes go through http or connector steps"/>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Code gets "no clock except through host functions" (<x-ref path="docs/spec/architecture.md" symbol="Code gets no network, no filesystem, and no clock">spec 7</x-ref>). QuickJS used to get the host's clock, so <code>Date.now()</code> was the time the step happened to run and differed on a retry or a fork. The fork now takes a wall clock (<x-ref path="third_party/qjs/options.go" symbol="Walltime func() (sec int64, nsec int32)"><code>Option.Walltime</code></x-ref>), and <code>Date</code> is the run's logical time, the same as <code>host.now()</code> and Python's <code>time.time()</code> (<x-ref path="engine/sandbox/sandbox_test.go" symbol="func TestDateIsTheLogicalClock("><code>TestDateIsTheLogicalClock</code></x-ref>).</p>
+</div>
+
+<h2 id="sandbox--secrets">Secrets, and keeping them out of history</h2>
+<p>A script reads a declared secret as plain text through <code>host.secret</code>, so it can put it in a header. Taskiem cannot stop a script from printing or returning it. Instead, before the step's event is written, <x-ref path="engine/runtime/scrub.go" symbol="func scrubSecrets(payload []byte, secrets []string) ([]byte, error) {"><code>scrubSecrets</code></x-ref> replaces every value the step could read with <code>[secret]</code> throughout the output, logs and error, in plain, query-escaped and path-escaped form (<x-ref path="engine/runtime/hardening_test.go" symbol="func TestCodeStepSecretsAndFetchCap("><code>TestCodeStepSecretsAndFetchCap</code></x-ref>). Connection credentials and secrets used in input expressions go on the same list.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>The scrubber matches exact text, so a determined script can get a secret past it. Values under 6 characters are left alone (<x-ref path="engine/runtime/scrub.go" symbol="const minScrub = 6"><code>minScrub</code></x-ref>). A secret that is base64-encoded, reversed or split survives. Object keys are not rewritten, only values (<x-ref path="engine/runtime/scrub.go" symbol="func scrubValue("><code>scrubValue</code></x-ref>). The scrubber stops accidents, such as a token in an error message. It does not stop a tenant's own code from leaking that tenant's secret, and a script can also send it to any host on the allow-list. Both are the tenant's own data, so this matters most for who in a tenant may write code steps.</p>
+</div>
+
+<h2 id="sandbox--containers">Container steps</h2>
+<p>A container step names an image by digest. Tags are refused, so the image cannot change under a published workflow (<x-ref path="engine/wd/container.go" symbol="func ImageProblem(image string) string {"><code>ImageProblem</code></x-ref>). It takes defaults of 1 CPU, 512 MB, 5 minutes and 256 KB of output, up to 4 CPUs, 4 GB, 30 minutes and 1 MB.</p>
+<p>The runner is chosen by <code>TASKIEM_CONTAINER_RUNNER</code> (<x-ref path="cmd/taskiem/containers.go" symbol="func containerSetup("><code>containerSetup</code></x-ref>). <code>kubernetes</code> is the production runner. <code>local</code> runs a process on the worker's own machine for development, and it needs a second variable to switch on because it is not a security boundary. Without either, container steps fail as not enabled. At start-up the Kubernetes runner checks that its namespace, registry allow-list, shim image and NetworkPolicy are in place.</p>
+<p>Each attempt is one Pod, with this security context:</p>
+<x-code path="engine/container/kubernetes.go" start="containerSecurity := map[string]any{" end="&quot;dnsConfig&quot;: map[string]any{&quot;nameservers&quot;: []string{&quot;127.0.0.1&quot;}}," caption="the Pod, minus resources and volumes"/>
+<p>The input, the declared secrets and the proxy address go in a Secret owned by the Pod, so deleting the Pod deletes it. An init container copies in <x-ref path="engine/container/shim.go" symbol="func Shim(args []string, stdout io.Writer) error {">the shim</x-ref>, which runs the tenant's program, passes it the input, caps its output and logs, kills its whole process group at the timeout, checks the output is JSON, and prints one line: <code>TASKIEM-RESULT</code> and the outcome in base64. The worker reads the Pod's log, finds that line from the end (<x-ref path="engine/container/container.go" symbol="func ParseOutcome(log string) (Outcome, bool) {"><code>ParseOutcome</code></x-ref>), and turns it into a result:</p>
+<x-code path="engine/container/container.go" start="func Settle(o Outcome, elapsed time.Duration) (Result, error) {" caption="outcomes and what they mean"/>
+<p>A Pod that could not pull its image or start counts as not sent, and is safe to retry. One that ran out of memory or past its deadline is an unknown outcome, which for the default <code>unsafe_write</code> class parks the step for a person. The Pod is always deleted, and every minute each worker removes Pods that a dead worker left behind (<x-ref path="engine/container/kubernetes.go" symbol="func (k *Kubernetes) Sweep(ctx context.Context) error {"><code>Sweep</code></x-ref>).</p>
+<h3>Network</h3>
+<p>A container has no network unless the step asks for <code>network: egress</code>. Then the worker issues a one-time token for the proxy, valid only for hosts on both the step's list and the environment's, and revokes it when the step ends, which also closes its open connections:</p>
+<x-code path="engine/runtime/containerstep.go" start="if cfg.Network == &quot;egress&quot; {" end="spec.Proxy = &quot;http://taskiem:&quot; + token + &quot;@&quot; + w.ProxyAddr" caption="egress for one attempt"/>
+<p>The <x-ref path="engine/egress/proxy.go" symbol="type Proxy struct {">proxy</x-ref> listens on port 3128 in the worker. It allows CONNECT tunnels and plain HTTP requests on ports 443 and 80, and dials through the same guard as everything else. The token is scrubbed from history like a secret. A write from a container gets <code>TASKIEM_IDEMPOTENCY_KEY</code> in its environment, so the program can pass it to the provider.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <ul>
+    <li>The shim runs as the same user as the program, so a program can print its own result line. The docs say so. It matters only in that a tenant can lie to itself about its own step.</li>
+    <li>The worker reads at most <code>(output + 16 KB) × 4/3 + 8 KB</code> of log. The result line is JSON in base64, and Go's JSON escapes <code>&lt;</code>, <code>&gt;</code> and <code>&amp;</code> to six bytes each. An output near its cap made mostly of HTML can therefore be cut off, and the step then ends as "no result", an unknown outcome. The escaping was confirmed; the whole failure was not reproduced.</li>
+    <li>Minutes are checked before a step starts, so one run can go up to 30 minutes past a plan's monthly allowance. Some failures record no elapsed time and are not counted at all.</li>
+    <li>The start-up check confirms the NetworkPolicy exists by name, not what it allows.</li>
+  </ul>
+</div>
+
+<h2 id="sandbox--flow-code">Workflow code in the same sandbox</h2>
+<p>A workflow can be written in TypeScript as a <code>*.flow.ts</code> file instead of JSON. <x-ref path="engine/flowcode/flowcode.go" symbol="func bundle(entry, resolveDir string, allowFiles bool) (string, error) {"><code>flowcode</code></x-ref> bundles it with esbuild, linked into the binary, against an embedded copy of the SDK, so no Node is needed. Only <code>@taskiem/sdk</code> and <code>@taskiem/connectors</code> can be imported. The bundle then runs in QuickJS with no <code>fetch</code> and no secrets, and returns the workflow definition as JSON, which is validated like any other. Through the API this runs in the API process, behind a gate of at least two at a time and half that per tenant (<x-ref path="api/codegate.go" symbol="type codeGate struct {"><code>codeGate</code></x-ref>).</p>

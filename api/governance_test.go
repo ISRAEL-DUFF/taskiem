@@ -84,7 +84,7 @@ func TestPolicyLevelsStepUpAndDelegation(t *testing.T) {
 	}
 	// Alice holds head_of_credit too, but approved level 1.
 	status, body = c["alice"].do("POST", path, map[string]any{"decision": "approved"})
-	if status != 403 || !strings.Contains(body["error"].(string), "earlier level") {
+	if status != 403 || !strings.Contains(body["error"].(string), "another level") {
 		t.Errorf("same person, two levels: %d %v", status, body)
 	}
 

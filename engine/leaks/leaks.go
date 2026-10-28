@@ -1,8 +1,9 @@
 // Package leaks finds money a business may be losing (decision 0045;
 // docs/spec/invoices-and-money-log.md 9.1, T6; docs/leaks.md): money in
 // that nothing matches after a day, overdue invoices, a payment recorded
-// twice, an invoice paid more than it asked or after it was voided, and a
-// fee above the rate the owner agreed with a connection.
+// twice, an invoice paid more than it asked or after it was voided, a fee
+// above the rate the owner agreed with a connection, and cash a rider owes
+// beyond the business's limit.
 //
 // A leak is opened once per kind and subject (the entry or the invoice),
 // shown in naira, can be assigned to a member, and is closed by a person
@@ -138,6 +139,14 @@ func (d *Detector) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 				FROM money_entries e JOIN money_fee_rates r ON r.tenant_id = e.tenant_id AND r.channel = e.channel
 				CROSS JOIN LATERAL (SELECT LEAST(COALESCE(r.cap_kobo, 9223372036854775807), (e.amount_kobo * r.percent_bp + 9999) / 10000 + r.flat_kobo) AS expected) x
 				WHERE e.tenant_id = $1 AND e.fee_kobo IS NOT NULL AND e.amount_kobo IS NOT NULL AND e.fee_kobo > x.expected`},
+			// Cash a rider took at the door and still owes, beyond the
+			// business's limit (dispatch D4); the rider's name is sealed, so
+			// Riders > Owed names them.
+			{"rider_owes", `SELECT m.rider_id::text, NULL::uuid, NULL::uuid, sum(m.amount_kobo - m.paid_kobo),
+				'a rider owes ' || ` + nairaSQL("sum(m.amount_kobo - m.paid_kobo)") + ` || ' in cash taken at the door since ' || to_char(min(m.created_at) AT TIME ZONE 'Africa/Lagos', 'DD Mon YYYY') || ', above your limit of ' || ` + nairaSQL("COALESCE(s.owe_limit_kobo, 2000000)") + `
+				FROM rider_remittances m LEFT JOIN dispatch_settings s ON s.tenant_id = m.tenant_id
+				WHERE m.tenant_id = $1 AND m.settled_at IS NULL
+				GROUP BY m.rider_id, s.owe_limit_kobo HAVING sum(m.amount_kobo - m.paid_kobo) > COALESCE(s.owe_limit_kobo, 2000000)`},
 		}
 		current := map[string]map[string]bool{}
 		for _, f := range found {

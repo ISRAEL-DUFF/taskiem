@@ -187,12 +187,18 @@ const CataloguePrefix = "p_"
 // connectors it installed.
 type TenantSource func(ctx context.Context, tenant string) ([]*Connector, error)
 
+// VersionSource loads one exact version of an uploaded connector (x_ or
+// p_) for a tenant, or returns nil when that version can no longer run
+// there (uninstalled, revoked, or no longer shared).
+type VersionSource func(ctx context.Context, tenant, id, version string) (*Connector, error)
+
 // Registry holds the connectors compiled into this binary, and reaches
 // tenants' own connectors through its TenantSource.
 type Registry struct {
-	mu     sync.RWMutex
-	m      map[string]*Connector
-	tenant TenantSource
+	mu       sync.RWMutex
+	m        map[string]*Connector
+	tenant   TenantSource
+	versions VersionSource
 }
 
 // SetTenantSource makes For include each tenant's own connectors.
@@ -200,6 +206,46 @@ func (r *Registry) SetTenantSource(f TenantSource) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tenant = f
+}
+
+// SetVersionSource lets Pinned load a version older than the newest.
+func (r *Registry) SetVersionSource(f VersionSource) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.versions = f
+}
+
+// Pinned is the connector a run's step calls: the version of ref the run
+// recorded when it started (RunStarted, spec 6.4), so uploading a newer
+// minor version does not change a run already under way. An uploaded
+// connector's pinned version is loaded even when a newer one is enabled,
+// or the pinned one was disabled for new runs. A built-in has only the
+// version in this binary, and a version that can no longer run (revoked,
+// uninstalled, unshared) gives way to the newest: repinned reports both.
+func (r *Registry) Pinned(ctx context.Context, tenant, ref, version string) (c *Connector, repinned bool, err error) {
+	lk, err := r.For(ctx, tenant)
+	if err != nil {
+		return nil, false, err
+	}
+	cur, ok := lk.Get(ref)
+	if version == "" || ok && cur.Manifest.Version == version {
+		return cur, false, nil
+	}
+	id, _, _ := strings.Cut(ref, "@")
+	r.mu.RLock()
+	src := r.versions
+	r.mu.RUnlock()
+	if src == nil || !strings.HasPrefix(id, TenantPrefix) && !strings.HasPrefix(id, CataloguePrefix) {
+		return cur, ok, nil
+	}
+	old, err := src(ctx, tenant, id, version)
+	if err != nil {
+		return nil, false, fmt.Errorf("connector %s %s: %w", id, version, err)
+	}
+	if old == nil || old.Ref() != ref {
+		return cur, ok, nil
+	}
+	return old, false, nil
 }
 
 // For is the connectors tenant can use: the built-ins and its own.
@@ -256,7 +302,7 @@ func (v *view) Pins() map[string]string {
 func NewRegistry() *Registry { return &Registry{m: map[string]*Connector{}} }
 
 // Register checks that every manifest action has a handler, then adds the
-// connector. A newer minor version of the same major replaces an older one.
+// connector, replacing one already registered under the same id@major.
 func (r *Registry) Register(c *Connector) error {
 	if err := c.Check(); err != nil {
 		return err

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
@@ -96,6 +98,96 @@ func TestDuplicateTriggerReturnsSameRun(t *testing.T) {
 	b, created2, err := e.Store.StartRun(ctx, req)
 	if err != nil || !created1 || created2 || a.ID != b.ID {
 		t.Errorf("dedup: %v %v %v %v %v", a.ID, b.ID, created1, created2, err)
+	}
+}
+
+// A dedup key holds for 30 days, well past any provider's retries: after
+// that the same delivery is new again, and the scheduler purges the receipt.
+func TestTriggerReceiptWindow(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	req := runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod", Trigger: map[string]any{"amount": 1}, TriggerID: "hook", DedupKey: "evt_old"}
+	first, _, err := e.Store.StartRun(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	age := func(days int) {
+		t.Helper()
+		if _, err := e.DB.Admin.Exec(ctx, `UPDATE trigger_receipts SET received_at = now() - make_interval(days => $2) WHERE tenant_id = $1`, e.Tenant, days); err != nil {
+			t.Fatal(err)
+		}
+	}
+	age(29)
+	if again, created, err := e.Store.StartRun(ctx, req); err != nil || created || again.ID != first.ID {
+		t.Fatalf("within the window: %v %v %v", again.ID, created, err)
+	}
+	age(31)
+	second, created, err := e.Store.StartRun(ctx, req)
+	if err != nil || !created || second.ID == first.ID {
+		t.Fatalf("past the window the delivery is new: %v %v %v", second.ID, created, err)
+	}
+	// The new run holds the key again.
+	if again, created, err := e.Store.StartRun(ctx, req); err != nil || created || again.ID != second.ID {
+		t.Fatalf("the new receipt: %v %v %v", again.ID, created, err)
+	}
+
+	// The scheduler purges receipts past the window, and only those.
+	req.DedupKey = "evt_fresh"
+	if _, _, err := e.Store.StartRun(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE trigger_receipts SET received_at = now() - interval '45 days' WHERE dedup_key = 'evt_old'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Scheduler().Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	rows, err := e.DB.Admin.Query(ctx, `SELECT dedup_key FROM trigger_receipts WHERE tenant_id = $1 ORDER BY dedup_key`, e.Tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if keys, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil || len(keys) != 1 || keys[0] != "evt_fresh" {
+		t.Errorf("after the purge: %v %v", keys, err)
+	}
+}
+
+// A connector's rate limit holds across workers (spec 6.2): with its one
+// call an hour spent, the next run's payment waits in the queue, unsent,
+// with no intent recorded and no retry spent, and goes once a token is due.
+func TestConnectorRateLimit(t *testing.T) {
+	e := rt.New(t)
+	conn, ok := e.Registry.Get("fakepay@1")
+	if !ok {
+		t.Fatal("no fakepay")
+	}
+	conn.Manifest.RateLimit = &connector.RateLimit{Requests: 1, Per: "1h"}
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	first := e.Start(t, wf, map[string]any{"amount": 1})
+	e.Drain(t)
+	second := e.Start(t, wf, map[string]any{"amount": 2})
+	e.Drain(t)
+	if e.Status(t, first) != "completed" || e.Status(t, second) != "running" {
+		t.Fatalf("first %s, second %s", e.Status(t, first), e.Status(t, second))
+	}
+	h := events(t, e, second)
+	if count(h, history.EffectIntent, "pay") != 0 || count(h, history.RetryScheduled, "pay") != 0 || e.Provider.Executions(second.ID.String()+":pay") != 0 {
+		t.Fatalf("the waiting payment: %s", types(h))
+	}
+	var wait float64
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT EXTRACT(EPOCH FROM available_at - now()) FROM tasks WHERE run_id = $1`, second.ID).Scan(&wait); err != nil || wait < 50*60 {
+		t.Fatalf("queued for %.0f s: %v", wait, err)
+	}
+	// An hour on, the token is due.
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE connector_rate_buckets SET updated_at = updated_at - interval '1 hour'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE tasks SET available_at = now() WHERE run_id = $1`, second.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, second); st != "completed" {
+		t.Fatalf("after an hour: %s %s", st, types(events(t, e, second)))
 	}
 }
 

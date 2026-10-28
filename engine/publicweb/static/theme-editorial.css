@@ -163,3 +163,5 @@ legend + * { clear: both; }
 .fam-plan + .fam-plan { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--line); }
 .fam-copy { margin-left: .5rem; vertical-align: middle; }
 .panel h3 { margin: .75rem 0 0; font-size: .95rem; }
+.rate-row { display: flex; gap: .5rem; }
+.rate-row .btn { flex: 1; padding: 0; }

@@ -315,6 +315,20 @@ func TestReceiveMoneyWithdraws(t *testing.T) {
 		!strings.Contains(input, `"amount_naira": 15000`) || !strings.Contains(input, `"request_id": "wd-1"`) {
 		t.Errorf("the run's input: %s %v", input, err)
 	}
+	// With a second owner, whoever asked for a withdrawal does not approve
+	// it; the other owner does (a one-owner business approves its own).
+	w.env.Drain(t)
+	var step string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT step_id FROM approvals WHERE run_id = $1`, run["run_id"]).Scan(&step); err != nil {
+		t.Fatal(err)
+	}
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "partner@adaobi.test", "password": "correct horse battery", "roles": []string{"owner"}})
+	path := "/v1/approvals/" + run["run_id"].(string) + "/" + step
+	if st, body := owner.do("POST", path, map[string]any{"decision": "approved"}); st != 403 || !strings.Contains(toJSON(body), "maker") {
+		t.Errorf("the owner who asked approved their own withdrawal: %d %v", st, body)
+	}
+	w.login(t, "partner@adaobi.test", "correct horse battery").must(200, "POST", path, map[string]any{"decision": "approved"})
+
 	// Started another way, the workflow takes no account of the starter's.
 	owner.must(422, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"environment": "prod",
 		"input": map[string]any{"amount_naira": 100, "request_id": "x", "bank_code": "044", "account_number": "9999999999"}})

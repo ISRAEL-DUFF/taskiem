@@ -15,11 +15,24 @@ export interface ActionOptions {
   pickup?: boolean;
   delivery?: boolean;
   delivery_note?: string;
+  /** The areas an order is delivered to, each with its fee (dispatch D1). */
+  zones?: DeliveryZone[];
+  /** Customers choosing delivery may pay at the door (dispatch D4). */
+  pay_on_delivery?: boolean;
   /** A booking's online part of the price, 1 to 100 per cent; unset is all of it. */
   deposit_percent?: number;
   /** What a customer cancelling a paid booking gets back. */
   cancel_refund?: "full" | "keep_deposit";
 }
+
+/** An area the business delivers to and what delivery there costs. */
+export interface DeliveryZone {
+  name: string;
+  fee_kobo: number;
+}
+
+/** The limits the server holds delivery areas to (storefront.CleanZones). */
+export const ZONE_LIMITS = { zones: 30, name: 40, feeKobo: 10_000_000 } as const;
 
 /** One of the storefront's forms (StorefrontAction). */
 export interface StorefrontAction {
@@ -52,7 +65,11 @@ export type OrderStatus =
   | "refund_due"
   | "no_show"
   | "price_changed"
-  | "refunded";
+  | "refunded"
+  // Dispatch (D2, D3): a rider holds it, is on the way, at the door.
+  | "dispatched"
+  | "on_the_way"
+  | "arrived";
 
 /** What an order costs at the table's prices now, waiting for the customer to agree (status price_changed). */
 export interface PriceChange {
@@ -68,6 +85,9 @@ export interface Customer {
   phone?: string;
   email?: string;
   address?: string;
+  /** Where a delivery goes beyond the address (dispatch D2): a landmark, and a map pin's link. */
+  landmark?: string;
+  pin?: string;
   message?: string;
   best_time?: string;
 }
@@ -82,7 +102,11 @@ export interface Order {
   basket: OrderLine[] | null;
   total_kobo: number;
   fulfilment?: string;
-  payment: PaymentMode;
+  /** The delivery area the customer chose, and its fee (part of the total). */
+  zone?: string;
+  delivery_kobo?: number;
+  /** on_delivery: the customer pays at the door (dispatch D4). */
+  payment: PaymentMode | "on_delivery";
   payment_url?: string;
   paid_at?: string | null;
   /** How it was paid: card (its Paystack page), transfer (the account number given for it), other (money matched to it). */
@@ -217,6 +241,10 @@ export interface ActionForm {
   pickup: boolean;
   delivery: boolean;
   deliveryNote: string;
+  /** Customers choosing delivery may pay at the door. */
+  payOnDelivery: boolean;
+  /** The delivery areas as typed: a name and a fee in naira. */
+  zones: { name: string; fee: string }[];
   /** A booking's deposit in per cent; blank is the full price. */
   deposit: string;
   /** Whether a customer cancelling a paid booking keeps their deposit back. */
@@ -232,6 +260,11 @@ export function actionForm(a: StorefrontAction): ActionForm {
     pickup: !!a.options.pickup,
     delivery: !!a.options.delivery,
     deliveryNote: a.options.delivery_note ?? "",
+    payOnDelivery: !!a.options.pay_on_delivery,
+    zones: (a.options.zones ?? []).map((z) => ({
+      name: z.name,
+      fee: feeInput(z.fee_kobo),
+    })),
     deposit: a.options.deposit_percent ? String(a.options.deposit_percent) : "",
     keepDeposit: a.options.cancel_refund === "keep_deposit",
   };
@@ -283,6 +316,9 @@ export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
   if (f.delivery) options.delivery = true;
   const note = f.deliveryNote.trim();
   if (f.delivery && note) options.delivery_note = note;
+  const zones = zoneList(f.zones);
+  if (f.delivery && zones.length > 0) options.zones = zones;
+  if (f.delivery && f.payOnDelivery) options.pay_on_delivery = true;
   return {
     enabled: f.enabled,
     label: f.label.trim(),
@@ -302,6 +338,10 @@ export function actionProblem(kind: FormKind, f: ActionForm): string | null {
     return `The delivery note is at most ${ACTION_LIMITS.delivery_note} characters.`;
   if (kind === "order" && f.enabled && !f.pickup && !f.delivery)
     return "Choose pickup, delivery or both.";
+  if (kind === "order" && f.delivery) {
+    const z = zoneProblem(f.zones);
+    if (z) return z;
+  }
   if (
     kind === "booking" &&
     f.payment !== "none" &&
@@ -311,6 +351,48 @@ export function actionProblem(kind: FormKind, f: ActionForm): string | null {
     return "The deposit is 1 to 100 per cent, or leave it empty for the full price.";
   return null;
 }
+
+/** Kobo as a fee box shows it: 150000 is "1500", 150050 is "1500.50". */
+export function feeInput(kobo: number): string {
+  const whole = Math.floor(kobo / 100);
+  const frac = kobo % 100;
+  return frac ? `${whole}.${String(frac).padStart(2, "0")}` : String(whole);
+}
+
+/** A typed fee ("1,500", "₦1500.50", "" for free) in kobo; NaN when not one. */
+export function feeKobo(text: string): number {
+  const t = text.replace(/[₦,\s]/g, "");
+  if (t === "") return 0;
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return NaN;
+  return Math.round(Number(t) * 100);
+}
+
+/** The areas typed, as the server takes them: named rows only. */
+export function zoneList(rows: { name: string; fee: string }[]): DeliveryZone[] {
+  return rows
+    .map((r) => ({ name: r.name.trim().replace(/\s+/g, " "), fee_kobo: feeKobo(r.fee) }))
+    .filter((z) => z.name !== "");
+}
+
+/** Why the delivery areas will be refused, or null. */
+export function zoneProblem(rows: { name: string; fee: string }[]): string | null {
+  const zones = zoneList(rows);
+  if (zones.length > ZONE_LIMITS.zones) return `Up to ${ZONE_LIMITS.zones} delivery areas.`;
+  const seen = new Set<string>();
+  for (const z of zones) {
+    if (z.name.length > ZONE_LIMITS.name || z.name.includes(","))
+      return `An area's name is up to ${ZONE_LIMITS.name} characters, with no commas.`;
+    if (seen.has(z.name.toLowerCase())) return `${z.name} is listed twice.`;
+    seen.add(z.name.toLowerCase());
+    if (Number.isNaN(z.fee_kobo) || z.fee_kobo > ZONE_LIMITS.feeKobo)
+      return `The fee for ${z.name} is an amount from ₦0 to ₦100,000.`;
+  }
+  return null;
+}
+
+/** An area as the customer sees it: "Yaba, ₦2,000 delivery" or "free delivery". */
+export const zoneLine = (z: DeliveryZone) =>
+  `${z.name}, ${z.fee_kobo > 0 ? `${formatPrice(z.fee_kobo)} delivery` : "free delivery"}`;
 
 /** A form's public address on the published page. */
 export const formURL = (previewURL: string, kind: FormKind) =>
@@ -337,6 +419,9 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: Tone }> =
       tone: "warn",
     },
     refunded: { label: "Refunded", tone: "muted" },
+    dispatched: { label: "With a rider", tone: "info" },
+    on_the_way: { label: "On the way", tone: "info" },
+    arrived: { label: "At the door", tone: "info" },
   };
 
 /** A status as the list shows it, with the badge's colour. */
@@ -458,6 +543,7 @@ export function paymentSummary(
       : "";
     return `${when}${deposit} · ${o.paid_at ? "paid" : "not paid"}`;
   }
+  if (o.kind === "order" && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
   if (o.kind !== "order" || o.payment === "none") return "No online payment";
   const when =
     o.payment === "at_order" ? "Pays when ordering" : "Pays after you accept";

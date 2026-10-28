@@ -30,7 +30,7 @@ type Scheduler struct {
 	// "orchestrator" role, when it runs apart from the "scheduler" role.
 	SweepOnly bool
 
-	lastPartitions, lastPurge time.Time
+	lastPartitions, lastPurge, lastReceipts time.Time
 }
 
 // TickStats reports one tick's work.
@@ -117,6 +117,13 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 			errs = append(errs, err)
 		} else {
 			s.lastPurge = time.Now()
+		}
+	}
+	if time.Since(s.lastReceipts) > time.Hour {
+		if err := s.purgeReceipts(ctx); err != nil {
+			errs = append(errs, err)
+		} else {
+			s.lastReceipts = time.Now()
 		}
 	}
 	if time.Since(s.lastPartitions) > time.Hour {

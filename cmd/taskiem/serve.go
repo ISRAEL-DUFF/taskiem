@@ -31,6 +31,7 @@ import (
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
@@ -43,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embed"
 	"github.com/israel-duff/taskiem/engine/embedsites"
@@ -58,6 +60,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
@@ -79,6 +82,9 @@ type config struct {
 	DSN, DBRole                       string
 	Listen, EdgeListen, MetricsListen string
 	KMS, LocalKey                     string
+	// AllowLocalKMS keeps the root key in the environment on a public
+	// HTTPS install (TASKIEM_ALLOW_LOCAL_KMS), which kms otherwise refuses.
+	AllowLocalKMS                     bool
 	OpenBaoAddr, OpenBaoToken, KMSKey string
 	WebDir                            string
 	AnchorKey, AnchorDir              string
@@ -310,6 +316,7 @@ func loadConfig() (config, error) {
 		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
 		KMS:           env("TASKIEM_KMS", "local"),
 		LocalKey:      os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
+		AllowLocalKMS: envBool("TASKIEM_ALLOW_LOCAL_KMS", false),
 		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
@@ -470,6 +477,12 @@ func loadConfig() (config, error) {
 func (c config) kms() (secrets.KMS, error) {
 	switch c.KMS {
 	case "local":
+		// The root key wraps every tenant key; in the process environment it
+		// is as safe as the host's environment. A public install keeps it in
+		// OpenBao unless the operator says otherwise (Atlas part D findings).
+		if strings.HasPrefix(c.PublicURL, "https://") && !c.AllowLocalKMS {
+			return nil, errors.New("TASKIEM_KMS is local (the default) on a public install: keep the root key in OpenBao (TASKIEM_KMS=openbao, docs/operations.md), or set TASKIEM_ALLOW_LOCAL_KMS=true to keep it in the environment knowingly")
+		}
 		key, err := base64.StdEncoding.DecodeString(c.LocalKey)
 		if err != nil || len(key) != 32 {
 			return nil, errors.New("TASKIEM_LOCAL_KMS_KEY must be 32 bytes, base64 (openssl rand -base64 32); use TASKIEM_KMS=openbao in production")
@@ -530,6 +543,10 @@ type engine struct {
 	// invoices are the business's invoices to its customers (decision
 	// 0045, T3).
 	invoices *invoicing.Invoices
+	// riders are the businesses' own riders (dispatch D1); nil without
+	// the message hash key. dispatch is their deliveries (D2 to D5).
+	riders   *riders.Riders
+	dispatch *dispatch.Dispatch
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -580,6 +597,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// The storefront platform connector's actions are bound to the orders
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
+	riderOps := &ridersconn.Late{}
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
@@ -589,6 +607,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Invoices = invoiceOps
 	copts.Schools = schoolOps
 	copts.Storefront = orders
+	copts.Riders = riderOps
 	copts.Forms = formOps
 	copts.Email = emailOps
 	copts.Notify = tell
@@ -610,6 +629,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	src := &wasmconn.Source{Pool: srcPool, Runtime: wrt, Logger: log}
 	reg.SetTenantSource(src.Connectors)
+	reg.SetVersionSource(src.Version)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey,
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
@@ -667,6 +687,27 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		n.Messages, n.Reach = e.messages, e.reach
 	}
 	tell.Set(n)
+	// Riders (dispatch D1): people outside the business, reached as its
+	// contacts are; the tap-in link goes by SMS to the form host's page.
+	if e.reach != nil {
+		e.riders = &riders.Riders{Pool: pool, Vault: vault, Book: e.reach}
+		if e.messages != nil {
+			e.riders.Messages = e.messages
+		}
+		if e.forms != nil && e.forms.FormHost != "" {
+			e.riders.PageBase = "https://" + e.forms.FormHost
+		}
+		riderOps.Set(e.riders)
+	}
+	// Their deliveries (dispatch D2 to D5): offers, the rider's taps, the
+	// door payment, told to the order's run.
+	if e.riders != nil && e.orders != nil {
+		e.dispatch = &dispatch.Dispatch{Pool: pool, Vault: vault, Riders: e.riders, Orders: e.orders, Chat: n.Chat,
+			MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Delivered: dispatch.TellRun(e.store), StatusLink: e.orders.StatusLink,
+			Logger: log.With("component", "dispatch")}
+		e.orders.AfterPaid = e.dispatch.OrderPaid
+		riderOps.SetDispatch(e.dispatch)
+	}
 	// Invoices (decision 0045): their pages are on the form host.
 	e.invoices = &invoicing.Invoices{Pool: pool, Vault: vault, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, Messages: e.messages, Signal: e.store.DeliverSignalOnce, Start: e.store.Start, Logger: log.With("component", "invoices")}
 	// A customer who asked for the business's updates on a chat app gets
@@ -1444,6 +1485,7 @@ func (e *engine) chat(srv *api.Server) {
 	// Updates for people outside a tenant (N11): links they send back,
 	// STOP, and messages to them.
 	srv.Reach, srv.Messages = e.reach, e.messages
+	srv.Riders, srv.Dispatch = e.riders, e.dispatch
 	if e.forms != nil {
 		keys := e.forms.Keys
 		srv.ReachKeys = &keys

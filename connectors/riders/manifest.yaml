@@ -1,0 +1,197 @@
+# The riders platform connector (docs/dispatch.md, decision 0055): the
+# business's own riders, the people who deliver its orders. It acts on
+# Taskiem's own records, for the run's tenant only, and needs no
+# connection. offer and release hand an order to a rider and take it back;
+# the rider drives the delivery in their chat from there (docs/dispatch.md).
+manifest: connector/v1
+id: riders
+version: 1.0.0
+name: Riders
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  list_riders:
+    title: List riders
+    description: The business's current riders by name, with the areas they cover, their fee per delivery, where they are reached (whatsapp, telegram, or sms until they tap in) and their state (free, busy or off, from their own words to Taskiem whichever business they ride for). Optionally only those covering one delivery area; active ones only unless include_inactive.
+    class: read
+    input:
+      type: object
+      properties:
+        zone:             { type: string, description: "A delivery area, as on the order form (Lekki Phase 1)" }
+        include_inactive: { type: boolean, description: Riders on leave too }
+    output:
+      type: object
+      properties:
+        riders: { type: array, items: { type: object, description: "Each as get_rider answers" } }
+        count:  { type: integer }
+  get_rider:
+    title: Read a rider
+    description: One rider by id, retired ones too.
+    class: read
+    input:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+    output:
+      type: object
+      properties:
+        id:         { type: string }
+        name:       { type: string }
+        phone:      { type: string }
+        zones:      { type: array, items: { type: string } }
+        fee_kobo:   { type: integer }
+        fee:        { type: string, description: "As people read it: ₦1,500" }
+        active:     { type: boolean }
+        retired:    { type: boolean }
+        reached:    { type: string, enum: [whatsapp, telegram, sms] }
+        state:      { type: string, enum: [free, busy, off] }
+        busy_until: { type: string, description: RFC 3339, while busy }
+        already:    { type: boolean, description: "add_rider: true when the phone already rode for the business" }
+  add_rider:
+    title: Add a rider
+    description: Adds a rider by name and phone, with the delivery areas they cover (the order form's, when it has some) and their fee per delivery, and sends them the link to get the business's deliveries on WhatsApp. A phone that already rides for the business is answered with that rider (already true); a retired rider comes back.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [name, phone]
+      properties:
+        name:     { type: string, maxLength: 60 }
+        phone:    { type: string, description: A Nigerian mobile number }
+        zones:    { type: array, items: { type: string } }
+        fee_kobo: { type: integer, minimum: 0, maximum: 10000000, description: Their fee per delivery in kobo }
+    output: { $ref: '#/actions/get_rider/output' }
+  retire_rider:
+    title: Retire a rider
+    description: Retires a rider; they are offered nothing more and keep their deliveries. Retiring one already retired changes nothing.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+    output: { $ref: '#/actions/get_rider/output' }
+  offer:
+    title: Offer an order to a rider
+    description: Offers a storefront order ready to go (accepted, paid when it is paid online, for delivery) to a rider, who has a few minutes to tap Accept in their chat; Can't or no answer passes it to the next rider covering its area, free riders first. Without rider_id the rider is chosen by rotation, or the owner is asked when the business is set to ask. status is offered, held (a rider has it already), asked_owner or no_rider (the owner is told). Wait for the storefront.delivered signal (correlation the reference) for the rider's Delivered.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string, description: The order's reference (trigger.body.reference) }
+        rider_id:  { type: string, description: A rider to offer it to; omit for rotation }
+        fee_kobo:  { type: integer, minimum: 0, maximum: 10000000, description: This delivery's fee for the rider (default the rider's) }
+    output:
+      type: object
+      properties:
+        reference:   { type: string }
+        status:      { type: string, enum: [offered, held, asked_owner, no_rider] }
+        rider:       { type: string }
+        delivery_id: { type: string }
+  release:
+    title: Take an order back from its rider
+    description: Takes an order back from the rider who holds it (or withdraws the offer out), telling them; the order is ready to offer again.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        status:    { type: string }
+        rider:     { type: string }
+  prepare_payouts:
+    title: Add up what each rider is due
+    description: Makes a payout batch once (the one named, or this run's) with each rider's fees for deliveries since their last payout, less the cash they owe; riders whose cash covers their fees are settled with nothing to pay, and riders with no bank account are named in not_paid. Each payout carries the rider's bank details for name enquiry and payment. The same batch again answers the same payouts.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        batch_id: { type: string, description: "A batch Riders > Pay made; empty for this run's" }
+    output:
+      type: object
+      properties:
+        batch_id:   { type: string }
+        payouts:
+          type: array
+          items:
+            type: object
+            properties:
+              payout_id:      { type: string }
+              rider:          { type: string }
+              amount_kobo:    { type: integer }
+              fees_kobo:      { type: integer }
+              owed_kobo:      { type: integer }
+              deliveries:     { type: integer }
+              bank_code:      { type: string }
+              account_number: { type: string }
+              account_name:   { type: string }
+        not_paid:   { type: array, items: { type: string } }
+        total_kobo: { type: integer }
+        count:      { type: integer }
+  finish_payouts:
+    title: Record how the payout went
+    description: Records each payout as paid (the cash the rider owed is netted from it), failed, or pending (the bank has not confirmed); a failed payout's deliveries, or the whole batch's when cancel (not approved), are paid next time. The bank's name for an account is kept.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [batch_id]
+      properties:
+        batch_id: { type: string }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              payout_id:    { type: string }
+              status:       { type: string, enum: [paid, failed, pending] }
+              account_name: { type: string }
+        cancel:   { type: boolean }
+    output:
+      type: object
+      properties:
+        batch_id: { type: string }
+        paid:     { type: integer }
+        failed:   { type: integer }

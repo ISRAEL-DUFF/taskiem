@@ -143,17 +143,22 @@ func New(options ...Option) (runtime *Runtime, err error) {
 
 	// Taskiem fork: no host directory is mounted; scripts have no filesystem.
 	fsConfig := wazero.NewFSConfig()
+	modConfig := wazero.NewModuleConfig().
+		WithStartFunctions(option.StartFunctionName).
+		WithSysWalltime().
+		WithSysNanotime().
+		WithSysNanosleep().
+		WithFSConfig(fsConfig).
+		WithStdout(option.Stdout).
+		WithStderr(option.Stderr)
+	// Taskiem fork: the caller's wall clock, when it gives one (Option.Walltime).
+	if option.Walltime != nil {
+		modConfig = modConfig.WithWalltime(option.Walltime, 1)
+	}
 	if runtime.module, err = runtime.wrt.InstantiateModule(
 		option.Context,
 		compiledQJSModule,
-		wazero.NewModuleConfig().
-			WithStartFunctions(option.StartFunctionName).
-			WithSysWalltime().
-			WithSysNanotime().
-			WithSysNanosleep().
-			WithFSConfig(fsConfig).
-			WithStdout(option.Stdout).
-			WithStderr(option.Stderr),
+		modConfig,
 	); err != nil {
 		return nil, fmt.Errorf("failed to instantiate module: %w", err)
 	}

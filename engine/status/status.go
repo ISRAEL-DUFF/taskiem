@@ -162,9 +162,16 @@ func checkUpdate(kind, status, impact, message string) error {
 	return nil
 }
 
+// Querier is a pool or a transaction: an operator opens or updates an
+// incident in the transaction that records it in the platform chain.
+type Querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
 // Open records a declaration as actor (cli:<user> or api:<token name>);
 // it returns the incident's id.
-func Open(ctx context.Context, pool *pgxpool.Pool, d Declaration, actor string) (uuid.UUID, error) {
+func Open(ctx context.Context, pool Querier, d Declaration, actor string) (uuid.UUID, error) {
 	if err := d.normalise(); err != nil {
 		return uuid.Nil, err
 	}
@@ -175,7 +182,7 @@ func Open(ctx context.Context, pool *pgxpool.Pool, d Declaration, actor string) 
 }
 
 // Post appends an update to an incident as actor.
-func Post(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, c Change, actor string) error {
+func Post(ctx context.Context, pool Querier, id uuid.UUID, c Change, actor string) error {
 	c.Message = strings.TrimSpace(c.Message)
 	var kind, impact string
 	err := pool.QueryRow(ctx, `SELECT i.kind, u.impact FROM status_incidents i

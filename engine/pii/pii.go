@@ -269,7 +269,83 @@ func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v a
 			return c.SealTx(ctx, tx, tenant, cat, v)
 		}
 	}
+	if str, ok := v.(string); ok {
+		return sealDerived(ctx, c, tx, tenant, str, taint)
+	}
 	return v, nil
+}
+
+// SubjectSealer seals under the subject of another value, so that erasing
+// that value's subject also erases what was sealed (secrets.Vault).
+type SubjectSealer interface {
+	SubjectForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error)
+	SealUnderTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject, category string, value any) (map[string]any, error)
+}
+
+// sealDerived seals a string built from known personal values ("ref-" +
+// a BVN, "Dear " + a name): an exact match would miss it, and it would be
+// stored in the clear where erasing the person cannot reach it. It is
+// sealed under the subject of each value it contains, longest first, one
+// envelope inside another, so erasing any of those people erases it.
+// Values shorter than MinRedact are not looked for, as in RedactText.
+func sealDerived(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, s string, taint Taint) (any, error) {
+	ss, ok := c.(SubjectSealer)
+	if !ok || len(taint) == 0 {
+		return s, nil
+	}
+	type hit struct {
+		value any
+		text  string
+		cat   string
+	}
+	var hits []hit
+	for k, cat := range taint {
+		text := k[2:]
+		if len(text) < MinRedact || !strings.Contains(s, text) {
+			continue
+		}
+		var value any = text
+		if k[0] == 'n' {
+			f, err := strconv.ParseFloat(text, 64)
+			if err != nil {
+				continue
+			}
+			value = f
+		}
+		hits = append(hits, hit{value, text, cat})
+	}
+	if len(hits) == 0 {
+		return s, nil
+	}
+	sort.Slice(hits, func(i, j int) bool {
+		if len(hits[i].text) != len(hits[j].text) {
+			return len(hits[i].text) > len(hits[j].text)
+		}
+		return hits[i].text < hits[j].text
+	})
+	var out any = s
+	seen := map[string]bool{}
+	for _, h := range hits {
+		subject, err := ss.SubjectForTx(ctx, tx, tenant, h.cat, h.value)
+		if err != nil {
+			return nil, err
+		}
+		if seen[subject] {
+			continue
+		}
+		seen[subject] = true
+		// Sealing the value itself makes sure its subject has a key; one
+		// already erased leaves nothing of this string to keep.
+		if _, err := c.SealTx(ctx, tx, tenant, h.cat, h.value); errors.Is(err, ErrErased) {
+			return Erased, nil
+		} else if err != nil {
+			return nil, err
+		}
+		if out, err = ss.SealUnderTx(ctx, tx, tenant, subject, h.cat, out); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // Open replaces every envelope with its plaintext (or Erased), recording
@@ -287,6 +363,10 @@ func Open(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, tai
 			}
 			if err != nil {
 				return nil, err
+			}
+			if IsEnvelope(pt) {
+				// A derived string sealed under several people (sealDerived).
+				return Open(ctx, c, tx, tenant, pt, taint)
 			}
 			cat, _ := t["$pii"].(string)
 			taint.Add(pt, cat)

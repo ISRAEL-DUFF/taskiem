@@ -142,6 +142,13 @@ func (w *world) submit(kind, payment string, total int64) string {
 	sub := storefront.Submission{Kind: kind, Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567", Email: "bola@example.com"},
 		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: total / 2, LineKobo: total}}, TotalKobo: total,
 		Fulfilment: "pickup", Payment: payment, Channel: "direct", Submitted: time.Now(), StatusKey: key}
+	return w.send(ref, hash, sub)
+}
+
+// send puts a submission in the inbox as the public host does.
+func (w *world) send(ref string, hash []byte, sub storefront.Submission) string {
+	w.t.Helper()
+	kind := sub.Kind
 	ct, err := storefront.SealSubmission(w.key, w.sf.ID, ref, sub)
 	if err != nil {
 		w.t.Fatal(err)
@@ -385,3 +392,52 @@ func TestEnquiryAndTheConnectorsBoundaries(t *testing.T) {
 }
 
 func (w *world) statusKey(ref string) string { return w.keys[ref] }
+
+// An order delivered to one of the form's areas keeps the area and its
+// fee, in its total and its run's summary (dispatch D1); the form's areas
+// are named once each.
+func TestOrderToADeliveryArea(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.in(func(tx pgx.Tx) error {
+		if _, err := storefront.SaveAction(ctx, tx, w.env.Tenant, storefront.Action{Kind: "order", Enabled: true, Payment: "after_accept",
+			Options: storefront.ActionOptions{Delivery: true, Zones: []storefront.Zone{{Name: "Yaba", FeeKobo: 200000}, {Name: "yaba", FeeKobo: 1}}}}); !errors.Is(err, storefront.ErrInvalid) {
+			t.Errorf("an area twice: %v", err)
+		}
+		a, err := storefront.SaveAction(ctx, tx, w.env.Tenant, storefront.Action{Kind: "order", Enabled: true, Payment: "after_accept",
+			Options: storefront.ActionOptions{Delivery: true, Zones: []storefront.Zone{{Name: "  Lekki  Phase 1 ", FeeKobo: 150000}, {Name: "Yaba", FeeKobo: 200000}}}})
+		if err != nil {
+			return err
+		}
+		if a.Options.Zones[0].Name != "Lekki Phase 1" {
+			t.Errorf("areas %+v", a.Options.Zones)
+		}
+		zones, err := storefront.Zones(ctx, tx, w.env.Tenant)
+		if len(zones) != 2 || zones[1].FeeKobo != 200000 {
+			t.Errorf("zones %+v", zones)
+		}
+		return err
+	})
+	ref := storefront.NewReference("ada-kitchen")
+	key, hash := storefront.NewStatusKey()
+	w.keys[ref] = key
+	w.send(ref, hash, storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567", Address: "12 Herbert Macaulay Way"},
+		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: 250000, LineKobo: 500000}}, TotalKobo: 700000, Zone: "Yaba", DeliveryKobo: 200000,
+		Fulfilment: "delivery", Payment: "after_accept", Channel: "direct", Submitted: time.Now(), StatusKey: key})
+	var body map[string]any
+	start := w.orders.Start
+	w.orders.Start = func(ctx context.Context, req runtime.StartRequest) (runtime.Started, error) {
+		body, _ = req.Trigger.(map[string]any)["body"].(map[string]any)
+		return start(ctx, req)
+	}
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	o := w.order(ref)
+	if o.Zone != "Yaba" || o.DeliveryKobo != 200000 || o.TotalKobo != 700000 || o.RunID == nil {
+		t.Fatalf("order %+v", o)
+	}
+	if body["summary"] != "2 × Jollof rice, delivery to Yaba ₦2,000" || body["zone"] != "Yaba" || body["delivery_fee"] != "₦2,000" {
+		t.Errorf("body %v", body)
+	}
+}
