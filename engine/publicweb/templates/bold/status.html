@@ -11,6 +11,7 @@
 <p class="hint">{{template "i-lock"}} Never share your card PIN or OTP.</p>{{end}}
 </div>
 {{with .Transfer}}{{template "ordertransfer" .}}{{end}}
+{{with .Rate}}{{template "orderrate" .}}{{end}}
 {{range .Buttons}}<form method="post" action="{{.Action}}" class="change">
 <input type="hidden" name="token" value="{{$.Token}}">
 <div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{$.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>

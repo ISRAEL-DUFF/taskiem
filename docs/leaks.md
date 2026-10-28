@@ -12,6 +12,7 @@ A leak is money a business may be losing: money that came in and belongs to noth
 | **Overpaid** | An invoice paid more than it asked for | The excess |
 | **Paid after it was voided** | Money paid into an account number Taskiem gave for an invoice that was then voided | The payment |
 | **Fee above the agreed rate** | A payment whose fee is above the rate the owner set for its connection | The difference |
+| **Cash a rider owes** | Cash a rider took at the door and has not handed in, above the business's limit ([dispatch](dispatch.md#paying-at-the-door)) | What they owe |
 
 POS sales and cash are takings, not money owed, so they are never "money in with nothing to match". Statement lines are not checked for duplicates: the same line uploaded twice is kept once, and lines without a reference (bank charges) repeat by nature.
 

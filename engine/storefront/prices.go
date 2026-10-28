@@ -76,6 +76,9 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 		pc.Basket = append(pc.Basket, n)
 		pc.TotalKobo += n.LineKobo
 	}
+	if len(pc.Basket) > 0 {
+		pc.TotalKobo += sub.DeliveryKobo
+	}
 	return pc, changed
 }
 

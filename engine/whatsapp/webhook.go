@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -54,6 +55,14 @@ type Inbound struct {
 	// arrives; the file is fetched from the Graph API, as a recording is.
 	// Telegram's photos arrive here too.
 	Image *Media
+	// Location is a shared location (type location), as a maps link: a
+	// rider's at the door (dispatch). Telegram's arrive here too.
+	Location string
+}
+
+// MapsLink is a latitude and longitude as a maps link.
+func MapsLink(lat, lng float64) string {
+	return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", lat, lng)
 }
 
 // Media is an audio message's or a photo's reference.
@@ -127,6 +136,10 @@ func Parse(body []byte) ([]Inbound, error) {
 							SHA256   string `json:"sha256"`
 							Caption  string `json:"caption"`
 						} `json:"image"`
+						Location *struct {
+							Latitude  float64 `json:"latitude"`
+							Longitude float64 `json:"longitude"`
+						} `json:"location"`
 					} `json:"messages"`
 				} `json:"value"`
 			} `json:"changes"`
@@ -165,6 +178,10 @@ func Parse(body []byte) ([]Inbound, error) {
 					if m.Image.ID != "" {
 						in.Image = &Media{ID: m.Image.ID, MimeType: m.Image.MimeType, SHA256: m.Image.SHA256}
 						in.Text = m.Image.Caption
+					}
+				case "location":
+					if m.Location != nil {
+						in.Location = MapsLink(m.Location.Latitude, m.Location.Longitude)
 					}
 				}
 				out = append(out, in)

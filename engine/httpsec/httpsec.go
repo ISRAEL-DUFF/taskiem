@@ -66,13 +66,15 @@ const PublicCSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-
 	"form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 
 // SetPublic writes a public page's headers: Set's, with the public policy,
-// a browsing context of its own, and no access to the camera, microphone,
-// location or payment APIs.
+// a browsing context of its own, and no access to the camera, microphone
+// or payment APIs. Location is the page's own, never a frame's: an order
+// form offers "use my location" for the rider's map pin (dispatch D2),
+// asked by the browser and never required.
 func SetPublic(h http.Header) {
 	Set(h)
 	h.Set("Content-Security-Policy", PublicCSP)
 	h.Set("Cross-Origin-Opener-Policy", "same-origin")
-	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self), payment=(), usb=()")
 }
 
 // PublicEmbedCSP is PublicCSP for a public /embed/ page: framed only by

@@ -1369,6 +1369,8 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 		return s.shopComplete(ctx, c, sh.Reference)
 	case "orders_on":
 		return s.shopTurnOnOrders(ctx, c)
+	case "deliveries_on":
+		return s.shopTurnOnDeliveries(ctx, c)
 	}
 	return nil
 }

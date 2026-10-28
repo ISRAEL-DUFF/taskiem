@@ -181,6 +181,9 @@ type Server struct {
 	// OrderPay offers Pay by bank transfer on an order's status page (N3);
 	// nil: the page offers the card page only.
 	OrderPay OrderPay
+	// OrderRate asks how a delivered order's delivery was, on its status
+	// page (dispatch D5); nil: it does not ask.
+	OrderRate OrderRate
 	// Receipts reads a school receipt for its verification page (receipt.go);
 	// nil: /r/<token> is a form link only.
 	Receipts Receipts
@@ -377,6 +380,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 		s.serveStatus(w, r, site, path[len("/o/"):], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && strings.HasSuffix(path, "/pay") && strings.Count(path, "/") == 3:
 		s.serveOrderPay(w, r, site, path[len("/o/"):len(path)-len("/pay")], embed)
+	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && strings.HasSuffix(path, "/rate") && strings.Count(path, "/") == 3:
+		s.serveOrderRate(w, r, site, path[len("/o/"):len(path)-len("/rate")], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && changePages[path[strings.LastIndex(path, "/")+1:]] &&
 		strings.Count(path, "/") == 3:
 		s.serveChange(w, r, site, path[len("/o/"):strings.LastIndex(path, "/")], path[strings.LastIndex(path, "/")+1:], embed)

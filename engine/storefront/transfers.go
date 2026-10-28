@@ -208,3 +208,76 @@ func (o *Orders) MarkRefunded(ctx context.Context, tenant uuid.UUID, reference, 
 		"refund:"+reference)
 	return ord, err
 }
+
+// doorMinutes is how long a door payment's account number lasts: the
+// rider waits at the door (dispatch D4).
+const doorMinutes = 30
+
+// DoorTransfer issues the one-time account number a customer pays into at
+// the door (dispatch D4): for an order paid on delivery, not yet paid,
+// with its rider there (arrived). A number still open for the amount is
+// handed back rather than a new one made.
+func (o *Orders) DoorTransfer(ctx context.Context, tenant, order uuid.UUID) error {
+	if o.IssueTransfer == nil {
+		return errors.New("storefront: account numbers are not set up on this server")
+	}
+	var ord Order
+	var connection string
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		ord, err = scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND id = $2`, tenant, order))
+		if err != nil {
+			return err
+		}
+		if ord.Payment != "on_delivery" || ord.PaidAt != nil || ord.Status != "arrived" {
+			return fmt.Errorf("%w: %s is not waiting for its payment at the door", ErrDecision, ord.Reference)
+		}
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND kind = $2`,
+			ord.storefront, ord.Kind).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		return o.open(ctx, tx, tenant, &ord)
+	})
+	if err != nil {
+		return err
+	}
+	payer := map[string]any{"name": ord.Customer.Name, "email": o.payerEmail(ord.Customer, ord.Reference)}
+	if ord.Customer.Phone != "" {
+		payer["phone"] = ord.Customer.Phone
+	}
+	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.Payable(), "Order "+ord.Reference, payer, doorMinutes)
+}
+
+// DoorAccount is the account number an order is paid into at the door:
+// the latest one issued, while open; ok false when there is none open.
+type DoorAccount struct {
+	Number     string    `json:"account_number"`
+	Bank       string    `json:"bank_name"`
+	Name       string    `json:"account_name"`
+	AmountKobo int64     `json:"amount_kobo"`
+	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+// OpenDoorAccount reads it in tx.
+func OpenDoorAccount(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, now time.Time) (DoorAccount, bool, error) {
+	var a DoorAccount
+	var status string
+	var expires *time.Time
+	var number, bank, name *string
+	err := tx.QueryRow(ctx, `SELECT status, account_number, bank_name, account_name, amount_kobo, expires_at FROM customer_invoice_accounts
+		WHERE tenant_id = $1 AND order_id = $2 AND kind = 'transfer' ORDER BY seq DESC LIMIT 1`, tenant, order).Scan(&status, &number, &bank, &name, &a.AmountKobo, &expires)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return a, false, nil
+	}
+	if err != nil || status != "open" || number == nil || expires == nil || !expires.After(now) {
+		return a, false, err
+	}
+	a.Number, a.ExpiresAt = *number, *expires
+	if bank != nil {
+		a.Bank = *bank
+	}
+	if name != nil {
+		a.Name = *name
+	}
+	return a, true, nil
+}

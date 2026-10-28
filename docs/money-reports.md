@@ -13,6 +13,7 @@ Every morning from 08:00 Lagos, everyone who [gets it](#who-gets-them) and has l
 > Money page: https://app.taskiem.com/money
 
 - **In** is money in that settled, by channel, the largest first (at most five named); **pending** is money in still on its way. **Out** is money out that settled. Invoices paid are those paid in full that day, with what was paid on them; leaks are those [opened](leaks.md) that day.
+- **Riders.** A business with [riders](dispatch.md#money) gets a line for each rider who delivered, took cash, handed cash in or was rated that day: "Musa: 4 delivered, ₦8,500 paid at the door, ₦3,000 cash, owes ₦3,000, rated 4.5 of 5".
 - **Nothing to say, nothing sent.** A day with no movement, no invoice paid and no leak opened sends no message.
 - **Once.** Each business's summary for a day is taken once (`money_digests`, migration 00205) in the transaction that queues it, so a restart or a second scheduler never sends it twice. Who gets it is decided then: someone who turns the daily summary on later that day gets the next day's, not that day's. It goes through the chat [outbox](whatsapp.md#delivery-and-retries) (kind `money_daily`, naming the summary and the person) and is worded when sent, in the person's language, from the log as it then stands.
 - **WhatsApp's 24-hour window.** Inside it the summary is a text message; outside it, it goes as the `taskiem_daily_summary` [template](whatsapp.md#templates), "[Ada Foods] Yesterday's money, 23 Oct 2026: ₦300,000 in … Tap Open for the Money page." with an **Open** button, once Meta has approved it in the number's account; until then as the alert template (`taskiem_alert`): "[Ada Foods] Yesterday: ₦300,000 in … Details: <link>", the line cut at 200 characters. Either is counted against the business's template allowance like other alerts. Telegram has no window. A summary that could not go out within a day is dropped, as is one for a person who has since turned it off or can no longer read invoices.
@@ -45,6 +46,8 @@ The choices are per business (a person in two businesses chooses for each), kept
 **Home** shows the same summary for today on its money card: money in, how many payments, a line of the money in through the day (from 6 am, or the first payment if earlier, to now), money out, and the payments waiting to be matched (`GET /v1/money/unmatched`).
 
 **The period in stretches.** The summary's `buckets` split the period for the charts: an hour each for a period of one day (`unit: "hour"`, 24 of them), a Lagos day each for up to 92 days (`unit: "day"`), and none for longer (`unit: ""`). Each has its settled money `in_settled_kobo` and `out_settled_kobo` and the number of settled `payments` in. A movement counts in the stretch of its first entry, as it counts in the period, so the stretches add up to the period's settled totals.
+
+**Riders.** For a business with [riders](dispatch.md), the summary's `riders` lists each rider with deliveries, cash or a rating in the period: `delivered`, `door_transfer_kobo` (paid by transfer at the door), `cash_kobo`, `remitted_kobo` (handed in, or taken off their pay), `fees_kobo`, the `rating` that period and what they `owed_kobo` now. The Overview shows them under **Riders**.
 
 The **effective fee rate** is the fees taken over the settled money in they were taken on, so channels that report no fee do not lower it.
 
