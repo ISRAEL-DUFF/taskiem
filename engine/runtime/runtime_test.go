@@ -253,6 +253,43 @@ func TestApprovalDecision(t *testing.T) {
 	}
 }
 
+// A run shows waiting while all it has left is waiting on someone or
+// something (an approval here), and running while a worker has its step
+// (engine findings 5f).
+func TestRunWaitingStatus(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"ok","type":"approval","config":{"role":"officer","timeout":"24h"}},`+
+		strings.Replace(payOne, `"id":"pay",`, `"id":"pay","needs":["ok"],`, 1), ""))
+	ref := e.Start(t, wf, map[string]any{"amount": 1})
+	if st := e.Status(t, ref); st != "waiting" {
+		t.Fatalf("waiting on the approval: %s", st)
+	}
+	if err := e.Store.DecideApproval(ctx, ref, "ok", "approved", "checker", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.Status(t, ref); st != "running" {
+		t.Fatalf("with the payment queued for a worker: %s", st)
+	}
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("at the end: %s %s", st, types(events(t, e, ref)))
+	}
+
+	// A waiting run still counts against the tenant's running-runs limit.
+	slow := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1h"}}`, ""))
+	w := e.Start(t, slow, map[string]any{})
+	if st := e.Status(t, w); st != "waiting" {
+		t.Fatalf("on a wait step: %s", st)
+	}
+	l, err := e.Store.ViewLimits(ctx, e.Tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Usage.RunningRuns != 1 {
+		t.Errorf("running runs counted: %d, want 1", l.Usage.RunningRuns)
+	}
+}
+
 func TestWaitTimerAndRunTimeout(t *testing.T) {
 	e := rt.New(t)
 	wf := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1s"}},{"id":"x","type":"transform","needs":["w"],"config":{"output":1}}`, ""))

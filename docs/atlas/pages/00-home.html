@@ -1,0 +1,50 @@
+<!--atlas
+{
+  "id": "home",
+  "title": "Start here",
+  "summary": "What the atlas is, the system on one page, and where to go next.",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
+  "sources": ["cmd/taskiem/serve.go"]
+}
+-->
+<div class="home-head">
+  <p class="eyebrow">Engineering atlas</p>
+  <h1>How Taskiem is built, <span>checked against its code.</span></h1>
+  <p class="lede">Taskiem is a workflow engine that businesses trust with money movement: durable runs, exactly-once payments, approvals and an audit trail, with connectors for African payment and identity providers. This atlas explains it one feature and one component at a time. It is written for the engineers who maintain it.</p>
+  <div class="home-meta"><span><x-stat name="go-lines-nontest"/> lines of Go outside tests</span><span><x-stat name="engine-packages"/> engine packages</span><span><x-stat name="connectors"/> connectors</span><span><x-stat name="migrations"/> migrations</span></div>
+</div>
+
+<h2>The system on one page</h2>
+<p>Everything runs from one Go binary. Each box below is a role it can run as, and PostgreSQL in the middle holds the state, the work queue and the audit log. Select a box to read about it.</p>
+<x-include name="architecture-map.html"/>
+
+<h2>Four ideas the rest depends on</h2>
+<div class="cols">
+  <div class="col">
+    <h3>The history is the run</h3>
+    <p>A run is an append-only list of events in <code>run_events</code>. A pure function, <code>decide()</code>, reads that list and returns the next events. It reads no clock and no randomness, so replaying a history always produces the same decisions.</p>
+    <p><x-page id="life-of-a-run">Follow one run</x-page></p>
+  </div>
+  <div class="col">
+    <h3>Postgres is the queue</h3>
+    <p>Tasks, timers and waits are rows. Workers claim them with <code>FOR UPDATE SKIP LOCKED</code> and hold a lease with an epoch number. Every write a worker makes is checked against that epoch, so a stalled worker can never overwrite the result of the worker that replaced it.</p>
+    <p><x-page id="durable-execution">Durable execution</x-page></p>
+  </div>
+  <div class="col">
+    <h3>Intent before effect</h3>
+    <p>Before any call that moves money, the worker commits an <span class="evt">EffectIntent</span> carrying a key derived from the run. After a crash, the engine knows a call may have gone out, and the connector's action class decides whether to retry, reconcile or stop for a person.</p>
+    <p><x-page id="exactly-once">Exactly-once effects</x-page></p>
+  </div>
+  <div class="col">
+    <h3>The database enforces tenancy</h3>
+    <p>Every transaction sets <code>app.tenant_scope</code>, and row-level security checks it on every tenant table. Work that crosses tenants, such as claiming tasks, goes through a few <code>SECURITY DEFINER</code> functions that return only routing columns.</p>
+    <p><x-page id="data-model">Data model and isolation</x-page></p>
+  </div>
+</div>
+
+<h2>The atlas, part by part</h2>
+<p>Read Part A first. After that, each part stands on its own. Pages marked <em>Planned</em> list what they will cover and the code they will be checked against.</p>
+<x-parts/>
+
+<h2>How far to trust a page</h2>
+<p>Each page states the commit it was checked against. When the code it describes changes after that commit, the page says so in amber at the top, lists the files that changed, and its dot in the contents turns amber. Code excerpts and line links are not pasted in. The build reads them from the repository each time it runs, so they always show the code as it is. Amber boxes headed <em>Spec and code differ</em> mark places where the code has moved away from <code>docs/spec/architecture.md</code>. <x-page id="about">How the atlas is maintained</x-page> explains the rest.</p>

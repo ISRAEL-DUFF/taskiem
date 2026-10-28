@@ -1,0 +1,162 @@
+<!--atlas
+{
+  "id": "durable-execution",
+  "title": "Durable execution",
+  "part": "B",
+  "order": 2,
+  "summary": "How a run survives crashes: the event log, the pure decision function, the Postgres task queue with leases and fencing, timers and signals, retries and compensation, admission, subflows, forks, and retention.",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
+  "sources": [
+    "engine/runtime/store.go", "engine/runtime/worker.go", "engine/runtime/scheduler.go", "engine/runtime/concurrency.go", "engine/runtime/admission.go",
+    "engine/runtime/fork.go", "engine/runtime/subflows.go", "engine/runtime/retention.go", "engine/runtime/decidecache.go", "engine/runtime/httpstep.go",
+    "engine/decide/", "engine/history/",
+    "engine/db/migrations/00004_execution.sql", "engine/db/migrations/00006_dispatch.sql", "engine/db/migrations/00007_engine_runtime.sql",
+    "engine/runtime/suites_test.go", "docs/spec/architecture.md"
+  ]
+}
+-->
+<p>A run in Taskiem must survive any process dying at any moment without losing work or repeating a payment. This page explains the machinery that makes that true. <x-page id="life-of-a-run"/> follows one run through it. This page takes each part in turn and covers the cases that one run does not reach.</p>
+
+<h2>The run is its event log</h2>
+<p>Every run has an ordered, append-only list of events in <code>run_events</code>. Nothing else describes what a run has done. The <code>runs</code> row holds a status, counters and leases for quick lookups, but the history is the source of truth. The application role can only <code>SELECT</code> and <code>INSERT</code> on <code>run_events</code>. <code>UPDATE</code> and <code>DELETE</code> are never granted, so even a bug cannot rewrite history.</p>
+<p>Events are appended through <code>taskiem_append_event</code>. It increments <code>runs.last_seq</code> and inserts the event at that number in one statement. The <code>UPDATE</code> takes the run's row lock, so two transactions can never give out the same sequence number, and there are never gaps.</p>
+<x-code path="engine/db/migrations/00007_engine_runtime.sql" start="CREATE FUNCTION taskiem_append_event" end="$$;"/>
+<p><code>run_events</code> is partitioned by month on the run's start time, not the event's time, so all of one run's events sit in one partition. The scheduler creates partitions three months ahead every hour (<x-ref path="engine/db/migrations/00004_execution.sql" symbol="CREATE FUNCTION taskiem_ensure_run_event_partitions"><code>taskiem_ensure_run_event_partitions</code></x-ref>), and a test checks that partitions cover new runs.</p>
+<h3>Event types</h3>
+<div class="table-wrap"><table>
+  <thead><tr><th>Event</th><th>Written by</th><th>Means</th></tr></thead>
+  <tbody>
+    <tr><td><span class="evt">RunStarted</span></td><td>ingest, API, subflow</td><td>The trigger was accepted. It holds the trigger, the tenant variables, the pinned connector versions and policy snapshots</td></tr>
+    <tr><td><span class="evt">RunAdmitted</span></td><td>scheduler</td><td>A queued run got its concurrency slot</td></tr>
+    <tr><td><span class="evt">StepScheduled</span></td><td>decide</td><td>A step is ready. Its payload says how it waits: a task, a timer, a signal or a child run</td></tr>
+    <tr><td><span class="evt">StepStarted</span></td><td>worker (writes) or decide (control steps)</td><td>A write is about to be sent, or a branch, parallel or foreach began</td></tr>
+    <tr><td><span class="evt">EffectIntent</span></td><td>worker</td><td>The key and request digest of a write, committed before the call</td></tr>
+    <tr><td><span class="evt">StepCompleted</span> <span class="evt">StepFailed</span></td><td>worker, decide, operator</td><td>An outcome. A failure carries its kind and the next move: retry, reconcile, park or fail</td></tr>
+    <tr><td><span class="evt">StepSkipped</span> <span class="evt">StepCancelled</span></td><td>decide</td><td>A <code>when</code> was false, or a losing branch of a <code>join: any</code> was stopped</td></tr>
+    <tr><td><span class="evt">RetryScheduled</span></td><td>decide</td><td>The next attempt and when it may run</td></tr>
+    <tr><td><span class="evt">TimerFired</span> <span class="evt">SignalReceived</span></td><td>scheduler, signal delivery</td><td>Time passed, or an outside event matched a wait</td></tr>
+    <tr><td><span class="evt">ApprovalRequested</span> <span class="evt">ApprovalDecided</span></td><td>decide, API</td><td>A human decision opened and closed</td></tr>
+    <tr><td><span class="evt">CompensationStarted</span> <span class="evt">CompensationCompleted</span></td><td>decide</td><td>Rollback of completed steps after a failure</td></tr>
+    <tr><td><span class="evt">CancelRequested</span></td><td>API</td><td>A person cancelled the run and asked for its completed steps to be reversed (the default). Decide then winds it down</td></tr>
+    <tr><td><span class="evt">RunCompleted</span> <span class="evt">RunFailed</span> <span class="evt">RunCancelled</span></td><td>decide, API</td><td>Terminal</td></tr>
+  </tbody>
+</table></div>
+
+<h2>Deciding: a pure function, run where the event lands</h2>
+<p><code>decide.Decide(definition, history)</code> folds the history into per-step facts and returns the events that follow. It reads no clock. Its notion of "now" is the <code>recorded_at</code> of the latest event, so time enters only through the log. Retry jitter comes from a hash of the run id, step and attempt, not from randomness.</p>
+<x-code path="engine/decide/decide.go" start="func backoff(" caption="deterministic jitter"/>
+<p>Determinism is tested, not assumed. <x-ref path="engine/decide/replay.go" symbol="// Verify replays decide()"><code>decide.Verify</code></x-ref> replays a recorded history and checks that every block of decide-written events is byte-for-byte what decide produces from the events before it. <x-ref path="engine/runtime/suites_test.go" symbol="func TestDeterminismSuite("><code>TestDeterminismSuite</code></x-ref> runs it over real runs, and the crash and PII suites also call it.</p>
+<p>There is no separate orchestrator in the common case. Whoever appends an event decides in the same transaction: ingest after <span class="evt">RunStarted</span>, the worker after an outcome, the API after an approval, the scheduler after a timer. The <code>orchestrator</code> role exists for the leftovers. Any run whose <code>decided_seq</code> is behind <code>last_seq</code> is found through a partial index and decided by the sweep.</p>
+<x-code path="engine/db/migrations/00006_dispatch.sql" start="CREATE FUNCTION taskiem_claim_runs_to_orchestrate" end="$$;"/>
+<p>Folding a long history on every event would be slow, so each process keeps the folded state of recent runs in a cache (<x-ref path="engine/runtime/decidecache.go" symbol="const decideCacheSize">up to 2,048 runs</x-ref>). Only events committed before the deciding transaction began are folded into it, so a rolled-back decision cannot leave phantom events behind.</p>
+
+<h2>Run statuses</h2>
+<figure class="diagram">
+<svg viewBox="0 0 760 260" role="img" aria-labelledby="ds-title">
+  <title id="ds-title">Run statuses and the events that move a run between them</title>
+  <defs><marker id="ds-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0 0L10 5L0 10z"/></marker></defs>
+  <g><rect class="d-box" x="20" y="100" width="120" height="46" rx="7"/><text class="d-title" x="80" y="128" text-anchor="middle">queued</text></g>
+  <g class="d-core"><rect class="d-box" x="230" y="100" width="130" height="46" rx="7"/><text class="d-title" x="295" y="128" text-anchor="middle">running</text></g>
+  <g><rect class="d-note" x="190" y="200" width="210" height="46" rx="7"/><text class="d-title" x="295" y="228" text-anchor="middle">needs_reconciliation</text></g>
+  <g><rect class="d-box" x="560" y="20" width="170" height="46" rx="7"/><text class="d-title" x="645" y="48" text-anchor="middle">completed</text></g>
+  <g><rect class="d-box" x="560" y="100" width="170" height="46" rx="7"/><text class="d-title" x="645" y="128" text-anchor="middle">failed</text></g>
+  <g><rect class="d-box" x="560" y="180" width="170" height="46" rx="7"/><text class="d-title" x="645" y="208" text-anchor="middle">cancelled</text></g>
+  <path class="d-line" d="M140 123H228" marker-end="url(#ds-ah)"/><text class="d-msg" x="184" y="115" text-anchor="middle">admitted</text>
+  <path class="d-line" d="M360 112L558 46" marker-end="url(#ds-ah)"/><text class="d-msg" x="452" y="70" text-anchor="middle">RunCompleted</text>
+  <path class="d-line" d="M360 123H558" marker-end="url(#ds-ah)"/><text class="d-msg" x="460" y="116" text-anchor="middle">RunFailed</text>
+  <path class="d-line" d="M360 134L558 198" marker-end="url(#ds-ah)"/><text class="d-msg" x="462" y="158" text-anchor="middle">RunCancelled</text>
+  <path class="d-line" d="M275 146V198" marker-end="url(#ds-ah)"/><text class="d-msg" x="268" y="178" text-anchor="end">write parked</text>
+  <path class="d-line" d="M315 198V148" marker-end="url(#ds-ah)"/><text class="d-msg" x="322" y="178">resolved</text>
+  <path class="d-line" d="M400 226L558 212" marker-end="url(#ds-ah)"/><text class="d-msg" x="480" y="236" text-anchor="middle">cancel</text>
+</svg>
+<figcaption class="d-caption">A queued run waits for a tenant limit or a concurrency slot. A run parked in <code>needs_reconciliation</code> has a write whose outcome is unknown and waits for a person.</figcaption>
+</figure>
+<div class="callout note"><span class="callout-label">Resolved: findings 5f</span>
+  <p>Runs now show <code>waiting</code>. The update that ends every decision settles a live run's status (<x-ref path="engine/runtime/store.go" symbol="const settleStatus"><code>settleStatus</code></x-ref>): <code>running</code> while it has a task queued or with a worker, <code>waiting</code> while all it has left is an approval, a timer, a signal, a form, a callback or a child run. A run backing off before a retry has its task queued, so it shows <code>running</code>. Waiting runs still count against the plan's running-runs limit and in usage figures.</p>
+</div>
+
+<h2>The task queue</h2>
+<p>A <span class="evt">StepScheduled</span> of kind <code>task</code> becomes a row in <code>tasks</code> with a queue chosen by step type (<x-ref path="engine/wd/model.go" symbol="func (s *Step) Queue()"><code>Step.Queue</code></x-ref>): <code>sandbox</code> for code, <code>container</code>, <code>ai</code>, and <code>connector</code> for everything else, including <code>http</code>. An insert trigger sends <code>NOTIFY taskiem_tasks</code> with the queue name.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Mechanism</th><th>How it works</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>Claim</td><td><code>FOR UPDATE SKIP LOCKED</code>, fair across tenants, per-tenant caps, worker pools. Increments <code>lease_epoch</code></td><td><x-ref path="engine/db/migrations/00122_dispatch_timing.sql" symbol="CREATE FUNCTION taskiem_claim_tasks(p_queue text, p_worker text, p_limit int, p_lease interval, p_tenant_cap int, p_pool text)"><code>taskiem_claim_tasks</code></x-ref></td></tr>
+    <tr><td>Lease</td><td>60 s by default. Workers run 16 executors per queue (4 for <code>sandbox</code> and <code>container</code>)</td><td><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) defaults()"><code>Worker.defaults</code></x-ref></td></tr>
+    <tr><td>Heartbeat</td><td>Every third of the lease, under the fence. If the fence fails, the step's context is cancelled and the worker stops</td><td><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) heartbeat("><code>heartbeat</code></x-ref></td></tr>
+    <tr><td>Fence</td><td>Every write about a task checks <code>lease_owner</code> and <code>lease_epoch</code> in the same transaction</td><td><x-ref path="engine/db/migrations/00004_execution.sql" symbol="CREATE FUNCTION taskiem_task_heartbeat"><code>taskiem_task_heartbeat</code></x-ref></td></tr>
+    <tr><td>Recovery</td><td>The scheduler clears expired leases, up to 1,000 a tick, so the task can be claimed again. The epoch stays, so the old holder stays fenced out</td><td><x-ref path="engine/db/migrations/00006_dispatch.sql" symbol="CREATE FUNCTION taskiem_recover_expired_leases"><code>taskiem_recover_expired_leases</code></x-ref></td></tr>
+    <tr><td>Shutdown</td><td>In-flight steps get the drain time, then leases are released at once instead of waiting to expire</td><td><x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) releaseLeases()"><code>releaseLeases</code></x-ref></td></tr>
+  </tbody>
+</table></div>
+<div class="callout note"><span class="callout-label">By design</span>
+  <p>There is no queue interface to swap for another system, and the spec now says so (<x-ref path="docs/spec/architecture.md" symbol="**Postgres is the queue by design, not as a stopgap.**">spec 4.3</x-ref>, amending decision 0002). Task rows are written inside the same transaction as the events that cause them, which no external queue can join. Moving off Postgres would be a redesign of dispatch (an outbox table and a relay), not a configuration change. A tuned or larger primary, the read replica, worker pools and moving large tenants come first.</p>
+</div>
+
+<h2>Waiting: timers, signals, callbacks, approvals</h2>
+<h3>Timers</h3>
+<p>Timers are rows in <code>timers</code> with a <code>kind</code>: <code>wait</code>, <code>signal_timeout</code>, <code>approval_timeout</code> or <code>run_timeout</code>. Every tick, the scheduler claims due timers through <code>taskiem_claim_due_timers</code>. For each one it opens a tenant transaction, marks the timer fired only if <code>fired_at</code> is still empty, appends <span class="evt">TimerFired</span>, and decides inline. The <code>fired_at</code> guard makes it safe for several schedulers to run at once.</p>
+<h3>Signals</h3>
+<p>A <code>signal</code> step waits for an event and a correlation key in the run's environment. Waiting and delivering both take a transaction-scoped advisory lock on <code>(tenant, environment, event, correlation)</code>, so a signal can never slip between "is anyone waiting?" and "I'm waiting now" (<x-ref path="engine/runtime/store.go" symbol="func signalLock("><code>signalLock</code></x-ref>).</p>
+<ul>
+  <li>Delivery to waiting runs is a broadcast. Every run waiting on that key gets <span class="evt">SignalReceived</span> (<x-ref path="engine/runtime/store.go" symbol="func (s *Store) deliverSignalTx("><code>deliverSignalTx</code></x-ref>).</li>
+  <li>A signal that arrives before anyone waits is buffered in <code>signals</code> for <x-ref path="engine/runtime/store.go" symbol="const SignalTTL">seven days</x-ref>. A buffered signal is consumed by the first run that starts waiting, oldest first (<x-ref path="engine/runtime/store.go" symbol="func (s *Store) registerWait("><code>registerWait</code></x-ref>). So the same signal reaches every waiter if they are already waiting, but only one if they start later. Workflows that rely on signals should not depend on more than one run receiving the same one.</li>
+</ul>
+<h3>Callbacks and approvals</h3>
+<p>A <code>callback</code> step gives the outside world a unique URL with a secret key to call the run back. The key is sealed in history like personal data. Approvals are rows in <code>approvals</code>, with policy snapshots taken at run start. A decision arrives through the API or a chat channel, is appended, and is decided inline. The <x-page id="governance"/> page covers policies and levels.</p>
+
+<h2>Retries, errors and compensation</h2>
+<p>A worker classifies each failure (the <x-page id="exactly-once"/> page has the rules). <code>decide</code> then applies the step's retry policy:</p>
+<x-code path="engine/decide/decide.go" start="func (d *decider) taskProgress(" max="45"/>
+<ul>
+  <li><strong>Default policy:</strong> <x-ref path="engine/decide/decide.go" symbol="var defaultRetry">three retries, exponential from 2 seconds, capped at 5 minutes</x-ref>, plus up to 20% jitter. Code steps get no retries by default.</li>
+  <li>A provider's <code>Retry-After</code> wins if it is longer, up to an hour.</li>
+  <li><code>max_duration</code> bounds the total time across attempts.</li>
+  <li>When retries run out, <x-ref path="engine/decide/decide.go" symbol="func (d *decider) finalise("><code>finalise</code></x-ref> fails the step. If any attempt was a write that may have taken effect, it parks it instead.</li>
+  <li>A failed step runs its <code>on_error</code> steps if it has them. Otherwise the run fails, after <x-ref path="engine/decide/decide.go" symbol="func (d *decider) compensate("><code>compensate</code></x-ref> has run the <code>compensate</code> action of every completed step that declares one, newest first. A compensation that fails parks the run rather than looping.</li>
+</ul>
+<h3>Cancelling</h3>
+<p>Cancelling reverses a run by default (decision 0054). <x-ref path="engine/runtime/store.go" symbol="func (s *Store) cancelTx("><code>cancelTx</code></x-ref> appends <span class="evt">CancelRequested</span> and decides, and <x-ref path="engine/decide/decide.go" symbol="func (d *decider) cancelRun()"><code>cancelRun</code></x-ref> takes it from there:</p>
+<ol>
+  <li>It withdraws every step that started and has not finished (<span class="evt">StepCancelled</span>). Approvals, timers, signal waits and forms close.</li>
+  <li>It cancels, reversing them too, the child runs its subflow steps wait for (<x-ref path="engine/runtime/subflows.go" symbol="func (s *Store) childrenToReverse("><code>childrenToReverse</code></x-ref>). The children are cancelled after the parent's decision is written, so a child that ends at once is heard in the next round.</li>
+  <li>It waits for writes already under way, for a write parked for a person, and for each child to end.</li>
+  <li>It runs the completed steps' compensations, newest first, exactly as a failure does, then appends <span class="evt">RunCancelled</span> naming who cancelled it and what was reversed.</li>
+</ol>
+<p><code>POST /v1/runs/{run}/cancel</code> with <code>{"reverse": false}</code> ends the run at once instead, leaving completed steps as they are. A queued run, which has done nothing, is always cancelled at once.</p>
+
+<h2>Admission and concurrency</h2>
+<p>A run can be held as <code>queued</code> for two different reasons, recorded in <code>runs.queue_reason</code>:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Reason</th><th>Held by</th><th>Let through by</th></tr></thead>
+  <tbody>
+    <tr><td><code>tenant</code></td><td>The tenant's soft ingest rate, its running-runs cap, or other runs already waiting (they keep their order)</td><td><x-ref path="engine/runtime/admission.go" symbol="func (s *Store) AdmitQueued("><code>AdmitQueued</code></x-ref> each scheduler tick: a token bucket per tenant in <code>tenant_admission</code>, refilled at the soft rate, at most 200 runs per tenant per tick</td></tr>
+    <tr><td><code>workflow</code></td><td>The workflow's <code>concurrency_key</code> slot is taken, or <code>max_concurrency</code> runs are active</td><td><x-ref path="engine/runtime/concurrency.go" symbol="func (s *Store) promote("><code>promote</code></x-ref>, called when a run of the workflow ends</td></tr>
+  </tbody>
+</table></div>
+<p>Concurrency slots are rows in <code>concurrency_slots</code> (one per workflow and key), so they survive restarts. Admission decisions for one workflow are serialised with a transaction-scoped advisory lock (<x-ref path="engine/runtime/concurrency.go" symbol="func (s *Store) admit("><code>admit</code></x-ref>). A tenant's backlog is capped. When it is full, new runs are refused with a limit error instead of queued.</p>
+
+<h2>Subflows</h2>
+<p>A <code>subflow</code> step starts another workflow of the same business as a child run, in the transaction that records the step (<x-ref path="engine/runtime/subflows.go" symbol="func (s *Store) startSubflow("><code>startSubflow</code></x-ref>). The child inherits the parent's idempotency seed plus the step, so resuming the parent never repeats the child's writes. When the child ends, it delivers a <code>subflow</code> signal to the parent's step, and a parent that ends cancels the children it was waiting for. Chains nest at most <x-ref path="engine/wd/subflow.go" symbol="const MaxSubflowDepth">five deep</x-ref>.</p>
+
+<h2>Replay, fork and repair</h2>
+<p>Replay needs no special mode: <code>decide</code> over a history always reconstructs the same state. Fork is how a failed run is resumed on a repaired version:</p>
+<x-code path="engine/runtime/fork.go" start="// Fork from step (spec 4.10" end="// does not answer it from a cached failure."/>
+<p>Forks reuse the decision loop with a much higher bound (4,096 rounds instead of 16), because each replayed outcome takes a round. <x-ref path="engine/runtime/fork.go" symbol="func (s *Store) planFork("><code>planFork</code></x-ref> refuses runs that cannot be resumed safely and says why.</p>
+
+<h2>Retention and archiving</h2>
+<p>When a run ends, <code>endRun</code> sets <code>retain_until</code> from the workflow's <code>settings.retention</code>, the tenant's default, or the platform default, capped by the plan. Every ten minutes the scheduler archives and then deletes up to 500 runs past retention (<x-ref path="engine/runtime/retention.go" symbol="func (s *Scheduler) PurgeExpired("><code>PurgeExpired</code></x-ref>). History goes to an S3-compatible bucket (<x-ref path="engine/archive/s3.go" symbol="type S3 struct"><code>archive.S3</code></x-ref>, <code>TASKIEM_ARCHIVE_S3_BUCKET</code>), one gzipped JSON-lines object per run at <code>&lt;prefix&gt;&lt;tenant&gt;/&lt;run&gt;.jsonl.gz</code>, or to a mounted directory on single-node installs (<x-ref path="engine/runtime/retention.go" symbol="type FileArchiver struct"><code>FileArchiver</code></x-ref>, same layout). A refused write leaves the run in place. With neither configured, nothing is deleted: history is never dropped unarchived.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Outputs over 256 KB are meant to move to object storage, referenced by content hash (<x-ref path="docs/spec/architecture.md" symbol="Step outputs up to 256 KB are stored inline">spec 4.9</x-ref>). That is still not built: <code>run_events</code> has a <x-ref path="engine/db/migrations/00004_execution.sql" symbol="payload_ref"><code>payload_ref</code></x-ref> column that nothing uses. What exists since findings 5d is a cap (<x-ref path="engine/runtime/worker.go" symbol="func capOutput("><code>capOutput</code></x-ref>): a connector, capability, AI or code step whose output is over 256 KB fails, saying how big it was, and a write parks for a person instead, since the provider already acted. HTTP steps cut responses to the same size, and container steps keep their own limit. History can no longer bloat, but a workflow that needs a large output has to return only the fields later steps use.</p>
+</div>
+
+<h2>How this is tested</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Suite</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><x-ref path="engine/runtime/suites_test.go" symbol="func TestCrashRecoverySuite("><code>TestCrashRecoverySuite</code></x-ref></td><td>Payment-shaped runs with random provider faults, workers that crash and stall, and short leases, then checks that no write was sent twice and every run ended. 120 runs by default. The G1 gate runs 10,000 (<code>TASKIEM_CHAOS_RUNS</code>)</td></tr>
+    <tr><td><x-ref path="engine/runtime/suites_test.go" symbol="func TestDatabaseCrashSuite("><code>TestDatabaseCrashSuite</code></x-ref></td><td>Crashes Postgres mid-run with an immediate shutdown and checks the same invariants. Opt-in, through <code>TASKIEM_CHAOS_PG_CRASH</code></td></tr>
+    <tr><td><x-ref path="engine/runtime/suites_test.go" symbol="func TestDeterminismSuite("><code>TestDeterminismSuite</code></x-ref></td><td>Replays recorded histories through <code>decide.Verify</code></td></tr>
+    <tr><td><x-ref path="engine/db/db_test.go" symbol="func TestConcurrentClaimsAreDisjoint("><code>TestConcurrentClaimsAreDisjoint</code></x-ref>, <x-ref path="engine/db/db_test.go" symbol="func TestFencingRejectsStaleWorker("><code>TestFencingRejectsStaleWorker</code></x-ref>, <x-ref path="engine/db/db_test.go" symbol="func TestTimersFireOnceUnderLease("><code>TestTimersFireOnceUnderLease</code></x-ref></td><td>The queue's guarantees at the SQL level</td></tr>
+  </tbody>
+</table></div>
+<p>The database suites skip unless <code>TASKIEM_TEST_DATABASE_URL</code> is set. CI sets it, so they run on every push.</p>

@@ -83,7 +83,7 @@ func TestTopupReconciliationExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rt.WaitFor(t, 30*time.Second, "reconciliation run", func() bool { e.Drain(t); return e.Status(t, ref) != "running" })
+	rt.WaitFor(t, 30*time.Second, "reconciliation run", func() bool { e.Drain(t); st := e.Status(t, ref); return st != "running" && st != "waiting" })
 	h, _ := e.Store.RunHistory(ctx, ref)
 	if st := e.Status(t, ref); st != "completed" {
 		var b strings.Builder

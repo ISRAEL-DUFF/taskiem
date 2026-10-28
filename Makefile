@@ -2,7 +2,7 @@
 TASKIEM_TEST_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check site-css
+.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check site-css atlas atlas-stale
 
 check: lint test validate licences ts
 
@@ -90,3 +90,11 @@ site-css:
 
 docs-check:
 	go run ./tools/docsite -check
+
+# The engineering atlas (docs/atlas/README.md): build it, and list the pages
+# whose code has changed since they were last checked.
+atlas:
+	node docs/atlas/atlas.mjs build
+
+atlas-stale:
+	node docs/atlas/atlas.mjs stale

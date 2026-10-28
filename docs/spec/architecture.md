@@ -112,7 +112,7 @@ Requests flow top to bottom: clients and providers hit the edge, the edge record
 | --- | --- |
 | Dev and self-hosted single node | One binary with all roles, Postgres, SeaweedFS, OpenBao via Docker Compose |
 | Cloud v1 (Nigeria region) | 2× api/edge, 2× orchestrator, 1–2× scheduler (leader-elected), N× workers by queue; Postgres primary plus synchronous standby |
-| Cloud at scale | Workers split by queue (connector, sandbox, AI, dedicated tenants); read replicas for inspector queries; queue moved to NATS JetStream if needed |
+| Cloud at scale | Workers split by queue (connector, sandbox, AI, dedicated tenants); read replicas for inspector queries; a larger Postgres primary before any change of queue (section 4.3) |
 | Enterprise dedicated | Single-tenant stack in the customer's chosen region or on their infrastructure |
 
 Scheduler instances use a session-level Postgres advisory lock for leader election, so only one fires timers at a time while others stand by. The lock is held on a dedicated, direct connection (never through a transaction-pooling proxy such as PgBouncer), and the leader re-checks it before each batch so a lost connection cannot leave two leaders.
@@ -200,7 +200,7 @@ Strings starting with `=` are expressions. The language is CEL (Common Expressio
 
 - Every save creates an immutable version. Runs are pinned to the version they started on, so an edit never changes an in-flight run.
 - States: `draft` → `published` → `deprecated` → `archived`. Only published versions accept triggers.
-- Publishing can require approval (maker-checker on workflows themselves), configurable per environment.
+- Publishing can require approval (maker-checker on workflows themselves), configurable per environment: for every environment, or for the ones listed (`four_eyes_publish_environments`). A publish that deploys to a listed environment waits as a whole; promotion into one needs a second person.
 - Environments (`dev`, `staging`, `prod`) hold separate secrets and connector credentials; promotion copies a version, never edits in place.
 - A JSON Schema for `wd/v1` is published so external tools and the AI builder validate against the same contract.
 
@@ -252,7 +252,7 @@ PostgreSQL is the queue in v1, which removes a moving part and keeps events and 
 - Claiming is cross-tenant, so it runs through the narrow dispatch path in section 5.3, not as an ordinary tenant-scoped query.
 - `LISTEN/NOTIFY` wakes idle workers instantly; polling every 1 s is the fallback.
 - Tasks carry `tenant_id` and a queue name, so tenants and workload classes (connector calls, code sandbox, AI) can get dedicated worker pools.
-- Exit path: if sustained load exceeds what one primary handles, the queue interface swaps to NATS JetStream without changing the orchestrator.
+- **Postgres is the queue by design, not as a stopgap.** A task row is written in the same transaction as the event that schedules it, and a worker records its result and the next decision in one transaction too. That is what makes a lost step or an orphaned task impossible, and it is why there is no interface to swap: a separate queue (NATS JetStream or any other) cannot join a Postgres transaction. Moving off Postgres would mean a redesign of dispatch, not a configuration change: tasks written to an outbox table with the event, a relay publishing them, and fencing and deduplication rebuilt against the new queue. Before that, in order: tune the primary, a larger primary, the read replica for lists and dashboards, dedicated worker pools for heavy tenants (decision 0024), and moving a large tenant to its own database. The G0 spike sustained 500 steps/s and peaked at 1,302 on 4 vCPUs (decision 0002); load tests on production-sized hardware set the real ceiling.
 
 ### 4.4 Exactly-once effects
 
@@ -325,7 +325,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 | --- | --- |
 | Step dispatch latency (queue to worker) | p95 under 50 ms |
 | Sustained step throughput, one Postgres primary | 500 steps/s |
-| Run history retention | 90 days hot after the run ends, then archived to object storage |
+| Run history retention | 90 days hot after the run ends, then archived to object storage (an S3-compatible bucket, `TASKIEM_ARCHIVE_S3_BUCKET`; a mounted directory on single-node installs) |
 | Recovery after worker crash | Lease expiry, default 60 s |
 
 These are design targets to validate with load tests in Phase 1, not measured figures.
@@ -1071,7 +1071,7 @@ AGPL services are limited to optional operational tooling: the core install (eng
 | JS in sandbox | QuickJS (WASM build) | MIT | Small, fast startup |
 | Object storage | Any S3-compatible API; SeaweedFS self-hosted | Apache 2.0 | Avoid AGPL storage in the core install |
 | Cache and rate limits | Valkey | BSD | Optional; Postgres works first |
-| Queue at scale | NATS JetStream | Apache 2.0 | Phase 4 option |
+| Queue at scale | PostgreSQL (the queue above) | PostgreSQL | Kept by design (section 4.3); another queue would mean redesigning dispatch |
 | Secrets service | OpenBao | MPL 2.0 | Run as a separate service |
 | Auth | go-webauthn, own OIDC/SAML integration | BSD | Passkeys first |
 | Telemetry | OpenTelemetry, Prometheus, Grafana stack | Apache 2.0 / AGPL 3.0 (separate-service tier) | Grafana, Loki, Tempo run as separate, unmodified, optional services; never linked |
@@ -1094,7 +1094,7 @@ The biggest risk is scope: eight pillars is several products' worth of work, so 
 | Scope overrun across eight pillars | Nothing ships | Strict phase gates; Phase 1 dogfooded inside holdco products before any external sale |
 | Exactly-once claims fail in production | Duplicate or lost payments, loss of trust | Action classes, reconcile hooks, chaos tests that kill workers mid-effect, external audit of the engine |
 | Partner APIs unavailable (NIBSS, tax portals) | Weaker connector moat | Prioritise providers with public APIs; pursue partnerships early; licensed aggregators as fallback |
-| Postgres-as-queue hits limits | Latency under load | Load tests in Phase 1; queue interface designed for a JetStream swap |
+| Postgres-as-queue hits limits | Latency under load | Load tests on production-sized hardware before launch; a larger primary, worker pools and tenant moves first; a queue redesign (an outbox and relay) only if those run out |
 | WhatsApp policy or pricing changes | Channel cost or features shift | Keep WhatsApp one channel among several; pass-through costs; templates kept minimal |
 | AI proposes unsafe changes | Bad workflows published | AI cannot publish or approve; shadow-sandbox validation; human review |
 | Flat pricing undercuts costs | Margin squeeze | Capacity caps per tier, daily usage snapshots, quarterly pricing review |

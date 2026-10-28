@@ -80,7 +80,7 @@ type config struct {
 	Listen, EdgeListen, MetricsListen string
 	KMS, LocalKey                     string
 	OpenBaoAddr, OpenBaoToken, KMSKey string
-	ArchiveDir, WebDir                string
+	WebDir                            string
 	AnchorKey, AnchorDir              string
 	SecureCookies, TrustProxy, Signup bool
 	// PublicURL is where people reach the web app; passkeys are bound to it.
@@ -313,7 +313,6 @@ func loadConfig() (config, error) {
 		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
-		ArchiveDir:    os.Getenv("TASKIEM_ARCHIVE_DIR"),
 		PublicURL:     strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
 		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
 		HooksURL:      strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
@@ -1111,10 +1110,8 @@ func serve(ctx context.Context, args []string) error {
 	}
 	if is("scheduler") {
 		s := &runtime.Scheduler{Store: e.store, Logger: log}
-		if cfg.ArchiveDir != "" {
-			s.Archiver = runtime.FileArchiver{Dir: cfg.ArchiveDir}
-		} else {
-			log.Warn("TASKIEM_ARCHIVE_DIR unset: runs past retention are kept, not purged")
+		if s.Archiver, err = archiver(os.Getenv, log); err != nil { // archive.go
+			return fmt.Errorf("serve: %w", err)
 		}
 		cron := &ingest.Cron{Store: e.store, Logger: log}
 		// Hourly digests of secret reads into each tenant's audit chain,

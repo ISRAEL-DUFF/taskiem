@@ -1,0 +1,70 @@
+<figure class="diagram" aria-labelledby="cap-{{uid}}">
+<svg viewBox="0 0 1000 600" role="img" aria-labelledby="t-{{uid}}">
+  <title id="t-{{uid}}">Taskiem's architecture: who calls in, the roles of the one binary, PostgreSQL in the middle, and what the workers call out to</title>
+  <defs>
+    <marker id="ah-{{uid}}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+
+  <text class="d-row" x="1" y="14">OUTSIDE</text>
+  <g><rect class="d-box" x="1" y="22" width="170" height="58" rx="7"/><text class="d-title" x="15" y="46">People and partners</text><text class="d-sub" x="15" y="65">web app · CLI · SDKs</text></g>
+  <g><rect class="d-box" x="208" y="22" width="170" height="58" rx="7"/><text class="d-title" x="222" y="46">Provider webhooks</text><text class="d-sub" x="222" y="65">Paystack, Moniepoint, …</text></g>
+  <g><rect class="d-box" x="415" y="22" width="170" height="58" rx="7"/><text class="d-title" x="429" y="46">Chat and USSD</text><text class="d-sub" x="429" y="65">WhatsApp · Telegram · USSD</text></g>
+  <g><rect class="d-box" x="622" y="22" width="170" height="58" rx="7"/><text class="d-title" x="636" y="46">Inbound email</text><text class="d-sub" x="636" y="65">workflow addresses</text></g>
+  <g><rect class="d-box" x="829" y="22" width="170" height="58" rx="7"/><text class="d-title" x="843" y="46">Public visitors</text><text class="d-sub" x="843" y="65">storefronts · forms</text></g>
+
+  <g>
+    <path class="d-line" d="M86 80V128" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M293 80V128" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M500 80V128" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M707 80V128" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M914 80V128" marker-end="url(#ah-{{uid}})"/>
+  </g>
+
+  <text class="d-row" x="98" y="124">FRONT ROLES</text>
+  <g class="d-core" data-go="identity-tenancy" aria-label="api role: open the page on identity, tenancy and access"><rect class="d-box" x="1" y="132" width="170" height="68" rx="7"/><text class="d-title" x="15" y="157">api</text><text class="d-sub" x="15" y="176">REST API · web app</text><text class="d-sub" x="15" y="191">chat, git, invoice loops</text></g>
+  <g class="d-core" data-go="triggers-channels" aria-label="edge role: open the page on triggers and channels"><rect class="d-box" x="208" y="132" width="377" height="68" rx="7"/><text class="d-title" x="222" y="157">edge</text><text class="d-sub" x="222" y="176">/hooks · /channels · /git-hooks</text><text class="d-sub" x="222" y="191">verify, deduplicate, record, answer 202 within 5 s</text></g>
+  <g class="d-core" data-go="triggers-channels" aria-label="mail role: open the page on triggers and channels"><rect class="d-box" x="622" y="132" width="170" height="68" rx="7"/><text class="d-title" x="636" y="157">mail</text><text class="d-sub" x="636" y="176">SMTP for known</text><text class="d-sub" x="636" y="191">addresses, sealed inbox</text></g>
+  <g class="d-core" data-go="business-modules" aria-label="public role: open the page on business modules"><rect class="d-box" x="829" y="132" width="170" height="68" rx="7"/><text class="d-title" x="843" y="157">public</text><text class="d-sub" x="843" y="176">storefronts and forms</text><text class="d-sub" x="843" y="191">own login: taskiem_public</text></g>
+
+  <g>
+    <path class="d-line" d="M86 200V248" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M396 200V248" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M707 200V248" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M914 200V248" marker-end="url(#ah-{{uid}})"/>
+  </g>
+
+  <text class="d-row" x="98" y="244">STATE, QUEUE AND AUDIT</text>
+  <g data-go="data-model" aria-label="PostgreSQL: open the page on the data model and tenant isolation">
+    <rect class="d-band" x="1" y="252" width="998" height="84" rx="8"/>
+    <text class="d-title" x="17" y="277">PostgreSQL</text>
+    <text class="d-sub" x="112" y="277">row-level security on every tenant table · one transaction per decision</text>
+    <text class="d-mono" x="17" y="300">runs · run_events · tasks · timers · signal_waits · approvals · trigger_receipts · audit_log · secrets</text>
+    <text class="d-mono" x="17" y="322">dispatch: taskiem_claim_tasks · _claim_due_timers · _claim_runs_to_orchestrate · _recover_expired_leases</text>
+  </g>
+
+  <g>
+    <path class="d-line" d="M151 340V378" marker-start="url(#ah-{{uid}})" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M500 340V378" marker-start="url(#ah-{{uid}})" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M849 340V378" marker-start="url(#ah-{{uid}})" marker-end="url(#ah-{{uid}})"/>
+  </g>
+
+  <text class="d-row" x="1" y="374">CORE ROLES</text>
+  <g class="d-core" data-go="durable-execution" aria-label="orchestrator role: open the page on durable execution"><rect class="d-box" x="1" y="382" width="300" height="72" rx="7"/><text class="d-title" x="15" y="407">orchestrator</text><text class="d-sub" x="15" y="426">sweeps runs left with undecided events</text><text class="d-sub" x="15" y="442">most decisions run inline, where events land</text></g>
+  <g class="d-core" data-go="durable-execution" aria-label="scheduler role: open the page on durable execution"><rect class="d-box" x="350" y="382" width="300" height="72" rx="7"/><text class="d-title" x="364" y="407">scheduler</text><text class="d-sub" x="364" y="426">timers · expired leases · admission · cron</text><text class="d-sub" x="364" y="442">billing, digests, mirrors, key checks …</text></g>
+  <g class="d-core" data-go="connectors" aria-label="worker role: open the page on the connector framework"><rect class="d-box" x="699" y="382" width="300" height="72" rx="7"/><text class="d-title" x="713" y="407">worker</text><text class="d-sub" x="713" y="426">one per queue: connector · sandbox · ai</text><text class="d-sub" x="713" y="442">container on request · fenced by lease epoch</text></g>
+
+  <g>
+    <path class="d-line" d="M849 454V488H118M118 488V516" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M373 488V516" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M628 488V516" marker-end="url(#ah-{{uid}})"/>
+    <path class="d-line" d="M882 488V516" marker-end="url(#ah-{{uid}})"/>
+  </g>
+
+  <text class="d-row" x="1" y="512">CALLED OUT TO</text>
+  <g data-go="security" aria-label="OpenBao or KMS: open the page on security"><rect class="d-box" x="1" y="520" width="232" height="62" rx="7"/><text class="d-title" x="15" y="545">OpenBao or KMS</text><text class="d-sub" x="15" y="564">tenant keys · bring your own key</text></g>
+  <g data-go="ai" aria-label="AI models: open the page on the AI layer"><rect class="d-box" x="256" y="520" width="232" height="62" rx="7"/><text class="d-title" x="270" y="545">AI models</text><text class="d-sub" x="270" y="564">ai steps · builder · self-repair</text></g>
+  <g data-go="business-modules" aria-label="Xenibase: open the page on business modules"><rect class="d-box" x="511" y="520" width="232" height="62" rx="7"/><text class="d-title" x="525" y="545">Xenibase</text><text class="d-sub" x="525" y="564">data tables · files · kept copies</text></g>
+  <g data-go="security" aria-label="Egress guard: open the page on security"><rect class="d-box" x="766" y="520" width="232" height="62" rx="7"/><text class="d-title" x="780" y="545">Egress guard</text><text class="d-sub" x="780" y="564">allow-listed calls to providers</text></g>
+</svg>
+<figcaption class="d-caption" id="cap-{{uid}}">One Go binary, run as any role with <code>taskiem serve --role</code>; <code>all</code> runs every role in one process. Select a box to open its page.</figcaption>
+</figure>

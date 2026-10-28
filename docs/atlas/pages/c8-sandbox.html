@@ -1,0 +1,27 @@
+<!--atlas
+{
+  "id": "sandbox",
+  "title": "Sandboxed code and containers",
+  "part": "C",
+  "order": 2,
+  "status": "planned",
+  "summary": "Code steps in QuickJS and CPython on WebAssembly, their limits and host functions, and container steps for heavy work.",
+  "scope": [
+    "The QuickJS fork and CPython compiled to WebAssembly on wazero",
+    "Limits per execution, pooling and cold start",
+    "Host functions, and what a script cannot reach",
+    "Secrets in code steps, and scrubbing",
+    "Container steps: runners, the shim, the egress proxy",
+    "Workflow code compiled in the same sandbox"
+  ],
+  "sources": [
+    "engine/sandbox/",
+    "engine/container/",
+    "cmd/taskiem-shim/",
+    "third_party/qjs/",
+    "engine/runtime/codestep.go",
+    "engine/runtime/containerstep.go",
+    "docs/decisions/0011-sandbox-quickjs-fork.md"
+  ]
+}
+-->

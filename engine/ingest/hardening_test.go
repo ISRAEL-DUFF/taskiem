@@ -35,12 +35,12 @@ func TestSignalsStayInTheirEnvironment(t *testing.T) {
 	if st != 202 || out["signalled"] != float64(0) {
 		t.Fatalf("dev delivery: %d %v", st, out)
 	}
-	if s := w.Status(t, waiting); s != "running" {
+	if s := w.Status(t, waiting); s != "waiting" {
 		t.Fatalf("a dev-signed delivery woke a prod run: %s", s)
 	}
 	// Buffered in dev, it is not handed to a prod run that starts waiting later.
 	later := w.Start(t, settle, map[string]any{"body": map[string]any{"ref": "T-9"}})
-	if s := w.Status(t, later); s != "running" {
+	if s := w.Status(t, later); s != "waiting" {
 		t.Fatalf("a prod run consumed a dev signal: %s", s)
 	}
 	// The same body delivered to prod is not a duplicate of the dev one.

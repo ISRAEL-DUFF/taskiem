@@ -228,8 +228,12 @@ func (s *Server) putSweep(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
+			wait, err := publishNeedsApproval(ctx, tx, g, nil)
+			if err != nil {
+				return err
+			}
 			to := withdrawTo{BankCode: deref(m.PayoutBankCode), AccountNumber: *m.PayoutAccount, AccountName: deref(m.PayoutName)}
-			made, n, err := s.sweepWorkflowTx(r, tx, m.WalletID, have, to, set, g.FourEyesPublish)
+			made, n, err := s.sweepWorkflowTx(r, tx, m.WalletID, have, to, set, wait)
 			if err != nil {
 				return err
 			}
