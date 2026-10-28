@@ -24,7 +24,7 @@ Every role also serves Prometheus metrics on 9090. `mode: all` runs every role i
 
 Alongside the Deployments the chart creates:
 
-- a Service per role;
+- a Service per role, of type `service.type` for `api`, `edge` and `all`, and for those three a `<release>-<role>-metrics` Service, always ClusterIP, for the metrics port (which also serves the profiler when `TASKIEM_PPROF` is on), so a LoadBalancer never exposes it;
 - an Ingress, if enabled, that sends `/hooks/`, `/git-hooks/` and `/channels/` to the edge role and everything else to the API;
 - a migration Job (a Helm pre-install and pre-upgrade hook);
 - a PersistentVolumeClaim for the scheduler;

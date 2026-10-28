@@ -112,3 +112,32 @@ func TestPodsNeverGetTheOwnersLogin(t *testing.T) {
 		t.Errorf("%d migrate Jobs", jobs)
 	}
 }
+
+// TestMetricsStayInsideTheCluster: the metrics port (and the profiler on
+// it) is never on a Service with a public port, since service.type can
+// make that one a LoadBalancer; each such role gets a ClusterIP metrics
+// Service instead, which the ServiceMonitor finds by its port name.
+func TestMetricsStayInsideTheCluster(t *testing.T) {
+	metrics := map[string]bool{}
+	for _, o := range manifests(t) {
+		if o.Kind != "Service" {
+			continue
+		}
+		has := false
+		for _, p := range o.Spec.Ports {
+			has = has || p.Name == "metrics"
+		}
+		if !has {
+			continue
+		}
+		metrics[o.Metadata.Name] = true
+		if len(o.Spec.Ports) != 1 || (o.Spec.Type != "" && o.Spec.Type != "ClusterIP") {
+			t.Errorf("Service %s: metrics beside other ports, or type %q", o.Metadata.Name, o.Spec.Type)
+		}
+	}
+	for _, name := range []string{"taskiem-api-metrics", "taskiem-edge-metrics", "taskiem-orchestrator", "taskiem-scheduler", "taskiem-worker"} {
+		if !metrics[name] {
+			t.Errorf("no metrics Service %s", name)
+		}
+	}
+}
