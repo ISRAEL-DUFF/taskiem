@@ -117,13 +117,17 @@ func (d *Detector) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 			// movement the rail reported as two (each event is kept once by
 			// its key, so two rows here are two kinds of event). Statement
 			// lines are left out: the same line is kept once, and lines
-			// without a reference repeat by nature (bank charges).
-			{"duplicate", `SELECT e.channel || '|' || e.direction || '|' || e.reference || '|' || e.amount_kobo, min(e.id::text)::uuid, NULL::uuid,
+			// without a reference repeat by nature (bank charges). A credit
+			// to a customer's account number is known by its credit_id: the
+			// reference is the account's, which takes many equal payments
+			// (a student's fees).
+			{"duplicate", `SELECT e.channel || '|' || e.direction || '|' || e.movement || '|' || e.amount_kobo, min(e.id::text)::uuid, NULL::uuid,
 				e.amount_kobo * (count(*) - 1),
-				` + nairaSQL("e.amount_kobo") + ` || ' with reference ' || e.reference || ' is on ' || e.channel || ' ' || count(*) || ' times'
-				FROM money_entries e WHERE e.tenant_id = $1 AND e.status = 'settled' AND e.amount_kobo > 0
-				  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'payout')
-				GROUP BY e.channel, e.direction, e.reference, e.amount_kobo HAVING count(*) > 1`},
+				` + nairaSQL("e.amount_kobo") + ` || ' with reference ' || e.movement || ' is on ' || e.channel || ' ' || count(*) || ' times'
+				FROM (SELECT e.*, CASE WHEN e.kind = 'account_credit' THEN COALESCE(e.credit_id, e.reference) ELSE e.reference END AS movement
+				      FROM money_entries e WHERE e.tenant_id = $1 AND e.status = 'settled' AND e.amount_kobo > 0
+				        AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'payout')) e
+				GROUP BY e.channel, e.direction, e.movement, e.amount_kobo HAVING count(*) > 1`},
 			{"overpaid", `SELECT i.id::text, NULL::uuid, i.id, i.paid_kobo - i.total_kobo,
 				i.number || ' was paid ' || ` + nairaSQL("(i.paid_kobo - i.total_kobo)") + ` || ' more than it asked for'
 				FROM customer_invoices i WHERE i.tenant_id = $1 AND i.paid_kobo > i.total_kobo`},

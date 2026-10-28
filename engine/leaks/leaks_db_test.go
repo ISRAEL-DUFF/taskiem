@@ -56,7 +56,10 @@ func TestLeaks(t *testing.T) {
 	heard("payment.received", map[string]any{"payment_id": "LOST-1", "amount_kobo": int64(777700)})
 	// The same payment reported as two kinds of event.
 	heard("payment.received", map[string]any{"payment_id": "DUP-1", "amount_kobo": int64(50000)})
-	heard("virtual_account.credited", map[string]any{"reference": "DUP-1", "credit_id": "DUP-1", "amount_kobo": int64(50000)})
+	heard("virtual_account.credited", map[string]any{"reference": "CUS_DUP", "credit_id": "DUP-1", "amount_kobo": int64(50000)})
+	// Two equal fee payments into one student's account: two payments.
+	heard("virtual_account.credited", map[string]any{"reference": "CUS_FEES", "credit_id": "F-1", "amount_kobo": int64(2500000)})
+	heard("virtual_account.credited", map[string]any{"reference": "CUS_FEES", "credit_id": "F-2", "amount_kobo": int64(2500000)})
 	// An overdue invoice.
 	late := send("Bola", 300000, "2099-01-31")
 	if _, err := e.DB.Admin.Exec(ctx, `UPDATE customer_invoices SET due_on = '2020-01-01' WHERE id = $1`, late.ID); err != nil {
@@ -122,6 +125,9 @@ func TestLeaks(t *testing.T) {
 	}
 	check("unmatched", 777700, "₦7,777 came in on paystack/main")
 	check("duplicate", 50000, "with reference DUP-1 is on paystack/main 2 times")
+	if len(byKind["duplicate"]) != 1 {
+		t.Errorf("duplicates: %+v", byKind["duplicate"])
+	}
 	check("overdue", 300000, late.Number+" is overdue: ₦3,000 still due")
 	check("overpaid", 50000, over.Number+" was paid ₦500 more")
 	check("void_paid", 200000, "was paid for "+void.Number+", which was voided")
@@ -155,11 +161,11 @@ func TestLeaks(t *testing.T) {
 		if _, err := leaks.Close(ctx, tx, e.Tenant, u.ID, "written_off", nil, "", "user:ada", time.Now()); !errors.Is(err, leaks.ErrState) {
 			t.Errorf("closed twice: %v", err)
 		}
-		// Open: the five other kinds, and the two DUP-1 entries and FEE-1,
-		// which nothing matches either; not the voided invoice's payment a
-		// second time, nor LOST-1, recovered.
+		// Open: the five other kinds, and the two DUP-1 entries, the two
+		// CUS_FEES payments and FEE-1, which nothing matches either; not
+		// the voided invoice's payment a second time, nor LOST-1, recovered.
 		tot, err := leaks.Sum(ctx, tx, e.Tenant)
-		if err != nil || tot.RecoveredKobo != 777700 || tot.Open != 8 {
+		if err != nil || tot.RecoveredKobo != 777700 || tot.Open != 10 {
 			now, _ := leaks.List(ctx, tx, e.Tenant, "open", 0)
 			for _, l := range now {
 				t.Logf("open: %s %d %s", l.Kind, l.AmountKobo, l.Detail)
