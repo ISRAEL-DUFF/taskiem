@@ -81,7 +81,7 @@ func (s *Store) admitTenant(ctx context.Context, tenant uuid.UUID) (int, error) 
 			n = min(int(tokens), admitPerTick)
 		}
 		if lim.MaxRunningRuns > 0 {
-			running, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND status = 'running'`, lim.MaxRunningRuns, tenant)
+			running, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND `+liveStatuses, lim.MaxRunningRuns, tenant)
 			if err != nil {
 				return err
 			}

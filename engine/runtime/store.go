@@ -71,6 +71,18 @@ type Store struct {
 	hitCount atomic.Int64
 }
 
+// settleStatus, appended to the UPDATE that ends a decision, sets a live
+// run's status from the work it has left: running while it has a task
+// queued or with a worker, waiting while all it has left are waits (an
+// approval, a timer, a signal, a form, a callback, a child run). Queued,
+// parked and ended runs keep their status.
+const settleStatus = `, status = CASE WHEN runs.status NOT IN ('running', 'waiting') THEN runs.status
+	WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.run_id = runs.id) THEN 'running' ELSE 'waiting' END`
+
+// liveStatuses are the statuses of a run that has started and not ended
+// or parked: what counts against a tenant's running-runs limit.
+const liveStatuses = `status IN ('running', 'waiting')`
+
 // maxInlineRounds bounds decide -> effects -> decide loops in one transaction
 // (a buffered signal consumed by a new wait triggers another round).
 const maxInlineRounds = 16
@@ -359,7 +371,7 @@ func tenantHold(ctx context.Context, tx pgx.Tx, req StartRequest, l Limits) (str
 	if waiting {
 		return "backlog", nil
 	}
-	n, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND status = 'running'`, l.MaxRunningRuns, req.TenantID)
+	n, err := countUpTo(ctx, tx, `runs WHERE tenant_id = $1 AND `+liveStatuses, l.MaxRunningRuns, req.TenantID)
 	if err != nil {
 		return "", err
 	}
@@ -569,7 +581,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 			if scheduled > 0 {
 				return s.countSteps(ctx, tx, run, def, scheduled)
 			}
-			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL WHERE id = $1`, ref.ID)
+			_, err := tx.Exec(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL`+settleStatus+` WHERE id = $1`, ref.ID)
 			return err
 		}
 	}
@@ -583,7 +595,7 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 // beyond the cap ever reaches a worker.
 func (s *Store) countSteps(ctx context.Context, tx pgx.Tx, run runRow, def *wd.Definition, scheduled int) error {
 	var total int
-	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2
+	if err := tx.QueryRow(ctx, `UPDATE runs SET decided_seq = last_seq, orch_lease_owner = NULL, orch_lease_until = NULL, steps_scheduled = steps_scheduled + $2`+settleStatus+`
 		WHERE id = $1 RETURNING steps_scheduled`, run.ref.ID, scheduled).Scan(&total); err != nil {
 		return err
 	}

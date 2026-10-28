@@ -23,7 +23,7 @@ func TestConcurrencyKeySerialisesRuns(t *testing.T) {
 	a := e.Start(t, wf, map[string]any{"borrower": "b1"})
 	b := e.Start(t, wf, map[string]any{"borrower": "b1"})
 	c := e.Start(t, wf, map[string]any{"borrower": "b2"})
-	if e.Status(t, a) != "running" || e.Status(t, b) != "queued" || e.Status(t, c) != "running" {
+	if e.Status(t, a) != "waiting" || e.Status(t, b) != "queued" || e.Status(t, c) != "waiting" { // admitted runs wait on their approval
 		t.Fatalf("statuses %s %s %s", e.Status(t, a), e.Status(t, b), e.Status(t, c))
 	}
 	e.Drain(t) // the sweep must not decide a queued run
@@ -33,7 +33,7 @@ func TestConcurrencyKeySerialisesRuns(t *testing.T) {
 	if err := e.Store.DecideApproval(ctx, a, "ok", "approved", "u", "web"); err != nil {
 		t.Fatal(err)
 	}
-	if e.Status(t, a) != "completed" || e.Status(t, b) != "running" {
+	if e.Status(t, a) != "completed" || e.Status(t, b) != "waiting" {
 		t.Fatalf("after a: %s %s", e.Status(t, a), e.Status(t, b))
 	}
 	h := events(t, e, b)
@@ -57,7 +57,7 @@ func TestMaxConcurrencyQueuesAndCancelPromotes(t *testing.T) {
 	if err := e.Store.CancelRun(ctx, a, "u", true); err != nil {
 		t.Fatal(err)
 	}
-	if e.Status(t, b) != "running" {
+	if e.Status(t, b) != "waiting" {
 		t.Errorf("b should be admitted once a is cancelled: %s", e.Status(t, b))
 	}
 }

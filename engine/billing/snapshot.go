@@ -83,7 +83,7 @@ func (s *Service) SnapshotTenant(ctx context.Context, tenant uuid.UUID, day time
 			  WHERE r.tenant_id = $1 AND r.started_at < $3 AND (r.ended_at IS NULL OR r.ended_at >= $2)
 			    AND e.type = 'StepScheduled' AND e.recorded_at >= $2 AND e.recorded_at < $3),
 			(SELECT count(DISTINCT workflow_id) FROM deployments WHERE tenant_id = $1),
-			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status = 'running'),
+			(SELECT count(*) FROM runs WHERE tenant_id = $1 AND status IN ('running', 'waiting')),
 			(SELECT count(*) FROM runs WHERE tenant_id = $1),
 			COALESCE((SELECT sum(sent) FROM whatsapp_template_usage WHERE tenant_id = $1 AND month = $4::date), 0)::bigint,
 			COALESCE((SELECT sum(over_allowance) FROM whatsapp_template_usage WHERE tenant_id = $1 AND month = $4::date), 0)::bigint,
