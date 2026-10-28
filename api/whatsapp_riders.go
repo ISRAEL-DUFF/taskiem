@@ -51,7 +51,9 @@ func (s *Server) waRidersCommand(ctx context.Context, c *chat, text, cmd string)
 	case s.Dispatch.Ready() && (cmd == "deliveries" || cmd == "my deliveries" || cmd == "today's deliveries"):
 		do = func() error { return s.waDeliveries(ctx, c) }
 	case s.Dispatch.Ready() && (cmd == "turn on deliveries" || cmd == "start deliveries" || cmd == "use my riders"):
-		do = func() error { return s.shopAsk(ctx, c, &chatShop{Action: "deliveries_on"}, c.t("wa.shop.turn_on_deliveries")) }
+		do = func() error {
+			return s.shopAsk(ctx, c, &chatShop{Action: "deliveries_on"}, c.t("wa.shop.turn_on_deliveries"))
+		}
 	default:
 		return false, nil
 	}
