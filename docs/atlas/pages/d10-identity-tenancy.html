@@ -5,7 +5,7 @@
   "part": "D",
   "order": 1,
   "summary": "How people, keys, partners and operators prove who they are, what each may do, and how every request ends up scoped to one tenant: sign-in, sessions, API keys, roles, step-up, sub-tenants, embedding and the operator console.",
-  "verified": "6df1072d982748b1b65639bc63c6599676ded8c4",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
   "sources": [
     "engine/access/", "engine/oidc/", "engine/saml/", "engine/webauthn/", "engine/totp/", "engine/embed/", "engine/ops/",
     "api/auth.go", "api/passkeys.go", "api/password.go", "api/sso.go", "api/scim.go", "api/roles.go", "api/approvals.go",
@@ -88,12 +88,9 @@
 </ul>
 <p>A passkey challenge is bound to one operation and one target, such as approving step <code>pay</code> of one run. The last 16 bytes of the challenge are the hash of that scope, and the server checks it again when the challenge is used, so a passkey signature collected for one approval cannot approve another (<x-ref path="api/passkeys.go" symbol="func (s *Server) issueChallenge("><code>issueChallenge</code></x-ref>, <x-ref path="docs/decisions/0026-bound-step-up-and-cookie-sessions.md">decision 0026</x-ref>). An authenticator code is not bound this way: it is used once and locks after 5 wrong tries in 15 minutes.</p>
 <p>When there is a public URL, anyone holding an administrative permission (members, roles, secrets, policies, Git, connectors, personal data) is held to passkeys: signed in with a password, they can only enrol a passkey, and once they have one, password sign-in is refused.</p>
-<div class="callout risk"><span class="callout-label">Risk: worth fixing</span>
-  <ul>
-    <li><strong>A person with no factor of their own changes factors without proof.</strong> Someone created by SSO has no password, passkey or code. For them <x-ref path="api/passkeys.go" symbol="func (s *Server) proveFactor("><code>proveFactor</code></x-ref> asks for nothing, so whoever holds their session can enrol a passkey. That passkey belongs to the person, outlives the session, signs in to their tenants that do not enforce SSO, and satisfies passkey step-up on approvals. Asking for a recent SSO sign-in (say, within 10 minutes) would close it.</li>
-    <li><strong>The passkey rule for administrators skips SSO sign-ins.</strong> It applies to password sessions only (<x-ref path="api/auth.go" symbol="p.EnrolOnly = s.RequireAdminPasskeys &amp;&amp; p.AuthMethod == &quot;password&quot;">resolve</x-ref>), so an owner or admin who signs in by SSO is never asked to enrol one. Decision 0026 says owners are held to passkeys by default.</li>
-    <li>The spec says passkeys are the default "for admins and approvers". Approvers are not on the list; their approvals need a passkey only when the policy says so.</li>
-  </ul>
+<p>Someone created by SSO has no password, passkey or code of their own. For them, changing factors needs a sign-in within the last 10 minutes (<x-ref path="api/passkeys.go" symbol="const recentSignIn = 10 * time.Minute"><code>recentSignIn</code></x-ref>), so a session someone took cannot enrol a passkey that would outlive it. An administrator who signs in through SSO is held to passkeys as one who uses a password is: until they have one, the session can only enrol one.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Both were gaps found while writing this page: <code>proveFactor</code> asked nothing of a person with no factor, and the passkey rule for administrators applied to password sessions only. The spec's "passkeys are the default for admins and approvers" still differs for approvers, whose approvals need a passkey only when the policy says so.</p>
 </div>
 
 <h2 id="identity-tenancy--tenancy">Tenants and partners</h2>
@@ -111,6 +108,7 @@
 
 <h2 id="identity-tenancy--operators">Taskiem's own staff</h2>
 <p>Operators are made only from the command line, never through the API (<x-ref path="docs/decisions/0027-operator-console.md">decision 0027</x-ref>). Their sessions last an hour, at most eight, with a strict-same-site cookie scoped to <code>/v1/ops</code>, and every write needs a passkey bound to that write. Their actions go to a platform audit log of their own, anchored outside the database like a tenant's. What they can do is narrow: review catalogue submissions and storefronts, post status incidents, manage field agents, and read a list of tenants. They cannot act inside a tenant's workflows or see its secrets.</p>
-<div class="callout risk"><span class="callout-label">Risk</span>
-  <p>The threat model says every operator "sign-in, write and tenant view" is recorded. Opening one tenant is (<x-ref path="api/ops_console.go" symbol="&quot;tenant.view&quot;"><code>tenant.view</code></x-ref>). The tenant list, a storefront's stored photos, submissions and reports are read without a record. Some writes (status incidents, and adding or disabling an operator from the CLI) are recorded in a second transaction after the change, so a failure there leaves a change with no record.</p>
+<p>Every page an operator reads is recorded as <code>ops.view</code> before it is answered, and is not served if it cannot be recorded (<x-ref path="api/ops.go" symbol="func (s *Server) opsRecordViews(next http.Handler) http.Handler {"><code>opsRecordViews</code></x-ref>). Every write is recorded in the same transaction as the change. An operator can suspend or resume any tenant, with a reason and a passkey for that tenant, recorded in the platform's chain and the tenant's.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The tenant list, a storefront's photos, submissions and reports used to be read without a record. Status incidents and the CLI's operator changes were recorded in a second transaction after the change. And only partners could suspend.</p>
 </div>

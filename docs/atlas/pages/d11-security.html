@@ -5,7 +5,7 @@
   "part": "D",
   "order": 2,
   "summary": "How secrets and personal data are encrypted and erased, how a tenant brings its own key, how outbound traffic is fenced, the HTTP hardening, and the threat model the team reviews against.",
-  "verified": "6df1072d982748b1b65639bc63c6599676ded8c4",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
   "sources": [
     "engine/secrets/", "engine/byok/", "engine/pii/", "engine/egress/", "engine/httpsec/",
     "engine/runtime/sealing.go", "engine/runtime/scrub.go", "api/server.go", "cmd/taskiem/hardening.go",
@@ -31,7 +31,7 @@
 <p>Every read of a secret is recorded with why it was read, a <code>secret_reads</code> row in the same transaction as the decryption: which run, step and attempt, or which person (<x-ref path="engine/secrets/reads.go" symbol="func WithUse(ctx context.Context, u Use) context.Context"><code>WithUse</code></x-ref>). Each hour's reads are hashed into the tenant's audit log, so deleting a read afterwards shows.</p>
 <p>Rotating makes a new tenant-key version, and a background job re-wraps the data keys under it, 500 at a time; values themselves are never re-encrypted. Old versions are destroyed a day after nothing uses them.</p>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec puts the root key "in an HSM or KMS" (<x-ref path="docs/spec/architecture.md" symbol="wrapped in turn by a root key in an HSM or KMS">spec 14.1</x-ref>). The choices are OpenBao, or a key in the process's environment, which is the default (<code>TASKIEM_KMS=local</code>). A cloud KMS is supported only for a tenant's own key. A production install should set <code>TASKIEM_KMS=openbao</code>.</p>
+  <p>The spec puts the root key "in an HSM or KMS" (<x-ref path="docs/spec/architecture.md" symbol="wrapped in turn by a root key in an HSM or KMS">spec 14.1</x-ref>). The choices are OpenBao, or a key in the process's environment (<code>TASKIEM_KMS=local</code>, the default for development). A cloud KMS is supported only for a tenant's own key. Since the Part D fixes, a public HTTPS install refuses the local key at start unless <code>TASKIEM_ALLOW_LOCAL_KMS=true</code> says it is meant (<x-ref path="cmd/taskiem/serve.go" symbol="func (c config) kms() (secrets.KMS, error) {"><code>kms</code></x-ref>).</p>
 </div>
 
 <h2 id="security--byok">Bringing your own key</h2>
@@ -43,13 +43,16 @@
 <h2 id="security--personal-data">Personal data</h2>
 <p>A field marked as personal, in the workflow's inputs or in a connector's manifest, is sealed before an event is written. Each person, a <em>subject</em>, gets their own key, and the subject's id is a keyed hash of the value, so the same BVN always has the same subject and the same key (<x-ref path="engine/secrets/subjects.go" symbol="func (v *Vault) SealTx("><code>SealTx</code></x-ref>). <x-ref path="engine/runtime/sealing.go" symbol="func (s *Store) sealPayload("><code>sealPayload</code></x-ref> seals declared fields, then any copy of a known value it finds elsewhere in the payload, then values it recognises by shape: emails, Nigerian phone numbers, BVNs and NINs, card numbers, and account numbers beside a bank code. If a connector's personal fields cannot be known, the event is not written at all.</p>
 <p>Erasing a person destroys their key (<x-ref path="engine/secrets/subjects.go" symbol="func (v *Vault) Erase("><code>Erase</code></x-ref>). Every sealed copy, in events, archives and backups, then reads as <code>[erased]</code>. A trigger in the database makes this one-way, and the application cannot delete the key rows.</p>
-<div class="callout risk"><span class="callout-label">Risk: worth fixing</span>
+<p>A string built from personal values, such as <code>'ref-' + bvn</code> or <code>'Dear ' + name</code>, is sealed under each person it contains, one envelope inside another, so erasing any of them erases it (<x-ref path="engine/pii/pii.go" symbol="func sealDerived("><code>sealDerived</code></x-ref>). Erasure cannot be undone, so it is done by a person who confirms with a passkey bound to that subject, or an authenticator code. An API key cannot erase.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Derived strings used to be written to history in the clear, where erasure could not reach them, and erasure needed only the <code>pii.erase</code> permission. Both were found while writing this page.</p>
+</div>
+<div class="callout risk"><span class="callout-label">Risk</span>
   <ul>
-    <li><strong>A value built from personal data is stored in the clear.</strong> A step whose output is <code>'ref-' + bvn</code> or <code>'Dear ' + name</code> writes <code>ref-22298765432</code> and <code>Dear Adaeze Okafor</code> to the run's history unsealed, while a plain copy of the BVN is sealed. Checked by running it and reading the stored event. Sealing finds copies only by exact match, so erasure cannot reach these. Sealing any string that contains a known value would close most of it.</li>
-    <li><strong>An erased person cannot be processed again.</strong> Their subject's key is gone, so a new run with the same BVN fails with "subject erased". That may be intended, but nothing documents it, and a customer who leaves and later returns would need a way back.</li>
-    <li><strong>Erasure needs no second proof.</strong> It is irreversible, yet needs only <code>pii.erase</code>, while changing an encryption key needs a passkey or code.</li>
+    <li>Values shorter than 5 characters, and transformations that change the value itself (upper-casing a name, reformatting a number), are not recognised inside a string.</li>
+    <li><strong>An erased person cannot be processed again.</strong> Their subject's key is gone, so a new run with the same BVN fails with "subject erased". That may be intended, but it needs documenting, and a returning customer needs a way back.</li>
     <li>The spec says erasure "is never applied under a running workflow" (<x-ref path="docs/spec/architecture.md" symbol="it is never applied under a running workflow">spec 9.4</x-ref>). Nothing checks for runs in flight; a waiting run sees <code>[erased]</code> when it resumes.</li>
-    <li>Log lines are masked for emails, phones, BVNs, NINs and cards, but not names or account numbers, and not secret values. Keeping secrets out of logs depends on code not logging them.</li>
+    <li>Log lines are masked for emails, phones, BVNs, NINs and cards, but not names or account numbers, and not secret values.</li>
   </ul>
 </div>
 

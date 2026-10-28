@@ -5,7 +5,7 @@
   "part": "B",
   "order": 4,
   "summary": "The schema as the migrations leave it, row-level security driven by a tenant scope, the three database roles, the cross-tenant functions, and what the isolation does and does not protect against.",
-  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
   "sources": [
     "engine/db/", "cmd/taskiem/serve.go", "engine/publicweb/hosts_db_test.go",
     "docs/decisions/0004-tenant-isolation-rls.md", "docs/operations.md", "docs/spec/architecture.md"
@@ -25,8 +25,8 @@
   <tbody>
     <tr><td>Identity and tenancy</td><td><code>tenants</code>, <code>users</code>, <code>memberships</code>, <code>roles</code>, <code>api_keys</code>, <code>sessions</code>, <code>webauthn_credentials</code>, <code>sso_*</code>, <code>scim_*</code>, <code>partners</code>, <code>end_users</code></td><td><x-page id="identity-tenancy"/></td></tr>
     <tr><td>Definitions</td><td><code>workflows</code>, <code>workflow_versions</code>, <code>deployments</code>, <code>environments</code>, <code>triggers</code>, <code>variables</code>, <code>workflow_expansions</code></td><td><x-page id="workflow-definitions"/></td></tr>
-    <tr><td>Execution</td><td><code>runs</code>, <code>run_events</code>, <code>tasks</code>, <code>timers</code>, <code>signals</code>, <code>signal_waits</code>, <code>trigger_receipts</code>, <code>concurrency_slots</code>, <code>tenant_admission</code>, <code>run_replays</code></td><td><x-page id="durable-execution"/></td></tr>
-    <tr><td>Governance</td><td><code>approval_policies</code>, <code>approvals</code>, <code>approval_decisions</code>, <code>publish_requests</code>, <code>audit_log</code>, <code>audit_chain_heads</code>, <code>audit_anchors</code>, <code>subject_keys</code></td><td><x-page id="governance"/></td></tr>
+    <tr><td>Execution</td><td><code>runs</code>, <code>run_events</code>, <code>tasks</code>, <code>timers</code>, <code>signals</code>, <code>signal_waits</code>, <code>trigger_receipts</code>, <code>connector_rate_buckets</code>, <code>concurrency_slots</code>, <code>tenant_admission</code>, <code>run_replays</code></td><td><x-page id="durable-execution"/></td></tr>
+    <tr><td>Governance</td><td><code>approval_policies</code>, <code>approvals</code>, <code>approval_decisions</code>, <code>approval_history</code>, <code>publish_requests</code>, <code>audit_log</code>, <code>audit_chain_heads</code>, <code>audit_anchors</code>, <code>subject_keys</code></td><td><x-page id="governance"/></td></tr>
     <tr><td>Secrets and connectors</td><td><code>secrets</code>, <code>tenant_keys</code>, <code>tenant_byok_keys</code>, <code>connections</code>, <code>tenant_connectors</code>, <code>connector_drift</code>, <code>catalogue_*</code>, <code>egress_rules</code></td><td><x-page id="security"/>, <x-page id="connectors"/></td></tr>
     <tr><td>Channels</td><td><code>whatsapp_*</code> (17 tables), <code>telegram_*</code>, <code>ussd_*</code>, <code>email_*</code>, <code>reach_*</code>, <code>chat_sessions</code></td><td><x-page id="triggers-channels"/></td></tr>
     <tr><td>Money</td><td><code>money_*</code>, <code>customer_invoice*</code>, <code>receive_money</code>, <code>payout_accounts</code></td><td><x-page id="business-modules"/></td></tr>

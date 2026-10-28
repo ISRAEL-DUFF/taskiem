@@ -5,7 +5,7 @@
   "part": "A",
   "order": 2,
   "summary": "One webhook followed from the edge, through three transactions and a payment, to the end of the run: what is written where, and what happens when something fails along the way.",
-  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
   "sources": [
     "engine/ingest/hooks.go", "engine/ingest/webhook.go",
     "engine/runtime/store.go", "engine/runtime/worker.go", "engine/runtime/scheduler.go", "engine/runtime/decidecache.go",
@@ -134,7 +134,7 @@
 <div class="table-wrap"><table>
   <thead><tr><th>If this happens</th><th>What the engine does</th></tr></thead>
   <tbody>
-    <tr><td>The provider sends the webhook twice</td><td>The second insert into <code>trigger_receipts</code> conflicts. The caller gets the first run's id with <code>duplicate: true</code>, and nothing else is written.</td></tr>
+    <tr><td>The provider sends the webhook twice</td><td>The second insert into <code>trigger_receipts</code> conflicts. The caller gets the first run's id with <code>duplicate: true</code>, and nothing else is written. A receipt holds for 30 days, far past any provider's retries, and is then purged.</td></tr>
     <tr><td>The edge dies before T1 commits</td><td>Nothing was recorded and the caller got no <code>202</code>, so the provider retries. The dedup key makes that safe even if T1 had in fact committed.</td></tr>
     <tr><td>A process dies after an event is appended but before it is decided</td><td>The run is left with <code>decided_seq</code> behind <code>last_seq</code>. The sweep claims it within a tick and decides it.</td></tr>
     <tr><td>The worker dies before T2</td><td>Nothing was sent. The lease expires after 60 seconds, the task is claimed again, and the new attempt finds no intent and sends normally.</td></tr>

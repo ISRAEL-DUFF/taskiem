@@ -5,7 +5,7 @@
   "part": "D",
   "order": 3,
   "summary": "Approval policies and levels, separation of duties everywhere it is enforced, the hash-chained audit log and its anchors, retention and erasure, suspended tenants, and the compliance reports.",
-  "verified": "2668902126c7eea4efd8c63007ff591671dfae76",
+  "verified": "c7f9f76faafcecb67ccde261b0f28f90af48808d",
   "sources": [
     "engine/policy/", "engine/audit/", "engine/runtime/approvals.go", "engine/runtime/retention.go", "engine/decide/decide.go",
     "api/approvals.go", "api/governance.go", "api/reports.go", "api/partner.go", "engine/ingest/hooks.go",
@@ -44,13 +44,17 @@
     <tr><td>School cash and discount requests</td><td>Never the person who asked, with no single-person exception</td></tr>
   </tbody>
 </table></div>
-<div class="callout risk"><span class="callout-label">Risk</span>
+<p>The vote's audit entry is written in the vote's own transaction (<x-ref path="engine/runtime/approvals.go" symbol="Audit func(tx pgx.Tx, res VoteResult) error"><code>Vote.Audit</code></x-ref>): a vote that cannot be recorded in the chain is not counted. Nobody who approved one level of a step approves another, including after an escalation reopens the step. The built-in withdrawal policy forbids the person who asked from approving while another owner can.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Three gaps were found while writing this page and are fixed:</p>
   <ul>
-    <li><strong>After an escalation, an earlier approver can approve again.</strong> Escalating reopens the approval at its first level without clearing the decisions already made, and the check against approving two levels applies only above the first. Someone who approved level 2 can then take the escalated approval. Found by reading the code; not reproduced.</li>
-    <li><strong>The approval's audit entry is written after the vote, in its own transaction</strong> (<x-ref path="api/approvals.go" symbol="return auditTx(r, tx, &quot;approval.decide&quot;, run.String()+&quot;/&quot;+step, detail)">approvals.go</x-ref>). A failure between the two leaves an approved, continuing run with no <code>approval.decide</code> in the chain. The run's own history still records the decision until retention removes it. One WhatsApp path discards the error from that second write altogether.</li>
-    <li>The built-in withdrawal policy for receive-money lets the person who asked approve their own withdrawal, even in a business with several owners.</li>
-    <li>Separation compares accounts, so one person with two accounts in a tenant can make with one and approve with the other. Erasing personal data and operator writes need one person only.</li>
+    <li>The audit entry used to follow the vote in a second transaction, and one WhatsApp path dropped its error.</li>
+    <li>After an escalation, the distinct-approver check did not run.</li>
+    <li>The withdrawal policy allowed self-approval.</li>
   </ul>
+</div>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>Separation compares accounts, so one person with two accounts in a tenant can make with one and approve with the other. Operator writes need one person (with a passkey). A tenant whose withdrawal policy was written before this change keeps the old one until its withdrawal settings are next saved.</p>
 </div>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
   <p>Spec 9.1 says rotating secrets "can each require approval" like publishing and policies (<x-ref path="docs/spec/architecture.md" symbol="Publishing to production, editing approval policies, and rotating secrets can each require approval.">spec 9.1</x-ref>); there is no four-eyes setting for secrets. A policy's <code>channels</code> list is parsed and then ignored.</p>
@@ -74,12 +78,12 @@
 
 <h2 id="governance--retention">Retention and erasure</h2>
 <p>A run is kept for its workflow's <code>retention</code>, else the tenant's default, else 90 days, counted from when it ends and capped by the plan. Every 10 minutes the scheduler archives up to 500 runs past their date and then deletes them, writing <code>run.purge</code> to the chain (<x-ref path="engine/runtime/retention.go" symbol="func (s *Scheduler) PurgeExpired(ctx context.Context, limit int) (int, error) {"><code>PurgeExpired</code></x-ref>). The audit log is never deleted. Erasing a person is covered on the <x-page id="security--personal-data">Security</x-page> page.</p>
+<p>Each decision is also written, with the vote, to <code>approval_history</code>, which is never purged. It records who decided, for whom, the level, step-up, channel, policy and amount, but not the approval's subject, which can hold personal data and goes with the run. The approvals report reads it. A workflow's <code>settings.retention</code> must be at least a day.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The purge used to take the approval evidence with the run, so the report forgot who approved what after 90 days. And a retention of minutes was accepted.</p>
+</div>
 <div class="callout risk"><span class="callout-label">Risk</span>
-  <ul>
-    <li><strong>Approval evidence goes with the run.</strong> The purge deletes the run's approvals and decisions, and the approvals report reads only those. After 90 days, or less, the report no longer shows who approved what; only the chain does.</li>
-    <li>A workflow's <code>settings.retention</code> is not validated. A value that does not parse is ignored, and a very short one, minutes, is accepted, which would purge runs and their approval evidence almost at once.</li>
-    <li>Without an archive configured, nothing is purged and personal data stays in the database for good (still erasable).</li>
-  </ul>
+  <p>Without an archive configured, nothing is purged and personal data stays in the database for good (still erasable).</p>
 </div>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
   <p>The spec keeps the audit log for a "minimum 7 years, configurable" (<x-ref path="docs/spec/architecture.md" symbol="separate from the audit log (minimum 7 years, configurable)">spec 9.4</x-ref>). There is no setting: it is kept for ever.</p>
@@ -94,8 +98,9 @@
   <li>schedules are not fired, and the ones missed are skipped on resume.</li>
 </ul>
 <p>Runs already under way carry on to their end, including their payments, as <x-ref path="docs/governance.md">the governance guide</x-ref> says: stopping one halfway would be worse.</p>
-<div class="callout risk"><span class="callout-label">Risk</span>
-  <p>Only a partner can suspend, and only its sub-tenants. For any other tenant, the guide's "by the operator" means an SQL update by hand: there is no command, console action or audit entry for it.</p>
+<p>A Taskiem operator can suspend or resume any tenant from the operator console, with a reason and a passkey for that tenant, recorded in both audit chains (<x-ref path="api/ops_console.go" symbol="func (s *Server) opsTenantAction("><code>opsTenantAction</code></x-ref>).</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Suspending a tenant other than a partner's sub-tenant used to mean an SQL update by hand, with no audit.</p>
 </div>
 
 <h2 id="governance--reports">Compliance reports</h2>
