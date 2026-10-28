@@ -102,6 +102,7 @@ auth:
     pkce: true
     fields_from_callback: { accounts_server: accounts-server }
     fields_from_token: { access_token: access_token, api_domain: api_domain }
+  test: { action: ping }
 connection_hosts: ["*.books.example", "*.books.eu"]
 egress_hosts: ["${connection.api_domain}", "${connection.accounts_server}"]
 base_url: https://www.books.example
@@ -131,6 +132,10 @@ func TestConnectionHosts(t *testing.T) {
 	got := m.HostsFor(map[string]string{"api_domain": "https://www.books.eu", "accounts_server": "https://accounts.evil.example"})
 	if !slices.Equal(got, []string{"www.books.eu"}) {
 		t.Errorf("hosts for the connection: %v", got)
+	}
+	// Linking checks a callback field with the provider, so it needs a test.
+	if _, probs := Parse([]byte(strings.Replace(zohoLike, "  test: { action: ping }\n", "", 1))); !strings.Contains(strings.Join(probs, ";"), "fields_from_callback: needs auth.test") {
+		t.Errorf("no test: %v", probs)
 	}
 	// A server from a connection field needs the list of the provider's.
 	src := strings.Replace(zohoLike, `connection_hosts: ["*.books.example", "*.books.eu"]`+"\n", "", 1)

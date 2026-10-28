@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strconv"
@@ -173,6 +174,24 @@ func TestNoFilesystemNetworkOrStdlib(t *testing.T) {
 	_, err := run(t, `export default async () => { const m = await import("std"); return m.loadFile("/etc/passwd") }`, nil, Host{}, DefaultLimits)
 	if err == nil {
 		t.Error("dynamic import of std succeeded")
+	}
+}
+
+// Date is the run's logical time, the same as host.now(), so a retried or
+// forked step sees the clock the run had (spec 7).
+func TestDateIsTheLogicalClock(t *testing.T) {
+	at := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+	script, err := Compile(`export default (_, host) => ({date: new Date().toISOString(), now: Date.now(), host: host.now()})`, "javascript")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), script, nil, Host{Now: at}, DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := res.Output.(map[string]any)
+	if out["date"] != "2020-01-02T03:04:05.000Z" || fmt.Sprint(out["now"]) != fmt.Sprint(at.UnixMilli()) || out["host"] != "2020-01-02T03:04:05Z" {
+		t.Errorf("clock: %v", out)
 	}
 }
 

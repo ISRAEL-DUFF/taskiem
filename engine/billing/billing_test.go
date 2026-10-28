@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -241,6 +242,35 @@ func (w *world) checkoutAndPay(t *testing.T, tenant uuid.UUID, plan string) bill
 		t.Fatal(err)
 	}
 	return res
+}
+
+// A larger plan never takes in less: an ingest rate a plan leaves out is
+// the platform default, which once left Enterprise below Business.
+func TestPlansIngestGrowsWithTheTier(t *testing.T) {
+	c, err := billing.LoadConfig("../../deploy/plans.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans := slices.Clone(c.Plans)
+	slices.SortFunc(plans, func(a, b billing.Plan) int { return a.Sort - b.Sort })
+	d := runtime.DefaultLimits()
+	defaults := map[string]float64{"ingest_rate": d.IngestRate, "ingest_burst": float64(d.IngestBurst), "ingest_ceiling": d.IngestCeiling, "ingest_ceiling_burst": float64(d.IngestCeilingBurst)}
+	prev := map[string]float64{}
+	for _, p := range plans {
+		if !p.Active {
+			continue
+		}
+		for k, def := range defaults {
+			v := def
+			if n, ok := p.Limits[k].(float64); ok {
+				v = n
+			}
+			if v < prev[k] {
+				t.Errorf("%s: %s %v is below the smaller plan's %v", p.ID, k, v, prev[k])
+			}
+			prev[k] = v
+		}
+	}
 }
 
 func TestConfigValidation(t *testing.T) {

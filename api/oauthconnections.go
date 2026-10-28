@@ -332,6 +332,17 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", err)
 		return
 	}
+	// A field from the callback (QuickBooks' realmId) came through the
+	// person's browser, which can change it, and it can name the account
+	// the platform app's events route here (decision 0051). The provider
+	// is asked, with the new token, before anything is saved.
+	if len(c.Manifest.Auth.OAuth2.FieldsFromCallback) > 0 {
+		if err := s.testCredentials(ctx, req.Tenant, c, withMode(withGrantedToken(c.Manifest, creds, answer), req.Mode)); err != nil {
+			s.oauthRevoke(ctx, req.Tenant, c, prov, token)
+			s.oauthDone(w, r, "", err)
+			return
+		}
+	}
 	var id uuid.UUID
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error {
 		var err error
@@ -579,6 +590,25 @@ func tokenValue(answer map[string]any, path string) any {
 
 // applyCallbackFields fills the fields a provider names in the query it
 // sends the browser back with (QuickBooks' realmId, Zoho's location).
+// withGrantedToken lends the test the access token just granted, where the
+// connector keeps only the refresh token and would otherwise refresh
+// (QuickBooks): a copy, so nothing more is stored.
+func withGrantedToken(m *connector.Manifest, creds map[string]string, answer map[string]any) map[string]string {
+	out := maps.Clone(creds)
+	tok := asString(answer["access_token"])
+	has := func(k string) bool {
+		return slices.ContainsFunc(m.Auth.Fields, func(f connector.AuthField) bool { return f.Key == k })
+	}
+	if tok == "" || out["access_token"] != "" || !has("access_token") {
+		return out
+	}
+	out["access_token"] = tok
+	if n, ok := answer["expires_in"].(float64); ok && n > 0 && has("access_expires_at") {
+		out["access_expires_at"] = time.Now().Add(time.Duration(n) * time.Second).UTC().Format(time.RFC3339)
+	}
+	return out
+}
+
 func applyCallbackFields(m *connector.Manifest, creds map[string]string, q url.Values) {
 	if creds == nil || m.Auth.OAuth2 == nil {
 		return

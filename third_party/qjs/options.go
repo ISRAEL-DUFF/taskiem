@@ -47,6 +47,9 @@ type Option struct {
 	ProxyFunction      any
 	Stdout             io.Writer
 	Stderr             io.Writer
+	// Taskiem fork: Walltime, when set, is the script's wall clock (Date),
+	// so a code step sees the run's logical time rather than the host's.
+	Walltime func() (sec int64, nsec int32)
 }
 
 // EvalOption configures JavaScript evaluation behavior in QuickJS context.
