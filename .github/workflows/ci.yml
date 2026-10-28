@@ -25,11 +25,11 @@ jobs:
     env:
       TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
         with:
           version: v2.15.0
       - name: Start OpenBao (transit engine for the secrets tests)
@@ -66,9 +66,9 @@ jobs:
   typescript:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -98,12 +98,12 @@ jobs:
     env:
       TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -111,7 +111,7 @@ jobs:
       - run: pnpm --filter @taskiem/web build
       - run: pnpm --filter @taskiem/web exec playwright install --with-deps chromium
       - run: pnpm --filter @taskiem/web e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-traces
@@ -121,7 +121,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Build and start the stack
         run: docker compose -f deploy/docker-compose.yml up -d --build --wait taskiem
       - name: Bootstrap and sign in
@@ -135,12 +135,12 @@ jobs:
   licences:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -157,7 +157,7 @@ jobs:
   ai-eval:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
       - name: Does this change touch the AI layer?
@@ -173,7 +173,7 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "No change to the AI layer (engine/ai, evals, templates, tools/aieval, api/ai.go, api/repair.go, the checks, masking, shadow runs or connector manifests): the AI evaluation is skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         if: steps.changes.outputs.run == 'true'
         with:
           go-version-file: go.mod
@@ -186,7 +186,7 @@ jobs:
       - name: Summary
         if: always() && steps.changes.outputs.run == 'true'
         run: cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.changes.outputs.run == 'true'
         with:
           name: ai-eval
@@ -230,7 +230,7 @@ jobs:
       TASKIEM_VPS_PREVIEW_DOMAIN: shops.localhost
       TASKIEM_VPS_MAIL_DOMAIN: in.localhost
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: ShellCheck
         run: shellcheck deploy/vm/install.sh deploy/vm/taskiem-vps
       - name: Images (a good one, a renamed copy, and one that cannot start)
@@ -342,14 +342,14 @@ jobs:
       image: ${{ steps.name.outputs.image }}
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Image name and version
         id: name
         run: |
           echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
           echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = tag ]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"; fi
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         id: meta
         with:
           images: ${{ steps.name.outputs.image }}
@@ -357,13 +357,13 @@ jobs:
             type=raw,value=sha-${{ steps.name.outputs.sha }}
             type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         id: build
         with:
           context: .
@@ -375,7 +375,7 @@ jobs:
           sbom: true
       # cosign-installer v4: v3 cannot install cosign v3 (it fetches a .sig
       # cosign v3 no longer publishes).
-      - uses: sigstore/cosign-installer@v4.1.2 # no v4 major tag is published
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2 (no v4 major tag is published)
         with:
           cosign-release: v3.1.3 # the version taskiem-vps verifies with (deploy/vm/install.sh)
       - name: Sign the image
@@ -400,8 +400,8 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -423,20 +423,20 @@ jobs:
       contents: read
       id-token: write # keyless cosign signing via GitHub OIDC
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - name: Build
         run: make build VERSION=${GITHUB_SHA::12}
       - name: SBOM (SPDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json
           output-file: bin/taskiem.spdx.json
           upload-artifact: false
-      - uses: sigstore/cosign-installer@v4.1.2 # no v4 major tag is published
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2 (no v4 major tag is published)
         with:
           cosign-release: v3.1.3 # as the image is signed
       - name: Sign binary and SBOM
@@ -444,7 +444,7 @@ jobs:
           for f in bin/taskiem bin/taskiem.spdx.json; do
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: taskiem-${{ github.sha }}
           path: bin/
@@ -453,8 +453,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.19.0
       - name: Chart and generated manifests

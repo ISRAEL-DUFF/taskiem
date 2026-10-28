@@ -42,8 +42,8 @@ jobs:
       MIN_GATE: ${{ inputs.min_gate || '0.7' }}
       JUDGE: ${{ inputs.judge && 'true' || 'false' }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - name: Builder suite with the real model
@@ -66,7 +66,7 @@ jobs:
             echo "ANTHROPIC_API_KEY is not configured as a repository secret: the real-model evaluation was skipped (needs-people AI1)." >> "$GITHUB_STEP_SUMMARY"
           fi
           cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: ai-eval-real-model
