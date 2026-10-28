@@ -218,6 +218,16 @@ func migrate(args []string, stdout io.Writer) error {
 	for _, r := range results {
 		fmt.Fprintf(stdout, "migrate: applied %s (%s)\n", r.Source.Path, r.Duration.Round(1e6))
 	}
+	// The pods' own login (the Helm chart's migrate Job passes the pods'
+	// TASKIEM_DATABASE_URL here): made a member of taskiem_app, never the
+	// owner (docs/kubernetes.md#database-logins).
+	if appDSN := os.Getenv("TASKIEM_APP_DATABASE_URL"); appDSN != "" {
+		login, err := db.EnsureAppLogin(context.Background(), *dsn, appDSN)
+		if err != nil {
+			return fmt.Errorf("migrate: TASKIEM_APP_DATABASE_URL: %w", err)
+		}
+		fmt.Fprintf(stdout, "migrate: %s signs in as a member of taskiem_app\n", login)
+	}
 	return nil
 }
 

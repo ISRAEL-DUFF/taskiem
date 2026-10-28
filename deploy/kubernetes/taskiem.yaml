@@ -785,10 +785,16 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
-          # The Secret is read directly: a pre-install hook runs before the
-          # chart's ConfigMap exists.
+          # The Secrets are read directly: a pre-install hook runs before
+          # the chart's ConfigMap exists. Only this Job holds the owner's
+          # login; it makes the pods' login a member of taskiem_app.
           env:
             - name: TASKIEM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: taskiem-migrate
+                  key: TASKIEM_DATABASE_URL
+            - name: TASKIEM_APP_DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: taskiem

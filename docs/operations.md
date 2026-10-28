@@ -42,7 +42,8 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). |
+| `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). For `taskiem serve`, a login that is a member of `taskiem_app` and owns nothing; for `taskiem migrate`, the schema owner ([database roles](#database-roles)). |
+| `TASKIEM_APP_DATABASE_URL` | — | `taskiem migrate` only: the engine's login, which it creates or updates and grants `taskiem_app` after migrating ([database roles](#database-roles)). |
 | `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
 | `TASKIEM_PUBLIC_DATABASE_URL`, `TASKIEM_PUBLIC_DATABASE_ROLE`, `TASKIEM_PUBLIC_DATABASE_POOL` | `TASKIEM_DATABASE_URL`, `taskiem_public`, `5` | The [public host](public-host.md)'s own login (a member of `taskiem_public` only), the role it sets, and its pool's size |
 | `TASKIEM_SMS_*`, `TASKIEM_MESSAGE_FROM`, `TASKIEM_MESSAGE_HASH_KEY` | — | The platform's own SMS providers and no-reply address for [messages to people outside an organisation](messages.md); the hash key also turns on [updates on WhatsApp and Telegram](updates.md) for them |
@@ -146,7 +147,7 @@ CREATE ROLE taskiem LOGIN PASSWORD '...';
 GRANT taskiem_app TO taskiem;
 ```
 
-Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
+Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or let `taskiem migrate` do it: with `TASKIEM_APP_DATABASE_URL` set to the engine's URL, it creates that login after migrating (or sets its password), and grants it `taskiem_app`. It refuses the owner's own login, a superuser, a login that owns tables, and Taskiem's own role names. The owner needs `CREATEROLE`. The Helm chart's migration Job always does this ([Kubernetes](kubernetes.md#database-logins)).
 
 ## Webhooks
 
