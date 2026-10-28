@@ -142,6 +142,28 @@ func canonical(doc json.RawMessage) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// draftDoc is canonical for a draft saved to a workflow: a draft may be
+// incomplete, but it is a wd/v1 document, an object with a list of step
+// objects, or the builder cannot draw it.
+func draftDoc(doc json.RawMessage) ([]byte, error) {
+	out, err := canonical(doc)
+	if err != nil {
+		return nil, err
+	}
+	var root struct {
+		Steps *[]json.RawMessage `json:"steps"`
+	}
+	if len(out) == 0 || out[0] != '{' || json.Unmarshal(out, &root) != nil || root.Steps == nil {
+		return nil, fmt.Errorf("%w: definition must be a wd/v1 object with a steps list", errBadRequest)
+	}
+	for _, st := range *root.Steps {
+		if st[0] != '{' {
+			return nil, fmt.Errorf("%w: each of the definition's steps must be an object", errBadRequest)
+		}
+	}
+	return out, nil
+}
+
 func (p *Principal) id() uuid.UUID {
 	if p.EndUser != nil {
 		return p.EndUser.ID
@@ -270,7 +292,7 @@ func (s *Server) createWorkflow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: name is required", errBadRequest))
 		return
 	}
-	doc, err := canonical(req.Definition)
+	doc, err := draftDoc(req.Definition)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -332,7 +354,7 @@ func (s *Server) createVersion(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	doc, err := canonical(req.Definition)
+	doc, err := draftDoc(req.Definition)
 	if err != nil {
 		s.fail(w, r, err)
 		return

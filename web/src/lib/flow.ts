@@ -63,6 +63,46 @@ function setChild(s: Step, kind: string, idx: number, steps: Step[]): Step {
   return { ...s, config: next } as Step;
 }
 
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** What keeps a value typed into the JSON tab from being a definition the
+ * builder can draw (an object with a trigger and a list of steps, each an
+ * object with an id and a type, at every depth), or undefined when it can. */
+export function definitionProblem(v: unknown): string | undefined {
+  if (!isObject(v)) return "The definition must be an object ({ ... }).";
+  if (!isObject(v.trigger)) return 'The definition needs a "trigger" object.';
+  const list = (steps: unknown, where: string): string | undefined => {
+    if (!Array.isArray(steps)) return `${where} must be a list of steps ([ ... ]).`;
+    for (const [i, s] of steps.entries()) {
+      if (!isObject(s)) return `${where}: step ${i + 1} must be an object.`;
+      if (typeof s.id !== "string" || s.id === "") return `${where}: step ${i + 1} needs an "id".`;
+      if (typeof s.type !== "string") return `Step "${s.id}" needs a "type".`;
+      if (s.needs !== undefined && !(Array.isArray(s.needs) && s.needs.every((n) => typeof n === "string"))) return `Step "${s.id}": "needs" must be a list of step ids.`;
+      if (s.config !== undefined && !isObject(s.config)) return `Step "${s.id}": "config" must be an object.`;
+      const c = (s.config ?? {}) as Record<string, unknown>;
+      const inner = (key: string): string | undefined => {
+        if (c[key] === undefined) return undefined;
+        if (!Array.isArray(c[key])) return `Step "${s.id}": "${key}" must be a list.`;
+        for (const [j, p] of (c[key] as unknown[]).entries()) {
+          if (!isObject(p)) return `Step "${s.id}": ${key} ${j + 1} must be an object.`;
+          const bad = p.steps === undefined ? undefined : list(p.steps, `Step "${s.id}", ${key} ${j + 1}`);
+          if (bad) return bad;
+        }
+        return undefined;
+      };
+      let bad: string | undefined;
+      if (s.type === "branch") {
+        bad = inner("paths");
+        if (!bad && c.default !== undefined) bad = !isObject(c.default) ? `Step "${s.id}": "default" must be an object.` : c.default.steps === undefined ? undefined : list(c.default.steps, `Step "${s.id}", otherwise`);
+      } else if (s.type === "parallel") bad = inner("branches");
+      else if (s.type === "foreach" && c.steps !== undefined) bad = list(c.steps, `Step "${s.id}"`);
+      if (bad) return bad;
+    }
+    return undefined;
+  };
+  return list(v.steps, '"steps"');
+}
+
 /** Every step at every depth with the list it is in, outer lists first. */
 export function placed(steps: Step[], list: ListRef = ""): { step: Step; list: ListRef }[] {
   const out: { step: Step; list: ListRef }[] = [];

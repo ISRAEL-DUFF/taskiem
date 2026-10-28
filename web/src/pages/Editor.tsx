@@ -8,7 +8,7 @@ import { SchedulePicker } from "../canvas/PlainPickers";
 import { FormTriggerEditor } from "../canvas/FormEditor";
 import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
-import { connectIn, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
+import { connectIn, definitionProblem, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
 import { merge } from "../lib/schema";
 import { triggerWords } from "../lib/home";
 import { runLook } from "../lib/lists";
@@ -82,6 +82,8 @@ export function Editor() {
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<{ at: InsertAt; where: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+  // What keeps the JSON tab's text from being a definition the builder can draw.
+  const [jsonProblem, setJsonProblem] = useState<string>();
   // ?tab=settings opens on when it runs (a new form opens on its questions).
   const [tab, setTab] = useState<"build" | "runs" | "settings" | "code" | "json">(() => (params.get("tab") === "settings" ? "settings" : "build"));
   const [notice, setNotice] = useState("");
@@ -108,6 +110,8 @@ export function Editor() {
     past.current = [];
     future.current = [];
   }, [doc.data]);
+  // The JSON tab starts from the definition each time it opens.
+  useEffect(() => setJsonProblem(undefined), [tab]);
 
   const remember = () => {
     if (!def) return;
@@ -536,7 +540,20 @@ export function Editor() {
         <div className="builder-page">
           <div className="card">
             <p className="hint">The whole definition (wd/v1). Edits apply as you type, once the JSON is valid.</p>
-            <JsonInput value={def} onChange={(v) => v && typeof v === "object" && change(v as WorkflowDefinition)} rows={30} />
+            <JsonInput
+              value={def}
+              onChange={(v) => {
+                const problem = v === undefined ? "The definition is empty." : definitionProblem(v);
+                setJsonProblem(problem);
+                if (!problem) change(v as WorkflowDefinition);
+              }}
+              rows={30}
+            />
+            {jsonProblem && (
+              <div className="error" role="alert" data-testid="json-problem">
+                {jsonProblem} The last definition that worked is kept.
+              </div>
+            )}
           </div>
         </div>
       )}

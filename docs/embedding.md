@@ -159,7 +159,7 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 | `GET /me` | — | The end user, sub-tenant, permissions, the app's allowed connectors and templates, branding tokens, `white_label`, expiry |
 | `GET /connectors` | — | The connectors the app allows, with their actions and schemas, and the allowed gated step types |
 | `GET /workflows`, `GET /workflows/{wf}`, `GET /workflows/{wf}/versions/{v}` | `workflow.read` | As `/v1/workflows` |
-| `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems` |
+| `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems`, but must be an object with a `steps` list (400 otherwise) |
 | `GET /templates` | — | The app's allowed templates, `available` when the app also allows their connectors |
 | `POST /templates/{id}/instantiate` | `workflow.edit` | `{"params", "name"?}`; a draft from one of the app's templates ([templates](templates.md)) |
 | `POST /workflows/{wf}/versions` | `workflow.edit` | Save a version (three-way merge with `parent_digest`, as `/v1`) |

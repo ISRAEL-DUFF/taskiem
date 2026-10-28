@@ -17021,7 +17021,7 @@ paths:
       - Workflows
       summary: Create a workflow
       description: 'Creates a workflow with its first draft version. Drafts may be incomplete: the answer lists
-        their problems.'
+        their problems. A draft is still a definition: an object whose steps are a list of objects (400 otherwise).'
       security:
       - sessionCookie: []
         csrfHeader: []

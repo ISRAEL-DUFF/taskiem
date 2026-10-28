@@ -206,6 +206,13 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 		t.Fatal("expected problems for an unknown connector")
 	}
 	owner.must(422, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions/1/publish", nil)
+	// But it is a definition: an object with a list of steps, or the
+	// builder could not draw it.
+	for _, doc := range []string{`{"schema":"wd/v1","id":"x","name":"x"}`, `[]`, `"x"`, `{"steps":{}}`, `{"steps":null}`, `{"steps":[1]}`} {
+		owner.must(400, "POST", "/v1/workflows", map[string]any{"name": "draft", "definition": json.RawMessage(doc)})
+		owner.must(400, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions", map[string]any{"definition": json.RawMessage(doc)})
+	}
+	owner.must(201, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions", map[string]any{"definition": json.RawMessage(`{"schema":"wd/v1","steps":[]}`)})
 
 	wf := publishFlow(t, owner, loanFlow)
 	owner.must(204, "PUT", "/v1/workflows/"+wf+"/versions/1/layout", map[string]any{"ok": map[string]any{"x": 10, "y": 20}})
