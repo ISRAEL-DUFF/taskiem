@@ -365,7 +365,7 @@ A ready task has waited over 10 minutes; the alert's `pool` and `queue` labels s
 
 Leases expire instead of being completed or released: processes die mid-step.
 
-1. Restarts and OOM kills on worker pods; raise memory limits or lower `TASKIEM_WORKER_QUEUES` concurrency.
+1. Restarts and OOM kills on worker pods: raise their memory limits (`roles.worker.resources` in the chart). A worker process runs up to 16 steps at once on each queue it serves (4 on `sandbox` and `container`), and no setting changes that; `TASKIEM_WORKER_QUEUES` only chooses the queues. Size the limit for the queues a pod serves: four Python steps at the interpreter's 256 MiB cap need 1 GiB on top of the process. Outside the chart, a pod can also serve fewer queues (say `sandbox` on a Deployment of its own), which bounds what one pod holds.
 2. Pods killed before draining: the grace period is shorter than delay + drain (the chart refuses this; a manual manifest may not), or nodes are being drained without respecting the PodDisruptionBudget.
 3. A step that hangs past its lease without heartbeats: its logs; the step's `timeout`.
 

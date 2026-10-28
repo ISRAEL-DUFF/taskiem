@@ -179,9 +179,11 @@
   <li><strong>write-safety-scan.md.</strong> Its queries use real columns (<code>workflow_versions.state</code>, <code>definition</code>, <code>tenant_id</code>).</li>
   <li><strong>reliability.md.</strong> The canary's setup output, <code>taskiem canary probe</code>, <code>taskiem runs tail</code>, the metric names in every query, and the shutdown sequence all match. So do the two tests it names, <code>TestShutdownFlipsReadinessFirst</code> and <code>TestWorkerDrainsThenReleasesLeases</code>.</li>
 </ul>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The lease-expiry runbook used to say to "lower <code>TASKIEM_WORKER_QUEUES</code> concurrency", which no setting does: that variable names queues, and concurrency is fixed in <x-ref path="engine/runtime/worker.go" symbol="w.Concurrency = 16">the worker</x-ref> (16 per queue, 4 for <code>sandbox</code> and <code>container</code>). The runbook now states those numbers, says to size memory for them or serve fewer queues per pod, and a test holds it to the worker's defaults. Found while writing this page.</p>
+</div>
 <div class="callout risk"><span class="callout-label">Risk</span>
   <ul>
-    <li>The lease-expiry runbook says to "<x-ref path="docs/reliability.md" symbol="lower `TASKIEM_WORKER_QUEUES` concurrency">lower <code>TASKIEM_WORKER_QUEUES</code> concurrency</x-ref>". That variable names queues, not slots. Worker concurrency is fixed in <x-ref path="engine/runtime/worker.go" symbol="w.Concurrency = 16">the worker</x-ref> (16, or 4 for <code>sandbox</code> and <code>container</code>), and no setting changes it. The advice cannot be followed. Fix: add <code>TASKIEM_WORKER_CONCURRENCY</code>, or change the advice to fewer queues per pod.</li>
     <li>The stalled-scheduler runbook says a second scheduler replica is safe, and with the chart's default PVC it is not (see above).</li>
   </ul>
 </div>
