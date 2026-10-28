@@ -191,6 +191,10 @@ plans:
     limits:
       max_running_runs: 0
       worker_concurrency: 0
+      ingest_rate: 250
+      ingest_burst: 1250
+      ingest_ceiling: 500
+      ingest_ceiling_burst: 2000
       max_queued_runs: 100000
       max_workflows: 0
       max_retention_days: 2555   # up to 7 years (spec 16.1)
