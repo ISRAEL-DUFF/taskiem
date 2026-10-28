@@ -17,6 +17,8 @@ export interface ActionOptions {
   delivery_note?: string;
   /** The areas an order is delivered to, each with its fee (dispatch D1). */
   zones?: DeliveryZone[];
+  /** Customers choosing delivery may pay at the door (dispatch D4). */
+  pay_on_delivery?: boolean;
   /** A booking's online part of the price, 1 to 100 per cent; unset is all of it. */
   deposit_percent?: number;
   /** What a customer cancelling a paid booking gets back. */
@@ -63,7 +65,11 @@ export type OrderStatus =
   | "refund_due"
   | "no_show"
   | "price_changed"
-  | "refunded";
+  | "refunded"
+  // Dispatch (D2, D3): a rider holds it, is on the way, at the door.
+  | "dispatched"
+  | "on_the_way"
+  | "arrived";
 
 /** What an order costs at the table's prices now, waiting for the customer to agree (status price_changed). */
 export interface PriceChange {
@@ -79,6 +85,9 @@ export interface Customer {
   phone?: string;
   email?: string;
   address?: string;
+  /** Where a delivery goes beyond the address (dispatch D2): a landmark, and a map pin's link. */
+  landmark?: string;
+  pin?: string;
   message?: string;
   best_time?: string;
 }
@@ -96,7 +105,8 @@ export interface Order {
   /** The delivery area the customer chose, and its fee (part of the total). */
   zone?: string;
   delivery_kobo?: number;
-  payment: PaymentMode;
+  /** on_delivery: the customer pays at the door (dispatch D4). */
+  payment: PaymentMode | "on_delivery";
   payment_url?: string;
   paid_at?: string | null;
   /** How it was paid: card (its Paystack page), transfer (the account number given for it), other (money matched to it). */
@@ -231,6 +241,8 @@ export interface ActionForm {
   pickup: boolean;
   delivery: boolean;
   deliveryNote: string;
+  /** Customers choosing delivery may pay at the door. */
+  payOnDelivery: boolean;
   /** The delivery areas as typed: a name and a fee in naira. */
   zones: { name: string; fee: string }[];
   /** A booking's deposit in per cent; blank is the full price. */
@@ -248,6 +260,7 @@ export function actionForm(a: StorefrontAction): ActionForm {
     pickup: !!a.options.pickup,
     delivery: !!a.options.delivery,
     deliveryNote: a.options.delivery_note ?? "",
+    payOnDelivery: !!a.options.pay_on_delivery,
     zones: (a.options.zones ?? []).map((z) => ({
       name: z.name,
       fee: feeInput(z.fee_kobo),
@@ -305,6 +318,7 @@ export function actionRequest(kind: FormKind, f: ActionForm): ActionRequest {
   if (f.delivery && note) options.delivery_note = note;
   const zones = zoneList(f.zones);
   if (f.delivery && zones.length > 0) options.zones = zones;
+  if (f.delivery && f.payOnDelivery) options.pay_on_delivery = true;
   return {
     enabled: f.enabled,
     label: f.label.trim(),
@@ -405,6 +419,9 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: Tone }> =
       tone: "warn",
     },
     refunded: { label: "Refunded", tone: "muted" },
+    dispatched: { label: "With a rider", tone: "info" },
+    on_the_way: { label: "On the way", tone: "info" },
+    arrived: { label: "At the door", tone: "info" },
   };
 
 /** A status as the list shows it, with the badge's colour. */
@@ -526,6 +543,7 @@ export function paymentSummary(
       : "";
     return `${when}${deposit} · ${o.paid_at ? "paid" : "not paid"}`;
   }
+  if (o.kind === "order" && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
   if (o.kind !== "order" || o.payment === "none") return "No online payment";
   const when =
     o.payment === "at_order" ? "Pays when ordering" : "Pays after you accept";

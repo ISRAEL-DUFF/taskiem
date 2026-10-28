@@ -85,3 +85,38 @@ test("an owner adds, changes and retires a rider", async ({ page }) => {
   await page.getByRole("button", { name: "Show retired riders" }).click();
   await expect(page.getByTestId("rider").filter({ hasText: "Musa Bello" })).toBeVisible();
 });
+
+// Deliveries and paying riders (dispatch D2 to D5): the owner sets how
+// orders are offered, and sees what riders owe and are due.
+test("an owner sets how orders are offered and opens riders' pay", async ({ page }) => {
+  await signUp(page);
+  await page.goto("/storefront/deliveries");
+  await expect(page.getByRole("heading", { name: "Deliveries", exact: true })).toBeVisible();
+  await expect(page.getByText("No deliveries that day.")).toBeVisible();
+  await axeBoth(page, "/storefront/deliveries");
+
+  await page.getByRole("button", { name: "How orders are offered" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Ask me in chat who takes it").check();
+  await dialog.getByLabel("Minutes a rider has to accept").fill("0");
+  await expect(dialog.getByText("Riders have 1 to 60 minutes to accept an offer.")).toBeVisible();
+  await dialog.getByLabel("Minutes a rider has to accept").fill("10");
+  await dialog.getByLabel("Ask riders for a photo at the door").check();
+  await axeBoth(page, "how orders are offered");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  const s = await (await page.request.get("/v1/dispatch/settings", { headers: H })).json();
+  expect(s).toMatchObject({ mode: "ask", offer_minutes: 10, proof: true });
+
+  await page.goto("/storefront/riders");
+  await page.getByRole("link", { name: "Pay riders" }).click();
+  await expect(page.getByRole("heading", { name: "Pay riders", exact: true })).toBeVisible();
+  await expect(page.getByText("No rider owes you cash.")).toBeVisible();
+  await expect(page.getByText("Weekly pay is not set up yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pay riders now" })).toBeDisabled();
+  await axeBoth(page, "/storefront/riders/pay");
+  // Without a Taskiem wallet or another payments account, setting it up says so.
+  await page.getByRole("button", { name: "Set up weekly pay" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("dialog")).toContainText("turn on receiving money with Taskiem");
+});

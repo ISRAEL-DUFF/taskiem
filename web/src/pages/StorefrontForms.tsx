@@ -421,6 +421,17 @@ function OrderOptions({
         </Field>
       )}
       {form.delivery && <DeliveryAreas form={form} set={set} />}
+      {form.delivery && (
+        <label className="sf-radio">
+          <input
+            type="checkbox"
+            checked={form.payOnDelivery}
+            onChange={(e) => set({ payOnDelivery: e.target.checked })}
+          />
+          Customers may pay at the door: by bank transfer to an account
+          number the rider gets for the order, or in cash
+        </label>
+      )}
     </>
   );
 }

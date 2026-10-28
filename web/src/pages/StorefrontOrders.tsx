@@ -15,6 +15,7 @@ import {
   useLoad,
 } from "../ui";
 import { formatPrice, type Storefront } from "../lib/storefront";
+import { OrderDelivery } from "./Dispatch";
 import {
   KIND_LABEL,
   ORDER_FILTERS,
@@ -531,6 +532,13 @@ export function StorefrontOrder() {
               </>
             )}
           </section>
+          {o.kind === "order" && (
+            <OrderDelivery
+              reference={o.reference}
+              delivery={o.fulfilment === "delivery"}
+              onChanged={reload}
+            />
+          )}
           <OrderMoney
             payments={data?.payments}
             manage={can("invoice.manage")}
@@ -647,6 +655,18 @@ function CustomerDetails({ c }: { c: Customer }) {
       isMasked(c.email) ? c.email : <a href={`mailto:${c.email}`}>{c.email}</a>,
     ]);
   if (c.address) rows.push(["Address", c.address]);
+  if (c.landmark) rows.push(["Landmark", c.landmark]);
+  if (c.pin)
+    rows.push([
+      "Location",
+      c.pin.startsWith("https://") ? (
+        <a href={c.pin} target="_blank" rel="noreferrer">
+          Open the map
+        </a>
+      ) : (
+        c.pin
+      ),
+    ]);
   if (c.message) rows.push(["Message", c.message]);
   if (c.best_time) rows.push(["Best time", c.best_time]);
   if (rows.length === 0) return <p className="hint">No details given.</p>;

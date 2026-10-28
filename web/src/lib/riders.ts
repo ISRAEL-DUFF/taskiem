@@ -16,7 +16,14 @@ export interface Rider {
   /** The chat app they tapped in on, or sms until they do. */
   reached: "whatsapp" | "telegram" | "sms";
   /** What they said to Taskiem, whichever business they ride for. */
-  presence: { state: "free" | "busy" | "off"; until?: string; since?: string };
+  presence: { state: "free" | "busy" | "off"; until?: string; since?: string; open?: number };
+  /** Three offers unanswered today: passed over until they tap anything. */
+  not_answering?: boolean;
+  /** Their bank account as it may be shown; unset until added under Pay riders. */
+  bank?: string;
+  /** The average customers gave their deliveries, of ratings. */
+  rating?: number | null;
+  ratings?: number;
   invited_at?: string | null;
   created_at: string;
   retired_at?: string | null;
@@ -59,6 +66,8 @@ export function riderSub(r: Rider): string {
   const parts = [r.zones.length > 0 ? r.zones.join(", ") : "All areas"];
   if (r.fee_kobo > 0) parts.push(`${formatPrice(r.fee_kobo)} a delivery`);
   parts.push(reachedLine(r));
+  if (r.rating != null && r.ratings) parts.push(`rated ${r.rating.toFixed(1)} of 5 (${r.ratings})`);
+  if (r.not_answering) parts.push("not answering offers today");
   return parts.join(" · ");
 }
 

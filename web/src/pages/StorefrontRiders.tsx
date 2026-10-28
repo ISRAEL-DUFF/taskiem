@@ -37,9 +37,14 @@ export function StorefrontRiders() {
         description="The people who deliver your orders. They get your deliveries on WhatsApp, and tell Taskiem when they are working."
         actions={
           v && (
-            <button type="button" className="primary" onClick={() => setEditing("new")}>
-              Add a rider
-            </button>
+            <>
+              <Link className="button" to="/storefront/riders/pay">
+                Pay riders
+              </Link>
+              <button type="button" className="primary" onClick={() => setEditing("new")}>
+                Add a rider
+              </button>
+            </>
           )
         }
       />
