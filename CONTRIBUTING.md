@@ -48,7 +48,8 @@ Run `make check` before pushing. It covers the main steps of CI's `go` and `type
 - the image, built once, then the Compose stack and the whole one-VM deployment on it (`docker` and `vps` jobs);
 - the Helm chart and the manifests generated from it (`make chart`, then `git diff`), and the VM Compose file (`deploy` job);
 - the AI evaluation report (`ai-eval` job; the gate itself is `TestBaselinesHold` in `go test`);
-- the forward-only migration check below (`migrations` job).
+- the forward-only migration check below (`migrations` job);
+- every reference in the engineering atlas resolves (`node docs/atlas/atlas.mjs check`), and a change to its pages comes with the rebuilt `docs/atlas/site/index.html` (`atlas` job).
 
 On a merge to main or a `v*` tag it also signs and pushes the image and a signed binary; a `v*` tag must name a commit on main.
 
