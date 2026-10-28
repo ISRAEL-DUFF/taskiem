@@ -976,6 +976,10 @@
       "text": "Ìnáwó AI oṣù yìí tán kí àkọsílẹ̀ náà tó ṣetán. Ẹ ṣì lè kọ́ iṣẹ́ nínú ohun èlò wẹ́ẹ̀bù.",
       "reviewed": false
     },
+    "wa.build.changed": {
+      "text": "Ẹnìkan ti yí iṣẹ́ yìí padà láti ìgbà tí mo bẹ̀rẹ̀ (ẹ̀yà {version}), ní àwọn ibi kan náà, nítorí náà n kò fi pamọ́. Ẹ ṣe àyípadà náà nínú ohun èlò wẹ́ẹ̀bù{link}.",
+      "reviewed": false
+    },
     "wa.build.denied": {
       "text": "Ẹ kò lè kọ́ iṣẹ́ nínú {org} (ó nílò workflow.edit).",
       "reviewed": false

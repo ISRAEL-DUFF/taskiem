@@ -976,6 +976,10 @@
       "text": "The AI budget for this month finish before the draft ready. You still fit build workflows for the web app.",
       "reviewed": false
     },
+    "wa.build.changed": {
+      "text": "Somebody don change this workflow since I start the build (version {version}), for the same places, so I no save am. Make the change for the web app{link}.",
+      "reviewed": false
+    },
     "wa.build.denied": {
       "text": "You no fit build workflows for {org} (you need workflow.edit).",
       "reviewed": false

@@ -474,6 +474,12 @@ func (s *Server) waBuildSave(ctx context.Context, c *chat) error {
 	if errors.Is(err, errConflict) || errors.Is(err, pgx.ErrNoRows) {
 		return c.say(ctx, s, c.t("wa.build.gone"))
 	}
+	// A version saved since the build started changes the same parts:
+	// choosing between them is for the web app. Nothing was written, so
+	// the build is still a proposal.
+	if mc := (*mergeConflict)(nil); errors.As(err, &mc) {
+		return c.say(ctx, s, c.t("wa.build.changed", "version", strconv.Itoa(mc.latest), "link", s.waLink(c, "/workflows/"+wf.String())))
+	}
 	if err != nil {
 		return err
 	}

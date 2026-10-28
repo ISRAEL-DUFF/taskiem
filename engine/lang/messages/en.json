@@ -1219,6 +1219,11 @@
       "reviewed": true,
       "context": "AI budget ran out during the build"
     },
+    "wa.build.changed": {
+      "text": "Someone changed this workflow since I started the build (version {version}), in the same places, so I did not save it. Make the change in the web app{link}.",
+      "reviewed": true,
+      "context": "Saving a chat build met a newer version that changes the same steps; nothing saved; {link} is ' at <url>' or empty"
+    },
     "wa.build.denied": {
       "text": "You cannot build workflows in {org} (it takes workflow.edit).",
       "reviewed": true,

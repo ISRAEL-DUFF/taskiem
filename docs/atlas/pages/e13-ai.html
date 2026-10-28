@@ -52,8 +52,8 @@
 <div class="callout"><span class="callout-label">Resolved</span>
   <p>Saving a build used to write the model's whole definition as the next version with no check that its base was still the latest, so edits saved while the build ran, or before it was saved, were silently undone. The builder's context also had a place for startable workflows that was never filled, so the model was not told which workflows a subflow step could start. Both were found while writing this page.</p>
 </div>
-<div class="callout risk"><span class="callout-label">Risk</span>
-  <p>Saving from WhatsApp or Telegram sends no resolutions, and a merge conflict there is not one of the errors the chat answers in words: it falls through as an error (<x-ref path="api/whatsapp_build.go" symbol="errors.Is(err, errConflict) || errors.Is(err, pgx.ErrNoRows)">waBuildSave</x-ref>), so the person gets no reply that says to finish the save on the web.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Saving from WhatsApp or Telegram sends no resolutions, and a merge conflict there used to fall through as an error, so the person got no reply. The chat now answers that someone changed the workflow since the build started, with a link to make the change on the web; nothing is written, and the build stays a proposal (<x-ref path="api/whatsapp_build.go" symbol="if mc := (*mergeConflict)(nil); errors.As(err, &amp;mc) {">waBuildSave</x-ref>).</p>
 </div>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
   <p>Spec 12.1 starts from "the canvas, CLI, or WhatsApp" (<x-ref path="docs/spec/architecture.md" symbol="The user describes the goal in the canvas, CLI, or WhatsApp.">spec 12.1</x-ref>). The <code>taskiem</code> command has no build command. Telegram, which the spec does not name, has one.</p>

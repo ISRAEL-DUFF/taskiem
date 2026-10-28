@@ -976,6 +976,10 @@
       "text": "Mmefu AI nke ọnwa a gwụrụ tupu mbido ahụ adị njikere. Ị ka nwere ike iwu usoro ọrụ na ngwa weebụ.",
       "reviewed": false
     },
+    "wa.build.changed": {
+      "text": "Onye ọzọ gbanwere usoro ọrụ a kemgbe m malitere ịrụ ya (ụdị {version}), n'otu ebe ahụ, ya mere echekwaghị m ya. Mee mgbanwe ahụ na ngwa weebụ{link}.",
+      "reviewed": false
+    },
     "wa.build.denied": {
       "text": "Ị pụghị iwu usoro ọrụ na {org} (ọ chọrọ workflow.edit).",
       "reviewed": false
