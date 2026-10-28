@@ -4,24 +4,72 @@
   "title": "Security architecture",
   "part": "D",
   "order": 2,
-  "status": "planned",
-  "summary": "Envelope encryption and bring-your-own-key, personal-data sealing and crypto-shredding, the egress guard, HTTP hardening, and leak detection.",
-  "scope": [
-    "Secrets: data keys, tenant keys, the root key in OpenBao or a KMS",
-    "Bring your own key: rotation, re-wrapping, parking when a key is lost",
-    "Personal data sealed in history, subject keys, erasure",
-    "The egress guard: allow-lists, SSRF defences, the explicit proxy (decision 0028)",
-    "HTTP security headers and rate limits",
-    "Scrubbing secrets out of outputs",
-    "The threat model and self-review"
-  ],
+  "summary": "How secrets and personal data are encrypted and erased, how a tenant brings its own key, how outbound traffic is fenced, the HTTP hardening, and the threat model the team reviews against.",
+  "verified": "6df1072d982748b1b65639bc63c6599676ded8c4",
   "sources": [
-    "engine/secrets/",
-    "engine/byok/",
-    "engine/pii/",
-    "engine/egress/",
-    "engine/httpsec/",
-    "docs/security/"
+    "engine/secrets/", "engine/byok/", "engine/pii/", "engine/egress/", "engine/httpsec/",
+    "engine/runtime/sealing.go", "engine/runtime/scrub.go", "api/server.go", "cmd/taskiem/hardening.go",
+    "docs/security/", "docs/decisions/0028-explicit-egress-proxy.md", "docs/spec/architecture.md"
   ]
 }
 -->
+<h2>What is protected, and against whom</h2>
+<p>A tenant trusts Taskiem with three kinds of thing: credentials (API keys, OAuth tokens, database passwords), the personal data that passes through its runs (BVNs, account numbers, names), and the ability to call out to the world. The design keeps each of those safe from the other tenants, from someone who gets a copy of the database, and from the tenant's own workflows reaching places they should not. The <x-ref path="docs/security/threat-model.md">threat model</x-ref> lists 19 boundaries, B1 to B19, and says what holds at each; a change that adds an entry point, a role, a secret store or a way to run tenant code updates it in the same pull request.</p>
+
+<h2 id="security--keys">Keys</h2>
+<p>Nothing secret is stored in the clear. Every value is encrypted under its own key, and keys are wrapped by keys above them:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Key</th><th>Encrypts</th><th>Kept</th></tr></thead>
+  <tbody>
+    <tr><td>Data key, one per value</td><td>The value: AES-256-GCM, bound to its tenant, environment, name and id, so a ciphertext copied to another row will not open</td><td>Beside the value, wrapped</td></tr>
+    <tr><td>Tenant key (KEK), versioned</td><td>Each data key, bound to the tenant</td><td><code>tenant_keys</code>, wrapped by the root key</td></tr>
+    <tr><td>Root key</td><td>Each tenant key</td><td>OpenBao's transit engine, or for a small install a key in the process's environment</td></tr>
+    <tr><td>The tenant's own key (BYOK)</td><td>The tenant key, a second time</td><td>The tenant's KMS: OpenBao or Vault, AWS KMS, Google Cloud KMS or Azure Key Vault</td></tr>
+  </tbody>
+</table></div>
+<x-code path="engine/secrets/keys.go" start="func (v *Vault) encrypt(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, env, binding string, value []byte)" caption="one value, one data key"/>
+<p>Every read of a secret is recorded with why it was read, a <code>secret_reads</code> row in the same transaction as the decryption: which run, step and attempt, or which person (<x-ref path="engine/secrets/reads.go" symbol="func WithUse(ctx context.Context, u Use) context.Context"><code>WithUse</code></x-ref>). Each hour's reads are hashed into the tenant's audit log, so deleting a read afterwards shows.</p>
+<p>Rotating makes a new tenant-key version, and a background job re-wraps the data keys under it, 500 at a time; values themselves are never re-encrypted. Old versions are destroyed a day after nothing uses them.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec puts the root key "in an HSM or KMS" (<x-ref path="docs/spec/architecture.md" symbol="wrapped in turn by a root key in an HSM or KMS">spec 14.1</x-ref>). The choices are OpenBao, or a key in the process's environment, which is the default (<code>TASKIEM_KMS=local</code>). A cloud KMS is supported only for a tenant's own key. A production install should set <code>TASKIEM_KMS=openbao</code>.</p>
+</div>
+
+<h2 id="security--byok">Bringing your own key</h2>
+<p>A tenant can add its own key, so that revoking it in its own KMS makes its data unreadable to Taskiem (<x-ref path="engine/secrets/byok.go" symbol="func (v *Vault) EnableBYOK("><code>EnableBYOK</code></x-ref>). Taskiem first proves it can wrap and unwrap with the key, then wraps a new tenant-key version twice, by the root key and then by the tenant's, so the tenant's KMS only ever sees ciphertext. Every minute a job asks the tenant's KMS to unwrap a test value. After two failures in a row the key is marked unavailable: the API answers <code>503 key_unavailable</code>, and steps that need a secret are parked before anything is sent, then resume by themselves when the key comes back.</p>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>Revocation is not instant. Unwrapped tenant keys are cached in memory for 5 minutes by default (up to an hour) in every process, so a revoked key keeps working that long. Versions made before BYOK was turned on stay readable without the tenant's key until the re-wrap finishes, and a database backup taken before then stays readable without it until the backup expires. <x-ref path="docs/byok.md">The BYOK guide</x-ref> says so.</p>
+</div>
+
+<h2 id="security--personal-data">Personal data</h2>
+<p>A field marked as personal, in the workflow's inputs or in a connector's manifest, is sealed before an event is written. Each person, a <em>subject</em>, gets their own key, and the subject's id is a keyed hash of the value, so the same BVN always has the same subject and the same key (<x-ref path="engine/secrets/subjects.go" symbol="func (v *Vault) SealTx("><code>SealTx</code></x-ref>). <x-ref path="engine/runtime/sealing.go" symbol="func (s *Store) sealPayload("><code>sealPayload</code></x-ref> seals declared fields, then any copy of a known value it finds elsewhere in the payload, then values it recognises by shape: emails, Nigerian phone numbers, BVNs and NINs, card numbers, and account numbers beside a bank code. If a connector's personal fields cannot be known, the event is not written at all.</p>
+<p>Erasing a person destroys their key (<x-ref path="engine/secrets/subjects.go" symbol="func (v *Vault) Erase("><code>Erase</code></x-ref>). Every sealed copy, in events, archives and backups, then reads as <code>[erased]</code>. A trigger in the database makes this one-way, and the application cannot delete the key rows.</p>
+<div class="callout risk"><span class="callout-label">Risk: worth fixing</span>
+  <ul>
+    <li><strong>A value built from personal data is stored in the clear.</strong> A step whose output is <code>'ref-' + bvn</code> or <code>'Dear ' + name</code> writes <code>ref-22298765432</code> and <code>Dear Adaeze Okafor</code> to the run's history unsealed, while a plain copy of the BVN is sealed. Checked by running it and reading the stored event. Sealing finds copies only by exact match, so erasure cannot reach these. Sealing any string that contains a known value would close most of it.</li>
+    <li><strong>An erased person cannot be processed again.</strong> Their subject's key is gone, so a new run with the same BVN fails with "subject erased". That may be intended, but nothing documents it, and a customer who leaves and later returns would need a way back.</li>
+    <li><strong>Erasure needs no second proof.</strong> It is irreversible, yet needs only <code>pii.erase</code>, while changing an encryption key needs a passkey or code.</li>
+    <li>The spec says erasure "is never applied under a running workflow" (<x-ref path="docs/spec/architecture.md" symbol="it is never applied under a running workflow">spec 9.4</x-ref>). Nothing checks for runs in flight; a waiting run sees <code>[erased]</code> when it resumes.</li>
+    <li>Log lines are masked for emails, phones, BVNs, NINs and cards, but not names or account numbers, and not secret values. Keeping secrets out of logs depends on code not logging them.</li>
+  </ul>
+</div>
+
+<h2 id="security--egress">Outbound traffic</h2>
+<p>Every call out of Taskiem made for a tenant goes through <x-ref path="engine/egress/egress.go" symbol="func (g *Guard) DialContext("><code>egress.Guard</code></x-ref>: connector calls, HTTP steps, code steps' <code>fetch</code>, alerts, partner webhooks, and calls to a tenant's KMS. A connector may reach only its manifest's hosts, and an HTTP step only its environment's allow-list. The guard resolves the name once, refuses if any address is private, loopback, link-local, a cloud metadata address, or one of the IPv6 forms that hide an IPv4 address, and then dials the address it checked, not the name, so a second DNS answer cannot redirect it. Redirects are followed at most five times, each checked the same way, and proxies from the environment are ignored.</p>
+<x-code path="engine/egress/egress.go" start="var blockedPrefixes = func() []netip.Prefix {" caption="ranges refused besides private and loopback"/>
+<p>Where a network requires an explicit proxy, Taskiem connects through it by IP address with <code>CONNECT</code>, never by name, so the proxy cannot resolve the name differently (<x-ref path="docs/decisions/0028-explicit-egress-proxy.md">decision 0028</x-ref>). Each connection is logged with the tenant, purpose, host, address and port.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec's egress "logs every request" (<x-ref path="docs/spec/architecture.md" symbol="All outbound connector and code traffic goes through an **egress proxy**">spec 14.2</x-ref>). It logs every connection, so several requests over one kept-alive connection log once. Some platform calls do not go through the guard, by design: the OpenBao client, billing, Git, and a self-hosted model. A few IPv6 forms are not on the list (<code>::ffff:0:0/96</code> and two new documentation ranges); reaching anything through them needs a translation path a normal Linux host does not have.</p>
+</div>
+
+<h2 id="security--http">The HTTP surface</h2>
+<p><x-ref path="engine/httpsec/httpsec.go" symbol="func Set(h http.Header) {"><code>httpsec.Set</code></x-ref> gives every API and edge response <code>nosniff</code>, <code>no-referrer</code>, <code>X-Frame-Options: DENY</code> and a content security policy that allows nothing but the app's own origin and refuses framing. Embedded frames get a policy naming the partner's allowed origins, and public pages a stricter one with no inline script or style. HSTS is a year, sent when the public URL is HTTPS.</p>
+<p>Rate limits are token buckets in each API process: sign-in, password reset and re-authentication at a burst of 10 and then one every 6 seconds, per IP and per email; passkey challenges and SSO starts at a burst of 30; and ingest per tenant by plan (<x-page id="triggers-channels--rates">Triggers and channels</x-page>).</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>The spec has "Rate limits per IP, user, API key, and tenant" (<x-ref path="docs/spec/architecture.md" symbol="Rate limits per IP, user, API key, and tenant.">spec 14.3</x-ref>). Limits exist on the endpoints above, but there is no general limit per API key or per tenant on the rest of <code>/v1</code>, and every limit is per process, so several API replicas allow several times the rate. The app's policy also allows inline styles.</p>
+</div>
+
+<h2 id="security--scrubbing">Secrets in outputs</h2>
+<p>A step's output, logs and error are scrubbed of every secret the step could read before they are written (<x-ref path="engine/runtime/scrub.go" symbol="func scrubSecrets(payload []byte, secrets []string) ([]byte, error) {"><code>scrubSecrets</code></x-ref>). The <x-page id="sandbox--secrets">Sandbox</x-page> page covers what it catches and what it does not.</p>
+
+<h2 id="security--review">Self-review</h2>
+<p>Security is reviewed in rounds, recorded in <x-ref path="docs/security/self-review.md"><code>self-review.md</code></x-ref>. Four reviewers each take one area: sign-in and sessions; tenancy and authorisation; untrusted input, egress and sandboxes; secrets, personal data and audit. Findings are numbered by round (S1 to S35, then K1 to K8 for BYOK, then R1 to R10), each with a severity, a status and, when fixed, the regression test that proves it. What a round leaves open is carried to the next. Two are open now: R7, undeploying without a second person, and R9. The repository has no secret scanner such as gitleaks; the linter's security rules and signed, SBOM-listed images in CI are what exist.</p>
