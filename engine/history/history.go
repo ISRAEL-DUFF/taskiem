@@ -33,6 +33,10 @@ const (
 	RunCompleted          = "RunCompleted"
 	RunFailed             = "RunFailed"
 	RunCancelled          = "RunCancelled"
+	// CancelRequested: a person cancelled the run with its effects reversed.
+	// Decide withdraws unfinished steps, waits for writes under way, runs the
+	// completed steps' compensations newest first, then cancels the run.
+	CancelRequested = "CancelRequested"
 )
 
 // Origins say which component wrote an event. Only "decide" events must be
@@ -60,6 +64,13 @@ type Event struct {
 // IsTerminal reports whether the event ends the run.
 func (e Event) IsTerminal() bool {
 	return e.Type == RunCompleted || e.Type == RunFailed || e.Type == RunCancelled
+}
+
+// CancelPayload is a CancelRequested or RunCancelled payload: who cancelled
+// the run and, once it ends, the steps whose compensations ran.
+type CancelPayload struct {
+	By       string   `json:"by"`
+	Reversed []string `json:"reversed,omitempty"`
 }
 
 // RunStartedPayload is recorded by ingest.

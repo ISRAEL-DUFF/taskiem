@@ -46,6 +46,7 @@ export function RunPage() {
   const [streamed, setStreamed] = useState<RunEvent[]>([]);
   const [view, setView] = useState<"canvas" | "timeline">("canvas");
   const [resolving, setResolving] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const act = useAction();
   const advanced = useAdvanced();
   const { me } = useAuth();
@@ -93,6 +94,7 @@ export function RunPage() {
   const ended = events.find((e) => ["RunCompleted", "RunFailed", "RunCancelled"].includes(e.type));
   const ENDED: Record<string, string> = { RunCompleted: "completed", RunFailed: "failed", RunCancelled: "cancelled" };
   const shownStatus = (ended && ENDED[ended.type]) || r.status;
+  const reversing = events.some((e) => e.type === "CancelRequested");
   // A run a form started: the submission, masked (trigger.form).
   const started = events.find((e) => e.type === "RunStarted")?.payload as { trigger?: { type?: string; form?: Record<string, unknown> } } | undefined;
   const form = started?.trigger?.form;
@@ -192,6 +194,9 @@ export function RunPage() {
             </>
           )}
         </dl>
+        {reversing && !TERMINAL.has(shownStatus) && (
+          <div className="notice">Cancelling: steps already under way are finishing, then the steps this run completed are reversed, newest first.</div>
+        )}
         {r.status === "needs_reconciliation" && (
           <div className="notice">
             A step's outcome is unknown and cannot be safely retried. Check with the provider, then resolve the parked step below.
@@ -202,12 +207,8 @@ export function RunPage() {
         <Link className="button" to={`/workflows/${r.workflow_id}?v=${r.version}`}>
           Open the workflow
         </Link>
-        {can("run.cancel") && !TERMINAL.has(shownStatus) && (
-          <button
-            className="danger"
-            disabled={act.busy}
-            onClick={() => confirm("Cancel this run? Steps already sent to a provider still record their results.") && void act.run(async () => (await post(`/v1/runs/${id}/cancel`), reload()), "Run cancelled")}
-          >
+        {can("run.cancel") && !TERMINAL.has(shownStatus) && !reversing && (
+          <button className="danger" disabled={act.busy} onClick={() => setCancelling(true)}>
             Cancel run
           </button>
         )}
@@ -293,6 +294,7 @@ export function RunPage() {
         </table>
       </details>
       {resolving && <Resolve run={id} step={resolving} onClose={() => setResolving(null)} onDone={() => (setResolving(null), setLive(true), reload())} />}
+      {cancelling && <CancelRun run={id} onClose={() => setCancelling(false)} onDone={() => (setCancelling(false), setLive(true), reload())} />}
     </>
   );
 }
@@ -360,6 +362,32 @@ function StepCard({ row, plainError, reads, canResolve, onResolve }: { row: Step
         </details>
       )}
     </div>
+  );
+}
+
+// Cancelling reverses what the run did by default (decision 0054): its
+// completed steps' compensations run, newest first, before it ends.
+function CancelRun({ run, onClose, onDone }: { run: string; onClose: () => void; onDone: () => void }) {
+  const act = useAction();
+  const cancel = (reverse: boolean) => void act.run(async () => (await post(`/v1/runs/${run}/cancel`, { reverse }), onDone()), reverse ? "Cancelling the run" : "Run cancelled");
+  return (
+    <Modal title="Cancel this run?" onClose={onClose}>
+      <p>Nothing new starts. Steps already sent to a provider finish and record their results.</p>
+      <p>
+        <strong>Cancel and reverse</strong> then runs the reversal of every completed step that has one (a refund for a payment, for example), newest first, and ends the run.{" "}
+        <strong>Cancel without reversing</strong> ends it now and leaves what it did as it is.
+      </p>
+      <ErrorBox error={act.error} />
+      <div className="toolbar">
+        <button className="danger" disabled={act.busy} onClick={() => cancel(true)}>
+          Cancel and reverse
+        </button>
+        <button disabled={act.busy} onClick={() => cancel(false)}>
+          Cancel without reversing
+        </button>
+        <button onClick={onClose}>Keep it running</button>
+      </div>
+    </Modal>
   );
 }
 

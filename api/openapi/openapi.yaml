@@ -8721,6 +8721,12 @@ paths:
           type: string
           format: uuid
         description: Run id
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
           description: Cancelled
@@ -13979,6 +13985,7 @@ paths:
       tags:
       - Runs
       summary: Cancel a run
+      description: 'By default the run''s completed steps are reversed by their compensations, newest first, and the answer''s status is `running` until they have run; `reverse: false` ends the run at once.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -13993,6 +14000,12 @@ paths:
           type: string
           format: uuid
         description: Run id
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequest'
       responses:
         '200':
           description: Cancelled
@@ -30552,6 +30565,14 @@ components:
           type: string
         count:
           type: integer
+      additionalProperties: false
+    CancelRequest:
+      type: object
+      properties:
+        reverse:
+          type: boolean
+          default: true
+          description: Run the compensations of the run's completed steps, newest first, before the run ends; it ends once writes already under way have settled. `false` ends the run now and leaves completed steps as they are.
       additionalProperties: false
     ResolveRequest:
       type: object

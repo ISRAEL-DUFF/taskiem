@@ -508,6 +508,7 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 	if p.mode == modeSend {
 		result = w.send(ctx, p)
 	}
+	result = capOutput(p, result)
 	if w.Hooks != nil && w.Hooks.AfterCall != nil {
 		if err := w.Hooks.AfterCall(c.step, c.attempt); err != nil {
 			return nil
@@ -552,6 +553,37 @@ func observeRunStart(hist []history.Event, c claim, now time.Time) {
 func failed(c claim, kind, msg, next string) history.Event {
 	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: kind, Message: msg, Next: next}})
 	return history.Event{Type: history.StepFailed, StepID: c.step, Attempt: c.attempt, Payload: raw}
+}
+
+// maxStepOutput bounds a step's output kept in its history (spec 4.9:
+// 256 KB inline). A larger one would be copied into the decision cache and
+// every replay of the run; until outputs over it move to object storage, a
+// step that returns one fails. http steps cut their response body to the
+// same size instead (maxHTTPBody), and container steps keep to their own
+// limits.output_bytes.
+const maxStepOutput = 256 << 10
+
+// capOutput turns a completion whose output is over maxStepOutput into a
+// failure that says so. A write has already happened, so it parks for an
+// operator, who records it as completed with a smaller output, rather than
+// failing in a way someone could take for "not paid".
+func capOutput(p *plan, ev history.Event) history.Event {
+	if ev.Type != history.StepCompleted || p.stepType == "http" || p.stepType == "container" {
+		return ev
+	}
+	var cp struct {
+		Output json.RawMessage `json:"output"`
+	}
+	if err := json.Unmarshal(ev.Payload, &cp); err != nil || len(cp.Output) <= maxStepOutput {
+		return ev
+	}
+	msg := fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10)
+	if !p.class.IsWrite() {
+		return failed(p.c, "output_too_large", msg, "fail")
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "output_too_large", Next: "park", MaybeApplied: true,
+		Message: msg + ". The provider accepted the call: record the step as completed with the output later steps need"}})
+	return history.Event{Type: history.StepFailed, StepID: ev.StepID, Attempt: ev.Attempt, Payload: raw}
 }
 
 func completedEvent(c claim, out any, reconciled bool) history.Event {

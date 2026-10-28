@@ -210,6 +210,35 @@ func TestForeachSeedGivesEachItemItsOwnKey(t *testing.T) {
 	}
 }
 
+// A cancel that reverses waits for a write already under way: once it
+// completes, it is compensated with the rest, newest first, and the run is
+// cancelled. A step that had not started is withdrawn and never runs.
+func TestCancelWaitsForWritesUnderWayThenReverses(t *testing.T) {
+	s := newSim(t, wdDoc(`
+	  {"id":"a","type":"connector","connector":"paystack@1","action":"transfer","compensate":{"action":"reverse_transfer","input":{"ref":"=steps.a.output.ref"}}},
+	  {"id":"b","type":"connector","connector":"paystack@1","action":"transfer","needs":["a"],"compensate":{"action":"reverse_transfer","input":{"ref":"=steps.b.output.ref"}}},
+	  {"id":"c","type":"connector","connector":"paystack@1","action":"transfer","needs":["b"]}`, ""), map[string]any{})
+	s.complete("a", map[string]any{"ref": "ra"})
+	s.append(history.EffectIntent, "b", 1, history.IntentPayload{Key: "k"}, history.OriginWorker)
+	out := s.external(history.CancelRequested, "", 0, history.CancelPayload{By: "u1"}, history.OriginAPI)
+	if len(out) != 1 || out[0].Type != history.StepCancelled || out[0].StepID != "b" {
+		t.Fatalf("on cancel: %v", out)
+	}
+	if s.has(history.RunCancelled, "") || s.has(history.CompensationStarted, "") {
+		t.Fatalf("b's write is under way, nothing may be reversed yet: %s", s.types())
+	}
+	s.complete("b", map[string]any{"ref": "rb"})
+	if got := s.pendingTasks(); !reflect.DeepEqual(got, []string{"compensate:b"}) {
+		t.Fatalf("pending %v: %s", got, s.types())
+	}
+	s.complete("compensate:b", nil)
+	s.complete("compensate:a", nil)
+	end := s.last()
+	if end.Type != history.RunCancelled || !strings.Contains(string(end.Payload), `"reversed":["b","a"]`) || s.has(history.StepScheduled, "c") {
+		t.Errorf("end %s %s: %s", end.Type, end.Payload, s.types())
+	}
+}
+
 func TestForeachFailureStopsNewIterations(t *testing.T) {
 	s := newSim(t, wdDoc(`
 	  {"id":"f","type":"foreach","config":{"items":"=[1,2,3,4]","max_concurrency":2,"steps":[

@@ -6,15 +6,18 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 var ctx = context.Background()
@@ -265,7 +268,7 @@ func TestCancelStopsRun(t *testing.T) {
 	e := rt.New(t)
 	wf := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1h"}}`, ""))
 	ref := e.Start(t, wf, map[string]any{})
-	if err := e.Store.CancelRun(ctx, ref, "u1"); err != nil {
+	if err := e.Store.CancelRun(ctx, ref, "u1", true); err != nil {
 		t.Fatal(err)
 	}
 	if st := e.Status(t, ref); st != "cancelled" {
@@ -275,6 +278,74 @@ func TestCancelStopsRun(t *testing.T) {
 	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM timers WHERE run_id = $1 AND fired_at IS NULL`, ref.ID).Scan(&timers)
 	if timers != 0 {
 		t.Errorf("%d timers left after cancel", timers)
+	}
+}
+
+// Cancelling a half-done disbursement reverses the payments already made,
+// newest first, before the run ends; cancelling without reversing leaves
+// them (decision 0054).
+func TestCancelReversesCompletedSteps(t *testing.T) {
+	e := rt.New(t)
+	doc := wfDoc(`{"id":"pay1","type":"connector","connector":"fakepay@1","action":"transfer",
+	   "input":{"amount":1,"logical_id":"=run.id + ':pay1'"},"compensate":{"action":"refund","input":{"logical_id":"=run.id + ':refund1'"}}},
+	  {"id":"pay2","type":"connector","connector":"fakepay@1","action":"transfer","needs":["pay1"],
+	   "input":{"amount":2,"logical_id":"=run.id + ':pay2'"},"compensate":{"action":"refund","input":{"logical_id":"=run.id + ':refund2'"}}},
+	  {"id":"ok","type":"approval","needs":["pay2"],"config":{"role":"officer"}},
+	  {"id":"pay3","type":"connector","connector":"fakepay@1","action":"transfer","needs":["ok"],"input":{"amount":3,"logical_id":"=run.id + ':pay3'"}}`, "")
+	wf := e.Publish(t, doc)
+	reversed, kept := e.Start(t, wf, map[string]any{}), e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	for _, ref := range []runtime.RunRef{reversed, kept} {
+		if h := events(t, e, ref); count(h, history.ApprovalRequested, "ok") != 1 {
+			t.Fatalf("setup: %s", types(h))
+		}
+	}
+
+	if err := e.Store.CancelRun(ctx, reversed, "u1", true); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.Status(t, reversed); st != "running" {
+		t.Errorf("while its compensations run: %s", st)
+	}
+	rt.WaitFor(t, 10*time.Second, "reversed cancel", func() bool { e.Drain(t); return e.Status(t, reversed) != "running" })
+	h := events(t, e, reversed)
+	if st := e.Status(t, reversed); st != "cancelled" || count(h, history.CompensationCompleted, "") != 1 {
+		t.Fatalf("reversed: %s %s", st, types(h))
+	}
+	var order []string
+	for _, ev := range h {
+		if ev.Type == history.StepCompleted && strings.HasPrefix(ev.StepID, history.CompensationPrefix) {
+			order = append(order, ev.StepID)
+		}
+	}
+	if strings.Join(order, ",") != "compensate:pay2,compensate:pay1" {
+		t.Errorf("compensation order %v", order)
+	}
+	if def, err := wd.Load([]byte(doc)); err != nil || decide.Verify(def, h) != nil {
+		t.Errorf("replay: %v %v", err, decide.Verify(def, h))
+	}
+	if e.Provider.Executions(reversed.ID.String()+":refund1") != 1 || e.Provider.Executions(reversed.ID.String()+":refund2") != 1 || e.Provider.Executions(reversed.ID.String()+":pay3") != 0 {
+		t.Errorf("provider: %v", e.Provider.Snapshot())
+	}
+	if count(h, history.StepCancelled, "ok") != 1 || h[len(h)-1].Type != history.RunCancelled || !strings.Contains(string(h[len(h)-1].Payload), `"reversed": ["pay2", "pay1"]`) {
+		t.Errorf("end: %s %s", types(h), h[len(h)-1].Payload)
+	}
+	var open int
+	_ = e.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM approvals WHERE run_id = $1 AND status = 'open'`, reversed.ID).Scan(&open)
+	if open != 0 {
+		t.Errorf("%d approvals still open", open)
+	}
+	// A second cancel changes nothing.
+	if err := e.Store.CancelRun(ctx, reversed, "u2", true); err != nil || count(events(t, e, reversed), history.CancelRequested, "") != 1 {
+		t.Errorf("second cancel: %v", err)
+	}
+
+	if err := e.Store.CancelRun(ctx, kept, "u1", false); err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st, h := e.Status(t, kept), events(t, e, kept); st != "cancelled" || count(h, history.CompensationStarted, "") != 0 || e.Provider.Executions(kept.ID.String()+":refund1") != 0 {
+		t.Errorf("without reversing: %s %s", st, types(h))
 	}
 }
 
@@ -364,6 +435,48 @@ func TestConnectorCredentialsFromConnections(t *testing.T) {
 	e.Drain(t)
 	if st := e.Status(t, ref); st != "completed" || seen != "sk_test_9" {
 		t.Errorf("status %s, credential %q: %s", st, seen, types(events(t, e, ref)))
+	}
+}
+
+// A step output over 256 KB is not kept: a read fails saying so, and a
+// write, which has already happened, parks for an operator.
+func TestLargeOutputsAreRefused(t *testing.T) {
+	e := rt.New(t)
+	list := func(kb int) map[string]any {
+		return map[string]any{"rows": strings.Repeat("x", kb<<10)}
+	}
+	conn := e.Provider.Connector()
+	conn.Manifest.ID = "bigpay"
+	conn.Actions["verify"] = connector.ActionFunc(func(_ context.Context, r connector.Request) (connector.Response, error) {
+		kb, _ := r.Input["reference"].(string)
+		n, _ := strconv.Atoi(kb)
+		return connector.Response{Output: list(n)}, nil
+	})
+	conn.Actions["transfer"] = connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) {
+		return connector.Response{Output: list(300)}, nil
+	})
+	if err := e.Registry.Register(conn); err != nil {
+		t.Fatal(err)
+	}
+	read := e.Publish(t, wfDoc(`{"id":"list","type":"connector","connector":"bigpay@1","action":"verify","retry":{"max":0},"input":{"reference":"=trigger.kb"}}`, ""))
+	small := e.Start(t, read, map[string]any{"kb": "100"})
+	big := e.Start(t, read, map[string]any{"kb": "300"})
+	write := e.Start(t, e.Publish(t, wfDoc(`{"id":"pay","type":"connector","connector":"bigpay@1","action":"transfer","input":{"amount":1,"logical_id":"x"}}`, "")), map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, small); st != "completed" {
+		t.Errorf("100 KB output: %s", st)
+	}
+	if st, msg := e.Status(t, big), failure(events(t, e, big), "list"); st != "failed" || !strings.Contains(msg, "step output is 301 KB, over the 256 KB limit") {
+		t.Errorf("300 KB read: %s %q", st, msg)
+	}
+	if st, msg := e.Status(t, write), failure(events(t, e, write), "pay"); st != "needs_reconciliation" || !strings.Contains(msg, "record the step as completed") {
+		t.Fatalf("300 KB write: %s %q", st, msg)
+	}
+	if err := e.Store.ResolveStep(ctx, write, "pay", runtime.ResolveCompleted, map[string]any{"reference": "r1"}, "provider shows the transfer", "ops"); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.Status(t, write); st != "completed" {
+		t.Errorf("resolved write: %s", st)
 	}
 }
 

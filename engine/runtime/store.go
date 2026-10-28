@@ -756,6 +756,8 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		return nil, s.endRun(ctx, tx, run, def, "completed")
 	case history.RunFailed:
 		return nil, s.endRun(ctx, tx, run, def, "failed")
+	case history.RunCancelled:
+		return nil, s.endRun(ctx, tx, run, def, "cancelled") // a reversed cancel, once its compensations ran
 	}
 	return nil, nil
 }
@@ -1096,9 +1098,13 @@ func (s *Store) DecideApproval(ctx context.Context, ref RunRef, step, decision, 
 	})
 }
 
-// CancelRun ends a run now. Steps a worker is executing still record their
-// results; nothing new starts (spec 4.10).
-func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string) error {
+// CancelRun cancels a run; nothing new starts (spec 4.10). With reverse
+// (decision 0054), decide withdraws its unfinished steps, waits for writes
+// already under way, runs its completed steps' compensations newest first
+// and then ends it, so the run may still be running when this returns.
+// Without, it ends now: steps a worker is executing still record their
+// results, and completed steps stay as they are.
+func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string, reverse bool) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
 		run, err := lockRun(ctx, tx, ref.ID)
 		if err != nil {
@@ -1107,6 +1113,19 @@ func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string) error {
 		switch run.status {
 		case "completed", "failed", "cancelled":
 			return nil
+		}
+		if reverse && run.status != "queued" {
+			// Decide ends the run once its writes under way have settled and
+			// its compensations have run (decision 0054); asked twice, the
+			// first request stands.
+			var asked bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND type = $2)`, ref.ID, history.CancelRequested).Scan(&asked); err != nil || asked {
+				return err
+			}
+			if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, history.OriginAPI); err != nil {
+				return err
+			}
+			return s.decideInline(ctx, tx, ref)
 		}
 		if _, err := appendEvent(ctx, tx, ref.ID, history.RunCancelled, "", 0, map[string]any{"by": by}, history.OriginAPI); err != nil {
 			return err

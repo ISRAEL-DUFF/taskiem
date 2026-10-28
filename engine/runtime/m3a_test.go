@@ -54,7 +54,7 @@ func TestMaxConcurrencyQueuesAndCancelPromotes(t *testing.T) {
 	if e.Status(t, b) != "queued" {
 		t.Fatalf("b %s", e.Status(t, b))
 	}
-	if err := e.Store.CancelRun(ctx, a, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, a, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if e.Status(t, b) != "running" {

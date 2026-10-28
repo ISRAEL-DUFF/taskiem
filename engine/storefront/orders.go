@@ -77,7 +77,7 @@ type Orders struct {
 	Live Live
 	// Cancel cancels a run (runtime.Store.CancelRun), when a booking is
 	// moved or cancelled.
-	Cancel func(ctx context.Context, ref runtime.RunRef, by string) error
+	Cancel func(ctx context.Context, ref runtime.RunRef, by string, reverse bool) error
 	// MoneyLog, when set, records a payment the payment check finds, as
 	// the provider's event would, and the order's payment counts that
 	// entry (matched.go): one entry and one match whichever is heard first.

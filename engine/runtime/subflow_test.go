@@ -98,7 +98,7 @@ func TestSubflows(t *testing.T) {
 	if len(links.Subflows) != 1 || e.Status(t, ref4) != "running" && e.Status(t, ref4) != "waiting" {
 		t.Fatalf("waiting parent: %+v %s", links, e.Status(t, ref4))
 	}
-	if err := e.Store.CancelRun(ctx, ref4, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, ref4, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if st := e.Status(t, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}); st != "cancelled" {
@@ -108,7 +108,7 @@ func TestSubflows(t *testing.T) {
 	// A child that is cancelled fails the step.
 	ref5 := e.Start(t, waiting, map[string]any{})
 	links, _ = e.Store.Forks(ctx, ref5)
-	if err := e.Store.CancelRun(ctx, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if st := e.Status(t, ref5); st != "failed" {

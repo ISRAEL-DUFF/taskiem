@@ -225,12 +225,13 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 | `StepCompleted` | Worker reports success with output (or output reference) |
 | `StepFailed` | Worker reports a failure with error class |
 | `StepSkipped` | A step's `when` was false or a step it needs did not run |
-| `StepCancelled` | A step in a losing branch of a `join: any` parallel step is stopped before it finished |
+| `StepCancelled` | A step in a losing branch of a `join: any` parallel step, or of a run being cancelled, is stopped before it finished |
 | `RetryScheduled` | Failure is retryable; records next attempt time |
 | `TimerFired` | A `wait` or timeout elapses |
 | `SignalReceived` | External event matched the run (webhook, WhatsApp reply) |
 | `ApprovalRequested` / `ApprovalDecided` | Governance step opens and closes |
 | `CompensationStarted` / `CompensationCompleted` | Saga rollback runs |
+| `CancelRequested` | A person cancelled the run with its completed steps reversed ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)) |
 | `RunCompleted` / `RunFailed` / `RunCancelled` | Terminal states |
 
 ### 4.2 Orchestrator
@@ -306,7 +307,9 @@ A step may declare a `compensate` action, for example `reverse_transfer` for `tr
 
 ### 4.9 Payloads
 
-Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant. PII fields are redacted in the copy shown in the UI and logs (section 9).
+Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant.
+
+*As built:* the object-storage copy is not built yet (`events.payload_ref` exists, unused). Until it is, no output over 256 KB is kept: an `http` step's response body is cut to 256 KB, a code step's output over it is a script error, a container step keeps to its own `limits.output_bytes` (up to 1 MB), and any other step (connector, capability, `ai`) whose output is over it fails saying so. A write, which has already happened, parks in `needs_reconciliation` instead, for an operator to record as completed with a smaller output. PII fields are redacted in the copy shown in the UI and logs (section 9).
 
 PII values are never stored in plaintext in either place. Before an event is written, every declared or detected PII field (section 9.3) is replaced by an envelope `{"$pii": "<category>", "subject": "<subject id>", "ct": "<ciphertext>"}` encrypted under that data subject's key in `subject_keys`. Non-PII fields stay plaintext JSONB so they remain queryable. Workers and the orchestrator decrypt envelopes in memory when an expression needs the value; this is what makes erasure by crypto-shredding possible (section 9.4).
 
@@ -314,7 +317,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 
 - **Replay** re-runs the orchestrator over the history to reconstruct state; it executes no effects.
 - **Fork from step** creates a new run that copies history up to a chosen step and continues from there on a newer WD version. This is the repair path for failed runs.
-- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured.
+- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing.
 
 ### 4.11 Initial performance targets
 
