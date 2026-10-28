@@ -387,6 +387,47 @@ var errAbandoned = errors.New("abandoned")
 // errPostpone asks for the task to be requeued until p.intentAt + CallTimeout.
 var errPostpone = errors.New("postpone")
 
+// rateLimited asks for the task to be requeued until the connection's rate
+// limit has a token for it: nothing was sent, and no retry is spent.
+type rateLimited struct{ wait time.Duration }
+
+func (e *rateLimited) Error() string { return fmt.Sprintf("rate limited for %s", e.wait) }
+
+// takeRate draws one call from the connector's rate limit (spec 6.2), a
+// token bucket in the database shared by every worker, inside prepare's
+// transaction: committed only with the rest of prepare. Without a token it
+// returns how long until one is due, and the task waits that long.
+func takeRate(ctx context.Context, tx pgx.Tx, p *plan) error {
+	if p.conn == nil || p.conn.Manifest.RateLimit == nil {
+		return nil
+	}
+	rl := p.conn.Manifest.RateLimit
+	rate, burst := rl.PerSecond(), float64(rl.Requests)
+	if rate <= 0 {
+		return nil
+	}
+	bucket := p.conn.Manifest.ID
+	if rl.Scope != "tenant" {
+		bucket += "/" + p.env + "/" + p.sched.Connection
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO connector_rate_buckets (tenant_id, bucket, tokens, updated_at) VALUES ($1, $2, $3, clock_timestamp())
+		ON CONFLICT DO NOTHING`, p.c.tenant, bucket, burst); err != nil {
+		return err
+	}
+	var tokens, elapsed float64
+	if err := tx.QueryRow(ctx, `SELECT tokens, GREATEST(0, EXTRACT(EPOCH FROM clock_timestamp() - updated_at)) FROM connector_rate_buckets
+		WHERE tenant_id = $1 AND bucket = $2 FOR UPDATE`, p.c.tenant, bucket).Scan(&tokens, &elapsed); err != nil {
+		return err
+	}
+	tokens = min(burst, tokens+elapsed*rate)
+	if tokens < 1 {
+		return &rateLimited{wait: time.Duration((1 - tokens) / rate * float64(time.Second))}
+	}
+	_, err := tx.Exec(ctx, `UPDATE connector_rate_buckets SET tokens = $3, updated_at = clock_timestamp() WHERE tenant_id = $1 AND bucket = $2`,
+		p.c.tenant, bucket, tokens-1)
+	return err
+}
+
 // errCancelled: the step was cancelled (a losing parallel branch) before its
 // write could start; the task is dropped without an outcome.
 var errCancelled = errors.New("cancelled")
@@ -468,6 +509,10 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		if errors.Is(err, errFenced) {
 			*outcome = "fenced"
 			return nil
+		}
+		if rl := (*rateLimited)(nil); errors.As(err, &rl) {
+			*outcome = "rate_limited"
+			return w.postpone(ctx, p, time.Now().Add(rl.wait))
 		}
 		if errors.Is(err, errCancelled) {
 			*outcome = "cancelled"
@@ -688,7 +733,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			return w.recordFailure(ctx, tx, p, "fatal", err.Error())
 		}
 		if !p.class.IsWrite() {
-			return nil
+			return takeRate(ctx, tx, p)
 		}
 
 		// Choose how to proceed from what earlier attempts left behind.
@@ -741,6 +786,10 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		}
 		if p.mode != modeSend {
 			return nil
+		}
+		// A token before the intent: a write that must wait is not open.
+		if err := takeRate(ctx, tx, p); err != nil {
+			return err
 		}
 		return w.recordIntent(ctx, tx, p)
 	})

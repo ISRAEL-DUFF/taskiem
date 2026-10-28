@@ -562,7 +562,7 @@ triggers:
 - **Idempotency and reconcile hooks** tell the engine where to put the key, how to encode it within the provider's charset and length limits (section 4.4), and which action confirms an unknown outcome. Registration rejects an encoding whose output cannot satisfy the declared limits.
 - **Compensation** names the reversing action, if one exists.
 - **PII fields** feed the redaction engine in section 9.
-- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17).
+- **Rate limits** are enforced by a token bucket per connection, shared across all workers via Postgres, or Valkey once it is deployed (section 17). *As built:* `connector_rate_buckets` holds one bucket per connection (scope `connection`, the default: connector, environment and connection) or per tenant (scope `tenant`), of `requests` tokens refilled evenly over `per`. A worker takes a token in the same transaction that records the call's intent, so a call that must wait is neither sent nor open: its task goes back to the queue until a token is due, without spending a retry. Scope `global` is refused until a platform-wide quota is needed.
 - **Input and output schemas** (JSON Schema) power canvas forms, code SDK types, and AI builder validation.
 - **Trigger correlation** maps inbound webhooks to waiting runs.
 

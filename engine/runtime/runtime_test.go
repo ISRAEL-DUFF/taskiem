@@ -152,6 +152,45 @@ func TestTriggerReceiptWindow(t *testing.T) {
 	}
 }
 
+// A connector's rate limit holds across workers (spec 6.2): with its one
+// call an hour spent, the next run's payment waits in the queue, unsent,
+// with no intent recorded and no retry spent, and goes once a token is due.
+func TestConnectorRateLimit(t *testing.T) {
+	e := rt.New(t)
+	conn, ok := e.Registry.Get("fakepay@1")
+	if !ok {
+		t.Fatal("no fakepay")
+	}
+	conn.Manifest.RateLimit = &connector.RateLimit{Requests: 1, Per: "1h"}
+	wf := e.Publish(t, wfDoc(payOne, ""))
+	first := e.Start(t, wf, map[string]any{"amount": 1})
+	e.Drain(t)
+	second := e.Start(t, wf, map[string]any{"amount": 2})
+	e.Drain(t)
+	if e.Status(t, first) != "completed" || e.Status(t, second) != "running" {
+		t.Fatalf("first %s, second %s", e.Status(t, first), e.Status(t, second))
+	}
+	h := events(t, e, second)
+	if count(h, history.EffectIntent, "pay") != 0 || count(h, history.RetryScheduled, "pay") != 0 || e.Provider.Executions(second.ID.String()+":pay") != 0 {
+		t.Fatalf("the waiting payment: %s", types(h))
+	}
+	var wait float64
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT EXTRACT(EPOCH FROM available_at - now()) FROM tasks WHERE run_id = $1`, second.ID).Scan(&wait); err != nil || wait < 50*60 {
+		t.Fatalf("queued for %.0f s: %v", wait, err)
+	}
+	// An hour on, the token is due.
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE connector_rate_buckets SET updated_at = updated_at - interval '1 hour'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE tasks SET available_at = now() WHERE run_id = $1`, second.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.Drain(t)
+	if st := e.Status(t, second); st != "completed" {
+		t.Fatalf("after an hour: %s %s", st, types(events(t, e, second)))
+	}
+}
+
 func TestRetryableErrorThenSuccess(t *testing.T) {
 	e := rt.New(t)
 	var calls atomic.Int32

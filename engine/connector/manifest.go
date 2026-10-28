@@ -18,6 +18,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/schemas"
 )
 
@@ -40,9 +41,12 @@ type Manifest struct {
 	// the provider keeps each account in one place (Zoho's data centres:
 	// *.zoho.com, *.zoho.eu…; rule 19): a ${connection.<field>} egress host
 	// or OAuth URL naming any other host is refused. Empty: any public host.
-	ConnectionHosts []string               `json:"connection_hosts,omitempty"`
-	Actions         map[string]ActionSpec  `json:"actions"`
-	Triggers        map[string]TriggerSpec `json:"triggers"`
+	ConnectionHosts []string `json:"connection_hosts,omitempty"`
+	// RateLimit is the provider's request quota, which workers keep to
+	// together (spec 6.2): a token bucket per connection or per tenant.
+	RateLimit *RateLimit             `json:"rate_limit,omitempty"`
+	Actions   map[string]ActionSpec  `json:"actions"`
+	Triggers  map[string]TriggerSpec `json:"triggers"`
 	// Capabilities and Events say what a rail can do in Taskiem's words
 	// (rule 16, engine/capability).
 	Capabilities map[string]CapabilityMap `json:"capabilities,omitempty"`
@@ -439,10 +443,35 @@ func (m *Manifest) KindOf() string {
 	return m.Kind
 }
 
+// RateLimit is requests per period: a bucket of Requests tokens, refilled
+// evenly over Per.
+type RateLimit struct {
+	Requests int    `json:"requests"`
+	Per      string `json:"per"`
+	Scope    string `json:"scope,omitempty"` // connection (default) or tenant
+}
+
+// PerSecond is the bucket's refill rate.
+func (r *RateLimit) PerSecond() float64 {
+	d, err := wd.ParseDuration(r.Per)
+	if err != nil || d <= 0 {
+		return 0
+	}
+	return float64(r.Requests) / d.Seconds()
+}
+
 func (m *Manifest) check() []string {
 	var out []string
 	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
 
+	if rl := m.RateLimit; rl != nil {
+		if rl.PerSecond() <= 0 {
+			add("/rate_limit/per: %q is not a period", rl.Per)
+		}
+		if rl.Scope == "global" {
+			add("/rate_limit/scope: global is not supported yet; use connection or tenant")
+		}
+	}
 	if o := m.Auth.OAuth2; o != nil {
 		for _, u := range []string{o.AuthorizeURL, o.TokenURL, o.RevokeURL} {
 			if strings.HasPrefix(u, connectionPlaceholder) && len(m.ConnectionHosts) == 0 {
