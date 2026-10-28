@@ -18,7 +18,7 @@
 <body>
 <header class="site-head">
   <div class="wrap">
-    <a class="logo" href="{{.Base}}">{{template "mark"}}<span class="word">taskiem</span></a>
+    <a class="logo" href="{{.Base}}" aria-label="Taskiem, home">{{template "mark"}}<img class="word on-light" src="{{.Base}}img/wordmark.svg" alt="" width="111" height="24"><img class="word on-dark" src="{{.Base}}img/wordmark-reversed.svg" alt="" width="111" height="24"></a>
     <nav class="nav" aria-label="Main">
       <a href="{{.Base}}how-it-works"{{if eq .Page.Name "how-it-works"}} aria-current="page"{{end}}>How it works</a>
       <a href="{{.Base}}templates"{{if eq .Page.Name "templates"}} aria-current="page"{{end}}>Templates</a>
@@ -51,7 +51,7 @@
   <div class="wrap">
     <div class="cols">
       <div class="brandcol">
-        <a class="logo" href="{{.Base}}">{{template "mark-reversed"}}<span class="word">taskiem</span></a>
+        <a class="logo" href="{{.Base}}" aria-label="Taskiem, home">{{template "mark-reversed"}}<img class="word" src="{{.Base}}img/wordmark-reversed.svg" alt="" width="111" height="24"></a>
         <p>Automation Nigerian businesses can trust with their money. Made in Lagos. Prices in naira.</p>
       </div>
       <div>

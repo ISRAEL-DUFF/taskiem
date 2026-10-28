@@ -41,22 +41,27 @@
   --wrap: 1200px;
   color-scheme: light;
 }
-/* In the dark theme lime takes pine's place as the accent (docs/brand). */
+/* In the dark theme lime takes pine's place as the accent: main buttons are
+   lime with pine text and links are lime, while pine bands and cards stay
+   pine (docs/brand/screens.md). The grounds are the web app's. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --pine: #0a2d23;
-    --pine-2: #12392d;
-    --pine-3: #1a4a3b;
-    --mist: #0b1f19;
-    --paper: #102a22;
-    --ink: #e8efe9;
-    --body: #bfcfc6;
-    --muted: #93a79d;
-    --line: #24443a;
+    --mist: #0d0e0c;
+    --paper: #151614;
+    --ink: #ededea;
+    --body: #c4c7bf;
+    --muted: #9a9d95;
+    --line: #262724;
     --leaf: #c8f169;
-    --heading: #fbfcfa;
+    --heading: #ededea;
     color-scheme: dark;
   }
+  html .btn { background: #c8f169; color: #0d3b2e; }
+  html .btn:hover { background: #d6f68a; }
+  html .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  html .btn.ghost:hover { background: var(--paper); }
+  html .more { color: #c8f169; }
+  html .toggle button[aria-pressed="true"] { background: #c8f169; color: #0d3b2e; }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -169,7 +174,10 @@ em { font-style: normal; font-weight: 600; color: var(--ink); }
 .site-head .wrap { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 72px; }
 .logo { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
 .logo .mark { width: 36px; height: 36px; flex: none; }
-.logo .word { font-weight: 800; font-size: 25px; letter-spacing: -0.02em; color: var(--heading); line-height: 1; }
+.logo .word { display: block; height: 24px; width: auto; }
+/* The brand's files, never recoloured: the pine wordmark on light ground, the reversed one on dark. */
+.logo .on-dark { display: none; }
+@media (prefers-color-scheme: dark) { .site-head .logo .on-light { display: none; } .site-head .logo .on-dark { display: block; } }
 .nav { display: flex; align-items: center; gap: 4px; }
 .nav a { text-decoration: none; font-size: 16px; font-weight: 600; color: var(--body); padding: 8px 12px; border-radius: 10px; }
 .nav a:hover { color: var(--ink); background: var(--paper); }
@@ -357,7 +365,6 @@ td.c, th.c { text-align: center; }
 .site-foot { background: var(--pine); color: var(--on-pine); padding-block: 64px 40px; border-top: 1px solid var(--pine-2); }
 .site-foot .cols { display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
 .site-foot .brandcol { display: grid; gap: 14px; align-content: start; }
-.site-foot .logo .word { color: var(--white); }
 .site-foot h4 { margin: 0 0 12px; font-family: var(--mono); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--lime); }
 .site-foot ul { list-style: none; padding: 0; display: grid; gap: 8px; }
 .site-foot a { color: var(--white); text-decoration: none; font-size: 16px; }
