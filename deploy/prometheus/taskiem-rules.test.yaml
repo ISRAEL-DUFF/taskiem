@@ -129,6 +129,19 @@ tests:
     values: 0+100x80
   interval: 1m
   name: slow step dispatch on any queue burns the dispatch budget
+- input_series:
+  - series: taskiem_http_requests_total{route="/v1/workflows",method="GET",code="200"}
+    values: 0+100x60 6000x60
+  - series: taskiem_http_requests_total{route="/v1/workflows",method="GET",code="500"}
+    values: "0x120"
+  interval: 1m
+  name: a quiet hour leaves the 30-day budget readable
+  promql_expr_test:
+  - eval_time: 120m
+    exp_samples:
+    - labels: taskiem:slo_error_budget_remaining:ratio{slo="api_availability"}
+      value: 1
+    expr: taskiem:slo_error_budget_remaining:ratio{slo="api_availability"}
 - alert_rule_test:
   - alertname: TaskiemSchedulerStalled
     eval_time: 5m

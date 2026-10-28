@@ -217,6 +217,42 @@ func TestBacklogAndDispatchCoverEveryQueueAndPool(t *testing.T) {
 	}
 }
 
+// The 30-day SLI and budget are bad events over all events in the period,
+// not an average of hourly ratios: an hour with no events has a NaN ratio,
+// and averaging it in blanks the 30-day figure for a month.
+func TestThirtyDaySLIIsARatioOfCounters(t *testing.T) {
+	month := map[string]string{}
+	budget := map[string]string{}
+	for _, g := range slo.Rules().Groups {
+		for _, r := range g.Rules {
+			if strings.Contains(r.Expr, "_over_time") {
+				t.Errorf("%s%s averages over time: %s", r.Record, r.Alert, r.Expr)
+			}
+			switch r.Record {
+			case slo.Record(slo.Period):
+				month[r.Labels["slo"]] = r.Expr
+			case "taskiem:slo_error_budget_remaining:ratio":
+				budget[r.Labels["slo"]] = r.Expr
+			}
+		}
+	}
+	for _, s := range slo.SLOs {
+		if month[s.Name] != s.ErrorRatio(slo.Period) {
+			t.Errorf("%s: 30-day ratio %q, want the counters over %s", s.Name, month[s.Name], slo.Period)
+		}
+		if !strings.Contains(budget[s.Name], slo.Record(slo.Period)) {
+			t.Errorf("%s: budget %q does not read the 30-day ratio", s.Name, budget[s.Name])
+		}
+	}
+	dash, err := slo.Dashboard()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(dash), "_over_time") {
+		t.Error("the dashboard averages over time")
+	}
+}
+
 // With promtool (TASKIEM_PROMTOOL or on PATH) the rules are checked and
 // their unit tests run: fast burns page, a healthy API does not.
 func TestPromtool(t *testing.T) {

@@ -116,8 +116,8 @@
 </table></div>
 <x-code path="engine/slo/slo.go" start="var Burns = []BurnRule{" caption="the four burn-rate conditions every SLO gets"/>
 <p>Next to the burn rates are six symptom alerts: the canary failing or stopped, the scheduler stalled, any worker pool's queue with a task over 10 minutes old, leases expiring, and a target that cannot be scraped (<x-ref path="engine/slo/slo.go" symbol="var Alerts = []Alert{"><code>slo.Alerts</code></x-ref>). Every metric the rules read exists, with the labels they use.</p>
-<div class="callout risk"><span class="callout-label">Risk</span>
-  <p><strong>The 30-day SLI and the error budget left go blank after any quiet hour.</strong> Both come from <x-ref path="engine/slo/render.go" symbol="avg_over_time(%s{slo=%q}[%s])"><code>avg_over_time</code> of the hourly ratio</x-ref>. If an SLO has no events in an hour, its counters exist but neither rose, and the ratio is <code>0/0</code>, which is <code>NaN</code>. One <code>NaN</code> makes <code>avg_over_time</code> <code>NaN</code> for the next 30 days. The dashboard's "SLI, last 30 days" and "Error budget left" panels then show nothing. Scheduler timeliness has no events whenever no timer or schedule falls due. On a small install, the other SLOs have none at night unless the canary runs. The burn-rate alerts are unaffected, because <code>NaN &gt; x</code> is false. Fix: record the 30-day ratio as <code>sum(increase(errors[30d])) / sum(increase(total[30d]))</code>, or drop <code>NaN</code> hours with <code>(ratio == ratio)</code>.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The 30-day SLI and the error budget left used to go blank for a month after any hour with no events: they were <code>avg_over_time</code> of the hourly ratio, and an empty hour's ratio is <code>0/0</code>, <code>NaN</code>. They are now bad events over all events from the counters across the 30 days (<code>taskiem:slo_errors:ratio_rate30d</code>, evaluated every five minutes), with a promtool test of a quiet hour. Found while writing this page.</p>
 </div>
 
 <h2 id="operations--telemetry">Metrics and traces</h2>

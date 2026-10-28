@@ -52,14 +52,15 @@ Each SLO has one alert name with four conditions (the Google SRE workbook's reco
 
 For the 95% dispatch objective the 1-hour page needs more than 72% of steps to be slow; the 6-hour page catches a sustained 30%.
 
-Recording rules: `taskiem:slo_errors:ratio_rate<window>{slo}` for 5m, 30m, 1h, 2h, 6h, 1d and 3d; `taskiem:slo_target:ratio`; `taskiem:slo_errors:ratio_avg30d` (the average of hourly ratios: quiet hours weigh as much as busy ones); and `taskiem:slo_error_budget_remaining:ratio` (1 is untouched, 0 is spent, below 0 is over).
+Recording rules: `taskiem:slo_errors:ratio_rate<window>{slo}` for 5m, 30m, 1h, 2h, 6h, 1d and 3d; `taskiem:slo_target:ratio`; `taskiem:slo_errors:ratio_rate30d` (bad events over all events in the last 30 days, from the counters: a busy hour weighs more than a quiet one, and an hour with no events changes nothing); and `taskiem:slo_error_budget_remaining:ratio` (1 is untouched, 0 is spent, below 0 is over). The two 30-day rules are evaluated every five minutes. Earlier releases recorded `ratio_avg30d` instead, an average of hourly ratios that one hour with no events (a `NaN` ratio) blanked for a month; a dashboard or alert of your own that reads it should read `ratio_rate30d`.
 
 ### Measuring G4
 
-G4's availability criterion is `api_availability` and `webhook_ingest`, each at or above 99.9% over 60 consecutive days, plus the canary. Take the SLI over each 30-day half from `1 - taskiem:slo_errors:ratio_avg30d`, or for one 60-day figure:
+G4's availability criterion is `api_availability` and `webhook_ingest`, each at or above 99.9% over 60 consecutive days, plus the canary. Take the SLI over each 30-day half from `1 - taskiem:slo_errors:ratio_rate30d`, or for one 60-day figure, from the counters:
 
 ```promql
-1 - avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="api_availability"}[60d])
+1 - sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",code=~"5.."}[60d]))
+  / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[60d]))
 ```
 
 Keep Prometheus retention (or a long-term store) above 60 days. Record any period excluded from the window (declared maintenance) in the status page; maintenance does not pause the measurement unless the decision owner says so beforehand. The owner of this measurement is a needs-people item (P4-R4).

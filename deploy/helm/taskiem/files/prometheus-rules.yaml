@@ -45,14 +45,6 @@ groups:
     labels:
       slo: api_availability
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="api_availability"}[30d])
-    labels:
-      slo: api_availability
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="api_availability"} / 0.001
-    labels:
-      slo: api_availability
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_http_request_duration_seconds_bucket{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",le="1"}[5m]))
       / sum(rate(taskiem_http_request_duration_seconds_count{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[5m]))
     labels:
@@ -92,14 +84,6 @@ groups:
     labels:
       slo: api_latency
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="api_latency"}[30d])
-    labels:
-      slo: api_latency
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="api_latency"} / 0.01
-    labels:
-      slo: api_latency
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector",result=~"5.."}[5m]))
       / sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector"}[5m]))
     labels:
@@ -139,14 +123,6 @@ groups:
     labels:
       slo: webhook_ingest
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="webhook_ingest"}[30d])
-    labels:
-      slo: webhook_ingest
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="webhook_ingest"} / 0.001
-    labels:
-      slo: webhook_ingest
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_run_start_seconds_bucket{le="5"}[5m])) / sum(rate(taskiem_run_start_seconds_count[5m]))
     labels:
       slo: run_start
@@ -179,14 +155,6 @@ groups:
     labels:
       slo: run_start
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="run_start"}[30d])
-    labels:
-      slo: run_start
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="run_start"} / 0.01
-    labels:
-      slo: run_start
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[5m]))
       / sum(rate(taskiem_step_dispatch_delay_seconds_count[5m]))
     labels:
@@ -226,14 +194,6 @@ groups:
     labels:
       slo: step_dispatch
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="step_dispatch"}[30d])
-    labels:
-      slo: step_dispatch
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="step_dispatch"} / 0.05
-    labels:
-      slo: step_dispatch
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_scheduler_lateness_seconds_bucket{le="5"}[5m])) / sum(rate(taskiem_scheduler_lateness_seconds_count[5m]))
     labels:
       slo: scheduler_timeliness
@@ -267,11 +227,59 @@ groups:
     labels:
       slo: scheduler_timeliness
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="scheduler_timeliness"}[30d])
+- interval: 5m
+  name: taskiem-slo-30d
+  rules:
+  - expr: sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",code=~"5.."}[30d]))
+      / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[30d]))
+    labels:
+      slo: api_availability
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="api_availability"} / 0.001
+    labels:
+      slo: api_availability
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_http_request_duration_seconds_bucket{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",le="1"}[30d]))
+      / sum(rate(taskiem_http_request_duration_seconds_count{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[30d]))
+    labels:
+      slo: api_latency
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="api_latency"} / 0.01
+    labels:
+      slo: api_latency
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector",result=~"5.."}[30d]))
+      / sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector"}[30d]))
+    labels:
+      slo: webhook_ingest
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="webhook_ingest"} / 0.001
+    labels:
+      slo: webhook_ingest
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_run_start_seconds_bucket{le="5"}[30d])) / sum(rate(taskiem_run_start_seconds_count[30d]))
+    labels:
+      slo: run_start
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="run_start"} / 0.01
+    labels:
+      slo: run_start
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[30d]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[30d]))
+    labels:
+      slo: step_dispatch
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="step_dispatch"} / 0.05
+    labels:
+      slo: step_dispatch
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_scheduler_lateness_seconds_bucket{le="5"}[30d])) /
+      sum(rate(taskiem_scheduler_lateness_seconds_count[30d]))
     labels:
       slo: scheduler_timeliness
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="scheduler_timeliness"} / 0.01
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="scheduler_timeliness"} / 0.01
     labels:
       slo: scheduler_timeliness
     record: taskiem:slo_error_budget_remaining:ratio

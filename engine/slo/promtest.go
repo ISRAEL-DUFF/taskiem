@@ -28,11 +28,23 @@ type promAlertTest struct {
 	ExpAlerts []promAlert `json:"exp_alerts"`
 }
 
+type promSample struct {
+	Labels string  `json:"labels"`
+	Value  float64 `json:"value"`
+}
+
+type promExprTest struct {
+	Expr       string       `json:"expr"`
+	EvalTime   string       `json:"eval_time"`
+	ExpSamples []promSample `json:"exp_samples"`
+}
+
 type promTest struct {
 	Name           string          `json:"name,omitempty"`
 	Interval       string          `json:"interval"`
 	InputSeries    []promSeries    `json:"input_series"`
-	AlertRuleTests []promAlertTest `json:"alert_rule_test"`
+	AlertRuleTests []promAlertTest `json:"alert_rule_test,omitempty"`
+	ExprTests      []promExprTest  `json:"promql_expr_test,omitempty"`
 }
 
 type promTestFile struct {
@@ -111,6 +123,20 @@ func RulesTestYAML() ([]byte, error) {
 					expect("TaskiemStepDispatchBudgetBurn", map[string]string{"severity": "ticket", "slo": "step_dispatch", "window": "1d"}),
 					expect("TaskiemStepDispatchBudgetBurn", map[string]string{"severity": "ticket", "slo": "step_dispatch", "window": "3d"}),
 				}}},
+			},
+			{
+				// An hour's own ratio is NaN when nothing happened in it; the
+				// 30-day figures must not be.
+				Name:     "a quiet hour leaves the 30-day budget readable",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					{Series: sprintf(api, "200"), Values: "0+100x60 6000x60"},
+					{Series: sprintf(api, "500"), Values: "0x120"},
+				},
+				ExprTests: []promExprTest{{
+					Expr: `taskiem:slo_error_budget_remaining:ratio{slo="api_availability"}`, EvalTime: "120m",
+					ExpSamples: []promSample{{Labels: `taskiem:slo_error_budget_remaining:ratio{slo="api_availability"}`, Value: 1}},
+				}},
 			},
 			{
 				Name:     "the scheduler stops ticking",
