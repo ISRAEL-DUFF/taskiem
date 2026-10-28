@@ -378,9 +378,14 @@ func TestOperatorConsoleWork(t *testing.T) {
 	entries := c.must(200, "GET", "/v1/ops/audit?limit=500", nil)["entries"].([]any)
 	seen := map[string]bool{}
 	for _, e := range entries {
-		seen[e.(map[string]any)["action"].(string)] = true
+		e := e.(map[string]any)
+		seen[e["action"].(string)] = true
+		if e["action"] == "ops.view" {
+			seen["ops.view "+e["target"].(string)] = true
+		}
 	}
-	for _, want := range []string{"catalogue.publisher.verify", "catalogue.approve", "catalogue.publisher.suspend", "status.open", "status.update", "tenant.view"} {
+	for _, want := range []string{"catalogue.publisher.verify", "catalogue.approve", "catalogue.publisher.suspend", "status.open", "status.update", "tenant.view",
+		"ops.view /v1/ops/tenants", "ops.view /v1/ops/catalogue/queue"} {
 		if !seen[want] {
 			t.Errorf("platform chain lacks %s: %v", want, seen)
 		}

@@ -96,7 +96,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 	r.Get("/auth/sso/start", s.opsSSOStart)
 	r.Get("/auth/sso/callback", s.opsSSOCallback)
 	r.Group(func(r chi.Router) {
-		r.Use(s.operatorAuth)
+		r.Use(s.operatorAuth, s.opsRecordViews)
 		r.Get("/me", s.opsMe)
 		r.Post("/auth/logout", s.opsLogout)
 		r.Post("/step-up/options", s.opsStepUpOptions)
@@ -135,6 +135,32 @@ func (s *Server) opsOn(next http.Handler) http.Handler {
 		if s.Ops == nil {
 			writeErr(w, http.StatusNotFound, "not found")
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// opsRecordViews records every operator read in the platform chain before
+// it is answered (threat model B19: "every sign-in, write and tenant view"),
+// so what staff looked at, a business's photos or a tenant list, is on the
+// record; a view that cannot be recorded is not served. Their own session,
+// and the views that record themselves (a tenant, the chain export), are
+// left to themselves.
+func (s *Server) opsRecordViews(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		self := strings.HasSuffix(path, "/ops/me") || strings.HasSuffix(path, "/ops/audit/export") ||
+			strings.Contains(path, "/ops/tenants/")
+		if r.Method == http.MethodGet && !self {
+			o := operatorFrom(r.Context())
+			detail := map[string]any{}
+			if r.URL.RawQuery != "" {
+				detail["query"] = r.URL.RawQuery
+			}
+			if err := ops.Audit(r.Context(), s.Store.Pool, o.Actor(), "ops.view", path, detail); err != nil {
+				s.fail(w, r, err)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

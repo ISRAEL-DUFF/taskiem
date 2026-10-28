@@ -423,14 +423,17 @@ func (s *Server) opsOpenIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := operatorFrom(r.Context())
-	id, err := status.Open(r.Context(), s.Store.Pool, req.Declaration, o.Actor())
+	var id uuid.UUID
+	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
+		var err error
+		if id, err = status.Open(r.Context(), tx, req.Declaration, o.Actor()); err != nil {
+			return err
+		}
+		return ops.AuditTx(r.Context(), tx, o.Actor(), "status.open", id.String(),
+			map[string]any{"kind": kind, "title": req.Title, "components": req.Components, "status": req.Status, "impact": req.Impact})
+	})
 	if err != nil {
 		s.statusFail(w, r, err)
-		return
-	}
-	if err := ops.Audit(r.Context(), s.Store.Pool, o.Actor(), "status.open", id.String(),
-		map[string]any{"kind": kind, "title": req.Title, "components": req.Components, "status": req.Status, "impact": req.Impact}); err != nil {
-		s.fail(w, r, err)
 		return
 	}
 	s.invalidateStatus()
@@ -455,12 +458,14 @@ func (s *Server) opsUpdateIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := operatorFrom(r.Context())
-	if err := status.Post(r.Context(), s.Store.Pool, id, req.Change, o.Actor()); err != nil {
+	err = s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
+		if err := status.Post(r.Context(), tx, id, req.Change, o.Actor()); err != nil {
+			return err
+		}
+		return ops.AuditTx(r.Context(), tx, o.Actor(), "status.update", id.String(), map[string]any{"status": req.Status, "impact": req.Impact})
+	})
+	if err != nil {
 		s.statusFail(w, r, err)
-		return
-	}
-	if err := ops.Audit(r.Context(), s.Store.Pool, o.Actor(), "status.update", id.String(), map[string]any{"status": req.Status, "impact": req.Impact}); err != nil {
-		s.fail(w, r, err)
 		return
 	}
 	s.invalidateStatus()
