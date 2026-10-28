@@ -26,8 +26,8 @@ test("the run canvas lights up as the run goes", async ({ page }) => {
   await expect(canvas.getByTestId("node-wait")).toHaveAttribute("data-status", "waiting");
   await expect(page.getByText("live", { exact: true })).toBeVisible();
 
-  page.once("dialog", (d) => void d.accept());
   await page.getByRole("button", { name: "Cancel run" }).click();
+  await page.getByRole("dialog", { name: "Cancel this run?" }).getByRole("button", { name: "Cancel and reverse" }).click();
   await expect(page.locator("h1 + .badge").first()).toHaveText("cancelled");
   await expect(canvas.getByTestId("node-wait")).toHaveAttribute("data-status", "cancelled");
   await expect(page.getByText("live", { exact: true })).toHaveCount(0);

@@ -8765,6 +8765,12 @@ paths:
           type: string
           format: uuid
         description: Run id
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '200':
           description: Cancelled
@@ -14023,6 +14029,7 @@ paths:
       tags:
       - Runs
       summary: Cancel a run
+      description: 'By default the run''s completed steps are reversed by their compensations, newest first, and the answer''s status is `running` until they have run; `reverse: false` ends the run at once.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -14037,6 +14044,12 @@ paths:
           type: string
           format: uuid
         description: Run id
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '200':
           description: Cancelled
@@ -30695,6 +30708,14 @@ components:
         count:
           type: integer
       additionalProperties: false
+    CancelRunRequest:
+      type: object
+      properties:
+        reverse:
+          type: boolean
+          default: true
+          description: Run the compensations of the run's completed steps, newest first, before the run ends; it ends once writes already under way have settled. `false` ends the run now and leaves completed steps as they are.
+      additionalProperties: false
     ResolveRequest:
       type: object
       required:
@@ -30707,7 +30728,7 @@ components:
           - completed
           - failed
           - retry
-          description: What the provider shows happened.
+          description: What the provider shows happened. `retry` (it did not happen; send it again) re-issues the effect under a new idempotency key and does not count against the step's retries.
         output:
           description: The step's output, when it completed.
         note:

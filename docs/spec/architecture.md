@@ -225,12 +225,13 @@ Each run has an ordered event log in `run_events`. Events are immutable and sequ
 | `StepCompleted` | Worker reports success with output (or output reference) |
 | `StepFailed` | Worker reports a failure with error class |
 | `StepSkipped` | A step's `when` was false or a step it needs did not run |
-| `StepCancelled` | A step in a losing branch of a `join: any` parallel step is stopped before it finished |
+| `StepCancelled` | A step in a losing branch of a `join: any` parallel step, or of a run being cancelled, is stopped before it finished |
 | `RetryScheduled` | Failure is retryable; records next attempt time |
 | `TimerFired` | A `wait` or timeout elapses |
 | `SignalReceived` | External event matched the run (webhook, WhatsApp reply) |
 | `ApprovalRequested` / `ApprovalDecided` | Governance step opens and closes |
 | `CompensationStarted` / `CompensationCompleted` | Saga rollback runs |
+| `CancelRequested` | A person cancelled the run with its completed steps reversed ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)) |
 | `RunCompleted` / `RunFailed` / `RunCancelled` | Terminal states |
 
 ### 4.2 Orchestrator
@@ -306,7 +307,9 @@ A step may declare a `compensate` action, for example `reverse_transfer` for `tr
 
 ### 4.9 Payloads
 
-Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant. PII fields are redacted in the copy shown in the UI and logs (section 9).
+Step outputs up to 256 KB are stored inline as JSONB. Larger outputs go to S3-compatible object storage (SeaweedFS when self-hosted), referenced by content hash, encrypted per tenant.
+
+*As built:* the object-storage copy is not built yet (`events.payload_ref` exists, unused). Until it is, no output over 256 KB is kept: an `http` step's response body is cut to 256 KB, a code step's output over it is a script error, a container step keeps to its own `limits.output_bytes` (up to 1 MB), and any other step (connector, capability, `ai`) whose output is over it fails saying so. A write, which has already happened, parks in `needs_reconciliation` instead, for an operator to record as completed with a smaller output. PII fields are redacted in the copy shown in the UI and logs (section 9).
 
 PII values are never stored in plaintext in either place. Before an event is written, every declared or detected PII field (section 9.3) is replaced by an envelope `{"$pii": "<category>", "subject": "<subject id>", "ct": "<ciphertext>"}` encrypted under that data subject's key in `subject_keys`. Non-PII fields stay plaintext JSONB so they remain queryable. Workers and the orchestrator decrypt envelopes in memory when an expression needs the value; this is what makes erasure by crypto-shredding possible (section 9.4).
 
@@ -314,7 +317,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 
 - **Replay** re-runs the orchestrator over the history to reconstruct state; it executes no effects.
 - **Fork from step** creates a new run that copies history up to a chosen step and continues from there on a newer WD version. This is the repair path for failed runs.
-- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured.
+- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing.
 
 ### 4.11 Initial performance targets
 
@@ -491,6 +494,7 @@ CREATE TABLE audit_chain_heads (
 - **Tenant hierarchy.** A partner reaches a sub-tenant only when the call comes through the partner admin API (section 13.4) with the `partner.read` or `partner.manage` permission. Each transaction enters one sub-tenant through a `SECURITY DEFINER` function that checks `tenants.parent_id`, writes the access to both the partner's and the sub-tenant's audit log, and narrows the scope to that sub-tenant alone (decision 0015). Partner users acting in the partner's own workspace never get sub-tenant ids in scope, which keeps sub-tenant data isolated from them by default.
 - The application role cannot bypass RLS. Only migrations and the platform-admin role can, and their use is itself audited.
 - **Dispatch path.** Workers, the orchestrator, and the scheduler must find work across all tenants. They do this only through a small set of `SECURITY DEFINER` functions owned by a `taskiem_dispatch` role: `claim_tasks(queue, worker_id, n)`, `claim_due_timers(n)`, `claim_runs_to_orchestrate(n)`, and `recover_expired_leases()`. Each function claims rows with `SKIP LOCKED`, returns only routing columns (ids, `tenant_id`, step id, lease epoch), and touches no payloads. The caller then opens a normal transaction with `app.tenant_scope` set to that row's single tenant before reading history, secrets, or payloads, so all data access stays under RLS. These functions are fixed in migrations, reviewed like security code, and covered by the RLS bypass tests.
+- *As built:* the dispatch path is not the only one. About 290 `SECURITY DEFINER` functions, all owned by `taskiem_dispatch`, serve every lookup that must happen before a tenant is known or across tenants: sign-in and sessions, the operator console, public pages and forms, inbound WhatsApp, Telegram and email routing, the connector catalogue, partners and platform apps, besides dispatch. Each pins `search_path`; none is executable by `PUBLIC`. The ones `taskiem_app` may call are listed in `engine/db/definers.tsv` with an owner and a reason, and the columns `taskiem_dispatch` may read in `engine/db/dispatch_columns.txt`; `TestDefinersAllowList` and `TestDispatchColumnsAllowList` fail when the database and those lists differ. Row-level security stops a query that forgets `tenant_id`; it does not stop code that sets the wrong scope, since `app.tenant_scope` is a setting the application role may change: the boundary there is `db.InTenantTx` and the code that chooses the tenant ids it is given.
 - `audit_log` and `run_events` grant `INSERT` and `SELECT` only; `UPDATE` and `DELETE` are revoked from every application role.
 - Large tenants can be moved to a dedicated database by tenant id; the data model never assumes tenants share a database.
 

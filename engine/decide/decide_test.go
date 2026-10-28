@@ -1,12 +1,15 @@
 package decide
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 func TestLinearConnectorFlow(t *testing.T) {
@@ -161,6 +164,103 @@ func TestForeachConcurrencyAndOutputs(t *testing.T) {
 	}
 	if s.payload(history.StepCompleted, "report")["output"] != int64(3) || s.last().Type != history.RunCompleted {
 		t.Errorf("report/run: %s", s.types())
+	}
+}
+
+// A seeded payment inside a foreach gets one key per item: the seed must
+// read the item, since the key leaves out the loop position.
+func TestForeachSeedGivesEachItemItsOwnKey(t *testing.T) {
+	doc := wdDoc(`
+	  {"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.employees","max_concurrency":50,"steps":[
+	    {"id":"pay_employee","type":"connector","connector":"paystack@1","action":"transfer","input":{"amount":"=item.amount"},
+	     "effect":{"idempotency_seed":"=trigger.body.payroll_id + '/' + item.employee_id"}}]}}`, "")
+	if probs := wd.Validate([]byte(doc)); len(probs) > 0 {
+		t.Fatalf("item-specific seed refused: %v", probs)
+	}
+	employees := make([]any, 50)
+	for i := range employees {
+		employees[i] = map[string]any{"employee_id": fmt.Sprintf("e%02d", i), "amount": 1000}
+	}
+	s := newSim(t, doc, map[string]any{"body": map[string]any{"payroll_id": "pr-2026-10", "employees": employees}})
+	pending := s.pendingTasks()
+	if len(pending) != 50 {
+		t.Fatalf("%d tasks pending, want 50", len(pending))
+	}
+	keys := map[[32]byte]string{}
+	for _, inst := range pending {
+		p := s.payload(history.StepScheduled, inst)
+		seed, _ := p["seed"].(string)
+		step, _ := p["key_step"].(string)
+		k, err := effects.KeyInput{TenantID: "t-1", Seed: seed, StepID: step}.Digest()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if other, dup := keys[k]; dup {
+			t.Errorf("%s and %s share an idempotency key (seed %q)", other, inst, seed)
+		}
+		keys[k] = inst
+	}
+	if len(keys) != 50 {
+		t.Errorf("%d distinct keys for 50 items", len(keys))
+	}
+
+	shared := strings.Replace(doc, `"=trigger.body.payroll_id + '/' + item.employee_id"`, `"=trigger.body.payroll_id"`, 1)
+	if probs := wd.Validate([]byte(shared)); len(probs) == 0 {
+		t.Error("a seed shared by every item was accepted")
+	}
+}
+
+// A cancel that reverses waits for a write already under way: once it
+// completes, it is compensated with the rest, newest first, and the run is
+// cancelled. A step that had not started is withdrawn and never runs.
+func TestCancelWaitsForWritesUnderWayThenReverses(t *testing.T) {
+	s := newSim(t, wdDoc(`
+	  {"id":"a","type":"connector","connector":"paystack@1","action":"transfer","compensate":{"action":"reverse_transfer","input":{"ref":"=steps.a.output.ref"}}},
+	  {"id":"b","type":"connector","connector":"paystack@1","action":"transfer","needs":["a"],"compensate":{"action":"reverse_transfer","input":{"ref":"=steps.b.output.ref"}}},
+	  {"id":"c","type":"connector","connector":"paystack@1","action":"transfer","needs":["b"]}`, ""), map[string]any{})
+	s.complete("a", map[string]any{"ref": "ra"})
+	s.append(history.EffectIntent, "b", 1, history.IntentPayload{Key: "k"}, history.OriginWorker)
+	out := s.external(history.CancelRequested, "", 0, history.CancelPayload{By: "u1"}, history.OriginAPI)
+	if len(out) != 1 || out[0].Type != history.StepCancelled || out[0].StepID != "b" {
+		t.Fatalf("on cancel: %v", out)
+	}
+	if s.has(history.RunCancelled, "") || s.has(history.CompensationStarted, "") {
+		t.Fatalf("b's write is under way, nothing may be reversed yet: %s", s.types())
+	}
+	s.complete("b", map[string]any{"ref": "rb"})
+	if got := s.pendingTasks(); !reflect.DeepEqual(got, []string{"compensate:b"}) {
+		t.Fatalf("pending %v: %s", got, s.types())
+	}
+	s.complete("compensate:b", nil)
+	s.complete("compensate:a", nil)
+	end := s.last()
+	if end.Type != history.RunCancelled || !strings.Contains(string(end.Payload), `"reversed":["b","a"]`) || s.has(history.StepScheduled, "c") {
+		t.Errorf("end %s %s: %s", end.Type, end.Payload, s.types())
+	}
+}
+
+// A reversing cancel waits for the child run a subflow step waits on to
+// report how it ended (the runtime cancels it, reversing it) before the
+// parent reverses its own steps and ends.
+func TestCancelWaitsForChildRuns(t *testing.T) {
+	s := newSim(t, wdDoc(`
+	  {"id":"a","type":"connector","connector":"paystack@1","action":"transfer","compensate":{"action":"reverse_transfer","input":{"ref":"=steps.a.output.ref"}}},
+	  {"id":"sub","type":"subflow","needs":["a"],"config":{"workflow":"01a18039-c029-7707-964c-225a6fda0c6a"}}`, ""), map[string]any{})
+	s.complete("a", map[string]any{"ref": "ra"})
+	if !s.has(history.StepScheduled, "sub") {
+		t.Fatalf("setup: %s", s.types())
+	}
+	s.external(history.CancelRequested, "", 0, history.CancelPayload{By: "u1"}, history.OriginAPI)
+	if !s.has(history.StepCancelled, "sub") || s.has(history.CompensationStarted, "") {
+		t.Fatalf("the child has not ended, nothing may be reversed yet: %s", s.types())
+	}
+	s.external(history.SignalReceived, "sub", 0, map[string]any{"event": history.SubflowEvent, "payload": map[string]any{"status": "cancelled"}}, history.OriginSignal)
+	if got := s.pendingTasks(); !reflect.DeepEqual(got, []string{"compensate:a"}) {
+		t.Fatalf("pending %v: %s", got, s.types())
+	}
+	s.complete("compensate:a", nil)
+	if s.last().Type != history.RunCancelled {
+		t.Errorf("end: %s", s.types())
 	}
 }
 

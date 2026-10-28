@@ -293,17 +293,31 @@ func (s *Server) getRun(w http.ResponseWriter, r *http.Request) {
 		"plain_errors": s.plainRunErrors(r, ref.ID, events)})
 }
 
+type cancelRunReq struct {
+	// Reverse runs the compensations of the run's completed steps, newest
+	// first, before it ends (decision 0054). Omitted: true.
+	Reverse *bool `json:"reverse,omitempty"`
+}
+
 func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {
 	ref, _, err := s.runRef(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.Store.CancelRun(r.Context(), ref, principalFrom(r.Context()).Actor()); err != nil {
+	var req cancelRunReq
+	if err := decodeOptional(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error { return auditTx(r, tx, "run.cancel", "run:"+ref.ID.String(), nil) }); err != nil {
+	reverse := req.Reverse == nil || *req.Reverse
+	if err := s.Store.CancelRun(r.Context(), ref, principalFrom(r.Context()).Actor(), reverse); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		return auditTx(r, tx, "run.cancel", "run:"+ref.ID.String(), map[string]any{"reverse": reverse})
+	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}

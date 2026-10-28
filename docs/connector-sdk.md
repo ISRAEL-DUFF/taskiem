@@ -169,6 +169,7 @@ func main() {}
 - Build every URL from `r.BaseURL` (or a host in `egress_hosts`). `tc.Do` and `tc.DoJSON` are the only way out. `DoJSON` classifies statuses as built-in connectors do: 429 and 503 retryable, other 5xx unknown outcome, other 4xx fatal; `tc.StatusOf(err)` gives the status for your own handling (a 409 that means "already done", a 404 that means "not found").
 - Return errors wrapped with `tc.Retryable`, `tc.Fatal`, `tc.UnknownOutcome`, `tc.NotSent` or `tc.Indeterminate`, or `tc.NotFound` from a reconcile action. An unwrapped error is an unknown outcome. Whatever you return, Taskiem knows whether a request left, and corrects "not sent" and "unknown" accordingly.
 - `tc.Log` writes to the step's log; personal data is masked.
+- Keep outputs small: return the fields a workflow needs, not the provider's whole response. An output over 256 KB fails the step (a write, already made, parks for an operator), so page a long list with an input such as `limit` or `page`.
 
 Test the handlers natively with `go test`: set `tc.TestHTTP` to play the provider and call `tc.Run` (see `examples/wasm-connector/main_test.go`).
 

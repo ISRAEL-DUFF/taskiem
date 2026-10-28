@@ -281,7 +281,7 @@ func TestMaxRunningRunsQueues(t *testing.T) {
 	if n, _ := e.Store.AdmitQueued(ctx); n != 0 {
 		t.Fatalf("admitted %d while at the cap", n)
 	}
-	if err := e.Store.CancelRun(ctx, a.Ref, "u"); err != nil {
+	if err := e.Store.CancelRun(ctx, a.Ref, "u", true); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := e.Store.AdmitQueued(ctx); n != 1 || err != nil {
