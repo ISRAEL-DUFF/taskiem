@@ -5333,11 +5333,9 @@ paths:
       description: Its current riders by name (retired=true for those retired), with where each is reached and their state; the order form's delivery areas; and the tap-in page riders open to get deliveries on WhatsApp or Telegram.
       security:
       - sessionCookie: []
-        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: storefront.manage
-      x-taskiem-all-environments: true
       parameters:
       - name: retired
         in: query
