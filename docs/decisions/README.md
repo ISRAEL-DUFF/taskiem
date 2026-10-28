@@ -7,7 +7,7 @@ Names: the index uses today's names. Xenibase was called PGDock until October 20
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-event-sourced-execution.md) | Event-sourced runs with a pure `decide()` | Accepted |
-| [0002](0002-postgres-as-queue.md) | PostgreSQL as the task queue in v1 | Accepted; amended after the G0 spike |
+| [0002](0002-postgres-as-queue.md) | PostgreSQL as the task queue in v1 | Accepted; amended after the G0 spike, and on 2026-10-28: Postgres is the queue by design, with no interface to swap |
 | [0003](0003-cel-expressions.md) | CEL for workflow expressions | Accepted |
 | [0004](0004-tenant-isolation-rls.md) | RLS with tenant scope arrays and a dispatch role | Accepted |
 | [0005](0005-idempotency-keys.md) | Derived and per-connector encoded idempotency keys | Accepted |
