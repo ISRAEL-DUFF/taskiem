@@ -2,15 +2,20 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wasmconn/wasmtest"
 )
 
@@ -128,4 +133,64 @@ func TestTenantConnectorUploadAndRun(t *testing.T) {
 		t.Error("a disabled connector still validates")
 	}
 	acme.must(404, "POST", "/v1/tenant-connectors/x_example_ledger/1.0.0/disable", nil)
+}
+
+// A run keeps the connector version it started with (spec 6.4): a newer
+// minor version uploaded while it waits serves new runs only. The key
+// prefix differs between the versions, so the provider shows which ran.
+func TestTenantConnectorRunKeepsItsVersion(t *testing.T) {
+	manifest, module := wasmtest.Example(t)
+	var mu sync.Mutex
+	var refs []string
+	ledger := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		ref, _ := b["reference"].(string)
+		refs = append(refs, ref)
+		_, _ = w.Write([]byte(`{"id":"pay_` + strconv.Itoa(len(refs)) + `","reference":"` + ref + `","status":"pending"}`))
+	}))
+	defer ledger.Close()
+	w := newWorld(t)
+	w.env.Connectors.BaseURLs = map[string]string{"x_example_ledger": ledger.URL}
+	acme := w.tenant(t, "Acme", "owner@acme.test")
+	tenant := tenantID(t, acme)
+	if st, out := acme.upload(manifest, module); st != 201 {
+		t.Fatalf("upload 1.0.0: %d %v", st, out)
+	}
+	acme.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "x_example_ledger@1", "name": "main",
+		"credentials": map[string]string{"api_key": "ledger-key"}})
+	flow := `{"schema":"wd/v1","id":"wf_pay","version":1,"name":"pay","trigger":{"type":"manual"},
+  "steps":[{"id":"ok","type":"approval","config":{"role":"owner","timeout":"24h"}},
+    {"id":"pay","type":"connector","connector":"x_example_ledger@1","action":"create_payment","needs":["ok"],
+    "connection":"main","input":{"amount":"=trigger.body.amount","account_number":"=trigger.body.account_number"}}]}`
+	wf := publishFlow(t, acme, flow)
+	start := func() runtime.RunRef {
+		id := acme.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"amount": 5000, "account_number": "0123456789"}})["run_id"].(string)
+		return runtime.RunRef{TenantID: tenant, ID: uuid.MustParse(id)}
+	}
+	approve := func(ref runtime.RunRef) {
+		t.Helper()
+		if err := w.env.Store.DecideApproval(context.Background(), ref, "ok", "approved", "checker", "web"); err != nil {
+			t.Fatal(err)
+		}
+		w.env.Drain(t)
+	}
+	waiting := start()
+
+	// 1.1.0 changes the key's prefix, then the waiting run is approved.
+	newer := strings.Replace(strings.Replace(string(manifest), "version: 1.0.0", "version: 1.1.0", 1), `prefix: "tsk_"`, `prefix: "tsn_"`, 1)
+	if st, out := acme.upload([]byte(newer), module); st != 201 {
+		t.Fatalf("upload 1.1.0: %d %v", st, out)
+	}
+	approve(waiting)
+	later := start()
+	approve(later)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(refs) != 2 || !strings.HasPrefix(refs[0], "tsk_") || !strings.HasPrefix(refs[1], "tsn_") {
+		t.Errorf("references sent: %v; want the waiting run on 1.0.0 (tsk_), the new one on 1.1.0 (tsn_)", refs)
+	}
 }

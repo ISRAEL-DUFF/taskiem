@@ -610,6 +610,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	}
 	src := &wasmconn.Source{Pool: srcPool, Runtime: wrt, Logger: log}
 	reg.SetTenantSource(src.Connectors)
+	reg.SetVersionSource(src.Version)
 	vault := &secrets.Vault{Pool: pool, KMS: kms, RootKey: cfg.KMSKey,
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,

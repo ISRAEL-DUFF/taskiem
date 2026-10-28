@@ -415,6 +415,7 @@ type plan struct {
 	c        claim
 	env      string
 	sched    history.ScheduledPayload
+	pins     map[string]string // connector versions the run started with
 	stepType string
 	class    effects.Class
 	conn     *connector.Connector
@@ -624,6 +625,13 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		var intentTimes []time.Time
 		outcomes := map[int]history.Error{}
 		for _, e := range hist {
+			if e.Type == history.RunStarted {
+				var rs history.RunStartedPayload
+				if err := json.Unmarshal(e.Payload, &rs); err != nil {
+					return err
+				}
+				p.pins = rs.Connectors
+			}
 			if e.StepID != c.step {
 				continue
 			}
@@ -767,13 +775,17 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 		if w.Registry == nil {
 			return fmt.Errorf("no connector registry")
 		}
-		reg, err := w.Registry.For(ctx, p.c.tenant.String())
+		// The version the run started with (spec 6.4), not the newest.
+		conn, repinned, err := w.Registry.Pinned(ctx, p.c.tenant.String(), p.sched.Connector, p.pins[p.sched.Connector])
 		if err != nil {
 			return fmt.Errorf("%w: %w", errLookup, err)
 		}
-		conn, ok := reg.Get(p.sched.Connector)
-		if !ok {
+		if conn == nil {
 			return fmt.Errorf("connector %s is not installed", p.sched.Connector)
+		}
+		if repinned && w.Logger != nil {
+			w.Logger.Warn("the connector version the run started with is not available; using the newest", "run", p.c.run, "connector", p.sched.Connector,
+				"pinned", p.pins[p.sched.Connector], "using", conn.Manifest.Version)
 		}
 		spec, ok := conn.Manifest.Actions[p.sched.Action]
 		if !ok {
