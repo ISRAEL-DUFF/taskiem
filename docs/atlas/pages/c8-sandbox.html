@@ -5,7 +5,7 @@
   "part": "C",
   "order": 2,
   "summary": "Code steps in QuickJS and CPython on WebAssembly, their limits and host functions, how secrets are kept out of history, container steps on Kubernetes with gVisor, and workflow code compiled in the same sandbox.",
-  "verified": "5ace1da1c8968883e58014e3ef0df29b54f91316",
+  "verified": "8141a2027d7a8059fc6dc64eabfe8f91716d6c18",
   "sources": [
     "engine/sandbox/", "engine/container/", "cmd/taskiem-shim/", "third_party/qjs/runtime.go",
     "engine/runtime/codestep.go", "engine/runtime/containerstep.go", "engine/runtime/scrub.go",
@@ -28,7 +28,7 @@
 </table></div>
 
 <h2 id="sandbox--quickjs">JavaScript and TypeScript in QuickJS</h2>
-<p>JavaScript runs in QuickJS compiled to WebAssembly, from a vendored copy of <code>fastschema/qjs</code> (<x-ref path="docs/decisions/0011-sandbox-quickjs-fork.md">decision 0011</x-ref>). The fork makes three changes, each marked in <x-ref path="third_party/qjs/runtime.go"><code>runtime.go</code></x-ref>: a hard memory cap, an interrupt whenever the context is cancelled, and no filesystem at all.</p>
+<p>JavaScript runs in QuickJS compiled to WebAssembly, from a vendored copy of <code>fastschema/qjs</code> (<x-ref path="docs/decisions/0011-sandbox-quickjs-fork.md">decision 0011</x-ref>). The fork makes four changes, each marked "Taskiem fork": a hard memory cap, an interrupt whenever the context is cancelled, no filesystem at all, and the run's logical time as the script's clock (<x-ref path="third_party/qjs/runtime.go"><code>runtime.go</code></x-ref>).</p>
 <x-code path="third_party/qjs/runtime.go" start="// Taskiem fork: always interrupt on context cancellation, and cap memory." end="WithMemoryCapacityFromMax(true)" caption="the cap and the interrupt"/>
 <p>When a workflow is validated, <x-ref path="engine/sandbox/sandbox.go" symbol="func Compile(source, language string) (string, error) {"><code>Compile</code></x-ref> strips TypeScript with esbuild into a single function and refuses anything that still calls <code>require(</code>, so a script cannot import a package. Compiled scripts are cached, 2,048 per process, keyed by a hash of the source.</p>
 <p><x-ref path="engine/sandbox/sandbox.go" symbol="func Run(ctx context.Context, script string, input any, host Host, lim Limits) (res Result, err error) {"><code>Run</code></x-ref> builds a fresh runtime for every execution, so nothing a script does to globals or prototypes reaches the next one (<x-ref path="engine/sandbox/sandbox_test.go" symbol="func TestRunsAreIsolated("><code>TestRunsAreIsolated</code></x-ref>). Before the script runs, a prelude removes QuickJS's own <code>std</code> and <code>os</code> modules and installs the one object a script may use:</p>
@@ -66,8 +66,8 @@
 <p>The host gives a script four things (<x-ref path="engine/sandbox/sandbox.go" symbol="type Host struct {"><code>Host</code></x-ref>): <code>log</code>, <code>now</code> (the run's logical time), <code>secret</code> (only the secrets the step declares) and <code>fetch</code>. <x-ref path="engine/runtime/codestep.go" symbol="func (w *Worker) runCode(ctx context.Context, p *plan, input any) (sandbox.Result, error) {"><code>runCode</code></x-ref> wires <code>fetch</code> through the same egress guard as connectors. The guard allows only the environment's hosts, resolves the name and refuses any private, loopback or metadata address before it dials the address it checked, so a DNS answer cannot change between the check and the call (<x-ref path="engine/egress/egress.go" symbol="func (g *Guard) DialContext("><code>Guard.DialContext</code></x-ref>). Redirects are checked the same way.</p>
 <p>Since findings 1, <code>fetch</code> refuses anything but GET and HEAD. A code step is recorded as a read, with no intent before it, so a write from one would be sent again whenever a worker died mid-step:</p>
 <x-code path="engine/runtime/codestep.go" start="// errFetchWrite refuses a write from a code step." end="var errFetchWrite = errors.New(" caption="writes go through http or connector steps"/>
-<div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec says code gets "no clock except through host functions" (<x-ref path="docs/spec/architecture.md" symbol="Code gets no network, no filesystem, and no clock">spec 7</x-ref>). QuickJS is given the real system clock, so <code>Date.now()</code> returns the time the step happened to run, not the run's logical time; <code>host.now()</code> returns the logical time. Checked by running both in one script. Replay is unaffected, since a code step's output is recorded, but a script that uses <code>Date</code> behaves differently on a retry or a fork. Python's clock is the logical time.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Code gets "no clock except through host functions" (<x-ref path="docs/spec/architecture.md" symbol="Code gets no network, no filesystem, and no clock">spec 7</x-ref>). QuickJS used to get the host's clock, so <code>Date.now()</code> was the time the step happened to run and differed on a retry or a fork. The fork now takes a wall clock (<x-ref path="third_party/qjs/options.go" symbol="Walltime func() (sec int64, nsec int32)"><code>Option.Walltime</code></x-ref>), and <code>Date</code> is the run's logical time, the same as <code>host.now()</code> and Python's <code>time.time()</code> (<x-ref path="engine/sandbox/sandbox_test.go" symbol="func TestDateIsTheLogicalClock("><code>TestDateIsTheLogicalClock</code></x-ref>).</p>
 </div>
 
 <h2 id="sandbox--secrets">Secrets, and keeping them out of history</h2>

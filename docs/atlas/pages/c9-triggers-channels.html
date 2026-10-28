@@ -5,7 +5,7 @@
   "part": "C",
   "order": 3,
   "summary": "How work gets in: every /hooks route and how it is verified, registration with providers, platform apps routed by account, polling and cron, rates and back-pressure, and the WhatsApp, Telegram, USSD and email channels.",
-  "verified": "ad3b87efe7f5a22c7de4a3e942a3e22a11286623",
+  "verified": "8141a2027d7a8059fc6dc64eabfe8f91716d6c18",
   "sources": [
     "engine/ingest/", "engine/remote/", "engine/whatsapp/", "engine/telegram/", "engine/ussd/", "engine/inmail/", "engine/voice/", "engine/lang/", "engine/reach/",
     "api/whatsapp_chat.go", "api/telegram.go", "api/ussd.go", "api/oauthconnections.go", "cmd/taskiem/mail.go",
@@ -40,8 +40,9 @@
 <p>Signals to waiting runs are never throttled: a payment confirmation for a run that is already under way is always let through.</p>
 <h3>Duplicates</h3>
 <p>A provider that does not hear back sends again. Each trigger has a dedup key: the manifest's expression for connector events (Paystack uses the event and the transfer's reference), or the SHA-256 of the body for a plain webhook. A second delivery with the same key starts nothing and answers <code>"duplicate": true</code>. The key is held in <code>trigger_receipts</code> in the same transaction as the run (<x-ref path="engine/runtime/store.go" symbol="INSERT INTO trigger_receipts">store.go</x-ref>), so a crash cannot record one without the other.</p>
-<div class="callout risk"><span class="callout-label">Risk</span>
-  <p>Nothing ever deletes from <code>trigger_receipts</code>. The run purge in <x-ref path="engine/db/migrations/00012_triggers.sql" symbol="CREATE OR REPLACE FUNCTION taskiem_purge_run(p_run uuid)">00012</x-ref> removes a run's events, tasks and approvals, not its receipts. The table grows with every delivery ever taken. Because the default key is the body hash, a webhook whose body is legitimately identical to one sent last year is still treated as a duplicate. Receipts should be purged with their run, or after a window such as 30 days. They are also the only replay defence for the schemes that sign no timestamp (plain HMAC, bearer, basic and the secret schemes), so the window should be well over any provider's retry period.</p>
+<p>A key dedups for 30 days, well past any provider's retries. After that the same delivery is new again: the old receipt is taken over (<x-ref path="engine/runtime/store.go" symbol="const insertReceipt ="><code>insertReceipt</code></x-ref>). Every hour the scheduler deletes receipts past the window through <x-ref path="engine/db/migrations/00240_trigger_receipt_window.sql" symbol="CREATE FUNCTION taskiem_purge_trigger_receipts()"><code>taskiem_purge_trigger_receipts</code></x-ref>. That function fixes the window itself, so no caller can clear a fresh receipt and have a delivery replayed. The receipt is also the only replay defence for schemes that sign no timestamp (plain HMAC, bearer, basic and the secret schemes), so 30 days covers any retry period.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Receipts were never deleted: the table grew with every delivery, and a body sent again months later was dropped as a duplicate.</p>
 </div>
 
 <h2 id="triggers-channels--registration">Registering triggers</h2>
@@ -52,8 +53,9 @@
 <p>For Slack, Meta and QuickBooks, a tenant connects through Taskiem's own app, and the provider sends every event for every customer to one address. <x-ref path="engine/ingest/apps.go" symbol="func (h *Handler) appEvent("><code>appEvent</code></x-ref> verifies the delivery with the app's secret, reads the account it is about (a Slack team, a Meta page, a QuickBooks company), and finds every connection made for that account (<x-ref path="docs/decisions/0051-platform-apps.md">decision 0051</x-ref>):</p>
 <x-code path="engine/db/migrations/00228_platform_apps.sql" start="CREATE FUNCTION taskiem_app_route_event(p_connector text, p_account text)" lines="11" lang="sql"/>
 <p>Each matching tenant's own gate then applies, and the event is delivered as if it had come to that tenant's own address. An event for an account nobody holds is counted and acknowledged with <code>200</code>, since a provider such as Slack wants plain success within three seconds.</p>
-<div class="callout risk"><span class="callout-label">Risk: needs a test and probably a fix</span>
-  <p>Routing trusts the account recorded on the connection. For QuickBooks that account is the company id, and it is taken from the <code>realmId</code> in the OAuth redirect, which passes through the user's browser (<x-ref path="connectors/quickbooks/manifest.yaml" symbol="fields_from_callback: { realm_id: realmId }">manifest</x-ref>, <x-ref path="api/oauthconnections.go" symbol="func applyCallbackFields("><code>applyCallbackFields</code></x-ref>). The callback saves the connection and its account without calling QuickBooks to confirm the token is for that company. The connector's own test, <code>get_company</code>, is not run there. A user who edits <code>realmId</code> on the redirect could therefore register another company's id and receive that company's Intuit change notifications (entity names, ids and operations) in their own workflows. They could not read the company's data, since API calls with their own token would be refused. The fix is to call <code>companyinfo/{realm}</code> with the new token before saving, and refuse on failure. Slack and Meta take their account from the token or the link step, so they are not affected. This was found by reading the code and has not been reproduced.</p>
+<p>Routing trusts the account recorded on the connection. For QuickBooks that account is the company id, taken from the <code>realmId</code> in the OAuth redirect, which passes through the person's browser (<x-ref path="connectors/quickbooks/manifest.yaml" symbol="fields_from_callback: { realm_id: realmId }">manifest</x-ref>). So before a connection is saved, linking asks the provider about any field from the callback: it runs the connector's test action (QuickBooks' <code>get_company</code>) with the new token. If the provider refuses, the token is revoked and nothing is saved (<x-ref path="api/oauthconnections.go" symbol="func withGrantedToken("><code>oauthconnections.go</code></x-ref>). A manifest that takes fields from the callback must declare a test.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The callback's <code>realmId</code> used to be saved unchecked. Someone who edited the redirect could register another company's id and receive that company's Intuit change notifications. <x-ref path="api/oauth_quickbooks_test.go" symbol="// A realmId changed on the way back names a company the token is not">The QuickBooks test</x-ref> now shows such a link refused.</p>
 </div>
 <p>Two smaller points on this path. The per-app rate limit is spent before the signature is checked, so a flood of unsigned requests can cause the provider's real deliveries to get <code>429</code>. The platform-client path counts only after verifying. And one target tenant that is suspended or over its ceiling fails the whole delivery, so the provider retries it for everyone. The others then see duplicates, which are dropped.</p>
 
@@ -79,13 +81,12 @@
     <tr><td>starter</td><td>5 / 25</td><td>20 / 100</td></tr>
     <tr><td>growth</td><td>25 / 125</td><td>75 / 300</td></tr>
     <tr><td>business</td><td>100 / 500</td><td>250 / 1,000</td></tr>
-    <tr><td>enterprise</td><td>20 / 100 (the defaults)</td><td>50 / 200 (the defaults)</td></tr>
+    <tr><td>enterprise</td><td>250 / 1,250</td><td>500 / 2,000</td></tr>
   </tbody>
 </table></div>
 <p>Bodies are capped at 1 MB for every plan, up to 10 MB by override. Queued runs are admitted by a token bucket in the database, so admission is the same whichever edge took the delivery.</p>
 <div class="callout risk"><span class="callout-label">Risk</span>
   <ul>
-    <li>The enterprise plan sets no ingest rates, so it falls back to the defaults, below business. Probably an omission in <code>plans.yaml</code>.</li>
     <li>The rate limiters live in each edge process. With three edge replicas a tenant's ceiling is three times what the plan says.</li>
     <li>Looking up a tenant that is not cached is limited to 100 a second across all tenants. Requests for random tenant ids can use that up, and real tenants whose cache entry has just expired then get <code>429</code> for a moment.</li>
   </ul>
