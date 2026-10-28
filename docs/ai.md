@@ -111,7 +111,7 @@ Rules classify first, from the failing step's error kind, HTTP status, connector
 
 A patch is shown only after it has passed, within at most three model attempts (failures are fed back):
 
-1. the publishing checks (`wdcheck`), with the workflow's id kept and no new policy finding;
+1. the publishing checks (`wdcheck`), with the workflow's id kept and no new policy finding, step by step: every payment that had an approval before still has one, whatever happens to the others, with template steps read through the business's own callable workflows as well as the library;
 2. a **shadow run** of the patched workflow over the failed run's **real recorded data**, on the real orchestrator (`engine/wdtest`, virtual clock): the recorded trigger, completed steps answered with their recorded outputs (exactly what a resume would replay), every other task mocked from its action's output schema (so every write is mocked and nothing is sent), recorded approvals and signals. It must complete, with connector inputs that match their actions' input schemas. A completed write whose input the patch would change makes the proposal **publish-only** (the run cannot be resumed with it);
 3. the **regression test** for the failing case, built from the redacted recording, which must pass on the patch (the evidence notes whether it fails on the old version, as the run did), and the model's own test if it wrote one;
 4. every **stored test** of the workflow (`workflow_tests`: regression tests of earlier accepted repairs).
