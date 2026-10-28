@@ -150,6 +150,17 @@ func TestOIDCSignIn(t *testing.T) {
 	if me["auth_method"] != "sso" || strings.Join(toStrings(me["roles"]), ",") != "operator,viewer" {
 		t.Fatalf("me: %v", me)
 	}
+	// Ada has no factor of her own: changing factors needs a sign-in moments
+	// ago, so a session someone took cannot enrol a passkey that outlives it.
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE sessions s SET created_at = now() - interval '11 minutes' FROM users u
+		WHERE u.id = s.user_id AND u.email = 'ada@bank.test'`); err != nil {
+		t.Fatal(err)
+	}
+	if st, body := ada.do("POST", "/v1/me/totp", nil); st != 403 || toJSON(body["reauth"]) != `["sign_in"]` {
+		t.Fatalf("an SSO session from 11 minutes ago sets up a factor: %d %v", st, body)
+	}
+	_, ada = w.oidcSignIn(t, idp, id)
+	ada.must(200, "POST", "/v1/me/totp", nil)
 	// Leaving the group takes away the role SSO gave, not others.
 	owner.must(201, "POST", "/v1/members", map[string]any{"email": "ada@bank.test", "roles": []string{"approver"}})
 	idp.Claims["groups"] = []any{}

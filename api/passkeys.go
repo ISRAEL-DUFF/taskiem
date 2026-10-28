@@ -674,9 +674,20 @@ func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof facto
 		if proof.Password == "" || !checkPassword(hash, proof.Password) {
 			return need("enter your password to confirm it is you", "password")
 		}
+	default:
+		// No factor of their own (signed up through SSO): the proof is a
+		// sign-in moments ago, so a session someone took cannot enrol a
+		// passkey that outlives it (Atlas part D findings).
+		if time.Since(p.SignedInAt) > recentSignIn {
+			return need("sign in again to confirm it is you, then try again", "sign_in")
+		}
 	}
 	return true
 }
+
+// recentSignIn is how lately a person with no factor of their own must
+// have signed in to change their sign-in factors.
+const recentSignIn = 10 * time.Minute
 
 // passkeyRefused reports whether err refuses the assertion (rather than
 // failing to check it).

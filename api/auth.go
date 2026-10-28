@@ -80,6 +80,8 @@ type Principal struct {
 	KeyOwner uuid.UUID
 	// AuthMethod is how the session signed in: password, passkey or sso.
 	AuthMethod string
+	// SignedInAt is when the session signed in (sessions only).
+	SignedInAt time.Time
 	// EnrolOnly marks a password session of an administrator held to
 	// passkeys: it may only enrol one.
 	EnrolOnly bool
@@ -330,7 +332,7 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return &p, nil
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod); err != nil {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod, &p.SignedInAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Perhaps someone with no membership answering invitations.
 			return s.resolveInvitee(r, tok, viaCookie)

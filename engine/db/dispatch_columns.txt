@@ -801,6 +801,7 @@ secret_reads.at
 secret_reads.id
 secret_reads.tenant_id
 sessions.auth_method
+sessions.created_at
 sessions.expires_at
 sessions.revoked_at
 sessions.tenant_id
