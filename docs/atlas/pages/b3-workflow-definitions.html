@@ -5,7 +5,7 @@
   "part": "B",
   "order": 1,
   "summary": "The wd/v1 document every editor produces: its structure and step types, CEL expressions, the three layers of validation, versions and environments, and the round trip between canvas, code and Git.",
-  "verified": "9cb086e6ba6096962dff16feeca45f6d7fbfb6df",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
   "sources": [
     "engine/wd/", "engine/expr/", "engine/wdcheck/", "engine/wdmerge/", "engine/wdtest/", "engine/flowcode/", "engine/expansion/",
     "engine/runtime/templatepins.go", "engine/runtime/capability.go", "engine/decide/decide.go",
@@ -40,6 +40,7 @@
   </tbody>
 </table></div>
 <p>Every step can have <code>needs</code> (steps it waits for), <code>when</code> (a condition), <code>retry</code>, <code>timeout</code>, <code>on_error</code> (steps to run if it fails), <code>effect</code> (the idempotency seed) and <code>compensate</code> (the action that undoes it).</p>
+<p>Inside a <code>foreach</code>, validation refuses a write whose seed is the same for every item, since each item would then share one key and only the first would happen (<x-ref path="engine/wd/exprcheck.go" symbol="func (c *exprChecker) seedPerItem("><code>seedPerItem</code></x-ref>).</p>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
   <p>The spec lists 15 step types and marks <code>form</code> as proposed (<x-ref path="docs/spec/architecture.md" symbol="### 3.2 Step types">spec 3.2</x-ref>). The code has <code>form</code> built and adds <code>container</code>, <code>capability</code> and <code>template</code>. Capability and template steps change what "the definition" means at run time: the version that is published is not the exact graph that runs. The run pins its expansion (<code>runs.expansion</code>), and the run inspector has to show the expanded steps.</p>
 </div>
@@ -70,8 +71,9 @@
 <p>Every save makes a new immutable version. A database trigger refuses changes to <code>definition</code> or <code>digest</code> once a version exists (<x-ref path="engine/db/migrations/00003_definitions.sql" symbol="CREATE FUNCTION taskiem_workflow_versions_immutable()">00003</x-ref>). The digest is a SHA-256 of the canonical JSON (<x-ref path="api/workflows.go" symbol="func canonical("><code>canonical</code></x-ref>). Runs pin the version they started on, so editing a workflow never changes a run in flight.</p>
 <p>Versions move through <code>draft</code>, <code>published</code>, <code>deprecated</code> and <code>archived</code>. Each environment (<code>dev</code>, <code>staging</code>, <code>prod</code>, or the tenant's own) runs its own version, recorded in <code>deployments</code>. Publishing deploys to every environment not gated on another. A gated environment only takes a version by promotion from the environment it names. Promotion copies the version and never edits it (<x-ref path="engine/db/migrations/00024_deployments.sql" symbol="CREATE TABLE deployments">00024</x-ref>).</p>
 <p>When a tenant turns on four-eyes publishing, a person asks to publish and a different person approves. API keys cannot ask. Every path that publishes checks the setting: the web app, chat, Git sync, AI repair, partner packages and receive-money (<x-ref path="api/workflows.go" symbol="func (s *Server) publish("><code>publish</code></x-ref>).</p>
-<div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec makes publish approval "configurable per environment" (<x-ref path="docs/spec/architecture.md" symbol="Publishing can require approval">spec 3.4</x-ref>). In the code it is one tenant-wide switch, <code>governance_settings.four_eyes_publish</code>. A tenant cannot require approval for <code>prod</code> while letting <code>dev</code> publish freely. Gating <code>prod</code> behind promotion from <code>staging</code> gets close, but promotion itself is not four-eyes.</p>
+<p>The approval can be required in every environment or only in the ones the tenant names, <code>governance_settings.four_eyes_publish_environments</code>, so <code>prod</code> can need a second person while <code>dev</code> publishes freely. A publish needs approval when any environment it deploys to is on the list. Promoting into a listed environment, and connecting Git to one, need it too (<x-ref path="api/governance.go" symbol="func (g governance) approvalNeeded("><code>approvalNeeded</code></x-ref>, <x-ref path="docs/spec/architecture.md" symbol="Publishing can require approval">spec 3.4</x-ref>).</p>
+<div class="callout"><span class="callout-label">Resolved: findings 5e</span>
+  <p>This was one tenant-wide switch until migration <code>00239</code>. An empty list keeps the old meaning: every environment.</p>
 </div>
 
 <h2>Code, canvas and Git</h2>

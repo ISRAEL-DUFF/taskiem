@@ -5,7 +5,7 @@
   "part": "A",
   "order": 1,
   "summary": "What Taskiem is, the roles its one binary runs as, how the repository is laid out, and a map of every engine package.",
-  "verified": "7659a15c26772a700fc5de6d51a07eaa6b4ba5ff",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
   "sources": ["cmd/taskiem/serve.go", "cmd/taskiem/main.go", "engine/runtime/scheduler.go", "go.mod", "web/package.json", "docs/spec/architecture.md"]
 }
 -->
@@ -147,9 +147,18 @@
   <li>The spec's example workflow uses <code>smileid@2</code>. There is no such connector. Identity checks go through <code>youverify</code>, <code>prembly</code> and <code>dojah</code>.</li>
   <li>Several tools named in the stack table are not used (above).</li>
   <li>There are <x-stat name="definer-functions"/> <code>SECURITY DEFINER</code> functions that bypass row-level security, not the spec's four. <x-page id="data-model--the-cross-tenant-functions">Data model</x-page></li>
-  <li>The task queue has no interface to swap for NATS JetStream. Cancelling a run does not compensate. Archives go to a local directory, not object storage, and large outputs are never moved out of the database. <x-page id="durable-execution">Durable execution</x-page></li>
-  <li>The <code>waiting</code> run status is never set. <x-page id="durable-execution--run-statuses">Run statuses</x-page></li>
-  <li>Publish approval is one tenant-wide switch, not per environment. <x-page id="workflow-definitions--versions-environments-and-publishing">Workflow definitions</x-page></li>
-  <li>An operator's "retry" on a parked payment reuses the old idempotency key, where the contract says it should get a new one. <x-page id="exactly-once--when-a-person-has-to-decide">Exactly-once effects</x-page></li>
+  <li>Large outputs are never moved out of the database: <code>payload_ref</code> is unused and outputs over 256 KB are refused or cut. <x-page id="durable-execution">Durable execution</x-page></li>
+</ol>
+<p>These were differences and have been resolved, in the code or by correcting the spec (findings 1 to 5):</p>
+<ul>
+  <li>Postgres is the queue by design. The spec no longer promises an interface to swap for NATS JetStream.</li>
+  <li>Cancelling a run reverses its completed steps (decision 0054). <x-page id="durable-execution">Durable execution</x-page></li>
+  <li>Runs past retention can be archived to an S3-compatible bucket, not only a local directory.</li>
+  <li>A run waiting on a timer, signal or approval has status <code>waiting</code>. <x-page id="durable-execution--run-statuses">Run statuses</x-page></li>
+  <li>Publish approval can be required per environment. <x-page id="workflow-definitions--versions-environments-and-publishing">Workflow definitions</x-page></li>
+  <li>An operator's retry on a parked write gets a new idempotency key. <x-page id="exactly-once--when-a-person-has-to-decide">Exactly-once effects</x-page></li>
+  <li>Code steps cannot write through <code>fetch</code>, and seeds inside a <code>foreach</code> must differ per item. <x-page id="exactly-once">Exactly-once effects</x-page></li>
+  <li>The cross-tenant functions are pinned to an owned allow-list. <x-page id="data-model--the-cross-tenant-functions">Data model</x-page></li>
+</ul>
 </ol>
 <p>The code also goes past the spec in places. Workers claim tasks fairly across tenants, with a concurrency cap per tenant and dedicated worker pools. Runs over a tenant's limits are queued and admitted later instead of being refused. The <x-page id="durable-execution"/> page covers both.</p>

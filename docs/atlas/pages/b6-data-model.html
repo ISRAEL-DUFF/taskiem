@@ -5,7 +5,7 @@
   "part": "B",
   "order": 4,
   "summary": "The schema as the migrations leave it, row-level security driven by a tenant scope, the three database roles, the cross-tenant functions, and what the isolation does and does not protect against.",
-  "verified": "9cb086e6ba6096962dff16feeca45f6d7fbfb6df",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
   "sources": [
     "engine/db/", "cmd/taskiem/serve.go", "engine/publicweb/hosts_db_test.go",
     "docs/decisions/0004-tenant-isolation-rls.md", "docs/operations.md", "docs/spec/architecture.md"
@@ -68,17 +68,16 @@
 <p>Some work has to see every tenant: claiming tasks, firing timers, finding a user by email before anyone knows their tenant, routing an inbound WhatsApp message to its business. That work goes through <code>SECURITY DEFINER</code> functions owned by <code>taskiem_dispatch</code>. The dispatch role has policies of its own on the routing tables only, with column-level grants, so even its functions cannot read payloads:</p>
 <x-code path="engine/db/migrations/00006_dispatch.sql" start="-- taskiem_dispatch sees every row of the tables it routes" lines="16"/>
 <p>The rule each function follows: claim with <code>SKIP LOCKED</code>, return only routing columns, and let the caller open a normal tenant-scoped transaction to read anything else. Every definer function in the migrations pins <code>search_path</code>, which closes the classic hijack of an unqualified name.</p>
-<div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec describes "a small set" of four dispatch functions, "reviewed like security code" (<x-ref path="docs/spec/architecture.md" symbol="**Dispatch path.**">spec 5.3</x-ref>). The migrations define <strong><x-stat name="definer-functions"/></strong> <code>SECURITY DEFINER</code> functions. Grouped by name, the largest families are public pages (about 34), authentication (27), the operator console (25), WhatsApp and Telegram (32), the connector catalogue (14) and partners (11). Each is a doorway past row-level security.</p>
-</div>
-<div class="callout risk"><span class="callout-label">Risk</span>
-  <p>The guard rails around these functions are good but partial:</p>
+<p>There are <strong><x-stat name="definer-functions"/></strong> of them, not the spec's original four. Grouped by name, the largest families are public pages (about 34), authentication (27), the operator console (25), WhatsApp and Telegram (32), the connector catalogue (14) and partners (11). Each is a doorway past row-level security. Spec 5.3 now describes them as built (<x-ref path="docs/spec/architecture.md" symbol="- *As built:* the dispatch path is not the only one.">spec 5.3</x-ref>).</p>
+<div class="callout risk"><span class="callout-label">Risk, partly resolved (findings 3)</span>
+  <p>What fences these functions now:</p>
   <ul>
-    <li><x-ref path="engine/db/db_test.go" symbol="func TestEveryTenantTableIsProtected("><code>TestEveryTenantTableIsProtected</code></x-ref> checks every table has RLS enabled and forced, with an app policy, and that partitions are not directly readable.</li>
-    <li><x-ref path="engine/db/db_test.go" symbol="func TestDispatchRoleCannotReadPayloads("><code>TestDispatchRoleCannotReadPayloads</code></x-ref> checks that the dispatch role is refused on a hand-kept list of sensitive columns.</li>
-    <li>The public host's test pins the exact set of functions <code>taskiem_public</code> may execute (<x-ref path="engine/publicweb/hosts_db_test.go" symbol="allowed := map[string]bool{">hosts_db_test.go</x-ref>).</li>
+    <li><x-ref path="engine/db/definers_test.go" symbol="func TestDefinersAllowList("><code>TestDefinersAllowList</code></x-ref> pins every definer function <code>taskiem_app</code> may execute to <x-ref path="engine/db/definers.tsv"><code>definers.tsv</code></x-ref>, each with an owner and a reason, and fails when one lacks <code>search_path</code> or is executable by <code>PUBLIC</code>. A new function cannot reach the API without a line there.</li>
+    <li><x-ref path="engine/db/definers_test.go" symbol="func TestDispatchColumnsAllowList("><code>TestDispatchColumnsAllowList</code></x-ref> turns the dispatch role's readable columns into an allow-list (<code>dispatch_columns.txt</code>).</li>
+    <li><x-ref path=".github/CODEOWNERS"><code>CODEOWNERS</code></x-ref> asks the named owner to review any change to those lists.</li>
+    <li><x-ref path="engine/db/db_test.go" symbol="func TestEveryTenantTableIsProtected("><code>TestEveryTenantTableIsProtected</code></x-ref> checks every table has RLS enabled and forced, and the public host's test pins what <code>taskiem_public</code> may execute.</li>
   </ul>
-  <p>Two things are missing. Nothing pins the set of functions <code>taskiem_app</code> may execute, so a new definer function only needs a <code>GRANT</code> to become reachable from the API. And the column denylist only covers what someone remembered to add. A test that lists every definer function, requires each to be recorded in an allow-list with a one-line justification, and asserts the <code>search_path</code> pin, would turn review into something CI enforces.</p>
+  <p>Still open: 82 reasons in <code>definers.tsv</code> only repeat their migration's heading; there is no lint against SQL built from strings; and the functions have not been reviewed family by family against the "routing columns only" rule. GitHub never asks a pull request's author to review it, so on the owner's own changes there is no second reviewer.</p>
 </div>
 
 <h2>What the isolation protects against, and what it does not</h2>

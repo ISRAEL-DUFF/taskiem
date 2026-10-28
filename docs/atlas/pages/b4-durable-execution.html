@@ -5,7 +5,7 @@
   "part": "B",
   "order": 2,
   "summary": "How a run survives crashes: the event log, the pure decision function, the Postgres task queue with leases and fencing, timers and signals, retries and compensation, admission, subflows, forks, and retention.",
-  "verified": "9cb086e6ba6096962dff16feeca45f6d7fbfb6df",
+  "verified": "80997cf34c2d8c942cc09f2de67ea2fc95a15419",
   "sources": [
     "engine/runtime/store.go", "engine/runtime/worker.go", "engine/runtime/scheduler.go", "engine/runtime/concurrency.go", "engine/runtime/admission.go",
     "engine/runtime/fork.go", "engine/runtime/subflows.go", "engine/runtime/retention.go", "engine/runtime/decidecache.go", "engine/runtime/httpstep.go",
@@ -37,6 +37,7 @@
     <tr><td><span class="evt">TimerFired</span> <span class="evt">SignalReceived</span></td><td>scheduler, signal delivery</td><td>Time passed, or an outside event matched a wait</td></tr>
     <tr><td><span class="evt">ApprovalRequested</span> <span class="evt">ApprovalDecided</span></td><td>decide, API</td><td>A human decision opened and closed</td></tr>
     <tr><td><span class="evt">CompensationStarted</span> <span class="evt">CompensationCompleted</span></td><td>decide</td><td>Rollback of completed steps after a failure</td></tr>
+    <tr><td><span class="evt">CancelRequested</span></td><td>API</td><td>A person cancelled the run and asked for its completed steps to be reversed (the default). Decide then winds it down</td></tr>
     <tr><td><span class="evt">RunCompleted</span> <span class="evt">RunFailed</span> <span class="evt">RunCancelled</span></td><td>decide, API</td><td>Terminal</td></tr>
   </tbody>
 </table></div>
@@ -70,8 +71,8 @@
 </svg>
 <figcaption class="d-caption">A queued run waits for a tenant limit or a concurrency slot. A run parked in <code>needs_reconciliation</code> has a write whose outcome is unknown and waits for a person.</figcaption>
 </figure>
-<div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The <code>runs.status</code> constraint and the spec both allow <code>waiting</code>, but the runtime never sets it. A run waiting on an approval, a timer or a signal shows as <code>running</code>. Anything that wants "runs waiting on a person" has to look at open <code>approvals</code>, <code>timers</code> and <code>signal_waits</code>, not at the status.</p>
+<div class="callout note"><span class="callout-label">Resolved: findings 5f</span>
+  <p>Runs now show <code>waiting</code>. The update that ends every decision settles a live run's status (<x-ref path="engine/runtime/store.go" symbol="const settleStatus"><code>settleStatus</code></x-ref>): <code>running</code> while it has a task queued or with a worker, <code>waiting</code> while all it has left is an approval, a timer, a signal, a form, a callback or a child run. A run backing off before a retry has its task queued, so it shows <code>running</code>. Waiting runs still count against the plan's running-runs limit and in usage figures.</p>
 </div>
 
 <h2>The task queue</h2>
@@ -113,9 +114,15 @@
   <li>When retries run out, <x-ref path="engine/decide/decide.go" symbol="func (d *decider) finalise("><code>finalise</code></x-ref> fails the step. If any attempt was a write that may have taken effect, it parks it instead.</li>
   <li>A failed step runs its <code>on_error</code> steps if it has them. Otherwise the run fails, after <x-ref path="engine/decide/decide.go" symbol="func (d *decider) compensate("><code>compensate</code></x-ref> has run the <code>compensate</code> action of every completed step that declares one, newest first. A compensation that fails parks the run rather than looping.</li>
 </ul>
-<div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec says cancelling a run "runs compensation if configured" (<x-ref path="docs/spec/architecture.md" symbol="**Cancel** appends `RunCancelled`">spec 4.10</x-ref>). <x-ref path="engine/runtime/store.go" symbol="func (s *Store) CancelRun("><code>CancelRun</code></x-ref> appends <span class="evt">RunCancelled</span> and ends the run immediately. Pending tasks and timers are deleted, and no compensation runs. A step a worker already holds still records its result. If cancelling a run should reverse transfers it already made, that has to be done by hand or built.</p>
-</div>
+<h3>Cancelling</h3>
+<p>Cancelling reverses a run by default (decision 0054). <x-ref path="engine/runtime/store.go" symbol="func (s *Store) cancelTx("><code>cancelTx</code></x-ref> appends <span class="evt">CancelRequested</span> and decides, and <x-ref path="engine/decide/decide.go" symbol="func (d *decider) cancelRun()"><code>cancelRun</code></x-ref> takes it from there:</p>
+<ol>
+  <li>It withdraws every step that started and has not finished (<span class="evt">StepCancelled</span>). Approvals, timers, signal waits and forms close.</li>
+  <li>It cancels, reversing them too, the child runs its subflow steps wait for (<x-ref path="engine/runtime/subflows.go" symbol="func (s *Store) childrenToReverse("><code>childrenToReverse</code></x-ref>). The children are cancelled after the parent's decision is written, so a child that ends at once is heard in the next round.</li>
+  <li>It waits for writes already under way, for a write parked for a person, and for each child to end.</li>
+  <li>It runs the completed steps' compensations, newest first, exactly as a failure does, then appends <span class="evt">RunCancelled</span> naming who cancelled it and what was reversed.</li>
+</ol>
+<p><code>POST /v1/runs/{run}/cancel</code> with <code>{"reverse": false}</code> ends the run at once instead, leaving completed steps as they are. A queued run, which has done nothing, is always cancelled at once.</p>
 
 <h2>Admission and concurrency</h2>
 <p>A run can be held as <code>queued</code> for two different reasons, recorded in <code>runs.queue_reason</code>:</p>
@@ -137,13 +144,9 @@
 <p>Forks reuse the decision loop with a much higher bound (4,096 rounds instead of 16), because each replayed outcome takes a round. <x-ref path="engine/runtime/fork.go" symbol="func (s *Store) planFork("><code>planFork</code></x-ref> refuses runs that cannot be resumed safely and says why.</p>
 
 <h2>Retention and archiving</h2>
-<p>When a run ends, <code>endRun</code> sets <code>retain_until</code> from the workflow's <code>settings.retention</code>, the tenant's default, or the platform default, capped by the plan. Every ten minutes the scheduler archives and then deletes up to 500 runs past retention (<x-ref path="engine/runtime/retention.go" symbol="func (s *Scheduler) PurgeExpired("><code>PurgeExpired</code></x-ref>). Without an archiver configured (<code>TASKIEM_ARCHIVE_DIR</code>), nothing is deleted: history is never dropped unarchived.</p>
+<p>When a run ends, <code>endRun</code> sets <code>retain_until</code> from the workflow's <code>settings.retention</code>, the tenant's default, or the platform default, capped by the plan. Every ten minutes the scheduler archives and then deletes up to 500 runs past retention (<x-ref path="engine/runtime/retention.go" symbol="func (s *Scheduler) PurgeExpired("><code>PurgeExpired</code></x-ref>). History goes to an S3-compatible bucket (<x-ref path="engine/archive/s3.go" symbol="type S3 struct"><code>archive.S3</code></x-ref>, <code>TASKIEM_ARCHIVE_S3_BUCKET</code>), one gzipped JSON-lines object per run at <code>&lt;prefix&gt;&lt;tenant&gt;/&lt;run&gt;.jsonl.gz</code>, or to a mounted directory on single-node installs (<x-ref path="engine/runtime/retention.go" symbol="type FileArchiver struct"><code>FileArchiver</code></x-ref>, same layout). A refused write leaves the run in place. With neither configured, nothing is deleted: history is never dropped unarchived.</p>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>Two storage promises in the spec are not built:</p>
-  <ul>
-    <li>Archives go to object storage after 90 days (<x-ref path="docs/spec/architecture.md" symbol="| Run history retention |">spec 4.11</x-ref>). The only archiver is <x-ref path="engine/runtime/retention.go" symbol="type FileArchiver struct"><code>FileArchiver</code></x-ref>, which writes gzipped JSON lines to a local directory. In a multi-node deployment that directory must be shared storage, or archives end up scattered across machines.</li>
-    <li>Outputs over 256 KB move to object storage, referenced by content hash (<x-ref path="docs/spec/architecture.md" symbol="Step outputs up to 256 KB are stored inline">spec 4.9</x-ref>). <code>run_events</code> has a <x-ref path="engine/db/migrations/00004_execution.sql" symbol="payload_ref"><code>payload_ref</code></x-ref> column, but nothing reads or writes it. Every output is stored inline. HTTP steps truncate responses at <x-ref path="engine/runtime/httpstep.go" symbol="const maxHTTPBody">256 KB</x-ref>, but connector, code and AI outputs have no equivalent cap here. A connector that returns a large list will bloat history, the fold cache and every replay.</li>
-  </ul>
+  <p>Outputs over 256 KB are meant to move to object storage, referenced by content hash (<x-ref path="docs/spec/architecture.md" symbol="Step outputs up to 256 KB are stored inline">spec 4.9</x-ref>). That is still not built: <code>run_events</code> has a <x-ref path="engine/db/migrations/00004_execution.sql" symbol="payload_ref"><code>payload_ref</code></x-ref> column that nothing uses. What exists since findings 5d is a cap (<x-ref path="engine/runtime/worker.go" symbol="func capOutput("><code>capOutput</code></x-ref>): a connector, capability, AI or code step whose output is over 256 KB fails, saying how big it was, and a write parks for a person instead, since the provider already acted. HTTP steps cut responses to the same size, and container steps keep their own limit. History can no longer bloat, but a workflow that needs a large output has to return only the fields later steps use.</p>
 </div>
 
 <h2>How this is tested</h2>
