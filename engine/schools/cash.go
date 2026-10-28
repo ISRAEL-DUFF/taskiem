@@ -37,6 +37,17 @@ import (
 // way, and are applied on approval. So does money a person entered on
 // Money, matched by hand to an invoice at or above the cash threshold
 // (KindCashMatch, recorded by engine/matching): approval makes the match.
+//
+// Both thresholds are weighed per student, not per request, so that
+// splitting does not pass under them: cash with the money a person
+// entered (desk, entered, uploaded) that already counts towards the
+// student's invoices without a second person (matching.EnteredUnapproved),
+// a discount or a reduction with the reductions of the student's
+// invoices and the standing discounts given them without one
+// (ReducedUnapproved), each within the window: since the current term
+// was started, and at least the last 24 hours (matching.SchoolWindowSQL).
+// What a second person approved is theirs and is not weighed again; a
+// rail's money is never counted.
 
 // Kinds of request.
 const (
@@ -253,8 +264,9 @@ func (s *Schools) PostPayment(ctx context.Context, tenant uuid.UUID, in PostingI
 		pending = threshold != nil && in.AmountKobo >= *threshold
 		if threshold != nil && !pending {
 			// With what desk and entered money already counts towards the
-			// student's open invoices without a second person: postings
-			// split under the threshold add up (docs/schools.md#the-second-person).
+			// student's invoices without a second person (their open ones,
+			// and any of theirs within the window): postings split under
+			// the threshold add up (docs/schools.md#the-second-person).
 			open, err := s.Invoices.OpenInvoicesOf(ctx, tx, tenant, "key:"+StudentKey(st.ID))
 			if err != nil {
 				return err
@@ -263,7 +275,7 @@ func (s *Schools) PostPayment(ctx context.Context, tenant uuid.UUID, in PostingI
 			for _, x := range open {
 				ids = append(ids, x.ID)
 			}
-			prior, err := matching.EnteredUnapproved(ctx, tx, tenant, ids)
+			prior, err := matching.EnteredUnapproved(ctx, tx, tenant, &st.ID, ids)
 			if err != nil {
 				return err
 			}
@@ -406,8 +418,11 @@ func (s *Schools) requestDiscount(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 // nil and the caller amends the invoice; at or above it, it records the
 // amendment as a request for a second person and returns ApprovalNeeded.
 // What is weighed is the reduction with those the invoice took already
-// without a second person (ReducedUnapproved): amendments split under the
-// threshold add up. An amendment that adds to the total returns nil.
+// without a second person and, on a student's invoice, with the student's
+// other reductions and standing discounts given without one within the
+// window (ReducedUnapproved): amendments and discounts split under the
+// threshold, on one invoice or several, add up. An amendment that adds to
+// the total returns nil.
 func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNumber string, in invoicing.AmendmentIn, by string) error {
 	if s.Invoices == nil {
 		return nil
@@ -428,15 +443,15 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 	if reduction <= 0 {
 		return nil
 	}
-	prior, err := ReducedUnapproved(ctx, tx, tenant, x.ID)
-	if err != nil || prior+reduction < limit {
-		return err
-	}
 	var student *uuid.UUID
 	var sid uuid.UUID
 	if err := tx.QueryRow(ctx, `SELECT student_id FROM school_term_invoices WHERE invoice_id = $1`, x.ID).Scan(&sid); err == nil {
 		student = &sid
 	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	prior, err := ReducedUnapproved(ctx, tx, tenant, student, &x.ID)
+	if err != nil || prior+reduction < limit {
 		return err
 	}
 	raw, _ := json.Marshal(in)
@@ -453,14 +468,23 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 	return &ApprovalNeeded{Request: p}
 }
 
-// ReducedUnapproved is what amendments took off an invoice (discounts and
-// lines taken out) without a second person approving them.
-func ReducedUnapproved(ctx context.Context, tx pgx.Tx, tenant, invoice uuid.UUID) (int64, error) {
+// ReducedUnapproved is what was taken off without a second person
+// approving it: by amendments (discounts and lines taken out) of the
+// invoice given, whenever made, and, for a student, by amendments of any
+// of the student's invoices and the standing discounts given them (at
+// what each was worth when given, ended or not), within the window
+// (matching.SchoolWindowSQL). Either may be nil.
+func ReducedUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, student, invoice *uuid.UUID) (int64, error) {
 	var n int64
-	err := tx.QueryRow(ctx, `SELECT COALESCE(-sum(a.amount_kobo), 0)::bigint FROM customer_invoice_amendments a
-		WHERE a.tenant_id = $1 AND a.invoice_id = $2 AND a.amount_kobo < 0
-		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = a.tenant_id AND r.kind = $3 AND r.status = 'posted'
-		                  AND r.result->>'amendment_id' = a.id::text)`, tenant, invoice, KindDiscountAmendment).Scan(&n)
+	err := tx.QueryRow(ctx, `SELECT ((SELECT COALESCE(-sum(a.amount_kobo), 0) FROM customer_invoice_amendments a
+		WHERE a.tenant_id = $1 AND a.amount_kobo < 0
+		  AND (a.invoice_id = $2::uuid OR $3::uuid IS NOT NULL AND a.created_at >= `+matching.SchoolWindowSQL+` AND a.invoice_id IN (`+matching.StudentInvoicesSQL("$3")+`))
+		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = a.tenant_id AND r.kind = $4 AND r.status = 'posted'
+		                  AND r.result->>'amendment_id' = a.id::text))
+		+ (SELECT COALESCE(sum(COALESCE(d.worth_kobo, d.amount_kobo, 0)), 0) FROM school_discounts d
+		WHERE d.tenant_id = $1 AND d.student_id = $3::uuid AND d.created_at >= `+matching.SchoolWindowSQL+`
+		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = d.tenant_id AND r.kind = $5 AND r.status = 'posted'
+		                  AND r.result->>'discount_id' = d.id::text)))::bigint`, tenant, invoice, student, KindDiscountAmendment, KindDiscount).Scan(&n)
 	return n, err
 }
 
@@ -706,7 +730,7 @@ func (s *Schools) apply(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, d *Dec
 			n := int64(v)
 			in.AmountKobo = &n
 		}
-		disc, _, err := s.giveDiscount(ctx, tx, tenant, *p.StudentID, in, p.RequestedBy)
+		disc, _, err := s.giveDiscount(ctx, tx, tenant, *p.StudentID, in, p.AmountKobo, p.RequestedBy)
 		if err != nil {
 			return err
 		}

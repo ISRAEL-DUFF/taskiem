@@ -668,3 +668,122 @@ func TestSplitCashNeedsASecondPerson(t *testing.T) {
 		t.Fatalf("the second posting: %v", err)
 	}
 }
+
+// The cash threshold weighs a student's entered money together across
+// their invoices, within the window (the current term, and at least the
+// last day): money split over two of a student's invoices adds up, and
+// another student's money does not count towards theirs.
+func TestCashSplitOverAStudentsInvoicesNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	tn := w.env.Tenant
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	// The second term started and invoiced: Ebube has two open invoices.
+	w.start(w.second)
+	w.setFees(w.second, w.j1, []schools.FeeItemIn{{Name: "Tuition", AmountKobo: 10_000_000, Kind: schools.Required}})
+	var second uuid.UUID
+	w.in(func(tx pgx.Tx) error {
+		if _, err := w.s.InvoiceTerm(ctx, tx, tn, w.second.ID, "", false, "user:ada"); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT invoice_id FROM school_term_invoices WHERE term_id = $1 AND student_id = $2`, w.second.ID, w.a.ID).Scan(&second)
+	})
+	if _, failed, err := w.s.SendTerm(ctx, tn, w.second.ID, "user:ada"); err != nil || len(failed) != 0 {
+		t.Fatalf("sending the second term: %v %v", err, failed)
+	}
+	log := &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
+	m := &matching.Matcher{Invoices: w.s.Invoices, PII: w.env.Vault}
+	match := func(kobo int64, invoice string) error {
+		t.Helper()
+		id, _, err := log.Enter(ctx, tn, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: kobo, Description: "School fees"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = m.Match(ctx, tn, id, invoice, "user:ada")
+		return err
+	}
+	// Chidi's money is his: it does not count towards Ebube's.
+	if err := match(3_000_000, w.invB.Number); err != nil {
+		t.Fatalf("Chidi's part: %v", err)
+	}
+	if err := match(3_000_000, w.invA.Number); err != nil {
+		t.Fatalf("Ebube's first part: %v", err)
+	}
+	// Ebube's second part, on his other invoice, brings his money to the
+	// threshold.
+	if err := match(3_000_000, second.String()); !errors.Is(err, matching.ErrHeld) {
+		t.Fatalf("Ebube's second part, on another invoice: %v", err)
+	}
+	if x := w.invoiceOf(second); x.PaidKobo != 0 {
+		t.Fatalf("held money reached the fees: %+v", x)
+	}
+}
+
+// The discount threshold weighs a student's standing discounts and the
+// reductions of their invoices together, within the window: discounts
+// split under it add up, another student's do not count, nor do those a
+// second person approved or those given before the window.
+func TestSplitDiscountsNeedASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	tn := w.env.Tenant
+	w.in(func(tx pgx.Tx) error {
+		_, err := schools.SetDiscountThreshold(ctx, tx, tn, 2_000_000, "user:owner")
+		return err
+	})
+	c := w.student("Nkem Eze", "GCA/003", w.j1, &w.fam.ID)
+	d := w.student("Tobi Ade", "GCA/004", w.j1, nil)
+	give := func(student uuid.UUID, kobo int64) *schools.ApprovalNeeded {
+		t.Helper()
+		var needs *schools.ApprovalNeeded
+		err := w.try(func(tx pgx.Tx) error {
+			_, _, err := w.s.AddDiscount(ctx, tx, tn, student, schools.DiscountIn{Kind: "other", AmountKobo: &kobo, Reason: "Help"}, "user:ada")
+			if errors.As(err, &needs) {
+				return nil // the request commits
+			}
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return needs
+	}
+	if n := give(c.ID, 1_500_000); n != nil {
+		t.Fatalf("Nkem's first discount: %+v", n.Request)
+	}
+	if n := give(d.ID, 1_500_000); n != nil {
+		t.Fatalf("Tobi's discount counted Nkem's: %+v", n.Request)
+	}
+	split := give(c.ID, 1_500_000)
+	if split == nil || split.Request.Kind != schools.KindDiscount || split.Request.AmountKobo != 1_500_000 {
+		t.Fatalf("a discount split under the threshold was not held: %+v", split)
+	}
+	// Approved, it is the second person's: not weighed again.
+	if _, err := w.decide(split.Request.ID, true, "", "user:bola"); err != nil {
+		t.Fatal(err)
+	}
+	if n := give(c.ID, 400_000); n != nil {
+		t.Fatalf("after approval: %+v", n.Request)
+	}
+	// Given before the window, a discount no longer counts.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE school_discounts SET created_at = now() - interval '2 days' WHERE student_id = $1`, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := give(c.ID, 1_900_000); n != nil {
+		t.Fatalf("a discount before the window counted: %+v", n.Request)
+	}
+	// A standing discount and an amendment of the student's invoice add up.
+	if n := give(w.a.ID, 1_000_000); n != nil {
+		t.Fatalf("Ebube's discount: %+v", n.Request)
+	}
+	var needs *schools.ApprovalNeeded
+	err := w.try(func(tx pgx.Tx) error {
+		err := w.s.RequestDiscountAmendment(ctx, tx, tn, w.invA.Number, invoicing.AmendmentIn{Kind: invoicing.AmendDiscount, AmountKobo: 1_000_000, Reason: "Hardship"}, "user:ada")
+		if errors.As(err, &needs) {
+			return nil
+		}
+		return err
+	})
+	if err != nil || needs == nil || needs.Request.AmountKobo != 1_000_000 {
+		t.Fatalf("an amendment with a standing discount: %v %+v", err, needs)
+	}
+}

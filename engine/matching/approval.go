@@ -20,8 +20,12 @@ import (
 // waits the same way: at or above the threshold the match is recorded as
 // a request (school_pending_postings, kind RequestKind) and nothing is
 // counted until someone other than the requester approves it
-// (ApproveHeld). Money a rail reported (its events, the look-back, a
-// step's answer) is the rail's word and is never held.
+// (ApproveHeld). The threshold is weighed per student, not per request:
+// with the money a person entered that already counts towards the
+// student's invoices without a second person, within the window
+// (SchoolWindowSQL: the current term, and at least the last 24 hours).
+// Money a rail reported (its events, the look-back, a step's answer) is
+// the rail's word and is never held nor counted.
 
 // RequestKind is the kind of the request a held match records.
 const RequestKind = "cash_match"
@@ -60,19 +64,39 @@ func CashLimit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, source string) 
 	return limit, err
 }
 
+// SchoolWindowSQL is when the window begins that a school's thresholds
+// weigh a student's earlier money and reductions over, for the tenant in
+// $1: since the current term was started, and at least the last 24
+// hours, so that starting a term does not forget what was done just
+// before it; with no current term, the last 24 hours
+// (docs/schools.md#the-second-person).
+const SchoolWindowSQL = `LEAST(COALESCE((SELECT w.started_at FROM school_terms w WHERE w.tenant_id = $1 AND w.current), now()), now() - interval '24 hours')`
+
+// StudentInvoicesSQL selects a student's invoices, for the tenant in $1
+// and the student in param: their term invoices, and any invoice made to
+// them as the school's customer (those desk money counts towards).
+func StudentInvoicesSQL(param string) string {
+	return `SELECT ti.invoice_id FROM school_term_invoices ti WHERE ti.tenant_id = $1 AND ti.student_id = ` + param + `::uuid
+		UNION ALL SELECT ci.id FROM customer_invoices ci WHERE ci.tenant_id = $1 AND ci.customer_id = 'key:student:' || ` + param + `::text`
+}
+
 // EnteredUnapproved is what money a person entered (cash, a statement
-// line, cash posted at a school's desk) counts towards the invoices
-// without a second person having approved it: what a school's cash
-// threshold weighs a further such payment with, per invoice, so that
-// splitting the money does not pass under it.
-func EnteredUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, invoices []uuid.UUID) (int64, error) {
+// line, cash posted at a school's desk) counts without a second person
+// having approved it towards the invoices given and, for a student,
+// towards any of the student's invoices within the window
+// (SchoolWindowSQL): what a school's cash threshold weighs a further such
+// payment for the student with, so that splitting the money, over one of
+// their invoices or several, does not pass under it. Money a rail
+// reported is never counted.
+func EnteredUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, student *uuid.UUID, invoices []uuid.UUID) (int64, error) {
 	var n int64
 	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(p.amount_kobo), 0)::bigint FROM customer_invoice_payments p JOIN money_entries e ON e.id = p.entry_id
-		WHERE p.tenant_id = $1 AND p.invoice_id = ANY ($2) AND p.undoes IS NULL
+		WHERE p.tenant_id = $1 AND p.undoes IS NULL
+		  AND (p.invoice_id = ANY ($2) OR $3::uuid IS NOT NULL AND p.created_at >= `+SchoolWindowSQL+` AND p.invoice_id IN (`+StudentInvoicesSQL("$3")+`))
 		  AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
 		  AND e.source IN ('entered', 'upload')
 		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = p.tenant_id AND r.status = 'posted' AND r.decided_by IS NOT NULL
-		                  AND COALESCE(r.result->>'entry_id', r.details->>'entry_id') = e.id::text)`, tenant, invoices).Scan(&n)
+		                  AND COALESCE(r.result->>'entry_id', r.details->>'entry_id') = e.id::text)`, tenant, invoices, student).Scan(&n)
 	return n, err
 }
 
@@ -97,13 +121,17 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 	if err != nil || limit == nil {
 		return nil, err
 	}
-	// Held when the money is at or above the threshold, or when a part
-	// with what money a person entered already counts towards its
-	// invoice without a second person is: two entries under it, matched
-	// to one invoice, are not let through.
-	var invoice *uuid.UUID
+	// Held when the money is at or above the threshold, or when what the
+	// match counts towards a student's invoices, with what money a person
+	// entered already counts towards that student's without a second
+	// person (EnteredUnapproved, within the window), is: entries under
+	// it, matched to one of a student's invoices or spread over several,
+	// are not let through. Another student's money is theirs.
+	var invoice, student *uuid.UUID
 	var towards int64
 	over := amount >= *limit
+	of := map[uuid.UUID][]uuid.UUID{}
+	kobo := map[uuid.UUID]int64{}
 	for _, p := range parts {
 		if p.Invoice == "" {
 			continue
@@ -114,24 +142,25 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 		}
 		// Only a student's invoice is the school's to hold: a shop's or
 		// any other invoice of the business is matched as before.
-		var school bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM school_term_invoices WHERE invoice_id = $1)`, x.ID).Scan(&school); err != nil {
-			return nil, err
-		}
-		if !school {
+		var sid uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT student_id FROM school_term_invoices WHERE invoice_id = $1`, x.ID).Scan(&sid); errors.Is(err, pgx.ErrNoRows) {
 			continue
+		} else if err != nil {
+			return nil, err
 		}
 		towards += p.AmountKobo
 		if invoice == nil {
 			id := x.ID
-			invoice = &id
+			invoice, student = &id, &sid
 		}
+		of[sid] = append(of[sid], x.ID)
+		kobo[sid] += p.AmountKobo
 		if !over {
-			prior, err := EnteredUnapproved(ctx, tx, tenant, []uuid.UUID{x.ID})
+			prior, err := EnteredUnapproved(ctx, tx, tenant, &sid, of[sid])
 			if err != nil {
 				return nil, err
 			}
-			over = prior+p.AmountKobo >= *limit
+			over = prior+kobo[sid] >= *limit
 		}
 	}
 	if invoice == nil || !over {
@@ -147,10 +176,6 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 	}
 	if waiting {
 		return nil, fmt.Errorf("%w: a match of this payment already waits for a second person's approval", invoicing.ErrState)
-	}
-	var student *uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT student_id FROM school_term_invoices WHERE invoice_id = $1`, *invoice).Scan(&student); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
 	}
 	raw, _ := json.Marshal(heldRequest{Entry: c.entry, Suggestion: c.suggestion, Parts: c.parts, CreditRest: c.creditRest, How: c.how, Reasons: c.reasons})
 	var user *uuid.UUID
