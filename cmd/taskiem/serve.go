@@ -79,6 +79,9 @@ type config struct {
 	DSN, DBRole                       string
 	Listen, EdgeListen, MetricsListen string
 	KMS, LocalKey                     string
+	// AllowLocalKMS keeps the root key in the environment on a public
+	// HTTPS install (TASKIEM_ALLOW_LOCAL_KMS), which kms otherwise refuses.
+	AllowLocalKMS bool
 	OpenBaoAddr, OpenBaoToken, KMSKey string
 	WebDir                            string
 	AnchorKey, AnchorDir              string
@@ -310,6 +313,7 @@ func loadConfig() (config, error) {
 		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
 		KMS:           env("TASKIEM_KMS", "local"),
 		LocalKey:      os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
+		AllowLocalKMS: envBool("TASKIEM_ALLOW_LOCAL_KMS", false),
 		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
 		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
 		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
@@ -470,6 +474,12 @@ func loadConfig() (config, error) {
 func (c config) kms() (secrets.KMS, error) {
 	switch c.KMS {
 	case "local":
+		// The root key wraps every tenant key; in the process environment it
+		// is as safe as the host's environment. A public install keeps it in
+		// OpenBao unless the operator says otherwise (Atlas part D findings).
+		if strings.HasPrefix(c.PublicURL, "https://") && !c.AllowLocalKMS {
+			return nil, errors.New("TASKIEM_KMS is local (the default) on a public install: keep the root key in OpenBao (TASKIEM_KMS=openbao, docs/operations.md), or set TASKIEM_ALLOW_LOCAL_KMS=true to keep it in the environment knowingly")
+		}
 		key, err := base64.StdEncoding.DecodeString(c.LocalKey)
 		if err != nil || len(key) != 32 {
 			return nil, errors.New("TASKIEM_LOCAL_KMS_KEY must be 32 bytes, base64 (openssl rand -base64 32); use TASKIEM_KMS=openbao in production")
