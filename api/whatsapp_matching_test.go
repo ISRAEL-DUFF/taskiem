@@ -82,7 +82,7 @@ func TestWhatsAppMatching(t *testing.T) {
 	st := owner.must(200, "GET", "/v1/invoice-settings", nil)
 	st["auto_match"] = true
 	owner.must(200, "PUT", "/v1/invoice-settings", st)
-	heard("virtual_account.credited", map[string]any{"reference": "VA-AUTO", "amount_kobo": int64(700000), "payer_name": "EFE OKON"})
+	heard("virtual_account.credited", map[string]any{"credit_id": "C-1", "reference": "VA-AUTO", "amount_kobo": int64(700000), "payer_name": "EFE OKON"})
 	if st := status(auto["number"].(string)); st != "paid" {
 		t.Fatalf("automatic: %s", st)
 	}
@@ -95,7 +95,7 @@ func TestWhatsAppMatching(t *testing.T) {
 	owner.must(200, "PUT", "/v1/invoice-settings", st)
 
 	// Suggested: the managers are asked, the viewer is not; once.
-	heard("virtual_account.credited", map[string]any{"reference": "VA-1", "amount_kobo": int64(900000), "payer_name": "BOLA ADE"})
+	heard("virtual_account.credited", map[string]any{"credit_id": "C-1", "reference": "VA-1", "amount_kobo": int64(900000), "payer_name": "BOLA ADE"})
 	ma, oa := asked(mn), asked(on)
 	if len(ma) != 1 || len(oa) != 1 || len(asked(vn)) != 0 {
 		t.Fatalf("asked: manager %+v, owner %+v, viewer %+v", ma, oa, asked(vn))
@@ -177,7 +177,7 @@ func TestWhatsAppMatching(t *testing.T) {
 	}
 
 	// One suggestion, turned down: left for the web app.
-	heard("virtual_account.credited", map[string]any{"reference": "VA-3", "amount_kobo": int64(1100000)})
+	heard("virtual_account.credited", map[string]any{"credit_id": "C-1", "reference": "VA-3", "amount_kobo": int64(1100000)})
 	a := asked(mn)
 	if len(a) != 2 || !strings.Contains(a[1].Text, single["number"].(string)) || strings.Contains(a[1].Text, "No shows the next") {
 		t.Fatalf("single: %+v", a)
@@ -194,7 +194,7 @@ func TestWhatsAppMatching(t *testing.T) {
 	part := owner.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Gbenga Ola", "phone": "+2348039876543"},
 		"amount_kobo": 2000000, "allow_part_payments": true})
 	owner.must(200, "POST", "/v1/invoices/"+part["id"].(string)+"/send", nil, "Idempotency-Key", "send-part")
-	heard("virtual_account.credited", map[string]any{"reference": "VA-4", "amount_kobo": int64(500000), "payer_name": "OLA GBENGA"})
+	heard("virtual_account.credited", map[string]any{"credit_id": "C-1", "reference": "VA-4", "amount_kobo": int64(500000), "payer_name": "OLA GBENGA"})
 	a = asked(mn)
 	if len(a) != 3 || !strings.Contains(a[2].Text, part["number"].(string)) {
 		t.Fatalf("part: %+v", a)

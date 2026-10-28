@@ -36,6 +36,9 @@ func newMatchWorld(t *testing.T) *matchWorld {
 // heard records a rail's event in the money log and lets matching look.
 func (w *matchWorld) heard(event string, fields map[string]any) {
 	w.t.Helper()
+	if event == "virtual_account.credited" && fields["credit_id"] == nil {
+		fields["credit_id"] = "C-" + fields["reference"].(string) // each its own credit
+	}
 	if _, err := w.log.RecordEvent(context.Background(), w.env.Tenant, "prod", "paystack", "main", event, fields); err != nil {
 		w.t.Fatal(err)
 	}

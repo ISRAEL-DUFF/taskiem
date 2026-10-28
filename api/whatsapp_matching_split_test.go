@@ -35,7 +35,7 @@ func TestWhatsAppMatchingSplit(t *testing.T) {
 	}
 	older, newer := invoice(200000, "2099-09-01"), invoice(300000, "2099-10-01")
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
-		map[string]any{"reference": "VA-SPLIT", "amount_kobo": int64(600000), "payer_name": "BOLA ADE"}); err != nil {
+		map[string]any{"credit_id": "C-1", "reference": "VA-SPLIT", "amount_kobo": int64(600000), "payer_name": "BOLA ADE"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Tick(ctx); err != nil {

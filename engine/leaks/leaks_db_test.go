@@ -56,7 +56,7 @@ func TestLeaks(t *testing.T) {
 	heard("payment.received", map[string]any{"payment_id": "LOST-1", "amount_kobo": int64(777700)})
 	// The same payment reported as two kinds of event.
 	heard("payment.received", map[string]any{"payment_id": "DUP-1", "amount_kobo": int64(50000)})
-	heard("virtual_account.credited", map[string]any{"reference": "DUP-1", "amount_kobo": int64(50000)})
+	heard("virtual_account.credited", map[string]any{"reference": "DUP-1", "credit_id": "DUP-1", "amount_kobo": int64(50000)})
 	// An overdue invoice.
 	late := send("Bola", 300000, "2099-01-31")
 	if _, err := e.DB.Admin.Exec(ctx, `UPDATE customer_invoices SET due_on = '2020-01-01' WHERE id = $1`, late.ID); err != nil {
