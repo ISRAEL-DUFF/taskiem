@@ -466,10 +466,20 @@ jobs:
   # servers on the staging channel follow (taskiem-vps). "production" is
   # moved only by the promote job below. Signing comes before tagging, so a
   # server never finds a tag on an image without a signature.
+  #
+  # One image job runs at a time per branch or tag, and none is cancelled, so
+  # two merges close together tag one after the other. A run tags "staging"
+  # only if its commit is still the head of main when it gets there: an older
+  # commit whose run finishes last keeps its sha- tag and signature but does
+  # not move staging servers back. (GitHub keeps one waiting run per group: a
+  # third merge replaces the waiting one, whose image is then not tagged.)
   image:
     if: github.event_name == 'push'
     needs: [image-build, go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
+    concurrency:
+      group: image-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -482,13 +492,24 @@ jobs:
       - name: Short commit
         id: name
         run: echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Is this commit still the head of main?
+        id: head
+        if: github.ref == 'refs/heads/main'
+        run: |
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "staging=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "staging=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=staging not moved::main is at $head, newer than $GITHUB_SHA; this image is tagged sha-${GITHUB_SHA::12} only."
+          fi
       - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         id: meta
         with:
           images: ${{ needs.image-build.outputs.image }}
           tags: |
             type=raw,value=sha-${{ steps.name.outputs.sha }}
-            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' && steps.head.outputs.staging == 'true' }}
             type=semver,pattern={{version}}
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
