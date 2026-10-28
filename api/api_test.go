@@ -171,6 +171,31 @@ func TestAuthAndCSRF(t *testing.T) {
 	}
 }
 
+// A seed shared by every item of a foreach gives every payment one key:
+// saving lists the problem and publishing is refused until the seed reads
+// the item.
+func TestSharedSeedInForeachRefused(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	payroll := func(seed string) json.RawMessage {
+		return json.RawMessage(`{"schema":"wd/v1","id":"wf_payroll","version":1,"name":"payroll","trigger":{"type":"manual"},"steps":[
+		  {"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.employees","steps":[
+		    {"id":"pay_employee","type":"http","config":{"method":"POST","url":"https://pay.example/transfer","class":"idempotent_write","idempotency_header":"Idempotency-Key"},
+		     "effect":{"idempotency_seed":"` + seed + `"}}]}}]}`)
+	}
+	bad := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "payroll", "definition": payroll("=trigger.body.payroll_id")})
+	if probs := toJSON(bad["problems"]); !strings.Contains(probs, "idempotency_seed inside a foreach must read item or index") {
+		t.Fatalf("problems: %s", probs)
+	}
+	owner.must(422, "POST", "/v1/workflows/"+bad["id"].(string)+"/versions/1/publish", nil)
+
+	good := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "payroll", "definition": payroll("=trigger.body.payroll_id + '/' + item.employee_id")})
+	if probs := good["problems"].([]any); len(probs) != 0 {
+		t.Fatalf("item-specific seed: %v", probs)
+	}
+	owner.must(200, "POST", "/v1/workflows/"+good["id"].(string)+"/versions/1/publish", nil)
+}
+
 func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	w := newWorld(t)
 	owner := w.tenant(t, "Acme", "owner@acme.test")

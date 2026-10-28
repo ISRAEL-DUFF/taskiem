@@ -1,12 +1,15 @@
 package decide
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 func TestLinearConnectorFlow(t *testing.T) {
@@ -161,6 +164,49 @@ func TestForeachConcurrencyAndOutputs(t *testing.T) {
 	}
 	if s.payload(history.StepCompleted, "report")["output"] != int64(3) || s.last().Type != history.RunCompleted {
 		t.Errorf("report/run: %s", s.types())
+	}
+}
+
+// A seeded payment inside a foreach gets one key per item: the seed must
+// read the item, since the key leaves out the loop position.
+func TestForeachSeedGivesEachItemItsOwnKey(t *testing.T) {
+	doc := wdDoc(`
+	  {"id":"pay_all","type":"foreach","config":{"items":"=trigger.body.employees","max_concurrency":50,"steps":[
+	    {"id":"pay_employee","type":"connector","connector":"paystack@1","action":"transfer","input":{"amount":"=item.amount"},
+	     "effect":{"idempotency_seed":"=trigger.body.payroll_id + '/' + item.employee_id"}}]}}`, "")
+	if probs := wd.Validate([]byte(doc)); len(probs) > 0 {
+		t.Fatalf("item-specific seed refused: %v", probs)
+	}
+	employees := make([]any, 50)
+	for i := range employees {
+		employees[i] = map[string]any{"employee_id": fmt.Sprintf("e%02d", i), "amount": 1000}
+	}
+	s := newSim(t, doc, map[string]any{"body": map[string]any{"payroll_id": "pr-2026-10", "employees": employees}})
+	pending := s.pendingTasks()
+	if len(pending) != 50 {
+		t.Fatalf("%d tasks pending, want 50", len(pending))
+	}
+	keys := map[[32]byte]string{}
+	for _, inst := range pending {
+		p := s.payload(history.StepScheduled, inst)
+		seed, _ := p["seed"].(string)
+		step, _ := p["key_step"].(string)
+		k, err := effects.KeyInput{TenantID: "t-1", Seed: seed, StepID: step}.Digest()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if other, dup := keys[k]; dup {
+			t.Errorf("%s and %s share an idempotency key (seed %q)", other, inst, seed)
+		}
+		keys[k] = inst
+	}
+	if len(keys) != 50 {
+		t.Errorf("%d distinct keys for 50 items", len(keys))
+	}
+
+	shared := strings.Replace(doc, `"=trigger.body.payroll_id + '/' + item.employee_id"`, `"=trigger.body.payroll_id"`, 1)
+	if probs := wd.Validate([]byte(shared)); len(probs) == 0 {
+		t.Error("a seed shared by every item was accepted")
 	}
 }
 
