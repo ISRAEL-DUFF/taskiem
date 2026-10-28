@@ -34,12 +34,10 @@ func aiSteps(doc []byte, find expansion.Templates) (*wd.Definition, error) {
 	if err != nil || find == nil || !def.HasTemplates() {
 		return def, err
 	}
-	raw, _, err := expansion.ExpandTemplates(doc, find)
-	if err != nil {
-		return def, nil
-	}
-	if expanded, err := wd.Load(raw); err == nil {
-		return expanded, nil
+	if raw, _, xerr := expansion.ExpandTemplates(doc, find); xerr == nil {
+		if expanded, lerr := wd.Load(raw); lerr == nil {
+			return expanded, nil
+		}
 	}
 	return def, nil
 }
