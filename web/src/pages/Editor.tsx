@@ -107,7 +107,10 @@ export function Editor() {
 
   useEffect(() => {
     if (!doc.data) return;
-    setDef(doc.data.definition);
+    // A draft saved without a trigger (drafts may be incomplete) opens as
+    // a manual one rather than leaving the builder nothing to draw.
+    const loaded = doc.data.definition;
+    setDef(loaded.trigger && typeof loaded.trigger === "object" ? loaded : { ...loaded, trigger: { type: "manual" } });
     setLayout((doc.data.layout ?? {}) as Record<string, unknown>);
     setProblems(doc.data.problems);
     setDirty(false);
@@ -177,7 +180,7 @@ export function Editor() {
   };
 
   // An email trigger's card shows the address mail starts it at.
-  const emailTrigger = doc.data?.definition.trigger.type === "email";
+  const emailTrigger = doc.data?.definition.trigger?.type === "email";
   const emailEndpoints = useLoad(
     () => (emailTrigger ? get<{ endpoints: EmailEndpoint[] }>(`/v1/workflows/${id}/email`) : Promise.resolve({ endpoints: [] })),
     [id, emailTrigger],

@@ -44,14 +44,24 @@ test("the JSON tab refuses a definition the builder cannot draw, and keeps the e
   await expect(page.locator("textarea.mono")).toHaveValue(/"mine"/);
 });
 
+test("a draft saved without a trigger opens as a manual one", async ({ page }) => {
+  await signIn(page);
+  // Drafts may be incomplete; the builder still draws one with no trigger.
+  const id = await workflow(page, "No trigger flow", { schema: "wd/v1", steps: [] });
+  await page.goto(`/workflows/${id}`);
+  await expect(page.getByRole("heading", { level: 1, name: "No trigger flow" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "This page stopped working" })).toHaveCount(0);
+});
+
 test("a page that fails says so and leaves the rest of the console working", async ({ page }) => {
   await signIn(page);
-  // A draft the API stores (drafts may be incomplete) but the builder
-  // cannot draw: it has no trigger.
-  const id = await workflow(page, "No trigger flow", { schema: "wd/v1", steps: [] });
+  const id = await workflow(page, "Broken answer flow", { schema: "wd/v1", trigger: { type: "manual" }, steps: [] });
+  // An answer the builder cannot draw at all, as a broken server might send.
+  await page.route(`**/v1/workflows/${id}/versions/1`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ definition: null, layout: {}, problems: [], version: { version: 1, digest: "x" } }) }));
   await page.goto(`/workflows/${id}`);
   await expect(page.getByRole("heading", { level: 1, name: "This page stopped working" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  await page.unrouteAll({ behavior: "ignoreErrors" });
   await page.getByRole("link", { name: "Go to Home" }).click();
   await expect(page.getByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 });
