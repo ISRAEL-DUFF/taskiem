@@ -11,6 +11,10 @@ Four documents in the relay brand ([brand](../../brand/README.md)), written from
 | Onboarding businesses | Operators, field agents, partner success and support: the three ways to bring a business on (field agent, self-serve sign-up, `taskiem bootstrap`), what to set up first, each step, a visit script, the first week, verification, a staging rehearsal, troubleshooting and a quick reference. Written 28 October 2026 from [agents](../../agents.md), [onboarding](../../onboarding.md), [the staging runbook](../../runbooks/staging.md), [moderation](../../moderation.md) and [WhatsApp](../../whatsapp.md); where they disagree, the docs win | [onboarding-businesses.docx](onboarding-businesses.docx) (Word, 19 pages) |
 | Investor presentation | Fundraising: problem, market, every feature area, trust, partners, business model, edge, progress, team and the ask, with speaker notes in the editable version | [taskiem-pitch-deck.pdf](taskiem-pitch-deck.pdf) (20 slides) |
 
+## Business cards and staff ID cards
+
+The [card maker](https://claude.ai/artifact/8cR1TFT5U9RiVB6RpwiruJ) makes both cards for one person, with a PDF download; `make-cards.mjs` makes them for a whole list. Both use one design, `cards/card-maker.html`: see [cards](cards/README.md).
+
 ## Editing them
 
 The editable originals are Claude artifacts owned by the founder's account: the [pitch deck](https://claude.ai/artifact/1BccFeT6bA8771ELKzSrVF) (downloads as .pptx or PDF, with speaker notes) and the [positioning brief](https://claude.ai/artifact/VkLbjT1r236nHn5VNtnUvy). The guide and the onboarding playbook are edited in Word. When one changes, replace its file here.
