@@ -550,6 +550,33 @@ export interface MoneySummary {
   /** The period in stretches, for charts: hours for one day, days for up to 92, none beyond. */
   unit?: "hour" | "day" | "";
   buckets?: MoneyBucket[];
+  /** Each rider's period (dispatch D4), for a business with riders. */
+  riders?: RiderDay[];
+}
+
+/** A rider's deliveries, money at the door and what they owe, in a period. */
+export interface RiderDay {
+  rider_id: string;
+  rider: string;
+  delivered: number;
+  door_transfer_kobo: number;
+  cash_kobo: number;
+  remitted_kobo: number;
+  owed_kobo: number;
+  fees_kobo: number;
+  rating?: number | null;
+  ratings: number;
+}
+
+/** A rider's period in words: "4 delivered · ₦8,500 paid at the door · ₦3,000 cash · fees ₦4,000 · rated 4.5". */
+export function riderDayLine(r: RiderDay): string {
+  const parts = [`${r.delivered} delivered`];
+  if (r.door_transfer_kobo) parts.push(`${naira(r.door_transfer_kobo)} paid at the door`);
+  if (r.cash_kobo) parts.push(`${naira(r.cash_kobo)} cash`);
+  if (r.remitted_kobo) parts.push(`${naira(r.remitted_kobo)} handed in`);
+  if (r.fees_kobo) parts.push(`fees ${naira(r.fees_kobo)}`);
+  if (r.rating != null) parts.push(`rated ${r.rating.toFixed(1)}`);
+  return parts.join(" · ");
 }
 
 /** The money collected for others, in words: "₦36,000 for WAEC, ₦5,000 for NECO"; empty for none. */

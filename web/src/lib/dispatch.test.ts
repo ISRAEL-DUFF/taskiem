@@ -100,3 +100,12 @@ describe("dispatch", () => {
     expect(riderSub(r)).toBe("All areas · On WhatsApp · rated 4.3 of 5 (8) · not answering offers today");
   });
 });
+
+describe("riders on the Money page", () => {
+  it("say a rider's period in a line", async () => {
+    const { riderDayLine } = await import("./money");
+    expect(
+      riderDayLine({ rider_id: "r1", rider: "Musa", delivered: 4, door_transfer_kobo: 850000, cash_kobo: 300000, remitted_kobo: 0, owed_kobo: 300000, fees_kobo: 400000, rating: 4.5, ratings: 2 }),
+    ).toBe("4 delivered · ₦8,500 paid at the door · ₦3,000 cash · fees ₦4,000 · rated 4.5");
+  });
+});

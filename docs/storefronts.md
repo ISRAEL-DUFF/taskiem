@@ -132,6 +132,7 @@ Saving a form re-publishes a published page, so its buttons match.
      - the workflow waits for the payment;
      - paid, the customer is told; not paid within a day, the order expires and the customer is told.
    - Then it **asks the owner to mark it delivered or collected**, which completes the order.
+   - **With riders of its own** ([dispatch](dispatch.md)), a business offers a confirmed order for delivery to a rider from its page or chat, or turns on deliveries so its workflow does. The rider's taps move the order to **With a rider**, **On the way** and **At the door**, tell the customer at each step, and their **Delivered** completes it. A customer may **pay at the door**, by an account number issued when the rider arrives, or in cash.
 
    The enquiry and call-back workflows acknowledge the customer by text, and ask the owner to mark them answered or called back.
 
@@ -324,6 +325,7 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `order AK-7QX4KD` | One order, the customer masked |
 | `order AK-7QX4KD ready` | For an accepted or paid order: texts the customer that it is ready (by SMS, and email when they gave one), and leaves its status: it is not done until it is collected |
 | `order AK-7QX4KD delivered` (or `collected`, `done`) | Completes it, as the order workflow's "mark it delivered or collected" step does. A run still waiting on that step finds it completed |
+| `order AK-7QX4KD to Musa`, `release AK-7QX4KD`, `deliveries`, `turn on deliveries` | A business's own riders ([dispatch](dispatch.md#in-chat)) |
 
 Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
 
