@@ -100,6 +100,68 @@ test("leaving the builder with unsaved changes asks first", async ({ page }) => 
   expect(page.isClosed()).toBe(false);
 });
 
+test("unsaved edits outlive Back and a sign-out, and are offered back", async ({ page }) => {
+  await signIn(page);
+  const id = await workflow(page, "Kept flow", {
+    schema: "wd/v1", id: "wf_kept", version: 1, name: "Kept", trigger: { type: "manual" },
+    steps: [{ id: "start", type: "transform", config: { output: "first" } }],
+  });
+  const offer = page.getByTestId("kept-draft");
+  const editJson = async (to: string) => {
+    await page.getByRole("tab", { name: "JSON" }).click();
+    const json = page.locator("textarea.mono");
+    await json.fill((await json.inputValue()).replace(/"(first|mine|again)"/, `"${to}"`));
+    await expect(page.getByText("Unsaved changes")).toBeVisible();
+  };
+  const reopen = async () => {
+    await page.goto("/workflows");
+    await page.goto(`/workflows/${id}`);
+    await expect(page.getByTestId("node-start")).toBeVisible();
+  };
+  await reopen();
+  await expect(offer).toHaveCount(0);
+  await editJson("mine");
+
+  // The browser's Back button leaves without a click on a link.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/workflows$/);
+  await page.goForward();
+  await expect(offer).toContainText("not saved");
+  await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+  await offer.getByRole("button", { name: "Bring them back" }).click();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await page.getByRole("tab", { name: "JSON" }).click();
+  await expect(page.locator("textarea.mono")).toHaveValue(/"mine"/);
+
+  // Signed out (a 401 on saving): the edits survive signing in again.
+  await editJson("again");
+  await page.context().clearCookies();
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  await signIn(page);
+  await page.goto(`/workflows/${id}`);
+  await offer.getByRole("button", { name: "Bring them back" }).click();
+  await page.getByRole("tab", { name: "JSON" }).click();
+  await expect(page.locator("textarea.mono")).toHaveValue(/"again"/);
+
+  // Saving forgets them.
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.locator(".builder-saved")).toBeVisible();
+  await reopen();
+  await expect(offer).toHaveCount(0);
+
+  // Throwing them away forgets them too.
+  await editJson("first");
+  await page.goBack();
+  await page.goForward();
+  await offer.getByRole("button", { name: "Throw them away" }).click();
+  await expect(offer).toHaveCount(0);
+  await page.getByRole("tab", { name: "JSON" }).click();
+  await expect(page.locator("textarea.mono")).toHaveValue(/"again"/);
+  await reopen();
+  await expect(offer).toHaveCount(0);
+});
+
 test("a step edited as JSON keeps its id; the ID field renames it", async ({ page }) => {
   await signIn(page);
   const id = await workflow(page, "Step JSON flow", {

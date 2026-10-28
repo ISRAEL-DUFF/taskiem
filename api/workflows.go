@@ -143,25 +143,151 @@ func canonical(doc json.RawMessage) ([]byte, error) {
 }
 
 // draftDoc is canonical for a draft saved to a workflow: a draft may be
-// incomplete, but it is a wd/v1 document, an object with a list of step
-// objects, or the builder cannot draw it.
+// incomplete (no trigger yet), but it is a wd/v1 document the builder can
+// draw: an object with a list of steps, each an object with an id and a
+// type, at every depth (the rules of web/src/lib/flow.ts definitionProblem).
+// Keys match exactly: "Steps" is not "steps", and a case variant of a wd/v1
+// key is refused rather than stored beside or instead of the key.
 func draftDoc(doc json.RawMessage) ([]byte, error) {
 	out, err := canonical(doc)
 	if err != nil {
 		return nil, err
 	}
-	var root struct {
-		Steps *[]json.RawMessage `json:"steps"`
-	}
-	if len(out) == 0 || out[0] != '{' || json.Unmarshal(out, &root) != nil || root.Steps == nil {
-		return nil, fmt.Errorf("%w: definition must be a wd/v1 object with a steps list", errBadRequest)
-	}
-	for _, st := range *root.Steps {
-		if st[0] != '{' {
-			return nil, fmt.Errorf("%w: each of the definition's steps must be an object", errBadRequest)
-		}
+	if msg := draftProblem(out); msg != "" {
+		return nil, fmt.Errorf("%w: %s", errBadRequest, msg)
 	}
 	return out, nil
+}
+
+// wdTopKeys are the top-level keys of a wd/v1 document.
+var wdTopKeys = []string{"schema", "id", "version", "name", "description", "trigger", "inputs", "steps", "types", "settings", "outputs"}
+
+// jsonObject decodes raw as an object, its keys as written, or false.
+func jsonObject(raw json.RawMessage) (map[string]json.RawMessage, bool) {
+	if len(raw) == 0 || raw[0] != '{' {
+		return nil, false
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return nil, false
+	}
+	return m, true
+}
+
+// jsonList decodes raw as a list, or false.
+func jsonList(raw json.RawMessage) ([]json.RawMessage, bool) {
+	if len(raw) == 0 || raw[0] != '[' {
+		return nil, false
+	}
+	var l []json.RawMessage
+	if json.Unmarshal(raw, &l) != nil {
+		return nil, false
+	}
+	return l, true
+}
+
+// draftProblem is what keeps a draft from being drawn, or "".
+func draftProblem(doc []byte) string {
+	const shape = "definition must be a wd/v1 object with a steps list"
+	root, ok := jsonObject(doc)
+	if !ok {
+		return shape
+	}
+	for k := range root {
+		for _, want := range wdTopKeys {
+			if k != want && strings.EqualFold(k, want) {
+				return fmt.Sprintf("definition key %q must be written %q", k, want)
+			}
+		}
+	}
+	steps, ok := root["steps"]
+	if !ok {
+		return shape
+	}
+	return draftSteps(steps, `"steps"`)
+}
+
+// draftSteps checks a list of steps and the lists inside its containers.
+func draftSteps(raw json.RawMessage, where string) string {
+	list, ok := jsonList(raw)
+	if !ok {
+		return where + " must be a list of steps"
+	}
+	for i, item := range list {
+		st, ok := jsonObject(item)
+		if !ok {
+			return fmt.Sprintf("%s: step %d must be an object", where, i+1)
+		}
+		var id string
+		if json.Unmarshal(st["id"], &id) != nil || id == "" {
+			return fmt.Sprintf(`%s: step %d needs an "id"`, where, i+1)
+		}
+		var typ string
+		if raw := st["type"]; len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &typ) != nil {
+			return fmt.Sprintf(`step %q needs a "type"`, id)
+		}
+		if raw, ok := st["needs"]; ok {
+			var needs []string
+			if json.Unmarshal(raw, &needs) != nil || needs == nil {
+				return fmt.Sprintf(`step %q: "needs" must be a list of step ids`, id)
+			}
+		}
+		cfg := map[string]json.RawMessage{}
+		if raw, ok := st["config"]; ok {
+			if cfg, ok = jsonObject(raw); !ok {
+				return fmt.Sprintf(`step %q: "config" must be an object`, id)
+			}
+		}
+		var bad string
+		switch typ {
+		case "branch":
+			bad = draftInner(cfg, "paths", id)
+			if raw, ok := cfg["default"]; bad == "" && ok {
+				def, ok := jsonObject(raw)
+				if !ok {
+					return fmt.Sprintf(`step %q: "default" must be an object`, id)
+				}
+				if s, ok := def["steps"]; ok {
+					bad = draftSteps(s, fmt.Sprintf("step %q, otherwise", id))
+				}
+			}
+		case "parallel":
+			bad = draftInner(cfg, "branches", id)
+		case "foreach":
+			if s, ok := cfg["steps"]; ok {
+				bad = draftSteps(s, fmt.Sprintf("step %q", id))
+			}
+		}
+		if bad != "" {
+			return bad
+		}
+	}
+	return ""
+}
+
+// draftInner checks a container's paths or branches: a list of objects whose
+// steps, where given, are a list of steps.
+func draftInner(cfg map[string]json.RawMessage, key, id string) string {
+	raw, ok := cfg[key]
+	if !ok {
+		return ""
+	}
+	list, ok := jsonList(raw)
+	if !ok {
+		return fmt.Sprintf("step %q: %q must be a list", id, key)
+	}
+	for j, item := range list {
+		p, ok := jsonObject(item)
+		if !ok {
+			return fmt.Sprintf("step %q: %s %d must be an object", id, key, j+1)
+		}
+		if s, ok := p["steps"]; ok {
+			if bad := draftSteps(s, fmt.Sprintf("step %q, %s %d", id, key, j+1)); bad != "" {
+				return bad
+			}
+		}
+	}
+	return ""
 }
 
 func (p *Principal) id() uuid.UUID {
