@@ -99,7 +99,11 @@ func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal
 	if err != nil {
 		return deliveriesView{}, err
 	}
-	if g.FourEyesPublish {
+	wait, err := publishNeedsApproval(ctx, tx, g, nil)
+	if err != nil {
+		return deliveriesView{}, err
+	}
+	if wait {
 		return deliveriesView{}, fmt.Errorf("%w: with four-eyes publishing, add the Storefront orders delivered by your riders template from Templates and have a second person publish it", errConflict)
 	}
 	tpl, ok := templates.Default().Get(dispatchOrdersTemplate)

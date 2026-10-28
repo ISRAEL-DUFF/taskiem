@@ -320,6 +320,19 @@ func TestRidersPay(t *testing.T) {
 		t.Fatalf("view %v", v)
 	}
 	run := ada.must(202, "POST", "/v1/riders/pay", nil)
+	defer func() {
+		// With a second person needed for prod alone, a change to weekly
+		// pay waits for them: prod keeps the version it has.
+		ada.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish_environments": []string{"prod"}})
+		st := ada.must(200, "PUT", "/v1/riders/pay/setup", map[string]any{"pay_day": 3, "pay_time": "12:00"})
+		if st["waiting"] != true || st["version"] != float64(3) {
+			t.Errorf("under four-eyes for prod: %v", st)
+		}
+		var cron string
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT cron FROM triggers WHERE workflow_id = $1 AND environment = 'prod'`, wf).Scan(&cron); err != nil || cron != "0 9 * * 1" {
+			t.Errorf("prod changed before the second person: %q %v", cron, err)
+		}
+	}()
 	var n int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs r JOIN trigger_receipts t ON t.run_id = r.id
 		WHERE r.id = $1 AND r.workflow_id = $2 AND t.dedup_key = $3`, run["run_id"], wf, "riders-pay:"+run["batch_id"].(string)).Scan(&n); err != nil || n != 1 {
@@ -447,6 +460,11 @@ func TestTurnOnDeliveriesRefused(t *testing.T) {
 		return err
 	}); err != nil {
 		t.Fatal(err)
+	}
+	// A second person for prod alone is four-eyes too (per environment).
+	ada.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish": false, "four_eyes_publish_environments": []string{"prod"}})
+	if e := ada.must(409, "POST", "/v1/dispatch/workflow", map[string]any{"replace": true}); !strings.Contains(fmt.Sprint(e["error"]), "four-eyes") {
+		t.Fatalf("four-eyes for prod: %v", e)
 	}
 	ada.must(200, "PUT", "/v1/governance", map[string]any{"four_eyes_publish": true})
 	if e := ada.must(409, "POST", "/v1/dispatch/workflow", map[string]any{"replace": true}); !strings.Contains(fmt.Sprint(e["error"]), "four-eyes") {

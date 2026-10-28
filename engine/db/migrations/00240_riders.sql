@@ -38,8 +38,10 @@ ALTER TABLE riders FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON riders TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON riders TO taskiem_app;
-CREATE POLICY dispatch ON riders TO taskiem_dispatch USING (true) WITH CHECK (true);
-GRANT SELECT ON riders TO taskiem_dispatch;
+-- The definers below find a rider by their phone across businesses; they
+-- read no name, phone, zone or fee.
+CREATE POLICY dispatch ON riders FOR SELECT TO taskiem_dispatch USING (true);
+GRANT SELECT (id, tenant_id, phone_hash, retired_at) ON riders TO taskiem_dispatch;
 
 -- What a rider said to the platform number, for every business they ride
 -- for: off (until they say on), or busy until a time. No row: free.

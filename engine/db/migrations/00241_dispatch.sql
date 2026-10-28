@@ -142,12 +142,18 @@ BEGIN
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
     EXECUTE format('CREATE POLICY tenant_isolation ON %I TO taskiem_app USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()))', t);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON %I TO taskiem_app', t);
-    EXECUTE format('CREATE POLICY dispatch ON %I TO taskiem_dispatch USING (true) WITH CHECK (true)', t);
-    EXECUTE format('GRANT SELECT ON %I TO taskiem_dispatch', t);
   END LOOP;
 END
 $$;
 -- +goose StatementEnd
+-- The dispatch role reads only what its definers need: a delivery's
+-- state, times and rating, and whether a business has cash owed. Never
+-- settings, payouts or remittance amounts.
+CREATE POLICY dispatch ON deliveries TO taskiem_dispatch USING (true) WITH CHECK (true);
+GRANT SELECT (id, tenant_id, order_id, rider_id, status, offered_at, accepted_at, picked_up_at, arrived_at, delivered_at, rated_at, rating)
+  ON deliveries TO taskiem_dispatch;
+CREATE POLICY dispatch ON rider_remittances FOR SELECT TO taskiem_dispatch USING (true);
+GRANT SELECT (tenant_id, settled_at) ON rider_remittances TO taskiem_dispatch;
 
 -- What a business may know of its riders' presence, now with their open
 -- deliveries anywhere: busy (with how many and since when) while they

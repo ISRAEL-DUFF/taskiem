@@ -162,9 +162,13 @@ func (s *Server) setupRidersPay(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		waiting = g.FourEyesPublish
+		// A second person publishes it when any environment it deploys to
+		// needs one (four-eyes for all, or per environment).
+		if waiting, err = publishNeedsApproval(ctx, tx, g, nil); err != nil {
+			return err
+		}
 		if wf, version, err = s.managedWorkflowTx(r, tx, managedWorkflow{Name: "Pay riders", Template: payRidersTemplate, What: "how riders are paid"},
-			doc, have, g.FourEyesPublish); err != nil {
+			doc, have, waiting); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE dispatch_settings SET payout_workflow_id = $2, updated_at = now() WHERE tenant_id = $1`, p.TenantID, wf)
