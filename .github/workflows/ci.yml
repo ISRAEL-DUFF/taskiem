@@ -34,7 +34,9 @@ jobs:
           version: v2.15.0
       - name: Start OpenBao (transit engine for the secrets tests)
         run: |
-          curl -sSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          # sha256 from the release's checksums-linux.txt; change both together.
+          curl -fsSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          echo "b82f5d05d0ab83244340893b8860542dccb9ff25422a30b3b9d60df0e34fb19d  bao.tgz" | sha256sum -c -
           tar xzf bao.tgz bao
           ./bao server -dev -dev-root-token-id=dev -dev-listen-address=127.0.0.1:8200 > bao.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8200/v1/sys/health >/dev/null && break; sleep 1; done
