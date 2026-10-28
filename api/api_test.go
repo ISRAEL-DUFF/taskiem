@@ -251,6 +251,19 @@ func TestWorkflowLifecycleAndRuns(t *testing.T) {
 	if !strings.Contains(toJSON(open), "22212345678") {
 		t.Error("revealed history should show the BVN")
 	}
+	// A page that refreshes what it revealed is audited once per window,
+	// not once per fetch; another run revealed is audited on its own.
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
+	other := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", in, "Idempotency-Key", "loan-2")["run_id"].(string)
+	owner.must(200, "GET", "/v1/runs/"+other+"?reveal=true", nil)
+	reveals := map[string]int{}
+	for _, e := range owner.must(200, "GET", "/v1/audit?action=pii.reveal", nil)["entries"].([]any) {
+		reveals[e.(map[string]any)["target"].(string)]++
+	}
+	if reveals["run:"+run] != 1 || reveals["run:"+other] != 1 {
+		t.Errorf("reveal audit entries: %v", reveals)
+	}
 
 	owner.must(200, "POST", "/v1/runs/"+run+"/cancel", nil)
 	if st := owner.must(200, "GET", "/v1/runs/"+run, nil)["run"].(map[string]any)["status"]; st != "cancelled" {
