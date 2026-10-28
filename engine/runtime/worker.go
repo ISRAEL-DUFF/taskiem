@@ -749,8 +749,9 @@ func (w *Worker) resolveExecutor(ctx context.Context, p *plan) error {
 			p.spec = &defaultHTTPKey
 		}
 	case p.stepType == "code":
-		// Code has no external effects of its own; host.fetch goes through
-		// the egress guard. It is treated as a read for retries.
+		// Code has no external effects of its own: host.fetch goes through
+		// the egress guard and refuses every method but GET and HEAD, so a
+		// re-run after a crash cannot repeat a write. A read for retries.
 		p.class = effects.Read
 	case p.stepType == "ai":
 		// Asking a model changes nothing: a read, retried freely.

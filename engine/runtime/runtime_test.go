@@ -460,4 +460,15 @@ def main(input, host):
 	if out.Output != float64(750250) || len(calc.Logs) != 1 || calc.Logs[0] != "rate 1500.50 key 5" {
 		t.Errorf("out %v logs %q", out.Output, calc.Logs)
 	}
+
+	// Writes are refused before they leave the sandbox.
+	post, _ := json.Marshal(`def main(input, host):
+    host.fetch(input["fx"], method="POST", body={"amount": 1})
+`)
+	wf = e.Publish(t, wfDoc(`{"id":"calc","type":"code","retry":{"max":0},"input":{"fx":"=trigger.fx"},"config":{"language":"python","source":`+string(post)+`}}`, ""))
+	ref = e.Start(t, wf, map[string]any{"fx": fx.URL})
+	e.Drain(t)
+	if st, msg := e.Status(t, ref), failure(events(t, e, ref), "calc"); st != "failed" || !strings.Contains(msg, "POST: host.fetch allows only GET and HEAD") {
+		t.Errorf("python POST: status %s: %q", st, msg)
+	}
 }

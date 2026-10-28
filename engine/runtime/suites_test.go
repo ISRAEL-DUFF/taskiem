@@ -2,12 +2,16 @@ package runtime_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -45,6 +49,7 @@ var logicalSuffixes = []string{":pay", ":bank", ":item:0", ":item:1", ":item:2"}
 // chaosWorkers runs n worker processes that crash, stall, and get killed.
 type chaosWorkers struct {
 	e               *rt.Env
+	queue           string // empty: the connector queue
 	rng             *rand.Rand
 	mu              sync.Mutex
 	stops           []context.CancelFunc
@@ -66,6 +71,9 @@ func (c *chaosWorkers) roll(p float64) bool {
 func (c *chaosWorkers) start(ctx context.Context) {
 	wctx, cancel := context.WithCancel(ctx)
 	w := c.e.Worker(fmt.Sprintf("chaos-%d", c.nextID.Add(1)))
+	if c.queue != "" {
+		w.Queue = c.queue
+	}
 	w.Concurrency = 4
 	w.Lease = c.lease
 	w.CallTimeout = c.lease / 2
@@ -204,6 +212,93 @@ func TestCrashRecoverySuite(t *testing.T) {
 		runs, runs*len(logicalSuffixes), duplicates, lost, notCompleted, replayErrors, cw.crashes.Load(), cw.stalls.Load(), cw.kills.Load())
 }
 
+// TestCodeStepWritesNeverSent: a code step is retried as a read, so a write
+// from host.fetch would repeat whenever a worker died after sending it. The
+// sandbox refuses the write; under crashes, stalls and kills no POST ever
+// reaches the provider, while the step's reads still run.
+func TestCodeStepWritesNeverSent(t *testing.T) {
+	runs := envInt("TASKIEM_CHAOS_RUNS", 120) / 3
+	e := rt.New(t)
+	var posts, gets atomic.Int64
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			gets.Add(1)
+		} else {
+			posts.Add(1)
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer provider.Close()
+	if err := e.Store.AllowEgress(context.Background(), e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := json.Marshal(`export default async (input, host) => {
+	    let refused = "";
+	    try { await host.fetch(input.url + "/transfer", { method: "POST", body: JSON.stringify({ amount: 1 }) }); }
+	    catch (e) { refused = String(e.message); }
+	    const balance = (await host.fetch(input.url + "/balance")).json();
+	    return { refused, ok: balance.ok };
+	  }`)
+	wf := e.Publish(t, wfDoc(`{"id":"pay","type":"code","input":{"url":"=trigger.url"},"config":{"language":"javascript","source":`+string(src)+`}}`, ""))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cw := &chaosWorkers{e: e, queue: "sandbox", rng: rand.New(rand.NewPCG(3, 4)), crashP: 0.1, stallP: 0.02, lease: 400 * time.Millisecond}
+	for i := 0; i < 3; i++ {
+		cw.start(ctx)
+	}
+	sched := e.Scheduler()
+	go func() { _ = sched.Run(ctx) }()
+	refs := make([]runtime.RunRef, runs)
+	for i := range refs {
+		refs[i] = e.Start(t, wf, map[string]any{"url": provider.URL})
+	}
+	killer := time.NewTicker(300 * time.Millisecond)
+	defer killer.Stop()
+	deadline := time.Now().Add(time.Duration(runs)*100*time.Millisecond + 60*time.Second)
+	for {
+		var open int
+		if err := e.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM runs WHERE status NOT IN ('completed', 'failed', 'cancelled', 'needs_reconciliation')`).Scan(&open); err != nil {
+			t.Fatal(err)
+		}
+		if open == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d runs still open at the deadline", open)
+		}
+		select {
+		case <-killer.C:
+			cw.killOne(ctx)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	cancel()
+	cw.stopAll()
+
+	if n := posts.Load(); n != 0 {
+		t.Errorf("%d POSTs reached the provider from code steps", n)
+	}
+	for _, ref := range refs {
+		if st := e.Status(t, ref); st != "completed" {
+			t.Errorf("run %s ended %s", ref.ID, st)
+			continue
+		}
+		for _, ev := range events(t, e, ref) {
+			if ev.Type == history.StepCompleted && ev.StepID == "pay" {
+				var cp history.CompletedPayload
+				_ = json.Unmarshal(ev.Payload, &cp)
+				out, _ := cp.Output.(map[string]any)
+				if msg, _ := out["refused"].(string); !strings.Contains(msg, "POST: host.fetch allows only GET and HEAD") || out["ok"] != true {
+					t.Errorf("run %s: output %v", ref.ID, cp.Output)
+				}
+			}
+		}
+	}
+	t.Logf("runs=%d posts=%d gets=%d | injected: crashes=%d stalls=%d process-kills=%d",
+		runs, posts.Load(), gets.Load(), cw.crashes.Load(), cw.stalls.Load(), cw.kills.Load())
+}
+
 // TestUnsafeWritesNeverRepeat: with no key and no status API, an unknown
 // outcome parks the run; the effect must never happen twice.
 func TestUnsafeWritesNeverRepeat(t *testing.T) {
@@ -290,7 +385,7 @@ func TestDatabaseCrashSuite(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cw := &chaosWorkers{e: e, rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second}
+	cw := &chaosWorkers{e: e, queue: "sandbox", rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second}
 	for i := 0; i < 4; i++ {
 		cw.start(ctx)
 	}
