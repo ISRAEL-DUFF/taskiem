@@ -429,9 +429,9 @@ func (s *Server) endSchoolDiscount(w http.ResponseWriter, r *http.Request) {
 
 // amendInvoice serves POST /v1/invoices/{id}/amendments, for every
 // business: a recorded change to a sent invoice with a reason. Where the
-// Schools area is on, a discount at or above the school's discount
-// threshold answers 409 needs_approval (B5 makes it a request for a second
-// person).
+// Schools area is on, a discount or a removal at or above the school's
+// discount threshold answers 202 needs_approval with the request recorded
+// for a second person.
 func (s *Server) amendInvoice(w http.ResponseWriter, r *http.Request) {
 	if !s.invoicesOn(w, r) {
 		return
@@ -445,10 +445,12 @@ func (s *Server) amendInvoice(w http.ResponseWriter, r *http.Request) {
 	var out invoicing.Amended
 	var needs *schools.ApprovalNeeded
 	err := s.tx(r, func(tx pgx.Tx) error {
-		if in.Kind == invoicing.AmendDiscount && s.schoolsOn(r.Context(), tx, p.TenantID) {
-			// At or above the school's discount threshold the amendment is
-			// recorded for a second person instead (schools_cash.go); the
-			// request commits with this transaction.
+		if s.schoolsOn(r.Context(), tx, p.TenantID) {
+			// A discount or a line taken out at or above the school's
+			// discount threshold (with what the invoice was reduced by
+			// already without a second person) is recorded for a second
+			// person instead (schools_cash.go); the request commits with
+			// this transaction.
 			err := s.schoolsSvc().RequestDiscountAmendment(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"), in, p.Actor())
 			if errors.As(err, &needs) {
 				return auditTx(r, tx, "school.approval.request", needs.Request.ID.String(), map[string]any{"kind": needs.Request.Kind, "amount_kobo": needs.Request.AmountKobo,

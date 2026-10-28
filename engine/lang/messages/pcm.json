@@ -1472,6 +1472,10 @@
       "text": "If no be am, No go show the next invoice wey fit be.",
       "reviewed": false
     },
+    "wa.match.needs_approval": {
+      "text": "E never match yet: na hand dem take enter this money and e reach the school cash limit, so another person go approve the match for Schools, Approvals.",
+      "reviewed": false
+    },
     "wa.match.other_person": {
       "text": "Na another person dem send dis button give.",
       "reviewed": false
@@ -1804,6 +1808,10 @@
       "text": "Which one?\n{list}\nSend *run* and the full name.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} wey dem enter with hand, {by} match am to invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} wey dem pay {how} for {student} ({class}), na {by} post am.",
       "reviewed": false
@@ -1830,6 +1838,10 @@
     },
     "wa.school.how.transfer": {
       "text": "by transfer to the school account",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "match of money wey dem enter with hand",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {

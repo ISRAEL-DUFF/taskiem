@@ -70,7 +70,7 @@ func TestMirrorCopiesEachEntryOnce(t *testing.T) {
 		fields map[string]any
 	}{
 		{"payment.received", map[string]any{"payment_id": "P-1", "amount_kobo": int64(250000)}},
-		{"virtual_account.credited", map[string]any{"reference": "VA-1", "amount_kobo": int64(90000), "payer_name": "ADA OBI"}},
+		{"virtual_account.credited", map[string]any{"reference": "VA-1", "credit_id": "C-1", "amount_kobo": int64(90000), "payer_name": "ADA OBI"}},
 	} {
 		if _, err := log.RecordEvent(ctx, e.Tenant, "prod", "paystack", "main", ev.name, ev.fields); err != nil {
 			t.Fatal(err)

@@ -1472,6 +1472,10 @@
       "text": "Ọ bụrụ na ọ bụghị ya, Mba ga-egosi akwụkwọ ụgwọ ọzọ.",
       "reviewed": false
     },
+    "wa.match.needs_approval": {
+      "text": "Ejikọbeghị ya: e ji aka tinye ego a, ọ ruru oke ego ụlọ akwụkwọ, ya mere onye ọzọ ga-akwado ya na Schools, Approvals.",
+      "reviewed": false
+    },
     "wa.match.other_person": {
       "text": "E zigara onye ọzọ bọtịnụ a.",
       "reviewed": false
@@ -1804,6 +1808,10 @@
       "text": "Kedu nke?\n{list}\nZiga *run* na aha ya zuru oke.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} e ji aka tinye, {by} jikọrọ ya na invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} a kwụrụ {how} maka {student} ({class}), {by} tinyere ya.",
       "reviewed": false
@@ -1830,6 +1838,10 @@
     },
     "wa.school.how.transfer": {
       "text": "site na nyefe n'akaụntụ ụlọ akwụkwọ",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "njikọ ego e ji aka tinye",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {

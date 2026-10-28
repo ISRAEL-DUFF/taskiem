@@ -104,7 +104,7 @@ import {
 import { isMasked, telLink } from "../lib/orders";
 import type { Claim } from "../lib/schoolFamily";
 import { ClaimsToMatch } from "./SchoolFamily";
-import { receiptPDF, type Receipt } from "../lib/schoolPayments";
+import { heldMatchLine, receiptPDF, type Receipt } from "../lib/schoolPayments";
 
 /** Runs a request and words the server's refusal as a sentence. */
 async function plainly<T>(p: Promise<T>): Promise<T> {
@@ -221,7 +221,9 @@ function WaitingCard({
   const words = pickerWords((orders ?? []).length > 0);
   const decide = (c: MoneySuggestion, action: "confirm" | "reject") =>
     void act.run(async () => {
-      await plainly(post(suggestionPath(c.id, action)));
+      const r = await plainly(post<unknown>(suggestionPath(c.id, action)));
+      const held = heldMatchLine(r);
+      if (held) return onDone(held);
       const kind = isOrder(c) ? "order" : "invoice";
       onDone(action === "confirm" ? matchedLine(p.amount_kobo, c.number, kind) : rejectedLine(c.number, kind));
     }, false);
@@ -305,7 +307,9 @@ function WaitingCard({
                   if (!other) return;
                   const chosen = choices.find((x) => x.value === other);
                   void act.run(async () => {
-                    await plainly(post(entryMatchPath(p.entry_id), matchRequest(other)));
+                    const r = await plainly(post<unknown>(entryMatchPath(p.entry_id), matchRequest(other)));
+                    const held = heldMatchLine(r);
+                    if (held) return onDone(held);
                     onDone(matchedLine(p.amount_kobo, chosen?.number ?? other, chosen?.kind));
                   }, false);
                 }}
@@ -367,7 +371,7 @@ function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; c
           if (problem) return;
           void act.run(async () => {
             const r = await plainly(post<MoneySplit>(entryMatchPath(p.entry_id), handRequest(rows)));
-            onDone(splitLine(r));
+            onDone(heldMatchLine(r) ?? splitLine(r));
           }, false);
         }}
       >
@@ -429,7 +433,7 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
           if (problem) return;
           void act.run(async () => {
             const r = await plainly(post<MoneySplit>(suggestionPath(c.id, "confirm"), splitRequest(rows, creditRest && rest > 0)));
-            onDone(splitLine(r));
+            onDone(heldMatchLine(r) ?? splitLine(r));
           }, false);
         }}
       >
@@ -1315,9 +1319,13 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
             if (problem) return;
             void act.run(async () => {
               const out = await plainly(post<Record<string, unknown>>(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
-              // A school's discount at or above its threshold is recorded
-              // for a second person (202), not made yet.
-              setWaiting(out.code === "needs_approval" ? "This discount is at or above the school's threshold: it is recorded and waits for a second person to approve it before it changes the invoice." : "");
+              // A school's discount or line taken out at or above its
+              // threshold is recorded for a second person (202), not made yet.
+              setWaiting(
+                out.code === "needs_approval"
+                  ? `${f.kind === "remove" ? "Taking this line out" : "This discount"} lowers the invoice by as much as the school's threshold or more, with what it was lowered by before: it is recorded and waits for a second person to approve it before it changes the invoice.`
+                  : "",
+              );
               setF(emptyAmendment());
               setTried(false);
               setOpen(false);

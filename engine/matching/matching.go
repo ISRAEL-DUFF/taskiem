@@ -134,6 +134,9 @@ type entry struct {
 	// Reversed is what of it went back to the payer already (a reversal
 	// heard before the money was looked at); AmountKobo is net of it.
 	Reversed int64
+	// Source is who said it moved: a rail (event, lookup, step) or a
+	// person (entered, upload).
+	Source string
 }
 
 // Tenant looks at up to 100 of a tenant's new money-in entries.
@@ -141,7 +144,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []entry
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), e.amount_kobo, e.fee_kobo, e.net, e.channel, e.reference,
-				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id)
+				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source
 			FROM money_entries e WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled'
 			  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'statement', 'cash')
 			  AND NOT EXISTS (SELECT 1 FROM money_match_state s WHERE s.entry_id = e.id)
@@ -156,7 +159,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 		rs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
 			var m moneylog.Entry
-			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed)
+			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source)
 			x.e.AmountKobo = moneylog.CountableKobo(m) - x.e.Reversed
 			return x, err
 		})
@@ -195,6 +198,31 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 		// All of it went back to the payer before it was looked at.
 		return m.hold(ctx, tenant, e.ID, "matched", HeldReversed)
 	}
+	// Money a person entered, where a school's cash threshold applies, is
+	// never matched exactly with no one asked: it is suggested, and a
+	// person's match of it may wait for a second person (approval.go).
+	var limit *int64
+	if personEntered(e.Source) {
+		if err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			limit, err = CashLimit(ctx, tx, tenant, e.Source)
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	if limit == nil {
+		if done, err := m.exact(ctx, tenant, e); done || err != nil {
+			return err
+		}
+	}
+	return m.suggest(ctx, tenant, e)
+}
+
+// exact matches an entry with no one asked, when it is paid into an
+// account number or through a checkout page Taskiem gave; done is false
+// when it is not.
+func (m *Matcher) exact(ctx context.Context, tenant uuid.UUID, e entry) (bool, error) {
 	// Exact: the reference is one Taskiem gave for an invoice, or for a
 	// storefront order's account number (N3).
 	var account uuid.UUID
@@ -207,31 +235,31 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 	switch {
 	case err == nil && invoice == nil:
 		if order == "" || m.Orders == nil {
-			return m.mark(ctx, tenant, e.ID, "unmatched")
+			return true, m.mark(ctx, tenant, e.ID, "unmatched")
 		}
-		return m.exactOrder(ctx, tenant, e, order, &account)
+		return true, m.exactOrder(ctx, tenant, e, order, &account)
 	case err == nil:
 		if e.AmountKobo <= 0 {
-			return m.mark(ctx, tenant, e.ID, "unmatched")
+			return true, m.mark(ctx, tenant, e.ID, "unmatched")
 		}
 		err := m.Invoices.Received(ctx, tenant, *invoice, invoicing.Received{PaymentID: e.Reference, AmountKobo: e.AmountKobo, Connection: e.Channel, Account: account})
 		if errors.Is(err, invoicing.ErrState) {
 			// A void invoice, or the money already counted elsewhere: a
 			// person decides.
 			m.log().Info("matching: exact match refused", "tenant", tenant, "entry", e.ID, "err", err)
-			return m.mark(ctx, tenant, e.ID, "unmatched")
+			return true, m.mark(ctx, tenant, e.ID, "unmatched")
 		}
 		if err != nil {
-			return err
+			return true, err
 		}
-		return m.mark(ctx, tenant, e.ID, "matched")
+		return true, m.mark(ctx, tenant, e.ID, "matched")
 	case !errors.Is(err, pgx.ErrNoRows):
-		return err
+		return true, err
 	}
 	// Exact: paid into a customer's permanent account (or held for a person
 	// when the account and reference disagree).
 	if done, err := m.permanent(ctx, tenant, e); done || err != nil {
-		return err
+		return true, err
 	}
 	// Exact: the reference is a storefront order's checkout page.
 	if m.Orders != nil {
@@ -242,11 +270,17 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 		})
 		switch {
 		case err == nil:
-			return m.exactOrder(ctx, tenant, e, order, nil)
+			return true, m.exactOrder(ctx, tenant, e, order, nil)
 		case !errors.Is(err, storefront.ErrNoOrder):
-			return err
+			return true, err
 		}
 	}
+	return false, nil
+}
+
+// suggest offers an entry's suggestions, and matches the best on its own
+// when the business has automatic matching on and it is strong and clear.
+func (m *Matcher) suggest(ctx context.Context, tenant uuid.UUID, e entry) error {
 	if e.AmountKobo <= 0 {
 		return m.mark(ctx, tenant, e.ID, "unmatched")
 	}
@@ -254,7 +288,7 @@ func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error
 	// Suggested: the business's open invoices and orders, scored.
 	var found []Suggestion
 	var auto bool
-	err = db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		st, err := invoicing.GetSettings(ctx, tx, tenant)
 		if err != nil {
 			return err

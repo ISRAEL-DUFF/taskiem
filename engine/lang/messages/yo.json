@@ -1472,6 +1472,10 @@
       "text": "Tí kì í bá ṣe é, Rárá yóò fi ìwé owó tó kàn hàn.",
       "reviewed": false
     },
+    "wa.match.needs_approval": {
+      "text": "Kò tíì so pọ̀: ọwọ́ ni a fi tẹ owó yìí sílẹ̀, ó sì tó ààlà owó ilé-ìwé, nítorí náà ẹlòmíràn gbọ́dọ̀ fọwọ́ sí i ní Schools, Approvals.",
+      "reviewed": false
+    },
     "wa.match.other_person": {
       "text": "Ẹlòmíràn ni a fi bọ́tìnnì yìí ránṣẹ́ sí.",
       "reviewed": false
@@ -1804,6 +1808,10 @@
       "text": "Èwo?\n{list}\nẸ fi *run* àti orúkọ rẹ̀ ní kíkún ránṣẹ́.",
       "reviewed": false
     },
+    "wa.school.cash_match": {
+      "text": "{amount} tí a fi ọwọ́ tẹ̀ sílẹ̀, {by} so ó pọ̀ mọ́ invoice {number}.",
+      "reviewed": false
+    },
     "wa.school.cash_posting": {
       "text": "{amount} tí a san {how} fún {student} ({class}), {by} ló gbà á sílẹ̀.",
       "reviewed": false
@@ -1830,6 +1838,10 @@
     },
     "wa.school.how.transfer": {
       "text": "nípa gbígbé owó sí àkáǹtì ilé ẹ̀kọ́",
+      "reviewed": false
+    },
+    "wa.school.kind.cash_match": {
+      "text": "owó tí a fi ọwọ́ tẹ̀ tí a so pọ̀",
       "reviewed": false
     },
     "wa.school.kind.cash_posting": {

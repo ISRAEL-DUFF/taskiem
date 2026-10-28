@@ -217,6 +217,8 @@ func schoolRequestLine(l lang.Tag, req schools.Posting) string {
 		kind, _ := req.Details["kind"].(string)
 		reason, _ := req.Details["reason"].(string)
 		return tr(l, "wa.school.discount", "kind", strings.ReplaceAll(kind, "_", " "), "amount", amount, "student", req.AdmissionNumber, "class", req.Class, "reason", reason, "by", by)
+	case schools.KindCashMatch:
+		return tr(l, "wa.school.cash_match", "amount", amount, "number", req.InvoiceNumber, "by", by)
 	case schools.KindDiscountAmendment:
 		reason, _ := req.Details["reason"].(string)
 		return tr(l, "wa.school.discount_amendment", "amount", amount, "number", req.InvoiceNumber, "reason", reason, "by", by)

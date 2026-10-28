@@ -67,6 +67,9 @@ func (w *world) read(number string) invoicing.Invoice {
 
 func (w *world) heard(event string, fields map[string]any) {
 	w.t.Helper()
+	if event == "virtual_account.credited" && fields["credit_id"] == nil {
+		fields["credit_id"] = "C-" + fields["reference"].(string) // each its own credit
+	}
 	if _, err := w.log.RecordEvent(ctx, w.env.Tenant, "prod", "paystack", "main", event, fields); err != nil {
 		w.t.Fatal(err)
 	}

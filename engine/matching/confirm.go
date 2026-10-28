@@ -149,6 +149,9 @@ type counting struct {
 	how, by    string
 	reasons    []string
 	creditRest bool
+	// approved: a second person approved it (ApproveHeld); it is not
+	// held again.
+	approved bool
 }
 
 // count counts an entry in parts, in one transaction: each part towards
@@ -161,8 +164,26 @@ type counting struct {
 func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Split, error) {
 	var out Split
 	var done []counted
+	var held *Held
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		out, done = Split{}, nil
+		var err error
+		out, done, held, err = m.countTx(ctx, tx, tenant, c)
+		return err
+	})
+	if err != nil {
+		return out, err
+	}
+	if held != nil {
+		// The request commits; nothing was counted.
+		return out, held
+	}
+	return out, m.paid(ctx, tenant, done)
+}
+
+// countTx is count in tx: what it counted, for paid once tx commits, or
+// the request recorded when the match waits for a second person.
+func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c counting) (out Split, done []counted, held *Held, err error) {
+	err = func() error {
 		parts, reasons := c.parts, c.reasons
 		var sugInvoice, sugOrder *uuid.UUID
 		if c.suggestion != nil {
@@ -193,10 +214,10 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 				parts = []Part{p}
 			}
 		}
-		var direction, status, channel, reference string
+		var direction, status, channel, reference, source string
 		var amount *int64
-		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
-			Scan(&direction, &status, &amount, &channel, &reference)
+		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference, source FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
+			Scan(&direction, &status, &amount, &channel, &reference, &source)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%w: no such payment", invoicing.ErrNotFound)
 		}
@@ -221,6 +242,14 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 		if len(parts) == 1 && parts[0].AmountKobo == 0 {
 			add = left > 0
 			parts = []Part{{Invoice: parts[0].Invoice, Order: parts[0].Order, AmountKobo: max(left, 1)}}
+		}
+		if !c.approved {
+			// Money a person entered, towards a school's invoice at or
+			// above its cash threshold: recorded for a second person, and
+			// nothing counted (approval.go).
+			if held, err = m.holdMatch(ctx, tx, tenant, c, source, *amount, parts); err != nil || held != nil {
+				return err
+			}
 		}
 		// The customer whose money this is, when the rest is left as
 		// credit: the suggested invoice's, else the first part's. A part
@@ -364,11 +393,8 @@ func (m *Matcher) count(ctx context.Context, tenant uuid.UUID, c counting) (Spli
 		_, err = tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, considered_at) VALUES ($1, $2, 'unmatched', $3)
 			ON CONFLICT (entry_id) DO UPDATE SET state = 'unmatched', considered_at = $3, held_reason = NULL`, c.entry, tenant, now)
 		return err
-	})
-	if err != nil {
-		return out, err
-	}
-	return out, m.paid(ctx, tenant, done)
+	}()
+	return out, done, held, err
 }
 
 // counted is a part counted towards an invoice or an order.

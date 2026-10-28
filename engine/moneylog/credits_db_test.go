@@ -36,3 +36,29 @@ func TestCreditsToOneAccountAreEachRecordedOnce(t *testing.T) {
 		t.Errorf("entries %d, corrections %d, fees %d; want 2 entries, none correcting another, fees 60000", n, corrects, fees)
 	}
 }
+
+// A credit without its credit_id is not recorded, keyed by the account
+// alone (the account's next credit would be dropped as the same
+// movement): the owners are told, once a day per connection.
+func TestCreditWithoutIDIsRefusedAndTold(t *testing.T) {
+	e := rt.New(t)
+	log := &moneylog.Log{Pool: e.DB.App, PII: e.Vault}
+	for _, amount := range []int64{5000000, 2500000} {
+		if ok, err := log.RecordEvent(ctx, e.Tenant, "prod", "paystack", "main", "virtual_account.credited",
+			map[string]any{"reference": "STU-2", "amount_kobo": amount}); err != nil || ok {
+			t.Fatal(ok, err)
+		}
+	}
+	var entries, told int
+	if err := db.InTenantTx(ctx, e.DB.App, []uuid.UUID{e.Tenant}, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM money_entries WHERE reference = 'STU-2'`).Scan(&entries); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT count(*) FROM alerts WHERE kind = $1`, moneylog.AlertCreditWithoutID).Scan(&told)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if entries != 0 || told != 1 {
+		t.Errorf("%d entries, %d alerts; want none recorded and one alert", entries, told)
+	}
+}

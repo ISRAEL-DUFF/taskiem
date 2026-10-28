@@ -3,6 +3,7 @@ import {
   amountKobo,
   decisionLine,
   emptyPayment,
+  heldMatchLine,
   howWords,
   isApprovalNeeded,
   kindWords,
@@ -94,6 +95,17 @@ describe("words", () => {
     expect(isApprovalNeeded({ code: "needs_approval", error: "x", request: posting })).toBe(true);
     expect(isApprovalNeeded({ posting })).toBe(false);
     expect(isApprovalNeeded(null)).toBe(false);
+  });
+  it("words a match of money entered by hand that waits for a second person", () => {
+    const req: Posting = { ...posting, kind: "cash_match", status: "pending", invoice_number: "INV-0101", amount_kobo: 6_000_000, details: { entry_id: "e1" } };
+    expect(heldMatchLine({ code: "needs_approval", error: "x", request: req })).toContain("waits for a second person");
+    expect(heldMatchLine({ parts: [] })).toBeNull();
+    expect(kindWords("cash_match")).toBe("Money entered by hand, matched to an invoice");
+    expect(requestDetails(req)[0]).toContain("INV-0101");
+  });
+  it("says a line taken out is what waits", () => {
+    const req: Posting = { ...posting, kind: "discount_amendment", status: "pending", invoice_number: "INV-0101", details: { amendment: { kind: "remove", line: 0 }, reason: "Left the bus" } };
+    expect(requestDetails(req)[0]).toBe("A line taken out of invoice INV-0101: Left the bus");
   });
 });
 

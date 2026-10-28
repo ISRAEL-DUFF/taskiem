@@ -87,7 +87,7 @@ func TestMatchingCustomersAPI(t *testing.T) {
 	ada := map[string]any{"name": "Ada Obi", "phone": "+2348031230003"}
 	a1, a2 := invoice(ada, 200000, "2099-09-01"), invoice(ada, 300000, "2099-10-01")
 	if _, err := log.RecordEvent(ctx, tenant, "prod", "paystack", "main", "virtual_account.credited",
-		map[string]any{"reference": "VA-ADA", "amount_kobo": int64(600000), "payer_name": "AUNTY NGOZI ADA OBI"}); err != nil {
+		map[string]any{"credit_id": "C-1", "reference": "VA-ADA", "amount_kobo": int64(600000), "payer_name": "AUNTY NGOZI ADA OBI"}); err != nil {
 		t.Fatal(err)
 	}
 	tick()
