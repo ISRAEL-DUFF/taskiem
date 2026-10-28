@@ -71,6 +71,12 @@ type Customer struct {
 	Phone    string `json:"phone"`
 	Email    string `json:"email,omitempty"`
 	Address  string `json:"address,omitempty"`
+	// Landmark and Pin say where a delivery goes beyond the address
+	// (dispatch D2): "opposite the Shoprite gate", and a maps link the
+	// customer gave (pasted, or their browser's location). Shown to the
+	// rider who holds the order only.
+	Landmark string `json:"landmark,omitempty"`
+	Pin      string `json:"pin,omitempty"`
 	Message  string `json:"message,omitempty"`
 	BestTime string `json:"best_time,omitempty"`
 }

@@ -1,0 +1,231 @@
+package api_test
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
+	"github.com/israel-duff/taskiem/templates"
+)
+
+// dispatchWorld is the reach world with a storefront taking orders for
+// delivery, riders and their deliveries.
+type dispatchWorld struct {
+	*reachWorld
+	biz    uuid.UUID
+	orders *storefront.Orders
+	sf     storefront.Storefront
+	key    []byte
+	proofs [][]byte
+	n      int
+}
+
+func newDispatchWorld(t *testing.T, owner string) (*dispatchWorld, *client) {
+	w := &dispatchWorld{reachWorld: newReachWorld(t)}
+	ctx := context.Background()
+	ada := w.tenant(t, owner, "ada@ada.test")
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM tenants WHERE name = $1`, owner).Scan(&w.biz); err != nil {
+		t.Fatal(err)
+	}
+	w.key, _ = storefront.InboxKey(bytes.Repeat([]byte{4}, 32))
+	w.orders = &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault, InboxKey: w.key, PreviewDomain: "shops.test", Messages: w.srv.Messages,
+		Start: w.env.Store.Start, Signal: w.env.Store.DeliverSignalOnce, MoneyLog: &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}}
+	w.srv.Orders = w.orders
+	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: w.srv.Reach, Messages: w.srv.Messages, PageBase: "https://" + reachFormHost}
+	w.srv.Dispatch = &dispatch.Dispatch{Pool: w.env.DB.App, Vault: w.env.Vault, Riders: w.srv.Riders, Orders: w.orders, Chat: []string{"whatsapp", "telegram"},
+		MoneyLog: &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}, Delivered: dispatch.TellRun(w.env.Store), StatusLink: w.orders.StatusLink}
+	w.orders.AfterPaid = w.srv.Dispatch.OrderPaid
+	w.srv.ProofStore = func(_ context.Context, _ uuid.UUID, data []byte) (string, error) {
+		w.proofs = append(w.proofs, data)
+		return fmt.Sprintf("files/proof-%d.jpg", len(w.proofs)), nil
+	}
+	tpl, _ := templates.Default().Get("storefront-order")
+	def, err := tpl.Instantiate(map[string]any{}, "Storefront order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf := w.env.PublishIn(t, w.biz, string(def))
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action) VALUES ($1, $2, $3, 1, 'prod', 'storefront', 'order')`,
+			uuid.New(), w.biz, wf); err != nil {
+			return err
+		}
+		if _, err := storefront.Save(ctx, tx, w.biz, "ada-stores", storefront.Card{Name: owner, Address: "4 Akoka Road, Yaba"}, nil, storefront.Columns{}, "user:ada"); err != nil {
+			return err
+		}
+		if _, err := storefront.SaveAction(ctx, tx, w.biz, storefront.Action{Kind: "order", Enabled: true, Payment: "after_accept",
+			Options: storefront.ActionOptions{Delivery: true, Zones: []storefront.Zone{{Name: "Lekki", FeeKobo: 150000}}}}); err != nil {
+			return err
+		}
+		w.sf, err = storefront.Publish(ctx, tx, w.biz, "shops.test", "user:ada", false)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return w, ada
+}
+
+// order makes an accepted order to Lekki, paid as payment says.
+func (w *dispatchWorld) order(t *testing.T, payment string) string {
+	t.Helper()
+	ctx := context.Background()
+	w.n++
+	ref := storefront.NewReference("ada-stores")
+	key, hash := storefront.NewStatusKey()
+	sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola Ade", Phone: fmt.Sprintf("+2348039%06d", time.Now().UnixNano()%1000000), Address: "12 Admiralty Way"},
+		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 2, PriceKobo: 250000, LineKobo: 500000}}, TotalKobo: 650000, Zone: "Lekki", DeliveryKobo: 150000,
+		Fulfilment: "delivery", Payment: payment, Channel: "direct", Submitted: time.Now(), StatusKey: key}
+	ct, err := storefront.SealSubmission(w.key, w.sf.ID, ref, sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idem := make([]byte, 32)
+	copy(idem, ref)
+	var got *string
+	if err := w.env.DB.PublicPool(t, 1).QueryRow(ctx, `SELECT taskiem_public_submit($1, 'order', $2, $3, $4, $5)`, w.sf.ID, ref, idem, hash, ct).Scan(&got); err != nil || got == nil {
+		t.Fatalf("submit: %v %v", got, err)
+	}
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.orders.Decide(ctx, w.biz, ref, "accept", "", "user:ada"); err != nil {
+		t.Fatal(err)
+	}
+	return ref
+}
+
+// TestDispatchInChat (dispatch D2, D3): an order offered to a rider in
+// their WhatsApp with Accept and Can't, the rider's taps and words run it
+// to completed, their buttons work only for them, their photo and
+// location are kept as proof; the owner offers, sees and releases from
+// the API and from chat.
+func TestDispatchInChat(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+
+	// Musa taps in and is added.
+	tapIn := func(phone string) {
+		path := strings.TrimPrefix(ada.must(200, "GET", "/v1/riders", nil)["tap_in_url"].(string), "https://"+reachFormHost)
+		loc, _ := url.Parse(w.page(t, path+"/whatsapp", nil).Header().Get("Location"))
+		w.whatsapp(t, phone, loc.Query().Get("text"))
+	}
+	const musa = "+2348031110001"
+	tapIn(musa)
+	m := ada.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": musa, "zones": []string{"Lekki"}, "fee_kobo": 100000})["rider"].(map[string]any)
+	if m["reached"] != "whatsapp" {
+		t.Fatalf("musa %v", m)
+	}
+
+	// An order offered by rotation reaches Musa with Accept and Can't.
+	ref := w.order(t, "none")
+	out := ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+	if out["status"] != "offered" || out["rider"] != "Musa Bello" {
+		t.Fatalf("offer %v", out)
+	}
+	w.tick(t)
+	msg := w.graph.Last(t, musa)
+	if msg.Type != "interactive" || !strings.Contains(msg.Text, "A delivery for you: "+ref) || !strings.Contains(msg.Text, "Drop: Lekki") ||
+		!strings.Contains(msg.Text, "Your fee: ₦1,000") || strings.Contains(msg.Text, "Admiralty") || len(msg.Buttons) != 2 || msg.Buttons[0].Title != "Accept" {
+		t.Fatalf("the offer: %+v", msg)
+	}
+	accept := msg.Buttons[0].ID
+
+	// Someone else pressing it gets nothing.
+	if got := w.press(t, "+2348030000009", accept); len(got) != 1 || !strings.Contains(got[0].Text, "no longer works") {
+		t.Fatalf("another number: %+v", got)
+	}
+	// Musa accepts: the address and the customer's phone, and Picked up.
+	got := w.press(t, musa, accept)
+	if len(got) != 1 || !strings.Contains(got[0].Text, ref+" is yours") || !strings.Contains(got[0].Text, "12 Admiralty Way") || len(got[0].Buttons) != 1 ||
+		got[0].Buttons[0].Title != "Picked up" {
+		t.Fatalf("accepted: %+v", got)
+	}
+	// Accept again: nothing more.
+	if again := w.press(t, musa, accept); len(again) != 0 {
+		t.Fatalf("accepted twice: %+v", again)
+	}
+	// Words work as the buttons do.
+	got = w.whatsapp(t, musa, "picked up")
+	if len(got) != 1 || !strings.Contains(got[0].Text, "On your way with "+ref) || got[0].Buttons[0].Title != "Arrived" {
+		t.Fatalf("picked up: %+v", got)
+	}
+	got = w.press(t, musa, got[0].Buttons[0].ID)
+	if len(got) != 1 || !strings.Contains(got[0].Text, "At the door with "+ref) || got[0].Buttons[0].Title != "Delivered" {
+		t.Fatalf("arrived: %+v", got)
+	}
+	delivered := got[0].Buttons[0].ID
+	// A location at the door is kept.
+	locMsg := map[string]any{"type": "location", "location": map[string]any{"latitude": 6.4281, "longitude": 3.4219}}
+	body := whatsapptest.Delivery(waPNID, musa, fmt.Sprintf("wamid.loc%d", w.seq.Add(1)), locMsg)
+	before := len(w.graph.Sent(musa))
+	w.post(t, w.wa, body, "X-Hub-Signature-256", whatsapp.Sign(waSecret, body))
+	if after := w.graph.Sent(musa)[before:]; len(after) != 1 || !strings.Contains(after[0].Text, "Got your location") {
+		t.Fatalf("location: %+v", after)
+	}
+	got = w.press(t, musa, delivered)
+	if len(got) != 1 || !strings.Contains(got[0].Text, ref+" is delivered") {
+		t.Fatalf("delivered: %+v", got)
+	}
+	// A photo after delivering is kept as proof.
+	w.graph.AddMedia("media-proof", "image/jpeg", []byte("\xff\xd8\xff photo"), 0)
+	before = len(w.graph.Sent(musa))
+	body = whatsapptest.Delivery(waPNID, musa, fmt.Sprintf("wamid.img%d", w.seq.Add(1)), whatsapptest.Image("media-proof", "image/jpeg", ""))
+	w.post(t, w.wa, body, "X-Hub-Signature-256", whatsapp.Sign(waSecret, body))
+	if after := w.graph.Sent(musa)[before:]; len(after) != 1 || !strings.Contains(after[0].Text, "Photo kept") || len(w.proofs) != 1 {
+		t.Fatalf("photo: %+v, %d proofs", after, len(w.proofs))
+	}
+	o := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil)
+	order := o
+	if v, ok := o["order"].(map[string]any); ok {
+		order = v
+	}
+	if order["status"] != "completed" {
+		t.Fatalf("order %v", o)
+	}
+	ds := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)
+	d := ds[0].(map[string]any)
+	if d["status"] != "delivered" || d["proof"] != true || !strings.Contains(d["location"].(string), "6.428100,3.421900") || d["rider"] != "Musa Bello" {
+		t.Fatalf("delivery %v", d)
+	}
+	if list := ada.must(200, "GET", "/v1/deliveries", nil)["deliveries"].([]any); len(list) != 1 {
+		t.Fatalf("today %v", list)
+	}
+
+	// From chat: Ada offers the next order to Musa, sees it, takes it back.
+	const adaWA = "+2348020000001"
+	ada.must(202, "POST", "/v1/me/whatsapp", map[string]any{"number": adaWA, "password": testPassword})
+	ada.must(200, "POST", "/v1/me/whatsapp/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, adaWA).Text)})
+	ref2 := w.order(t, "none")
+	if got := w.whatsapp(t, adaWA, "order "+ref2+" to musa"); len(got) != 1 || !strings.Contains(got[0].Text, ref2+" is offered to Musa Bello") {
+		t.Fatalf("order to: %+v", got)
+	}
+	if got := w.whatsapp(t, adaWA, "order "+ref2+" to nobody"); len(got) != 1 || !strings.Contains(got[0].Text, "no rider called nobody") {
+		t.Fatalf("no such rider: %+v", got)
+	}
+	if got := w.whatsapp(t, adaWA, "deliveries"); len(got) != 1 || !strings.Contains(got[0].Text, ref2+" · Musa Bello: offered") ||
+		!strings.Contains(got[0].Text, ref+" · Musa Bello: delivered") {
+		t.Fatalf("deliveries: %+v", got)
+	}
+	if got := w.whatsapp(t, adaWA, "release "+ref2); len(got) != 1 || !strings.Contains(got[0].Text, ref2+" is taken back from Musa Bello") {
+		t.Fatalf("release: %+v", got)
+	}
+	// Musa's words for it now do nothing.
+	if got := w.whatsapp(t, musa, "accept"); len(got) != 1 || !strings.Contains(got[0].Text, "no delivery that fits") {
+		t.Fatalf("accept after release: %+v", got)
+	}
+	_ = ctx
+}

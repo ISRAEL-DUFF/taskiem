@@ -164,6 +164,30 @@
       "text": "Ẹ ṣé. A ó pè yín padà láìpẹ́ ({reference}).",
       "reviewed": false
     },
+    "customer.delivery_arrived": {
+      "text": "Ẹni tó gbé ọjà rẹ ti dé ẹnu ọ̀nà pẹ̀lú {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_done": {
+      "text": "A ti fi {reference} jíṣẹ́. O ṣé.",
+      "reviewed": false
+    },
+    "customer.delivery_done_rate": {
+      "text": "A ti fi {reference} jíṣẹ́. Báwo ni ìfijíṣẹ́ náà ṣe rí? Fún un ní máàkì níbí: {link}",
+      "reviewed": false
+    },
+    "customer.delivery_on_way": {
+      "text": "Ọjà rẹ {reference} ti ń bọ̀ pẹ̀lú {rider} ({phone}).",
+      "reviewed": false
+    },
+    "customer.delivery_paid": {
+      "text": "A ti gba owó rẹ, o ṣé: {reference}.",
+      "reviewed": false
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Ẹni tó gbé ọjà rẹ ti dé pẹ̀lú {reference}. San {total} sí {account}, {bank}, {name}, kí ó tó di {until}.",
+      "reviewed": false
+    },
     "customer.enquiry_thanks": {
       "text": "A ti gba ìbéèrè yín ({reference}), a ó sì dáhùn láìpẹ́.",
       "reviewed": false
@@ -404,20 +428,164 @@
       "text": "Ẹ kọ {name} sí.",
       "reviewed": false
     },
+    "rider.arrived": {
+      "text": "O ti dé pẹ̀lú {reference}: fi lé wọn lọ́wọ́ kí o tẹ Mo ti fi lé e.",
+      "reviewed": false
+    },
+    "rider.btn.accept": {
+      "text": "Gbà á",
+      "reviewed": false
+    },
+    "rider.btn.arrived": {
+      "text": "Mo ti dé",
+      "reviewed": false
+    },
+    "rider.btn.cant": {
+      "text": "Mi ò lè",
+      "reviewed": false
+    },
+    "rider.btn.cash": {
+      "text": "Mo gba owó",
+      "reviewed": false
+    },
+    "rider.btn.delivered": {
+      "text": "Mo ti fi lé e",
+      "reviewed": false
+    },
+    "rider.btn.new_number": {
+      "text": "Nọ́mbà tuntun",
+      "reviewed": false
+    },
+    "rider.btn.picked_up": {
+      "text": "Mo ti gbé e",
+      "reviewed": false
+    },
     "rider.busy": {
       "text": "O ń ṣe ọwọ́ dí títí di {time}. Fi FREE ránṣẹ́ nígbà tí o bá lè gba iṣẹ́ ìfijíṣẹ́ padà.",
+      "reviewed": false
+    },
+    "rider.button_invalid": {
+      "text": "Bọ́tìnì yẹn kò ṣiṣẹ́ mọ́.",
+      "reviewed": false
+    },
+    "rider.cant": {
+      "text": "Ó dáa: {reference} yóò lọ sọ́dọ̀ ẹlòmíì.",
+      "reviewed": false
+    },
+    "rider.collect": {
+      "text": "Oníbàárà yóò san {total} ní ẹnu ọ̀nà.",
+      "reviewed": false
+    },
+    "rider.collect_door": {
+      "text": "Oníbàárà yóò san {total} ní ẹnu ọ̀nà: tẹ Mo ti dé, Taskiem yóò fún wọn ní nọ́mbà àkáǹtì láti sanwó sí.",
+      "reviewed": false
+    },
+    "rider.customer": {
+      "text": "Oníbàárà: {customer}, {phone}",
+      "reviewed": false
+    },
+    "rider.done": {
+      "text": "O ṣé: a ti fi {reference} jíṣẹ́.",
+      "reviewed": false
+    },
+    "rider.done_proof": {
+      "text": "O ṣé: a ti fi {reference} jíṣẹ́. Fi àwòrán rẹ̀ ní ẹnu ọ̀nà ránṣẹ́ gẹ́gẹ́ bí ẹ̀rí.",
+      "reviewed": false
+    },
+    "rider.door": {
+      "text": "Sọ fún oníbàárà kí ó fi {total} ránṣẹ́ sí {account}, {bank}, {name}. Ó wúlò títí di {time}. Màá sọ fún ọ nígbà tí ó bá dé.",
+      "reviewed": false
+    },
+    "rider.drop": {
+      "text": "Mú u lọ sí: {drop}",
+      "reviewed": false
+    },
+    "rider.fee": {
+      "text": "Owó rẹ: {fee}",
+      "reviewed": false
+    },
+    "rider.held": {
+      "text": "{reference} jẹ́ tìrẹ.",
+      "reviewed": false
+    },
+    "rider.held_tail": {
+      "text": "Tẹ Mo ti gbé e nígbà tí o bá ti gbà á.",
+      "reviewed": false
+    },
+    "rider.items": {
+      "text": "Ohun tó wà níbẹ̀: {items}",
+      "reviewed": false
+    },
+    "rider.landmark": {
+      "text": "Àmì ibẹ̀: {landmark}",
       "reviewed": false
     },
     "rider.linked": {
       "text": "O ti di ẹni tó ń bá {business} gbé ọjà. Àwọn iṣẹ́ ìfijíṣẹ́ wọn yóò máa wá síbí. Fi OFF ránṣẹ́ nígbà tí o kò bá ṣiṣẹ́, àti ON nígbà tí o bá ń ṣiṣẹ́.",
       "reviewed": false
     },
+    "rider.location_kept": {
+      "text": "Mo ti gba ibi tí o wà: ó wà pẹ̀lú ìfijíṣẹ́ náà.",
+      "reviewed": false
+    },
+    "rider.no_delivery": {
+      "text": "O kò ní ìfijíṣẹ́ tó bá ìyẹn mu báyìí.",
+      "reviewed": false
+    },
     "rider.off": {
       "text": "O ti dá iṣẹ́ dúró. Kò sí oníṣòwò tí yóò fún ọ ní iṣẹ́ ìfijíṣẹ́ títí o fi fi ON ránṣẹ́.",
       "reviewed": false
     },
+    "rider.offer": {
+      "text": "Ìfijíṣẹ́ fún ọ: {reference}.",
+      "reviewed": false
+    },
+    "rider.offer_tail": {
+      "text": "Dáhùn kí ó tó di {time}.",
+      "reviewed": false
+    },
     "rider.on": {
       "text": "O ti padà sẹ́nu iṣẹ́. Àwọn oníṣòwò tí o ń bá ṣiṣẹ́ lè fún ọ ní iṣẹ́ ìfijíṣẹ́.",
+      "reviewed": false
+    },
+    "rider.on_way": {
+      "text": "O wà lójú ọ̀nà pẹ̀lú {reference}. Tẹ Mo ti dé ní ẹnu ọ̀nà.",
+      "reviewed": false
+    },
+    "rider.paid": {
+      "text": "Wọ́n ti sanwó. Fi {reference} lé wọn lọ́wọ́ kí o tẹ Mo ti fi lé e.",
+      "reviewed": false
+    },
+    "rider.photo_failed": {
+      "text": "Má bínú, a kò lè tọ́jú àwòrán yẹn. Gbìyànjú lẹ́ẹ̀kan sí i.",
+      "reviewed": false
+    },
+    "rider.photo_kept": {
+      "text": "Mo ti tọ́jú àwòrán náà gẹ́gẹ́ bí ẹ̀rí. O ṣé.",
+      "reviewed": false
+    },
+    "rider.pickup": {
+      "text": "Gbé e ní: {pickup}",
+      "reviewed": false
+    },
+    "rider.pin": {
+      "text": "Máàpù: {pin}",
+      "reviewed": false
+    },
+    "rider.refused": {
+      "text": "Kì í ṣe báyìí: {reason}",
+      "reviewed": false
+    },
+    "rider.released": {
+      "text": "{business} ti gba {reference} padà: o kò nílò láti fi jíṣẹ́ mọ́.",
+      "reviewed": false
+    },
+    "rider.unpaid": {
+      "text": "A kò tíì san {reference}: {total}. Sọ fún oníbàárà kí ó sanwó, tàbí gba owó kí o tẹ Mo gba owó.",
+      "reviewed": false
+    },
+    "rider.withdrawn": {
+      "text": "Ìfilọ̀ {reference} ti kọjá.",
       "reviewed": false
     },
     "run.status.cancelled": {
@@ -944,6 +1112,78 @@
       "text": "Ẹ dáhùn *yes* láti bẹ̀rẹ̀ {workflow}, tàbí *cancel*.",
       "reviewed": false
     },
+    "wa.dispatch.held": {
+      "text": "{rider} ti ní {ref} tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "ó ti pẹ́ láti dé",
+      "reviewed": false
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "ó ti pẹ́ láti gbé e",
+      "reviewed": false
+    },
+    "wa.dispatch.no_rider": {
+      "text": "Kò sí ẹni tó lè gbé {ref} báyìí. Fi àwọn míì kún un, tàbí dárúkọ ọ̀kan: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "O kò ní ẹni tó ń gbé ọjà tí à ń pè ní {name}. Fi *riders* ránṣẹ́ láti rí wọn.",
+      "reviewed": false
+    },
+    "wa.dispatch.none_today": {
+      "text": "Kò tíì sí ìfijíṣẹ́ lónìí.",
+      "reviewed": false
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "Kò sí ẹni tó ní {ref}.",
+      "reviewed": false
+    },
+    "wa.dispatch.offered": {
+      "text": "A ti fi {ref} lọ {rider}. Màá sọ fún ọ bí wọn kò bá lè gbé e.",
+      "reviewed": false
+    },
+    "wa.dispatch.refused": {
+      "text": "Kì í ṣe báyìí: {reason}",
+      "reviewed": false
+    },
+    "wa.dispatch.released": {
+      "text": "A ti gba {ref} padà lọ́wọ́ {rider}. Fi í lọ ẹlòmíì: *order {ref} to Musa*",
+      "reviewed": false
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "wọ́n gbà á, wọn kò tíì gbé e",
+      "reviewed": false
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "ó wà ní ẹnu ọ̀nà",
+      "reviewed": false
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "a ti fi jíṣẹ́",
+      "reviewed": false
+    },
+    "wa.dispatch.state.offered": {
+      "text": "a ti fi lọ̀",
+      "reviewed": false
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "ó ń bọ̀",
+      "reviewed": false
+    },
+    "wa.dispatch.state.released": {
+      "text": "a gbà á padà",
+      "reviewed": false
+    },
+    "wa.dispatch.today": {
+      "text": "Àwọn ìfijíṣẹ́ òní:",
+      "reviewed": false
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Èwo nínú wọn: {names}?",
+      "reviewed": false
+    },
     "wa.field.enter": {
       "text": "Ẹ tẹ {label}",
       "reviewed": false
@@ -1034,6 +1274,10 @@
     },
     "wa.help.cancel": {
       "text": "• *cancel*: láti pa ohun tó ń lọ lọ́wọ́ tì",
+      "reviewed": false
+    },
+    "wa.help.dispatch": {
+      "text": "• *order* àti nọ́mbà *to Musa*: fi fún ẹni tó ń gbé ọjà; *release* àti nọ́mbà: gbà á padà; *deliveries*: ti òní",
       "reviewed": false
     },
     "wa.help.find": {
@@ -1956,6 +2200,10 @@
       "text": "a ti gbà á",
       "reviewed": false
     },
+    "wa.shop.status.arrived": {
+      "text": "ó wà ní ẹnu ọ̀nà oníbàárà",
+      "reviewed": false
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "ń dúró de ìsanwó",
       "reviewed": false
@@ -1972,12 +2220,20 @@
       "text": "a kọ̀ ọ́",
       "reviewed": false
     },
+    "wa.shop.status.dispatched": {
+      "text": "ó wà lọ́wọ́ ẹni tó ń gbé e",
+      "reviewed": false
+    },
     "wa.shop.status.expired": {
       "text": "ó ti parí àkókò",
       "reviewed": false
     },
     "wa.shop.status.no_show": {
       "text": "kò wá",
+      "reviewed": false
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "ó ń bọ̀",
       "reviewed": false
     },
     "wa.shop.status.paid": {

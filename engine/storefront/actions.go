@@ -46,6 +46,10 @@ type ActionOptions struct {
 	// (dispatch D1): the form asks for one with delivery and adds its fee
 	// to the total, and riders cover them. None: the address is enough.
 	Zones []Zone `json:"zones,omitempty"`
+	// PayOnDelivery lets a customer choosing delivery pay at the door, by
+	// a one-time account number when the rider arrives or in cash
+	// (dispatch D4). Off by default.
+	PayOnDelivery bool `json:"pay_on_delivery,omitempty"`
 	// DepositPercent is how much of a service's price a booking pays
 	// online (1 to 100; unset is the full price).
 	DepositPercent int `json:"deposit_percent,omitempty"`
@@ -137,6 +141,8 @@ type PublicAction struct {
 	DeliveryNote string `json:"delivery_note,omitempty"`
 	// Zones are the delivery areas the customer chooses from, with fees.
 	Zones []Zone `json:"zones,omitempty"`
+	// PayOnDelivery offers paying at the door with delivery.
+	PayOnDelivery bool `json:"pay_on_delivery,omitempty"`
 	// DepositPercent is a booking's online part of the price (100: all).
 	DepositPercent int `json:"deposit_percent,omitempty"`
 }
@@ -223,6 +229,9 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 			return Action{}, err
 		}
 		a.Options.Zones = zones
+		if !a.Options.Delivery || a.Payment == "none" {
+			a.Options.PayOnDelivery = false
+		}
 	case "booking":
 		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
 			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
@@ -284,7 +293,7 @@ func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAc
 	for _, a := range list {
 		if a.Enabled {
 			out = append(out, PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
-				Zones: a.Options.Zones, DepositPercent: a.Options.DepositPercent})
+				Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent})
 		}
 	}
 	return out, nil

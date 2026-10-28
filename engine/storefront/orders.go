@@ -31,6 +31,10 @@ const PaymentTTL = 30 * time.Minute
 // with the order's reference as the correlation key.
 const PaymentSignal = "storefront.payment"
 
+// DeliveredSignal is the signal an order's run hears when its rider
+// delivered it (dispatch D3), correlated by the reference.
+const DeliveredSignal = "storefront.delivered"
+
 var (
 	// ErrNoOrder is a reference the caller's tenant has no order for.
 	ErrNoOrder = errors.New("storefront: no such order")
@@ -85,6 +89,9 @@ type Orders struct {
 	// IssueTransfer asks the business's rail for a one-time account number
 	// for an order (N3; invoicing's IssueForOrder): nil offers none.
 	IssueTransfer IssueTransfer
+	// AfterPaid hears of an order a payment moved to paid, after the
+	// payment is counted (dispatch tells the rider at the door).
+	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
 	// PreviewDomain is where storefronts are served (<slug>.<domain>).
 	PreviewDomain string
 	Logger        *slog.Logger
@@ -226,7 +233,7 @@ func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st
 	switch status {
 	case "":
 	case "open":
-		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed')`
+		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed', 'dispatched', 'on_the_way', 'arrived')`
 	default:
 		args = append(args, status)
 		q += fmt.Sprintf(` AND status = $%d`, len(args))
@@ -420,6 +427,9 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if (sub.Kind != "order" && sub.Kind != "booking") || payable < 100 {
 		payment = "none"
 	}
+	if payment == "on_delivery" && (sub.Kind != "order" || sub.Fulfilment != "delivery") {
+		payment = "after_accept"
+	}
 	if payment == "at_order" {
 		status = "awaiting_payment"
 		e := o.now().Add(PaymentTTL)
@@ -460,7 +470,10 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	var zone *string
 	var delivery *int64
 	if sub.Zone != "" && sub.Fulfilment == "delivery" {
-		zone, delivery = &sub.Zone, &sub.DeliveryKobo
+		zone = &sub.Zone
+		if sub.DeliveryKobo > 0 {
+			delivery = &sub.DeliveryKobo
+		}
 	}
 	id := uuid.Must(uuid.NewV7())
 	if _, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
@@ -614,6 +627,8 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 		paymentStatus = "paid"
 	case ord.Payment == "after_accept":
 		paymentStatus = "due_after_accept"
+	case ord.Payment == "on_delivery":
+		paymentStatus = "on_delivery"
 	}
 	body := map[string]any{"reference": ord.Reference, "kind": ord.Kind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
 		"total": FormatNaira(ord.TotalKobo), "summary": Summary(ord.Basket), "fulfilment": ord.Fulfilment, "payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}}
@@ -839,7 +854,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "declined", "refund_due":
 				next = ord.Status
-			case "received", "accepted":
+			case "received", "accepted", "dispatched":
 				next = "declined"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -851,7 +866,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "completed":
 				next = ord.Status
-			case "received", "accepted", "paid":
+			case "received", "accepted", "paid", "dispatched", "on_the_way", "arrived":
 				next = "completed"
 			}
 		case "no_show":
@@ -867,7 +882,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "cancelled", "expired":
 				next = ord.Status
-			case "received", "accepted", "awaiting_payment":
+			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived":
 				next = "cancelled"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -886,6 +901,26 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			}
 			if err := audit(ctx, tx, tenant, "storefront.order_"+next, reference, map[string]any{"by": actor}); err != nil {
 				return err
+			}
+			// Its delivery (dispatch): completed by the owner, the rider who
+			// holds it delivered it; declined or cancelled, it is released
+			// and any offer withdrawn.
+			switch next {
+			case "completed":
+				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'delivered', delivered_at = now() WHERE tenant_id = $1 AND order_id = $2
+					AND status IN ('accepted', 'picked_up', 'arrived')`, tenant, ord.ID); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'withdrawn', answered_at = now() WHERE tenant_id = $1 AND order_id = $2 AND status = 'offered'`,
+					tenant, ord.ID); err != nil {
+					return err
+				}
+			case "declined", "cancelled", "refund_due":
+				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = CASE WHEN status = 'offered' THEN 'withdrawn' ELSE 'released' END,
+					released_at = CASE WHEN status = 'offered' THEN NULL ELSE now() END, answered_at = COALESCE(answered_at, now())
+					WHERE tenant_id = $1 AND order_id = $2 AND status IN ('offered', 'accepted', 'picked_up', 'arrived')`, tenant, ord.ID); err != nil {
+					return err
+				}
 			}
 			// A booking declined or cancelled frees its slot.
 			if ord.Kind == "booking" && (next == "declined" || next == "cancelled" || next == "refund_due") {

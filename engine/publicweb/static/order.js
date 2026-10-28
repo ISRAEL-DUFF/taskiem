@@ -54,6 +54,30 @@
     box.appendChild(input);
     box.appendChild(step(input, 1, "One more " + name));
   }
+  // The map pin: the browser's location, when the customer asks for it
+  // (offered, never required; the server turns it into a maps link).
+  var pin = form.querySelector("input[data-pin]");
+  if (pin && navigator.geolocation) {
+    var here = document.createElement("button");
+    here.type = "button";
+    here.className = "btn btn-small";
+    here.textContent = "Use my location";
+    here.addEventListener("click", function () {
+      here.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        function (p) {
+          pin.value = p.coords.latitude.toFixed(6) + "," + p.coords.longitude.toFixed(6);
+          here.textContent = "Location added";
+        },
+        function () {
+          here.disabled = false;
+          here.textContent = "Location not available";
+        },
+        { timeout: 15000 }
+      );
+    });
+    pin.parentNode.appendChild(here);
+  }
   form.addEventListener("input", update);
   form.addEventListener("change", update);
   update();

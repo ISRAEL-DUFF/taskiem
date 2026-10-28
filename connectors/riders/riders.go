@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -32,7 +33,14 @@ type Ops interface {
 	Retire(ctx context.Context, tenant, id uuid.UUID, actor string) (riders.Rider, error)
 }
 
-// New returns the connector; ops nil makes every action fail plainly.
+// Dispatcher is what the dispatch actions call: *dispatch.Dispatch.
+type Dispatcher interface {
+	Offer(ctx context.Context, tenant uuid.UUID, reference string, in dispatch.OfferIn) (dispatch.OfferOut, error)
+	Release(ctx context.Context, tenant uuid.UUID, reference, actor string) (dispatch.Delivery, error)
+}
+
+// New returns the connector; ops nil makes every action fail plainly. ops
+// that is also a Dispatcher serves offer and release.
 func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
@@ -41,10 +49,68 @@ func New(ops Ops) *connector.Connector {
 		"get_rider":    connector.ActionFunc(a.get),
 		"add_rider":    connector.ActionFunc(a.add),
 		"retire_rider": connector.ActionFunc(a.retire),
+		"offer":        connector.ActionFunc(a.offer),
+		"release":      connector.ActionFunc(a.release),
 	}}
 }
 
 type actions struct{ ops Ops }
+
+func (a *actions) dispatcher(ctx context.Context) (connector.Caller, Dispatcher, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return c, nil, err
+	}
+	d, ok := a.ops.(Dispatcher)
+	if !ok {
+		return c, nil, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	if l, ok := d.(*Late); ok && !l.dispatching() {
+		return c, nil, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return c, d, nil
+}
+
+func (a *actions) offer(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, d, err := a.dispatcher(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	ref, _ := req.Input["reference"].(string)
+	in := dispatch.OfferIn{Ask: true, By: "workflow:" + c.Run.String()}
+	if s, ok := req.Input["rider_id"].(string); ok && s != "" {
+		id, err := uuid.Parse(s)
+		if err != nil {
+			return connector.Response{}, fmt.Errorf("rider_id is a rider's id: %w", effects.ErrFatal)
+		}
+		in.Rider = &id
+	}
+	if n, ok := number(req.Input["fee_kobo"]); ok {
+		in.FeeKobo = &n
+	}
+	out, err := d.Offer(ctx, c.Tenant, ref, in)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	res := map[string]any{"reference": ref, "status": out.Status, "rider": out.Rider}
+	if out.Delivery != nil {
+		res["delivery_id"] = out.Delivery.ID.String()
+	}
+	return connector.Response{Output: res}, nil
+}
+
+func (a *actions) release(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, d, err := a.dispatcher(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	ref, _ := req.Input["reference"].(string)
+	x, err := d.Release(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "status": x.Status, "rider": x.Rider}}, nil
+}
 
 func (a *actions) caller(ctx context.Context) (connector.Caller, error) {
 	c, ok := connector.CallerFrom(ctx)
@@ -177,7 +243,8 @@ func classify(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, riders.ErrInvalid), errors.Is(err, riders.ErrNoRider):
+	case errors.Is(err, riders.ErrInvalid), errors.Is(err, riders.ErrNoRider), errors.Is(err, dispatch.ErrNotReady), errors.Is(err, dispatch.ErrInvalid),
+		errors.Is(err, dispatch.ErrNoDelivery), errors.Is(err, dispatch.ErrMove), errors.Is(err, storefront.ErrNoOrder):
 		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	return err
@@ -188,10 +255,36 @@ func classify(err error) error {
 type Late struct {
 	mu  sync.RWMutex
 	ops Ops
+	dis Dispatcher
 }
 
 // Set binds the operations.
 func (l *Late) Set(ops Ops) { l.mu.Lock(); l.ops = ops; l.mu.Unlock() }
+
+// SetDispatch binds the dispatch actions.
+func (l *Late) SetDispatch(d Dispatcher) { l.mu.Lock(); l.dis = d; l.mu.Unlock() }
+
+func (l *Late) dispatching() bool { l.mu.RLock(); defer l.mu.RUnlock(); return l.dis != nil }
+
+func (l *Late) Offer(ctx context.Context, tenant uuid.UUID, reference string, in dispatch.OfferIn) (dispatch.OfferOut, error) {
+	l.mu.RLock()
+	d := l.dis
+	l.mu.RUnlock()
+	if d == nil {
+		return dispatch.OfferOut{}, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return d.Offer(ctx, tenant, reference, in)
+}
+
+func (l *Late) Release(ctx context.Context, tenant uuid.UUID, reference, actor string) (dispatch.Delivery, error) {
+	l.mu.RLock()
+	d := l.dis
+	l.mu.RUnlock()
+	if d == nil {
+		return dispatch.Delivery{}, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return d.Release(ctx, tenant, reference, actor)
+}
 
 func (l *Late) get() (Ops, error) {
 	l.mu.RLock()

@@ -328,6 +328,18 @@ func statusWords(d *statusData, o OrderState) {
 	case "declined":
 		d.Headline = "Your order was declined"
 		d.Lines = []string{b + " could not take this order. Contact them directly if you have questions."}
+	case "dispatched":
+		d.Headline = "A rider has your order"
+		d.Lines = []string{"You will get an SMS when it is on its way."}
+	case "on_the_way":
+		d.Headline = "Your order is on its way"
+		d.Lines = []string{"The rider will be at your door soon."}
+	case "arrived":
+		d.Headline = "Your rider is at the door"
+		d.Lines = []string{"Collect your order from the rider."}
+		if o.Payment == "on_delivery" {
+			d.Lines = []string{"Pay the rider's account number by transfer (it is in your SMS too), or pay in cash, then collect your order."}
+		}
 	case "completed":
 		d.Headline = "Your order is complete"
 		d.Lines = []string{"Thank you for ordering from " + b + "."}

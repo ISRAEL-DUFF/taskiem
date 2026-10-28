@@ -204,6 +204,36 @@
       "reviewed": true,
       "context": "SMS to a customer who asked to be called back"
     },
+    "customer.delivery_arrived": {
+      "text": "Your rider is at the door with {reference}.",
+      "reviewed": true,
+      "context": "To the customer when the rider arrives"
+    },
+    "customer.delivery_done": {
+      "text": "{reference} is delivered. Thank you.",
+      "reviewed": true,
+      "context": "To the customer when delivered"
+    },
+    "customer.delivery_done_rate": {
+      "text": "{reference} is delivered. How was your delivery? Rate it here: {link}",
+      "reviewed": true,
+      "context": "To the customer when delivered, with the link to rate it"
+    },
+    "customer.delivery_on_way": {
+      "text": "Your order {reference} is on its way with {rider} ({phone}).",
+      "reviewed": true,
+      "context": "To the customer at pickup"
+    },
+    "customer.delivery_paid": {
+      "text": "Paid, thank you: {reference}.",
+      "reviewed": true,
+      "context": "To the customer when the door payment lands"
+    },
+    "customer.delivery_pay_at_door": {
+      "text": "Your rider is at the door with {reference}. Pay {total} by transfer to {account}, {bank}, {name}, by {until}.",
+      "reviewed": true,
+      "context": "To the customer at the door: the account number to pay into"
+    },
     "customer.enquiry_thanks": {
       "text": "We have your question ({reference}) and will reply soon.",
       "reviewed": true,
@@ -504,25 +534,205 @@
       "reviewed": true,
       "context": "Readiness: a setting (variable) the workflow reads is not set"
     },
+    "rider.arrived": {
+      "text": "At the door with {reference}: hand it over and tap Delivered.",
+      "reviewed": true,
+      "context": "At the door, the order paid"
+    },
+    "rider.btn.accept": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "A rider's button: take the offered delivery (20 characters at most)"
+    },
+    "rider.btn.arrived": {
+      "text": "Arrived",
+      "reviewed": true,
+      "context": "A rider's button: they are at the customer's door (20 characters at most)"
+    },
+    "rider.btn.cant": {
+      "text": "Can't",
+      "reviewed": true,
+      "context": "A rider's button: pass the offer on (20 characters at most)"
+    },
+    "rider.btn.cash": {
+      "text": "Cash received",
+      "reviewed": true,
+      "context": "A rider's button: the customer paid them cash (20 characters at most)"
+    },
+    "rider.btn.delivered": {
+      "text": "Delivered",
+      "reviewed": true,
+      "context": "A rider's button: handed over (20 characters at most)"
+    },
+    "rider.btn.new_number": {
+      "text": "New number",
+      "reviewed": true,
+      "context": "A rider's button: another account number for the customer (20 characters at most)"
+    },
+    "rider.btn.picked_up": {
+      "text": "Picked up",
+      "reviewed": true,
+      "context": "A rider's button: they have the order (20 characters at most)"
+    },
     "rider.busy": {
       "text": "You're busy until {time}. Send FREE when you can take deliveries again.",
       "reviewed": true,
       "context": "A rider said busy till a time (Lagos time, like 15:00); keep FREE in English"
+    },
+    "rider.button_invalid": {
+      "text": "That button no longer works.",
+      "reviewed": true,
+      "context": "A rider's button that does nothing now"
+    },
+    "rider.cant": {
+      "text": "OK: {reference} goes to another rider.",
+      "reviewed": true,
+      "context": "A rider passed an offer"
+    },
+    "rider.collect": {
+      "text": "The customer pays {total} at the door.",
+      "reviewed": true,
+      "context": "In an offer: the customer pays at the door"
+    },
+    "rider.collect_door": {
+      "text": "The customer pays {total} at the door: tap Arrived and Taskiem gives them an account number to pay into.",
+      "reviewed": true,
+      "context": "Once held: how the customer pays at the door"
+    },
+    "rider.customer": {
+      "text": "Customer: {customer}, {phone}",
+      "reviewed": true,
+      "context": "The customer's first name and phone, once held"
+    },
+    "rider.done": {
+      "text": "Thank you: {reference} is delivered.",
+      "reviewed": true,
+      "context": "Delivered"
+    },
+    "rider.done_proof": {
+      "text": "Thank you: {reference} is delivered. Send a photo of it at the door as proof.",
+      "reviewed": true,
+      "context": "Delivered, the business asks for a photo"
+    },
+    "rider.door": {
+      "text": "Ask the customer to transfer {total} to {account}, {bank}, {name}. Valid until {time}. I'll tell you when it lands.",
+      "reviewed": true,
+      "context": "At the door: the account number the customer pays into, valid until a Lagos time"
+    },
+    "rider.drop": {
+      "text": "Drop: {drop}",
+      "reviewed": true,
+      "context": "Where the order goes: the area, or once held the address"
+    },
+    "rider.fee": {
+      "text": "Your fee: {fee}",
+      "reviewed": true,
+      "context": "What the rider is paid for the delivery"
+    },
+    "rider.held": {
+      "text": "{reference} is yours.",
+      "reviewed": true,
+      "context": "A rider accepted: the delivery is theirs"
+    },
+    "rider.held_tail": {
+      "text": "Tap Picked up when you have it.",
+      "reviewed": true,
+      "context": "Last line once held; keep the button's words as on the button"
+    },
+    "rider.items": {
+      "text": "Items: {items}",
+      "reviewed": true,
+      "context": "What the order holds, in one line"
+    },
+    "rider.landmark": {
+      "text": "Landmark: {landmark}",
+      "reviewed": true,
+      "context": "A landmark the customer gave"
     },
     "rider.linked": {
       "text": "You're set up as a rider for {business}. Their deliveries will come here. Send OFF when you're not working and ON when you are.",
       "reviewed": true,
       "context": "A rider of the business tapped its link: their deliveries come here; keep OFF and ON in English"
     },
+    "rider.location_kept": {
+      "text": "Got your location: it is kept with the delivery.",
+      "reviewed": true,
+      "context": "A rider's location kept on their delivery"
+    },
+    "rider.no_delivery": {
+      "text": "You have no delivery that fits that now.",
+      "reviewed": true,
+      "context": "A rider's word with no delivery it fits"
+    },
     "rider.off": {
       "text": "You're off. No business will offer you deliveries until you send ON.",
       "reviewed": true,
       "context": "A rider said off: no business they ride for offers them deliveries; keep ON in English"
     },
+    "rider.offer": {
+      "text": "A delivery for you: {reference}.",
+      "reviewed": true,
+      "context": "First line of a delivery offered to a rider"
+    },
+    "rider.offer_tail": {
+      "text": "Answer by {time}.",
+      "reviewed": true,
+      "context": "Last line of an offer: the time it stands until, Lagos time"
+    },
     "rider.on": {
       "text": "You're on. The businesses you ride for can offer you deliveries.",
       "reviewed": true,
       "context": "A rider said on or free: the businesses they ride for can offer them deliveries"
+    },
+    "rider.on_way": {
+      "text": "On your way with {reference}. Tap Arrived at the door.",
+      "reviewed": true,
+      "context": "After Picked up"
+    },
+    "rider.paid": {
+      "text": "Paid. Hand {reference} over and tap Delivered.",
+      "reviewed": true,
+      "context": "The door payment landed"
+    },
+    "rider.photo_failed": {
+      "text": "Sorry, that photo could not be kept. Try again in a moment.",
+      "reviewed": true,
+      "context": "A rider's photo that could not be kept"
+    },
+    "rider.photo_kept": {
+      "text": "Photo kept as proof of delivery. Thank you.",
+      "reviewed": true,
+      "context": "A rider's photo kept as proof"
+    },
+    "rider.pickup": {
+      "text": "Pick up: {pickup}",
+      "reviewed": true,
+      "context": "Where the rider picks the order up, with its directions link"
+    },
+    "rider.pin": {
+      "text": "Map: {pin}",
+      "reviewed": true,
+      "context": "The map link the customer gave"
+    },
+    "rider.refused": {
+      "text": "Not now: {reason}",
+      "reviewed": true,
+      "context": "A rider's tap that does not fit; reason is in English"
+    },
+    "rider.released": {
+      "text": "{business} took {reference} back: you don't need to deliver it.",
+      "reviewed": true,
+      "context": "The owner took the order back"
+    },
+    "rider.unpaid": {
+      "text": "{reference} is not paid yet: {total}. Ask the customer to pay, or take cash and tap Cash received.",
+      "reviewed": true,
+      "context": "At the door: not paid yet, no account number now"
+    },
+    "rider.withdrawn": {
+      "text": "The offer of {reference} has passed.",
+      "reviewed": true,
+      "context": "An offer the rider did not answer in time, or the owner gave to another"
     },
     "run.status.cancelled": {
       "text": "cancelled",
@@ -1179,6 +1389,96 @@
       "reviewed": true,
       "context": "Waiting for yes to start a run"
     },
+    "wa.dispatch.held": {
+      "text": "{rider} has {ref} already.",
+      "reviewed": true,
+      "context": "The order is with a rider already"
+    },
+    "wa.dispatch.late_arrival": {
+      "text": "late to arrive",
+      "reviewed": true,
+      "context": "A late delivery"
+    },
+    "wa.dispatch.late_pickup": {
+      "text": "late to pick up",
+      "reviewed": true,
+      "context": "A late delivery"
+    },
+    "wa.dispatch.no_rider": {
+      "text": "No rider is free to take {ref} now. Add riders, or name one: *order {ref} to Musa*",
+      "reviewed": true,
+      "context": "No rider to offer it to"
+    },
+    "wa.dispatch.no_such_rider": {
+      "text": "You have no rider called {name}. Send *riders* to see them.",
+      "reviewed": true,
+      "context": "The owner named no rider of theirs"
+    },
+    "wa.dispatch.none_today": {
+      "text": "No deliveries today yet.",
+      "reviewed": true,
+      "context": "No deliveries today"
+    },
+    "wa.dispatch.nothing_to_release": {
+      "text": "No rider has {ref}.",
+      "reviewed": true,
+      "context": "No rider holds the order"
+    },
+    "wa.dispatch.offered": {
+      "text": "{ref} is offered to {rider}. I'll tell you if they can't take it.",
+      "reviewed": true,
+      "context": "The order was offered to a rider"
+    },
+    "wa.dispatch.refused": {
+      "text": "Not now: {reason}",
+      "reviewed": true,
+      "context": "An offer or release refused; reason is in English"
+    },
+    "wa.dispatch.released": {
+      "text": "{ref} is taken back from {rider}. Offer it again: *order {ref} to Musa*",
+      "reviewed": true,
+      "context": "The owner took an order back"
+    },
+    "wa.dispatch.state.accepted": {
+      "text": "taken, not picked up",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.arrived": {
+      "text": "at the door",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.delivered": {
+      "text": "delivered",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.offered": {
+      "text": "offered",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.picked_up": {
+      "text": "on the way",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.state.released": {
+      "text": "taken back",
+      "reviewed": true,
+      "context": "A delivery's state"
+    },
+    "wa.dispatch.today": {
+      "text": "Today's deliveries:",
+      "reviewed": true,
+      "context": "Heading of today's deliveries"
+    },
+    "wa.dispatch.which_rider": {
+      "text": "Which one: {names}?",
+      "reviewed": true,
+      "context": "Several riders fit the name"
+    },
     "wa.field.enter": {
       "text": "Enter {label}",
       "reviewed": true,
@@ -1293,6 +1593,11 @@
       "text": "• *cancel*: drop what is in progress",
       "reviewed": true,
       "context": "Help line"
+    },
+    "wa.help.dispatch": {
+      "text": "• *order* and a reference *to Musa*: give it to a rider; *release* and a reference: take it back; *deliveries*: today's",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
     },
     "wa.help.find": {
       "text": "• *find*, a table's name and a word: look up rows",
@@ -2444,6 +2749,11 @@
       "reviewed": true,
       "context": "An order's status"
     },
+    "wa.shop.status.arrived": {
+      "text": "at the customer's door",
+      "reviewed": true,
+      "context": "An order's status"
+    },
     "wa.shop.status.awaiting_payment": {
       "text": "waiting for payment",
       "reviewed": true,
@@ -2464,6 +2774,11 @@
       "reviewed": true,
       "context": "An order's status"
     },
+    "wa.shop.status.dispatched": {
+      "text": "with a rider",
+      "reviewed": true,
+      "context": "An order's status"
+    },
     "wa.shop.status.expired": {
       "text": "expired",
       "reviewed": true,
@@ -2473,6 +2788,11 @@
       "text": "did not come",
       "reviewed": true,
       "context": "A booking's status: the customer did not come"
+    },
+    "wa.shop.status.on_the_way": {
+      "text": "on the way",
+      "reviewed": true,
+      "context": "An order's status"
     },
     "wa.shop.status.paid": {
       "text": "paid",

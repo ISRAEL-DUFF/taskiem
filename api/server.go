@@ -31,6 +31,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/embedsites"
 	"github.com/israel-duff/taskiem/engine/forms"
@@ -188,6 +189,10 @@ type Server struct {
 	Messages  *sender.Queue
 	// Riders are the businesses' own riders (dispatch D1); nil: none.
 	Riders *riders.Riders
+	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when
+	// set, keeps a rider's proof photo instead of Media (tests).
+	Dispatch   *dispatch.Dispatch
+	ProofStore func(ctx context.Context, tenant uuid.UUID, data []byte) (string, error)
 	// ChatSigner signs approval decision and hand-off tokens when WhatsApp
 	// is off (with WhatsApp on, its signer is used for both channels).
 	ChatSigner whatsapp.Signer
@@ -429,6 +434,15 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/riders/{id}", s.updateRider)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/retire", s.retireRider)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/invite", s.inviteRider)
+			r.With(s.need(PermStorefrontManage)).Get("/riders/owed", s.ridersOwed)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
+			// Deliveries with riders (dispatch.go, D2 to D4).
+			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/offer", s.offerOrder)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/release", s.releaseOrder)
+			r.With(s.need(PermStorefrontManage)).Get("/dispatch/settings", s.getDispatchSettings)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/dispatch/settings", s.putDispatchSettings)
 			r.With(s.need(PermWorkflowRead)).Get("/forms", s.listForms)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Patch("/forms/{id}", s.patchForm)
 			r.With(s.need(PermFormLinks), s.tenantWide).Post("/forms/{id}/links", s.mintFormLinks)

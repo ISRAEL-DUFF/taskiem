@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -33,6 +34,8 @@ const (
 	maxFormBody   = 32 << 10
 	maxName       = 80
 	maxAddress    = 200
+	maxArea       = 40
+	maxLandmark   = 120
 	maxOrderNote  = 500
 	maxEnquiry    = 1000
 	maxBestTime   = 60
@@ -100,6 +103,11 @@ type formData struct {
 	// one chosen (dispatch D1).
 	Zones []zoneItem
 	Zone  string
+	// Area (no areas set), Landmark and Pin say where a delivery goes;
+	// PayOnDelivery offers paying at the door, PayLater is it chosen
+	// (dispatch D2, D4).
+	Area, Landmark, Pin     string
+	PayOnDelivery, PayLater bool
 }
 
 type zoneItem struct {
@@ -238,6 +246,7 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 	}
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
+		f.PayOnDelivery = act.Delivery && act.PayOnDelivery && act.Payment != "none"
 		if act.Delivery {
 			for _, z := range act.Zones {
 				fee := "free delivery"
@@ -332,7 +341,9 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 	}
 	idem := claims.IdempotencyKey()
 	sub.StatusKey = s.statusKey(idem)
-	sub.Payment = act.Payment
+	if sub.Payment != "on_delivery" {
+		sub.Payment = act.Payment
+	}
 	sub.Channel = "direct"
 	if embed {
 		sub.Channel = "embed"
@@ -388,6 +399,8 @@ func (f *formData) keep(v url.Values) {
 		f.Fulfilment = fl
 	}
 	f.chooseZone(v.Get("zone"))
+	f.Area, f.Landmark, f.Pin = v.Get("area"), v.Get("landmark"), v.Get("pin")
+	f.PayLater = f.PayOnDelivery && v.Get("pay") == "on_delivery"
 	for i := range f.Items {
 		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
@@ -449,6 +462,23 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 				f.Address = ""
 				return sub, "Please enter the delivery address (up to 200 characters)."
 			}
+			if len(f.Zones) == 0 {
+				if sub.Zone, bad = text(v.Get("area"), maxArea, false); bad {
+					f.Area = ""
+					return sub, "Please keep the area to 40 characters."
+				}
+			}
+			if c.Landmark, bad = text(v.Get("landmark"), maxLandmark, false); bad {
+				f.Landmark = ""
+				return sub, "Please keep the landmark to 120 characters."
+			}
+			if c.Pin, bad = mapsPin(v.Get("pin")); bad {
+				f.Pin = ""
+				return sub, "Please paste a link from your maps app, or leave the map pin empty."
+			}
+			if f.PayOnDelivery && v.Get("pay") == "on_delivery" {
+				sub.Payment = "on_delivery"
+			}
 		}
 	case "enquiry":
 		if c.Message, bad = text(v.Get("message"), maxEnquiry, true); bad || c.Message == "" {
@@ -466,7 +496,7 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 	for _, x := range []struct {
 		val   string
 		clear *string
-	}{{c.Name, &f.Name}, {c.Message, &f.Message}, {c.Address, &f.Address}, {c.BestTime, &f.BestTime}} {
+	}{{c.Name, &f.Name}, {c.Message, &f.Message}, {c.Address, &f.Address}, {c.BestTime, &f.BestTime}, {c.Landmark, &f.Landmark}} {
 		if sensitive(x.val) {
 			*x.clear = ""
 			return sub, "Please do not put card numbers, BVNs or NINs in this form. " + f.Business + " will never ask for them here."
@@ -520,6 +550,40 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 	}
 	return ""
 }
+
+// mapsPin reads a map pin: a link from a maps app, or "latitude,longitude"
+// (what the browser's location gives), as a maps link; "" for none. bad
+// when it is neither.
+func mapsPin(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+	if m := latLong.FindStringSubmatch(s); m != nil {
+		lat, err1 := strconv.ParseFloat(m[1], 64)
+		lng, err2 := strconv.ParseFloat(m[2], 64)
+		if err1 != nil || err2 != nil || lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+			return "", true
+		}
+		return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", lat, lng), false
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Scheme != "https" || len(s) > 300 {
+		return "", true
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, h := range mapHosts {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			return u.String(), false
+		}
+	}
+	return "", true
+}
+
+var (
+	latLong  = regexp.MustCompile(`^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$`)
+	mapHosts = []string{"google.com", "maps.google.com", "goo.gl", "maps.app.goo.gl", "maps.apple.com", "openstreetmap.org", "waze.com"}
+)
 
 // chooseZone marks the delivery area named (exactly as offered) chosen;
 // false when it is none of them.

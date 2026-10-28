@@ -241,13 +241,30 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 			if done, err := s.invoicePress(ctx, tg, reach.Telegram, addr, payload); done || err != nil {
 				return err
 			}
+			// A rider's buttons (dispatch.go).
+			if done, err := s.riderPress(ctx, tg, reach.Telegram, addr, payload); done || err != nil {
+				return err
+			}
 		}
 	}
 	if user == uuid.Nil {
+		// A rider's photo or location at the door (dispatch.go).
+		if u.Photo != nil || u.Location != "" {
+			rin := whatsapp.Inbound{Type: "image", Location: u.Location}
+			if u.Photo != nil {
+				rin.Image = &whatsapp.Media{ID: u.Photo.FileID, MimeType: u.Photo.MimeType}
+			}
+			if done, err := s.riderMedia(ctx, &chat{ch: tg, addr: addr, in: rin}, reach.Telegram); done || err != nil {
+				return err
+			}
+		}
 		if done, err := s.reachStopStart(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
 		if done, err := s.riderWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
+			return err
+		}
+		if done, err := s.riderDeliveryWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
 		if done, err := s.reachAbout(ctx, tg, reach.Telegram, addr); done || err != nil {

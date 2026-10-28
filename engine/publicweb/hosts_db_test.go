@@ -168,6 +168,8 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// Paying an invoice (T4): asking for an account number or a payment link, and what the page shows of them.
 		"taskiem_public_invoice_request(bytea,text,bigint)": true, "taskiem_public_invoice_payment(bytea)": true,
 		"taskiem_public_order_request(text,bytea)": true, "taskiem_public_order_payment(text,bytea)": true,
+		// Rating a delivery from the status page (dispatch D5).
+		"taskiem_public_order_rate(text,bytea,integer)": true, "taskiem_public_order_delivery(text,bytea)": true,
 		// The customer's own account number on their invoice's page (W3): the number and bank only.
 		"taskiem_public_invoice_own_account(bytea)": true,
 		// A school receipt's verification page (B5): Valid or Voided, the school, the amount and the date, by the receipt's token.

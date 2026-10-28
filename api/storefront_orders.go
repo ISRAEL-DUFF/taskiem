@@ -174,7 +174,8 @@ func maskCustomer(c *storefront.Customer) {
 
 // RunStorefrontOrders takes submissions from the inbox every second, asks
 // the payment provider about waiting payments every 30 seconds, and every
-// 15 applies customers' and owners' changes and sweeps bookings.
+// 15 applies customers' and owners' changes, sweeps bookings and moves
+// riders' deliveries on (offers that ran out, quiet riders).
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	if s.Orders == nil {
 		<-ctx.Done()
@@ -199,6 +200,12 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 		case <-bookings.C:
 			if err := s.Orders.CheckBookings(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("storefront: bookings", "err", err)
+			}
+			// Offers that ran out, quiet riders, remittances (dispatch).
+			if s.Dispatch.Ready() {
+				if err := s.Dispatch.Sweep(ctx); err != nil && ctx.Err() == nil {
+					s.Logger.Error("dispatch: sweep", "err", err)
+				}
 			}
 		}
 	}

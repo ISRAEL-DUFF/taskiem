@@ -41,7 +41,18 @@
 <select id="f-zone" name="zone"{{if not $.Pickup}} required{{end}}><option value="">Choose your area</option>{{range .}}<option value="{{.Name}}" data-fee="{{.FeeKobo}}"{{if .Selected}} selected{{end}}>{{.Name}}, {{.Fee}}</option>{{end}}</select></div>
 {{end}}<div class="field"><label for="f-address">Delivery address{{if .Pickup}} <span class="hint">(for delivery)</span>{{end}}</label>
 <textarea id="f-address" name="address" rows="2" maxlength="200" autocomplete="street-address"{{if not .Pickup}} required{{end}}>{{.Address}}</textarea></div>
-{{end}}
+{{if not .Zones}}<div class="field"><label for="f-area">Area <span class="hint">(optional)</span></label>
+<input id="f-area" type="text" name="area" value="{{.Area}}" maxlength="40" placeholder="Yaba"></div>
+{{end}}<div class="field"><label for="f-landmark">Landmark <span class="hint">(optional)</span></label>
+<input id="f-landmark" type="text" name="landmark" value="{{.Landmark}}" maxlength="120" placeholder="Opposite the Shoprite gate"></div>
+<div class="field"><label for="f-pin">Map pin <span class="hint">(optional: a link from your maps app)</span></label>
+<input id="f-pin" type="text" name="pin" value="{{.Pin}}" maxlength="300" inputmode="url" data-pin></div>
+{{if .PayOnDelivery}}<fieldset class="choices">
+<legend>When do you pay?</legend>
+<div class="choice"><input id="pay-now" type="radio" name="pay" value="now"{{if not .PayLater}} checked{{end}}><label for="pay-now"><strong>Now</strong><span>Online, before it is sent</span></label></div>
+<div class="choice"><input id="pay-later" type="radio" name="pay" value="on_delivery"{{if .PayLater}} checked{{end}}><label for="pay-later"><strong>When it arrives</strong><span>By bank transfer or cash, with delivery only</span></label></div>
+</fieldset>
+{{end}}{{end}}
 <div class="field"><label for="f-message">Message <span class="hint">(optional)</span></label>
 <textarea id="f-message" name="message" rows="2" maxlength="500">{{.Message}}</textarea></div>
 {{else if eq .Kind "enquiry"}}

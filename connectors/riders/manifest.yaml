@@ -1,8 +1,8 @@
 # The riders platform connector (docs/dispatch.md, decision 0053): the
 # business's own riders, the people who deliver its orders. It acts on
 # Taskiem's own records, for the run's tenant only, and needs no
-# connection. Offering orders to riders and the delivery's taps come with
-# the next dispatch milestones.
+# connection. offer and release hand an order to a rider and take it back;
+# the rider drives the delivery in their chat from there (docs/dispatch.md).
 manifest: connector/v1
 id: riders
 version: 1.0.0
@@ -85,3 +85,48 @@ actions:
       properties:
         id: { type: string }
     output: { $ref: '#/actions/get_rider/output' }
+  offer:
+    title: Offer an order to a rider
+    description: Offers a storefront order ready to go (accepted, paid when it is paid online, for delivery) to a rider, who has a few minutes to tap Accept in their chat; Can't or no answer passes it to the next rider covering its area, free riders first. Without rider_id the rider is chosen by rotation, or the owner is asked when the business is set to ask. status is offered, held (a rider has it already), asked_owner or no_rider (the owner is told). Wait for the storefront.delivered signal (correlation the reference) for the rider's Delivered.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string, description: The order's reference (trigger.body.reference) }
+        rider_id:  { type: string, description: A rider to offer it to; omit for rotation }
+        fee_kobo:  { type: integer, minimum: 0, maximum: 10000000, description: This delivery's fee for the rider (default the rider's) }
+    output:
+      type: object
+      properties:
+        reference:   { type: string }
+        status:      { type: string, enum: [offered, held, asked_owner, no_rider] }
+        rider:       { type: string }
+        delivery_id: { type: string }
+  release:
+    title: Take an order back from its rider
+    description: Takes an order back from the rider who holds it (or withdraws the offer out), telling them; the order is ready to offer again.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        status:    { type: string }
+        rider:     { type: string }

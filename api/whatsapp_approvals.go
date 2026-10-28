@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
@@ -245,6 +246,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendReachItem(ctx, it)
 		case invoicing.OutboxInvoice:
 			sendErr = s.sendInvoiceItem(ctx, it)
+		case dispatch.OutboxRider:
+			sendErr = s.sendRiderItem(ctx, it)
 		case matching.OutboxMatch:
 			sendErr = s.sendMatchItem(ctx, it)
 		case moneydigest.OutboxDaily:

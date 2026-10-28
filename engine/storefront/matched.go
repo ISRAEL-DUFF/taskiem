@@ -79,13 +79,27 @@ type OrderPayment struct {
 // acceptance waits for its payment link to be made first: its workflow
 // sends the link and waits for it.
 func (x Order) Matchable() bool {
-	return x.PaidAt == nil && (x.Kind == "order" || x.Kind == "booking") && x.Payable() >= 100 &&
-		(x.Status == "awaiting_payment" || x.Payment == "none" && (x.Status == "received" || x.Status == "accepted"))
+	if x.PaidAt != nil || (x.Kind != "order" && x.Kind != "booking") || x.Payable() < 100 {
+		return false
+	}
+	switch x.Payment {
+	case "none":
+		return x.Status == "received" || x.Status == "accepted"
+	case "on_delivery":
+		// Paid at the door (dispatch D4), or before: until it is completed.
+		switch x.Status {
+		case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived":
+			return true
+		}
+		return false
+	}
+	return x.Status == "awaiting_payment"
 }
 
 // matchableSQL is Matchable in SQL.
 const matchableSQL = `paid_at IS NULL AND kind IN ('order', 'booking') AND COALESCE(deposit_kobo, total_kobo) >= 100
-	AND (status = 'awaiting_payment' OR payment = 'none' AND status IN ('received', 'accepted'))`
+	AND (status = 'awaiting_payment' OR payment = 'none' AND status IN ('received', 'accepted')
+	  OR payment = 'on_delivery' AND status IN ('received', 'accepted', 'dispatched', 'on_the_way', 'arrived'))`
 
 // CountPayment counts a payment towards the order with this reference, in
 // the caller's transaction, and moves the order to paid when it is not
@@ -207,6 +221,12 @@ func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *C
 // payment commits: its run starts, or the run waiting for its payment is
 // woken. Nothing when the payment did not move the order to paid.
 func (o *Orders) Paid(ctx context.Context, tenant uuid.UUID, c Counted) error {
+	if c.Became && o.AfterPaid != nil {
+		// Dispatch tells a rider at the door (D4).
+		if err := o.AfterPaid(ctx, tenant, c.Order); err != nil {
+			o.log().Warn("storefront: after a payment", "reference", c.Order.Reference, "err", err)
+		}
+	}
 	if !c.Became || !c.wake {
 		return nil
 	}

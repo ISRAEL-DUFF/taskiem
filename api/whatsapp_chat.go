@@ -266,6 +266,10 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		if done, err := s.invoicePress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
 			return err
 		}
+		// A rider's buttons (dispatch.go).
+		if done, err := s.riderPress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
@@ -379,11 +383,19 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 			return s.waSay(ctx, wa, number, "", tr(l, "wa.linked"))
 		}
 	}
+	// A rider's photo or location at the door (dispatch.go).
+	if done, err := s.riderMedia(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, reach.WhatsApp); done || err != nil {
+		return err
+	}
 	if done, err := s.reachStopStart(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
-	// A rider's off, on or busy (whatsapp_riders.go).
+	// A rider's off, on or busy (whatsapp_riders.go), and their words for
+	// a delivery (dispatch.go).
 	if done, err := s.riderWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
+	if done, err := s.riderDeliveryWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
 	if wa.Own() {

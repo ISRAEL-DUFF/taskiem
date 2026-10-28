@@ -5502,6 +5502,300 @@ paths:
                     $ref: '#/components/schemas/Rider'
         default:
           $ref: '#/components/responses/Error'
+  /v1/riders/owed:
+    get:
+      operationId: ridersOwed
+      tags:
+      - Riders
+      summary: Cash riders owe
+      description: What each rider owes from cash they took at the door, most first.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: What is owed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [owed]
+                properties:
+                  owed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rider_id:
+                          type: string
+                          format: uuid
+                        rider:
+                          type: string
+                        owed_kobo:
+                          type: integer
+                        deliveries:
+                          type: integer
+                        since:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/riders/{id}/remit:
+    post:
+      operationId: riderRemit
+      tags:
+      - Riders
+      summary: Record cash a rider handed in
+      description: Cash handed in, or a transfer from them, counted against what they owe, oldest first; 400 for more than they owe.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo, how]
+              properties:
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                how:
+                  type: string
+                  enum: [cash, transfer]
+      responses:
+        '200':
+          description: What they still owe
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [owed_kobo]
+                properties:
+                  owed_kobo:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/deliveries:
+    get:
+      operationId: listDeliveries
+      tags:
+      - Riders
+      summary: Deliveries
+      description: A day's deliveries (day, Lagos; default today) or the open ones (open=true), newest first, each with whether it is late.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: open
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Delivery'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/dispatch/settings:
+    get:
+      operationId: getDispatchSettings
+      tags:
+      - Riders
+      summary: How orders are dispatched
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putDispatchSettings
+      tags:
+      - Riders
+      summary: Set how orders are dispatched
+      description: Rotation or ask the owner, the offer window, when quiet riders are raised, proof photos, the cash a rider may owe, the rating mark.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchSettings'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/deliveries:
+    get:
+      operationId: orderDeliveries
+      tags:
+      - Riders
+      summary: An order's deliveries
+      description: Who was offered the order and who holds it, with its photo's link while it may be seen; not_ready says why it cannot be offered now, if it cannot.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Delivery'
+                  not_ready:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/offer:
+    post:
+      operationId: offerOrder
+      tags:
+      - Riders
+      summary: Offer an order to a rider
+      description: To the rider named, or by rotation among riders covering its area, free ones first. 409 when the order is not ready (not accepted, not paid when paid online, for pickup).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                rider_id:
+                  type: string
+                  format: uuid
+                fee_kobo:
+                  type: integer
+                  minimum: 0
+                  maximum: 10000000
+      responses:
+        '200':
+          description: What came of it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [offered, held, asked_owner, no_rider]
+                  rider:
+                    type: string
+                  delivery:
+                    $ref: '#/components/schemas/Delivery'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/release:
+    post:
+      operationId: releaseOrder
+      tags:
+      - Riders
+      summary: Take an order back from its rider
+      description: The rider who holds it (or was offered it) is told; the order is ready to offer again.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivery]
+                properties:
+                  delivery:
+                    $ref: '#/components/schemas/Delivery'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/bookings:
     put:
       operationId: putStorefrontBookings
@@ -23424,6 +23718,9 @@ components:
           type: boolean
         delivery_note:
           type: string
+        pay_on_delivery:
+          type: boolean
+          description: A customer choosing delivery may pay at the door, by a one-time account number when the rider arrives or in cash (dispatch D4)
         zones:
           type: array
           maxItems: 30
@@ -23439,6 +23736,99 @@ components:
           type: string
           enum: [full, keep_deposit, '']
           description: What a customer cancelling a paid booking gets back (default full)
+    Delivery:
+      type: object
+      required: [id, order_id, reference, rider_id, rider, status, offered_at, fee_kobo]
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        rider_id:
+          type: string
+          format: uuid
+        rider:
+          type: string
+        rider_phone:
+          type: string
+        status:
+          type: string
+          enum: [offered, declined, passed, withdrawn, accepted, picked_up, arrived, delivered, released]
+        offered_by:
+          type: string
+        offered_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        answered_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        accepted_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        picked_up_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        arrived_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        delivered_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        released_at:
+          $ref: '#/components/schemas/NullableTimestamp'
+        fee_kobo:
+          type: integer
+        paid_how:
+          type: string
+          enum: [transfer, cash]
+        proof:
+          type: boolean
+          description: A photo was kept as proof
+        proof_url:
+          type: string
+          description: The photo, for ten minutes
+        location:
+          type: string
+        rating:
+          type:
+          - integer
+          - 'null'
+        late:
+          type: string
+          enum: [pickup, arrival]
+        zone:
+          type: string
+    DispatchSettings:
+      type: object
+      additionalProperties: false
+      required: [mode, offer_minutes, pickup_minutes, arrive_minutes, proof, owe_limit_kobo, rating_mark]
+      properties:
+        mode:
+          type: string
+          enum: [rotation, ask]
+        offer_minutes:
+          type: integer
+          minimum: 1
+          maximum: 60
+        pickup_minutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+        arrive_minutes:
+          type: integer
+          minimum: 10
+          maximum: 600
+        proof:
+          type: boolean
+        owe_limit_kobo:
+          type: integer
+          minimum: 0
+        rating_mark:
+          type: number
+          minimum: 1
+          maximum: 5
     DeliveryZone:
       type: object
       additionalProperties: false
@@ -23477,11 +23867,20 @@ components:
           type: string
           enum: [whatsapp, telegram, sms]
           description: The chat app they tapped in on, or sms until they do
+        not_answering:
+          type: boolean
+          description: Three offers unanswered today; passed over until they tap anything
+        bank:
+          type: string
+          description: The account their payouts go to, as it may be shown
         presence:
           type: object
           required: [state]
-          description: What the rider said to Taskiem, whichever business they ride for (never which)
+          description: What the rider said to Taskiem, and the deliveries they hold, whichever business they ride for (never which)
           properties:
+            open:
+              type: integer
+              description: Deliveries they hold now, for any business
             state:
               type: string
               enum: [free, busy, "off"]
@@ -24307,7 +24706,7 @@ components:
           enum: [order, enquiry, callback, booking]
         status:
           type: string
-          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded]
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived]
         customer:
           type: object
           properties:
@@ -24319,6 +24718,11 @@ components:
               type: string
             address:
               type: string
+            landmark:
+              type: string
+            pin:
+              type: string
+              description: A maps link the customer gave
             message:
               type: string
             best_time:
@@ -24339,7 +24743,7 @@ components:
           description: The area's delivery fee, part of total_kobo
         payment:
           type: string
-          enum: [after_accept, at_order, none]
+          enum: [after_accept, at_order, none, on_delivery]
         payment_url:
           type: string
         paid_at:
