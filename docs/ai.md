@@ -152,7 +152,7 @@ Each model call is a row in `ai_interactions` (`repair_id`), each proposal appen
 
 ## AI steps
 
-A workflow can ask the model at run time with an `ai` step ([contract](contracts/wd-v1.md#ai-steps), [decision 0050](decisions/0050-ai-steps.md)): to sort a message, pull details out of free text, summarise, or draft a reply. The step's prompt and input go to the deployment's model (or another it offers, `TASKIEM_AI_STEP_MODELS`) with the run's personal data replaced by placeholders (in object keys as well as values), which are put back in the answer; a step lets a field through as it is only when it lists it in `personal_data`, and publishing one that does is audited. The answer must match the step's `output_schema`; one that does not is sent back once.
+A workflow can ask the model at run time with an `ai` step ([contract](contracts/wd-v1.md#ai-steps), [decision 0050](decisions/0050-ai-steps.md)): to sort a message, pull details out of free text, summarise, or draft a reply. The step's prompt and input go to the deployment's model (or another it offers, `TASKIEM_AI_STEP_MODELS`) with the run's personal data replaced by placeholders (in object keys as well as values), which are put back in the answer (a known value shorter than five characters, such as a short name, is replaced inside text only where it stands as a whole word, and one of one or two characters only when it is the whole value); a step lets a field through as it is only when it lists it in `personal_data`, and publishing one that does is audited. The answer must match the step's `output_schema`; one that does not is sent back once.
 
 Three controls sit with the business and the deployment:
 

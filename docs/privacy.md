@@ -13,7 +13,7 @@ Personal data in a run is encrypted under its data subject's own key before it i
 Detection is conservative, because a step's data is full of digit strings that are not personal:
 
 - Only strings are examined; numbers only under a field name that says what they are (`bvn`, `nin`, `phone`, `account_number`, `card_number`, ...).
-- **Phone**: a Nigerian mobile number, `+234`/`234`/`0` then a 70x, 71x, 80x, 81x, 90x or 91x prefix.
+- **Phone**: a Nigerian mobile number, `+234`/`234`/`0` then a 70x, 71x, 80x, 81x, 90x or 91x prefix, however its digits are grouped (`0803 123 4567`, `(0803) 123-4567`, `+234 (0)803 123 4567`); or any number in international form, `+` and a country code with 8 to 15 digits in all (`+44 20 7946 0958`).
 - **BVN / NIN**: 11 digits (BVNs start with 22), unless they are a phone number.
 - **Account number (NUBAN)**: 10 digits under an account field name, or beside a bank code whose CBN check digit it satisfies.
 - **Card**: 13 to 19 digits passing the Luhn check with a Visa, Mastercard, Verve, American Express or Discover prefix and length. Card numbers should never reach a workflow: connectors tokenise with the provider.

@@ -86,6 +86,18 @@ func TestRedactFreeText(t *testing.T) {
 			t.Errorf("%q should stay: %s", keep, out)
 		}
 	}
+	if strings.Contains(out, "[nin]") || strings.Count(out, "[phone]") != 2 {
+		t.Errorf("a grouped phone number is a phone: %s", out)
+	}
+	// Phones however grouped, and in international form.
+	in = "+234 803 123 4567, +234-803-123-4567, (0803) 123 4567, +44 20 7946 0958, +254 712 345678; on 2026-01-02 pay 5000"
+	if out := pii.Redact(in); out != "[phone], [phone], [phone], [phone], [phone]; on 2026-01-02 pay 5000" {
+		t.Errorf("phones: %s", out)
+	}
+	got := detect(t, `{"a": "(0803) 123 4567", "b": "+44 20 7946 0958", "c": "+254712345678", "d": "+5000", "e": "2026-01-02"}`)
+	if got["/a"] != "phone" || got["/b"] != "phone" || got["/c"] != "phone" || len(got) != 3 {
+		t.Errorf("phone fields: %v", got)
+	}
 }
 
 func keys(m map[string]string) []string {

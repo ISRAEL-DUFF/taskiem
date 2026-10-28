@@ -2,6 +2,7 @@ package pii
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -87,5 +88,48 @@ func TestMaskerMasksKeys(t *testing.T) {
 	}
 	if m.Restored()["s:Adaeze Okafor"] != "name" {
 		t.Errorf("restored: %v", m.Restored())
+	}
+}
+
+// A known value shorter than MinRedact is masked inside text only as a
+// whole word, and one or two characters never are.
+func TestMaskerShortValues(t *testing.T) {
+	taint := Taint{}
+	taint.Add("Ada", "name")
+	taint.Add("4821", "pin")
+	taint.Add("Jo", "name")
+	m := NewMasker(taint)
+	got := m.Mask(map[string]any{
+		"note":  "Ada (pin 4821) met Adaeze and Jo; ref 148210, Ada_x, Ada.",
+		"short": "Jo",
+	}).(map[string]any)
+	if want := "[[name_1]] (pin [[pin_1]]) met Adaeze and Jo; ref 148210, Ada_x, [[name_1]]."; got["note"] != want {
+		t.Errorf("note: %v, want %s", got["note"], want)
+	}
+	if got["short"] != "[[name_2]]" {
+		t.Errorf("a short whole value: %v", got["short"])
+	}
+	// A known text built from a short known value is not hidden whole.
+	built := Taint{}
+	built.Add("Ada", "name")
+	built.Add("Write a greeting for Ada", "name")
+	if got := NewMasker(built).Mask("Write a greeting for Ada"); got != "Write a greeting for [[name_1]]" {
+		t.Errorf("a composite text: %v", got)
+	}
+}
+
+// Phone numbers are masked however their digits are grouped, and numbers
+// in international form are phones too.
+func TestMaskerPhones(t *testing.T) {
+	m := NewMasker(Taint{})
+	one := regexp.MustCompile(`^call \[\[phone_[0-9]+\]\] today$`)
+	for _, phone := range []string{"+234 803 123 4567", "+234-803-123-4567", "(0803) 123 4567", "0803 123 4567", "0803.123.4567",
+		"+234 (0)803 123 4567", "+44 20 7946 0958", "+254 712 345678", "+1 (415) 555-2671", "+447911123456"} {
+		if got := m.MaskText("call " + phone + " today"); !one.MatchString(got) {
+			t.Errorf("%s: %s", phone, got)
+		}
+	}
+	if got := m.MaskText("call +44 20 7946 0958 about 5000"); !strings.HasSuffix(got, "]] about 5000") {
+		t.Errorf("an amount after a phone: %s", got)
 	}
 }

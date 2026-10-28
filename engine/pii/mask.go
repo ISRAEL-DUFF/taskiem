@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Masker swaps personal data for placeholders before a value leaves for
@@ -41,7 +43,7 @@ func NewMasker(taint Taint) *Masker {
 		}
 		v, composite := k[2:], false
 		for k2 := range taint {
-			if v2 := k2[2:]; k2 != k && len(v2) >= MinRedact && len(v2) < len(v) && strings.Contains(v, v2) {
+			if v2 := k2[2:]; k2 != k && len(v2) < len(v) && containsValue(v, v2) {
 				composite = true
 				break
 			}
@@ -142,9 +144,17 @@ func isPlaceholder(s string) bool {
 	return placeholderRe.MatchString(s) && placeholderRe.FindString(s) == s
 }
 
+// MinMaskWord is the shortest known value MaskText looks for inside text.
+// Values shorter than MinRedact ("Ada", a 4-digit PIN) are masked only as
+// whole words, so "Ada" is masked in "Call Ada" but not in "Adaeze"; a
+// value of one or two characters is masked only when it is the whole
+// value, never inside text, where it would hide unrelated words.
+const MinMaskWord = 3
+
 // MaskText swaps the personal values in free text for placeholders: the
-// run's known values (at least MinRedact long, whole matches only, longest
-// first) and what the text patterns recognise.
+// run's known values (whole matches only, longest first: at least
+// MinRedact long anywhere, shorter ones from MinMaskWord as whole words)
+// and what the text patterns recognise.
 func (m *Masker) MaskText(s string) string {
 	if s == "" {
 		return s
@@ -153,7 +163,7 @@ func (m *Masker) MaskText(s string) string {
 	var hits []hit
 	for k, cat := range m.taint {
 		v := k[2:]
-		if len(v) >= MinRedact && strings.Contains(s, v) {
+		if utf8.RuneCountInString(v) >= MinMaskWord && strings.Contains(s, v) {
 			hits = append(hits, hit{v, cat})
 		}
 	}
@@ -164,13 +174,19 @@ func (m *Masker) MaskText(s string) string {
 		return hits[i].val < hits[j].val
 	})
 	for _, h := range hits {
-		s = strings.ReplaceAll(s, h.val, m.placeholder(h.val, h.cat))
+		if len(h.val) >= MinRedact {
+			s = strings.ReplaceAll(s, h.val, m.placeholder(h.val, h.cat))
+		} else {
+			s = replaceWord(s, h.val, func() string { return m.placeholder(h.val, h.cat) })
+		}
 	}
 	s = textEmail.ReplaceAllStringFunc(s, func(x string) string { return m.placeholder(x, "email") })
-	s = textPhone.ReplaceAllStringFunc(s, func(x string) string { return m.placeholder(x, "phone") })
+	s = replacePhones(s, func(x string) string { return m.placeholder(x, "phone") })
 	return textDigit.ReplaceAllStringFunc(s, func(x string) string {
 		d := strings.NewReplacer(" ", "", "-", "").Replace(x)
 		switch {
+		case isPhone(d):
+			return m.placeholder(x, "phone")
 		case len(d) == 11 && strings.HasPrefix(d, "22"):
 			return m.placeholder(x, "bvn")
 		case len(d) == 11:
@@ -181,6 +197,43 @@ func (m *Masker) MaskText(s string) string {
 		return x
 	})
 }
+
+// replaceWord replaces each occurrence of w in s that is a whole word:
+// neither side touches a letter, a digit or an underscore (so a value is
+// never found inside a placeholder such as [[name_12]]).
+func replaceWord(s, w string, repl func() string) string {
+	var b strings.Builder
+	last := 0 // s[:last] is written
+	for from := 0; ; {
+		i := strings.Index(s[from:], w)
+		if i < 0 {
+			break
+		}
+		i += from
+		end := i + len(w)
+		before, _ := utf8.DecodeLastRuneInString(s[:i])
+		after, _ := utf8.DecodeRuneInString(s[end:])
+		if (i == 0 || !wordRune(before)) && (end == len(s) || !wordRune(after)) {
+			b.WriteString(s[last:i])
+			b.WriteString(repl())
+			last, from = end, end
+			continue
+		}
+		from = i + 1
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// containsValue reports whether MaskText would find the known value w in s.
+func containsValue(s, w string) bool {
+	if len(w) >= MinRedact {
+		return strings.Contains(s, w)
+	}
+	return utf8.RuneCountInString(w) >= MinMaskWord && replaceWord(s, w, func() string { return "" }) != s
+}
+
+func wordRune(r rune) bool { return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 // Unmask returns a copy of v with every placeholder this masker made
 // swapped back for its value: a string that is exactly a placeholder
