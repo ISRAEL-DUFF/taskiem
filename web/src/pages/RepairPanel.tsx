@@ -76,7 +76,11 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
   const r = data?.repairs.find((x) => x.status !== "dismissed");
   if (!r) return null;
   const ev = r.evidence ?? {};
-  const decide = (path: string) => void act.run(async () => (await post(`/v1/repairs/${r.id}/${path}`), reload()), "Done");
+  // A refusal can change the proposal too (superseded by a newer version): reload either way.
+  const decide = (path: string) =>
+    void act.run(async () => (await post(`/v1/repairs/${r.id}/${path}`), reload()), "Done").then((ok) => {
+      if (!ok) reload();
+    });
   const canAccept = can("run.resolve") && (r.status !== "proposed" || can("workflow.publish"));
   return (
     <div className="card" data-testid="repair-panel">
@@ -159,6 +163,7 @@ export function RepairPanel({ run, status }: { run: string; status: string }) {
       )}
 
       {r.status === "withheld" && <div className="notice">The AI could not prove a fix in the shadow sandbox, so nothing is proposed. Fix the workflow by hand.</div>}
+      {r.status === "superseded" && <div className="notice">A version published after this run's changed what the fix changes, so it can no longer be applied. Fix the workflow by hand.</div>}
 
       {r.action?.kind === "reconnect" && (
         <p>

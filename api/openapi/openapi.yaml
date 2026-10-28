@@ -270,7 +270,7 @@ paths:
       tags:
       - AI
       summary: Save an AI build as a workflow
-      description: Saves the build's draft as a new workflow or a new version of one; the AI is recorded as co-author.
+      description: Saves the build's draft as a new workflow or a new version of one; the AI is recorded as co-author. A version saved since the build started is merged three ways with the proposal, as a version save with `parent_digest` is.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -312,7 +312,8 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: The build is not a proposal (still running, failed or already saved), or the workflow is
-            kept in Git.
+            kept in Git, or a version saved since the build started changed what the proposal changes (`conflicts`,
+            `latest_version` and `latest_digest`, as a version save answers; send `resolutions`).
           content:
             application/json:
               schema:
@@ -14361,7 +14362,10 @@ paths:
                 $ref: '#/components/schemas/Error'
         '409':
           description: The proposal cannot be accepted in its state, or its failure class is settled by resolving
-            the step.
+            the step, or another repair of the workflow waits for its publish request. `repair_superseded`, with
+            `latest_version` and `conflicts` or `failures`, when the patch cannot be merged onto the version
+            published since the run's (both changed the same step or field) or no longer passes its tests once
+            merged; the proposal is then `superseded`.
           content:
             application/json:
               schema:
@@ -23542,6 +23546,14 @@ components:
           description: Data tables to make with the draft (the proposal's, as reviewed), as POST /v1/tables takes them. Needs table.edit; each is reported in the answer, and the draft is saved whatever becomes of them.
           items:
             $ref: '#/components/schemas/TableRequest'
+        resolutions:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+            - ours
+            - theirs
+          description: How to settle conflicts a previous save reported, by conflict path (ours is the proposal).
       additionalProperties: false
     AIProposedTable:
       type: object
@@ -30935,6 +30947,7 @@ components:
           - published
           - resumed
           - dismissed
+          - superseded
         explanation:
           type: string
         action:

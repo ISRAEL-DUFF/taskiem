@@ -6,13 +6,16 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/repair"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 const flow = `{"schema":"wd/v1","id":"wf_t","version":1,"name":"t","trigger":{"type":"manual"},"steps":[
@@ -157,5 +160,92 @@ func TestBudget(t *testing.T) {
 	_, err := r.Repair(context.Background(), repair.Request{Classification: repair.Classification{Class: repair.Data, Certain: true}, Definition: json.RawMessage(flow)})
 	if !errors.Is(err, ai.ErrBudgetExhausted) || len(f.Requests()) != 0 {
 		t.Fatalf("%v, %d requests", err, len(f.Requests()))
+	}
+}
+
+const payManifest = `
+manifest: connector/v1
+id: pay
+version: 1.0.0
+name: Pay
+category: payments
+auth: { type: none }
+actions:
+  transfer:
+    title: Transfer
+    class: unsafe_write
+    input: { type: object, properties: { amount: { type: integer } } }
+`
+
+func payRegistry(t *testing.T) *connector.Registry {
+	t.Helper()
+	reg := connector.NewRegistry()
+	pay := connector.ActionFunc(func(context.Context, connector.Request) (connector.Response, error) { return connector.Response{}, nil })
+	if err := reg.Register(&connector.Connector{Manifest: connector.MustParse([]byte(payManifest)), Actions: map[string]connector.Action{"transfer": pay}}); err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+// policyProblems is the problems the repairer finds in a patch of orig.
+func policyProblems(t *testing.T, r *repair.Repairer, orig, patch string) []string {
+	t.Helper()
+	r.Provider = &ai.Fake{Script: []ai.Response{envelope("data", patch, "")}}
+	r.MaxAttempts = 1
+	res, err := r.Repair(context.Background(), repair.Request{
+		Classification: repair.Classification{Class: repair.Data, Certain: true}, Definition: json.RawMessage(orig),
+		Check: func([]byte, *wdtest.Case) repair.Check { return repair.Check{Passed: true} },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, p := range res.Problems {
+		out = append(out, p.Path)
+	}
+	return out
+}
+
+// Every payment that had an approval before keeps one: a patch that moves
+// the approval from one payment to another is refused, though the number
+// of unapproved payments stays the same.
+func TestPatchKeepsEachPaymentsApproval(t *testing.T) {
+	doc := func(aNeeds, bNeeds string) string {
+		return `{"schema":"wd/v1","id":"wf_p","version":1,"name":"p","trigger":{"type":"manual"},"steps":[
+		 {"id":"ok","type":"approval","config":{"role":"finance","count":1}},
+		 {"id":"pay_a","type":"connector","connector":"pay@1","action":"transfer","needs":[` + aNeeds + `],"input":{"amount":1}},
+		 {"id":"pay_b","type":"connector","connector":"pay@1","action":"transfer","needs":[` + bNeeds + `],"input":{"amount":2}}]}`
+	}
+	r := &repair.Repairer{Connectors: payRegistry(t)}
+	if got := policyProblems(t, r, doc(`"ok"`, ``), doc(``, `"ok"`)); strings.Join(got, ",") != "/steps/pay_a" {
+		t.Errorf("approval moved off pay_a: problems %v", got)
+	}
+	if got := policyProblems(t, r, doc(`"ok"`, ``), doc(`"ok"`, `"ok"`)); len(got) != 0 {
+		t.Errorf("approval added to pay_b: problems %v", got)
+	}
+}
+
+// A template step's template is found where the caller says (the tenant's
+// callable workflows), so a patch that calls one that pays unapproved is
+// refused.
+func TestPatchPolicyReadsTheTenantsTemplates(t *testing.T) {
+	fs := fstest.MapFS{"library/payall.json": &fstest.MapFile{Data: []byte(`{"id":"payall","title":"Pay all","summary":"S","description":"D",
+	 "category":"notifications","tags":[],"connectors":["pay"],"params":[],"callable":true,
+	 "outputs":[{"name":"x","type":"integer","title":"X","description":"X","value":"=1"}],
+	 "definition":{"schema":"wd/v1","id":"wf_payall","version":1,"name":"Pay all","trigger":{"type":"manual"},
+	  "inputs":{"schema":{"type":"object","properties":{}}},
+	  "steps":[{"id":"pay","type":"connector","connector":"pay@1","action":"transfer","input":{"amount":1}}]}}`)}}
+	lib, err := templates.Load(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := `{"schema":"wd/v1","id":"wf_p","version":1,"name":"p","trigger":{"type":"manual"},"steps":[
+	 {"id":"t","type":"transform","config":{"output":{"x":1}}}]}`
+	patch := `{"schema":"wd/v1","id":"wf_p","version":1,"name":"p","trigger":{"type":"manual"},"steps":[
+	 {"id":"t","type":"transform","config":{"output":{"x":1}}},
+	 {"id":"all","type":"template","template":"payall","needs":["t"],"input":{}}]}`
+	r := &repair.Repairer{Connectors: payRegistry(t), Find: expansion.Library(lib)}
+	if got := policyProblems(t, r, orig, patch); len(got) == 0 {
+		t.Errorf("the tenant's template's unapproved payment was not found")
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 	"github.com/israel-duff/taskiem/schemas"
@@ -70,7 +71,11 @@ type Repairer struct {
 	// Connectors are the tenant's connectors, seen as manifests only.
 	Connectors connector.Lookup
 	// Validate runs the publishing checks (wdcheck, injected).
-	Validate    func(doc []byte) []builder.Problem
+	Validate func(doc []byte) []builder.Problem
+	// Find finds a template step's template beyond the library: the
+	// tenant's callable workflows (nil: the library only), for the policy
+	// rules to read a patch with its templates expanded.
+	Find        expansion.Templates
 	Meter       builder.Meter
 	Recorder    builder.Recorder
 	MaxAttempts int // default 3
@@ -254,8 +259,15 @@ func (r *Repairer) validate(doc []byte, orig *wd.Definition, origDoc []byte) []b
 	if bytes.Equal(canonical(doc), canonical(origDoc)) {
 		out = append(out, builder.Problem{Path: "/", Message: "the patch does not change the workflow"})
 	}
-	if f := builder.PolicyFindings(def, builder.ManifestOnly(r.Connectors)); len(f) > len(builder.PolicyFindings(orig, builder.ManifestOnly(r.Connectors))) {
-		for _, w := range f {
+	// Step by step, not by count: a patch that takes one payment's
+	// approval away fails even if it gives another payment one.
+	reg := builder.ManifestOnly(r.Connectors)
+	before := map[string]bool{}
+	for _, w := range builder.PolicyFindingsWith(orig, reg, r.Find) {
+		before[w.Rule+" "+w.Path] = true
+	}
+	for _, w := range builder.PolicyFindingsWith(def, reg, r.Find) {
+		if !before[w.Rule+" "+w.Path] {
 			out = append(out, builder.Problem{Path: w.Path, Message: "policy " + w.Rule + ": " + w.Message})
 		}
 	}
