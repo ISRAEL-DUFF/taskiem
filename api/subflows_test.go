@@ -3,6 +3,8 @@ package api_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/ai/builder"
 )
 
 // A subflow step (decision 0049) is checked against the business's
@@ -82,4 +84,28 @@ func TestSubflowSteps(t *testing.T) {
 		t.Errorf("the child's runs: %v", runs)
 	}
 
+}
+
+// The builder is told which workflows a subflow step may run: the
+// business's published ones started by hand or by another run.
+func TestAIBuildListsStartableWorkflows(t *testing.T) {
+	w, f := aiWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	flow := func(id, name, trigger string) map[string]any {
+		return map[string]any{"schema": "wd/v1", "id": id, "version": 1, "name": name, "trigger": map[string]any{"type": trigger},
+			"inputs": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"amount_kobo": map[string]any{"type": "integer"}}}},
+			"steps":  []any{map[string]any{"id": "total", "type": "transform", "config": map[string]any{"output": map[string]any{"kobo": "=trigger.body.amount_kobo"}}}}}
+	}
+	for _, c := range []struct{ id, name, trigger string }{{"wf_child", "Child", "subflow"}, {"wf_byHand", "By hand", "manual"}, {"wf_draft", "Draft only", "manual"}} {
+		id := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": c.name, "definition": flow(c.id, c.name, c.trigger)})["id"].(string)
+		if c.id != "wf_draft" {
+			owner.must(200, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil)
+		}
+	}
+	build(t, w, owner, map[string]any{"goal": "run my Child workflow for each order"})
+	ctxDoc, _ := builder.ContextFrom(f.Requests()[0].Messages[0].Text)
+	raw := toJSON(ctxDoc["startable_workflows"])
+	if !strings.Contains(raw, `"Child"`) || !strings.Contains(raw, `"By hand"`) || !strings.Contains(raw, "amount_kobo") || strings.Contains(raw, "Draft only") {
+		t.Errorf("startable workflows: %s", raw)
+	}
 }

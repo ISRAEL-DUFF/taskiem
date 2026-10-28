@@ -78,6 +78,44 @@ func TestAISteps(t *testing.T) {
 	}
 }
 
+// An ai step inside a callable workflow used as a template step runs in
+// the user's run, so saving and publishing the user check and audit it as
+// their own.
+func TestAIStepsInTemplates(t *testing.T) {
+	w, _ := aiWorld(t)
+	w.srv.AI.Config = ai.Config{Provider: "fake", Model: "claude-opus-5-5"}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	tenant := owner.must(200, "GET", "/v1/me", nil)["tenant_id"].(string)
+	sorter := map[string]any{"schema": "wd/v1", "id": "wf_sort", "version": 1, "name": "Sort", "trigger": map[string]any{"type": "manual"},
+		"inputs": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}, "phone": map[string]any{"type": "string"}}}},
+		"steps": []any{map[string]any{"id": "sort", "type": "ai", "input": map[string]any{"text": "=trigger.body.text", "phone": "=trigger.body.phone"},
+			"config": map[string]any{"prompt": "Urgent or not?", "personal_data": []string{"phone"},
+				"output_schema": map[string]any{"type": "object", "required": []string{"urgent"}, "properties": map[string]any{"urgent": map[string]any{"type": "boolean"}}}}}},
+		"outputs": []any{map[string]any{"name": "urgent", "type": "boolean", "title": "Urgent", "description": "Whether it is urgent", "value": "=steps.sort.output.urgent"}}}
+	a := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Sort", "definition": sorter})
+	if probs := a["problems"].([]any); len(probs) != 0 {
+		t.Fatalf("the callable workflow: %v", probs)
+	}
+	aid := a["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+aid+"/versions/1/publish", nil)
+	user := map[string]any{"schema": "wd/v1", "id": "wf_use", "version": 1, "name": "Use it", "trigger": map[string]any{"type": "manual"},
+		"steps": []any{map[string]any{"id": "sub", "type": "template", "workflow": aid, "input": map[string]any{"text": "=trigger.body.text", "phone": "=trigger.body.phone"}}}}
+	b := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Use it", "definition": user})
+	if probs := b["problems"].([]any); len(probs) != 0 {
+		t.Fatalf("the user: %v", probs)
+	}
+	bid := b["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+bid+"/versions/1/publish", nil)
+	if n := auditCount(t, w, tenant, "ai.personal_data.allow"); n != 2 {
+		t.Errorf("audit entries for the callable workflow and its user: %d", n)
+	}
+	// The business turns AI steps off: the user's next version is refused.
+	owner.must(200, "PUT", "/v1/governance", map[string]any{"ai_steps": false})
+	if probs := toJSON(owner.must(201, "POST", "/v1/workflows/"+bid+"/versions", map[string]any{"definition": user})["problems"]); !strings.Contains(probs, "turned AI steps off") {
+		t.Errorf("an ai step in a template with AI steps off: %s", probs)
+	}
+}
+
 // A deployment without a model refuses AI steps when they are saved.
 func TestAIStepsWithoutAModel(t *testing.T) {
 	w := newWorld(t)

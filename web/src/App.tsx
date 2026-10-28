@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
+import { PageBoundary } from "./PageBoundary";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
 import { NewWorkflow } from "./pages/NewWorkflow";
@@ -363,6 +364,7 @@ function SignedIn() {
       <main className={building ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
         <BillingBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
+        <PageBoundary>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
@@ -436,6 +438,7 @@ function SignedIn() {
           <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
         </Routes>
+        </PageBoundary>
         </div>
       </main>
       <PullToRefresh

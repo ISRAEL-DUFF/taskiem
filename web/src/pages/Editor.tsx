@@ -8,13 +8,14 @@ import { SchedulePicker } from "../canvas/PlainPickers";
 import { FormTriggerEditor } from "../canvas/FormEditor";
 import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
-import { connectIn, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
+import { connectIn, definitionProblem, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
 import { merge } from "../lib/schema";
 import { triggerWords } from "../lib/home";
 import { runLook } from "../lib/lists";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, Item, Items, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { AIBuilder } from "./AIBuild";
+import { MergeDialog } from "./MergeDialog";
 import { resolveSchema } from "../lib/values";
 import { SchemaForm } from "../forms/SchemaForm";
 import { NeedsList } from "./Readiness";
@@ -29,6 +30,8 @@ import { catalog, idFrom } from "../builder/catalog";
 import { TRIGGER_CHOICES } from "../builder/triggers";
 import { stepTitle } from "../builder/look";
 import { sourcesAnywhere, withStarted } from "../builder/sources";
+import { useLeaveWarning } from "../lib/leave";
+import { dropDraft, keepDraft, keptDraft, type KeptDraft } from "../lib/keep";
 
 interface Loaded {
   workflow: WorkflowSummary;
@@ -82,6 +85,15 @@ export function Editor() {
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<{ at: InsertAt; where: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+  // What keeps the JSON tab's text from being a definition the builder can draw.
+  const [jsonProblem, setJsonProblem] = useState<string>();
+  // Warn before leaving with unsaved changes (the tab, or another page).
+  useLeaveWarning(dirty);
+  // Edits kept in the tab from an earlier visit (Back, a sign-out, a closed
+  // page), offered back on opening; and the version the edits on the page
+  // were made on, which a save names so the server merges.
+  const [offer, setOffer] = useState<KeptDraft<WorkflowDefinition>>();
+  const base = useRef<{ version: number; digest?: string }>(undefined);
   // ?tab=settings opens on when it runs (a new form opens on its questions).
   const [tab, setTab] = useState<"build" | "runs" | "settings" | "code" | "json">(() => (params.get("tab") === "settings" ? "settings" : "build"));
   const [notice, setNotice] = useState("");
@@ -101,13 +113,40 @@ export function Editor() {
 
   useEffect(() => {
     if (!doc.data) return;
-    setDef(doc.data.definition);
+    // A draft saved without a trigger (drafts may be incomplete) opens as
+    // a manual one rather than leaving the builder nothing to draw.
+    const loaded = doc.data.definition;
+    setDef(loaded.trigger && typeof loaded.trigger === "object" ? loaded : { ...loaded, trigger: { type: "manual" } });
     setLayout((doc.data.layout ?? {}) as Record<string, unknown>);
     setProblems(doc.data.problems);
     setDirty(false);
     past.current = [];
     future.current = [];
-  }, [doc.data]);
+    base.current = { version: doc.data.version.version, digest: doc.data.version.digest };
+    const kept = keptDraft<WorkflowDefinition>(id);
+    setOffer(kept && !definitionProblem(kept.definition) ? kept : undefined);
+  }, [doc.data, id]);
+  // While there are unsaved edits, keep them in the tab.
+  useEffect(() => {
+    if (!dirty || !def || !base.current) return;
+    keepDraft(id, { definition: def, layout, version: base.current.version, digest: base.current.digest, at: new Date().toISOString() });
+  }, [dirty, def, layout, id]);
+  const restore = () => {
+    if (!offer || !def) return;
+    past.current = [...past.current.slice(-49), { def, layout }];
+    future.current = [];
+    base.current = { version: offer.version, digest: offer.digest };
+    setDef(offer.definition);
+    setLayout(offer.layout);
+    setDirty(true);
+    setOffer(undefined);
+  };
+  const throwAway = () => {
+    dropDraft(id);
+    setOffer(undefined);
+  };
+  // The JSON tab starts from the definition each time it opens.
+  useEffect(() => setJsonProblem(undefined), [tab]);
 
   const remember = () => {
     if (!def) return;
@@ -117,6 +156,7 @@ export function Editor() {
   const edit = useCallback((next: WorkflowDefinition) => {
     setDef(next);
     setDirty(true);
+    setOffer(undefined);
   }, []);
   const change = (next: WorkflowDefinition) => {
     remember();
@@ -169,7 +209,7 @@ export function Editor() {
   };
 
   // An email trigger's card shows the address mail starts it at.
-  const emailTrigger = doc.data?.definition.trigger.type === "email";
+  const emailTrigger = doc.data?.definition.trigger?.type === "email";
   const emailEndpoints = useLoad(
     () => (emailTrigger ? get<{ endpoints: EmailEndpoint[] }>(`/v1/workflows/${id}/email`) : Promise.resolve({ endpoints: [] })),
     [id, emailTrigger],
@@ -186,7 +226,7 @@ export function Editor() {
     if (!dirty) return version;
     let r: { version: number; problems: Problem[]; merged: boolean };
     try {
-      r = await post(`/v1/workflows/${id}/versions`, { definition: forSaving(def), layout, parent_digest: doc.data?.version.digest, resolutions });
+      r = await post(`/v1/workflows/${id}/versions`, { definition: forSaving(def), layout, parent_digest: base.current?.digest ?? doc.data?.version.digest, resolutions });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && Array.isArray(e.body.conflicts)) {
         setMerge({ conflicts: e.body.conflicts as MergeConflict[], latest: Number(e.body.latest_version) });
@@ -195,6 +235,7 @@ export function Editor() {
       throw e;
     }
     setMerge(undefined);
+    dropDraft(id);
     if (r.merged) setNotice(`Saved as version ${r.version}, merged with changes saved since you started.`);
     setProblems(r.problems);
     setDirty(false);
@@ -319,6 +360,7 @@ export function Editor() {
             value={version}
             onChange={(e) => {
               if (dirty && !confirm("Discard unsaved changes?")) return;
+              dropDraft(id);
               setParams({ v: e.target.value });
             }}
           >
@@ -349,6 +391,22 @@ export function Editor() {
 
       <div className="builder-notes">
         <ErrorBox error={act.error ?? testing.error} />
+        {offer && !dirty && !readOnly && (
+          <div className="notice" role="status" data-testid="kept-draft">
+            <p>
+              You have changes to this workflow that were not saved{offer.at ? `, from ${fmtTime(offer.at)}` : ""}
+              {offer.version !== version ? ` (made on version ${offer.version})` : ""}. Bring them back?
+            </p>
+            <div className="row">
+              <button type="button" className="primary" onClick={restore}>
+                Bring them back
+              </button>
+              <button type="button" onClick={throwAway}>
+                Throw them away
+              </button>
+            </div>
+          </div>
+        )}
         {needs && (
           <div className="notice">
             <p>Version {needs.version} is saved, but not published yet: fix these, then publish again.</p>
@@ -536,7 +594,20 @@ export function Editor() {
         <div className="builder-page">
           <div className="card">
             <p className="hint">The whole definition (wd/v1). Edits apply as you type, once the JSON is valid.</p>
-            <JsonInput value={def} onChange={(v) => v && typeof v === "object" && change(v as WorkflowDefinition)} rows={30} />
+            <JsonInput
+              value={def}
+              onChange={(v) => {
+                const problem = v === undefined ? "The definition is empty." : definitionProblem(v);
+                setJsonProblem(problem);
+                if (!problem) change(v as WorkflowDefinition);
+              }}
+              rows={30}
+            />
+            {jsonProblem && (
+              <div className="error" role="alert" data-testid="json-problem">
+                {jsonProblem} The last definition that worked is kept.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1042,53 +1113,5 @@ function CodeTab({ def, onApply }: { def: WorkflowDefinition; onApply: (def: Wor
         </button>
       </div>
     </div>
-  );
-}
-
-/** Lets an editor choose, for each conflict, their edit or the newer version's. */
-function MergeDialog({
-  conflicts,
-  latest,
-  busy,
-  onClose,
-  onResolve,
-}: {
-  conflicts: MergeConflict[];
-  latest: number;
-  busy: boolean;
-  onClose: () => void;
-  onResolve: (res: Record<string, "ours" | "theirs">) => void;
-}) {
-  const [choice, setChoice] = useState<Record<string, "ours" | "theirs">>({});
-  const show = (v: unknown) => (v === undefined ? "(removed)" : JSON.stringify(v, null, 2));
-  const label = (c: MergeConflict) => (c.path.startsWith("steps/") ? `Step ${c.path.slice(6)}` : `Workflow ${c.path}`);
-  return (
-    <Modal title="Resolve conflicting edits" onClose={onClose}>
-      <p className="hint">
-        Version {latest} changed these parts too. Everything else is merged. Choose which version of each to keep, then save.
-      </p>
-      {conflicts.map((c) => (
-        <fieldset key={c.path} className="card" data-testid={`conflict-${c.path}`}>
-          <legend>
-            {label(c)} {c.kind === "changed_and_deleted" && "(changed on one side, removed on the other)"}
-          </legend>
-          <div className="row">
-            {(["ours", "theirs"] as const).map((side) => (
-              <label key={side} className="grow">
-                <input type="radio" name={c.path} checked={choice[c.path] === side} onChange={() => setChoice({ ...choice, [c.path]: side })} />{" "}
-                {side === "ours" ? "Yours" : `Version ${latest}`}
-                <pre className="mono">{show(c[side])}</pre>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      ))}
-      <div className="row">
-        <button className="primary" disabled={busy || conflicts.some((c) => !choice[c.path])} onClick={() => onResolve(choice)}>
-          Save merged version
-        </button>
-        <button onClick={onClose}>Cancel</button>
-      </div>
-    </Modal>
   );
 }

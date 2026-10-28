@@ -452,6 +452,8 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 	if b.Action == matchSplit {
 		sp, err := m.ConfirmSplit(ctx, tenant.ID, b.Suggestion, p.Actor())
 		switch {
+		case errors.Is(err, matching.ErrHeld):
+			return say(c.t("wa.match.needs_approval"))
 		case errors.Is(err, invoicing.ErrNotFound):
 			return say(c.t("wa.button_invalid"))
 		case errors.Is(err, invoicing.ErrState), errors.Is(err, invoicing.ErrInvalid):
@@ -470,6 +472,8 @@ func (s *Server) matchPress(ctx context.Context, c *chat, payload string) error 
 	if b.Action == matchYes {
 		x, err := m.Confirm(ctx, tenant.ID, b.Suggestion, p.Actor(), false)
 		switch {
+		case errors.Is(err, matching.ErrHeld):
+			return say(c.t("wa.match.needs_approval"))
 		case errors.Is(err, invoicing.ErrNotFound):
 			return say(c.t("wa.button_invalid"))
 		case errors.Is(err, invoicing.ErrState):

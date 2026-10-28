@@ -22,13 +22,14 @@ import (
 
 // AI steps (decision 0050, wd-v1 AI steps) ask the deployment's model at
 // run time, on the "ai" queue. Before anything leaves, the worker checks
-// that the business allows AI steps and has budget left, and swaps the
-// run's personal data in the prompt and input for placeholders, except in
-// the input fields the step lets through. The answer must match the
-// step's output_schema; one that does not is sent back once with its
-// problems. The placeholders in the answer are swapped back, and the
-// output is sealed like any output that repeats personal data. Every call
-// is an ai_interactions row, counted against the monthly AI budget.
+// that the business allows AI steps, that its plan includes AI, and that
+// it has budget left, and swaps the run's personal data in the prompt and
+// input for placeholders, except in the input fields the step lets
+// through. The answer must match the step's output_schema; one that does
+// not is sent back once with its problems. The placeholders in the answer
+// are swapped back, and the output is sealed like any output that repeats
+// personal data. Every call is an ai_interactions row, counted against
+// the monthly AI budget.
 
 // AISteps is how a worker runs ai steps.
 type AISteps struct {
@@ -38,6 +39,10 @@ type AISteps struct {
 	// For returns the provider for a model; nil uses ai.New with the
 	// model put in Config.
 	For func(model string) (ai.Provider, error)
+	// Plan reports whether the tenant's plan includes AI (the billing
+	// feature "ai"); an error is a failure to tell, retried. Nil: every
+	// plan does (billing off).
+	Plan func(ctx context.Context, tenant uuid.UUID) (bool, error)
 	// Overage reports a plan's AI overage rate: a tenant whose plan bills
 	// tokens beyond the budget is not stopped by it. Nil: no overage.
 	Overage func(ctx context.Context, tenant uuid.UUID) (int64, error)
@@ -78,17 +83,13 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	}
 	cfg := p.step.AI
 	var allowed bool
-	var limit, used int64
+	var limit int64
 	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT ai_steps FROM governance_settings), true)`).Scan(&allowed); err != nil {
 			return err
 		}
 		lim, err := w.Store.limitsTx(ctx, tx, p.c.tenant)
-		if err != nil {
-			return err
-		}
 		limit = lim.AIMonthlyTokens
-		used, err = AITokensThisMonth(ctx, tx, p.c.tenant)
 		return err
 	})
 	if err != nil {
@@ -97,13 +98,14 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	if !allowed {
 		return fail("disabled", "the business has turned AI steps off (Secrets & settings, AI steps)")
 	}
-	if limit > 0 && used >= limit && w.AI.Overage != nil {
-		if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {
-			limit = 0
+	if w.AI.Plan != nil {
+		ok, err := w.AI.Plan(ctx, p.c.tenant)
+		if err != nil {
+			return failed(p.c, "retryable", "reading the business's plan: "+err.Error(), "retry")
 		}
-	}
-	if limit > 0 && used >= limit {
-		return fail("limit", "this month's AI budget is used up (%d tokens); the step runs again once the budget allows", limit)
+		if !ok {
+			return fail("disabled", "the business's plan does not include AI, which AI steps need; change plan under Billing")
+		}
 	}
 	prov, model, err := w.AI.provider(cfg.Model)
 	if err != nil || prov == nil {
@@ -131,16 +133,20 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		masked[k] = v
 	}
 	maskedIn, _ := masker.Mask(masked).(map[string]any)
+	// The record of the call is built from the same masked question, so it
+	// shows what the model was sent; only the fields let through are
+	// redacted in it.
+	logIn := make(map[string]any, len(maskedIn)+len(through))
+	for k, v := range maskedIn {
+		logIn[k] = v
+	}
 	for k, v := range through {
 		maskedIn[k] = v
+		logIn[k] = redactThrough(p.taint, v)
 	}
-	question := fmt.Sprint(prompt)
-	if s, ok := prompt.(string); ok {
-		question = s
-	}
-	if len(maskedIn) > 0 {
-		raw, _ := json.MarshalIndent(maskedIn, "", "  ")
-		question += "\n\nInput (JSON):\n" + string(raw)
+	question, logged := aiQuestion(prompt, maskedIn), aiQuestion(prompt, logIn)
+	if len(question) > maxAIQuestion {
+		return fail("input_too_large", "the prompt and input come to %d bytes; an AI step sends at most %d", len(question), maxAIQuestion)
 	}
 	var schema map[string]any
 	if err := json.Unmarshal(cfg.OutputSchema, &schema); err != nil {
@@ -154,12 +160,39 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	if timeout <= 0 {
 		timeout = 2 * time.Minute
 	}
+	// The budget, with what the steps calling now have reserved: this
+	// step reserves what it may use (the question and the longest answer,
+	// for both rounds) until its calls are recorded. A call that could
+	// not be recorded keeps the reservation until it lapses: the provider
+	// billed it, so the retry must not spend outside the budget.
+	unrecorded := false
+	if limit > 0 {
+		estimate := int64(2 * (len(aiStepSystem)/4 + len(question)/4 + maxTokens))
+		release, over, err := w.reserveAI(ctx, p, limit, estimate, 2*timeout+time.Minute)
+		if err != nil {
+			return failed(p.c, "retryable", "reserving the business's AI budget: "+err.Error(), "retry")
+		}
+		defer func() {
+			if !unrecorded {
+				release()
+			}
+		}()
+		if over && w.AI.Overage != nil {
+			if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {
+				over = false // a plan with AI overage bills tokens beyond the budget
+			}
+		}
+		if over {
+			return fail("limit", "this month's AI budget is used up (%d tokens); the step is not tried again (the budget starts afresh next month, UTC)", limit)
+		}
+	}
 	req := ai.Request{
 		System:    []ai.SystemBlock{{Text: aiStepSystem, Cache: true}},
 		Messages:  []ai.Message{{Role: "user", Text: question}},
 		Schema:    closeObjects(schema),
 		MaxTokens: maxTokens,
 	}
+	sent := []ai.Message{{Role: "user", Text: logged}}
 	sum := sha256.Sum256([]byte(aiStepSystem))
 	digest := hex.EncodeToString(sum[:])
 
@@ -189,7 +222,14 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 				answer, _ = decodeAnswer(raw)
 			}
 		}
-		w.recordAIStep(ctx, p, model, prov.Name(), digest, round, req, resp, outcome, err)
+		if rerr := w.recordAIStep(ctx, p, model, prov.Name(), digest, round, sent, resp, outcome, err); rerr != nil {
+			// A call not recorded is neither audited nor counted against
+			// the budget: the answer is not used, the attempt is tried
+			// again, and the step's reservation is held until it lapses.
+			unrecorded = true
+			w.Logger.Error("recording an ai step's call", "run", p.c.run, "step", p.c.step, "err", rerr)
+			return failed(p.c, "retryable", "recording the AI model's call: "+pii.Redact(rerr.Error()), "retry")
+		}
 		switch outcome {
 		case "valid":
 			out := masker.Unmask(answer)
@@ -215,11 +255,91 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		if round == 2 {
 			return fail("invalid_output", "the AI model's answer did not match the output schema: %s", strings.Join(problems, "; "))
 		}
-		req.Messages = append(req.Messages,
-			ai.Message{Role: "assistant", Text: resp.Text},
-			ai.Message{Role: "user", Text: "That answer does not match the schema: " + strings.Join(problems, "; ") + ". Answer again with JSON that matches it."})
+		again := ai.Message{Role: "user", Text: "That answer does not match the schema: " + strings.Join(problems, "; ") + ". Answer again with JSON that matches it."}
+		req.Messages = append(req.Messages, ai.Message{Role: "assistant", Text: resp.Text}, again)
+		sent = append(sent, ai.Message{Role: "assistant", Text: redactAnswer(p.taint, resp.Text)}, again)
 	}
 	return fail("invalid_output", "no answer")
+}
+
+// aiQuestion is the question an ai step sends: its prompt, then its input
+// as JSON.
+func aiQuestion(prompt any, input map[string]any) string {
+	q := fmt.Sprint(prompt)
+	if s, ok := prompt.(string); ok {
+		q = s
+	}
+	if len(input) > 0 {
+		raw, _ := json.MarshalIndent(input, "", "  ")
+		q += "\n\nInput (JSON):\n" + string(raw)
+	}
+	return q
+}
+
+// redactThrough is an input field let through to the model, as the record
+// of the call keeps it: its personal values replaced by their categories.
+func redactThrough(taint pii.Taint, v any) any {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "[personal data]"
+	}
+	s := taint.RedactText(pii.Redact(string(raw)))
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+	return s
+}
+
+// redactAnswer is a model's answer as its record keeps it: it may repeat
+// the fields let through.
+func redactAnswer(taint pii.Taint, s string) string { return taint.RedactText(pii.Redact(s)) }
+
+// maxAIQuestion bounds what an ai step sends, its prompt and input: as
+// large as a step's output may be (maxStepOutput), so a step can pass
+// another's whole output to the model, but not an unbounded one.
+const maxAIQuestion = maxStepOutput
+
+// reserveAI checks the tenant's monthly AI budget, counting the tokens
+// recorded and those the ai steps calling now have reserved, and reserves
+// estimate tokens for this step until release is called (or ttl passes,
+// if its worker dies first). Checks are serialised per tenant, so steps
+// starting at once see each other's reservations. over: the budget is
+// used up, and nothing was reserved; release is safe to call either way.
+func (w *Worker) reserveAI(ctx context.Context, p *plan, limit, estimate int64, ttl time.Duration) (release func(), over bool, err error) {
+	id := uuid.Must(uuid.NewV7())
+	release = func() {}
+	err = db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem ai budget ' || $1::text, 0))`, p.c.tenant); err != nil {
+			return err
+		}
+		used, err := AITokensThisMonth(ctx, tx, p.c.tenant)
+		if err != nil {
+			return err
+		}
+		var reserved int64
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`,
+			p.c.tenant).Scan(&reserved); err != nil {
+			return err
+		}
+		if over = used+reserved >= limit; over {
+			return nil
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO ai_reservations (id, tenant_id, run_id, step_id, tokens, expires_at) VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))`,
+			id, p.c.tenant, p.c.run, p.c.step, estimate, ttl.Seconds())
+		return err
+	})
+	if err != nil || over {
+		return release, over, err
+	}
+	return func() {
+		ctx := context.WithoutCancel(ctx)
+		if err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `DELETE FROM ai_reservations WHERE id = $1 OR (tenant_id = $2 AND expires_at <= now())`, id, p.c.tenant)
+			return err
+		}); err != nil {
+			w.Logger.Error("releasing an ai step's budget reservation", "run", p.c.run, "step", p.c.step, "err", err)
+		}
+	}, false, nil
 }
 
 func containsString(list []string, s string) bool {
@@ -286,21 +406,18 @@ func closeObjects(schema map[string]any) map[string]any {
 }
 
 // recordAIStep writes one call of an ai step to ai_interactions, where it
-// counts against the monthly budget: the messages as they left (the input
-// fields let through are pattern-masked here, so the record never holds
-// personal data in the clear), the answer, and the tokens.
-func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, digest string, round int, req ai.Request, resp *ai.Response, outcome string, callErr error) {
+// counts against the monthly budget: the messages as they left, built from
+// the same masked question (only the input fields let through are
+// redacted, so the record never holds them in the clear), the answer, and
+// the tokens.
+func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, digest string, round int, msgs []ai.Message, resp *ai.Response, outcome string, callErr error) error {
 	ctx = context.WithoutCancel(ctx)
-	msgs := make([]ai.Message, len(req.Messages))
-	for i, m := range req.Messages {
-		msgs[i] = ai.Message{Role: m.Role, Text: p.taint.RedactText(pii.Redact(m.Text))}
-	}
 	rawMsgs, _ := json.Marshal(msgs)
 	var text *string
 	var stop string
 	var u ai.Usage
 	if resp != nil {
-		t := p.taint.RedactText(pii.Redact(resp.Text))
+		t := redactAnswer(p.taint, resp.Text)
 		text, stop, u = &t, resp.StopReason, resp.Usage
 		if resp.Model != "" {
 			model = resp.Model
@@ -314,7 +431,7 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 	if round > 1 {
 		kind = "step_correct"
 	}
-	err := db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
+	return db.InTenantTx(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO ai_interactions (id, tenant_id, run_id, step_id, round, kind, actor, provider, model, system_digest, messages,
 			response, stop_reason, outcome, error, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULLIF($13, ''), $14, NULLIF($15, ''), $16, $17, $18, $19, $20)`,
@@ -322,7 +439,4 @@ func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, dig
 			text, stop, outcome, errText, u.InputTokens, u.OutputTokens, u.CacheCreationTokens, u.CacheReadTokens, u.Total())
 		return err
 	})
-	if err != nil {
-		w.Logger.Error("recording an ai step's call", "run", p.c.run, "step", p.c.step, "err", err)
-	}
 }

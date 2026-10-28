@@ -47,6 +47,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
+/** The embedded builder (src/embed) has no console session: the panels it
+ * shares with the console see the end user's permissions, with the
+ * technical parts shown (docs/embedding.md: end users build by hand). */
+export function EmbeddedAuth({ permissions, children }: { permissions: string[]; children: ReactNode }) {
+  const none = () => Promise.reject(new Error("not in the embedded builder"));
+  const value: Auth = {
+    me: { tenant_id: null, roles: [], permissions, advanced: true },
+    can: (perm) => permissions.includes(perm),
+    login: none,
+    loginWithPasskey: none,
+    logout: none,
+    refresh: none,
+  };
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
 export function useAuth(): Auth {
   const a = useContext(Ctx);
   if (!a) throw new Error("useAuth outside AuthProvider");

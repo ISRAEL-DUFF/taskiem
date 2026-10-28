@@ -32,7 +32,9 @@ type fakeRails struct {
 	credits   []any
 	err       error
 	truncated bool
-	calls     []map[string]any
+	// stillTruncated: the quarters do not fit either.
+	stillTruncated bool
+	calls          []map[string]any
 }
 
 func (f *fakeRails) Capable(context.Context, uuid.UUID, string) ([]invoicing.Rail, error) {
@@ -56,7 +58,7 @@ func (f *fakeRails) Call(_ context.Context, _ uuid.UUID, _ invoicing.Rail, _ str
 	// Truncated only for the whole window: its quarters fit.
 	since, _ := time.Parse(time.RFC3339, in["since"].(string))
 	until, _ := time.Parse(time.RFC3339, in["until"].(string))
-	if f.truncated && until.Sub(since) > 13*time.Hour {
+	if f.truncated && (f.stillTruncated || until.Sub(since) > 13*time.Hour) {
 		return map[string]any{"credits": f.credits[:1], "truncated": true}, nil
 	}
 	return map[string]any{"credits": f.credits}, nil
@@ -199,6 +201,31 @@ func TestLookBackReadsShorterWindows(t *testing.T) {
 	res, err := w.l.Look(ctx, w.target("paystack/main", ""))
 	if err != nil || len(w.rails.calls) != 5 || res.Found != 2 {
 		t.Fatalf("look %+v %v (%d calls)", res, err, len(w.rails.calls))
+	}
+}
+
+// A quarter that still has more than one read holds is a failure, not a
+// run that went well: Failing in a row raise the alert. What was read is
+// recorded.
+func TestLookBackStillTruncatedFails(t *testing.T) {
+	w := newWorld(t)
+	tg := w.target("paystack/main", "")
+	w.rails.truncated, w.rails.stillTruncated = true, true
+	w.rails.credits = []any{credit("A", time.Hour, w.now), credit("B", 30*time.Hour, w.now)}
+	for i := range lookback.Failing {
+		if _, err := w.l.Look(ctx, tg); err == nil {
+			t.Fatalf("look %d did not fail", i)
+		}
+		w.now = w.now.Add(lookback.Every)
+	}
+	if n := w.count(`SELECT count(*) FROM money_entries WHERE tenant_id = $1 AND source = 'lookup'`, w.env.Tenant); n != 1 {
+		t.Errorf("%d entries recorded", n)
+	}
+	if n := w.count(`SELECT count(*) FROM money_lookbacks WHERE tenant_id = $1 AND last_ok_at IS NULL AND failures = $2`, w.env.Tenant, lookback.Failing); n != 1 {
+		t.Errorf("the look-back was recorded OK")
+	}
+	if n := w.count(`SELECT count(*) FROM alerts WHERE tenant_id = $1 AND kind = $2`, w.env.Tenant, lookback.AlertFailing); n != 1 {
+		t.Fatalf("%d failing alerts", n)
 	}
 }
 

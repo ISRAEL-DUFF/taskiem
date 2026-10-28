@@ -50,7 +50,7 @@ The total is then the sum of the lines, and the status follows from it and the p
 - The total stays at least ₦1: to cancel what is left, void the invoice.
 - A draft is not amended: change it instead.
 - Every amendment is in the audit log (`invoice.amended`, with who, the amount and the reason) and in the [invoices export](money-reports.md#invoices) (`amended`).
-- Where the [Schools](schools.md) area is on, a discount at or above the school's discount threshold is recorded as a request for a second person instead of made (202, `code: needs_approval`), and made when they approve it ([discounts](schools.md#discounts)).
+- Where the [Schools](schools.md) area is on, a discount or a line taken out at or above the school's discount threshold is recorded as a request for a second person instead of made (202, `code: needs_approval`), and made when they approve it ([discounts](schools.md#discounts)). What is weighed is what the amendment takes off the invoice together with what earlier amendments took off it without a second person and, on a student's invoice, with what the student was given without one within the current term (and at least the last 24 hours): their standing discounts and the reductions of their other invoices ([the second person](schools.md#the-second-person)).
 
 The database keeps the rule whoever writes: a sent invoice's lines can only grow, each new line naming a recorded amendment of that invoice (once), its total is recomputed from its lines, and never below what was paid.
 

@@ -341,6 +341,17 @@ func (s *Server) embedGuardBody(next http.Handler) http.Handler {
 		}
 		var body map[string]json.RawMessage
 		if json.Unmarshal(raw, &body) == nil {
+			// The handlers decode field names regardless of case
+			// (encoding/json), so "Definition" would reach them unchecked:
+			// a guarded field is taken only as spelled.
+			for k := range body {
+				for _, g := range []string{"definition", "template"} {
+					if k != g && strings.EqualFold(k, g) {
+						writeErr(w, http.StatusBadRequest, fmt.Sprintf("unknown field %q (field names are lower case)", k))
+						return
+					}
+				}
+			}
 			if t, ok := body["template"]; ok {
 				var tpl string
 				if json.Unmarshal(t, &tpl) != nil || !slices.Contains(eu.AllowedTemplates, tpl) {

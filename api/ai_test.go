@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -151,6 +152,42 @@ func TestAIBuildProposesAndSavesADraft(t *testing.T) {
 	s2 := owner.must(201, "POST", "/v1/ai/builds/"+b2["id"].(string)+"/save", nil)
 	if s2["id"] != wf || s2["version"] != float64(2) {
 		t.Errorf("modify: %v", s2)
+	}
+}
+
+// A build changes the version it read when it started; saving it after
+// someone saved another version merges the two, as a canvas save does,
+// and asks for resolutions where both changed the same step.
+func TestAISaveMergesEditsSinceTheBuild(t *testing.T) {
+	doc := func(a, b int) string {
+		return fmt.Sprintf(`{"schema":"wd/v1","id":"wf_x","version":1,"name":"x","trigger":{"type":"manual"},"steps":[`+
+			`{"id":"a","type":"transform","config":{"output":{"x":%d}}},{"id":"b","type":"transform","needs":["a"],"config":{"output":{"y":%d}}}]}`, a, b)
+	}
+	w, _ := aiWorld(t, aiEnvelope(t, doc(2, 1)), aiEnvelope(t, doc(3, 5)))
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "x", "definition": json.RawMessage(doc(1, 1))})["id"].(string)
+	version := func(v float64) string {
+		return toJSON(owner.must(200, "GET", fmt.Sprintf("/v1/workflows/%s/versions/%d", wf, int(v)), nil)["definition"])
+	}
+
+	// The AI changes step a; meanwhile a person saves a change to step b.
+	b1 := build(t, w, owner, map[string]any{"goal": "make x two", "workflow": wf})
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": json.RawMessage(doc(1, 5))})
+	s1 := owner.must(201, "POST", "/v1/ai/builds/"+b1["id"].(string)+"/save", nil)
+	if got := version(s1["version"].(float64)); s1["version"] != float64(3) || !strings.Contains(got, `"x":2`) || !strings.Contains(got, `"y":5`) {
+		t.Fatalf("save %v: %s", s1, got)
+	}
+
+	// Both change step a: a conflict, settled by a resolution.
+	b2 := build(t, w, owner, map[string]any{"goal": "make x three", "workflow": wf})
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": json.RawMessage(doc(7, 5))})
+	st, out := owner.do("POST", "/v1/ai/builds/"+b2["id"].(string)+"/save", nil)
+	if st != 409 || !strings.Contains(toJSON(out["conflicts"]), "steps/a") || out["latest_version"] != float64(4) {
+		t.Fatalf("save: %d %v", st, out)
+	}
+	s2 := owner.must(201, "POST", "/v1/ai/builds/"+b2["id"].(string)+"/save", map[string]any{"resolutions": map[string]string{"steps/a": "ours"}})
+	if got := version(s2["version"].(float64)); s2["version"] != float64(5) || !strings.Contains(got, `"x":3`) || !strings.Contains(got, `"y":5`) {
+		t.Fatalf("save %v: %s", s2, got)
 	}
 }
 

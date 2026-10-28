@@ -4,6 +4,7 @@ import {
   TRIGGER,
   childLists,
   connectIn,
+  definitionProblem,
   emptyPaths,
   flowGraph,
   forSaving,
@@ -14,6 +15,7 @@ import {
   notesOf,
   removeAnywhere,
   renameAnywhere,
+  stepFromJson,
   tidy,
   withNotes,
   type FlowNode,
@@ -179,5 +181,34 @@ describe("saving an If", () => {
   it("names the paths that still need a step; an empty No is fine", () => {
     expect(emptyPaths([newChoice("ok")], (s) => s.name ?? s.id)).toEqual(["Yes of “Is it so?”"]);
     expect(emptyPaths(order(), (s) => s.id)).toEqual([]);
+  });
+});
+
+describe("a step edited as JSON", () => {
+  it("keeps its id: renaming goes through the ID field", () => {
+    expect(stepFromJson(t("a"), { id: "b", type: "transform" })).toMatch(/stays "a"/);
+    expect(stepFromJson(t("a"), [])).toMatch(/must be an object/);
+    expect(stepFromJson(t("a"), { id: "a" })).toMatch(/needs a "type"/);
+    expect(stepFromJson(t("a"), { id: "a", type: "transform", name: "Renamed" })).toEqual({ id: "a", type: "transform", name: "Renamed" });
+  });
+});
+
+describe("what the JSON tab accepts", () => {
+  const def = (steps: unknown) => ({ schema: "wd/v1", id: "wf_x", version: 1, name: "x", trigger: { type: "manual" }, steps });
+  it("takes a definition the builder can draw, at every depth", () => {
+    expect(definitionProblem(def(order()))).toBeUndefined();
+    expect(definitionProblem(def([]))).toBeUndefined();
+  });
+  it("says what is wrong with anything else", () => {
+    expect(definitionProblem([])).toMatch(/must be an object/);
+    expect(definitionProblem({ steps: [] })).toMatch(/trigger/);
+    expect(definitionProblem({ trigger: { type: "manual" } })).toMatch(/"steps" must be a list/);
+    expect(definitionProblem(def([1]))).toMatch(/step 1 must be an object/);
+    expect(definitionProblem(def([{ type: "transform" }]))).toMatch(/needs an "id"/);
+    expect(definitionProblem(def([{ id: "a", type: "transform", needs: "b" }]))).toMatch(/"needs" must be a list/);
+    expect(definitionProblem(def([{ id: "c", type: "branch", config: { paths: [{ name: "yes", steps: [null] }] } }]))).toMatch(/Step "c", paths 1: step 1 must be an object/);
+    expect(definitionProblem(def([{ id: "c", type: "branch", config: { default: { steps: {} } } }]))).toMatch(/otherwise must be a list/);
+    expect(definitionProblem(def([{ id: "p", type: "parallel", config: { branches: {} } }]))).toMatch(/"branches" must be a list/);
+    expect(definitionProblem(def([{ id: "e", type: "foreach", config: { steps: [{ id: "x" }] } }]))).toMatch(/Step "x" needs a "type"/);
   });
 });

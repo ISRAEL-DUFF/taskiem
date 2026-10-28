@@ -159,7 +159,7 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 | `GET /me` | — | The end user, sub-tenant, permissions, the app's allowed connectors and templates, branding tokens, `white_label`, expiry |
 | `GET /connectors` | — | The connectors the app allows, with their actions and schemas, and the allowed gated step types |
 | `GET /workflows`, `GET /workflows/{wf}`, `GET /workflows/{wf}/versions/{v}` | `workflow.read` | As `/v1/workflows` |
-| `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems` |
+| `POST /workflows` | `workflow.edit` | `{"name", "definition", "template"?}`; drafts may be incomplete and come back with `problems`, but must be an object with a `steps` list (400 otherwise) |
 | `GET /templates` | — | The app's allowed templates, `available` when the app also allows their connectors |
 | `POST /templates/{id}/instantiate` | `workflow.edit` | `{"params", "name"?}`; a draft from one of the app's templates ([templates](templates.md)) |
 | `POST /workflows/{wf}/versions` | `workflow.edit` | Save a version (three-way merge with `parent_digest`, as `/v1`) |
@@ -171,7 +171,7 @@ End users call `/v1/embed/{app}/...` with `Authorization: Bearer <token>`. The t
 | `GET /runs/{run}/stream` | `run.read` | Server-sent events of a run's history (use `fetch` with the header; `EventSource` cannot send it) |
 | `POST /runs/{run}/cancel` | `run.cancel` | Cancel |
 
-**Allowed connectors and templates.** Every definition an end user saves, validates or publishes is checked against the app: a connector, or an `http`, `code` or `ai` step, that the app does not allow (anywhere, nested steps and the trigger included) is refused with 403 and `"not_allowed": [...]`. Starting a run checks the version that would run too, so narrowing an app later stops runs of what it no longer allows. A `template` must be one of the app's.
+**Allowed connectors and templates.** Every definition an end user saves, validates or publishes is checked against the app: a connector, or an `http`, `code` or `ai` step, that the app does not allow (anywhere, nested steps and the trigger included) is refused with 403 and `"not_allowed": [...]`. Starting a run checks the version that would run too, so narrowing an app later stops runs of what it no longer allows. A `template` must be one of the app's. Field names are taken as spelled: a body with `Definition` or `Template` (any other case) is refused with 400, so the check cannot be passed by changing case.
 
 **Headless mode** is the same API without a browser: register the app with `"headless": true` and call these routes from your servers with an end-user token, to build your own UI on the engine. `TestHeadlessFlow` (`api/embed_test.go`) walks it end to end: list connectors, create from a template, validate, save a second version, lay out, publish, start a run, read it, stream it, list runs, and see the outcome, redacted, through the partner API.
 

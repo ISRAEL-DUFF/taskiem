@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Background, Controls, ReactFlow, type Connection, type EdgeChange, type NodeChange } from "@xyflow/react";
 import type { Step, WorkflowDefinition } from "@sdk/wd";
-import { ApiError, type ConnectorInfo, type Problem, type RunEvent, type RunSummary, type VersionInfo, type WorkflowSummary } from "../api";
+import { ApiError, type ConnectorInfo, type MergeConflict, type Problem, type RunEvent, type RunSummary, type VersionInfo, type WorkflowSummary } from "../api";
+import { EmbeddedAuth } from "../auth";
 import { RunCanvas } from "../canvas/RunCanvas";
 import { StepNode, type StepFlowNode } from "../canvas/StepNode";
 import { StepPanel } from "../canvas/StepPanel";
@@ -112,7 +113,12 @@ function Builder({ client, me, emit }: { client: EmbedClient; me: EmbedMe; emit:
   const [open, setOpen] = useState<string>();
   const [name, setName] = useState("");
   const act = useAction();
-  if (open) return <Editor client={client} id={open} can={can} emit={emit} onBack={() => (setOpen(undefined), list.reload())} />;
+  if (open)
+    return (
+      <EmbeddedAuth permissions={me.permissions}>
+        <Editor client={client} id={open} can={can} emit={emit} onBack={() => (setOpen(undefined), list.reload())} />
+      </EmbeddedAuth>
+    );
   return (
     <div className="tk-body">
       <div className="toolbar">
@@ -190,6 +196,9 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
   const [input, setInput] = useState<unknown>({});
   const [starting, setStarting] = useState(false);
   const [run, setRun] = useState<string>();
+  // A save refused because a newer version changed the same parts.
+  const [merge, setMerge] = useState<{ conflicts: MergeConflict[]; latest: number }>();
+  const [choice, setChoice] = useState<Record<string, "ours" | "theirs">>({});
   const act = useAction();
 
   useEffect(() => {
@@ -246,9 +255,27 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
     setSelected(sid);
   };
 
-  const save = async (): Promise<number> => {
+  // A save names the version it started from; if someone saved since, the
+  // server merges the two edits, or reports the conflicts to choose between.
+  // Either way the edits stay on the canvas.
+  const save = async (resolutions?: Record<string, "ours" | "theirs">): Promise<number> => {
     if (!def || !dirty) return v;
-    const r = await client.post<{ version: number; problems: Problem[] }>(`/workflows/${id}/versions`, { definition: def, layout, parent_digest: doc.data?.version.digest });
+    let r: { version: number; problems: Problem[]; merged?: boolean };
+    try {
+      r = await client.post<{ version: number; problems: Problem[]; merged?: boolean }>(`/workflows/${id}/versions`, { definition: def, layout, parent_digest: doc.data?.version.digest, resolutions });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && Array.isArray(e.body.conflicts)) {
+        setMerge({ conflicts: e.body.conflicts as MergeConflict[], latest: Number(e.body.latest_version) });
+        setChoice({});
+        throw new Error(`Version ${String(e.body.latest_version)} was saved while you were editing, and changes the same parts. Choose which to keep below; your changes are still here.`, { cause: e });
+      }
+      if (e instanceof ApiError && e.status === 409) {
+        throw new Error("This workflow changed while you were editing. Your changes are still here: note them, then reload to get the latest.", { cause: e });
+      }
+      throw e;
+    }
+    setMerge(undefined);
+    if (r.merged) setNotice(`Saved as version ${r.version}, merged with changes saved since you started.`);
     setProblems(r.problems);
     setDirty(false);
     setVersion(r.version);
@@ -307,7 +334,7 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
             <button onClick={() => void validate()} disabled={act.busy}>
               Validate
             </button>
-            <button onClick={() => void act.run(save, "Saved")} disabled={act.busy || !dirty}>
+            <button onClick={() => void act.run(() => save(), "Saved")} disabled={act.busy || !dirty}>
               Save
             </button>
           </>
@@ -324,6 +351,29 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
         )}
       </div>
       <ErrorBox error={act.error} />
+      {merge && (
+        <div className="card" role="group" aria-label="Conflicting edits" data-testid="embed-merge">
+          <p className="hint">Version {merge.latest} changed these parts too. Everything else is merged. Choose which version of each to keep, then save.</p>
+          {merge.conflicts.map((c) => (
+            <fieldset key={c.path} data-testid={`conflict-${c.path}`}>
+              <legend>{c.path.startsWith("steps/") ? `Step ${c.path.slice(6)}` : `Workflow ${c.path}`}</legend>
+              {(["ours", "theirs"] as const).map((side) => (
+                <label key={side} className="inline">
+                  <input type="radio" name={c.path} checked={choice[c.path] === side} onChange={() => setChoice({ ...choice, [c.path]: side })} />{" "}
+                  {side === "ours" ? "Yours" : `Version ${merge.latest}`}
+                  <pre className="mono">{c[side] === undefined ? "(removed)" : JSON.stringify(c[side], null, 2)}</pre>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+          <div className="toolbar">
+            <button className="primary" disabled={act.busy || merge.conflicts.some((c) => !choice[c.path])} onClick={() => void act.run(() => save(choice), "Saved")}>
+              Save merged version
+            </button>
+            <button onClick={() => setMerge(undefined)}>Cancel</button>
+          </div>
+        </div>
+      )}
       {notice && (
         <div className="notice" role="status" onClick={() => setNotice("")}>
           {notice}
@@ -394,7 +444,8 @@ function Editor({ client, id, can, emit, onBack }: { client: EmbedClient; id: st
               connectors={catalogue.data?.connectors ?? []}
               onChange={(s) => editSteps(def.steps.map((x) => (x.id === sel.id ? s : x)))}
               onRename={(to) => {
-                if (def.steps.some((s) => s.id === to)) return false;
+                // Taken at any depth: a choice's paths and the rest hold steps too.
+                if (freshId(def.steps, to) !== to) return false;
                 editSteps(renameStep(def.steps, sel.id, to));
                 setSelected(to);
                 return true;

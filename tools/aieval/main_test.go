@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -489,5 +490,32 @@ func TestFormTriggerDedups(t *testing.T) {
 	 "steps":[{"id":"t","type":"transform","config":{"output":{}}}]}`)
 	if ok, why := rules["dedup"](def, registry(t)); !ok {
 		t.Errorf("dedup: %s", why)
+	}
+}
+
+// CI runs the suites when a change touches what the model is given or
+// what grades its answer: the AI layer, the suites and templates, and the
+// checks, masking, shadow runs and connector manifests the pipelines use.
+func TestCIRunsTheSuitesForTheAILayer(t *testing.T) {
+	raw, err := os.ReadFile("../../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`grep -qE '([^']+)'`).FindSubmatch(raw)
+	if m == nil {
+		t.Fatal("ci.yml: no path filter for the AI evaluation")
+	}
+	filter := regexp.MustCompile(string(m[1]))
+	for _, p := range []string{"engine/ai/builder/builder.go", "evals/builder/payouts.jsonl", "templates/library.go", "tools/aieval/main.go",
+		"api/ai.go", "api/repair.go", "engine/shadow/shadow.go", "engine/pii/mask.go", "engine/wd/model.go", "engine/wdcheck/check.go",
+		"engine/expansion/template.go", "connectors/paystack/manifest.yaml"} {
+		if !filter.MatchString(p) {
+			t.Errorf("a change to %s does not run the AI evaluation", p)
+		}
+	}
+	for _, p := range []string{"api/server.go", "connectors/paystack/paystack.go", "engine/runtime/worker.go", "web/src/App.tsx"} {
+		if filter.MatchString(p) {
+			t.Errorf("a change to %s runs the AI evaluation", p)
+		}
 	}
 }

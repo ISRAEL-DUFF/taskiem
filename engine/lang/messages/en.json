@@ -1219,6 +1219,11 @@
       "reviewed": true,
       "context": "AI budget ran out during the build"
     },
+    "wa.build.changed": {
+      "text": "Someone changed this workflow since I started the build (version {version}), in the same places, so I did not save it. Make the change in the web app{link}.",
+      "reviewed": true,
+      "context": "Saving a chat build met a newer version that changes the same steps; nothing saved; {link} is ' at <url>' or empty"
+    },
     "wa.build.denied": {
       "text": "You cannot build workflows in {org} (it takes workflow.edit).",
       "reviewed": true,
@@ -1303,6 +1308,11 @@
       "text": "Publish *{name}* now, so it starts working? Reply *yes* or *no*.",
       "reviewed": true,
       "context": "Offering to publish a saved draft"
+    },
+    "wa.build.plan": {
+      "text": "The plan for {org} does not include building with AI, so I cannot build this here. You can still build workflows in the web app, or change plan under Billing.",
+      "reviewed": true,
+      "context": "The plan has no AI building"
     },
     "wa.build.publish_later": {
       "text": "When you are ready, send *publish {name}*.",
@@ -1839,6 +1849,11 @@
       "reviewed": true,
       "context": "A payment a member is asked to match to an invoice (WhatsApp or Telegram), when more than one invoice could fit"
     },
+    "wa.match.needs_approval": {
+      "text": "Not matched yet: this money was entered by hand and is at or above the school's cash threshold, so the match waits for a second person to approve it under Schools, Approvals.",
+      "reviewed": true,
+      "context": "Yes, match was pressed on money a person entered (cash, a statement line) at or above the school's cash threshold: the match is recorded for a second person"
+    },
     "wa.match.other_person": {
       "text": "This button was sent to someone else.",
       "reviewed": true,
@@ -2254,6 +2269,11 @@
       "reviewed": true,
       "context": "run: several workflows match"
     },
+    "wa.school.cash_match": {
+      "text": "{amount} entered by hand, matched to invoice {number} by {by}.",
+      "reviewed": true,
+      "context": "Money a person entered (cash, a statement line) matched to an invoice, waiting for a second person"
+    },
     "wa.school.cash_posting": {
       "text": "{amount} paid {how} for {student} ({class}), posted by {by}.",
       "reviewed": true,
@@ -2288,6 +2308,11 @@
       "text": "by transfer to the school's account",
       "reviewed": true,
       "context": "How money was paid at the desk"
+    },
+    "wa.school.kind.cash_match": {
+      "text": "a match of money entered by hand",
+      "reviewed": true,
+      "context": "The kind of a school approval request: money a person entered, matched to an invoice"
     },
     "wa.school.kind.cash_posting": {
       "text": "a cash posting",
