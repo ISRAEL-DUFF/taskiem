@@ -152,7 +152,7 @@ Each model call is a row in `ai_interactions` (`repair_id`), each proposal appen
 
 ## AI steps
 
-A workflow can ask the model at run time with an `ai` step ([contract](contracts/wd-v1.md#ai-steps), [decision 0050](decisions/0050-ai-steps.md)): to sort a message, pull details out of free text, summarise, or draft a reply. The step's prompt and input go to the deployment's model (or another it offers, `TASKIEM_AI_STEP_MODELS`) with the run's personal data replaced by placeholders, which are put back in the answer; a step lets a field through as it is only when it lists it in `personal_data`, and publishing one that does is audited. The answer must match the step's `output_schema`; one that does not is sent back once.
+A workflow can ask the model at run time with an `ai` step ([contract](contracts/wd-v1.md#ai-steps), [decision 0050](decisions/0050-ai-steps.md)): to sort a message, pull details out of free text, summarise, or draft a reply. The step's prompt and input go to the deployment's model (or another it offers, `TASKIEM_AI_STEP_MODELS`) with the run's personal data replaced by placeholders (in object keys as well as values), which are put back in the answer; a step lets a field through as it is only when it lists it in `personal_data`, and publishing one that does is audited. The answer must match the step's `output_schema`; one that does not is sent back once.
 
 Three controls sit with the business and the deployment:
 
@@ -160,7 +160,7 @@ Three controls sit with the business and the deployment:
 - **The plan.** AI steps need a plan with the `ai` feature, as AI building does.
 - **What the provider keeps.** `GET /v1/ai/status` and the **AI steps** box under **Secrets & settings** show the model, the models steps may use, and the deployment's statement of what the provider retains (`TASKIEM_AI_RETENTION`).
 
-Each call is recorded in `ai_interactions` against the run and step, with personal data masked, and counts against the monthly budget below. The builder proposes an ai step only when the business may use one (rule 21).
+Each call is recorded in `ai_interactions` against the run and step, built from the same masked question that was sent (so the record shows exactly what the model saw; only the fields let through are redacted in it), and counts against the monthly budget below. The builder proposes an ai step only when the business may use one (rule 21).
 
 ## Budgets
 

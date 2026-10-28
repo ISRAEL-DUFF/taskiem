@@ -131,17 +131,18 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		masked[k] = v
 	}
 	maskedIn, _ := masker.Mask(masked).(map[string]any)
+	// The record of the call is built from the same masked question, so it
+	// shows what the model was sent; only the fields let through are
+	// redacted in it.
+	logIn := make(map[string]any, len(maskedIn)+len(through))
+	for k, v := range maskedIn {
+		logIn[k] = v
+	}
 	for k, v := range through {
 		maskedIn[k] = v
+		logIn[k] = redactThrough(p.taint, v)
 	}
-	question := fmt.Sprint(prompt)
-	if s, ok := prompt.(string); ok {
-		question = s
-	}
-	if len(maskedIn) > 0 {
-		raw, _ := json.MarshalIndent(maskedIn, "", "  ")
-		question += "\n\nInput (JSON):\n" + string(raw)
-	}
+	question, logged := aiQuestion(prompt, maskedIn), aiQuestion(prompt, logIn)
 	var schema map[string]any
 	if err := json.Unmarshal(cfg.OutputSchema, &schema); err != nil {
 		return fail("fatal", "output_schema: %v", err)
@@ -160,6 +161,7 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		Schema:    closeObjects(schema),
 		MaxTokens: maxTokens,
 	}
+	sent := []ai.Message{{Role: "user", Text: logged}}
 	sum := sha256.Sum256([]byte(aiStepSystem))
 	digest := hex.EncodeToString(sum[:])
 
@@ -189,7 +191,7 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 				answer, _ = decodeAnswer(raw)
 			}
 		}
-		w.recordAIStep(ctx, p, model, prov.Name(), digest, round, req, resp, outcome, err)
+		w.recordAIStep(ctx, p, model, prov.Name(), digest, round, sent, resp, outcome, err)
 		switch outcome {
 		case "valid":
 			out := masker.Unmask(answer)
@@ -215,12 +217,44 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		if round == 2 {
 			return fail("invalid_output", "the AI model's answer did not match the output schema: %s", strings.Join(problems, "; "))
 		}
-		req.Messages = append(req.Messages,
-			ai.Message{Role: "assistant", Text: resp.Text},
-			ai.Message{Role: "user", Text: "That answer does not match the schema: " + strings.Join(problems, "; ") + ". Answer again with JSON that matches it."})
+		again := ai.Message{Role: "user", Text: "That answer does not match the schema: " + strings.Join(problems, "; ") + ". Answer again with JSON that matches it."}
+		req.Messages = append(req.Messages, ai.Message{Role: "assistant", Text: resp.Text}, again)
+		sent = append(sent, ai.Message{Role: "assistant", Text: redactAnswer(p.taint, resp.Text)}, again)
 	}
 	return fail("invalid_output", "no answer")
 }
+
+// aiQuestion is the question an ai step sends: its prompt, then its input
+// as JSON.
+func aiQuestion(prompt any, input map[string]any) string {
+	q := fmt.Sprint(prompt)
+	if s, ok := prompt.(string); ok {
+		q = s
+	}
+	if len(input) > 0 {
+		raw, _ := json.MarshalIndent(input, "", "  ")
+		q += "\n\nInput (JSON):\n" + string(raw)
+	}
+	return q
+}
+
+// redactThrough is an input field let through to the model, as the record
+// of the call keeps it: its personal values replaced by their categories.
+func redactThrough(taint pii.Taint, v any) any {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "[personal data]"
+	}
+	s := taint.RedactText(pii.Redact(string(raw)))
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+	return s
+}
+
+// redactAnswer is a model's answer as its record keeps it: it may repeat
+// the fields let through.
+func redactAnswer(taint pii.Taint, s string) string { return taint.RedactText(pii.Redact(s)) }
 
 func containsString(list []string, s string) bool {
 	for _, x := range list {
@@ -286,21 +320,18 @@ func closeObjects(schema map[string]any) map[string]any {
 }
 
 // recordAIStep writes one call of an ai step to ai_interactions, where it
-// counts against the monthly budget: the messages as they left (the input
-// fields let through are pattern-masked here, so the record never holds
-// personal data in the clear), the answer, and the tokens.
-func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, digest string, round int, req ai.Request, resp *ai.Response, outcome string, callErr error) {
+// counts against the monthly budget: the messages as they left, built from
+// the same masked question (only the input fields let through are
+// redacted, so the record never holds them in the clear), the answer, and
+// the tokens.
+func (w *Worker) recordAIStep(ctx context.Context, p *plan, model, provider, digest string, round int, msgs []ai.Message, resp *ai.Response, outcome string, callErr error) {
 	ctx = context.WithoutCancel(ctx)
-	msgs := make([]ai.Message, len(req.Messages))
-	for i, m := range req.Messages {
-		msgs[i] = ai.Message{Role: m.Role, Text: p.taint.RedactText(pii.Redact(m.Text))}
-	}
 	rawMsgs, _ := json.Marshal(msgs)
 	var text *string
 	var stop string
 	var u ai.Usage
 	if resp != nil {
-		t := p.taint.RedactText(pii.Redact(resp.Text))
+		t := redactAnswer(p.taint, resp.Text)
 		text, stop, u = &t, resp.StopReason, resp.Usage
 		if resp.Model != "" {
 			model = resp.Model

@@ -68,3 +68,24 @@ func TestMasker(t *testing.T) {
 		t.Errorf("plain: %v", v)
 	}
 }
+
+// Object keys reach the model like values, so personal data in a key is
+// masked too, and put back in the answer's keys.
+func TestMaskerMasksKeys(t *testing.T) {
+	taint := Taint{}
+	taint.Add("Adaeze Okafor", "name")
+	m := NewMasker(taint)
+	in := map[string]any{"balances": map[string]any{"Adaeze Okafor": int64(5000), "ada@example.com": int64(20), "rice": int64(3)}}
+	got := m.Mask(in).(map[string]any)["balances"].(map[string]any)
+	want := map[string]any{"[[name_1]]": int64(5000), "[[email_1]]": int64(20), "rice": int64(3)}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("masked keys: %v", got)
+	}
+	back := m.Unmask(map[string]any{"[[name_1]]": "owes", "Note for [[email_1]]": "late"}).(map[string]any)
+	if back["Adaeze Okafor"] != "owes" || back["Note for ada@example.com"] != "late" {
+		t.Errorf("unmasked keys: %v", back)
+	}
+	if m.Restored()["s:Adaeze Okafor"] != "name" {
+		t.Errorf("restored: %v", m.Restored())
+	}
+}

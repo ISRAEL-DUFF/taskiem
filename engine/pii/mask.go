@@ -106,20 +106,20 @@ func (m *Masker) Mask(v any) any {
 func (m *Masker) maskKnown(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
+		// Keys too: an input built as {name: balance} carries the name in
+		// its key, and the key reaches the model like any value.
+		out := make(map[string]any, len(t))
 		for k, x := range t {
-			t[k] = m.maskKnown(x)
+			out[m.maskString(k)] = m.maskKnown(x)
 		}
-		return t
+		return out
 	case []any:
 		for i, x := range t {
 			t[i] = m.maskKnown(x)
 		}
 		return t
 	case string:
-		if cat, ok := m.taint["s:"+t]; ok && t != "" && !isPlaceholder(t) {
-			return m.placeholder(t, cat)
-		}
-		return m.MaskText(t)
+		return m.maskString(t)
 	}
 	if k, ok := scalarKey(v); ok {
 		if cat, hit := m.taint[k]; hit {
@@ -127,6 +127,13 @@ func (m *Masker) maskKnown(v any) any {
 		}
 	}
 	return v
+}
+
+func (m *Masker) maskString(s string) string {
+	if cat, ok := m.taint["s:"+s]; ok && s != "" && !isPlaceholder(s) {
+		return m.placeholder(s, cat)
+	}
+	return m.MaskText(s)
 }
 
 var placeholderRe = regexp.MustCompile(`\[\[[a-z0-9_]+_[0-9]+\]\]`)
@@ -188,7 +195,7 @@ func (m *Masker) Unmask(v any) any {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, x := range t {
-			out[k] = m.Unmask(x)
+			out[m.unmaskText(k)] = m.Unmask(x)
 		}
 		return out
 	case []any:
@@ -202,20 +209,25 @@ func (m *Masker) Unmask(v any) any {
 			m.restored.Add(orig, m.cats[t])
 			return orig
 		}
-		cat := ""
-		out := placeholderRe.ReplaceAllStringFunc(t, func(p string) string {
-			if orig, ok := m.values[p]; ok {
-				if cat == "" {
-					cat = m.cats[p]
-				}
-				return toString(orig)
-			}
-			return p
-		})
-		if out != t {
-			m.restored.Add(out, cat)
-		}
-		return out
+		return m.unmaskText(t)
 	}
 	return v
+}
+
+// unmaskText puts the values back into a text (or an object key).
+func (m *Masker) unmaskText(t string) string {
+	cat := ""
+	out := placeholderRe.ReplaceAllStringFunc(t, func(p string) string {
+		if orig, ok := m.values[p]; ok {
+			if cat == "" {
+				cat = m.cats[p]
+			}
+			return toString(orig)
+		}
+		return p
+	})
+	if out != t {
+		m.restored.Add(out, cat)
+	}
+	return out
 }

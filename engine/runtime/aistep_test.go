@@ -163,6 +163,38 @@ func TestAIStep(t *testing.T) {
 	}
 }
 
+// Personal data in an input's keys is masked like a value, and the call's
+// record holds the question as it was sent: only the fields let through
+// are redacted in it.
+func TestAIStepMasksKeysAndRecordsWhatWasSent(t *testing.T) {
+	e := rt.New(t)
+	flow := strings.Replace(aiFlow, `"input":{"customer":"=trigger.body.name",`, `"input":{"balances":"={trigger.body.name: 5000}",`, 1)
+	wf := e.Publish(t, flow)
+	const name, phone = "Adaeze Okafor", "+2348031234567"
+	fake := &ai.Fake{Script: []ai.Response{aiAnswer(`{"greeting":"Hi","priority":"low"}`)}}
+	e.AI = fake
+	ref := e.Start(t, wf, map[string]any{"body": map[string]any{"name": name, "phone": phone, "note": "n"}})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("run: %s %s", st, types(events(t, e, ref)))
+	}
+	q := fake.Requests()[0].Messages[0].Text
+	if strings.Contains(q, name) || !strings.Contains(q, `"[[name_1]]": 5000`) {
+		t.Errorf("the name in a key reached the model: %s", q)
+	}
+	var raw []byte
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT messages FROM ai_interactions WHERE run_id = $1`, ref.ID).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var msgs []ai.Message
+	if err := json.Unmarshal(raw, &msgs); err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.ReplaceAll(q, phone, "[phone]"); len(msgs) != 1 || msgs[0].Text != want {
+		t.Errorf("recorded:\n%v\nwant:\n%s", msgs, want)
+	}
+}
+
 var errSlowDown = slowDown{}
 
 type slowDown struct{}
