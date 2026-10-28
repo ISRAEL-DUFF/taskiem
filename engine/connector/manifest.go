@@ -630,6 +630,11 @@ func (m *Manifest) check() []string {
 				add("/auth/oauth2/fields_from_callback/%s: not an auth field", k)
 			}
 		}
+		// A callback field passes through the person's browser, so linking
+		// checks it with the provider: there must be a test to do that with.
+		if len(o.FieldsFromCallback) > 0 && m.Auth.Test == nil {
+			add("/auth/oauth2/fields_from_callback: needs auth.test, which linking runs to check the fields with the provider")
+		}
 		for _, k := range o.LinkedFields {
 			if !slices.ContainsFunc(m.Auth.Fields, func(f AuthField) bool { return f.Key == k }) {
 				add("/auth/oauth2/linked_fields: %q is not an auth field", k)
