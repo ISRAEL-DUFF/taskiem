@@ -779,28 +779,35 @@ type storedTest struct {
 func (s *Server) workflowTests(ctx context.Context, tenant, wf uuid.UUID) ([]storedTest, error) {
 	var out []storedTest
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT test, policies FROM workflow_tests WHERE workflow_id = $1 ORDER BY created_at`, wf)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var raw, pol []byte
-			if err := rows.Scan(&raw, &pol); err != nil {
-				return err
-			}
-			var t storedTest
-			if err := json.Unmarshal(raw, &t.test); err != nil {
-				continue
-			}
-			if len(pol) > 0 {
-				_ = json.Unmarshal(pol, &t.policies)
-			}
-			out = append(out, t)
-		}
-		return rows.Err()
+		var err error
+		out, err = workflowTestsTx(ctx, tx, wf)
+		return err
 	})
 	return out, err
+}
+
+func workflowTestsTx(ctx context.Context, tx pgx.Tx, wf uuid.UUID) ([]storedTest, error) {
+	var out []storedTest
+	rows, err := tx.Query(ctx, `SELECT test, policies FROM workflow_tests WHERE workflow_id = $1 ORDER BY created_at`, wf)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw, pol []byte
+		if err := rows.Scan(&raw, &pol); err != nil {
+			return nil, err
+		}
+		var t storedTest
+		if err := json.Unmarshal(raw, &t.test); err != nil {
+			continue
+		}
+		if len(pol) > 0 {
+			_ = json.Unmarshal(pol, &t.policies)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 // repairRecorder writes a repair's model calls to ai_interactions.
@@ -870,18 +877,23 @@ type repairView struct {
 	DismissedBy  *string         `json:"dismissed_by"`
 	DismissedAt  *time.Time      `json:"dismissed_at"`
 	ResumedRunID *uuid.UUID      `json:"resumed_run_id"`
+	// PublishedSince: the latest version published after the run's, onto
+	// which accepting merges the patch (rebaseRepair).
+	PublishedSince *int `json:"published_since"`
 }
 
 const repairColumns = `id, run_id, workflow_id, version, environment, reason, class, classified_by, step_id, status, explanation, action, definition, diff,
 	evidence, test, attempts, provider, model, total_tokens, error, created_by, created_at, finished_at, draft_version, accepted_by, accepted_at,
-	dismissed_by, dismissed_at, resumed_run_id`
+	dismissed_by, dismissed_at, resumed_run_id,
+	(SELECT max(wv.version) FROM workflow_versions wv WHERE wv.workflow_id = repair_proposals.workflow_id AND wv.state IN ('published', 'deprecated')
+		AND wv.version > repair_proposals.version AND wv.repair_id IS DISTINCT FROM repair_proposals.id)`
 
 func scanRepair(r pgx.CollectableRow) (repairView, error) {
 	var v repairView
 	var action, def, diff, ev, test []byte
 	err := r.Scan(&v.ID, &v.RunID, &v.WorkflowID, &v.Version, &v.Environment, &v.Reason, &v.Class, &v.ClassifiedBy, &v.Step, &v.Status, &v.Explanation,
 		&action, &def, &diff, &ev, &test, &v.Attempts, &v.Provider, &v.Model, &v.TotalTokens, &v.Error, &v.CreatedBy, &v.CreatedAt, &v.FinishedAt,
-		&v.DraftVersion, &v.AcceptedBy, &v.AcceptedAt, &v.DismissedBy, &v.DismissedAt, &v.ResumedRunID)
+		&v.DraftVersion, &v.AcceptedBy, &v.AcceptedAt, &v.DismissedBy, &v.DismissedAt, &v.ResumedRunID, &v.PublishedSince)
 	raw := func(b []byte) json.RawMessage {
 		if b == nil {
 			return json.RawMessage("null")
@@ -1178,7 +1190,7 @@ func (s *Server) acceptPatch(r *http.Request, v repairView) ([]problem, error) {
 
 // repairSuperseded is a patch that cannot be carried onto the versions
 // published since its run's: their change and the patch's conflict, or
-// the merged definition fails the proposal's tests.
+// the merged definition fails the patch's check.
 type repairSuperseded struct {
 	latest    int
 	conflicts []wdmerge.Conflict
@@ -1197,7 +1209,9 @@ func (e *repairSuperseded) Error() string {
 // on, and publishing it as it is would drop their changes. It is merged
 // three ways, the run's version the base, as a canvas save is merged onto
 // a newer version (createVersion), and the merged definition must pass the
-// proposal's tests (the regression test and the model's) again. Drafts are
+// patch's whole check again (shadowCheck), and still resume the run safely
+// if the patch did; the change it makes to the latest version is kept on
+// the proposal's evidence (merged). Drafts are
 // left out: a draft saved since is merged when it is next saved, and is
 // not published by accepting a repair. Another repair of the workflow
 // awaiting its publish request is decided first, so neither drops the other.
@@ -1234,30 +1248,63 @@ func (s *Server) rebaseRepair(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if doc, err = canonical(merged); err != nil {
 		return nil, err
 	}
-	def, err := wd.Load(doc)
+	orig, err := wd.Load(base)
 	if err != nil {
-		return nil, &repairSuperseded{latest: latest, failures: []string{err.Error()}}
+		return nil, err
 	}
 	reg, err := s.Registry.For(ctx, tenant.String())
 	if err != nil {
 		return nil, err
 	}
-	var policies map[string]json.RawMessage
-	var raw []byte
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(jsonb_object_agg(name, document), '{}'::jsonb) FROM approval_policies WHERE state = 'active'`).Scan(&raw); err != nil {
+	// The same check the patch passed (shadowCheck): the shadow run over
+	// the run's recorded data, the failing case, the model's test and the
+	// workflow's stored tests.
+	ref := runtime.RunRef{ID: v.RunID, TenantID: tenant}
+	opened, taint, err := s.Store.OpenedHistoryWithTaint(ctx, ref)
+	if err != nil {
 		return nil, err
 	}
-	_ = json.Unmarshal(raw, &policies)
-	var tests []wdtest.Case
-	_ = json.Unmarshal(v.Test, &tests)
-	var failures []string
-	for _, t := range tests {
-		if res := shadow.RunCase(def, reg, policies, t); !res.Passed() {
-			failures = append(failures, t.Name)
-		}
+	sealed, err := s.Store.RunHistory(ctx, ref)
+	if err != nil {
+		return nil, err
 	}
-	if len(failures) > 0 {
+	rec, err := shadow.Record(opened)
+	if err != nil {
+		return nil, err
+	}
+	srec, err := shadow.Record(sealed)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := workflowTestsTx(ctx, tx, v.WorkflowID)
+	if err != nil {
+		return nil, err
+	}
+	var proposed []wdtest.Case
+	_ = json.Unmarshal(v.Test, &proposed)
+	var modelTest *wdtest.Case
+	if len(proposed) > 1 { // the failing case, then the model's
+		modelTest = &proposed[1]
+	}
+	var was repairEvidence
+	_ = json.Unmarshal(v.Evidence, &was)
+	ev := &repairEvidence{}
+	var tests []wdtest.Case
+	check := s.shadowCheck(orig, doc, reg, rec, srec.Redacted(orig, reg), existing, modelTest, scrubber(taint), ev, &tests, v.RunID)
+	failures := check.Feedback
+	// A patch that could resume the run must still: a write the run
+	// completed is not sent again with another input.
+	if was.Resumable && check.Passed && !ev.Resumable && ev.Shadow != nil {
+		failures = append(failures, "the merged definition would send a write the run completed with another input: "+strings.Join(ev.Shadow.Mismatches, ", "))
+	}
+	if !check.Passed || len(failures) > 0 {
 		return nil, &repairSuperseded{latest: latest, failures: failures}
+	}
+	// What accepting publishes, against the latest version, is kept on the
+	// proposal: the diff the person saw was against the run's version.
+	note, _ := json.Marshal(map[string]any{"onto": latest, "diff": nonNil(wddiff.Diff(theirs, doc))})
+	if _, err := tx.Exec(ctx, `UPDATE repair_proposals SET evidence = jsonb_set(COALESCE(evidence, '{}'::jsonb), '{merged}', $2::jsonb) WHERE id = $1`, v.ID, note); err != nil {
+		return nil, err
 	}
 	return doc, nil
 }

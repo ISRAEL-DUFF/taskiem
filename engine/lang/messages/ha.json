@@ -976,6 +976,10 @@
       "text": "Kasafin AI na wannan wata ya ƙare kafin daftarin ya shirya. Har yanzu za ka iya gina ayyuka a manhajar yanar gizo.",
       "reviewed": false
     },
+    "wa.build.changed": {
+      "text": "Wani ya canza wannan aikin tun da na fara ginawa (sigar {version}), a wurare iri ɗaya, don haka ban adana shi ba. Yi canjin a manhajar yanar gizo{link}.",
+      "reviewed": false
+    },
     "wa.build.denied": {
       "text": "Ba za ka iya gina ayyuka a {org} ba (yana buƙatar workflow.edit).",
       "reviewed": false

@@ -241,3 +241,46 @@ func TestWhatsAppBuildDisabled(t *testing.T) {
 		t.Errorf("disabled: %q", r)
 	}
 }
+
+// A build saved after someone else changed the same steps of its workflow
+// is not saved over chat: the person is told why and where to finish,
+// and the build stays a proposal.
+func TestWhatsAppBuildSaveConflict(t *testing.T) {
+	w := newWAWorld(t)
+	registerSME(t, w.env.Registry)
+	w.srv.AI = &api.AISettings{Provider: waBuildModel(t, nil)}
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const on = "+2348010000025"
+	w.bind(t, owner, on)
+	flow := func(sms string) json.RawMessage {
+		return json.RawMessage(strings.Replace(smsOnlyFlow, `"sms":"Good morning"`, `"sms":"`+sms+`"`, 1))
+	}
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Daily hello", "definition": flow("Hi")})["id"].(string)
+
+	before := len(w.graph.Sent(on))
+	w.say(t, on, "build every morning text me good morning")
+	if got := w.lastTo(t, on, before+1); len(got) != 1 || !strings.Contains(got[0].Text, "Save this as a draft workflow?") {
+		t.Fatalf("draft: %+v", got)
+	}
+	// The build changes version 1 of wf (chat builds start new workflows,
+	// so the row is pointed at it); then someone saves a different change
+	// to the same step.
+	ctx := context.Background()
+	var build uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `UPDATE ai_builds SET workflow_id = $1,
+		base_digest = (SELECT digest FROM workflow_versions WHERE workflow_id = $1 AND version = 1) WHERE status = 'proposed' RETURNING id`, wf).Scan(&build); err != nil {
+		t.Fatal(err)
+	}
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": flow("Hello there")})
+
+	saved := w.send(t, on, whatsapptest.ButtonReply("yes", "Yes, save draft"))
+	if len(saved) != 1 || !strings.Contains(saved[0].Text, "changed this workflow") || !strings.Contains(saved[0].Text, waPublicURL+"/workflows/"+wf) {
+		t.Fatalf("conflict reply: %+v", saved)
+	}
+	var status string
+	var versions int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status, (SELECT count(*) FROM workflow_versions WHERE workflow_id = $2) FROM ai_builds WHERE id = $1`, build, wf).
+		Scan(&status, &versions); err != nil || status != "proposed" || versions != 2 {
+		t.Errorf("the build is kept and nothing saved: %q %d %v", status, versions, err)
+	}
+}

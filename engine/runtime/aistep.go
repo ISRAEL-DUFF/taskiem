@@ -162,14 +162,21 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	}
 	// The budget, with what the steps calling now have reserved: this
 	// step reserves what it may use (the question and the longest answer,
-	// for both rounds) until its calls are recorded.
+	// for both rounds) until its calls are recorded. A call that could
+	// not be recorded keeps the reservation until it lapses: the provider
+	// billed it, so the retry must not spend outside the budget.
+	unrecorded := false
 	if limit > 0 {
 		estimate := int64(2 * (len(aiStepSystem)/4 + len(question)/4 + maxTokens))
 		release, over, err := w.reserveAI(ctx, p, limit, estimate, 2*timeout+time.Minute)
 		if err != nil {
 			return failed(p.c, "retryable", "reserving the business's AI budget: "+err.Error(), "retry")
 		}
-		defer release()
+		defer func() {
+			if !unrecorded {
+				release()
+			}
+		}()
 		if over && w.AI.Overage != nil {
 			if rate, err := w.AI.Overage(ctx, p.c.tenant); err == nil && rate > 0 {
 				over = false // a plan with AI overage bills tokens beyond the budget
@@ -217,8 +224,9 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 		}
 		if rerr := w.recordAIStep(ctx, p, model, prov.Name(), digest, round, sent, resp, outcome, err); rerr != nil {
 			// A call not recorded is neither audited nor counted against
-			// the budget: the answer is not used, and the attempt is tried
-			// again.
+			// the budget: the answer is not used, the attempt is tried
+			// again, and the step's reservation is held until it lapses.
+			unrecorded = true
 			w.Logger.Error("recording an ai step's call", "run", p.c.run, "step", p.c.step, "err", rerr)
 			return failed(p.c, "retryable", "recording the AI model's call: "+pii.Redact(rerr.Error()), "retry")
 		}
