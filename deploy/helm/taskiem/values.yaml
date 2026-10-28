@@ -73,8 +73,11 @@ roles:
     resources:
       requests: { cpu: 250m, memory: 256Mi }
       limits: { memory: 512Mi }
-  # Schedules, timers, retention archiving, audit anchoring, alerts. Several
-  # replicas are safe (claims use SKIP LOCKED); one is usually enough.
+  # Schedules, timers, retention archiving, audit anchoring, alerts. One is
+  # enough. Its claims are safe to run twice (SKIP LOCKED), but a second
+  # replica needs the S3 archive (config.TASKIEM_ARCHIVE_S3_BUCKET) and
+  # storage.enabled: false, which turns audit anchoring off; the chart
+  # refuses anything else (docs/kubernetes.md#storage).
   scheduler:
     replicas: 1
     databasePool: 10

@@ -165,7 +165,7 @@ Install the pool first, then route tenants with `taskiem pools assign <name> --t
 
 The scheduler mounts the claim at `/var/lib/taskiem`:
 
-- `archive/` holds runs past retention, unless `TASKIEM_ARCHIVE_S3_BUCKET` sends them to a bucket ([operations](operations.md)). Use a bucket when the scheduler runs more than one replica or the volume is not backed up.
+- `archive/` holds runs past retention, unless `TASKIEM_ARCHIVE_S3_BUCKET` sends them to a bucket ([operations](operations.md)). Use a bucket when the volume is not backed up.
 - `anchors/` holds signed audit-chain heads.
 
 Anchors are only worth something as a copy outside the database. Use a storage class with write-once (object-lock) semantics where you can, and back the volume up.
@@ -177,6 +177,8 @@ If `storage.enabled` is false:
 - runs past retention are kept rather than purged;
 - audit heads are not anchored outside the database;
 - the scheduler logs a warning about both.
+
+**One scheduler, or a bucket and no volume.** The scheduler's database work is safe to run twice: timers, schedules and alerts are claimed with leases, `SKIP LOCKED` and conditional updates, and a run past retention is deleted once (two schedulers may both archive it, writing the same object twice). Its files are not. Each replica would archive to its own local directory and write its own anchors, and the default claim is `ReadWriteOnce` under a `Recreate` strategy, so a second replica on another node cannot mount it. The chart therefore refuses `roles.scheduler.replicas` above 1 unless the archive goes to a bucket (`config.TASKIEM_ARCHIVE_S3_BUCKET`, credentials in the Secret) and `storage.enabled` is false. Audit anchors are written only to a local directory, so that setup has no audit anchoring. There is no leader election: every replica also runs the canary.
 
 ## Dedicated single-tenant deployments
 
