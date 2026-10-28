@@ -325,7 +325,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 | --- | --- |
 | Step dispatch latency (queue to worker) | p95 under 50 ms |
 | Sustained step throughput, one Postgres primary | 500 steps/s |
-| Run history retention | 90 days hot after the run ends, then archived to object storage |
+| Run history retention | 90 days hot after the run ends, then archived to object storage (an S3-compatible bucket, `TASKIEM_ARCHIVE_S3_BUCKET`; a mounted directory on single-node installs) |
 | Recovery after worker crash | Lease expiry, default 60 s |
 
 These are design targets to validate with load tests in Phase 1, not measured figures.

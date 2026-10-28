@@ -61,7 +61,14 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | `TASKIEM_DATABASE_ROLE` | `taskiem_app` | Role set on every connection (`SET ROLE`); row-level security applies to it. Empty disables. |
 | `TASKIEM_DATABASE_POOL` | `20` | Connections per process. |
 | `TASKIEM_KMS` | `local` | `openbao` in production: transit key `TASKIEM_KMS_KEY` (`taskiem`) at `TASKIEM_OPENBAO_ADDR` with `TASKIEM_OPENBAO_TOKEN`. `local` takes a 32-byte base64 `TASKIEM_LOCAL_KMS_KEY` and is for development. |
-| `TASKIEM_ARCHIVE_DIR` | — | Where runs past retention are archived (gzipped JSON lines) before purging. Unset: nothing is purged. |
+| `TASKIEM_ARCHIVE_S3_BUCKET` | — | The S3-compatible bucket runs past retention are archived to before purging: one object per run, `<prefix><tenant>/<run>.jsonl.gz` (gzipped JSON lines, one event each). Use it in production and whenever more than one scheduler runs. Set, it wins over `TASKIEM_ARCHIVE_DIR` |
+| `TASKIEM_ARCHIVE_S3_ENDPOINT` | `https://s3.<region>.amazonaws.com` | The service's URL: AWS's regional endpoint, or a self-hosted one such as `http://seaweedfs:8333` |
+| `TASKIEM_ARCHIVE_S3_REGION` | `us-east-1` | The bucket's region, which requests are signed for. Self-hosted services usually take `us-east-1` |
+| `TASKIEM_ARCHIVE_S3_ACCESS_KEY_ID`, `TASKIEM_ARCHIVE_S3_SECRET_ACCESS_KEY`, `TASKIEM_ARCHIVE_S3_SESSION_TOKEN` | — | Credentials allowed `s3:PutObject` on the prefix and nothing else; the session token only with temporary credentials |
+| `TASKIEM_ARCHIVE_S3_PREFIX` | `runs/` | Where in the bucket archives go |
+| `TASKIEM_ARCHIVE_S3_PATH_STYLE` | `false` | `true` addresses the bucket in the path (`endpoint/bucket/key`), as SeaweedFS and MinIO expect. AWS buckets use the default |
+| `TASKIEM_ARCHIVE_S3_SSE`, `TASKIEM_ARCHIVE_S3_KMS_KEY_ID` | — | Server-side encryption of each archive: `AES256`, or `aws:kms` with the key's id (or the bucket's default key). Personal data inside is already sealed per data subject; this encrypts the rest at rest |
+| `TASKIEM_ARCHIVE_DIR` | — | Single-node installs only: a mounted directory runs past retention are archived to, in the same layout as the bucket. With neither this nor a bucket, nothing is purged |
 | `TASKIEM_ANCHOR_KEY` | — | Ed25519 seed (32 bytes, base64: `openssl rand -base64 32`) that signs the daily audit-chain anchors. Keep it like a KMS key; its public half is served at `GET /v1/audit/anchors`. Unset: no anchoring. |
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
 | `TASKIEM_SMTP_URL` | — | Mail server for alert emails and password-reset links: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)), and "Forgot password?" sends nothing (it still answers, and logs a warning; [passwords](governance.md#passwords)) |
