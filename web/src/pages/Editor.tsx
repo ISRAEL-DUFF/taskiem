@@ -31,6 +31,7 @@ import { TRIGGER_CHOICES } from "../builder/triggers";
 import { stepTitle } from "../builder/look";
 import { sourcesAnywhere, withStarted } from "../builder/sources";
 import { useLeaveWarning } from "../lib/leave";
+import { dropDraft, keepDraft, keptDraft, type KeptDraft } from "../lib/keep";
 
 interface Loaded {
   workflow: WorkflowSummary;
@@ -88,6 +89,11 @@ export function Editor() {
   const [jsonProblem, setJsonProblem] = useState<string>();
   // Warn before leaving with unsaved changes (the tab, or another page).
   useLeaveWarning(dirty);
+  // Edits kept in the tab from an earlier visit (Back, a sign-out, a closed
+  // page), offered back on opening; and the version the edits on the page
+  // were made on, which a save names so the server merges.
+  const [offer, setOffer] = useState<KeptDraft<WorkflowDefinition>>();
+  const base = useRef<{ version: number; digest?: string }>(undefined);
   // ?tab=settings opens on when it runs (a new form opens on its questions).
   const [tab, setTab] = useState<"build" | "runs" | "settings" | "code" | "json">(() => (params.get("tab") === "settings" ? "settings" : "build"));
   const [notice, setNotice] = useState("");
@@ -116,7 +122,29 @@ export function Editor() {
     setDirty(false);
     past.current = [];
     future.current = [];
-  }, [doc.data]);
+    base.current = { version: doc.data.version.version, digest: doc.data.version.digest };
+    const kept = keptDraft<WorkflowDefinition>(id);
+    setOffer(kept && !definitionProblem(kept.definition) ? kept : undefined);
+  }, [doc.data, id]);
+  // While there are unsaved edits, keep them in the tab.
+  useEffect(() => {
+    if (!dirty || !def || !base.current) return;
+    keepDraft(id, { definition: def, layout, version: base.current.version, digest: base.current.digest, at: new Date().toISOString() });
+  }, [dirty, def, layout, id]);
+  const restore = () => {
+    if (!offer || !def) return;
+    past.current = [...past.current.slice(-49), { def, layout }];
+    future.current = [];
+    base.current = { version: offer.version, digest: offer.digest };
+    setDef(offer.definition);
+    setLayout(offer.layout);
+    setDirty(true);
+    setOffer(undefined);
+  };
+  const throwAway = () => {
+    dropDraft(id);
+    setOffer(undefined);
+  };
   // The JSON tab starts from the definition each time it opens.
   useEffect(() => setJsonProblem(undefined), [tab]);
 
@@ -128,6 +156,7 @@ export function Editor() {
   const edit = useCallback((next: WorkflowDefinition) => {
     setDef(next);
     setDirty(true);
+    setOffer(undefined);
   }, []);
   const change = (next: WorkflowDefinition) => {
     remember();
@@ -197,7 +226,7 @@ export function Editor() {
     if (!dirty) return version;
     let r: { version: number; problems: Problem[]; merged: boolean };
     try {
-      r = await post(`/v1/workflows/${id}/versions`, { definition: forSaving(def), layout, parent_digest: doc.data?.version.digest, resolutions });
+      r = await post(`/v1/workflows/${id}/versions`, { definition: forSaving(def), layout, parent_digest: base.current?.digest ?? doc.data?.version.digest, resolutions });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && Array.isArray(e.body.conflicts)) {
         setMerge({ conflicts: e.body.conflicts as MergeConflict[], latest: Number(e.body.latest_version) });
@@ -206,6 +235,7 @@ export function Editor() {
       throw e;
     }
     setMerge(undefined);
+    dropDraft(id);
     if (r.merged) setNotice(`Saved as version ${r.version}, merged with changes saved since you started.`);
     setProblems(r.problems);
     setDirty(false);
@@ -330,6 +360,7 @@ export function Editor() {
             value={version}
             onChange={(e) => {
               if (dirty && !confirm("Discard unsaved changes?")) return;
+              dropDraft(id);
               setParams({ v: e.target.value });
             }}
           >
@@ -360,6 +391,22 @@ export function Editor() {
 
       <div className="builder-notes">
         <ErrorBox error={act.error ?? testing.error} />
+        {offer && !dirty && !readOnly && (
+          <div className="notice" role="status" data-testid="kept-draft">
+            <p>
+              You have changes to this workflow that were not saved{offer.at ? `, from ${fmtTime(offer.at)}` : ""}
+              {offer.version !== version ? ` (made on version ${offer.version})` : ""}. Bring them back?
+            </p>
+            <div className="row">
+              <button type="button" className="primary" onClick={restore}>
+                Bring them back
+              </button>
+              <button type="button" onClick={throwAway}>
+                Throw them away
+              </button>
+            </div>
+          </div>
+        )}
         {needs && (
           <div className="notice">
             <p>Version {needs.version} is saved, but not published yet: fix these, then publish again.</p>
