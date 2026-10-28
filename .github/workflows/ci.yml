@@ -119,13 +119,113 @@ jobs:
           name: playwright-traces
           path: web/test-results/
 
-  # The image builds and the Compose stack comes up healthy.
-  docker:
+  # The image, built once (decision 0032). The docker and vps jobs run this
+  # build, and on a push the image job signs and tags this same digest, so
+  # the image servers pull is the one the smoke tests ran. On a push it goes
+  # to GHCR by digest, untagged, with an SBOM and build provenance; nothing
+  # trusts it until it is signed. The base images are pinned by digest in the
+  # Dockerfile.
+  image-build:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Image name and version
+        id: name
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"; fi
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        id: meta
+        with:
+          images: ${{ steps.name.outputs.image }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        id: build
+        with:
+          context: .
+          build-args: VERSION=${{ steps.name.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ steps.name.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          provenance: mode=max
+          sbom: true
+      - name: Summary
+        env:
+          REF: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: echo "Built and pushed \`$REF\` (untagged, unsigned until the image job)" >> "$GITHUB_STEP_SUMMARY"
+
+  # The same build on a pull request: not pushed, handed to the smoke tests
+  # as an artifact. No registry token.
+  image-build-pr:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - name: Build and start the stack
-        run: docker compose -f deploy/docker-compose.yml up -d --build --wait taskiem
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          build-args: VERSION=ci
+          tags: taskiem:ci
+          outputs: type=docker,dest=${{ runner.temp }}/taskiem.tar
+          provenance: false
+          sbom: false
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image
+          path: ${{ runner.temp }}/taskiem.tar
+          retention-days: 1
+
+  # The Compose stack comes up healthy on the image built above.
+  docker:
+    runs-on: ubuntu-latest
+    needs: [image-build, image-build-pr]
+    # One of the two builds runs (push or pull request); the other is skipped.
+    if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: read # pull the image by digest on a push
+    env:
+      TASKIEM_IMAGE: taskiem:ci # deploy/docker-compose.yml's image for migrate and taskiem
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # This run's image (image-build or image-build-pr), as taskiem:ci.
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.event_name != 'push'
+        with:
+          name: image
+          path: ${{ runner.temp }}
+      - name: This run's image
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ needs.image-build.outputs.image }}@${{ needs.image-build.outputs.digest }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            docker pull "$REF"
+            docker tag "$REF" taskiem:ci
+          else
+            docker load -i "$RUNNER_TEMP/taskiem.tar"
+          fi
+          echo "taskiem:ci is $(docker image inspect taskiem:ci --format '{{.Id}}')"
+      - name: Start the stack
+        run: docker compose -f deploy/docker-compose.yml up -d --no-build --wait taskiem
       - name: Bootstrap and sign in
         run: |
           docker compose -f deploy/docker-compose.yml run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD='ci password 123' taskiem bootstrap --tenant CI --email ci@example.com
@@ -208,6 +308,12 @@ jobs:
   # (auto-unseal), a broken release (rolled back), a good one, and rollback.
   vps:
     runs-on: ubuntu-latest
+    needs: [image-build, image-build-pr]
+    # One of the two builds runs (push or pull request); the other is skipped.
+    if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: read # pull the image by digest on a push
     defaults:
       run:
         shell: bash # -eo pipefail: a failure before "| tee" fails the step
@@ -238,9 +344,32 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: ShellCheck
         run: shellcheck deploy/vm/install.sh deploy/vm/taskiem-vps
-      - name: Images (a good one, a renamed copy, and one that cannot start)
+      # This run's image (image-build or image-build-pr), as taskiem:ci.
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.event_name != 'push'
+        with:
+          name: image
+          path: ${{ runner.temp }}
+      - name: This run's image
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ needs.image-build.outputs.image }}@${{ needs.image-build.outputs.digest }}
         run: |
-          docker build --build-arg VERSION=ci -t taskiem:ci .
+          if [ "$EVENT" = push ]; then
+            docker pull "$REF"
+            docker tag "$REF" taskiem:ci
+          else
+            docker load -i "$RUNNER_TEMP/taskiem.tar"
+          fi
+          echo "taskiem:ci is $(docker image inspect taskiem:ci --format '{{.Id}}')"
+      - name: Images (this run's, a renamed copy, and one that cannot start)
+        run: |
           docker tag taskiem:ci taskiem:ci-next
           printf 'FROM taskiem:ci\nENTRYPOINT ["/taskiem", "no-such-command"]\n' | docker build -t taskiem:broken -
           PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres taskiem_ci
@@ -329,35 +458,34 @@ jobs:
           sudo docker compose --project-directory /opt/taskiem logs --tail 200 || true
           sudo cat /var/lib/taskiem-vps/last-update.log || true
 
-  # The image the Helm chart and the VM deployment pull (decision 0032):
-  # pushed to GHCR on every merge to main and every v* tag, signed keylessly
-  # with cosign, with an SBOM and build provenance attached. Tags: sha-<12>
-  # and the version (immutable), and the channel "staging", which servers on
-  # the staging channel follow (taskiem-vps). "production" is moved only by
-  # the promote job below.
+  # The image the Helm chart and the VM deployment pull (decision 0032), on
+  # every merge to main and every v* tag: the digest image-build pushed and
+  # the docker and vps jobs ran, signed keylessly with cosign (its SBOM and
+  # build provenance were attached when it was built), then tagged. Tags:
+  # sha-<12> and the version (immutable), and the channel "staging", which
+  # servers on the staging channel follow (taskiem-vps). "production" is
+  # moved only by the promote job below. Signing comes before tagging, so a
+  # server never finds a tag on an image without a signature.
   image:
     if: github.event_name == 'push'
-    needs: [go, typescript, web, docker, licences, vps]
+    needs: [image-build, go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
       id-token: write # keyless cosign signing via GitHub OIDC
     outputs:
-      image: ${{ steps.name.outputs.image }}
-      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ needs.image-build.outputs.image }}
+      digest: ${{ needs.image-build.outputs.digest }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - name: Image name and version
+      - name: Short commit
         id: name
-        run: |
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"; fi
+        run: echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
       - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         id: meta
         with:
-          images: ${{ steps.name.outputs.image }}
+          images: ${{ needs.image-build.outputs.image }}
           tags: |
             type=raw,value=sha-${{ steps.name.outputs.sha }}
             type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' }}
@@ -368,28 +496,31 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
-        id: build
-        with:
-          context: .
-          push: true
-          build-args: VERSION=${{ steps.name.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: mode=max
-          sbom: true
       # cosign-installer v4: v3 cannot install cosign v3 (it fetches a .sig
       # cosign v3 no longer publishes).
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2 (no v4 major tag is published)
         with:
           cosign-release: v3.1.3 # the version taskiem-vps verifies with (deploy/vm/install.sh)
-      - name: Sign the image
+      - name: Sign the image the smoke tests ran
         env:
-          REF: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+          REF: ${{ needs.image-build.outputs.image }}@${{ needs.image-build.outputs.digest }}
+        run: cosign sign --yes "$REF"
+      # imagetools create with one source copies its manifest as it is, so
+      # every tag names the signed digest; the loop checks that it does.
+      - name: Tag it
+        env:
+          IMAGE: ${{ needs.image-build.outputs.image }}
+          DIGEST: ${{ needs.image-build.outputs.digest }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          cosign sign --yes "$REF"
-          { echo "Pushed and signed \`$REF\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
+          args=()
+          for t in $TAGS; do args+=(-t "$t"); done
+          docker buildx imagetools create "${args[@]}" "$IMAGE@$DIGEST"
+          for t in $TAGS; do
+            got=$(docker buildx imagetools inspect "$t" --format '{{json .Manifest}}' | jq -r .digest)
+            if [ "$got" != "$DIGEST" ]; then echo "::error::$t names $got, not the signed $DIGEST"; exit 1; fi
+          done
+          { echo "Signed and tagged \`$IMAGE@$DIGEST\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
 
   # Production servers follow the "production" tag. A version tag (v1.2.0)
   # builds and signs its image above; this job moves "production" to it once
@@ -454,7 +585,8 @@ jobs:
           name: taskiem-${{ github.sha }}
           path: bin/
 
-  # The image builds, the chart lints, and deploy/kubernetes is regenerated from it.
+  # The chart lints, deploy/kubernetes is regenerated from it, and the VM
+  # Compose file parses. (The image is built once, by image-build.)
   deploy:
     runs-on: ubuntu-latest
     steps:
@@ -472,5 +604,3 @@ jobs:
           printf "TASKIEM_DOMAIN='ci.example'\nTASKIEM_IMAGE='taskiem:ci'\n" > .env
           touch taskiem.env migrate.env openbao.env openbao-unseal.env
           docker compose config --quiet
-      - name: Image
-        run: docker build --build-arg VERSION=ci -t taskiem:ci .

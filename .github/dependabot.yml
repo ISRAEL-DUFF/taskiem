@@ -13,6 +13,12 @@ updates:
       actions:
         patterns: ["*"]
 
+  # The Dockerfile's base images, pinned by digest with the tag kept.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
   - package-ecosystem: gomod
     directories: [/, /third_party/qjs]
     schedule:
