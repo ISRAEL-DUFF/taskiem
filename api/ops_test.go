@@ -489,7 +489,7 @@ func TestOperatorSSO(t *testing.T) {
 	c.must(403, "POST", "/v1/ops/status/incidents", map[string]any{"kind": "incident", "title": "x", "components": []string{"api"}, "message": "x"})
 }
 
-// Operator accounts are the CLI's alone (migration 00246): the API
+// Operator accounts are the CLI's alone (migration 00253): the API
 // server's role may not make, reset, disable, list or enrol operators, so
 // SQL that runs in the server cannot either; the CLI's role can, and each
 // change is in the platform audit chain.
