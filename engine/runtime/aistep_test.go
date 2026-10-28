@@ -251,6 +251,63 @@ func TestAIStepUnrecordedCallIsRetried(t *testing.T) {
 	}
 }
 
+// A call that cannot be recorded was still billed: its reservation is held
+// until it lapses, so another step cannot spend those tokens meanwhile.
+func TestAIStepUnrecordedCallKeepsItsReservation(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, aiFlow)
+	fake := &ai.Fake{Respond: func(ai.Request) (*ai.Response, error) {
+		r := aiAnswer(`{"greeting":"Hi","priority":"low"}`)
+		return &r, nil
+	}}
+	e.AI = fake
+	start := func() runtime.RunRef {
+		return e.Start(t, wf, map[string]any{"body": map[string]any{"name": "Ada", "phone": "+2348031234567", "note": "n"}})
+	}
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": 10000000}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.DB.Admin.Exec(ctx, `CREATE FUNCTION test_no_ai_record() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no room'; END $$;
+		CREATE TRIGGER test_no_ai_record BEFORE INSERT ON ai_interactions FOR EACH ROW EXECUTE FUNCTION test_no_ai_record()`); err != nil {
+		t.Fatal(err)
+	}
+	ref := start()
+	e.Drain(t)
+	if f := failureOf(t, e, ref, "ask"); f["kind"] != "retryable" {
+		t.Fatalf("an unrecorded call: %v", f)
+	}
+	if _, err := e.DB.Admin.Exec(ctx, `DROP TRIGGER test_no_ai_record ON ai_interactions`); err != nil {
+		t.Fatal(err)
+	}
+	var held int64
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT COALESCE(sum(tokens), 0)::bigint FROM ai_reservations WHERE tenant_id = $1 AND expires_at > now()`, e.Tenant).Scan(&held); err != nil {
+		t.Fatal(err)
+	}
+	if held == 0 {
+		t.Fatal("the unrecorded calls' reservations were released")
+	}
+	// With a budget the held tokens fill, the next step is refused
+	// without asking the model.
+	if err := e.Store.SetLimits(ctx, e.Tenant, map[string]any{"ai_monthly_tokens": held}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	calls := len(fake.Requests())
+	ref = start()
+	e.Drain(t)
+	if f := failureOf(t, e, ref, "ask"); f["kind"] != "limit" || len(fake.Requests()) != calls {
+		t.Errorf("while the unrecorded calls are held: %v, %d calls", f, len(fake.Requests())-calls)
+	}
+	// Once they lapse, the budget is free again.
+	if _, err := e.DB.Admin.Exec(ctx, `UPDATE ai_reservations SET expires_at = now() - interval '1 second' WHERE tenant_id = $1`, e.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	ref = start()
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Errorf("after the reservations lapsed: %s", st)
+	}
+}
+
 // Steps calling at once reserve their share of the budget, so they cannot
 // all pass the same check; a reservation lapses if its worker dies, and
 // the question sent is bounded.
