@@ -179,29 +179,30 @@ func (s *Store) notifyParent(ctx context.Context, tx pgx.Tx, r runRow, status st
 	return err
 }
 
-// reverseChildren, when a run cancelled with reversing withdraws one of
-// its steps, cancels the child runs that step waits for with reversing
-// too, and reports whether there were any. Each child tells the step when
-// it has ended, as it would have anyway.
-func (s *Store) reverseChildren(ctx context.Context, tx pgx.Tx, r runRow, step string) (bool, error) {
+// childrenToReverse returns, when a run cancelled with reversing
+// withdraws one of its steps, the child runs that step waits for, which
+// are cancelled with reversing too (reverseChildren). Each child tells the
+// step when it has ended, as it would have anyway.
+func (s *Store) childrenToReverse(ctx context.Context, tx pgx.Tx, r runRow, step string) ([]uuid.UUID, error) {
 	if asked, err := cancelRequested(ctx, tx, r.ref.ID); err != nil || !asked {
-		return false, err
+		return nil, err
 	}
 	rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 AND parent_step = $2 AND parent_waits
 		AND status NOT IN ('completed', 'failed', 'cancelled') ORDER BY started_at`, r.ref.ID, step)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	children, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-	if err != nil {
-		return false, err
-	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+}
+
+// reverseChildren cancels children with reversing.
+func (s *Store) reverseChildren(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, children []uuid.UUID) error {
 	for _, id := range children {
-		if err := s.cancelTx(ctx, tx, RunRef{ID: id, TenantID: r.ref.TenantID}, "the workflow that started it was cancelled", true, history.OriginScheduler); err != nil {
-			return false, err
+		if err := s.cancelTx(ctx, tx, RunRef{ID: id, TenantID: tenant}, "the workflow that started it was cancelled", true, history.OriginScheduler); err != nil {
+			return err
 		}
 	}
-	return len(children) > 0, nil
+	return nil
 }
 
 // cancelChildren cancels the child runs a run was waiting for when it

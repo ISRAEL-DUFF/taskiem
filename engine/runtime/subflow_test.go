@@ -9,9 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 const doubleIt = `{"schema":"wd/v1","id":"wf_double","version":1,"name":"Double it","trigger":{"type":"subflow"},
@@ -104,6 +106,15 @@ func TestSubflows(t *testing.T) {
 	}
 	if st := e.Status(t, runtime.RunRef{ID: links.Subflows[0], TenantID: e.Tenant}); st != "cancelled" {
 		t.Errorf("the child after the parent's cancel: %s", st)
+	}
+	// The child had nothing to reverse, so it ended inside the parent's
+	// decision; the parent must still hear it and end, and replay.
+	rt.WaitFor(t, 10*time.Second, "cancelled parent", func() bool { e.Drain(t); return e.Status(t, ref4) != "running" })
+	if st := e.Status(t, ref4); st != "cancelled" {
+		t.Errorf("the parent after its child ended: %s %s", st, types(events(t, e, ref4)))
+	}
+	if err := decide.Verify(waitingDef(t, e, waiting), events(t, e, ref4)); err != nil {
+		t.Errorf("replay: %v", err)
 	}
 
 	// A parent cancelled with reversing reverses the child it waits for
@@ -208,4 +219,13 @@ func payloadOf(t *testing.T, ev history.Event) map[string]any {
 		t.Fatal(err)
 	}
 	return m
+}
+
+func waitingDef(t *testing.T, e *rt.Env, wf uuid.UUID) *wd.Definition {
+	t.Helper()
+	def, err := e.Store.Definition(ctx, e.Tenant, wf, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return def
 }

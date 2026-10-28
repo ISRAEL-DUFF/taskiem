@@ -754,15 +754,20 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		// A run cancelled with reversing reverses the child runs its subflow
 		// steps wait for first (decision 0054): the step keeps its wait, so
 		// it hears when each child has ended, and decide waits for that.
-		reversing, err := s.reverseChildren(ctx, tx, run, ev.StepID)
+		children, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
 		if err != nil {
 			return nil, err
 		}
-		if !reversing {
+		if len(children) == 0 {
 			if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}
+			break
 		}
+		// After decide's batch: a child with nothing to reverse ends at
+		// once and tells this step so, and that event must follow the
+		// batch and be decided in the next round.
+		return func() error { return s.reverseChildren(ctx, tx, run.ref.TenantID, children) }, nil
 	case history.RunCompleted:
 		return nil, s.endRun(ctx, tx, run, def, "completed")
 	case history.RunFailed:
