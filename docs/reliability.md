@@ -25,7 +25,7 @@ Every objective is over a rolling 30 days. The SLI is good events over all event
 | `api_latency` | 99% | Those requests answered within 1 s | The same requests | `taskiem_http_request_duration_seconds` |
 | `webhook_ingest` | 99.9% | Webhook and connector-event deliveries answered without a 5xx | Deliveries to `/hooks` | `taskiem_ingest_deliveries_total` |
 | `run_start` | 99% | Runs whose first worker step is claimed within 5 s of the trigger being accepted | Runs whose first step runs on a worker | `taskiem_run_start_seconds` |
-| `step_dispatch` | 95% | Connector and sandbox steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms) | Claimed connector and sandbox steps | `taskiem_step_dispatch_delay_seconds` |
+| `step_dispatch` | 95% | Steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms) | Claimed steps, every queue and worker pool | `taskiem_step_dispatch_delay_seconds` |
 | `scheduler_timeliness` | 99% | Timers and schedules fired within 5 s of being due | Timers and schedules fired | `taskiem_scheduler_lateness_seconds` |
 
 Spec 15.3 sets the first and the dispatch latency; the others are ours. "Zero accepted events lost" (spec 15.3) is a design property (an accepted delivery is a committed row), not a ratio, and is checked by the chaos and load tests, not here.
@@ -90,7 +90,7 @@ Planned maintenance spends budget like any outage. During the G4 window a spent 
 | `TaskiemCanaryFailing` | page | 5 canary probes failed in 15 min and none passed | [runbook](#runbook-taskiemcanaryfailing) |
 | `TaskiemCanaryStopped` | ticket | No canary probes for 15 min | [runbook](#runbook-taskiemcanarystopped) |
 | `TaskiemSchedulerStalled` | page | No scheduler tick for 2 min, or no scheduler | [runbook](#runbook-taskiemschedulerstalled) |
-| `TaskiemQueueBacklog` | page | A connector or sandbox task has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
+| `TaskiemQueueBacklog` | page | A task in some worker pool and queue has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
 | `TaskiemLeaseExpiries` | ticket | Over 10 leases expired in 15 min | [runbook](#runbook-taskiemleaseexpiries) |
 | `TaskiemTargetDown` | ticket | A pod's metrics cannot be scraped for 10 min | [runbook](#runbook-taskiemtargetdown) |
 
@@ -353,9 +353,9 @@ No scheduler has finished a tick for 2 minutes. Timers, schedules, lease recover
 
 ### Runbook: TaskiemQueueBacklog
 
-A connector or sandbox task has waited over 10 minutes.
+A ready task has waited over 10 minutes; the alert's `pool` and `queue` labels say where (`taskiem_pool_oldest_ready_seconds`).
 
-1. Workers running for that queue (`TASKIEM_WORKER_QUEUES`)? A queue with no worker never drains.
+1. Workers running for that pool and queue (`TASKIEM_WORKER_POOL`, `TASKIEM_WORKER_QUEUES`; `taskiem pools` lists live ones)? A queue with no worker in that pool never drains. A dedicated pool must run every queue its tenants use except `container`, which always runs in the shared container pool; the `ai` queue needs `TASKIEM_AI_PROVIDER` too.
 2. `taskiem_queue_leased`: workers busy (scale them) or idle (they cannot claim: logs, database)?
 3. One tenant's backlog at its `worker_concurrency` cap ages its own tasks; that is the plan working. Tell the tenant, or raise the cap with `taskiem tenants limits`.
 4. Sandbox queue only: Python steps need memory; OOM-killed workers show as restarts and `TaskiemLeaseExpiries`.

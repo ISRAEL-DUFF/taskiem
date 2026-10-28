@@ -99,11 +99,11 @@ func RulesTestYAML() ([]byte, error) {
 				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemAPIAvailabilityBudgetBurn", ExpAlerts: []promAlert{}}},
 			},
 			{
-				Name:     "slow step dispatch burns the dispatch budget",
+				Name:     "slow step dispatch on any queue burns the dispatch budget",
 				Interval: "1m",
 				InputSeries: []promSeries{
-					{Series: `taskiem_step_dispatch_delay_seconds_bucket{queue="connector",le="0.05"}`, Values: "0+20x80"},
-					{Series: `taskiem_step_dispatch_delay_seconds_count{queue="connector"}`, Values: "0+100x80"},
+					{Series: `taskiem_step_dispatch_delay_seconds_bucket{queue="container",le="0.05"}`, Values: "0+20x80"},
+					{Series: `taskiem_step_dispatch_delay_seconds_count{queue="container"}`, Values: "0+100x80"},
 				},
 				AlertRuleTests: []promAlertTest{{EvalTime: "70m", Alertname: "TaskiemStepDispatchBudgetBurn", ExpAlerts: []promAlert{
 					expect("TaskiemStepDispatchBudgetBurn", map[string]string{"severity": "page", "slo": "step_dispatch", "window": "1h"}),
@@ -136,14 +136,19 @@ func RulesTestYAML() ([]byte, error) {
 				},
 			},
 			{
-				Name:     "a queue nobody serves",
+				Name:     "a queue nobody serves, in any pool",
 				Interval: "1m",
 				InputSeries: []promSeries{
-					{Series: `taskiem_queue_oldest_ready_seconds{queue="sandbox"}`, Values: "0+60x20"},
-					{Series: `taskiem_queue_oldest_ready_seconds{queue="container"}`, Values: "0+60x20"},
+					{Series: `taskiem_pool_oldest_ready_seconds{pool="shared",queue="sandbox"}`, Values: "0+60x20"},
+					{Series: `taskiem_pool_oldest_ready_seconds{pool="shared",queue="container"}`, Values: "0+60x20"},
+					{Series: `taskiem_pool_oldest_ready_seconds{pool="acme",queue="ai"}`, Values: "0+60x20"},
+					// Served: tasks are claimed within seconds.
+					{Series: `taskiem_pool_oldest_ready_seconds{pool="acme",queue="connector"}`, Values: "0+0x20"},
 				},
 				AlertRuleTests: []promAlertTest{{EvalTime: "18m", Alertname: "TaskiemQueueBacklog", ExpAlerts: []promAlert{
-					expect("TaskiemQueueBacklog", map[string]string{"severity": "page", "queue": "sandbox"}),
+					expect("TaskiemQueueBacklog", map[string]string{"severity": "page", "pool": "acme", "queue": "ai"}),
+					expect("TaskiemQueueBacklog", map[string]string{"severity": "page", "pool": "shared", "queue": "container"}),
+					expect("TaskiemQueueBacklog", map[string]string{"severity": "page", "pool": "shared", "queue": "sandbox"}),
 				}}},
 			},
 		},

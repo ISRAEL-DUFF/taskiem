@@ -72,9 +72,9 @@ var SLOs = []SLO{
 	},
 	{
 		Name: "step_dispatch", Title: "Step dispatch latency", Target: 0.95, Alert: "TaskiemStepDispatchBudgetBurn",
-		Description: "Share of connector and sandbox steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms).",
-		Good:        `taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}`,
-		Total:       `taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}`,
+		Description: "Share of steps, on every queue and in every worker pool, claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms).",
+		Good:        `taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}`,
+		Total:       `taskiem_step_dispatch_delay_seconds_count`,
 	},
 	{
 		Name: "scheduler_timeliness", Title: "Scheduler timeliness", Target: 0.99, Alert: "TaskiemSchedulerTimelinessBudgetBurn",
@@ -152,8 +152,8 @@ var Alerts = []Alert{
 	{
 		Name: "TaskiemQueueBacklog", Severity: "page", For: "5m",
 		Summary:     "Steps have waited over 10 minutes in a queue",
-		Description: "The oldest ready task in a connector or sandbox queue is over 10 minutes old: workers are down, stuck or saturated. The dispatch SLO only sees steps that are claimed, so this catches a queue nobody serves.",
-		Expr:        `max by (queue) (taskiem_queue_oldest_ready_seconds{queue=~"connector|sandbox"}) > 600`,
+		Description: "The oldest ready task in a queue of a worker pool is over 10 minutes old: that pool's workers for the queue are down, stuck, saturated or were never started. The dispatch SLO only sees steps that are claimed, so this catches a queue or pool nobody serves.",
+		Expr:        `max by (pool, queue) (taskiem_pool_oldest_ready_seconds) > 600`,
 	},
 	{
 		Name: "TaskiemLeaseExpiries", Severity: "ticket", For: "15m",

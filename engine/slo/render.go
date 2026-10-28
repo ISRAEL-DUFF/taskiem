@@ -161,8 +161,8 @@ func Dashboard() ([]byte, error) {
 			{Expr: "histogram_quantile(0.5, sum by (le, phase) (rate(taskiem_canary_duration_seconds_bucket[15m])))", LegendFormat: "p50 {{phase}}", RefID: "A"},
 			{Expr: "histogram_quantile(0.95, sum by (le, phase) (rate(taskiem_canary_duration_seconds_bucket[15m])))", LegendFormat: "p95 {{phase}}", RefID: "B"},
 		}, nil)
-	add("timeseries", "Oldest ready task", "Age of the oldest task waiting in each queue.", "s", gridPos{8, 8, 16, y},
-		[]target{{Expr: "max by (queue) (taskiem_queue_oldest_ready_seconds)", LegendFormat: "{{queue}}", RefID: "A"}}, nil)
+	add("timeseries", "Oldest ready task", "Age of the oldest task waiting in each worker pool and queue.", "s", gridPos{8, 8, 16, y},
+		[]target{{Expr: "max by (pool, queue) (taskiem_pool_oldest_ready_seconds)", LegendFormat: "{{pool}}/{{queue}}", RefID: "A"}}, nil)
 	y += 8
 	add("timeseries", "Step dispatch delay (p95)", "Spec 15.3: under 50 ms.", "s", gridPos{8, 8, 0, y},
 		[]target{{Expr: "histogram_quantile(0.95, sum by (le, queue) (rate(taskiem_step_dispatch_delay_seconds_bucket[5m])))", LegendFormat: "{{queue}}", RefID: "A"}}, nil)

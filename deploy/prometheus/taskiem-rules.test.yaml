@@ -79,9 +79,9 @@ tests:
     eval_time: 70m
     exp_alerts:
     - exp_annotations:
-        description: 'Share of connector and sandbox steps claimed within 50 ms of
-          becoming ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At
-          this rate the whole budget lasts 2.1 days.'
+        description: 'Share of steps, on every queue and in every worker pool, claimed
+          within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective:
+          95% over 30d. At this rate the whole budget lasts 2.1 days.'
         runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
         summary: Step dispatch latency is burning its error budget 14.4x too fast
           (1h and 5m windows)
@@ -90,9 +90,9 @@ tests:
         slo: step_dispatch
         window: 1h
     - exp_annotations:
-        description: 'Share of connector and sandbox steps claimed within 50 ms of
-          becoming ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At
-          this rate the whole budget lasts 5 days.'
+        description: 'Share of steps, on every queue and in every worker pool, claimed
+          within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective:
+          95% over 30d. At this rate the whole budget lasts 5 days.'
         runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
         summary: Step dispatch latency is burning its error budget 6x too fast (6h
           and 30m windows)
@@ -101,9 +101,9 @@ tests:
         slo: step_dispatch
         window: 6h
     - exp_annotations:
-        description: 'Share of connector and sandbox steps claimed within 50 ms of
-          becoming ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At
-          this rate the whole budget lasts 10 days.'
+        description: 'Share of steps, on every queue and in every worker pool, claimed
+          within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective:
+          95% over 30d. At this rate the whole budget lasts 10 days.'
         runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
         summary: Step dispatch latency is burning its error budget 3x too fast (1d
           and 2h windows)
@@ -112,9 +112,9 @@ tests:
         slo: step_dispatch
         window: 1d
     - exp_annotations:
-        description: 'Share of connector and sandbox steps claimed within 50 ms of
-          becoming ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At
-          this rate the whole budget lasts 30 days.'
+        description: 'Share of steps, on every queue and in every worker pool, claimed
+          within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective:
+          95% over 30d. At this rate the whole budget lasts 30 days.'
         runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
         summary: Step dispatch latency is burning its error budget 1x too fast (3d
           and 6h windows)
@@ -123,12 +123,12 @@ tests:
         slo: step_dispatch
         window: 3d
   input_series:
-  - series: taskiem_step_dispatch_delay_seconds_bucket{queue="connector",le="0.05"}
+  - series: taskiem_step_dispatch_delay_seconds_bucket{queue="container",le="0.05"}
     values: 0+20x80
-  - series: taskiem_step_dispatch_delay_seconds_count{queue="connector"}
+  - series: taskiem_step_dispatch_delay_seconds_count{queue="container"}
     values: 0+100x80
   interval: 1m
-  name: slow step dispatch burns the dispatch budget
+  name: slow step dispatch on any queue burns the dispatch budget
 - alert_rule_test:
   - alertname: TaskiemSchedulerStalled
     eval_time: 5m
@@ -175,18 +175,46 @@ tests:
     eval_time: 18m
     exp_alerts:
     - exp_annotations:
-        description: 'The oldest ready task in a connector or sandbox queue is over
-          10 minutes old: workers are down, stuck or saturated. The dispatch SLO only
-          sees steps that are claimed, so this catches a queue nobody serves.'
+        description: 'The oldest ready task in a queue of a worker pool is over 10
+          minutes old: that pool''s workers for the queue are down, stuck, saturated
+          or were never started. The dispatch SLO only sees steps that are claimed,
+          so this catches a queue or pool nobody serves.'
         runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemqueuebacklog
         summary: Steps have waited over 10 minutes in a queue
       exp_labels:
+        pool: acme
+        queue: ai
+        severity: page
+    - exp_annotations:
+        description: 'The oldest ready task in a queue of a worker pool is over 10
+          minutes old: that pool''s workers for the queue are down, stuck, saturated
+          or were never started. The dispatch SLO only sees steps that are claimed,
+          so this catches a queue or pool nobody serves.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemqueuebacklog
+        summary: Steps have waited over 10 minutes in a queue
+      exp_labels:
+        pool: shared
+        queue: container
+        severity: page
+    - exp_annotations:
+        description: 'The oldest ready task in a queue of a worker pool is over 10
+          minutes old: that pool''s workers for the queue are down, stuck, saturated
+          or were never started. The dispatch SLO only sees steps that are claimed,
+          so this catches a queue or pool nobody serves.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemqueuebacklog
+        summary: Steps have waited over 10 minutes in a queue
+      exp_labels:
+        pool: shared
         queue: sandbox
         severity: page
   input_series:
-  - series: taskiem_queue_oldest_ready_seconds{queue="sandbox"}
+  - series: taskiem_pool_oldest_ready_seconds{pool="shared",queue="sandbox"}
     values: 0+60x20
-  - series: taskiem_queue_oldest_ready_seconds{queue="container"}
+  - series: taskiem_pool_oldest_ready_seconds{pool="shared",queue="container"}
     values: 0+60x20
+  - series: taskiem_pool_oldest_ready_seconds{pool="acme",queue="ai"}
+    values: 0+60x20
+  - series: taskiem_pool_oldest_ready_seconds{pool="acme",queue="connector"}
+    values: 0+0x20
   interval: 1m
-  name: a queue nobody serves
+  name: a queue nobody serves, in any pool

@@ -595,7 +595,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Share of connector and sandbox steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms).",
+      "description": "Share of steps, on every queue and in every worker pool, claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms).",
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit"
@@ -944,7 +944,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Age of the oldest task waiting in each queue.",
+      "description": "Age of the oldest task waiting in each worker pool and queue.",
       "fieldConfig": {
         "defaults": {
           "unit": "s"
@@ -960,8 +960,8 @@
       "id": 28,
       "targets": [
         {
-          "expr": "max by (queue) (taskiem_queue_oldest_ready_seconds)",
-          "legendFormat": "{{queue}}",
+          "expr": "max by (pool, queue) (taskiem_pool_oldest_ready_seconds)",
+          "legendFormat": "{{pool}}/{{queue}}",
           "refId": "A"
         }
       ],

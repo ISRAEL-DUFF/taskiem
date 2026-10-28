@@ -144,7 +144,7 @@ workerPools:
 
 Each pool gets a Deployment `taskiem-worker-<name>` (`serve --role worker` with `TASKIEM_WORKER_POOL=<name>`), a metrics Service, an HPA with `autoscaling.enabled`, a PodDisruptionBudget when it keeps more than one replica, and a NetworkPolicy with `networkPolicy.enabled`. Pods are labelled `app.kubernetes.io/component: worker-pool` and `taskiem.io/worker-pool: <name>`. Unset fields take `roles.worker`'s resources and the chart's `nodeSelector` and `tolerations`. The chart refuses invalid or repeated names, `shared`, and the `container` queue. Split mode only.
 
-Install the pool first, then route tenants with `taskiem pools assign <name> --tenant <id>` (or `--plan <plan>`): routing to a pool with no live worker is refused. Scale a pool on its backlog with KEDA on `taskiem_pool_ready{pool="<name>"}`.
+Install the pool first, then route tenants with `taskiem pools assign <name> --tenant <id>` (or `--plan <plan>`): routing is refused unless the pool has a live worker on each queue the shared pool serves (`container` aside), so give a pool the same `queues` as `roles.worker`. A routed tenant's container steps still run in `containerSteps`. Scale a pool on its backlog with KEDA on `taskiem_pool_ready{pool="<name>"}`.
 
 ## Storage
 
