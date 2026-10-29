@@ -514,6 +514,16 @@ func loadConfig() (config, error) {
 	if c.Cloud, err = cloudConfigFromEnv(); err != nil {
 		return c, err
 	}
+	// Container steps run in the shared pool whatever a tenant's routing
+	// (migration 00253), so a dedicated pool's container worker would
+	// never claim anything.
+	if c.Cloud.WorkerPool != runtime.SharedPool {
+		for _, q := range c.Queues {
+			if strings.TrimSpace(q) == "container" {
+				return c, fmt.Errorf("TASKIEM_WORKER_QUEUES: the container queue runs only in the shared pool, not in TASKIEM_WORKER_POOL %q", c.Cloud.WorkerPool)
+			}
+		}
+	}
 	if c.Public, err = publicConfigFromEnv(); err != nil {
 		return c, err
 	}

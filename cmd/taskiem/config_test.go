@@ -69,3 +69,23 @@ func TestConfigNumbersAndKeys(t *testing.T) {
 		t.Errorf("good anchor key: %v", err)
 	}
 }
+
+// A dedicated pool's worker cannot serve the container queue: container
+// steps run in the shared pool whatever the tenant's routing.
+func TestConfigRefusesContainerInADedicatedPool(t *testing.T) {
+	t.Setenv("TASKIEM_DATABASE_URL", "postgres://localhost/taskiem")
+	t.Setenv("TASKIEM_WORKER_POOL", "acme")
+	t.Setenv("TASKIEM_WORKER_QUEUES", "connector,container")
+	if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "TASKIEM_WORKER_QUEUES") {
+		t.Errorf("container in a dedicated pool: %v", err)
+	}
+	t.Setenv("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai")
+	if _, err := loadConfig(); err != nil {
+		t.Errorf("a dedicated pool without container: %v", err)
+	}
+	t.Setenv("TASKIEM_WORKER_POOL", "shared")
+	t.Setenv("TASKIEM_WORKER_QUEUES", "container")
+	if _, err := loadConfig(); err != nil {
+		t.Errorf("container in the shared pool: %v", err)
+	}
+}

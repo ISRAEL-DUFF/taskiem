@@ -29,7 +29,7 @@ Names: the index uses today's names. Xenibase was called PGDock until October 20
 | [0021](0021-remote-trigger-registration.md) | Remote trigger registration: intent recorded in the deploy, a reconciler for the provider (amends 0012) | Accepted |
 | [0022](0022-self-serve-onboarding.md) | Self-serve onboarding: confirm email without blocking the first run, and measure G4 where runs end | Accepted |
 | [0023](0023-slos-and-alerting.md) | SLOs as code: burn-rate alerts from one list, a black-box canary, a self-hosted status page, readiness before drain | Accepted (on-call, paging, status domain, G4 owner pending P4-R1 to P4-R4) |
-| [0024](0024-production-cloud.md) | Production cloud: worker pools routed at claim time, a replica only for stale-tolerant views, retries only where safe (amends 0002) | Accepted (infrastructure pending P4-C1 to P4-C6) |
+| [0024](0024-production-cloud.md) | Production cloud: worker pools routed at claim time, a replica only for stale-tolerant views, retries only where safe (amends 0002) | Accepted (infrastructure pending P4-C1 to P4-C6); amended 2026-10-29 (container steps in the shared pool) |
 | [0025](0025-public-docs-and-api-reference.md) | Public docs and API reference: a hand-written OpenAPI document checked against the router, a static site from docs/ | Accepted (domain, hosting and review owner pending P4-D1 to P4-D3) |
 | [0026](0026-bound-step-up-and-cookie-sessions.md) | Step-up bound to its operation, cookie sessions without a body token, key changes behind step-up | Accepted |
 | [0027](0027-operator-console.md) | An operator identity apart from tenants, a console on it, and a platform audit chain | Accepted (operator accounts and SSO issuer pending P4-X1, P4-X2) |
