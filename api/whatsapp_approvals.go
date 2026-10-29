@@ -77,6 +77,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 	if err := s.purgeTranscripts(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("transcripts: %w", err))
 	}
+	// Chat bindings silent too long (chat_dormant.go).
+	if err := s.dormantSweep(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("dormant bindings: %w", err))
+	}
 	for _, t := range tenants {
 		if err := s.waNotifyApprovals(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: approvals: %w", t, err))

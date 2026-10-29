@@ -12375,6 +12375,57 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/terms:
+    post:
+      operationId: answerTerms
+      tags:
+      - Account
+      summary: Agree to the terms, or not now
+      description: The signed-in person's answer to the current terms and privacy notice (`terms` on GET /v1/me).
+        Agreeing is recorded with its versions; not now is recorded as asked, and these versions are not asked
+        again (docs/onboarding.md).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - accept
+              properties:
+                accept:
+                  type: boolean
+        required: true
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - accepted
+                properties:
+                  accepted:
+                    type: boolean
+        '403':
+          description: An API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The deployment asks no terms.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/password:
     post:
       operationId: changePassword
@@ -21704,6 +21755,9 @@ components:
           description: "A gate session: the gate role's school.gate and nothing else. Every route but GET /v1/me and sign-out answers 403 with gate_only."
         factors:
           description: What the person proves themselves with to change their factors.
+        terms:
+          $ref: '#/components/schemas/TermsAsked'
+          description: Terms the person has not answered yet; answer with POST /v1/me/terms.
     SchoolSettings:
       type: object
       required:
@@ -23686,6 +23740,23 @@ components:
       properties:
         enabled:
           type: boolean
+        terms:
+          $ref: '#/components/schemas/TermsAsked'
+    TermsAsked:
+      type: object
+      description: The terms and privacy notice the deployment asks people to agree to (TASKIEM_TERMS_VERSION,
+        TASKIEM_PRIVACY_VERSION).
+      required:
+      - url
+      - terms_version
+      - privacy_version
+      properties:
+        url:
+          type: string
+        terms_version:
+          type: string
+        privacy_version:
+          type: string
     SignupRequest:
       type: object
       required:
@@ -23712,6 +23783,10 @@ components:
           type: boolean
           description: 'Return the session token in the body instead of setting the cookie: for API clients and
             scripts. Browsers leave it out.'
+        accept_terms:
+          type: boolean
+          description: The person agrees to the terms and privacy notice (`terms` on GET /v1/signup). Required
+            true when the deployment has them.
     SignupResult:
       type: object
       required:

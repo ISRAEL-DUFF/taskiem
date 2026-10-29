@@ -141,6 +141,18 @@ Conversation state is tenant data today (`chat_sessions`, under row-level securi
 - The web form, the field agent's sign-up and linking after web signup still pass their tests unchanged (`web/e2e/onboarding.spec.ts`, `api/agents_test.go`).
 - A Telegram sign-up that shares someone else's contact, or no contact, makes nothing.
 
+### 6.7 As built (C1)
+
+Built as above ([onboarding](../onboarding.md#signing-up-from-chat), [WhatsApp](../whatsapp.md#the-chat-pin-and-dormant-chats)), migration `00266_chat_signup`, where it differs:
+
+- **The language.** WhatsApp has no list message the platform client sends, and reply buttons stop at three, so the offer and the terms say which languages are on and a language's name typed chooses it (as `language <name>` does); words already route the language as before.
+- **What they sell and how they pay** are numbered lists in the message (several numbers for how they pay), answered by number or word.
+- **The templates offered** come from a table in code (`signupTemplates`): **Remind me every day** first; then by what they sell (a shop: today's sales total; a school: fee reminders; services: send an invoice) and how they are paid (POS: the evening POS summary; Paystack: payment receipts; a shop: the low stock alert). A template tapped is built without the AI (`chatTemplateBuild`: an `ai_builds` row with provider `template`, saved with `ai_assisted: false`), so it works on a deployment or plan without AI.
+- **The pre-signup record** keeps the business's and the person's names plain, not sealed: the vault seals per tenant and there is no tenant yet. It is reached only through `taskiem_chat_signup_*`, keyed by a digest of the address, and lives 30 minutes.
+- **The terms' Yes** is recorded with the account, in the transaction that makes it (the moment of Yes is in the `terms.accept` audit entry's `agreed_at`), since before it there is no person to record it for.
+- **A Telegram sign-up's number** proves the person and counts toward the daily limit; it is not bound as their WhatsApp too (one person on both channels is C5).
+- **Not yet:** the PIN on Telegram (C2's Mini App); telling the owner on their other channel or by email when a chat goes dormant, and money actions and approvals waiting on the PIN beyond the dormant gate (they are refused with the rest); agreeing to the terms when joining by invitation (C5, with **Join**); the cleanup of unused chat-born tenants by the owner's last message (with phase 4's).
+
 ## 7. C2: connecting from chat
 
 ### 7.1 When chat asks

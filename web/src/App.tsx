@@ -40,7 +40,7 @@ import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
-import { Signup, VerifyEmail } from "./pages/Signup";
+import { Signup, TermsBanner, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
@@ -546,6 +546,7 @@ function SignedIn() {
         inert={drawer || undefined}
       >
         <BillingBanner />
+        <TermsBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
           <PageBoundary>
             <Routes>

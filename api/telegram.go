@@ -221,9 +221,22 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 			return err
 		}
 	}
+	sc := &signupChat{ch: tg, addr: addr, user: user, lang: s.chooseLang(ctx, uuid.Nil, addr, "").Tag, tg: &u}
+	// The contact a sign-up asked for (chat_signup.go), before an agent's.
+	if u.Kind == "message" && u.Contact != nil && user == uuid.Nil {
+		if done, err := s.chatSignupContact(ctx, sc, u.Contact); done || err != nil {
+			return err
+		}
+	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if u.Kind == "message" {
 		if done, err := s.tgAgentMessage(ctx, u, user); done || err != nil {
+			return err
+		}
+	}
+	// The website's t.me/<bot>?start=signup link (chat_signup.go).
+	if strings.TrimSpace(strings.TrimPrefix(in.Text, "/start")) == "signup" && user == uuid.Nil {
+		if done, err := s.chatSignupMessage(ctx, sc, "start", ""); done || err != nil {
 			return err
 		}
 	}
@@ -232,12 +245,13 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		return s.tgRedeem(ctx, u, strings.TrimSpace(code))
 	}
 	// An invoice's buttons, which its customer may use (invoice_chat.go).
+	payload := ""
 	if u.Kind == "callback" {
-		payload, ok, err := tg.ResolveCallback(ctx, u.FromID, u.CallbackData)
+		p, ok, err := tg.ResolveCallback(ctx, u.FromID, u.CallbackData)
 		if err != nil {
 			return err
 		}
-		if ok {
+		if payload = p; ok {
 			if done, err := s.invoicePress(ctx, tg, reach.Telegram, addr, payload); done || err != nil {
 				return err
 			}
@@ -273,8 +287,17 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		if done, err := s.supplierWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
+		if done, err := s.chatSignupMessage(ctx, sc, in.Text, payload); done || err != nil {
+			return err
+		}
 		if done, err := s.reachAbout(ctx, tg, reach.Telegram, addr); done || err != nil {
 			return err
+		}
+		if s.signupOn(tg) {
+			if !s.limiter("tg-unbound:"+addr, 10*time.Minute, 2).Allow() {
+				return nil
+			}
+			return s.signupOffer(ctx, sc, in.Text)
 		}
 		return s.tgUnbound(ctx, addr, in.Text)
 	}

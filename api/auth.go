@@ -550,6 +550,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		if f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID); err == nil {
 			out["factors"] = f
 		}
+		// Terms the person has not answered yet (onboarding.go).
+		if t := s.meTerms(r.Context(), p.UserID); t != nil && p.KeyID == uuid.Nil {
+			out["terms"] = t
+		}
 	}
 	// What the web app shows: the technical parts only with Advanced on,
 	// and the business's name in its sidebar.
@@ -708,7 +712,7 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.needVerified(r); err != nil {
+	if err := s.needVerified(r, true); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -895,7 +899,7 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.needVerified(r); err != nil {
+	if err := s.needVerified(r, false); err != nil {
 		s.fail(w, r, err)
 		return
 	}

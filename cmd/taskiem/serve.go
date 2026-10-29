@@ -112,6 +112,12 @@ type config struct {
 	SignupPerAddress     int
 	SignupBlockedDomains []string
 	DocsURL              string
+	// Chat as a way in (docs/spec/chat-way-in.md): which channels offer
+	// sign-up and its limits, the terms people agree to, and how long a
+	// silent chat binding lasts before it is dormant.
+	ChatSignup         api.ChatSignupConfig
+	Terms              api.TermsConfig
+	BindingDormantDays int
 	// Public is the public host for storefronts and forms (public.go).
 	Public publicConfig
 	// Messages are SMS and email to people outside a tenant (messages.go).
@@ -349,6 +355,65 @@ func envPositive(k string, def int) (int, error) {
 	return n, nil
 }
 
+// chatWayIn reads the settings of chat as a way in: TASKIEM_CHAT_SIGNUP
+// (whatsapp, telegram), TASKIEM_CHAT_SIGNUP_PER_HOUR (60),
+// TASKIEM_CHAT_SIGNUP_COUNTRIES (calling codes, 234),
+// TASKIEM_BINDING_DORMANT_DAYS (90; 0 is off), and the terms
+// (TASKIEM_TERMS_URL, TASKIEM_TERMS_VERSION, TASKIEM_PRIVACY_VERSION),
+// which chat sign-up needs: nothing is made before the person agrees.
+func chatWayIn(c *config) error {
+	for _, ch := range strings.Split(os.Getenv("TASKIEM_CHAT_SIGNUP"), ",") {
+		switch ch = strings.ToLower(strings.TrimSpace(ch)); ch {
+		case "":
+		case "whatsapp", "telegram":
+			if !slices.Contains(c.ChatSignup.Channels, ch) {
+				c.ChatSignup.Channels = append(c.ChatSignup.Channels, ch)
+			}
+		default:
+			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram)", ch)
+		}
+	}
+	var err error
+	if c.ChatSignup.PerHour, err = envPositive("TASKIEM_CHAT_SIGNUP_PER_HOUR", 60); err != nil {
+		return err
+	}
+	for _, code := range strings.Split(env("TASKIEM_CHAT_SIGNUP_COUNTRIES", "234"), ",") {
+		code = strings.TrimPrefix(strings.TrimSpace(code), "+")
+		if code == "" {
+			continue
+		}
+		if len(code) > 3 || strings.Trim(code, "0123456789") != "" || code[0] == '0' {
+			return fmt.Errorf("TASKIEM_CHAT_SIGNUP_COUNTRIES: %q is not a calling code (like 234)", code)
+		}
+		c.ChatSignup.Countries = append(c.ChatSignup.Countries, code)
+	}
+	c.BindingDormantDays = 90
+	if v := strings.TrimSpace(os.Getenv("TASKIEM_BINDING_DORMANT_DAYS")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 3650 {
+			return fmt.Errorf("TASKIEM_BINDING_DORMANT_DAYS must be a number of days from 0 (off) to 3650, not %q", v)
+		}
+		c.BindingDormantDays = n
+	}
+	c.Terms = api.TermsConfig{URL: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_URL")), Version: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_VERSION")),
+		PrivacyVersion: strings.TrimSpace(os.Getenv("TASKIEM_PRIVACY_VERSION"))}
+	for k, v := range map[string]string{"TASKIEM_TERMS_VERSION": c.Terms.Version, "TASKIEM_PRIVACY_VERSION": c.Terms.PrivacyVersion} {
+		if len(v) > 32 {
+			return fmt.Errorf("%s: at most 32 characters", k)
+		}
+	}
+	if (c.Terms.Version == "") != (c.Terms.PrivacyVersion == "") {
+		return errors.New("TASKIEM_TERMS_VERSION and TASKIEM_PRIVACY_VERSION are set together")
+	}
+	if c.Terms.URL != "" && !strings.HasPrefix(c.Terms.URL, "https://") && !strings.HasPrefix(c.Terms.URL, "http://localhost") {
+		return fmt.Errorf("TASKIEM_TERMS_URL must be an https link, not %q", c.Terms.URL)
+	}
+	if len(c.ChatSignup.Channels) > 0 && !c.Terms.On() {
+		return errors.New("TASKIEM_CHAT_SIGNUP needs TASKIEM_TERMS_VERSION and TASKIEM_PRIVACY_VERSION: nothing is made before the person agrees to them")
+	}
+	return nil
+}
+
 func loadConfig() (config, error) {
 	var bad []error
 	flag := envBools(&bad)
@@ -462,6 +527,9 @@ func loadConfig() (config, error) {
 		}
 	}
 	c.DocsURL = strings.TrimRight(os.Getenv("TASKIEM_DOCS_URL"), "/")
+	if err := chatWayIn(&c); err != nil {
+		return c, err
+	}
 	pool, err := envPositive("TASKIEM_DATABASE_POOL", int(c.PoolSize))
 	if err != nil {
 		return c, err
@@ -1105,6 +1173,10 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
+		srv.ChatSignup, srv.Terms, srv.BindingDormantDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays
+		if len(cfg.ChatSignup.Channels) > 0 {
+			log.Info("sign-up from chat on", "channels", strings.Join(cfg.ChatSignup.Channels, ","), "terms", cfg.Terms.Version, "privacy", cfg.Terms.PrivacyVersion)
+		}
 		if srv.AI, err = aiSettings(cfg.AI); err != nil {
 			return err
 		} else if srv.AI != nil {

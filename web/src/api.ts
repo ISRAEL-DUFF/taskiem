@@ -195,6 +195,13 @@ export interface TenantConnector {
   active: boolean;
 }
 
+/** The terms and privacy notice the deployment asks people to agree to. */
+export interface TermsAsked {
+  url: string;
+  terms_version: string;
+  privacy_version: string;
+}
+
 export interface Me {
   /** Null for a person with no membership answering invitations. */
   tenant_id: string | null;
@@ -223,6 +230,8 @@ export interface Me {
   schools?: boolean;
   /** A gate session: the gate screen only; the server refuses the rest. */
   gate_only?: boolean;
+  /** Terms the person has not answered yet: asked once (POST /v1/me/terms). */
+  terms?: TermsAsked;
 }
 
 /** A tenant inviting the signed-in person (GET /v1/me/invitations). */

@@ -2996,6 +2996,186 @@
       "text": "A kò tíì so nọ́mbà yìí mọ́ àkọọ́lẹ̀ Taskiem kankan. Láti lo Taskiem níbí, ẹ wọlé, ẹ ṣí {where}, ẹ fi nọ́mbà yìí kún un lábẹ́ WhatsApp, lẹ́yìn náà ẹ tẹ kóòdù tí a fi ránṣẹ́ sí yín tàbí kí ẹ dá a padà.",
       "reviewed": false
     },
+    "signup.offer": {
+      "text": "Ẹ n lẹ! Taskiem ń ṣe iṣẹ́ okòwò rẹ láti inú ìjíròrò yìí: owó tí wọ́n san, ìwé owó, ọjà, ìránnilétí, ojú-ìwé ṣọ́ọ̀bù rẹ. Ṣé o fẹ́ bẹ̀rẹ̀, lọ́fẹ̀ẹ́?\n\nLáti bá wa sọ̀rọ̀ ní èdè mìíràn, tẹ orúkọ rẹ̀: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_start": {
+      "text": "Bẹ̀rẹ̀ okòwò mi",
+      "reviewed": false
+    },
+    "signup.button_have": {
+      "text": "Mo ń lo Taskiem",
+      "reviewed": false
+    },
+    "signup.button_no": {
+      "text": "Kì í ṣe báyìí",
+      "reviewed": false
+    },
+    "signup.later": {
+      "text": "Kò burú. Fi *start* ránṣẹ́ nígbàkígbà láti bẹ̀rẹ̀.",
+      "reviewed": false
+    },
+    "signup.no_org": {
+      "text": "Àkọọ́lẹ̀ Taskiem rẹ kò ní okòwò kankan báyìí. Ṣé o fẹ́ bẹ̀rẹ̀ ọ̀kan?",
+      "reviewed": false
+    },
+    "signup.country": {
+      "text": "Ìforúkọsílẹ̀ láti inú ìjíròrò kò tíì ṣí sílẹ̀ ní orílẹ̀-èdè rẹ. O lè forúkọ sílẹ̀ lórí ojú-òpó Taskiem dípò.",
+      "reviewed": false
+    },
+    "signup.too_many": {
+      "text": "Nọ́mbà yìí ti ṣe okòwò {count} lónìí, èyí tí ó pọ̀ jù fún ọjọ́ kan. Gbìyànjú lọ́la.",
+      "reviewed": false
+    },
+    "signup.busy": {
+      "text": "Ọwọ́ wa dí láti forúkọ àwọn ènìyàn sílẹ̀ báyìí. Jọ̀wọ́ gbìyànjú lẹ́yìn wákàtí kan.",
+      "reviewed": false
+    },
+    "signup.terms": {
+      "text": "Taskiem ń tọ́jú àkọsílẹ̀ okòwò rẹ àti àwọn àlàyé tí o fún un. Ka bí ó ti ń ṣe é, àti àwọn òfin: {link}\n\nFèsì *Yes* láti gbà kí o sì bẹ̀rẹ̀. (Láti sọ̀rọ̀ ní èdè mìíràn, tẹ orúkọ rẹ̀: {languages}.)",
+      "reviewed": false
+    },
+    "signup.declined": {
+      "text": "A kò ṣe nǹkan kan. Fi *start* ránṣẹ́ tí o bá yí ọkàn padà.",
+      "reviewed": false
+    },
+    "signup.cancelled": {
+      "text": "A ti dúró: a kò ṣe nǹkan kan. Fi *start* ránṣẹ́ láti tún bẹ̀rẹ̀.",
+      "reviewed": false
+    },
+    "signup.ask_business": {
+      "text": "Kí ni orúkọ okòwò rẹ? (Fi *cancel* ránṣẹ́ láti dúró nígbàkígbà.)",
+      "reviewed": false
+    },
+    "signup.ask_name": {
+      "text": "Àti orúkọ rẹ?",
+      "reviewed": false
+    },
+    "signup.ask_sells": {
+      "text": "Kí ni o ń tà tàbí ṣe? Fèsì pẹ̀lú nọ́mbà:\n1. Oúnjẹ\n2. Ọjà ilé\n3. Aṣọ\n4. Fóònù àti ẹ̀rọ\n5. Ilé-ìwé\n6. Ilé ìṣaralóge\n7. Iṣẹ́ ìsìn\n8. Nǹkan mìíràn",
+      "reviewed": false
+    },
+    "signup.ask_pays": {
+      "text": "Báwo ni àwọn oníbàárà ṣe ń sanwó fún ọ? Fèsì pẹ̀lú àwọn nọ́mbà tí ó bá yẹ, bí 1 2 3:\n1. Owó ní ọwọ́\n2. Gbígbé owó sí báńkì\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": false
+    },
+    "signup.ask_contact": {
+      "text": "Ìgbésẹ̀ ìkẹyìn: tẹ *Share my number* kí a lè mọ̀ pé ìwọ ni, kí a sì lè fi ọ̀rọ̀ ránṣẹ́ sí ọ nígbà tí Telegram kò bá ṣiṣẹ́. Fi *cancel* ránṣẹ́ láti dúró.",
+      "reviewed": false
+    },
+    "signup.contact_own": {
+      "text": "Ìyẹn kì í ṣe nọ́mbà tìrẹ. Tẹ *Share my number* láti pín tìrẹ.",
+      "reviewed": false
+    },
+    "signup.number_taken": {
+      "text": "Nọ́mbà yìí ti ń lo Taskiem tẹ́lẹ̀. Láti lo Taskiem níbí pẹ̀lú, wọlé, ṣí {where}, kí o sì so ìjíròrò yìí pọ̀.",
+      "reviewed": false
+    },
+    "signup.business_bad": {
+      "text": "Orúkọ okòwò nílò lẹ́tà 2 sí 80, láìsí ìjápọ̀ tàbí àdírẹ́sì ímeèlì. Kí ni orúkọ okòwò rẹ?",
+      "reviewed": false
+    },
+    "signup.name_bad": {
+      "text": "Orúkọ nílò lẹ́tà tí kò ju 80 lọ, láìsí ìjápọ̀ tàbí àdírẹ́sì ímeèlì. Kí ni orúkọ rẹ?",
+      "reviewed": false
+    },
+    "signup.done": {
+      "text": "Ó ti parí: *{business}* ti wà lórí Taskiem.",
+      "reviewed": false
+    },
+    "signup.done_trial": {
+      "text": "Ó ti parí: *{business}* ti wà lórí Taskiem, lọ́fẹ̀ẹ́ fún ọjọ́ {days}.",
+      "reviewed": false
+    },
+    "signup.starters": {
+      "text": "Èyí ni nǹkan mẹ́ta tí àwọn okòwò bí tìrẹ fi ń bẹ̀rẹ̀:",
+      "reviewed": false
+    },
+    "signup.own_words": {
+      "text": "Tẹ ọ̀kan, tàbí sọ ohun tí o fẹ́ ní ọ̀rọ̀ ara rẹ.",
+      "reviewed": false
+    },
+    "signup.pin_hint": {
+      "text": "Ìjíròrò yìí ni àkọọ́lẹ̀ rẹ. Fi *pin* ránṣẹ́ láti ṣètò PIN oní-nọ́mbà mẹ́fà tí yóò pa á mọ́ fún ọ.",
+      "reviewed": false
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Ìránnilétí ojoojúmọ́",
+      "reviewed": false
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Àpapọ̀ títà ọjọ́",
+      "reviewed": false
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "Ìránnilétí owó ilé",
+      "reviewed": false
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Fi ìwé owó ránṣẹ́",
+      "reviewed": false
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "Àkópọ̀ POS alẹ́",
+      "reviewed": false
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Ìwé ẹ̀rí owó",
+      "reviewed": false
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Ìkìlọ̀ ọjà tó kéré",
+      "reviewed": false
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Ka ọjà mi",
+      "reviewed": false
+    },
+    "dormant.form_title": {
+      "text": "Fihàn pé ìwọ ni",
+      "reviewed": false
+    },
+    "dormant.prove": {
+      "text": "Ìjíròrò yìí dákẹ́ fún ọjọ́ {days}, nítorí náà Taskiem dáwọ́ lílò rẹ̀ dúró títí o fi fihàn pé ìwọ ṣì ni. Tẹ PIN ìjíròrò rẹ sínú fọ́ọ̀mù náà.",
+      "reviewed": false
+    },
+    "dormant.relink": {
+      "text": "Ìjíròrò yìí dákẹ́ fún ọjọ́ {days}, nítorí náà Taskiem dáwọ́ lílò rẹ̀ dúró títí o fi fihàn pé ìwọ ṣì ni. Wọlé, ṣí {where} kí o sì tún so ó pọ̀, tàbí lo Taskiem láti ìjíròrò rẹ mìíràn. Tí kò bá di fífihàn, a ó tú u lẹ́yìn ọjọ́ {days} mìíràn.",
+      "reviewed": false
+    },
+    "chatpin.web": {
+      "text": "Ṣètò PIN rẹ nínú ohun èlò wẹ́ẹ̀bù, ní {where}: yóò kọ́kọ́ béèrè passkey, authenticator tàbí ọ̀rọ̀ aṣínà rẹ.",
+      "reviewed": false
+    },
+    "chatpin.not_here": {
+      "text": "A kò tíì lè ṣètò PIN ìjíròrò láti ibí: ṣètò rẹ̀ láti WhatsApp, níbi tí Taskiem ti ń fi fọ́ọ̀mù tó ní ààbò ránṣẹ́.",
+      "reviewed": false
+    },
+    "chatpin.form_title": {
+      "text": "PIN ìjíròrò rẹ",
+      "reviewed": false
+    },
+    "chatpin.form": {
+      "text": "Yan PIN oní-nọ́mbà mẹ́fà nínú fọ́ọ̀mù náà. Pa á mọ́ fún ara rẹ: ó ń fihàn pé ìjíròrò yìí jẹ́ tìrẹ, ó sì ń fọwọ́ sí ohun tí ó bá béèrè fún un.",
+      "reviewed": false
+    },
+    "chatpin.summary": {
+      "text": "Nọ́mbà mẹ́fà tí ó pa ìjíròrò yìí mọ́ fún ọ",
+      "reviewed": false
+    },
+    "terms.ask": {
+      "text": "Taskiem ní àwọn òfin àti ìkéde ìpamọ́ tí o kò tíì gbà: {link}\n\nTẹ *I agree*, tàbí fèsì *I agree*. Taskiem yóò máa bá iṣẹ́ lọ bí ó ti wù kí ó rí.",
+      "reviewed": false
+    },
+    "terms.button": {
+      "text": "Mo gbà",
+      "reviewed": false
+    },
+    "terms.thanks": {
+      "text": "O ṣé: a ti ṣàkọsílẹ̀ ìfọwọ́sí rẹ.",
+      "reviewed": false
+    },
     "wd.ai": {
       "text": "Béèrè lọ́wọ́ AI, pẹ̀lú ìfipamọ́ àlàyé ìkọ̀kọ̀ kúrò lọ́dọ̀ rẹ̀",
       "reviewed": false

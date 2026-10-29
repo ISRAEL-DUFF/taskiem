@@ -300,6 +300,24 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if c.tenants, err = s.tenantsOf(ctx, user); err != nil {
 		return err
 	}
+	// A dormant binding acts on nothing until it is proven again
+	// (chat_dormant.go).
+	if dormant, err := s.bindingGate(ctx, c, user); dormant || err != nil {
+		return err
+	}
+	// Another business, or one when none is left (chat_signup.go).
+	text := ""
+	if in.Type == "text" {
+		text = in.Text
+	}
+	// Only words and its own buttons: an approval tapped or a form sent
+	// meanwhile goes where it always went.
+	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
+		if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
+			return err
+		}
+	}
 	if wa := c.wa; wa != nil && wa.Own() {
 		// A tenant's own number speaks for that tenant only.
 		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
@@ -309,6 +327,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 		c.tenant, c.tenants = c.tenants[i], c.tenants[i:i+1]
 	} else {
 		if len(c.tenants) == 0 {
+			if s.signupOn(ch) {
+				return s.waSay(ctx, ch, number, "", c.t("signup.no_org"), whatsapp.Button{ID: "su:start", Title: c.t("signup.button_start")},
+					whatsapp.Button{ID: "su:no", Title: c.t("signup.button_no")})
+			}
 			return s.waSay(ctx, ch, number, "", c.t("wa.no_org"))
 		}
 		contact, err := ch.Contact(ctx, number)
@@ -332,13 +354,14 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	// The language of this tenant's conversation: chosen, detected from
 	// what is written, or the tenant's default (languages.go).
-	text := ""
-	if in.Type == "text" {
-		text = in.Text
-	}
 	c.lang = s.chooseLang(ctx, c.tenant.ID, number, text)
 	if c.lang.Detected {
 		c.note = c.t("lang.detected", "language", langName(c.lang.Tag))
+	}
+	// The terms, asked once of an account from before them; agreed to by
+	// the button or "I agree" (chat_dormant.go).
+	if done, err := s.termsInChat(ctx, c, text); done || err != nil {
+		return err
 	}
 	// A tapped approval button carries a signed decision token.
 	if strings.HasPrefix(in.Reply, "tk1.") {
@@ -350,6 +373,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
+	}
+	// A template a new business was offered (chat_signup.go).
+	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
+		return s.chatTemplateBuild(ctx, c, id)
 	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
@@ -406,6 +433,12 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
+	// Signing up from chat (chat_signup.go): a sign-up under way, a word
+	// or button that starts one.
+	sc := &signupChat{ch: wa, addr: number, lang: l}
+	if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
+		return err
+	}
 	if wa.Own() {
 		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
 			return err
@@ -420,6 +453,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	}
 	if !s.limiter("wa-unbound:"+number, 10*time.Minute, 2).Allow() {
 		return nil
+	}
+	if s.signupOn(wa) {
+		return s.signupOffer(ctx, sc, text)
 	}
 	where := "Account"
 	if s.PublicURL != "" {
@@ -640,6 +676,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		switch cmd {
 		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":
 			return s.waSignInLink(ctx, c)
+		case "pin", "chat pin", "set pin", "set my pin", "change pin":
+			// The chat PIN, set from the chat by a person with no other
+			// credential (chat_dormant.go).
+			return s.waChatPin(ctx, c)
 		}
 		// "publish <workflow>": a draft published from chat (N6).
 		if name, ok := strings.CutPrefix(cmd, "publish "); ok && name != "" {

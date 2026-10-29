@@ -21,6 +21,8 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 ## For people: using Taskiem on Telegram
 
+**No account yet?** Where the operator turned it on, open the bot (or the website's `t.me/<bot>?start=signup` link) and choose **Start my business**: the same questions as on WhatsApp, then **Share my number**, which must be your own. The business and your account are made from the chat ([signing up from chat](onboarding.md#signing-up-from-chat)). A number that already uses Taskiem on WhatsApp makes no second account.
+
 **Link your account.** Under Account > Telegram, choose **Link Telegram** and confirm it is you (passkey, authenticator code or password, as when adding a passkey). Open the link it shows on the device where you use Telegram, and press **Start**: the Telegram account that opens the link is linked to you. A link works once, for 10 minutes; at most five are made an hour. An account can be linked to one Taskiem account, and you have one Telegram account at a time (linking another replaces it). Unlink it on the same page.
 
 **What you can send** is what you can send on WhatsApp ([the table](whatsapp.md#for-people-using-taskiem-on-whatsapp)): `help`, `status`, `run <workflow>`, `approvals`, `build <what to automate>`, `tables`, `add to <table>`, `find <table> <text>`, `switch <organisation>`, `cancel`, `language`, and voice notes where they are on. Telegram's `/help`, `/approvals` and so on work too. Every message from Taskiem starts with the organisation's name in brackets.

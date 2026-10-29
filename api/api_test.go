@@ -84,7 +84,7 @@ func newWorld(t *testing.T) *world {
 // it), so worlds that send email can invite people at once.
 func (w *world) tenant(t *testing.T, name, email string) *client {
 	anon := &client{t: t, base: w.base}
-	anon.must(201, "POST", "/v1/signup", map[string]any{"tenant": name, "email": email, "name": "Owner", "password": "correct horse battery"})
+	anon.must(201, "POST", "/v1/signup", map[string]any{"tenant": name, "email": email, "name": "Owner", "password": "correct horse battery", "accept_terms": true})
 	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE users SET email_verified_at = now() WHERE lower(email) = lower($1)`, email); err != nil {
 		t.Fatal(err)
 	}

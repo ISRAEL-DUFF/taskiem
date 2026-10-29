@@ -74,6 +74,17 @@ type Server struct {
 	// may not sign up, besides the built-in throwaway services
 	// (TASKIEM_SIGNUP_BLOCKED_DOMAINS).
 	SignupBlockedDomains []string
+	// ChatSignup is signing up from chat (chat_signup.go); Terms the terms
+	// and privacy notice every way in asks people to agree to.
+	ChatSignup ChatSignupConfig
+	Terms      TermsConfig
+	// BindingDormantDays is how long a chat binding may be silent before it
+	// is dormant: sent nothing, acting on nothing until proven again, and
+	// removed after as long again (TASKIEM_BINDING_DORMANT_DAYS); 0 is off.
+	BindingDormantDays int
+	// termsAsked are the people asked about, or agreed to, the current
+	// terms since start: chat does not look them up again.
+	termsAsked sync.Map
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -313,6 +324,7 @@ func (s *Server) Handler() http.Handler {
 			r.Route("/keys", s.keyRoutes)                            // encryption keys and BYOK (keys.go)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
+			r.Post("/me/terms", s.answerTerms) // agreeing to the terms (onboarding.go)
 			r.Post("/me/password", s.changePassword)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)

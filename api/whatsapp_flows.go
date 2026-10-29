@@ -204,6 +204,9 @@ func (s *Server) waFlowRequest(ctx context.Context, wa *whatsapp.Platform, req w
 	if row.kind == "pin" {
 		return s.waFlowPin(ctx, row, req), http.StatusOK
 	}
+	if row.kind == "pin_set" || row.kind == "pin_wake" {
+		return s.waFlowChatPin(ctx, row, req), http.StatusOK
+	}
 	resp, err := s.waFlowInputs(ctx, row, req)
 	if err != nil {
 		s.Logger.Error("whatsapp: a Flow request", "err", err)
@@ -377,7 +380,7 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 		return invalid()
 	}
 	switch row.kind {
-	case "pin":
+	case "pin", "pin_set", "pin_wake":
 		say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, c.tenants[i].Name, text) }
 		if out, _ := row.data["outcome"].(string); out != "" && (row.status == "done" || row.status == "refused") {
 			return say(out)

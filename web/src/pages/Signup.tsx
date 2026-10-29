@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { post } from "../api";
+import { get, post, type TermsAsked } from "../api";
 import { useAuth } from "../auth";
 import { useOnboarding } from "../onboarding";
 import { ErrorBox, Field, useAction } from "../ui";
@@ -10,7 +10,14 @@ import { ErrorBox, Field, useAction } from "../ui";
 export function Signup() {
   const { refresh } = useAuth();
   const nav = useNavigate();
-  const [f, setF] = useState({ tenant: "", name: "", email: "", password: "", website: "" });
+  const [f, setF] = useState({ tenant: "", name: "", email: "", password: "", website: "", accept_terms: false });
+  const [terms, setTerms] = useState<TermsAsked | undefined>();
+  useEffect(() => {
+    get<{ enabled: boolean; terms?: TermsAsked }>("/v1/signup").then(
+      (o) => setTerms(o.terms),
+      () => undefined,
+    );
+  }, []);
   const act = useAction();
   const set = (k: keyof typeof f) => (e: ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   return (
@@ -39,6 +46,17 @@ export function Signup() {
         <Field label="Password" hint="At least 12 characters. A short sentence is easy to remember.">
           <input type="password" value={f.password} onChange={set("password")} required minLength={12} autoComplete="new-password" />
         </Field>
+        {terms && (
+          <label className="row" data-testid="signup-terms">
+            <input type="checkbox" checked={f.accept_terms} onChange={(e) => setF({ ...f, accept_terms: e.target.checked })} required />
+            <span style={{ flex: "1 1 auto", whiteSpace: "normal" }}>
+              I agree to Taskiem's{" "}
+              <a href={terms.url} target="_blank" rel="noreferrer">
+                terms and privacy notice
+              </a>
+            </span>
+          </label>
+        )}
         {/* People never see this field; form-filling bots do. */}
         <div className="honeypot" aria-hidden="true">
           <label>
@@ -89,6 +107,37 @@ export function VerifyEmail() {
       <p>
         <Link to="/start">Back to Get started</Link>
       </p>
+    </div>
+  );
+}
+
+/** Terms the signed-in person has not answered yet (an account from
+ * before them): asked once, at the top of every page, until they agree or
+ * say not now. */
+export function TermsBanner() {
+  const { me } = useAuth();
+  const [gone, setGone] = useState(false);
+  const act = useAction();
+  if (!me?.terms || gone) return null;
+  const answer = (accept: boolean) =>
+    void act.run(async () => {
+      await post("/v1/me/terms", { accept });
+      setGone(true);
+    }, false);
+  return (
+    <div className="warning" role="status" data-testid="terms-banner">
+      Taskiem has terms and a privacy notice you have not agreed to yet:{" "}
+      <a href={me.terms.url} target="_blank" rel="noreferrer">
+        read them
+      </a>
+      .{" "}
+      <button className="primary" onClick={() => answer(true)} disabled={act.busy}>
+        I agree
+      </button>{" "}
+      <button onClick={() => answer(false)} disabled={act.busy}>
+        Not now
+      </button>
+      <ErrorBox error={act.error} />
     </div>
   );
 }

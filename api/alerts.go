@@ -88,7 +88,7 @@ func (s *Server) createAlertChannel(w http.ResponseWriter, r *http.Request) {
 		// The platform's mail server writes to any address given here, so
 		// a self-serve tenant must confirm its email first, as for
 		// inviting people (security review R2).
-		if err := s.needVerified(r); err != nil {
+		if err := s.needVerified(r, true); err != nil {
 			s.fail(w, r, err)
 			return
 		}

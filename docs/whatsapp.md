@@ -47,6 +47,8 @@ Outbound messages go to `graph.facebook.com` through the egress guard. Sends are
 
 ## For people: using Taskiem on WhatsApp
 
+**No account yet?** Where the operator turned it on, write to Taskiem's number and choose **Start my business**: the business and your account are made from the chat ([signing up from chat](onboarding.md#signing-up-from-chat)).
+
 **Link your number.** Under Account > WhatsApp, enter your number with its country code and confirm it is you (passkey, authenticator code or password, as when adding a passkey). Taskiem sends a 6-digit code to that number on WhatsApp: type it on the page, or send it back to Taskiem's number. The code works for 10 minutes; five wrong codes spend it, and at most three codes are sent an hour. A number can be linked to one account, and an account has one number. Unlink it on the same page.
 
 **What you can send:**
@@ -229,6 +231,12 @@ A policy rule's `step_up` names the weakest second factor it takes ([policies](g
 | `passkey` | A passkey only |
 
 `runtime.StepUpSatisfies` decides, inside `VoteApproval`, for every channel. A tap on **Approve** or **Reject** under a `whatsapp_pin` policy, by someone with a PIN that is not locked, gets a PIN form bound to that decision (its run, step, level, decision and the decision token tapped, in the flow row; 10 minutes; once). The endpoint checks the person can still decide approvals, the PIN (Argon2id, like passwords), that the request is still open at that level, and then records the vote with step-up `whatsapp_pin`. Wrong PINs are counted (`whatsapp.pin.fail`); the fifth in 15 minutes locks the PIN for 15 minutes (`whatsapp.pin.locked`). Under `totp` or `passkey` policies, without a PIN, or with it locked, the web link is sent as before. The PIN is a person's, like the binding (`whatsapp_pins`, reached only through functions); setting it needs a bound number, an enrolled passkey or authenticator, and a fresh assertion or code (`PUT /v1/me/whatsapp/pin`); `DELETE` removes it; `GET /v1/me/whatsapp` shows whether it is set or locked.
+
+## The chat PIN and dormant chats
+
+**The chat PIN.** A person whose chat is their only credential (no password, passkey or authenticator: someone who [signed up from chat](onboarding.md#signing-up-from-chat)) sends `pin` and sets their six-digit PIN in the PIN form (`pin_set`; encrypted to Taskiem, never a message; weak PINs refused). Anyone else sets it on the web, behind their passkey or authenticator, as above. It is the same PIN (`whatsapp_pins`), so it also approves under `whatsapp_pin` policies. On Telegram it comes with the Mini App (C2).
+
+**Dormant chats.** Operators reissue numbers that fall silent, so every chat binding, however it was made, silent for `TASKIEM_BINDING_DORMANT_DAYS` (90; `0` is off) is dormant: `taskiem_wa_numbers` and `taskiem_tg_accounts` leave it out, so it is sent nothing that carries a business's data (approvals go to the person's other channels or the web, as when no chat is linked), and its messages act on nothing. The next message gets the PIN form (`pin_wake`) when the person has a PIN, else how to link it again from the web; linking again, or the right PIN (wrong ones count toward the lock), wakes it (`binding.wake`). A binding dormant as long again is removed, and the address is a stranger again. The sweep runs with the notifier, at most hourly.
 
 ## Own numbers
 

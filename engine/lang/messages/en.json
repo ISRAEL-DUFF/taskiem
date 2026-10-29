@@ -3744,6 +3744,231 @@
       "reviewed": true,
       "context": "A number linked to no one wrote"
     },
+    "signup.offer": {
+      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free?\n\nTo chat in another language, type its name: {languages}.",
+      "reviewed": true,
+      "context": "A stranger wrote to Taskiem's shared number or bot; three buttons follow. {languages} lists the languages on"
+    },
+    "signup.button_start": {
+      "text": "Start my business",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: start signing up"
+    },
+    "signup.button_have": {
+      "text": "I use Taskiem",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the person already has a Taskiem account"
+    },
+    "signup.button_no": {
+      "text": "Not now",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: not now"
+    },
+    "signup.later": {
+      "text": "No problem. Send *start* any time to begin.",
+      "reviewed": true,
+      "context": "The person said not now to signing up"
+    },
+    "signup.no_org": {
+      "text": "Your Taskiem account has no business at the moment. Do you want to start one?",
+      "reviewed": true,
+      "context": "A linked person belongs to no business; buttons to start one follow"
+    },
+    "signup.country": {
+      "text": "Signing up from chat is not open in your country yet. You can sign up on Taskiem's website instead.",
+      "reviewed": true,
+      "context": "Sign-up is not open in the number's country"
+    },
+    "signup.too_many": {
+      "text": "This number has made {count} businesses today, the most for one day. Try again tomorrow.",
+      "reviewed": true,
+      "context": "Daily limit of businesses per number; {count} is the limit"
+    },
+    "signup.busy": {
+      "text": "We are busy signing people up right now. Please try again in an hour.",
+      "reviewed": true,
+      "context": "The deployment's hourly sign-up limit is reached"
+    },
+    "signup.terms": {
+      "text": "Taskiem keeps your business's records and the details you give it. Read how, and the terms: {link}\n\nReply *Yes* to agree and start. (To chat in another language, type its name: {languages}.)",
+      "reviewed": true,
+      "context": "Before anything is made: the terms and privacy notice, Yes and No buttons follow. {link} is where to read them; {languages} the languages on"
+    },
+    "signup.declined": {
+      "text": "Nothing was made. Send *start* if you change your mind.",
+      "reviewed": true,
+      "context": "The person said No to the terms: nothing was made"
+    },
+    "signup.cancelled": {
+      "text": "Stopped: nothing was made. Send *start* to begin again.",
+      "reviewed": true,
+      "context": "The person cancelled signing up: nothing was made"
+    },
+    "signup.ask_business": {
+      "text": "What is your business called? (Send *cancel* to stop at any point.)",
+      "reviewed": true,
+      "context": "Sign-up question 1"
+    },
+    "signup.ask_name": {
+      "text": "And your name?",
+      "reviewed": true,
+      "context": "Sign-up question 2"
+    },
+    "signup.ask_sells": {
+      "text": "What do you sell or do? Reply with a number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phones and gadgets\n5. School\n6. Salon\n7. Services\n8. Something else",
+      "reviewed": true,
+      "context": "Sign-up question 3, a numbered list"
+    },
+    "signup.ask_pays": {
+      "text": "How do customers pay you? Reply with the numbers that fit, like 1 2 3:\n1. Cash\n2. Bank transfer\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": true,
+      "context": "Sign-up question 4, a numbered list, several may be picked"
+    },
+    "signup.ask_contact": {
+      "text": "Last step: tap *Share my number* so we know it is you and can text you when Telegram can't. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "Telegram: the person must share their own number with the keyboard button"
+    },
+    "signup.contact_own": {
+      "text": "That is not your own number. Tap *Share my number* to share yours.",
+      "reviewed": true,
+      "context": "Telegram: the contact shared is not the person's own"
+    },
+    "signup.number_taken": {
+      "text": "This number already uses Taskiem. To use Taskiem here too, sign in, open {where}, and link this chat.",
+      "reviewed": true,
+      "context": "The number already belongs to a Taskiem account; nothing was made. {where} is the account page"
+    },
+    "signup.business_bad": {
+      "text": "A business name needs 2 to 80 characters, and no links or email addresses. What is your business called?",
+      "reviewed": true,
+      "context": "The business name was refused"
+    },
+    "signup.name_bad": {
+      "text": "A name needs at most 80 characters, and no links or email addresses. What is your name?",
+      "reviewed": true,
+      "context": "The person's name was refused"
+    },
+    "signup.done": {
+      "text": "Done: *{business}* is on Taskiem.",
+      "reviewed": true,
+      "context": "The business is made (no trial). {business} is its name"
+    },
+    "signup.done_trial": {
+      "text": "Done: *{business}* is on Taskiem, free for {days} days.",
+      "reviewed": true,
+      "context": "The business is made, with a free trial of {days} days. {business} is its name"
+    },
+    "signup.starters": {
+      "text": "Here are three things businesses like yours start with:",
+      "reviewed": true,
+      "context": "Before the three templates offered to a new business"
+    },
+    "signup.own_words": {
+      "text": "Tap one, or say what you want in your own words.",
+      "reviewed": true,
+      "context": "After the templates offered"
+    },
+    "signup.pin_hint": {
+      "text": "This chat is your account. Send *pin* to set a six-digit PIN that keeps it yours.",
+      "reviewed": true,
+      "context": "After signing up on WhatsApp: the chat PIN"
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Daily reminder",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the daily-reminder template"
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Day's sales total",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the sales-day-total template"
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "Fee reminders",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the school-fee-reminders template"
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Send an invoice",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the send-invoice template"
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "POS evening summary",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the pos-daily-summary template"
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Payment receipts",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the payment-receipt-whatsapp template"
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Low stock alert",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the low-stock-alert template"
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Count my shelf",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the stock-count-reminder template"
+    },
+    "dormant.form_title": {
+      "text": "Prove it is you",
+      "reviewed": true,
+      "context": "Title of the PIN form that wakes a dormant chat"
+    },
+    "dormant.prove": {
+      "text": "This chat was quiet for {days} days, so Taskiem stopped using it until you prove it is still you. Enter your chat PIN in the form.",
+      "reviewed": true,
+      "context": "A dormant binding wrote and has a PIN: the PIN form follows. {days} is the dormancy period"
+    },
+    "dormant.relink": {
+      "text": "This chat was quiet for {days} days, so Taskiem stopped using it until you prove it is still you. Sign in, open {where} and link it again, or use Taskiem from your other chat. If it stays unproven, it is unlinked after another {days} days.",
+      "reviewed": true,
+      "context": "A dormant binding wrote, with no PIN to prove it. {days} is the dormancy period, {where} the account page"
+    },
+    "chatpin.web": {
+      "text": "Set your PIN in the web app, at {where}: it asks for your passkey, authenticator or password first.",
+      "reviewed": true,
+      "context": "pin: the person has a password, passkey or authenticator, so sets the PIN on the web. {where} is the account page"
+    },
+    "chatpin.not_here": {
+      "text": "The chat PIN cannot be set from here yet: set it from WhatsApp, where Taskiem sends a secure form.",
+      "reviewed": true,
+      "context": "pin: the PIN form cannot be sent on this channel"
+    },
+    "chatpin.form_title": {
+      "text": "Your chat PIN",
+      "reviewed": true,
+      "context": "Title of the PIN form that sets the chat PIN"
+    },
+    "chatpin.form": {
+      "text": "Choose a six-digit PIN in the form. Keep it to yourself: it proves this chat is yours, and approves what asks for it.",
+      "reviewed": true,
+      "context": "Message with the PIN form that sets the chat PIN"
+    },
+    "chatpin.summary": {
+      "text": "Six digits that keep this chat yours",
+      "reviewed": true,
+      "context": "Summary line in the PIN form"
+    },
+    "terms.ask": {
+      "text": "Taskiem has terms and a privacy notice you have not agreed to yet: {link}\n\nTap *I agree*, or reply *I agree*. Taskiem carries on either way.",
+      "reviewed": true,
+      "context": "An account from before the terms is asked once; an I agree button follows. {link} is where to read them"
+    },
+    "terms.button": {
+      "text": "I agree",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: agree to the terms"
+    },
+    "terms.thanks": {
+      "text": "Thank you: your agreement is recorded.",
+      "reviewed": true,
+      "context": "The person agreed to the terms"
+    },
     "wd.ai": {
       "text": "Ask the AI model, with personal data hidden from it",
       "reviewed": true,

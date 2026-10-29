@@ -114,6 +114,12 @@ channel_languages.language
 channel_languages.number
 channel_languages.source
 channel_languages.updated_at
+chat_signups.address_hash
+chat_signups.channel
+chat_signups.data
+chat_signups.expires_at
+chat_signups.step
+chat_signups.updated_at
 concurrency_slots.run_id
 connection_app_accounts.account_key
 connection_app_accounts.client
@@ -1018,6 +1024,8 @@ tasks.tenant_id
 telegram_agent_codes.code
 telegram_agent_codes.expires_at
 telegram_agent_codes.telegram_id
+telegram_bindings.dormant_at
+telegram_bindings.last_active_at
 telegram_bindings.telegram_id
 telegram_bindings.user_id
 telegram_bindings.username
@@ -1075,6 +1083,9 @@ tenant_limits.updated_at
 tenant_limits.updated_by
 tenant_limits.whatsapp_templates_monthly
 tenant_limits.worker_concurrency
+tenant_onboarding.channel_hash
+tenant_onboarding.signed_up_at
+tenant_onboarding.source
 tenant_usage.day
 tenant_usage.runs_started
 tenant_usage.shard
@@ -1099,6 +1110,12 @@ tenants.parent_id
 tenants.plan_id
 tenants.region
 tenants.status
+terms_acceptances.accepted_at
+terms_acceptances.asked_at
+terms_acceptances.channel
+terms_acceptances.document
+terms_acceptances.user_id
+terms_acceptances.version
 timers.fire_at
 timers.fired_at
 timers.id
@@ -1132,6 +1149,8 @@ webauthn_credentials.id
 webauthn_credentials.public_key
 webauthn_credentials.sign_count
 webauthn_credentials.user_id
+whatsapp_bindings.dormant_at
+whatsapp_bindings.last_active_at
 whatsapp_bindings.number
 whatsapp_bindings.user_id
 whatsapp_bindings.verified_at
