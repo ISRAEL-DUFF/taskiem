@@ -11,3 +11,7 @@ linters:
       - path: runtime\.go
         linters: [errcheck]
         text: "r.module.Close"
+      # govet's inline analyser suggests replacing deprecated aliases such
+      # as reflect.Ptr; upstream uses them, and they are kept as upstream.
+      - linters: [govet]
+        text: "^inline: "
