@@ -19,7 +19,7 @@ Signup is off by default. Before turning it on for the public:
 
 ## Signup
 
-The sign-in page offers "Create an account" when signup is on. The form asks for the organisation's name, the person's name, an email and a password. The person is signed in at once and lands on **Get started**.
+The sign-in page offers "Create an account" when signup is on. Someone who already has an account cannot sign up again; a second business for them is planned in [a second business](spec/new-business.md). The form asks for the organisation's name, the person's name, an email and a password. The person is signed in at once and lands on **Get started**.
 
 What signup refuses, all without a third-party service:
 
