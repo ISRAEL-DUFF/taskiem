@@ -122,3 +122,18 @@ func TestReferences(t *testing.T) {
 		t.Error("undeclared root accepted")
 	}
 }
+
+// Of several failing expressions, the same is reported every time: the
+// error goes into history, and a replay must reproduce it exactly.
+func TestResolveReportsOneErrorEveryTime(t *testing.T) {
+	in := map[string]any{"a": "=trigger.body.missing_a", "b": "=trigger.body.missing_b", "c": "=trigger.body.missing_c"}
+	_, first := e.Resolve(in, act(), true)
+	if first == nil {
+		t.Fatal("expected an error")
+	}
+	for range 200 {
+		if _, err := e.Resolve(in, act(), true); err == nil || err.Error() != first.Error() {
+			t.Fatalf("got %v, then %v", first, err)
+		}
+	}
+}
