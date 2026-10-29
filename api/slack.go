@@ -95,20 +95,34 @@ func (c *slackChannel) Touch(context.Context, string, bool, bool, *uuid.UUID) er
 // payloads (a decision token fits Slack's 2,000 characters). It returns the
 // message's ts.
 func (c *slackChannel) Send(ctx context.Context, addr string, m whatsapp.Message) (string, error) {
+	team, input, err := slackMessage(addr, m)
+	if err != nil {
+		return "", err
+	}
+	out, err := c.s.slackCall(ctx, c.tenant, team, "post_message", input)
+	if err != nil {
+		return "", err
+	}
+	ts, _ := out["ts"].(string)
+	return ts, nil
+}
+
+// slackMessage is m as post_message's input, for the workspace addr is in.
+func slackMessage(addr string, m whatsapp.Message) (team string, input map[string]any, err error) {
 	team, user, ok := parseSlackAddr(addr)
 	if !ok {
-		return "", errors.New("slack: not a Slack address")
+		return "", nil, errors.New("slack: not a Slack address")
 	}
 	text := strings.TrimSpace(m.Text)
 	if text == "" {
-		return "", fmt.Errorf("%w: nothing to say", whatsapp.ErrNothingToSend)
+		return "", nil, fmt.Errorf("%w: nothing to say", whatsapp.ErrNothingToSend)
 	}
 	blocks := []any{map[string]any{"type": "section", "text": map[string]any{"type": "plain_text", "text": clip(text, 3000)}}}
 	if len(m.Buttons) > 0 {
 		var els []any
 		for i, b := range m.Buttons {
 			if b.ID == "" || len(b.ID) > 2000 {
-				return "", errors.New("slack: a button's payload must be 1-2000 characters")
+				return "", nil, errors.New("slack: a button's payload must be 1-2000 characters")
 			}
 			id := slackReply
 			switch {
@@ -131,12 +145,7 @@ func (c *slackChannel) Send(ctx context.Context, addr string, m whatsapp.Message
 		blocks = append(blocks, map[string]any{"type": "actions", "elements": []any{map[string]any{"type": "button", "action_id": "taskiem.open",
 			"url": l.URL, "text": map[string]any{"type": "plain_text", "text": clip(l.Title, 75)}}}})
 	}
-	out, err := c.s.slackCall(ctx, c.tenant, team, "post_message", map[string]any{"channel": user, "text": clip(text, 3000), "blocks": blocks})
-	if err != nil {
-		return "", err
-	}
-	ts, _ := out["ts"].(string)
-	return ts, nil
+	return team, map[string]any{"channel": user, "text": clip(text, 3000), "blocks": blocks}, nil
 }
 
 func clip(s string, n int) string {

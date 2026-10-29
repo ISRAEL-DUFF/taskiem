@@ -157,6 +157,10 @@ func (s *Server) signupOptions(w http.ResponseWriter, _ *http.Request) {
 	if s.Terms.On() {
 		out["terms"] = s.termsOut()
 	}
+	if s.slackInstallOn() {
+		// Starting in Slack instead (slack_install.go).
+		out["slack"] = "/v1/slack/install"
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

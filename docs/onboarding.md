@@ -37,7 +37,7 @@ What signup refuses, all without a third-party service:
 
 When the deployment has terms (`TASKIEM_TERMS_VERSION` and `TASKIEM_PRIVACY_VERSION`, [below](#the-terms)), the form also asks the person to agree to them, and signup without `accept_terms: true` is `400`.
 
-Every outcome is counted in `taskiem_signups_total{source, outcome}`, with `source` `signup` for this form (as `tenant_onboarding.source` names it), `agent` for [field agents](agents.md), and `whatsapp` or `telegram` for [signing up from chat](#signing-up-from-chat).
+Every outcome is counted in `taskiem_signups_total{source, outcome}`, with `source` `signup` for this form (as `tenant_onboarding.source` names it), `agent` for [field agents](agents.md), and `whatsapp`, `telegram` or `slack` for [signing up from chat](#signing-up-from-chat).
 
 ## Signing up from chat
 
@@ -45,7 +45,7 @@ Beside the web form, a person can sign up from Taskiem's shared WhatsApp number 
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TASKIEM_CHAT_SIGNUP` | — (off) | The channels that offer sign-up to strangers: `whatsapp`, `telegram`, comma-separated. Off, a stranger is told how to link a chat, as before. Needs the terms' versions |
+| `TASKIEM_CHAT_SIGNUP` | — (off) | The channels that offer sign-up to strangers: `whatsapp`, `telegram`, `slack`, comma-separated. Off, a stranger is told how to link a chat, as before. Needs the terms' versions; `slack` also needs Taskiem's Slack app ([below](#signing-up-from-slack)) |
 | `TASKIEM_CHAT_SIGNUP_PER_HOUR` | `60` | Businesses chat may make an hour, every channel and replica together; over it, "try again in an hour" and a warning in the logs |
 | `TASKIEM_CHAT_SIGNUP_COUNTRIES` | `234` | Calling codes sign-up is open to, comma-separated; a number elsewhere is told sign-up is not open there yet |
 | `TASKIEM_TERMS_URL` | `<public url>/terms` | Where the terms and privacy notice are read |
@@ -63,9 +63,18 @@ Beside the web form, a person can sign up from Taskiem's shared WhatsApp number 
 
 **The chat PIN and dormant chats.** Until an email is added, the chat is the account's only credential: a chat-born person sets a six-digit PIN from the chat with `pin`, in the PIN form ([WhatsApp](whatsapp.md#the-chat-pin-and-dormant-chats)). Every chat binding silent for `TASKIEM_BINDING_DORMANT_DAYS` (90) is dormant until it is proven again.
 
+## Signing up from Slack
+
+With `slack` in `TASKIEM_CHAT_SIGNUP` and Taskiem's Slack app registered ([Slack](integrations/slack.md#signing-up-from-slack)), the web's sign-up page also offers **Start in Slack** (`GET /v1/slack/install`). Slack asks the person to add Taskiem's app to their workspace; the bot then writes to them there with the same steps as the chat sign-up above: the terms with **Yes**, the business's name (the workspace's offered as a button), what they sell and how customers pay. Their name comes from Slack. The business is made with the workspace's Slack connected (`main`, through Taskiem's app) and its owner linked there, so they build and run from the DM at once; `tenant_onboarding.source` is `slack`.
+
+- **The email** Slack holds for them becomes the account's, **unconfirmed** (a workspace's administrators set members' emails), so nothing is emailed for the business until they confirm it. When that email is already someone's account, nothing is merged: they are told so before any question, and may start a new business under a Slack-only account instead.
+- **A workspace already on Taskiem**: its businesses' Slack connections take the new install's token and work again; the installer is told whose workspace it is and offered **Start a separate business**. Nothing is made unless they choose it.
+- **An install nobody finishes** waits a day; then its token is given back to Slack. Removing the app forgets it at once.
+- The request works once, for ten minutes, only in the browser that started it.
+
 ## The terms
 
-With `TASKIEM_TERMS_VERSION` and `TASKIEM_PRIVACY_VERSION` set, every way in records which versions a person agreed to, when and where (`terms_acceptances`: `web`, `whatsapp`, `telegram`): the web form's checkbox, **Yes** in a chat sign-up. An account from before them is asked once: on the web, a banner with **I agree** and **Not now** (`terms` on `GET /v1/me`, answered with `POST /v1/me/terms`); in chat, one message with **I agree**. Nothing is held back meanwhile, and a new version is asked for once in whichever door the person uses next.
+With `TASKIEM_TERMS_VERSION` and `TASKIEM_PRIVACY_VERSION` set, every way in records which versions a person agreed to, when and where (`terms_acceptances`: `web`, `whatsapp`, `telegram`, `slack`): the web form's checkbox, **Yes** in a chat sign-up. An account from before them is asked once: on the web, a banner with **I agree** and **Not now** (`terms` on `GET /v1/me`, answered with `POST /v1/me/terms`); in chat, one message with **I agree**. Nothing is held back meanwhile, and a new version is asked for once in whichever door the person uses next.
 
 ## Confirming the email
 

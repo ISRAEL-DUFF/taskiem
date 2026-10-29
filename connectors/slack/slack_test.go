@@ -235,6 +235,15 @@ func TestReads(t *testing.T) {
 	if err != nil || out["found"] != false {
 		t.Errorf("not found %v %v", out, err)
 	}
+
+	out, got, err = run(t, "get_user", map[string]any{"user": " W012A3CDE "}, step{"/users.info", "lookup_user"})
+	if err != nil || out["found"] != true || out["real_name"] != "Egon Spengler" || out["email"] != "spengler@ghostbusters.example.com" || got[0].Form.Get("user") != "W012A3CDE" {
+		t.Errorf("get user %v %v", out, err)
+	}
+	out, _, err = run(t, "get_user", map[string]any{"user": "U0NOBODY"}, step{"/users.info", "user_not_found"})
+	if err != nil || out["found"] != false {
+		t.Errorf("unknown user %v %v", out, err)
+	}
 }
 
 func TestUploadFile(t *testing.T) {

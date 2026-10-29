@@ -100,7 +100,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_SIGNUP_PER_ADDRESS` | `5` | Signups per client address a day, across replicas; negative: no limit |
 | `TASKIEM_SIGNUP_BLOCKED_DOMAINS` | — | Email domains that may not sign up, besides the built-in throwaway services (comma-separated) |
 | `TASKIEM_DOCS_URL` | — | The public docs site the web app's help panels link to: the site's `/docs` (`https://example.ng/docs`) |
-| `TASKIEM_CHAT_SIGNUP` | — | The channels that offer sign-up to strangers (`whatsapp`, `telegram`); needs the terms' versions ([onboarding](onboarding.md#signing-up-from-chat)) |
+| `TASKIEM_CHAT_SIGNUP` | — | The channels that offer sign-up to strangers (`whatsapp`, `telegram`, `slack`); needs the terms' versions ([onboarding](onboarding.md#signing-up-from-chat)); `slack` needs Taskiem's Slack app with the redirect URL `<TASKIEM_PUBLIC_URL>/v1/slack/install/callback` ([Slack](integrations/slack.md#signing-up-from-slack)) |
 | `TASKIEM_CHAT_SIGNUP_PER_HOUR` | `60` | Businesses chat may make an hour, across channels and replicas |
 | `TASKIEM_CHAT_SIGNUP_COUNTRIES` | `234` | Calling codes chat sign-up is open to (comma-separated) |
 | `TASKIEM_TERMS_URL`, `TASKIEM_TERMS_VERSION`, `TASKIEM_PRIVACY_VERSION` | `<public url>/terms`, —, — | The terms and privacy notice every way in asks people to agree to, and their versions; set both versions or neither ([onboarding](onboarding.md#the-terms)) |

@@ -10,7 +10,7 @@ The app's events and button clicks come to Taskiem's app URLs for every workspac
 
 Taskiem's Slack app (once, by Taskiem's operators):
 
-1. Create the app at <https://api.slack.com/apps>, with the bot scopes `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `chat:write.public`, `files:write`, `groups:read`, `im:history`, `im:write`, `reactions:write`, `users:read` and `users:read.email`, and the redirect URL `<TASKIEM_PUBLIC_URL>/v1/connections/oauth/callback`.
+1. Create the app at <https://api.slack.com/apps>, with the bot scopes `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `chat:write.public`, `files:write`, `groups:read`, `im:history`, `im:write`, `reactions:write`, `users:read` and `users:read.email`, and the redirect URLs `<TASKIEM_PUBLIC_URL>/v1/connections/oauth/callback` and, for [signing up from Slack](#signing-up-from-slack), `<TASKIEM_PUBLIC_URL>/v1/slack/install/callback`.
 2. **Event Subscriptions** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/events`: direct messages to the bot are [the conversation](#the-conversation-in-slack) there, and every other event goes on, unchanged, to `/hooks/apps/slack@1/events` (which may also stay the Request URL until the conversation is wanted). Subscribe the bot to `message.im`, the events workflows use, and `app_uninstalled` and `tokens_revoked`. Under **App Home**, turn the **Messages** tab on and allow people to send messages to the app.
 3. **Interactivity** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/interactions`: approval buttons are decided there, and every other click goes on to `/hooks/apps/slack@1/interactions` (see [approvals in Slack](#approvals-in-slack)).
 4. **Manage Distribution** → turn on public distribution, so workspaces other than Taskiem's can install it.
@@ -32,8 +32,17 @@ Not yet: the "First payment to this account" warning in chat requests (WhatsApp'
 A member linked to Slack (above) can write to Taskiem's bot in a direct message, as on WhatsApp and Telegram ([docs/spec/chat-way-in.md §8](../spec/chat-way-in.md#8-c3-slack-as-a-conversation)): `help`, `status`, `run <workflow>`, `approvals`, builds, tables, invoices, stock, `connect <service>`, `switch`. Replies come from the bot in the same DM, buttons as Block Kit buttons (a conversation's Yes or No, a template to start), and a connect link as a button.
 
 - **Events.** `/channels/slack/events`, verified with the app's signing secret: Slack's `url_verification` is answered with its challenge; a person's message in the bot's DM (`message`, `channel_type: im`, no subtype, no `bot_id`) is acknowledged at once and handled after, each `event_id` once (Slack retries, `slack_events_seen`, a day); the bot's own messages and edits are ignored; every other event goes on to `/hooks/apps/slack@1/events`.
-- **Which business.** A DM names only the workspace and the user, and a workspace may hold several businesses. The conversation keeps a current business per Slack user (`slack_contacts`, reached only through functions), among the businesses that linked them in that workspace, and `switch` changes it; replies name the business when there is more than one. Someone not linked gets no answer: the bot speaks only through a business's connection.
+- **Which business.** A DM names only the workspace and the user, and a workspace may hold several businesses. The conversation keeps a current business per Slack user (`slack_contacts`, reached only through functions), among the businesses that linked them in that workspace, and `switch` changes it; replies name the business when there is more than one. Someone not linked gets no answer (the bot speaks only through a business's connection), except the installer of a workspace waiting for a business ([below](#signing-up-from-slack)).
 - **Not yet:** forms as Slack modals (a run's inputs and a table's row are asked one at a time in the DM, as on Telegram), and files (voice notes, product photos) shared in the DM.
+
+## Signing up from Slack
+
+A business can start in Slack ([onboarding](../onboarding.md#signing-up-from-slack), [docs/spec/chat-way-in.md §9](../spec/chat-way-in.md#9-c4-signing-up-from-slack)), when `TASKIEM_CHAT_SIGNUP` includes `slack`, the terms are set and Taskiem's Slack app is registered with the second redirect URL above.
+
+- **Add to Slack with no business.** `GET /v1/slack/install` (the web's sign-up page links it) records a request that is the platform's, not a tenant's: its state hashed together with a cookie only the starting browser holds, its PKCE verifier sealed with the platform's KMS key; ten minutes, once. Slack sends the browser back to `/v1/slack/install/callback`, where the code is exchanged (`oauth.v2.access`) for the workspace's bot token, then the browser goes on to the bot in Slack (`slack.com/app_redirect`), or to the web's `/slack/added` with what went wrong.
+- **The install** (`slack_installs`, one per workspace, reached only through functions) keeps the token, sealed with the platform's key, for a day, with the installer and their name and email from `users.info` (the `get_user` action). The bot writes to the installer: the terms with **Yes**, the business's name (the workspace's offered), what they sell and how they are paid. The business is made with that token as its `main` Slack connection, through Taskiem's app for the workspace, and the installer linked; the install is then forgotten. An install no business took in a day has its token given back (`auth.revoke`); `app_uninstalled` forgets it at once.
+- **The installer's email** becomes the account's, unconfirmed; when it is already an account's, nothing is merged, and the installer may start under a Slack-only account instead.
+- **A workspace already connected** through Taskiem's app: every one of its connections takes the new token (and is active again); the installer is told whose workspace it is and offered **Start a separate business**; nothing is made without that choice, and the shared token is never given back.
 
 ## Your own Slack app
 
@@ -76,6 +85,7 @@ The connection test is `auth_test` (`auth.test`).
 | `list_conversations` | `conversations.list` | read | Cursor paging (`cursor` / `next_cursor`) |
 | `get_conversation` | `conversations.info` | read | |
 | `lookup_user_by_email` | `users.lookupByEmail` | read | `found: false` for an unknown or deactivated address |
+| `get_user` | `users.info` | read | A member's names and, with `users:read.email`, the workspace's record of their email (not proof they hold the mailbox); `found: false` for an unknown user |
 | `upload_file` | `files.getUploadURLExternal`, POST to the upload URL, `files.completeUploadExternal` | unsafe write | Text `content` or `content_base64`, up to 50 MB; shared in `channel_id` when given |
 | `list_users` | `users.list` | read | A page of members (bots, Slackbot and deactivated people left out unless `include_bots`), with emails where `users:read.email` allows; `cursor` / `next_cursor` |
 | `open_conversation` | `conversations.open` | read | The direct message with one person (or a group DM): the same channel every time, so safe to repeat |

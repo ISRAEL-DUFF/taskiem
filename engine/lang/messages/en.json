@@ -829,6 +829,36 @@
       "reviewed": true,
       "context": "An approval button pressed from a Slack account not linked in that business"
     },
+    "slack.install.welcome": {
+      "text": "Thanks for adding Taskiem to {workspace}. Let's set up your business here in Slack: a few questions, about a minute.",
+      "reviewed": true,
+      "context": "The bot's first message to the person who added Taskiem to a Slack workspace from the website; the sign-up's terms follow. {workspace} is the workspace's name"
+    },
+    "slack.install.known": {
+      "text": "Taskiem is already in {workspace}, for {businesses}. To work there, ask its owner to add you on Taskiem. To keep a separate business of your own, press the button below.",
+      "reviewed": true,
+      "context": "The bot's first message to someone who added Taskiem to a Slack workspace that is already a business's on Taskiem; a 'Start a separate business' button follows. {businesses} are those businesses' names"
+    },
+    "slack.install.back": {
+      "text": "Taskiem is back in {workspace}. Write to me here as before; send new business to start another.",
+      "reviewed": true,
+      "context": "The bot's message to someone who added Taskiem to a Slack workspace where they are already linked in a business"
+    },
+    "slack.install.email_taken": {
+      "text": "{email} already has a Taskiem account. To use it here, sign in at {where} and link Slack from your profile. Or press the button below to make a business here in Slack, under a separate account.",
+      "reviewed": true,
+      "context": "The bot's first message to someone who added Taskiem to Slack whose Slack email ({email}) is already a Taskiem account; nothing is merged. A 'Start a new business' button follows. {where} is where the web Account page is"
+    },
+    "slack.install.button_separate": {
+      "text": "Start a separate business",
+      "reviewed": true,
+      "context": "Button under slack.install.known (75 characters at most)"
+    },
+    "slack.install.button_new": {
+      "text": "Start a new business",
+      "reviewed": true,
+      "context": "Button under slack.install.email_taken (75 characters at most)"
+    },
     "sms.reconcile": {
       "text": "Your request {reference} is being checked. We will let you know.",
       "reviewed": true,

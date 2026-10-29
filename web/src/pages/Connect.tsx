@@ -38,8 +38,11 @@ export function ConnectPage() {
   useEffect(() => {
     // The fragment holds the Mini App's data: kept in memory, dropped
     // from the address bar.
-    if (window.location.hash) window.history.replaceState(null, "", loc.pathname);
-    get<LinkView>(`/v1/connect/${token}`).then(setView, (e: Error) => setGone(e.message));
+    if (window.location.hash)
+      window.history.replaceState(null, "", loc.pathname);
+    get<LinkView>(`/v1/connect/${token}`).then(setView, (e: Error) =>
+      setGone(e.message),
+    );
   }, [token]);
   if (gone)
     return (
@@ -50,12 +53,24 @@ export function ConnectPage() {
     );
   if (!view) return <Skeleton rows={3} />;
   const c = view.connector;
-  if (done) return <Connected service={done.connected} business={view.business} back={done.back} />;
+  if (done)
+    return (
+      <Connected
+        service={done.connected}
+        business={view.business}
+        back={done.back}
+      />
+    );
   const modes = modesOf(c);
   const chosen = mode || modes.find((m) => m.available)?.mode || "";
   const { main, more } = splitFields(c);
   const signIn = !!c.auth.oauth2 && !!c.oauth_linkable;
-  const problems = Object.fromEntries((c.auth.fields ?? []).map((f) => [f.key, keyProblem(f, creds[f.key] ?? "", chosen)]));
+  const problems = Object.fromEntries(
+    (c.auth.fields ?? []).map((f) => [
+      f.key,
+      keyProblem(f, creds[f.key] ?? "", chosen),
+    ]),
+  );
   const blocked = Object.values(problems).some(Boolean);
   const field = (f: AuthField) => (
     <Field
@@ -91,7 +106,16 @@ export function ConnectPage() {
       }
     >
       {f.multiline ? (
-        <textarea autoComplete="off" spellCheck={false} rows={5} value={creds[f.key] ?? ""} required={f.required !== false} onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })} />
+        <textarea
+          autoComplete="off"
+          spellCheck={false}
+          rows={5}
+          value={creds[f.key] ?? ""}
+          required={f.required !== false}
+          onChange={(e) =>
+            setCreds({ ...creds, [f.key]: e.target.value.trim() })
+          }
+        />
       ) : (
         <input
           type={f.secret ? "password" : "text"}
@@ -100,7 +124,9 @@ export function ConnectPage() {
           value={creds[f.key] ?? ""}
           required={f.required !== false}
           aria-invalid={!!problems[f.key]}
-          onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value.trim() })}
+          onChange={(e) =>
+            setCreds({ ...creds, [f.key]: e.target.value.trim() })
+          }
         />
       )}
     </Field>
@@ -112,7 +138,10 @@ export function ConnectPage() {
       </h1>
       {signIn ? (
         <>
-          <p>You sign in to {c.name} and approve; nothing is copied. Taskiem never sees your password.</p>
+          <p>
+            You sign in to {c.name} and approve; nothing is copied. Taskiem
+            never sees your password.
+          </p>
           <ErrorBox error={act.error} />
           <button
             className="primary"
@@ -120,36 +149,54 @@ export function ConnectPage() {
             disabled={act.busy}
             onClick={() =>
               void act.run(async () => {
-                const { url } = await post<{ url: string }>(`/v1/connect/${token}/oauth`, { mode: chosen || undefined });
+                const { url } = await post<{ url: string }>(
+                  `/v1/connect/${token}/oauth`,
+                  { mode: chosen || undefined },
+                );
                 window.location.assign(url);
               }, false)
             }
           >
             Continue to {c.name}
           </button>
-          <p className="hint">If {c.name} says it cannot sign you in here, open this page in your phone's browser (Chrome or Safari) and try again.</p>
+          <p className="hint">
+            If {c.name} says it cannot sign you in here, open this page in your
+            phone's browser (Chrome or Safari) and try again.
+          </p>
         </>
       ) : (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              const out = await post<{ connected: string; back?: string }>(`/v1/connect/${token}`, {
-                credentials: creds,
-                mode: chosen || undefined,
-                init_data: initData || undefined,
-              });
+              const out = await post<{ connected: string; back?: string }>(
+                `/v1/connect/${token}`,
+                {
+                  credentials: creds,
+                  mode: chosen || undefined,
+                  init_data: initData || undefined,
+                },
+              );
               setDone(out);
             }, false);
           }}
         >
-          <p className="hint">Copy each value from {c.name} and paste it here. Taskiem checks it with {c.name} before saving it, and it never appears in your chat.</p>
+          <p className="hint">
+            Copy each value from {c.name} and paste it here. Taskiem checks it
+            with {c.name} before saving it, and it never appears in your chat.
+          </p>
           {modes.length > 1 && (
             <fieldset className="choice">
               <legend>Which kind?</legend>
               {modes.map((m) => (
                 <label key={m.mode} className="inline">
-                  <input type="radio" name="mode" checked={chosen === m.mode} disabled={!m.available} onChange={() => setMode(m.mode)} />
+                  <input
+                    type="radio"
+                    name="mode"
+                    checked={chosen === m.mode}
+                    disabled={!m.available}
+                    onChange={() => setMode(m.mode)}
+                  />
                   {m.label}
                 </label>
               ))}
@@ -163,22 +210,43 @@ export function ConnectPage() {
             </details>
           )}
           <ErrorBox error={act.error} />
-          <button className="primary" type="submit" disabled={act.busy || blocked} style={{ width: "100%" }}>
+          <button
+            className="primary"
+            type="submit"
+            disabled={act.busy || blocked}
+            style={{ width: "100%" }}
+          >
             {act.busy ? "Checking…" : `Connect ${c.name}`}
           </button>
         </form>
       )}
-      <p className="hint">This link works once, until {new Date(view.expires_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.</p>
+      <p className="hint">
+        This link works once, until{" "}
+        {new Date(view.expires_at).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })}
+        .
+      </p>
     </div>
   );
 }
 
-function Connected({ service, business, back }: { service: string; business: string; back?: string }) {
+function Connected({
+  service,
+  business,
+  back,
+}: {
+  service: string;
+  business: string;
+  back?: string;
+}) {
   return (
     <div className="login card" role="status" data-testid="connect-done">
       <h1>{service} is connected</h1>
       <p>
-        {service} is connected to {business}. Taskiem has told your chat, and carries on there.
+        {service} is connected to {business}. Taskiem has told your chat, and
+        carries on there.
       </p>
       {back && (
         <p>
@@ -198,12 +266,47 @@ export function ConnectDone() {
   const service = q.get("service") ?? "The service";
   const back = q.get("back") ?? undefined;
   const error = q.get("error");
-  if (!error) return <Connected service={service} business="your business" back={back?.startsWith("https://") ? back : undefined} />;
+  if (!error)
+    return (
+      <Connected
+        service={service}
+        business="your business"
+        back={back?.startsWith("https://") ? back : undefined}
+      />
+    );
   return (
     <div className="login card" role="alert">
       <h1>{service} was not connected</h1>
       <p className="error">{error}</p>
       <p>Open the link in your chat again to try once more, while it lasts.</p>
+    </div>
+  );
+}
+
+/** Where Add to Slack ends when Slack could not take the browser to the
+ * bot (docs/spec/chat-way-in.md 9): the install's outcome, and where the
+ * sign-up goes on. */
+export function SlackAdded() {
+  const error = new URLSearchParams(useLocation().search).get("error");
+  if (error)
+    return (
+      <div className="login card" role="alert">
+        <h1>Taskiem was not added to Slack</h1>
+        <p className="error">{error}</p>
+        <p>
+          <a className="button primary" href="/v1/slack/install">
+            Try again
+          </a>
+        </p>
+      </div>
+    );
+  return (
+    <div className="login card" role="status">
+      <h1>Taskiem is in your Slack</h1>
+      <p>
+        Open Slack: Taskiem has written to you there. Answer a few questions in
+        that message to set up your business.
+      </p>
     </div>
   );
 }

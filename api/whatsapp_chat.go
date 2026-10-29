@@ -328,6 +328,11 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// meanwhile goes where it always went.
 	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
+		if dm, ok := ch.(*slackDMChannel); ok {
+			// Another business from Slack has the workspace's Slack too.
+			team, slackUser, _ := parseSlackAddr(number)
+			sc.slack = &slackSignup{team: team, user: slackUser, linked: dm.linked}
+		}
 		if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
 			return err
 		}

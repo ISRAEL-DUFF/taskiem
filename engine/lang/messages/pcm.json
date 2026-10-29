@@ -664,6 +664,30 @@
       "text": "Dis Slack account never link to you for Taskiem, so e no fit decide dis one. Link am from your Taskiem profile.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "Thank you as you add Taskiem to {workspace}. Make we set your business up here for Slack: small questions, like one minute.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem don already dey {workspace}, for {businesses}. If you wan work there, tell the owner make e add you for Taskiem. If you wan your own separate business, press the button wey dey below.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem don come back for {workspace}. Dey write me here like before; send new business if you wan start another one.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} don get Taskiem account already. If you wan use am here, sign in for {where} come link Slack from your profile. Or press the button wey dey below make you start business here for Slack, under another account.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Start my own business",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Start new business",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "We dey check your request {reference}. We go let you know.",
       "reviewed": false

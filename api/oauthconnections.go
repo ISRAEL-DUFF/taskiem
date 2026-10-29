@@ -62,6 +62,9 @@ type oauthProvider struct {
 	authorize, token, revoke string
 	server                   string // the provider's server the URLs were resolved from
 	client                   OAuthClient
+	// redirect is where the provider sends the browser back: the
+	// connections callback, or Add to Slack's (slack_install.go).
+	redirect string
 }
 
 // oauthFor says how connector c is linked here for connections in a mode
@@ -84,7 +87,7 @@ func (s *Server) oauthFor(c *connector.Connector, mode string) (oauthProvider, e
 	if err != nil {
 		return oauthProvider{}, fmt.Errorf("%w: %s cannot be linked on this platform: %w", errOAuthUnavailable, c.Manifest.Name, err)
 	}
-	return oauthProvider{authorize: authorize, token: token, revoke: revoke, server: strings.TrimRight(c.Manifest.BaseURL, "/"), client: client}, nil
+	return oauthProvider{authorize: authorize, token: token, revoke: revoke, server: strings.TrimRight(c.Manifest.BaseURL, "/"), client: client, redirect: s.oauthRedirectURI()}, nil
 }
 
 // forAccount resolves the endpoints that live where the account does
@@ -222,7 +225,7 @@ func (s *Server) beginOAuthConnection(ctx context.Context, p *Principal, c *conn
 	sum := sha256.Sum256([]byte(verifier))
 	q := url.Values{
 		"client_id":             {prov.client.ID},
-		"redirect_uri":          {s.oauthRedirectURI()},
+		"redirect_uri":          {prov.redirect},
 		"state":                 {state},
 		"code_challenge":        {base64.RawURLEncoding.EncodeToString(sum[:])},
 		"code_challenge_method": {"S256"},
@@ -466,7 +469,7 @@ func (s *Server) oauthExchange(ctx context.Context, tenant uuid.UUID, c *connect
 	form := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
-		"redirect_uri":  {s.oauthRedirectURI()},
+		"redirect_uri":  {prov.redirect},
 		"client_id":     {prov.client.ID},
 		"client_secret": {prov.client.Secret},
 		"code_verifier": {verifier},

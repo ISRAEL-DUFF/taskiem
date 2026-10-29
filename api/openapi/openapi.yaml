@@ -17357,6 +17357,55 @@ paths:
                       type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/slack/install:
+    get:
+      operationId: slackInstallStart
+      tags:
+      - Authentication
+      summary: Add to Slack, to sign up in Slack
+      description: |
+        Starts installing Taskiem's Slack app in a workspace with no business behind it (docs/spec/chat-way-in.md 9).
+        Records the request (ten minutes, once, bound to this browser by a cookie, with PKCE) and redirects the browser to
+        Slack's consent page. 404 unless sign-up from Slack is on (TASKIEM_CHAT_SIGNUP includes slack, terms set, Taskiem's
+        Slack app registered at a public URL); 429 past ten a minute from one address.
+      security: []
+      responses:
+        '302':
+          description: Redirects the browser to Slack
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/slack/install/callback:
+    get:
+      operationId: slackInstallCallback
+      tags:
+      - Authentication
+      summary: Add to Slack callback
+      description: |
+        Where Slack returns the browser after an install started at /v1/slack/install, in the browser that started it.
+        The code is exchanged for the workspace's bot token, which waits a day, sealed, for the installer to make a
+        business in a direct message with the bot (then it is the business's Slack connection; otherwise it is given back).
+        Redirects to the bot's messages in Slack, or to the web app's /slack/added with `?error=<message>`.
+      security: []
+      parameters:
+      - name: code
+        in: query
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: error
+        in: query
+        schema:
+          type: string
+        description: '`access_denied` when the person cancelled.'
+      responses:
+        '302':
+          description: Redirects the browser
+        default:
+          $ref: '#/components/responses/Error'
   /v1/signup:
     get:
       operationId: signupOptions
@@ -23904,6 +23953,9 @@ components:
           type: boolean
         terms:
           $ref: '#/components/schemas/TermsAsked'
+        slack:
+          type: string
+          description: Where Add to Slack starts, when a business can be made in Slack instead (GET /v1/slack/install).
     TermsAsked:
       type: object
       description: The terms and privacy notice the deployment asks people to agree to (TASKIEM_TERMS_VERSION,

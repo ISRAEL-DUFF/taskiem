@@ -664,6 +664,30 @@
       "text": "Ejikọtaghị akaụntụ Slack a na gị na Taskiem, ya mere ọ pụghị ikpebi nke a. Jikọọ ya site na profaịlụ Taskiem gị.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "Daalụ maka itinye Taskiem na {workspace}. Ka anyị hazie azụmahịa gị ebe a na Slack: ajụjụ ole na ole, ihe dịka otu nkeji.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem adịlarị na {workspace}, maka {businesses}. Iji rụọ ọrụ ebe ahụ, rịọ onye nwe ya ka o tinye gị na Taskiem. Iji nwee azụmahịa nke gị iche, pịa bọtịnụ dị n'okpuru.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem alọghachila na {workspace}. Dee m ozi ebe a dịka mbụ; zipu new business iji malite ọzọ.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} enweelarị akaụntụ Taskiem. Iji jiri ya ebe a, banye na {where} ma jikọọ Slack site na profaịlụ gị. Ma ọ bụ pịa bọtịnụ dị n'okpuru iji mepụta azụmahịa ebe a na Slack, n'okpuru akaụntụ ọzọ.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Malite azụmahịa nke m iche",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Malite azụmahịa ọhụrụ",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "Ana-enyocha aririo gi {reference}. Anyi ga-agwa gi.",
       "reviewed": false

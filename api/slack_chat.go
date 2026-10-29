@@ -151,6 +151,12 @@ func (s *Server) slackEvents(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	if ev.Type == "event_callback" && ev.Event.Type == "app_uninstalled" {
+		// An install still waiting for a business is gone with the app.
+		if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_slack_install_drop($1)`, ev.TeamID); err != nil {
+			s.Logger.Warn("slack: forgetting an install", "err", err)
+		}
+	}
 	// Anything else is a workflow's: the slack@1 events trigger of
 	// Taskiem's app, routed by workspace (decision 0051).
 	if s.Ingest == nil {
@@ -192,9 +198,11 @@ func (s *Server) slackDM(ctx context.Context, team, slackUser string, in whatsap
 		return
 	}
 	if len(links) == 0 {
-		// Not linked: nothing can answer from a business. Said at most
-		// twice in ten minutes; the bot cannot write without a business's
-		// token, so this is best effort through any business here.
+		// Not linked: the installer of a workspace waiting for a business
+		// is signing up (slack_install.go); nobody else is answered.
+		if err := s.slackStranger(ctx, team, slackUser, in); err != nil {
+			s.Logger.Warn("slack: a message before sign-up", "err", err)
+		}
 		return
 	}
 	ch := &slackDMChannel{s: s, team: team}

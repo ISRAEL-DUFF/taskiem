@@ -219,6 +219,18 @@ Built as above ([Slack](../integrations/slack.md#the-conversation-in-slack)), mi
 - **Uninstalling** marks the connection expired, as 0051 says; the business and its people stay, and anyone linked by WhatsApp, Telegram or the web keeps working there.
 - **Accept:** an install with no account makes a business whose owner can build and run from the DM; an installer whose email is someone's account is not merged; a second install of a known workspace makes nothing without the installer's choice; the platform-level install request cannot be completed in another browser.
 
+### 9.1 As built (C4)
+
+Built as above ([Slack](../integrations/slack.md#signing-up-from-slack), [onboarding](../onboarding.md#signing-up-from-slack)), with these choices:
+
+- **The install link** is `GET /v1/slack/install`, offered on the web's sign-up page (`slack` in `GET /v1/signup`) when `TASKIEM_CHAT_SIGNUP` includes `slack`, the terms are set and Taskiem's Slack app is registered; ten a minute per address. Slack sends the browser back to its own callback, `/v1/slack/install/callback` (a second redirect URL on the app), not the connections callback: the request is the platform's (`slack_install_requests`), its state hashed with the browser's cookie, its PKCE verifier sealed with the platform's KMS key (`Vault.SealPlatform`, the customer-key credentials' pattern, bound to its use). Afterwards the browser is sent to the bot in Slack (`slack.com/app_redirect`), or to `/slack/added` with what went wrong.
+- **The install record** (`slack_installs`, one per workspace, a day) keeps the bot token sealed the same way, the installer, and Slack's name and email for them, read with a new `slack@1` action, `get_user` (`users.info`). An hourly sweep gives back (`auth.revoke`) the token of an install no business took; an `app_uninstalled` event forgets it at once.
+- **The sign-up** is the WhatsApp one on a channel that sends with the install's token: the terms, the business's name with the workspace's offered as a button, what they sell and how they are paid; the person's name is Slack's, so that question is skipped (asked when Slack gives none). The daily limit counts the Slack user. The business is made as in §6.3 with `source` `slack`, its Slack connection `main` in `prod` holding the token through Taskiem's app for the workspace (the app account, so the workspace's events route to it), and the owner's Slack link verified. The install record is dropped in the same transaction.
+- **The email**: Slack's, kept unconfirmed (so nothing is emailed for the business until it is confirmed, as for chat-born owners); when it is already an account's, the installer is told so before anything is asked, with how to link that account from the web (the email link is C5) or **Start a new business** under a Slack-only account (`owner+…@slack.taskiem.invalid`).
+- **A known workspace**: every connection of it through Taskiem's app, whatever its status, takes the new token and is active again; the installer is told the businesses' names and gets **Start a separate business** (**Ask to join** is C5). Their install's token is shared, so the sweep never gives it back. An installer already linked there is told the conversation carries on.
+- **A linked person's `new business` in Slack** gives the new business the workspace's Slack too: the token of their current business's connection there, their link verified.
+- **Not yet:** **Ask to join** (C5); Slack's Marketplace listing (a people item).
+
 ## 10. C5: one person, many doors
 
 ### 10.1 I already use Taskiem

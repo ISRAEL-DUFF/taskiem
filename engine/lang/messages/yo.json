@@ -664,6 +664,30 @@
       "text": "A kò so àkáǹtì Slack yìí mọ́ yín lórí Taskiem, nítorí náà kò lè pinnu èyí. Ẹ so ó pọ̀ láti àkọsílẹ̀ Taskiem yín.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "A dúpẹ́ pé o fi Taskiem kún {workspace}. Ẹ jẹ́ ká ṣètò iṣẹ́ rẹ níbí nínú Slack: ìbéèrè díẹ̀, bí ìṣẹ́jú kan.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem ti wà nínú {workspace} tẹ́lẹ̀, fún {businesses}. Láti ṣiṣẹ́ níbẹ̀, ní kí olùdásílẹ̀ rẹ̀ fi ọ́ kún un lórí Taskiem. Láti ní iṣẹ́ tìrẹ lọ́tọ̀, tẹ bọ́tìnnì ìsàlẹ̀.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem ti padà sí {workspace}. Máa kọ̀wé sí mi níbí bí ti tẹ́lẹ̀; fi new business ránṣẹ́ láti bẹ̀rẹ̀ òmíràn.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} ti ní àkọọ́lẹ̀ Taskiem tẹ́lẹ̀. Láti lò ó níbí, wọlé ní {where} kí o so Slack pọ̀ láti ojú-ìwé rẹ. Tàbí tẹ bọ́tìnnì ìsàlẹ̀ láti ṣe iṣẹ́ kan níbí nínú Slack, lábẹ́ àkọọ́lẹ̀ míràn.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Bẹ̀rẹ̀ iṣẹ́ tèmi lọ́tọ̀",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Bẹ̀rẹ̀ iṣẹ́ tuntun",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "A n se ayewo ibeere yin {reference}. A o je ki e mo.",
       "reviewed": false

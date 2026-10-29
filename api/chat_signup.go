@@ -89,6 +89,8 @@ type signupState struct {
 	Name     string   `json:"name,omitempty"`
 	Sells    string   `json:"sells,omitempty"`
 	Pays     []string `json:"pays,omitempty"`
+	// Suggest is a name offered for the business (the Slack workspace's).
+	Suggest string `json:"suggest,omitempty"`
 	// Agreed is when the person replied Yes to the terms.
 	Agreed *time.Time `json:"agreed,omitempty"`
 }
@@ -103,6 +105,9 @@ type signupChat struct {
 	lang lang.Tag
 	// tg is the Telegram account writing, on Telegram.
 	tg *telegram.Update
+	// slack is the Slack user writing and the token their business's
+	// Slack connection takes, on Slack (slack_install.go).
+	slack *slackSignup
 }
 
 func (sc *signupChat) t(id string, kv ...string) string { return tr(sc.lang, id, kv...) }
@@ -277,6 +282,13 @@ func (s *Server) signupBegin(ctx context.Context, sc *signupChat) error {
 	if sc.user != uuid.Nil {
 		st.Step = suBusiness
 	}
+	if ss := sc.slack; ss != nil {
+		// Slack names the workspace and, for a new person, who they are.
+		st.Suggest = ss.teamName
+		if sc.user == uuid.Nil {
+			st.Name = ss.person
+		}
+	}
 	if err := s.signupSave(ctx, sc, st); err != nil {
 		return err
 	}
@@ -290,6 +302,9 @@ func (s *Server) signupAsk(ctx context.Context, sc *signupChat, st *signupState)
 		return s.suSay(ctx, sc, sc.t("signup.terms", "link", s.termsLink(), "languages", langNames(s.operatorLangs())),
 			whatsapp.Button{ID: "su:yes", Title: sc.t("button.yes")}, whatsapp.Button{ID: "su:no", Title: sc.t("button.no")})
 	case suBusiness:
+		if n, ok := plainName(st.Suggest, 2, 80); ok {
+			return s.suSay(ctx, sc, sc.t("signup.ask_business"), whatsapp.Button{ID: "su:suggest", Title: n})
+		}
 		return s.suSay(ctx, sc, sc.t("signup.ask_business"))
 	case suName:
 		return s.suSay(ctx, sc, sc.t("signup.ask_name"))
@@ -355,12 +370,16 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		st.Agreed = &now
 		return next(suBusiness)
 	case suBusiness:
+		if reply == "su:suggest" && st.Suggest != "" {
+			text = st.Suggest
+		}
 		name, ok := plainName(text, 2, 80)
 		if !ok {
 			return s.suSay(ctx, sc, sc.t("signup.business_bad"))
 		}
 		st.Business = name
-		if sc.user != uuid.Nil {
+		if sc.user != uuid.Nil || st.Name != "" {
+			// Their name is known: the account's, or Slack's.
 			return next(suSells)
 		}
 		return next(suName)
@@ -473,13 +492,32 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 	if number != "" {
 		nb.Detail["number"] = whatsapp.MaskNumber(number)
 	}
+	// On Slack the business gets the workspace's Slack, and its owner is
+	// linked there, whoever they are (slack_install.go).
+	var join func(tx pgx.Tx, tenant, owner uuid.UUID) error
+	if ss := sc.slack; ss != nil {
+		if err := s.slackSignupToken(ctx, ss); err != nil {
+			return err
+		}
+		nb.Detail["workspace"] = ss.team
+		join = func(tx pgx.Tx, tenant, owner uuid.UUID) error { return s.slackJoinTx(ctx, tx, tenant, owner, ss) }
+		nb.Then = join
+	}
 	if sc.user == uuid.Nil {
 		// A person the address is the only proof of. On WhatsApp the sign-in
 		// name is the field agent's for the number, so an owner an agent
 		// signed up who never agreed is found and is this one.
 		nb.OwnerEmail = ownerPlaceholderEmail(number)
-		if channel == "telegram" {
+		switch channel {
+		case "telegram":
 			nb.OwnerEmail = telegramPlaceholderEmail(sc.tg.FromID)
+		case "slack":
+			// Slack's email, unconfirmed, unless it is someone's account.
+			email, err := s.slackOwnerEmail(ctx, sc.slack)
+			if err != nil {
+				return err
+			}
+			nb.OwnerEmail = email
 		}
 		var found uuid.UUID
 		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, nb.OwnerEmail).Scan(&found)
@@ -491,11 +529,14 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 		}
 		nb.Detail["new_owner"] = nb.Owner == uuid.Nil
 		nb.Then = func(tx pgx.Tx, tenant, owner uuid.UUID) error {
-			var outcome string
+			outcome := "ok"
 			var err error
-			if channel == "telegram" {
+			switch channel {
+			case "telegram":
 				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_telegram($1, $2, $3)`, owner, sc.tg.FromID, sc.tg.Username).Scan(&outcome)
-			} else {
+			case "slack":
+				err = join(tx, tenant, owner)
+			default:
 				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_whatsapp($1, $2)`, owner, number).Scan(&outcome)
 			}
 			if err != nil {

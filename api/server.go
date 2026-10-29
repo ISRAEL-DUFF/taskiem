@@ -312,6 +312,10 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/connect/{token}", s.getConnectLink)
 		r.Post("/connect/{token}", s.connectWithKey)
 		r.Post("/connect/{token}/oauth", s.connectWithOAuth)
+		// Add to Slack from the website: a business made in Slack
+		// (slack_install.go).
+		r.Get("/slack/install", s.slackInstallStart)
+		r.Get("/slack/install/callback", s.slackInstallCallback)
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)

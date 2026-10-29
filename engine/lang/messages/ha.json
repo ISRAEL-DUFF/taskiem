@@ -664,6 +664,30 @@
       "text": "Wannan asusun Slack ba a haɗa shi da ku a Taskiem ba, don haka ba zai iya yanke wannan ba. Ku haɗa shi daga shafin bayanan ku na Taskiem.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "Na gode da ka ƙara Taskiem a {workspace}. Mu kafa kasuwancinka a nan cikin Slack: 'yan tambayoyi, kamar minti ɗaya.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem yana cikin {workspace} tuni, don {businesses}. Don yin aiki a can, ka roƙi mai shi ya ƙara ka a Taskiem. Don samun kasuwancinka na daban, danna maɓallin da ke ƙasa.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem ya dawo cikin {workspace}. Ka rubuto mini a nan kamar da; aika new business don fara wani.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} yana da asusun Taskiem tuni. Don amfani da shi a nan, shiga a {where} ka haɗa Slack daga bayananka. Ko danna maɓallin da ke ƙasa don yin kasuwanci a nan cikin Slack, ƙarƙashin wani asusu daban.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Fara kasuwanci na daban",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Fara sabon kasuwanci",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
       "reviewed": false
