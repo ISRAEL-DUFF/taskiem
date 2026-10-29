@@ -1272,6 +1272,9 @@ func serve(ctx context.Context, args []string) error {
 			// /hooks/apps/slack@1/interactions (docs/integrations/slack.md).
 			git.Ingest = e.hooks()
 			mux.HandleFunc("/channels/slack/interactions", git.SlackHooks().ServeHTTP)
+			// Its events: DMs to the bot here, the rest on to
+			// /hooks/apps/slack@1/events (docs/spec/chat-way-in.md 8).
+			mux.HandleFunc("/channels/slack/events", git.SlackEvents().ServeHTTP)
 		}
 		// USSD aggregators' callbacks: the fast path (docs/ussd.md).
 		mux.Handle("/channels/ussd/", http.StripPrefix("/channels/ussd", git.USSDHooks()))

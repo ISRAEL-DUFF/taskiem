@@ -191,7 +191,7 @@ Built as above ([WhatsApp](../whatsapp.md#connecting-a-service-from-the-chat), [
 - **The connect link's connection** is the first free name (`main` unless one exists), in `prod`; the web form's audit (`connection.create`) is kept, and `connection.from_chat` added beside it with `via` and the channel.
 - **The Telegram Mini App** reads `initData` from the page's address (Telegram puts it in the fragment), so the page needs no script from Telegram. It is the connect form only: Telegram's forms for a run's inputs and a table's row are not built yet.
 - **The pasted-key guard** drops the message before anything reads it, so there is nothing to mask: it is never stored. Keys from strangers are checked against the platform's connectors.
-- **Not yet:** the account a sign-in connected as, in the chat's message ("Google is connected (ada@example.com)"); setting the chat PIN and waking a dormant chat from Telegram (the PIN form is WhatsApp's; on Telegram the Mini App is the connect form only); Slack's connect link (C3).
+- **Not yet:** the account a sign-in connected as, in the chat's message ("Google is connected (ada@example.com)"); setting the chat PIN and waking a dormant chat from Telegram (the PIN form is WhatsApp's; on Telegram the Mini App is the connect form only). Slack's connect link came with C3, as a button.
 
 ## 8. C3: Slack as a conversation
 
@@ -200,6 +200,15 @@ Built as above ([WhatsApp](../whatsapp.md#connecting-a-service-from-the-chat), [
 - **Forms.** A run's inputs and a table's row come as a modal (`views.open`, from the button's `trigger_id`), checked as the other forms are; a key goes through the connect page (§7.3).
 - **Voice notes and photos**: a file shared in the DM is fetched with the bot token (`files:read` added to the app's scopes) where voice notes are on; a product photo likewise.
 - **Accept:** the WhatsApp conversation tests (status, run, build, tables, invoices, stock) run on Slack through the same harness, and approvals in Slack still work as today.
+
+### 8.1 As built (C3)
+
+Built as above ([Slack](../integrations/slack.md#the-conversation-in-slack)), migration `00268_slack_conversation`, where it differs:
+
+- **The channel** for a DM is its own (`slackDMChannel`): no business of its own (`OwnTenant` none), so the conversation picks among the businesses that linked the person in the workspace and `switch` works as on WhatsApp; it sends through the first of them whose Slack connection reaches the workspace (the bot is the same). Approval requests keep the business's channel, as before.
+- **Buttons**: a conversation's buttons go out with the action id `taskiem.reply` and come back through `/channels/slack/interactions` as the person's answer; decision tokens keep `taskiem.decide`. A connect link is a URL button, since a plain-text section does not link.
+- **Someone not linked** gets no reply rather than how to link: the bot can only write through a business's connection, and none has linked them.
+- **Not yet:** modals for forms (asked one at a time, as on Telegram) and files in the DM (voice notes, photos; `files:read` not asked for yet).
 
 ## 9. C4: signing up from Slack
 

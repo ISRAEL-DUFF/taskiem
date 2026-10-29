@@ -290,6 +290,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		if s.Slack != nil {
 			r.Post("/channels/slack/interactions", s.slackInteractions)
+			r.Post("/channels/slack/events", s.slackEvents) // DMs to the bot (slack_chat.go)
 		}
 		r.Mount("/channels/ussd", s.USSDHooks())
 	}

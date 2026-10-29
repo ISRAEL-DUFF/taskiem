@@ -303,6 +303,12 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if c.tenants, err = s.tenantsOf(ctx, user); err != nil {
 		return err
 	}
+	// A Slack DM reaches only the businesses that linked the person in
+	// that workspace (slack_chat.go).
+	if l, ok := ch.(interface{ linkedTenants() []uuid.UUID }); ok {
+		linked := l.linkedTenants()
+		c.tenants = slices.DeleteFunc(c.tenants, func(t tenantRef) bool { return !slices.Contains(linked, t.ID) })
+	}
 	// A dormant binding acts on nothing until it is proven again
 	// (chat_dormant.go).
 	if dormant, err := s.bindingGate(ctx, c, user); dormant || err != nil {

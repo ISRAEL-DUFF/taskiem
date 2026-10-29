@@ -115,6 +115,7 @@ func newSlackWorld(t *testing.T) *slackWorld {
 		Logger: slog.New(slog.DiscardHandler), Slack: &api.SlackApp{SigningSecret: slackSecret}, ChatSigner: whatsapp.Signer{Key: waKey}, PublicURL: waPublicURL}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/channels/slack/interactions", srv.SlackHooks().ServeHTTP)
+	mux.HandleFunc("/channels/slack/events", srv.SlackEvents().ServeHTTP)
 	mux.Handle("/", specCheck(t, srv.Handler()))
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)

@@ -863,6 +863,12 @@ slack_bindings.team_id
 slack_bindings.tenant_id
 slack_bindings.user_id
 slack_bindings.verified_at
+slack_contacts.address
+slack_contacts.current_tenant
+slack_contacts.last_inbound_at
+slack_contacts.updated_at
+slack_events_seen.event_id
+slack_events_seen.received_at
 sso_connections.config
 sso_connections.created_at
 sso_connections.created_by

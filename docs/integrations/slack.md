@@ -11,7 +11,7 @@ The app's events and button clicks come to Taskiem's app URLs for every workspac
 Taskiem's Slack app (once, by Taskiem's operators):
 
 1. Create the app at <https://api.slack.com/apps>, with the bot scopes `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `chat:write.public`, `files:write`, `groups:read`, `im:history`, `im:write`, `reactions:write`, `users:read` and `users:read.email`, and the redirect URL `<TASKIEM_PUBLIC_URL>/v1/connections/oauth/callback`.
-2. **Event Subscriptions** → Request URL `<TASKIEM_HOOKS_URL>/apps/slack@1/events`; subscribe the bot to the events workflows use, and to `app_uninstalled` and `tokens_revoked`.
+2. **Event Subscriptions** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/events`: direct messages to the bot are [the conversation](#the-conversation-in-slack) there, and every other event goes on, unchanged, to `/hooks/apps/slack@1/events` (which may also stay the Request URL until the conversation is wanted). Subscribe the bot to `message.im`, the events workflows use, and `app_uninstalled` and `tokens_revoked`. Under **App Home**, turn the **Messages** tab on and allow people to send messages to the app.
 3. **Interactivity** → Request URL `<TASKIEM_PUBLIC_URL>/channels/slack/interactions`: approval buttons are decided there, and every other click goes on to `/hooks/apps/slack@1/interactions` (see [approvals in Slack](#approvals-in-slack)).
 4. **Manage Distribution** → turn on public distribution, so workspaces other than Taskiem's can install it.
 5. Put the client id, client secret and signing secret in the environment.
@@ -26,6 +26,14 @@ Approval requests can come to a member in Slack, as they do on WhatsApp and Tele
 - **Where clicks go.** Taskiem's Slack app has one interactivity URL, `/channels/slack/interactions`, verified with the app's signing secret: Taskiem's own buttons (approvals, Confirm) are handled there, and every other click goes on, unchanged, to `/hooks/apps/slack@1/interactions`, the `interactions` trigger.
 
 Not yet: the "First payment to this account" warning in chat requests (WhatsApp's and Telegram's do not show it either), and updating a request in Slack when it is decided somewhere else (its buttons then answer that it was already decided).
+
+## The conversation in Slack
+
+A member linked to Slack (above) can write to Taskiem's bot in a direct message, as on WhatsApp and Telegram ([docs/spec/chat-way-in.md §8](../spec/chat-way-in.md#8-c3-slack-as-a-conversation)): `help`, `status`, `run <workflow>`, `approvals`, builds, tables, invoices, stock, `connect <service>`, `switch`. Replies come from the bot in the same DM, buttons as Block Kit buttons (a conversation's Yes or No, a template to start), and a connect link as a button.
+
+- **Events.** `/channels/slack/events`, verified with the app's signing secret: Slack's `url_verification` is answered with its challenge; a person's message in the bot's DM (`message`, `channel_type: im`, no subtype, no `bot_id`) is acknowledged at once and handled after, each `event_id` once (Slack retries, `slack_events_seen`, a day); the bot's own messages and edits are ignored; every other event goes on to `/hooks/apps/slack@1/events`.
+- **Which business.** A DM names only the workspace and the user, and a workspace may hold several businesses. The conversation keeps a current business per Slack user (`slack_contacts`, reached only through functions), among the businesses that linked them in that workspace, and `switch` changes it; replies name the business when there is more than one. Someone not linked gets no answer: the bot speaks only through a business's connection.
+- **Not yet:** forms as Slack modals (a run's inputs and a table's row are asked one at a time in the DM, as on Telegram), and files (voice notes, product photos) shared in the DM.
 
 ## Your own Slack app
 

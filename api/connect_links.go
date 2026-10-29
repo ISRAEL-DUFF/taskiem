@@ -428,14 +428,16 @@ func (s *Server) waConnect(ctx context.Context, c *chat, name string) error {
 		return err
 	}
 	service := whatsapp.SafeText(conn.Manifest.Name)
-	if c.ch.Name() != "telegram" {
+	if c.ch.Name() == "whatsapp" {
 		return c.say(ctx, s, c.t("connect.link", "service", service, "link", link, "minutes", "15"))
 	}
-	// On Telegram the page opens inside the chat as a Mini App, which signs
-	// who opened it (so the link is on the button only); a service that
-	// signs in goes to the browser.
+	// On Telegram and Slack the link is a button: on Telegram the page opens
+	// inside the chat as a Mini App, which signs who opened it (so the link
+	// is on the button only), and a service that signs in goes to the
+	// browser; Slack's text does not link.
+	tg := c.ch.Name() == "telegram"
 	_, err = c.ch.Send(ctx, c.addr, whatsapp.Message{Text: c.ch.Prefix(c.tenant.Name) + c.t("connect.link_button", "service", service, "minutes", "15"),
-		Link: &whatsapp.LinkButton{Title: c.t("connect.button", "service", service), URL: link, WebApp: conn.Manifest.Auth.OAuth2 == nil}})
+		Link: &whatsapp.LinkButton{Title: c.t("connect.button", "service", service), URL: link, WebApp: tg && conn.Manifest.Auth.OAuth2 == nil}})
 	return err
 }
 

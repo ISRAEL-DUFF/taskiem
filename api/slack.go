@@ -46,9 +46,11 @@ type SlackApp struct {
 const (
 	slackConnector = "slack@1"
 	// slackDecide and slackLink are the action ids of Taskiem's own
-	// buttons; any other action is a workflow's.
+	// buttons, and slackReply a conversation's (Yes, No, a template to
+	// start: slack_chat.go); any other action is a workflow's.
 	slackDecide = "taskiem.decide"
 	slackLink   = "taskiem.link"
+	slackReply  = "taskiem.reply"
 )
 
 var slackAddrRe = regexp.MustCompile(`^sl:([A-Z0-9]{1,24}):([A-Z0-9]{1,24})$`)
@@ -108,8 +110,11 @@ func (c *slackChannel) Send(ctx context.Context, addr string, m whatsapp.Message
 			if b.ID == "" || len(b.ID) > 2000 {
 				return "", errors.New("slack: a button's payload must be 1-2000 characters")
 			}
-			id := slackDecide
-			if strings.HasPrefix(b.ID, "taskiem-link:") {
+			id := slackReply
+			switch {
+			case strings.HasPrefix(b.ID, "tk1."):
+				id = slackDecide
+			case strings.HasPrefix(b.ID, "taskiem-link:"):
 				id = slackLink
 			}
 			el := map[string]any{"type": "button", "action_id": fmt.Sprintf("%s.%d", id, i), "value": b.ID,
@@ -120,6 +125,11 @@ func (c *slackChannel) Send(ctx context.Context, addr string, m whatsapp.Message
 			els = append(els, el)
 		}
 		blocks = append(blocks, map[string]any{"type": "actions", "elements": els})
+	}
+	if l := m.Link; l != nil && strings.HasPrefix(l.URL, "https://") {
+		// A page to open (a connect link): a button with its URL.
+		blocks = append(blocks, map[string]any{"type": "actions", "elements": []any{map[string]any{"type": "button", "action_id": "taskiem.open",
+			"url": l.URL, "text": map[string]any{"type": "plain_text", "text": clip(l.Title, 75)}}}})
 	}
 	out, err := c.s.slackCall(ctx, c.tenant, team, "post_message", map[string]any{"channel": user, "text": clip(text, 3000), "blocks": blocks})
 	if err != nil {
@@ -379,6 +389,10 @@ type slackPayload struct {
 // Served on the edge role, and on the api role when it runs every role.
 func (s *Server) SlackHooks() http.Handler { return http.HandlerFunc(s.slackInteractions) }
 
+// SlackEvents receives the events of Taskiem's Slack app: POST
+// /channels/slack/events (slack_chat.go), on the same roles.
+func (s *Server) SlackEvents() http.Handler { return http.HandlerFunc(s.slackEvents) }
+
 func (s *Server) slackInteractions(w http.ResponseWriter, r *http.Request) {
 	if s.Slack == nil {
 		writeErr(w, http.StatusNotFound, "not found")
@@ -408,6 +422,16 @@ func (s *Server) slackInteractions(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(action, slackDecide+"."):
 		w.WriteHeader(http.StatusOK)
 		s.background(r.Context(), "slack decision", func(ctx context.Context) { s.slackDecision(ctx, pl, value) })
+	case strings.HasPrefix(action, slackReply+"."):
+		// A conversation's button, read as the person's answer (slack_chat.go).
+		w.WriteHeader(http.StatusOK)
+		s.background(r.Context(), "slack reply", func(ctx context.Context) {
+			s.slackDM(ctx, pl.Team.ID, pl.User.ID, whatsapp.Inbound{ID: uuid.NewString(), Type: "interactive", Reply: value})
+			s.slackReplace(ctx, pl, "")
+		})
+	case action == "taskiem.open":
+		// A link button: Slack opens the page; nothing to do here.
+		w.WriteHeader(http.StatusOK)
 	default:
 		// A workflow's button, modal or shortcut: the slack@1 interactions
 		// trigger of Taskiem's app, routed by workspace (rule 18).
