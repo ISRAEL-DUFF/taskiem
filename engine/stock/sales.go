@@ -100,11 +100,15 @@ func (in *SaleIn) check() error {
 		return fmt.Errorf("%w: only a terminal's sale is given its items", ErrSaleInvalid)
 	}
 	var total int64
+	each := map[string]int64{}
 	for i := range in.Lines {
 		l := &in.Lines[i]
 		l.Item = strings.TrimSpace(l.Item)
 		if l.ItemID == "" || l.Item == "" || l.Quantity <= 0 || l.Quantity > MaxDelta || l.PriceKobo < 0 || l.PriceKobo > 1e10 {
 			return fmt.Errorf("%w: each item is sold at least once, at a price of 0 or more", ErrSaleInvalid)
+		}
+		if each[l.ItemID] += l.Quantity; each[l.ItemID] > MaxDelta {
+			return fmt.Errorf("%w: at most %d of an item in a sale", ErrSaleInvalid, MaxDelta)
 		}
 		l.LineKobo = l.PriceKobo * l.Quantity
 		total += l.LineKobo
@@ -119,9 +123,13 @@ func (in *SaleIn) check() error {
 		return fmt.Errorf("%w: a sale has an amount; something given away is an adjustment", ErrSaleInvalid)
 	}
 	in.Note = strings.TrimSpace(in.Note)
-	if len([]rune(in.Note)) > 200 || in.Actor == "" || in.Key == "" || len(in.Key) > 150 {
+	if len([]rune(in.Note)) > 200 {
 		return fmt.Errorf("%w: the note is up to 200 characters", ErrSaleInvalid)
 	}
+	if in.Actor == "" || in.Key == "" {
+		return fmt.Errorf("%w: who sold it, and an idempotency key", ErrSaleInvalid)
+	}
+	in.Key = FitKey(in.Key)
 	if in.SoldAt.IsZero() {
 		in.SoldAt = time.Now()
 	}
@@ -197,6 +205,13 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 			if err != nil {
 				return err
 			}
+			// The takings are the sale's: the invoice matcher never offers
+			// them for an invoice or order (taskiem_money_entry_counted
+			// counts them too, 00260).
+			if _, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2, 'matched')
+				ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = now()`, id, tenant); err != nil {
+				return err
+			}
 			status, entry = "recorded", &id
 		}
 		if in.Entry != nil {
@@ -230,7 +245,21 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 			}
 			break
 		}
+		// One movement per item: an item on two lines ("2 rice, 3 rice")
+		// moves by both.
+		var order []string
+		each := map[string]*SaleLine{}
 		for _, l := range x.Lines {
+			if e := each[l.ItemID]; e != nil {
+				e.Quantity += l.Quantity
+				continue
+			}
+			l := l
+			each[l.ItemID] = &l
+			order = append(order, l.ItemID)
+		}
+		for _, id := range order {
+			l := each[id]
 			d := -l.Quantity
 			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Sale, Delta: &d, Reference: x.Reference, Actor: in.Actor,
 				Key: "sale:" + x.ID.String() + ":" + l.ItemID, CostKobo: l.CostKobo})
@@ -320,6 +349,9 @@ const freeSQL = `NOT EXISTS (SELECT 1 FROM stock_sales x WHERE x.entry_id = e.id
 // takeEntry checks a terminal's sale may be given to a sale: money in,
 // settled, of the kind, the amount, and counting for nothing yet.
 func takeEntry(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, amount int64, paidHow string) error {
+	if err := moneylog.LockEntry(ctx, tx, entry); err != nil {
+		return err
+	}
 	var ok bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM money_entries e WHERE e.tenant_id = $1 AND e.id = $2 AND e.direction = 'in' AND e.status = 'settled'
 		AND e.kind = ANY ($3) AND `+countableSQL+` = $4 AND `+freeSQL+`)`, tenant, entry, kindsFor(paidHow), amount).Scan(&ok)
@@ -329,8 +361,31 @@ func takeEntry(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, amount i
 	if !ok {
 		return ErrEntryTaken
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2, 'matched')
-		ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = now()`, entry, tenant)
+	return matchedTx(ctx, tx, tenant, entry)
+}
+
+// entryFree takes an entry's lock (the one invoices and orders count it
+// under, moneylog.LockEntry) and says nothing counts it yet: no sale,
+// invoice or order.
+func entryFree(ctx context.Context, tx pgx.Tx, entry uuid.UUID) (bool, error) {
+	if err := moneylog.LockEntry(ctx, tx, entry); err != nil {
+		return false, err
+	}
+	var free bool
+	err := tx.QueryRow(ctx, `SELECT taskiem_money_entry_counted($1) = 0`, entry).Scan(&free)
+	return free, err
+}
+
+// matchedTx marks an entry a sale took as matched, and closes what the
+// invoice matcher offered it for, so it is neither offered again nor
+// confirmed from an old offer.
+func matchedTx(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2, 'matched')
+		ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = now()`, entry, tenant); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'closed', decided_at = now()
+		WHERE tenant_id = $1 AND entry_id = $2 AND status = 'open'`, tenant, entry)
 	return err
 }
 
@@ -376,6 +431,16 @@ func (s *Stock) MatchSales(ctx context.Context, tenant uuid.UUID) (int, error) {
 			if err != nil {
 				return err
 			}
+			// Under the lock invoices and orders count it under: nothing
+			// counts it yet.
+			free, err := entryFree(ctx, sp, entry)
+			if err != nil || !free {
+				_ = sp.Rollback(ctx)
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			_, err = sp.Exec(ctx, `UPDATE stock_sales SET status = 'matched', entry_id = $3, matched_how = $4, matched_at = now() WHERE tenant_id = $1 AND id = $2`,
 				tenant, x.ID, entry, how)
 			var pe *pgconn.PgError
@@ -387,8 +452,7 @@ func (s *Stock) MatchSales(ctx context.Context, tenant uuid.UUID) (int, error) {
 				_ = sp.Rollback(ctx)
 				return err
 			}
-			if _, err := sp.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2, 'matched')
-				ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = now()`, entry, tenant); err != nil {
+			if err := matchedTx(ctx, sp, tenant, entry); err != nil {
 				_ = sp.Rollback(ctx)
 				return err
 			}

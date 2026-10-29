@@ -156,3 +156,46 @@ func TestStockWordsInPidgin(t *testing.T) {
 		t.Fatalf("stock: %v", items)
 	}
 }
+
+// Adding an item retried after a failure part way (its row in the table,
+// its quantity not yet recorded) finishes it under the same key; another
+// key with the same name is refused. A long Idempotency-Key is taken.
+func TestStockAddRetried(t *testing.T) {
+	ctx := context.Background()
+	w := shopWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Mama Put Stores", "ada@mama.test")
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+
+	// The quantity's movement fails once, after the row is in the table.
+	if _, err := w.env.DB.Admin.Exec(ctx, `CREATE FUNCTION test_refuse_movement() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN RAISE EXCEPTION 'the database went away'; END $$;
+		CREATE TRIGGER test_refuse_movement BEFORE INSERT ON stock_movements FOR EACH ROW EXECUTE FUNCTION test_refuse_movement()`); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := owner.do("POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 20, "unit": "bag"}, "Idempotency-Key", "add-1"); code < 500 {
+		t.Fatalf("first try: %d %v", code, out)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `DROP TRIGGER test_refuse_movement ON stock_movements; DROP FUNCTION test_refuse_movement()`); err != nil {
+		t.Fatal(err)
+	}
+	out := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 20, "unit": "bag"}, "Idempotency-Key", "add-1")
+	if out["movement"] == nil {
+		t.Fatalf("retried: %v", out)
+	}
+	rice := out["item"].(map[string]any)["id"].(string)
+	if items := itemsByName(t, owner.must(200, "GET", "/v1/stock", nil)); len(items) != 1 || items["Rice"]["stock"] != float64(20) {
+		t.Fatalf("stock: %v", items)
+	}
+	owner.must(409, "POST", "/v1/stock/items", map[string]any{"name": "rice", "quantity": 5}, "Idempotency-Key", "add-2")
+
+	long := strings.Repeat("k", 250)
+	c := owner.must(201, "POST", "/v1/stock/counts", map[string]any{"lines": []any{map[string]any{"item_id": rice, "count": 19}}}, "Idempotency-Key", long)
+	if c["count"].(map[string]any)["changed"] != float64(1) {
+		t.Fatalf("count: %v", c)
+	}
+	owner.must(201, "POST", "/v1/stock/counts", map[string]any{"lines": []any{map[string]any{"item_id": rice, "count": 19}}}, "Idempotency-Key", long)
+	if items := itemsByName(t, owner.must(200, "GET", "/v1/stock", nil)); items["Rice"]["stock"] != float64(19) {
+		t.Fatalf("counted: %v", items)
+	}
+}

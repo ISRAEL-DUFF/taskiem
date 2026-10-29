@@ -237,10 +237,7 @@ func (s *Server) sendSalesEveningItem(ctx context.Context, it whatsapp.OutboxIte
 	if err != nil {
 		return err
 	}
-	var low []stock.Item
-	if _, items, err := s.stockItems(ctx, it.Tenant); err == nil {
-		low = stock.Low(items)
-	}
+	low, _ := s.lowItems(ctx, it.Tenant)
 	ch, addr, err := s.chatAddrOf(ctx, it.Channel, it.Tenant, it.User)
 	if err != nil {
 		return err
@@ -277,12 +274,8 @@ func (s *Server) lowDailyLine(ctx context.Context, l lang.Tag, tenant uuid.UUID)
 	if !s.Stock.Ready() {
 		return ""
 	}
-	_, items, err := s.stockItems(ctx, tenant)
-	if err != nil {
-		return ""
-	}
-	low := stock.Low(items)
-	if len(low) == 0 {
+	low, err := s.lowItems(ctx, tenant)
+	if err != nil || len(low) == 0 {
 		return ""
 	}
 	names := make([]string, 0, 5)
@@ -293,4 +286,30 @@ func (s *Server) lowDailyLine(ctx context.Context, l lang.Tag, tenant uuid.UUID)
 		names = append(names, tr(l, "money.daily.low_more", "count", strconv.Itoa(len(low)-5)))
 	}
 	return tr(l, "money.daily.low", "list", strings.Join(names, "; "))
+}
+
+// lowSeen is a business's low items as read at.
+type lowSeen struct {
+	at  time.Time
+	low []stock.Item
+}
+
+// lowFresh is how long a business's low items are reused: the evening
+// total and the morning summary go to each person who gets them, read
+// once for all of them.
+const lowFresh = 5 * time.Minute
+
+// lowItems is a business's items at or below their reorder level, read
+// from the catalogue at most once in lowFresh.
+func (s *Server) lowItems(ctx context.Context, tenant uuid.UUID) ([]stock.Item, error) {
+	if v, ok := s.stockLow.Get(tenant); ok && time.Since(v.at) < lowFresh {
+		return v.low, nil
+	}
+	_, items, err := s.stockItems(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	low := stock.Low(items)
+	s.stockLow.Put(tenant, lowSeen{at: time.Now(), low: low})
+	return low, nil
 }

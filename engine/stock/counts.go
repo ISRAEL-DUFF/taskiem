@@ -99,6 +99,7 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 	if in.Key == "" {
 		return StockCount{}, nil, fmt.Errorf("%w: an idempotency key", ErrCount)
 	}
+	in.Key = FitKey(in.Key)
 	if c, err := scanCount(tx.QueryRow(ctx, `SELECT `+countCols+` FROM stock_counts WHERE tenant_id = $1 AND key = $2`, tenant, in.Key)); err == nil {
 		return c, nil, nil
 	} else if !errors.Is(err, ErrCount) {

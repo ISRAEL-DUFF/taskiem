@@ -12,6 +12,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // The owner's stock alerts (docs/spec/stock.md §7, K4), not leaks, as
@@ -132,7 +133,7 @@ func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 		for _, s := range list {
 			fresh, err := alerts.Notify(ctx, tx, tenant, alerts.Alert{Kind: AlertLowWeek, Dedup: s.id + ":" + s.since.UTC().Format(time.RFC3339),
 				Title: s.item + " has been low for a week",
-				Body:  fmt.Sprintf("%s has been at or below its reorder level since %s, and nothing is ordered. Order it from its supplier on the Stock page, or send *order from* and the supplier's name.", s.item, s.since.In(lagosZone).Format("2 Jan")),
+				Body:  fmt.Sprintf("%s has been at or below its reorder level since %s, and nothing is ordered. Order it from its supplier on the Stock page, or send *order from* and the supplier's name.", s.item, s.since.In(storefront.Lagos).Format("2 Jan")),
 				Link:  "/storefront/stock"})
 			if err != nil {
 				return err
@@ -166,7 +167,7 @@ func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 		for _, l := range lates {
 			fresh, err := alerts.Notify(ctx, tx, tenant, alerts.Alert{Kind: AlertLateBuy, Dedup: l.id.String(),
 				Title: "Order " + l.ref + " from " + l.supplier + " has not come",
-				Body:  fmt.Sprintf("%s confirmed %s on %s and it was expected within %d days. Nothing has come in on it yet.", l.supplier, l.ref, l.confirmed.In(lagosZone).Format("2 Jan"), l.days),
+				Body:  fmt.Sprintf("%s confirmed %s on %s and it was expected within %d days. Nothing has come in on it yet.", l.supplier, l.ref, l.confirmed.In(storefront.Lagos).Format("2 Jan"), l.days),
 				Link:  "/storefront/stock"})
 			if err != nil {
 				return err
@@ -179,10 +180,3 @@ func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 	})
 	return raised, err
 }
-
-var lagosZone = func() *time.Location {
-	if l, err := time.LoadLocation("Africa/Lagos"); err == nil {
-		return l
-	}
-	return time.FixedZone("WAT", 3600)
-}()

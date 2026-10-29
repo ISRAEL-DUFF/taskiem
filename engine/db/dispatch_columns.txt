@@ -884,6 +884,8 @@ stock_movements.reason
 stock_movements.short
 stock_movements.status
 stock_movements.tenant_id
+stock_sales.amount_kobo
+stock_sales.entry_id
 stock_sales.status
 stock_sales.tenant_id
 storefront_actions.enabled

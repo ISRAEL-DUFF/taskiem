@@ -101,12 +101,10 @@ func (x *XenibaseStock) call(ctx context.Context, tenant uuid.UUID, action strin
 	return out, nil
 }
 
-// Rows reads every row of the tenant's catalogue table (up to MaxItems +
-// 1), with its mapping: what stock reads items from, outside the API.
-func (x *XenibaseStock) Rows(ctx context.Context, tenant uuid.UUID) ([]map[string]any, Columns, error) {
-	var table string
-	var m Columns
-	err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+// catalogue finds the tenant's catalogue table and its mapping; table is
+// empty when there is none.
+func (x *XenibaseStock) catalogue(ctx context.Context, tenant uuid.UUID) (table string, m Columns, err error) {
+	err = db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		sf, err := Get(ctx, tx, tenant)
 		if err != nil || sf.CatalogueTable == nil {
 			return err
@@ -118,6 +116,35 @@ func (x *XenibaseStock) Rows(ctx context.Context, tenant uuid.UUID) ([]map[strin
 		table, m = t.Name, sf.CatalogueColumns
 		return nil
 	})
+	return table, m, err
+}
+
+// Row reads one row of the tenant's catalogue table by its id (none when
+// it is gone), with its mapping.
+func (x *XenibaseStock) Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, Columns, error) {
+	table, m, err := x.catalogue(ctx, tenant)
+	if err != nil || table == "" {
+		return nil, m, err
+	}
+	page, err := x.call(ctx, tenant, "read_rows", map[string]any{"table": table, "limit": 1,
+		"filters": []any{map[string]any{"column": "id", "op": "eq", "value": id}}}, "")
+	if err != nil {
+		return nil, m, err
+	}
+	var out []map[string]any
+	rows, _ := page["rows"].([]any)
+	for _, r := range rows {
+		if row, ok := r.(map[string]any); ok {
+			out = append(out, row)
+		}
+	}
+	return out, m, nil
+}
+
+// Rows reads every row of the tenant's catalogue table (up to MaxItems +
+// 1), with its mapping: what stock reads items from, outside the API.
+func (x *XenibaseStock) Rows(ctx context.Context, tenant uuid.UUID) ([]map[string]any, Columns, error) {
+	table, m, err := x.catalogue(ctx, tenant)
 	if err != nil || table == "" {
 		return nil, m, err
 	}

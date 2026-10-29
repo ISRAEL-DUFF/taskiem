@@ -91,6 +91,10 @@ func TestPurchaseOrders(t *testing.T) {
 		if err != nil || len(fresh) != 0 {
 			t.Errorf("on order already: %+v %v", fresh, err)
 		}
+		// A key's _ is no wildcard: "low_1" is not "low-1".
+		if wild, _, err := p.DraftLowTx(ctx, tx, w.env.Tenant, items, "user:owner", "low_1"); err != nil || len(wild) != 0 {
+			t.Errorf("low_1: %+v %v", wild, err)
+		}
 		return nil
 	})
 
@@ -155,6 +159,15 @@ func TestPurchaseOrders(t *testing.T) {
 	}
 	if len(costs) != 3 || costs[1] != (stock.Cost{ItemID: "indomie", Kobo: 850000}) {
 		t.Fatalf("costs: %+v", costs)
+	}
+	// The receipt that completed it, retried (its answer lost): the same
+	// answer, not "received already"; a key's _ is no wildcard.
+	if again, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"rice": 7, "indomie": 46}, "user:owner", "r2"); err != nil ||
+		again.Status != stock.FullReceived || w.tb.count("indomie") != 50 {
+		t.Fatalf("retried: %+v %v", again, err)
+	}
+	if _, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"rice": 1}, "user:owner", "r_"); !errors.Is(err, stock.ErrPurchase) {
+		t.Fatalf("r_ taken for r1: %v", err)
 	}
 	if _, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"rice": 1}, "user:owner", "r3"); !errors.Is(err, stock.ErrPurchase) {
 		t.Fatalf("received already: %v", err)

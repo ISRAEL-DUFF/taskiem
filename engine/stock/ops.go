@@ -40,8 +40,29 @@ func (s *Stock) Items(ctx context.Context, tenant uuid.UUID) ([]Item, error) {
 	return Items(rows, m), nil
 }
 
+// RowReader reads one row of the catalogue by its id: what Item reads
+// when the catalogue can, rather than the whole table.
+type RowReader interface {
+	Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, storefront.Columns, error)
+}
+
 // Item reads one item by its row id.
 func (s *Stock) Item(ctx context.Context, tenant uuid.UUID, id string) (Item, error) {
+	if r, ok := s.Table.(RowReader); ok {
+		rows, m, err := r.Row(ctx, tenant, id)
+		if err != nil {
+			return Item{}, err
+		}
+		if m.Stock == "" {
+			return Item{}, ErrNotTracked
+		}
+		for _, it := range Items(rows, m) {
+			if it.ID == id {
+				return it, nil
+			}
+		}
+		return Item{}, ErrNoItem
+	}
 	items, err := s.Items(ctx, tenant)
 	if err != nil {
 		return Item{}, err

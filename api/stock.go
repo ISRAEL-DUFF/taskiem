@@ -380,7 +380,16 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	}
 	for _, it := range items {
 		if matchKey(it.Name) == matchKey(in.Name) {
-			return it, stock.Movement{}, fmt.Errorf("%w: %s", errItemExists, it.Name)
+			// This key was adding it (a retry after a failure part way):
+			// finish, rather than refuse the item it made.
+			mine, err := s.stockAdding(ctx, tenant, key, in.Name)
+			if err != nil {
+				return it, stock.Movement{}, err
+			}
+			if !mine {
+				return it, stock.Movement{}, fmt.Errorf("%w: %s", errItemExists, it.Name)
+			}
+			return s.stockAdded(ctx, tenant, actor, key, in, sh, it.ID, audit)
 		}
 	}
 	if len(items) >= storefront.MaxItems {
@@ -403,6 +412,12 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	if err != nil {
 		return stock.Item{}, stock.Movement{}, err
 	}
+	// What this key is adding, before the row is: a retry finds it.
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return audit(tx, "stock.item_adding", sh.table.Name, map[string]any{"key": key, "name": matchKey(in.Name)})
+	}); err != nil {
+		return stock.Item{}, stock.Movement{}, err
+	}
 	out, err := tr.call(ctx, s, "insert_rows", map[string]any{"table": sh.table.Name, "rows": []any{checked}}, key+"-row")
 	if err != nil {
 		return stock.Item{}, stock.Movement{}, err
@@ -416,18 +431,54 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	if id == "" {
 		return stock.Item{}, stock.Movement{}, errors.New("stock: the table gave no id for the new item")
 	}
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return audit(tx, "storefront.item_add", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "for": "stock"})
-	}); err != nil {
-		return stock.Item{}, stock.Movement{}, err
-	}
+	return s.stockAdded(ctx, tenant, actor, key, in, sh, id, audit)
+}
+
+// stockAdding says key was adding an item named name (stockAdd's record
+// before its row).
+func (s *Server) stockAdding(ctx context.Context, tenant uuid.UUID, key, name string) (bool, error) {
+	var mine bool
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM audit_log WHERE tenant_id = $1 AND action = 'stock.item_adding'
+			AND detail->>'key' = $2 AND detail->>'name' = $3)`, tenant, key, matchKey(name)).Scan(&mine)
+	})
+	return mine, err
+}
+
+// stockAdded finishes adding item id, whose row is in the table: its
+// audit entry and its quantity as received, in one transaction, once;
+// then sends the movement and reads the item.
+func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key string, in stockNew, sh stockShop, id string, audit stockAudit) (stock.Item, stock.Movement, error) {
 	var mv stock.Movement
-	if in.Quantity > 0 {
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var done bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM audit_log WHERE tenant_id = $1 AND action = 'storefront.item_add'
+			AND detail->>'key' = $2 AND detail->>'row_id' = $3)`, tenant, key, id).Scan(&done); err != nil {
+			return err
+		}
+		if !done {
+			if err := audit(tx, "storefront.item_add", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "for": "stock", "key": key}); err != nil {
+				return err
+			}
+		}
+		if in.Quantity <= 0 {
+			return nil
+		}
 		q := in.Quantity
-		mv, err = s.stockMove(ctx, tenant, stock.Move{ItemID: id, Item: in.Name, Reason: stock.Received, Delta: &q, Actor: actor, Key: key + "-received",
-			CostKobo: in.CostKobo}, audit)
-		if err != nil {
-			return stock.Item{}, mv, err
+		var err error
+		if mv, err = stock.RecordTx(ctx, tx, tenant, stock.Move{ItemID: id, Item: in.Name, Reason: stock.Received, Delta: &q, Actor: actor,
+			Key: key + "-received", CostKobo: in.CostKobo}); err != nil || done {
+			return err
+		}
+		return audit(tx, "stock.move", in.Name, map[string]any{"item_id": id, "reason": stock.Received, "movement_id": mv.ID, "change": q})
+	}); err != nil {
+		return stock.Item{}, mv, err
+	}
+	if mv.ID != uuid.Nil {
+		if out, err := s.Stock.Apply(ctx, tenant, mv.ID); err != nil {
+			s.Logger.Warn("stock: sending a movement", "tenant", tenant, "movement", mv.ID, "err", err) // recorded: the sweep sends it again
+		} else if out.ID != uuid.Nil {
+			mv = out
 		}
 	}
 	if err := s.SyncStorefront(ctx, tenant); err != nil {

@@ -57,7 +57,7 @@ A sale is items, how many, the amount and how it was paid: `cash`, `transfer` or
 
 With no amount, the amount is the items' catalogue prices; an item with no price needs the amount.
 
-**Matching.** A sale by transfer or on the terminal waits for its money. Every minute, a waiting sale is matched to money in of that amount (a transfer or payment for `transfer`, a terminal's `pos_sale` for `pos`) within 12 hours of it, the sale's reference in the money's reference first, then the nearest in time. Each money entry counts for one sale only, and once matched it is no longer an unmatched leak.
+**Matching.** A sale by transfer or on the terminal waits for its money. Every minute, a waiting sale is matched to money in of that amount (a transfer or payment for `transfer`, a terminal's `pos_sale` for `pos`) within 12 hours of it, the sale's reference in the money's reference first, then the nearest in time. Each money entry counts for one sale only, and once matched it is no longer an unmatched leak. Money a sale takes (its cash takings too) counts like an invoice's or an order's: it is not offered for an invoice or order, cannot be matched to one, and what the matcher had offered it for is closed. A sale naming an item on two lines moves its stock by both.
 
 **Terminal sales with no items.** A terminal's sale is money, not items. Those of a day that no sale names are listed on the Stock page and in the evening total, so the owner can say what was sold (**Say what was sold**, or `sold … pos`): the sale takes that money, for its amount, and the items come off the stock. Nothing is guessed.
 

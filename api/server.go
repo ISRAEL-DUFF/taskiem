@@ -245,6 +245,7 @@ type Server struct {
 	limiters     limiterSet                          // sign-in and other unauthenticated attempts
 	hosts        hostCache                           // custom domains: Host to embed app
 	defs         lru.Cache[string, *wd.Definition]   // "workflow/version"; versions are immutable, bounded (S34)
+	stockLow     lru.Cache[uuid.UUID, lowSeen]       // businesses' low items, for the evening and morning messages (stock_sales.go)
 	bg           sync.WaitGroup
 	bgActive     atomic.Int64 // work running after its request was answered (reset emails)
 }

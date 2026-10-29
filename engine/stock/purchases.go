@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strings"
 	"time"
@@ -658,8 +659,12 @@ func DraftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in DraftIn) (Purc
 // at its last cost. skipped names the low items with no supplier Taskiem
 // knows.
 func (p *Purchases) DraftLowTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item, actor, key string) (drafted []Purchase, skipped []string, err error) {
-	// Drafted already under this key: the same answer.
-	rows, err := tx.Query(ctx, `SELECT o.id FROM purchase_orders o WHERE o.tenant_id = $1 AND o.key LIKE $2 || ':%' ORDER BY o.created_at, o.id`, tenant, key)
+	// Drafted already under this key: the same answer. Its orders are keyed
+	// "<key>:<supplier id>", matched exactly (a key's _ or % is no
+	// wildcard).
+	key = FitKey(key)
+	rows, err := tx.Query(ctx, `SELECT o.id FROM purchase_orders o WHERE o.tenant_id = $1 AND starts_with(o.key, $2 || ':') AND length(o.key) = length($2) + 37
+		ORDER BY o.created_at, o.id`, tenant, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -854,7 +859,7 @@ func CounterTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, text string
 	if err := stockAudit(ctx, tx, tenant, "purchase.changed", x.Reference, map[string]any{"purchase_id": id, "by": "supplier"}); err != nil {
 		return x, err
 	}
-	if _, err := alerts.Notify(ctx, tx, tenant, alerts.Alert{Kind: AlertSupplier, Dedup: x.ID.String() + ":" + p256(text),
+	if _, err := alerts.Notify(ctx, tx, tenant, alerts.Alert{Kind: AlertSupplier, Dedup: x.ID.String() + ":" + digest(text),
 		Title: x.Supplier + " asks to change order " + x.Reference,
 		Body:  "You ordered " + x.Words() + ". " + x.Supplier + " says: " + text,
 		Link:  "/storefront/stock"}); err != nil {
@@ -863,14 +868,11 @@ func CounterTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, text string
 	return PurchaseTx(ctx, tx, tenant, id, false)
 }
 
-// p256 is a short digest of text, to tell apart a supplier's changes.
-func p256(text string) string {
-	var h uint64 = 1469598103934665603
-	for _, b := range []byte(text) {
-		h ^= uint64(b)
-		h *= 1099511628211
-	}
-	return fmt.Sprintf("%016x", h)
+// digest is a short digest of text, to tell apart a supplier's changes.
+func digest(text string) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(text))
+	return fmt.Sprintf("%016x", h.Sum64())
 }
 
 // CancelTx cancels an order nothing was received on.
@@ -917,19 +919,26 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	if err != nil {
 		return x, nil, nil, err
 	}
-	if x.Status != Sent && x.Status != Confirmed && x.Status != PartReceived {
-		return x, nil, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
-	}
 	if key == "" {
 		return x, nil, nil, fmt.Errorf("%w: an idempotency key", ErrPurchase)
 	}
-	// A receipt already made answers as it did.
+	key = FitKey(key)
+	// A receipt already made answers as it did, whatever the order's
+	// status now (the receipt may have completed it): one of its movements,
+	// "po:<key>:<item id>", is there.
+	keys := make([]string, len(x.Lines))
+	for i, l := range x.Lines {
+		keys[i] = "po:" + key + ":" + l.ItemID
+	}
 	var done bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND key LIKE $2 || ':%')`, tenant, "po:"+key).Scan(&done); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND key = ANY ($2))`, tenant, keys).Scan(&done); err != nil {
 		return x, nil, nil, err
 	}
 	if done {
 		return x, nil, nil, nil
+	}
+	if x.Status != Sent && x.Status != Confirmed && x.Status != PartReceived {
+		return x, nil, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
 	}
 	known := map[string]bool{}
 	for _, l := range x.Lines {
@@ -1016,7 +1025,7 @@ func (p *Purchases) after(ctx context.Context, tenant uuid.UUID, moves []Movemen
 	}
 	if p.Cost != nil {
 		for _, c := range costs {
-			_ = p.Cost(ctx, tenant, c.ItemID, c.Kobo, "po-cost:"+key+":"+c.ItemID)
+			_ = p.Cost(ctx, tenant, c.ItemID, c.Kobo, "po-cost:"+FitKey(key)+":"+c.ItemID)
 		}
 	}
 }
@@ -1044,6 +1053,7 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 	if key == "" || log == nil {
 		return x, fmt.Errorf("%w: an idempotency key", ErrPurchase)
 	}
+	key = FitKey(key)
 	channel := "cash"
 	if how == Transfer {
 		channel = "bank"

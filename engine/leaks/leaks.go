@@ -25,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/stock"
 )
 
 // UnmatchedAfter is how long money in may wait for a match before it is a
@@ -89,10 +90,9 @@ const naira = `('₦' || to_char(floor(%[1]s / 100), 'FM999,999,999,990') || CAS
 
 func nairaSQL(expr string) string { return fmt.Sprintf(naira, expr) }
 
-// stockCostSQL is a movement's item's cost: when it moved, else the last
-// known; 0 when none was ever given.
-const stockCostSQL = `COALESCE(m.cost_kobo, (SELECT c.cost_kobo FROM stock_movements c WHERE c.tenant_id = m.tenant_id AND c.item_id = m.item_id
-	AND c.cost_kobo IS NOT NULL ORDER BY c.created_at DESC LIMIT 1), 0)`
+// stockCostSQL is a movement's item's cost as shrinkage values it
+// (stock.CostSQL), so a leak and the shrinkage report agree.
+const stockCostSQL = stock.CostSQL
 
 // Tenant opens the tenant's new leaks, updates the amounts of open ones,
 // and resolves those whose cause went away. It returns how many it

@@ -123,6 +123,8 @@ type Movement struct {
 	Error     string     `json:"error,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	DoneAt    *time.Time `json:"done_at"`
+	// claims is how many times its count was read to send it (changeKey).
+	claims int
 }
 
 // MaxDelta bounds a change asked for at once.
@@ -149,19 +151,34 @@ func (m Move) check() error {
 	if m.ItemID == "" || len(m.ItemID) > 100 || strings.TrimSpace(m.Item) == "" || len(m.Item) > 200 {
 		return fmt.Errorf("%w: the item", ErrInvalid)
 	}
-	if len([]rune(m.Note)) > 200 || len(m.Reference) > 100 || m.Actor == "" || m.Key == "" || len(m.Key) > 200 {
+	if len([]rune(m.Note)) > 200 {
 		return fmt.Errorf("%w: the note is up to 200 characters", ErrInvalid)
+	}
+	if len(m.Reference) > 100 || m.Actor == "" || m.Key == "" || len(m.Key) > 200 {
+		return fmt.Errorf("%w: a reference up to 100 characters, who made it, and a key", ErrInvalid)
 	}
 	return nil
 }
 
+// FitKey is a caller's idempotency key as stock keeps it: as given up to
+// 64 characters, else a hash of it, so the keys built from it (a sale's,
+// "count:<key>:<item>", "po:<key>:<item>") fit however long the caller's
+// key is (the API takes keys up to 255 characters).
+func FitKey(key string) string {
+	if len(key) <= 64 {
+		return key
+	}
+	h := sha256.Sum256([]byte(key))
+	return "h-" + hex.EncodeToString(h[:16])
+}
+
 const movementCols = `id, item_id, item, reason, status, delta, set_to, count_before, count_after, change, short, COALESCE(note, ''),
-	COALESCE(reference, ''), actor, COALESCE(error, ''), created_at, done_at`
+	COALESCE(reference, ''), actor, COALESCE(error, ''), created_at, done_at, claims`
 
 func scanMovement(r pgx.Row) (Movement, error) {
 	var m Movement
 	err := r.Scan(&m.ID, &m.ItemID, &m.Item, &m.Reason, &m.Status, &m.Delta, &m.SetTo, &m.Before, &m.After, &m.Change, &m.Short, &m.Note,
-		&m.Reference, &m.Actor, &m.Error, &m.CreatedAt, &m.DoneAt)
+		&m.Reference, &m.Actor, &m.Error, &m.CreatedAt, &m.DoneAt, &m.claims)
 	return m, err
 }
 
@@ -170,6 +187,9 @@ func scanMovement(r pgx.Row) (Movement, error) {
 func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Movement, error) {
 	mv.Item = strings.TrimSpace(mv.Item)
 	mv.Note = strings.TrimSpace(mv.Note)
+	if len(mv.Key) > 200 {
+		mv.Key = FitKey(mv.Key)
+	}
 	if err := mv.check(); err != nil {
 		return Movement{}, err
 	}
@@ -214,7 +234,7 @@ func (s *Stock) Apply(ctx context.Context, tenant, id uuid.UUID) (Movement, erro
 				continue
 			}
 		}
-		applied, err := s.Table.Change(ctx, tenant, m.ItemID, *from, *to, changeKey(m.ID, *from))
+		applied, err := s.Table.Change(ctx, tenant, m.ItemID, *from, *to, changeKey(m.ID, *from, m.claims))
 		if err != nil {
 			s.failed(ctx, tenant, m.ID, err)
 			return m, err
@@ -284,7 +304,7 @@ func (s *Stock) claim(ctx context.Context, tenant uuid.UUID, m Movement) (Moveme
 		}
 		to, short := target(n, cur)
 		m, err = scanMovement(tx.QueryRow(ctx, `UPDATE stock_movements SET count_before = $3, count_after = $4, short = $5, claimed_at = now(),
-			attempts = attempts + 1, error = NULL WHERE tenant_id = $1 AND id = $2 RETURNING `+movementCols, tenant, m.ID, n, to, short))
+			attempts = attempts + 1, claims = claims + 1, error = NULL WHERE tenant_id = $1 AND id = $2 RETURNING `+movementCols, tenant, m.ID, n, to, short))
 		return err
 	})
 	return m, err
@@ -345,10 +365,16 @@ func (s *Stock) failed(ctx context.Context, tenant, id uuid.UUID, cause error) {
 	})
 }
 
-// changeKey is the Idempotency-Key of one change: the movement and the
-// count it changes from.
-func changeKey(id uuid.UUID, from int64) string {
-	h := sha256.Sum256([]byte(id.String() + "\x00" + strconv.FormatInt(from, 10)))
+// changeKey is the Idempotency-Key of one change: the movement, the count
+// it changes from, and its claim. A retry of the same claim (an answer
+// lost) is the same change; a later claim reading the same count is a new
+// one, not answered from a refusal of the earlier claim.
+func changeKey(id uuid.UUID, from int64, claims int) string {
+	text := id.String() + "\x00" + strconv.FormatInt(from, 10)
+	if claims > 0 {
+		text += "\x00" + strconv.Itoa(claims)
+	}
+	h := sha256.Sum256([]byte(text))
 	return "tsk-st-" + hex.EncodeToString(h[:16])
 }
 

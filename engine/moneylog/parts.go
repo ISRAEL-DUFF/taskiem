@@ -57,7 +57,8 @@ func EntryHas(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, amount in
 }
 
 // CountedTowards names what an entry counts towards now ("invoice
-// INV-0104", "invoice INV-0104 and order AK-7QX4KD" for a split), or ""
+// INV-0104", "invoice INV-0104 and order AK-7QX4KD" for a split, "sale
+// S-7QX4KD" for a counter sale's), or ""
 // for nothing. Call it under the entry's lock.
 func CountedTowards(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID) (string, error) {
 	rows, err := tx.Query(ctx, `SELECT what FROM (
@@ -65,7 +66,9 @@ func CountedTowards(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID) (st
 			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
 		UNION ALL
 		SELECT 'order ' || o.reference, p.created_at FROM storefront_order_payments p JOIN storefront_orders o ON o.id = p.order_id
-			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)) m
+			WHERE p.tenant_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)
+		UNION ALL
+		SELECT 'sale ' || x.reference, x.created_at FROM stock_sales x WHERE x.tenant_id = $1 AND x.entry_id = $2) m
 		ORDER BY created_at, what`, tenant, entry)
 	if err != nil {
 		return "", err
