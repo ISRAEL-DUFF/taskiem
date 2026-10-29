@@ -7,7 +7,7 @@ TASKIEM_TEST_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/postgre
 export TASKIEM_TEST_DATABASE_URL
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check site-css atlas atlas-stale
+.PHONY: check lint test test-db validate licences ts web e2e build spike load up down db-up db-down image chart docs docs-check atlas atlas-stale
 
 check: lint test validate licences ts
 
@@ -89,13 +89,8 @@ DOCS_SOURCE ?=
 SITE_APP ?=
 SITE_WHATSAPP ?=
 SITE_EMAIL ?=
-docs: site-css
+docs:
 	go run ./tools/docsite -out site -base '$(DOCS_BASE)' -source '$(DOCS_SOURCE)' -app '$(SITE_APP)' -whatsapp '$(SITE_WHATSAPP)' -email '$(SITE_EMAIL)'
-
-# The website's stylesheet: the designer's Tailwind configuration compiled
-# to tools/docsite/assets/www.css, which is committed (CI checks it is current).
-site-css:
-	pnpm site:css
 
 docs-check:
 	go run ./tools/docsite -check

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Full Name",
+    "title": "Job title",
+    "phone": "+234 000 000 0000",
+    "whatsapp": "+234 000 000 0000",
+    "email": "name@yourdomain.ng",
+    "web": "yourdomain.ng",
+    "office": "Lagos, Nigeria",
+    "staffNo": "TKM-0000",
+    "team": "Team",
+    "issued": "01/2027",
+    "expires": "12/2028",
+    "photo": "",
+    "returnTo": "Taskiem, office address, Lagos",
+    "returnPhone": "+234 000 000 0000",
+    "emergency": "Name · +234 000 000 0000"
+  }
+]
