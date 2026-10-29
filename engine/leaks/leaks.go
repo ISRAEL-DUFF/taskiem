@@ -89,6 +89,11 @@ const naira = `('₦' || to_char(floor(%[1]s / 100), 'FM999,999,999,990') || CAS
 
 func nairaSQL(expr string) string { return fmt.Sprintf(naira, expr) }
 
+// stockCostSQL is a movement's item's cost: when it moved, else the last
+// known; 0 when none was ever given.
+const stockCostSQL = `COALESCE(m.cost_kobo, (SELECT c.cost_kobo FROM stock_movements c WHERE c.tenant_id = m.tenant_id AND c.item_id = m.item_id
+	AND c.cost_kobo IS NOT NULL ORDER BY c.created_at DESC LIMIT 1), 0)`
+
 // Tenant opens the tenant's new leaks, updates the amounts of open ones,
 // and resolves those whose cause went away. It returns how many it
 // opened.
@@ -151,6 +156,22 @@ func (d *Detector) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 				FROM rider_remittances m LEFT JOIN dispatch_settings s ON s.tenant_id = m.tenant_id
 				WHERE m.tenant_id = $1 AND m.settled_at IS NULL
 				GROUP BY m.rider_id, s.owe_limit_kobo HAVING sum(m.amount_kobo - m.paid_kobo) > COALESCE(s.owe_limit_kobo, 2000000)`},
+			// Stock (stock K4): a sale of more than the shelf had, a count
+			// below zero in the table, and a count's loss above the
+			// business's limit (₦5,000 unless set), each valued at the
+			// item's cost when it moved (else its last known cost; units
+			// only where it has none). They stay until closed.
+			{"stock_short", `SELECT m.id::text, NULL::uuid, NULL::uuid, m.short * ` + stockCostSQL + `,
+				'sold ' || m.short || ' more ' || m.item || ' than the stock held' || COALESCE(' (' || m.reference || ')', '') || ', worth ' || ` + nairaSQL("(m.short * "+stockCostSQL+")") + ` || ' at cost'
+				FROM stock_movements m WHERE m.tenant_id = $1 AND m.status = 'done' AND m.short > 0`},
+			{"stock_negative", `SELECT m.id::text, NULL::uuid, NULL::uuid, -m.count_after * ` + stockCostSQL + `,
+				m.item || ' went below zero (' || m.count_after || ') in your table, worth ' || ` + nairaSQL("(-m.count_after * "+stockCostSQL+")") + ` || ' at cost'
+				FROM stock_movements m WHERE m.tenant_id = $1 AND m.status = 'done' AND m.count_after < 0`},
+			{"stock_count", `SELECT m.id::text, NULL::uuid, NULL::uuid, -m.change * ` + stockCostSQL + `,
+				'a count found ' || -m.change || ' ' || m.item || ' fewer than recorded' || COALESCE(' (' || m.reference || ')', '') || ', worth ' || ` + nairaSQL("(-m.change * "+stockCostSQL+")") + ` || ' at cost'
+				FROM stock_movements m LEFT JOIN stock_settings ss ON ss.tenant_id = m.tenant_id
+				WHERE m.tenant_id = $1 AND m.status = 'done' AND m.reason = 'count' AND m.change < 0
+				  AND (` + stockCostSQL + ` = 0 OR -m.change * ` + stockCostSQL + ` > COALESCE(ss.count_limit_kobo, 500000))`},
 		}
 		current := map[string]map[string]bool{}
 		for _, f := range found {

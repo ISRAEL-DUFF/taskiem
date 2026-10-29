@@ -40,6 +40,8 @@ type stockChat struct {
 	// Purchase is a supplier or purchase step being confirmed
 	// (whatsapp_purchases.go).
 	Purchase *purchaseChat `json:"purchase,omitempty"`
+	// Count is a count being taken (stock_counts.go).
+	Count *countChat `json:"count,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -60,6 +62,9 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 		return true, s.waStockAdd(ctx, c, a)
 	}
 	switch {
+	case words[0] == "count" && (len(words) == 1 || len(words) > 2):
+		// "count", asked item by item, or "count rice 12, indomie 40".
+		return true, s.waStockCount(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
 	case (words[0] == "sold" || words[0] == "sell") && len(words) > 1:
 		return true, s.waStockSale(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
 	case cmd == "stock" || cmd == "low stock" || cmd == "what is low" || cmd == "what's low":
@@ -397,6 +402,9 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 	if in != nil && in.Purchase != nil {
 		return s.waPurchaseApply(ctx, c)
 	}
+	if in != nil && in.Count != nil {
+		return s.waStockCountApply(ctx, c)
+	}
 	if sh.Action == "stock_sale" && in != nil && in.Sale != nil && c.p.Can(PermTableEdit) {
 		if !s.limiter("wa-shop:"+c.addr, 20*time.Second, 10).Allow() {
 			return c.say(ctx, s, c.t("wa.shop.too_many"))
@@ -461,7 +469,7 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 		}
 		q := in.Quantity
 		m, err := s.stockMove(tctx, c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Received, Delta: &q, Actor: c.p.Actor(),
-			Key: key}, audit)
+			Key: key, CostKobo: in.CostKobo}, audit)
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
@@ -599,7 +607,8 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 			return c.say(ctx, s, c.t("wa.sale.no_price", "name", whatsapp.SafeText(it.Name)))
 		}
 		unit := it.Unit
-		sale.Lines = append(sale.Lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: x.Quantity, Unit: unit, PriceKobo: price, LineKobo: price * x.Quantity})
+		sale.Lines = append(sale.Lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: x.Quantity, Unit: unit, PriceKobo: price, LineKobo: price * x.Quantity,
+			CostKobo: it.CostKobo})
 		total += price * x.Quantity
 		if it.Stock != nil && *it.Stock < x.Quantity {
 			sale.Beyond = append(sale.Beyond, it.Name)

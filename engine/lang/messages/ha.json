@@ -2724,6 +2724,54 @@
       "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: masu kawowa da odojinsu",
       "reviewed": false
     },
+    "wa.count.how": {
+      "text": "Rubuta shi kamar *count rice 12, indomie 40*, da dalili bayan colon idan ka so (*count rice 12: rats*). Ko aika *count* in tambaye ka ɗaya bayan ɗaya.",
+      "reviewed": false
+    },
+    "wa.count.none": {
+      "text": "Babu abin da za a ƙirga tukuna. Ka fara ƙara kayanka.",
+      "reviewed": false
+    },
+    "wa.count.start": {
+      "text": "Ana ƙirga kaya {count}. Aika adadin da ke kan shiryayye, *skip* don tsallake ɗaya, ko *done* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.count.ask": {
+      "text": "*{item}* nawa? (Taskiem na da {had}.)",
+      "reviewed": false
+    },
+    "wa.count.number": {
+      "text": "Aika lamba cikakkiya, kamar 12, ko *skip*.",
+      "reviewed": false
+    },
+    "wa.count.confirm": {
+      "text": "Ƙidayar kaya {count}:",
+      "reviewed": false
+    },
+    "wa.count.line": {
+      "text": "• {item}: {had} → {counted}",
+      "reviewed": false
+    },
+    "wa.count.same": {
+      "text": "{count} kamar yadda Taskiem ke da su.",
+      "reviewed": false
+    },
+    "wa.count.done": {
+      "text": "An ƙirga {reference}: kaya {changed} sun canza.",
+      "reviewed": false
+    },
+    "wa.count.lost": {
+      "text": "Abin da ya ɓace: {amount} a farashin saye.",
+      "reviewed": false
+    },
+    "money.daily.shrink": {
+      "text": "Kayan da suka ɓace: {count}, {amount} a farashin saye; mafi yawa {item} ({lost}).",
+      "reviewed": false
+    },
+    "wa.help.counts": {
+      "text": "• *count rice 12, indomie 40* (ko *count* in tambaye ka ɗaya bayan ɗaya): ƙirga abin da ke kan shiryayye",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (da hoton)",
       "reviewed": false

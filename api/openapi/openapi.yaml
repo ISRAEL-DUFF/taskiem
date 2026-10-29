@@ -6265,6 +6265,123 @@ paths:
                     $ref: '#/components/schemas/StockSale'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/counts:
+    get:
+      operationId: listCounts
+      tags:
+      - Stock
+      summary: Counts
+      description: The latest counts of the shelf, each with its lines (what Taskiem had and what was counted), how many items it changed and what was missing at cost.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      responses:
+        '200':
+          description: The counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts]
+                properties:
+                  counts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockCount'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: recordCount
+      tags:
+      - Stock
+      summary: Record a count
+      description: 'How many of each item are on the shelf, and why they differ: a count movement for each item whose count changes, naming the count, valued at the item''s cost. A count of every item closes a counting period (full).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same count'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines]
+              properties:
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  items:
+                    type: object
+                    required: [item_id, count]
+                    properties:
+                      item_id:
+                        type: string
+                      count:
+                        type: integer
+                        minimum: 0
+                reason:
+                  type: string
+                  maxLength: 200
+      responses:
+        '201':
+          description: The count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    $ref: '#/components/schemas/StockCount'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/shrinkage:
+    get:
+      operationId: getShrinkage
+      tags:
+      - Stock
+      summary: Shrinkage
+      description: 'Over Lagos days from to to (this month by default): what came in, was sold, and was lost to counts and adjustments, at cost, each item''s, the largest loss first.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The period
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockShrink'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/suppliers:
     get:
       operationId: listSuppliers
@@ -6456,12 +6573,35 @@ paths:
         default:
           $ref: '#/components/responses/Error'
   /v1/stock/settings:
+    get:
+      operationId: getStockSettings
+      tags:
+      - Stock
+      summary: Stock settings
+      description: The approval limit for purchase orders and the loss a count may find before it is a leak.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/StockSettings'
+        default:
+          $ref: '#/components/responses/Error'
     put:
       operationId: putStockSettings
       tags:
       - Stock
       summary: Stock settings
-      description: 'purchase_limit_kobo, above which a purchase order is sent only by a person other than the one who drafted it (null: the owner sends any).'
+      description: 'purchase_limit_kobo (null: the owner sends any order), above which a purchase order is sent only by a person other than the one who drafted it, and count_limit_kobo (null: ₦5,000), above which a count''s loss at cost is a leak. Those left out stay as they are.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -25377,6 +25517,80 @@ components:
           type: array
           items:
             type: object
+    StockCount:
+      type: object
+      required: [id, reference, lines, full, lost_kobo, by, counted_at, changed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+              item:
+                type: string
+              unit:
+                type: string
+              expected:
+                type: [integer, 'null']
+              counted:
+                type: integer
+              cost_kobo:
+                type: integer
+        full:
+          type: boolean
+        reason:
+          type: string
+        lost_kobo:
+          type: integer
+        by:
+          type: string
+        counted_at:
+          type: string
+          format: date-time
+        changed:
+          type: integer
+    StockShrink:
+      type: object
+      required: [from, to, received, sold, lost, lost_kobo, items]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        received:
+          type: integer
+        sold:
+          type: integer
+        lost:
+          type: integer
+        lost_kobo:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+              item:
+                type: string
+              received:
+                type: integer
+              sold:
+                type: integer
+              lost:
+                type: integer
+              lost_kobo:
+                type: integer
     StockSupplier:
       type: object
       required: [id, name, phone, reached, owed_kobo, open, created_at]
@@ -25410,6 +25624,10 @@ components:
         purchase_limit_kobo:
           type: [integer, 'null']
           minimum: 0
+        count_limit_kobo:
+          type: [integer, 'null']
+          minimum: 0
+          description: A count's loss worth more than this at cost is a leak (null, ₦5,000)
     PurchaseOrder:
       type: object
       required: [id, reference, supplier_id, supplier, lines, total_kobo, status, drafted_by, received_kobo, paid_kobo, owed_kobo, created_at]

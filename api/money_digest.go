@@ -41,6 +41,7 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	var school *moneydigest.SchoolSummary
 	var riderDays []dispatch.RiderDay
 	var sales stock.Day
+	var shrink stock.Shrink
 	var period time.Time
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		var sentAt time.Time
@@ -72,8 +73,12 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 				return err
 			}
 		}
-		// The sales recorded by chat or the web (stock K2).
-		sales, err = stock.DayTx(ctx, tx, it.Tenant, from)
+		// The sales recorded by chat or the web (stock K2), and what was
+		// lost (K4).
+		if sales, err = stock.DayTx(ctx, tx, it.Tenant, from); err != nil {
+			return err
+		}
+		shrink, err = stock.ShrinkTx(ctx, tx, it.Tenant, from, to)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -111,6 +116,10 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	text := ch.Prefix(business) + moneydigest.DailyTextWith(l, sum, school, "")
 	// The sales recorded that day (stock K2).
 	if line := salesDailyLine(l, sales); line != "" {
+		text += "\n\n" + line
+	}
+	// What was lost to counts and adjustments that day, at cost (K4).
+	if line := shrinkDailyLine(l, shrink); line != "" {
 		text += "\n\n" + line
 	}
 	// What is low this morning, with how many to order (stock K3).

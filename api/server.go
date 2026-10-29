@@ -457,12 +457,17 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
 			r.With(s.need(PermTableRead)).Get("/stock/sales", s.getSales)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/sales", s.recordSale)
+			// Counts and shrinkage (stock_counts.go, K4).
+			r.With(s.need(PermTableRead)).Get("/stock/counts", s.listCounts)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/counts", s.recordCount)
+			r.With(s.need(PermTableRead)).Get("/stock/shrinkage", s.getShrinkage)
 			// Suppliers and purchase orders (stock_purchases.go, K3).
 			r.With(s.need(PermStorefrontManage)).Get("/stock/suppliers", s.listSuppliers)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/suppliers", s.addSupplier)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/stock/suppliers/{id}", s.patchSupplier)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/suppliers/{id}/retire", s.retireSupplier)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/suppliers/{id}/invite", s.inviteSupplier)
+			r.With(s.need(PermStorefrontManage)).Get("/stock/settings", s.getStockSettings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/settings", s.putStockSettings)
 			r.With(s.need(PermTableRead)).Get("/stock/purchases", s.listPurchases)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases", s.draftPurchase)

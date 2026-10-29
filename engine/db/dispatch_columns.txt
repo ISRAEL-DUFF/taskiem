@@ -876,8 +876,12 @@ sso_requests.return_to
 sso_requests.state
 sso_requests.tenant_id
 sso_requests.verifier
+stock_movements.change
 stock_movements.claimed_at
+stock_movements.count_after
 stock_movements.mirrored_at
+stock_movements.reason
+stock_movements.short
 stock_movements.status
 stock_movements.tenant_id
 stock_sales.status

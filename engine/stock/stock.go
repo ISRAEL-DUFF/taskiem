@@ -94,6 +94,9 @@ type Move struct {
 	Actor     string
 	// Key makes recording it once: the same key is the same movement.
 	Key string
+	// CostKobo is the item's cost price when it moved, so a loss is valued
+	// at cost (K4); nil when it has none, or it is not known.
+	CostKobo *int64
 }
 
 // Movement is a recorded movement.
@@ -170,10 +173,10 @@ func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Moveme
 	if err := mv.check(); err != nil {
 		return Movement{}, err
 	}
-	m, err := scanMovement(tx.QueryRow(ctx, `INSERT INTO stock_movements (id, tenant_id, item_id, item, reason, delta, set_to, status, note, reference, actor, key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NULLIF($8, ''), NULLIF($9, ''), $10, $11)
+	m, err := scanMovement(tx.QueryRow(ctx, `INSERT INTO stock_movements (id, tenant_id, item_id, item, reason, delta, set_to, status, note, reference, actor, key, cost_kobo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NULLIF($8, ''), NULLIF($9, ''), $10, $11, $12)
 		ON CONFLICT (tenant_id, key) DO NOTHING RETURNING `+movementCols,
-		uuid.Must(uuid.NewV7()), tenant, mv.ItemID, mv.Item, mv.Reason, mv.Delta, mv.SetTo, mv.Note, mv.Reference, mv.Actor, mv.Key))
+		uuid.Must(uuid.NewV7()), tenant, mv.ItemID, mv.Item, mv.Reason, mv.Delta, mv.SetTo, mv.Note, mv.Reference, mv.Actor, mv.Key, mv.CostKobo))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return scanMovement(tx.QueryRow(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1 AND key = $2`, tenant, mv.Key))
 	}

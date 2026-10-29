@@ -598,6 +598,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 				if s.Stock.Ready() && m.Arg != "" {
 					return s.waStockSale(ctx, c, m.Arg)
 				}
+			case lang.IntentCount:
+				// A count, read as English's "count ..." (K4).
+				if s.Stock.Ready() && m.Arg != "" {
+					return s.waStockCount(ctx, c, m.Arg)
+				}
 			case lang.IntentReceived:
 				// Goods received, read as English's "received ..." (K3).
 				if s.Stock.Ready() && m.Arg != "" {
@@ -609,7 +614,7 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		// Words that only looked like one ("I spend the whole day…") are
 		// ordinary chat, which the model may still route.
-		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold, lang.IntentReceived}, m.Intent) {
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold, lang.IntentReceived, lang.IntentCount}, m.Intent) {
 			matched = false
 		}
 		// A way into the web app for someone with no password (N6).
@@ -731,7 +736,7 @@ func (s *Server) waHelp(c *chat) string {
 	if c.p.Can(PermTableRead) && s.Stock.Ready() {
 		lines = append(lines, c.t("wa.help.stock"))
 		if c.p.Can(PermTableEdit) {
-			lines = append(lines, c.t("wa.help.sales"))
+			lines = append(lines, c.t("wa.help.sales"), c.t("wa.help.counts"))
 		}
 		if c.p.Can(PermStorefrontManage) && s.Purchases.Ready() {
 			lines = append(lines, c.t("wa.help.purchases"))

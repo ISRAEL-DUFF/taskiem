@@ -77,6 +77,14 @@ A **purchase order** is a supplier, lines (an item, how many, the price of one: 
 
 An order can be cancelled until anything is received on it. The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
 
+## Counts, shrinkage and leaks
+
+A **count** is how many of each item are on the shelf: `count rice 12, indomie 40` (a reason after a colon: `count rice 12: rats`), `count` to be asked item by item (a number, *skip*, or *done*), or **Count the shelf** on the Stock page (a sheet to fill, or a CSV of names and counts it reads into the sheet). Shown first and written on **yes**: each item whose count differs gets a `count` movement naming the count (`C-7QX4KD`), with the reason as its note and the item's cost price. A count of every item holding a count is a full count, closing a counting period. `stock rice 12` is still a count of one item.
+
+Every movement keeps the item's cost price when Taskiem knows it (sales, goods received, counts, changes from the web), so **shrinkage** is valued at cost: for a period, what came in, what was sold (sales and orders) and what was lost (counts and adjustments that took stock off), each item's, the largest loss first (`GET /v1/stock/shrinkage`, the Stock page's **Counts and losses**). The morning money summary says what was lost the day before, and the monthly email the month's.
+
+Three things are **leaks**, valued at cost and closed with a reason as other [leaks](leaks.md) are: a sale of more than the stock, a count below zero in the table, and a count missing more than the business's limit (₦5,000 unless set on the Stock page; an item with no cost price always, in units). Two are **owner alerts**, not leaks: an item low for a week with nothing ordered, and an order confirmed and not received after its expected days (three by default). The stock watch looks every hour.
+
 ## In chat
 
 On WhatsApp and Telegram (each change shown first, written on **yes**):
@@ -94,13 +102,14 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `received 10 bags of rice` | Goods received on the open order from the item's supplier; with none, goods received as `add` |
 | `paid Dangote 425,000 transfer` | A payment on the supplier's oldest order with something owed |
 | `confirmed P-7QX4KD` | The supplier said yes by phone |
+| `count rice 12, indomie 40: rats` | A count, with its reason; `count` alone asks item by item |
 | `sold 3 bags of rice 45,000 cash` | A sale (`transfer`, `pos`; several items: `sold 2 cartons indomie, 1 bag rice 60,000 transfer`; no amount takes the prices) |
 
-Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review), and so do the words for goods received (`i don receive 10 bags rice`). Suppliers and their orders need `storefront.manage`; goods received, `table.edit`. A voice note is read the same way, where voice notes are on.
+Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review), and so do the words for goods received (`i don receive 10 bags rice`) and for a count (`i don count rice 12`). Suppliers and their orders need `storefront.manage`; goods received, `table.edit`. A voice note is read the same way, where voice notes are on.
 
 ## On the web
 
-**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day. **Orders to suppliers** lists the recent orders with **Approve and send**, **Mark confirmed**, **Goods came in**, **Record a payment** and **Cancel** as each fits, and **Order what is low**. **Storefront > Suppliers** lists the suppliers with where their orders reach them and what is owed, **Add a supplier** (with the items they supply), **Change**, **Send the link again**, **Retire**, and the approval limit.
+**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day. **Orders to suppliers** lists the recent orders with **Approve and send**, **Mark confirmed**, **Goods came in**, **Record a payment** and **Cancel** as each fits, and **Order what is low**. **Counts and losses** shows this month's shrinkage, the latest counts, **Count the shelf** and the count's leak limit. **Storefront > Suppliers** lists the suppliers with where their orders reach them and what is owed, **Add a supplier** (with the items they supply), **Change**, **Send the link again**, **Retire**, and the approval limit.
 
 ## API
 
@@ -114,7 +123,9 @@ Items are found as `price` finds them: the exact name, else the one the words st
 | `POST /v1/stock/movements` | Goods received, an adjustment or a count, with an `Idempotency-Key`; 202 while it has not reached the table |
 | `POST /v1/stock/sales` | A sale, with an `Idempotency-Key`: `lines` (`item_id`, `quantity`, `price_kobo`), `amount_kobo`, `paid_how`, `note`; `entry_id` gives a terminal's sale its items (409 when that money counts for something already) |
 | `GET`/`POST /v1/stock/suppliers`, `PATCH /v1/stock/suppliers/{id}`, `POST .../retire`, `POST .../invite` | Suppliers (`storefront.manage`) |
-| `PUT /v1/stock/settings` | `purchase_limit_kobo`: above it, a second person sends an order |
+| `GET`/`PUT /v1/stock/settings` | `purchase_limit_kobo` (above it, a second person sends an order) and `count_limit_kobo` (a count's loss above it is a leak); a PUT changes only what it names |
+| `GET`/`POST /v1/stock/counts` | Counts; a count is `lines` (`item_id`, `count`) and a `reason`, with an `Idempotency-Key` |
+| `GET /v1/stock/shrinkage?from=&to=` | A period's received, sold and lost, at cost (this month by default) |
 | `GET`/`POST /v1/stock/purchases`, `POST /v1/stock/purchases/low` | Orders, drafted by hand or for what is low, with an `Idempotency-Key` |
 | `POST /v1/stock/purchases/{id}/send`, `/confirm`, `/cancel`, `/receive`, `/pay` | An order's steps; `receive` and `pay` take an `Idempotency-Key` |
 | `GET /v1/stock/sales?day=2026-10-29` | A day's sales (today in Lagos by default), added up by how paid, the top items, how many wait, and the terminal's sales with no items |
@@ -146,3 +157,5 @@ Changes carry the step's idempotency key: a retried step moves stock once.
 Sales are `engine/stock/sales.go` (`RecordSale`, `MatchSales`, `DayTx`), the sentence parser `salewords.go`, and the evening total `evening.go` (`Evening`, queued as `money_digests` kind `sales_evening` and sent by the WhatsApp/Telegram outbox, written at send time). Migration 00257 holds `stock_sales`; a sale's money entry is unique to it.
 
 Suppliers and purchase orders are `engine/stock/purchases.go` (`Purchases`: suppliers, `DraftLowTx`, `SendTx`, `ConfirmTx`, `CounterTx`, `ReceiveTx`, `PayTx`) and migration 00258 (`suppliers`, `purchase_orders`, `purchase_payments`, `stock_settings`, `taskiem_supplier_orders`). The order goes through the chat outbox (kind `supplier`, the order and the supplier's contact); its buttons are signed for the business, the order and the contact (`api/whatsapp_purchases.go`).
+
+Counts and shrinkage are `engine/stock/counts.go` (`CountTx`, `RecordCount`, `ShrinkTx`) and `watch.go` (`Watch`: `stock_low`, the two alerts); the leaks are three of `engine/leaks`' queries. Migration 00259 adds `stock_movements.cost_kobo`, `stock_counts`, `stock_low`, `stock_settings.count_limit_kobo`, `purchase_orders.expected_days` and the leak kinds.

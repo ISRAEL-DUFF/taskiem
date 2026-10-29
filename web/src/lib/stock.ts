@@ -470,3 +470,126 @@ export const unsoldSale = (u: UnsoldEntry): SaleForm => ({
   ...emptySale("pos"),
   amount: feeInput(u.amount_kobo),
 });
+
+// --- counts and shrinkage (docs/stock.md "Counts and shrinkage") ---
+
+export interface CountLine {
+  item_id: string;
+  item: string;
+  unit?: string;
+  expected: number | null;
+  counted: number;
+  cost_kobo?: number;
+}
+
+export interface StockCount {
+  id: string;
+  reference: string;
+  lines: CountLine[];
+  /** Every item was counted. */
+  full: boolean;
+  reason?: string;
+  lost_kobo: number;
+  by: string;
+  counted_at: string;
+  changed: number;
+}
+
+export interface Shrink {
+  from: string;
+  to: string;
+  received: number;
+  sold: number;
+  lost: number;
+  lost_kobo: number;
+  items: {
+    item_id: string;
+    item: string;
+    received: number;
+    sold: number;
+    lost: number;
+    lost_kobo: number;
+  }[];
+}
+
+/** What was counted, by item id, as the sheet holds it ("" not counted). */
+export type CountSheet = Record<string, string>;
+
+/** Why a count will be refused, or null. */
+export function countProblem(f: CountSheet): string | null {
+  const filled = Object.values(f).filter((v) => v.trim() !== "");
+  if (filled.length === 0) return "Enter how many of at least one item.";
+  if (filled.some((v) => Number.isNaN(whole(v))))
+    return "How many is a whole number, like 12.";
+  return null;
+}
+
+/** The POST /v1/stock/counts body: the items counted. */
+export const countRequest = (f: CountSheet, reason: string) => ({
+  lines: Object.entries(f)
+    .filter(([, v]) => v.trim() !== "")
+    .map(([item_id, v]) => ({ item_id, count: whole(v) })),
+  reason: reason.trim(),
+});
+
+/** How a counted item differs from what Taskiem has: "15 → 12 (3 fewer)". */
+export function countDiff(it: StockItem, v: string): string | null {
+  const n = whole(v);
+  if (v.trim() === "" || Number.isNaN(n)) return null;
+  if (it.stock === null) return `${quantity(n, it.unit)}, first count`;
+  if (n === it.stock) return "as Taskiem has it";
+  const d = n - it.stock;
+  return `${it.stock} → ${quantity(n, it.unit)} (${Math.abs(d)} ${d < 0 ? "fewer" : "more"})`;
+}
+
+/** A count's sheet from a CSV of item names and counts ("name,count" per
+ * line, a heading line allowed); unknown names the rows no item matches. */
+export function countFromCSV(
+  text: string,
+  items: StockItem[],
+): { sheet: CountSheet; unknown: string[] } {
+  const byName = new Map(items.map((i) => [i.name.trim().toLowerCase(), i]));
+  const sheet: CountSheet = {};
+  const unknown: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === "") continue;
+    const cells = csvCells(line);
+    const name = cells[0] ?? "";
+    const count = (cells.at(-1) ?? "").replace(/,/g, "");
+    if (cells.length < 2 || name === "") continue;
+    if (!/^\d+$/.test(count)) continue; // a heading, or not a count
+    const it = byName.get(name.toLowerCase());
+    if (!it) unknown.push(name);
+    else sheet[it.id] = count;
+  }
+  return { sheet, unknown };
+}
+
+/** A CSV line's cells: split on commas, semicolons or tabs outside
+ * double quotes, quotes taken off. */
+function csvCells(line: string): string[] {
+  const out: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (const ch of line) {
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && (ch === "," || ch === ";" || ch === "\t")) {
+      out.push(cell.trim());
+      cell = "";
+    } else cell += ch;
+  }
+  out.push(cell.trim());
+  return out;
+}
+
+/** A period's shrinkage in a line. */
+export function shrinkLine(s: Shrink): string {
+  if (s.received === 0 && s.sold === 0 && s.lost === 0)
+    return "Nothing moved yet this month.";
+  const lost =
+    s.lost === 0
+      ? "nothing lost"
+      : `${s.lost} lost${s.lost_kobo ? ` (${formatPrice(s.lost_kobo)} at cost)` : ""}`;
+  return `${s.received} in, ${s.sold} sold, ${lost}`;
+}

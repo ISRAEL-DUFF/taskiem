@@ -96,3 +96,31 @@ func TestUnits(t *testing.T) {
 		t.Errorf("suggest without a target %d", low.Suggest())
 	}
 }
+
+func TestParseCount(t *testing.T) {
+	for _, c := range []struct {
+		in     string
+		want   []stock.Counted
+		reason string
+	}{
+		{"rice 12, indomie 40", []stock.Counted{{"rice", 12}, {"indomie", 40}}, ""},
+		{"12 bags of rice and 40 indomie: rats in the store", []stock.Counted{{"rice", 12}, {"indomie", 40}}, "rats in the store"},
+		{"Indomie Chicken 0", []stock.Counted{{"Indomie Chicken", 0}}, ""},
+	} {
+		got, reason, ok := stock.ParseCount(c.in)
+		if !ok || reason != c.reason || len(got) != len(c.want) {
+			t.Errorf("%q: %+v %q %v", c.in, got, reason, ok)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%q: %+v", c.in, got)
+			}
+		}
+	}
+	for _, bad := range []string{"", "rice", "rice twelve", "rice -2"} {
+		if got, _, ok := stock.ParseCount(bad); ok {
+			t.Errorf("%q: %+v", bad, got)
+		}
+	}
+}

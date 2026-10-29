@@ -424,7 +424,8 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	var mv stock.Movement
 	if in.Quantity > 0 {
 		q := in.Quantity
-		mv, err = s.stockMove(ctx, tenant, stock.Move{ItemID: id, Item: in.Name, Reason: stock.Received, Delta: &q, Actor: actor, Key: key + "-received"}, audit)
+		mv, err = s.stockMove(ctx, tenant, stock.Move{ItemID: id, Item: in.Name, Reason: stock.Received, Delta: &q, Actor: actor, Key: key + "-received",
+			CostKobo: in.CostKobo}, audit)
 		if err != nil {
 			return stock.Item{}, mv, err
 		}
@@ -826,7 +827,7 @@ func (s *Server) moveStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mv := stock.Move{ItemID: it.ID, Item: it.Name, Reason: in.Reason, Delta: in.Change, SetTo: in.Count, Note: in.Note, Reference: in.Reference,
-		Actor: p.Actor(), Key: "api-" + key}
+		Actor: p.Actor(), Key: "api-" + key, CostKobo: it.CostKobo}
 	m, err := s.stockMove(r.Context(), p.TenantID, mv, func(tx pgx.Tx, action, target string, detail map[string]any) error {
 		return auditTx(r, tx, action, target, detail)
 	})

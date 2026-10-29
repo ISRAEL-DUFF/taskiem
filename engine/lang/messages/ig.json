@@ -2724,6 +2724,54 @@
       "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: ndị na-ebute ihe na ịtụ ha",
       "reviewed": false
     },
+    "wa.count.how": {
+      "text": "Dee ya dị ka *count rice 12, indomie 40*, na ihe kpatara ya mgbe colon gasịrị ma ọ bụrụ na ịchọrọ (*count rice 12: rats*). Ma ọ bụ zipu *count* ka m jụọ otu otu.",
+      "reviewed": false
+    },
+    "wa.count.none": {
+      "text": "Ọ dịghị ihe a ga-agụ ka. Buru ụzọ tinye ngwa ahịa gị.",
+      "reviewed": false
+    },
+    "wa.count.start": {
+      "text": "Anyị na-agụ ngwa ahịa {count}. Zipu ole dị n'ebe a na-edebe ihe, *skip* iji wụfee otu, ma ọ bụ *done* iji kwụsị.",
+      "reviewed": false
+    },
+    "wa.count.ask": {
+      "text": "*{item}* ole? (Taskiem nwere {had}.)",
+      "reviewed": false
+    },
+    "wa.count.number": {
+      "text": "Zipu nọmba zuru ezu, dị ka 12, ma ọ bụ *skip*.",
+      "reviewed": false
+    },
+    "wa.count.confirm": {
+      "text": "Ọgụgụ ngwa ahịa {count}:",
+      "reviewed": false
+    },
+    "wa.count.line": {
+      "text": "• {item}: {had} → {counted}",
+      "reviewed": false
+    },
+    "wa.count.same": {
+      "text": "{count} dị ka Taskiem nwere ha.",
+      "reviewed": false
+    },
+    "wa.count.done": {
+      "text": "Agụọla {reference}: ngwa ahịa {changed} gbanwere.",
+      "reviewed": false
+    },
+    "wa.count.lost": {
+      "text": "Ihe furu efu: {amount} n'ọnụ ahịa ịzụ.",
+      "reviewed": false
+    },
+    "money.daily.shrink": {
+      "text": "Ngwa ahịa furu efu: {count}, {amount} n'ọnụ ahịa ịzụ; nke kacha bụ {item} ({lost}).",
+      "reviewed": false
+    },
+    "wa.help.counts": {
+      "text": "• *count rice 12, indomie 40* (ma ọ bụ *count* ka m jụọ otu otu): gụọ ihe dị n'ebe a na-edebe ihe",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (ya na foto ahụ)",
       "reviewed": false

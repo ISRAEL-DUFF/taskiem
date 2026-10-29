@@ -171,3 +171,47 @@ func cutPrefixFold(s, prefix string) (string, bool) {
 	}
 	return s, false
 }
+
+// Counted is one item a count names: "rice 12".
+type Counted struct {
+	Name  string
+	Count int64
+}
+
+// ParseCount reads what follows "count": items and how many are on the
+// shelf ("rice 12, indomie 40", "12 bags rice and 40 indomie"), then a
+// reason after a colon ("count rice 12: rats"). ok is false when the words
+// are not that.
+func ParseCount(text string) (list []Counted, reason string, ok bool) {
+	text = strings.TrimSpace(text)
+	if i := strings.Index(text, ":"); i >= 0 {
+		text, reason = strings.TrimSpace(text[:i]), strings.TrimSpace(text[i+1:])
+	}
+	parts := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ';' || r == '\n' })
+	var split []string
+	for _, p := range parts {
+		split = append(split, strings.Split(p, " and ")...)
+	}
+	for _, p := range split {
+		f := strings.Fields(p)
+		if len(f) < 2 {
+			return nil, "", false
+		}
+		var name string
+		var n int64
+		if v, isNum := wholeNumber(f[len(f)-1]); isNum {
+			n, name = v, strings.Join(f[:len(f)-1], " ")
+		} else if v, isNum := wholeNumber(f[0]); isNum {
+			_, rest := unitAndName(strings.Join(f[1:], " "))
+			n, name = v, rest
+		} else {
+			return nil, "", false
+		}
+		name = strings.Trim(name, " -.")
+		if name == "" || n < 0 || n > MaxDelta {
+			return nil, "", false
+		}
+		list = append(list, Counted{Name: name, Count: n})
+	}
+	return list, cut(reason, 200), len(list) > 0
+}

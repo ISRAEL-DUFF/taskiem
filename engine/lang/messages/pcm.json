@@ -2724,6 +2724,54 @@
       "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: suppliers and dia orders",
       "reviewed": false
     },
+    "wa.count.how": {
+      "text": "Write am like *count rice 12, indomie 40*, and reason after colon if you want (*count rice 12: rats*). Or send *count* make I ask you one by one.",
+      "reviewed": false
+    },
+    "wa.count.none": {
+      "text": "Nothing dey to count yet. Add your items first.",
+      "reviewed": false
+    },
+    "wa.count.start": {
+      "text": "We go count {count} items. Send how many dey shelf, *skip* to pass one, or *done* to stop.",
+      "reviewed": false
+    },
+    "wa.count.ask": {
+      "text": "How many *{item}*? (Taskiem get {had}.)",
+      "reviewed": false
+    },
+    "wa.count.number": {
+      "text": "Send number, like 12, or *skip*.",
+      "reviewed": false
+    },
+    "wa.count.confirm": {
+      "text": "Count of {count} items:",
+      "reviewed": false
+    },
+    "wa.count.line": {
+      "text": "• {item}: {had} → {counted}",
+      "reviewed": false
+    },
+    "wa.count.same": {
+      "text": "{count} dey as Taskiem get am.",
+      "reviewed": false
+    },
+    "wa.count.done": {
+      "text": "Count {reference} don enter: {changed} items change.",
+      "reviewed": false
+    },
+    "wa.count.lost": {
+      "text": "Wetin miss: {amount} for cost.",
+      "reviewed": false
+    },
+    "money.daily.shrink": {
+      "text": "Stock wey loss: {count} items, {amount} for cost; di most na {item} ({lost}).",
+      "reviewed": false
+    },
+    "wa.help.counts": {
+      "text": "• *count rice 12, indomie 40* (or *count* make I ask one by one): count wetin dey shelf",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (with di photo)",
       "reviewed": false

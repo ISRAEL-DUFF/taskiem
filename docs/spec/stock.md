@@ -105,6 +105,13 @@ Five milestones, K1 to K5, built in order on one branch and landing together in 
 - **Leaks** are money ([leaks](../leaks.md)), so three are leaks, each valued at the item's cost price (in units only where it has none) and closed with a reason as other leaks are: a sale of more than the stock; a negative count; a count difference above the owner's limit.
 - **Owner alerts**, not leaks, as dispatch did for quiet riders: an item below its reorder level for more than a week with no order; a purchase order confirmed and not received after its expected days.
 
+- **As built (K4):**
+  - Migration 00259: `stock_movements.cost_kobo` (the item's cost when it moved, where Taskiem knows it: sales, receipts, counts, the web's changes), `stock_counts` (lines with what Taskiem had and what was counted, full, the reason, what was missing at cost), `stock_low` (items low since when, for the alert), `stock_settings.count_limit_kobo`, `purchase_orders.expected_days` (3), the leak kinds `stock_short`, `stock_negative`, `stock_count`, and `taskiem_money_leak_tenants` looking at stock too.
+  - `engine/stock`: `CountTx`/`RecordCount` (a count movement per difference, naming the count), `ShrinkTx` (received, sold, lost at cost, the cost when it moved else the last known), `MonthlyText` for the monthly email, `Watch` (hourly: items low a week with nothing on an open order, orders confirmed and late; each told once). The leaks are queries of `engine/leaks`, open until closed.
+  - "The daily close" is the morning money summary: it says what was lost the day before. A CSV count is read into the sheet in the browser and sent as the sheet is.
+  - Chat: `count …` and `count` item by item, and `count` in the other four languages after their word.
+  - Web: **Counts and losses** on the Stock page (this month, the latest counts, **Count the shelf** with a CSV, the leak limit); the three leaks named on the Money page.
+
 ## 8. Templates, chat and docs (K5)
 
 - Templates: `low-stock-alert`, `reorder-from-supplier` (the low list to drafted orders every morning, sent after approval), `sales-day-total` (the evening total from sales by chat), `stock-count-reminder` (weekly). The sheet-based `stock-reorder-alert` and `daily-sales-summary` stay, superseded only where the business keeps stock in a table or records sales by chat.

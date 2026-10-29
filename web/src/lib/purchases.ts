@@ -24,6 +24,8 @@ export interface Supplier {
 export interface StockSettings {
   /** Orders above it need a second person to send them. */
   purchase_limit_kobo: number | null;
+  /** A count's loss above it, at cost, is a leak; null: ₦5,000. */
+  count_limit_kobo?: number | null;
 }
 
 export interface SuppliersView {

@@ -583,3 +583,116 @@ test("suppliers and orders to them", async ({ page }) => {
     body: { name: "Mama Rice", phone: "0805 555 1234", items: ["2"] },
   });
 });
+
+test("count the shelf: a sheet, a CSV, the month's losses", async ({
+  page,
+}) => {
+  await signUp(page);
+  const json = (body: unknown, status = 200) => ({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+  await page.route("**/v1/stock", (route) => route.fulfill(json(stock)));
+  await page.route("**/v1/stock/movements?**", (route) =>
+    route.fulfill(json(movements)),
+  );
+  await page.route("**/v1/stock/shrinkage", (route) =>
+    route.fulfill(
+      json({
+        from: "2026-10-01T00:00:00+01:00",
+        to: "2026-10-30T00:00:00+01:00",
+        received: 35,
+        sold: 12,
+        lost: 4,
+        lost_kobo: 12000000,
+        items: [
+          {
+            item_id: "2",
+            item: "Rice",
+            received: 20,
+            sold: 2,
+            lost: 3,
+            lost_kobo: 12000000,
+          },
+          {
+            item_id: "1",
+            item: "Indomie",
+            received: 15,
+            sold: 10,
+            lost: 1,
+            lost_kobo: 0,
+          },
+        ],
+      }),
+    ),
+  );
+  let sent: unknown = null;
+  await page.route("**/v1/stock/counts", async (route) => {
+    if (route.request().method() === "POST") {
+      sent = route.request().postDataJSON();
+      return route.fulfill(json({ count: {} }, 201));
+    }
+    await route.fulfill(
+      json({
+        counts: [
+          {
+            id: "c1",
+            reference: "C-7QX4KD",
+            lines: [
+              { item_id: "2", item: "Rice", expected: 18, counted: 15 },
+              { item_id: "1", item: "Indomie", expected: 4, counted: 4 },
+            ],
+            full: true,
+            reason: "rats",
+            lost_kobo: 12000000,
+            by: "user:ada",
+            counted_at: new Date().toISOString(),
+            changed: 1,
+          },
+        ],
+      }),
+    );
+  });
+  await page.route("**/v1/stock/settings", (route) =>
+    route.fulfill(
+      json({ settings: { purchase_limit_kobo: null, count_limit_kobo: null } }),
+    ),
+  );
+  await page.goto("/storefront/stock");
+  await expect(page.getByTestId("shrink")).toContainText(
+    "This month: 35 in, 12 sold, 4 lost (₦120,000 at cost). Lost most: Rice (3, ₦120,000).",
+  );
+  await expect(page.getByTestId("count")).toContainText(
+    "C-7QX4KD · 2 items, every item",
+  );
+  await expect(page.getByTestId("count")).toContainText("₦120,000 missing");
+  await axeBoth(page, "/storefront/stock, with counts");
+
+  await page.getByRole("button", { name: "Count the shelf" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: /^Indomie/ }).fill("3");
+  await expect(dialog).toContainText("4 → 3 cartons (1 fewer)");
+  await dialog.getByLabel("Or read a CSV").setInputFiles({
+    name: "count.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("Item,Count\nRice,28\nGarri,4\n"),
+  });
+  await expect(dialog.getByRole("textbox", { name: /^Rice/ })).toHaveValue(
+    "28",
+  );
+  await expect(dialog.getByRole("status")).toContainText(
+    "No item is called Garri",
+  );
+  await dialog.getByLabel("Why they differ").fill("spoilt");
+  await axeBoth(page, "count the shelf");
+  await dialog.getByRole("button", { name: "Record the count" }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent).toEqual({
+    lines: [
+      { item_id: "1", count: 3 },
+      { item_id: "2", count: 28 },
+    ],
+    reason: "spoilt",
+  });
+});

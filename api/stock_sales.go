@@ -60,7 +60,7 @@ func saleLines(items []stock.Item, asked []saleItem, amount *int64) ([]stock.Sal
 		case amount == nil:
 			return nil, fmt.Errorf("%w: %s", errNoPrice, it.Name)
 		}
-		lines = append(lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: a.Quantity, Unit: it.Unit, PriceKobo: price})
+		lines = append(lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: a.Quantity, Unit: it.Unit, PriceKobo: price, CostKobo: it.CostKobo})
 	}
 	return lines, nil
 }

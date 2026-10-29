@@ -38,6 +38,9 @@ type SaleLine struct {
 	Unit      string `json:"unit,omitempty"`
 	PriceKobo int64  `json:"price_kobo"`
 	LineKobo  int64  `json:"line_kobo"`
+	// CostKobo is the item's cost price when sold, kept on its movement
+	// (K4).
+	CostKobo *int64 `json:"cost_kobo,omitempty"`
 }
 
 // SaleIn is a sale to record. AmountKobo nil prices it from its lines.
@@ -230,7 +233,7 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 		for _, l := range x.Lines {
 			d := -l.Quantity
 			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Sale, Delta: &d, Reference: x.Reference, Actor: in.Actor,
-				Key: "sale:" + x.ID.String() + ":" + l.ItemID})
+				Key: "sale:" + x.ID.String() + ":" + l.ItemID, CostKobo: l.CostKobo})
 			if err != nil {
 				return err
 			}

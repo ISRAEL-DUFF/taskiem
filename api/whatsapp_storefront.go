@@ -188,6 +188,9 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 		if sh.Action == "setup" {
 			return s.waShopSetup(ctx, c, text)
 		}
+		if sh.StockChat != nil && sh.StockChat.Count != nil && sh.StockChat.Count.Asking {
+			return s.waStockCountAnswer(ctx, c, text)
+		}
 		if len(sh.Pick) > 0 {
 			if strings.HasPrefix(sh.Action, "stock_") {
 				return s.waStockPick(ctx, c, text)

@@ -15,6 +15,11 @@ import {
   quantity,
   stockLine,
   byHowLine,
+  countDiff,
+  countFromCSV,
+  countProblem,
+  countRequest,
+  shrinkLine,
   emptySale,
   saleProblem,
   saleRequest,
@@ -318,5 +323,62 @@ describe("sales", () => {
       amount_kobo: 450050,
       entry_id: "e1",
     });
+  });
+});
+
+describe("counts", () => {
+  const indomie: StockItem = {
+    id: "1",
+    name: "Indomie",
+    available: true,
+    stock: 40,
+    unit: "carton",
+  };
+  const rice: StockItem = {
+    id: "2",
+    name: "Rice",
+    available: true,
+    stock: null,
+    unit: "bag",
+  };
+  const items = [indomie, rice];
+  it("says how a count differs", () => {
+    expect(countDiff(indomie, "37")).toBe("40 → 37 cartons (3 fewer)");
+    expect(countDiff(indomie, "40")).toBe("as Taskiem has it");
+    expect(countDiff(indomie, "42")).toBe("40 → 42 cartons (2 more)");
+    expect(countDiff(rice, "12")).toBe("12 bags, first count");
+    expect(countDiff(indomie, "")).toBeNull();
+  });
+  it("checks and sends the items counted", () => {
+    expect(countProblem({})).toContain("at least one");
+    expect(countProblem({ "1": "2.5" })).toContain("whole number");
+    expect(countProblem({ "1": "37", "2": "" })).toBeNull();
+    expect(countRequest({ "1": "37", "2": "" }, " rats ")).toEqual({
+      lines: [{ item_id: "1", count: 37 }],
+      reason: "rats",
+    });
+  });
+  it("reads a CSV of names and counts", () => {
+    const out = countFromCSV(
+      'Item,Count\nindomie,37\n"Rice";"1,200"\nGarri,4\n\n',
+      items,
+    );
+    expect(out.sheet).toEqual({ "1": "37", "2": "1200" });
+    expect(out.unknown).toEqual(["Garri"]);
+  });
+  it("says a month's shrinkage", () => {
+    const base = { from: "", to: "", items: [] };
+    expect(
+      shrinkLine({ ...base, received: 0, sold: 0, lost: 0, lost_kobo: 0 }),
+    ).toBe("Nothing moved yet this month.");
+    expect(
+      shrinkLine({
+        ...base,
+        received: 35,
+        sold: 12,
+        lost: 4,
+        lost_kobo: 12000000,
+      }),
+    ).toBe("35 in, 12 sold, 4 lost (₦120,000 at cost)");
   });
 });

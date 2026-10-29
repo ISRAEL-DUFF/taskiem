@@ -56,6 +56,18 @@ On the web, the Stock page has **Orders to suppliers** with **Order what is low*
 
 Give each item a **reorder level** on the Stock page: when the count is at that or less, the item is low. Give it an **order up to** level too, and Taskiem says how many to order. *stock* lists what is low, and each morning's money summary says it too.
 
+## Counting your shelf
+
+Every so often, count what is on the shelf and tell Taskiem:
+
+*count rice 12, indomie 40*
+
+Add why after a colon if some are missing: *count rice 12: rats*. Or send *count* and Taskiem asks you item by item. On the web, press **Count the shelf** on the Stock page; you can also give it a spreadsheet (CSV) with each item's name and how many.
+
+Taskiem shows what changes and writes it on **yes**. What went missing is valued at what you paid, and the Stock page shows what you lost this month. A big loss at a count, a sale of more than you had, or a count below zero shows as a leak on the Money page, so you can find out why.
+
+Taskiem also tells you when an item has been low for a week with nothing ordered, and when a supplier's confirmed order has not come.
+
 ## When the count looks wrong
 
 Open **Storefront > Stock** and press **History** on the item. Every change is there: goods received, orders, adjustments with their reasons, counts. If someone changed the number in your products table by hand, it shows as **Changed in the table**.

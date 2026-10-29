@@ -1275,7 +1275,8 @@ func serve(ctx context.Context, args []string) error {
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
 		// Money summaries: yesterday's to owners on chat each morning,
 		// last month's by email on the 1st (docs/money-reports.md).
-		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Schools: e.schools(), Logger: log.With("component", "moneydigest")}
+		money := &moneydigest.Digester{Pool: e.pool, Mailer: alerter.Mailer, From: alerter.From, PublicURL: cfg.PublicURL, Schools: e.schools(),
+			MonthlyMore: stock.MonthlyMore, Logger: log.With("component", "moneydigest")}
 		if e.wa != nil {
 			money.Channels = append(money.Channels, "whatsapp")
 		}
@@ -1285,7 +1286,9 @@ func serve(ctx context.Context, args []string) error {
 		log.Info("money summaries", "daily_chat", len(money.Channels) > 0, "monthly_email", money.Mailer != nil && money.From != "")
 		// The evening sales total in chat, at each shop's closing time.
 		evening := &stock.Evening{Pool: e.pool, Channels: money.Channels, Logger: log.With("component", "stock")}
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run, stockSweep.Run, evening.Run)
+		// Items low a week with nothing ordered, orders late (stock K4).
+		watch := &stock.Watch{Stock: e.stock, Pool: e.pool, Logger: log.With("component", "stock")}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run, stockSweep.Run, evening.Run, watch.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

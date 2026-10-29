@@ -125,7 +125,7 @@ func (s *Stock) Sell(ctx context.Context, tenant uuid.UUID, lines []SellLine, am
 		case amount == nil:
 			return CounterSale{}, fmt.Errorf("%w: %s has no price; give the amount", ErrSaleInvalid, it.Name)
 		}
-		in.Lines = append(in.Lines, SaleLine{ItemID: it.ID, Item: it.Name, Quantity: l.Quantity, Unit: it.Unit, PriceKobo: price})
+		in.Lines = append(in.Lines, SaleLine{ItemID: it.ID, Item: it.Name, Quantity: l.Quantity, Unit: it.Unit, PriceKobo: price, CostKobo: it.CostKobo})
 	}
 	return s.RecordSale(ctx, tenant, in, s.MoneyLog)
 }

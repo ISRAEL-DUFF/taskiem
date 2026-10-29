@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -223,19 +224,57 @@ func (s *Server) inviteSupplier(w http.ResponseWriter, r *http.Request) {
 	s.supplierAction(w, r, s.Purchases.InviteSupplierTx, "supplier.invite")
 }
 
-// putStockSettings is PUT /v1/stock/settings.
+// getStockSettings is GET /v1/stock/settings.
+func (s *Server) getStockSettings(w http.ResponseWriter, r *http.Request) {
+	var out stock.Settings
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		out, err = stock.SettingsTx(r.Context(), tx, principalFrom(r.Context()).TenantID)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"settings": out})
+}
+
+// putStockSettings is PUT /v1/stock/settings: the limits given change,
+// those left out stay (null clears one).
 func (s *Server) putStockSettings(w http.ResponseWriter, r *http.Request) {
-	var in stock.Settings
+	var in map[string]json.RawMessage
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	if err := s.tx(r, func(tx pgx.Tx) error { return stock.PutSettingsTx(r.Context(), tx, p.TenantID, in, p.Actor()) }); err != nil {
+	var out stock.Settings
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if out, err = stock.SettingsTx(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
+		for k, v := range in {
+			var to **int64
+			switch k {
+			case "purchase_limit_kobo":
+				to = &out.PurchaseLimitKobo
+			case "count_limit_kobo":
+				to = &out.CountLimitKobo
+			default:
+				return fmt.Errorf("%w: unknown setting %s", errBadRequest, k)
+			}
+			var n *int64
+			if err := json.Unmarshal(v, &n); err != nil {
+				return fmt.Errorf("%w: %s is an amount in kobo, or null", errBadRequest, k)
+			}
+			*to = n
+		}
+		return stock.PutSettingsTx(r.Context(), tx, p.TenantID, out, p.Actor())
+	}); err != nil {
 		s.purchaseFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"settings": in})
+	writeJSON(w, http.StatusOK, map[string]any{"settings": out})
 }
 
 // --- purchase orders ---

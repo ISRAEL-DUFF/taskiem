@@ -421,12 +421,15 @@ type Settings struct {
 	// PurchaseLimitKobo: orders above it need a second person's approval;
 	// nil, the owner approves any.
 	PurchaseLimitKobo *int64 `json:"purchase_limit_kobo"`
+	// CountLimitKobo: a count's loss worth more than this at cost is a
+	// leak; nil, ₦5,000 (K4).
+	CountLimitKobo *int64 `json:"count_limit_kobo"`
 }
 
 // SettingsTx reads the business's stock settings.
 func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
 	var s Settings
-	err := tx.QueryRow(ctx, `SELECT purchase_limit_kobo FROM stock_settings WHERE tenant_id = $1`, tenant).Scan(&s.PurchaseLimitKobo)
+	err := tx.QueryRow(ctx, `SELECT purchase_limit_kobo, count_limit_kobo FROM stock_settings WHERE tenant_id = $1`, tenant).Scan(&s.PurchaseLimitKobo, &s.CountLimitKobo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, nil
 	}
@@ -435,16 +438,20 @@ func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, err
 
 // PutSettingsTx writes them.
 func PutSettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, s Settings, actor string) error {
-	if s.PurchaseLimitKobo != nil && (*s.PurchaseLimitKobo < 0 || *s.PurchaseLimitKobo > MaxPurchaseKobo) {
-		return fmt.Errorf("%w: the limit is from ₦0 to ₦100,000,000", ErrPurchase)
+	for _, v := range []*int64{s.PurchaseLimitKobo, s.CountLimitKobo} {
+		if v != nil && (*v < 0 || *v > MaxPurchaseKobo) {
+			return fmt.Errorf("%w: a limit is from ₦0 to ₦100,000,000", ErrPurchase)
+		}
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO stock_settings (tenant_id, purchase_limit_kobo, updated_by) VALUES ($1, $2, $3)
-		ON CONFLICT (tenant_id) DO UPDATE SET purchase_limit_kobo = EXCLUDED.purchase_limit_kobo, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		tenant, s.PurchaseLimitKobo, actor)
+	_, err := tx.Exec(ctx, `INSERT INTO stock_settings (tenant_id, purchase_limit_kobo, count_limit_kobo, updated_by) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id) DO UPDATE SET purchase_limit_kobo = EXCLUDED.purchase_limit_kobo, count_limit_kobo = EXCLUDED.count_limit_kobo,
+		  updated_by = EXCLUDED.updated_by, updated_at = now()`,
+		tenant, s.PurchaseLimitKobo, s.CountLimitKobo, actor)
 	if err != nil {
 		return err
 	}
-	return stockAudit(ctx, tx, tenant, "stock.settings", "stock", map[string]any{"purchase_limit_kobo": s.PurchaseLimitKobo, "by": actor})
+	return stockAudit(ctx, tx, tenant, "stock.settings", "stock", map[string]any{"purchase_limit_kobo": s.PurchaseLimitKobo, "count_limit_kobo": s.CountLimitKobo,
+		"by": actor})
 }
 
 // --- purchase orders ---
@@ -944,7 +951,7 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		n := got[l.ItemID]
 		if n > 0 {
 			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Received, Delta: &n, Reference: x.Reference,
-				Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ItemID})
+				Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
 			if err != nil {
 				return x, nil, nil, err
 			}
@@ -1152,4 +1159,12 @@ func (p *Purchases) SupplierOrders(ctx context.Context, phone, channel, addr str
 		var o SupplierOrder
 		return o, r.Scan(&o.Tenant, &o.Purchase, &o.Reference, &o.Status)
 	})
+}
+
+// positive is n, or nil when it is not above 0.
+func positive(n int64) *int64 {
+	if n <= 0 {
+		return nil
+	}
+	return &n
 }

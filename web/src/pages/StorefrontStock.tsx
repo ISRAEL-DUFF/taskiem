@@ -50,6 +50,7 @@ import {
   type StockView,
 } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
+import { CountsCard } from "./StockCounts";
 import { PurchasesCard } from "./StockPurchases";
 import { StorefrontTabs } from "./Storefront";
 
@@ -184,6 +185,7 @@ export function StorefrontStock() {
             )}
           </section>
           <PurchasesCard onChanged={reload} />
+          <CountsCard items={v.items} onChanged={reload} />
           <section className="card" aria-labelledby="stock-items">
             <h2 id="stock-items" style={{ marginTop: 0 }}>
               Your items
