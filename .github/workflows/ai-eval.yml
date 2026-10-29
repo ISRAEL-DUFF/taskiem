@@ -44,8 +44,8 @@ jobs:
       MIN_GATE: ${{ inputs.min_gate || '0.7' }}
       JUDGE: ${{ inputs.judge && 'true' || 'false' }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: Is the API key configured?
@@ -79,7 +79,7 @@ jobs:
       - name: Summary
         if: always() && steps.key.outputs.present == 'true'
         run: cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && steps.key.outputs.present == 'true'
         with:
           name: ai-eval-real-model
