@@ -118,6 +118,12 @@ Five milestones, K1 to K5, built in order on one branch and landing together in 
 - Chat words in the five languages (drafts for review): each milestone brings its own words (sold in K2, received and supplier in K3, count in K4); K5 adds adjust, how many and stock, and reviews them all.
 - Docs: `docs/stock.md` (the guide), the storefront page's stock section, the money log (sales, expenses to suppliers), the owner's guide; the AI builder learns `stock@1` ("tell me what's low", "order from my supplier when rice is low") with eval cases and a table warning for a proposed "stock" table with a quantity column that the catalogue already is.
 
+- **As built (K5):**
+  - Templates `low-stock-alert`, `reorder-from-supplier` (draft, one approval, send each; an order above the limit is reported not sent), `sales-day-total` (stock@1's new `sales_day`) and `stock-count-reminder`, each with its workflow tests. The sheet templates gain `replaced_where`: a business keeping stock in a table is not offered `stock-reorder-alert`, one recording sales not `daily-sales-summary`.
+  - Chat words in the other four languages for an item's stock and what is low, and stock taken off with why (drafts for review, as the others are).
+  - The AI builder: rule 24 (stock@1, the four templates, never notify a supplier), synonyms (inventory, shelf, restock, reorder, stocktake, sold), the `stock_as_table` warning for a proposed table of stock with a quantity, and five eval cases (`evals/builder/stock.jsonl`).
+  - Docs: [docs/stock.md](../stock.md), the owner's guide, the storefront's and the money log's pages; decision 0057 accepted. Paying suppliers through Taskiem is not built (0057, as built).
+
 ## 9. Milestones
 
 | Id | Milestone | Size | Done when |

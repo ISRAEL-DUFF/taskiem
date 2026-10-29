@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/leaks"
 )
 
@@ -96,5 +98,61 @@ func TestStockCounts(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT array_agg(detail ORDER BY detail) FROM money_leaks WHERE tenant_id = $1 AND kind = 'stock_count'`, tenant).Scan(&details); err != nil ||
 		len(details) != 2 || !strings.Contains(details[0], "a count found 2 Indomie fewer") || !strings.Contains(details[1], "a count found 3 Rice fewer") {
 		t.Fatalf("leaks: %v %v", details, err)
+	}
+}
+
+// The sheet-based stock and sales templates give way to stock's own for a
+// business keeping stock in a table, and recording sales (K5).
+func TestStockTemplatesReplaceSheets(t *testing.T) {
+	w := newTablesWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Mama Put Stores", "ada@mama.test")
+	offered := func() map[string]bool {
+		out := map[string]bool{}
+		for _, x := range owner.must(200, "GET", "/v1/templates", nil)["templates"].([]any) {
+			out[x.(map[string]any)["id"].(string)] = true
+		}
+		return out
+	}
+	if got := offered(); !got["stock-reorder-alert"] || !got["daily-sales-summary"] || !got["low-stock-alert"] || !got["sales-day-total"] {
+		t.Fatalf("before: %v", got)
+	}
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	rice := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 5, "price_kobo": 4500000}, "Idempotency-Key", "r")["item"].(map[string]any)["id"]
+	if got := offered(); got["stock-reorder-alert"] || !got["daily-sales-summary"] {
+		t.Fatalf("keeping stock: %v", got)
+	}
+	owner.must(201, "POST", "/v1/stock/sales", map[string]any{"lines": []any{map[string]any{"item_id": rice, "quantity": 1}}, "paid_how": "cash"}, "Idempotency-Key", "s")
+	if got := offered(); got["daily-sales-summary"] || !got["sales-day-total"] {
+		t.Fatalf("recording sales: %v", got)
+	}
+}
+
+// The stock words in another language (K5): an item's stock, what is low,
+// and stock taken off with why.
+func TestStockWordsInPidgin(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.PCM}}
+	owner := w.tenant(t, "Mama Put Stores", "ada@mama.test")
+	const on = "+2348010000096"
+	w.bind(t, owner, on)
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Indomie", "quantity": 4, "unit": "carton", "reorder_level": 10}, "Idempotency-Key", "i")
+	w.say(t, on, "language pidgin")
+	if r := w.say(t, on, "how many cartons of indomie dey"); !strings.Contains(r, "Indomie") || !strings.Contains(r, "4 cartons") {
+		t.Fatalf("how many: %q", r)
+	}
+	if r := w.say(t, on, "check stock"); !strings.Contains(r, "Indomie") {
+		t.Fatalf("what is low: %q", r)
+	}
+	if r := w.say(t, on, "comot indomie 2 spoil"); !strings.Contains(r, "-2") {
+		t.Fatalf("taken off: %q", r)
+	}
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "2") {
+		t.Fatalf("written: %q", r)
+	}
+	if items := itemsByName(t, owner.must(200, "GET", "/v1/stock", nil)); items["Indomie"]["stock"] != float64(2) {
+		t.Fatalf("stock: %v", items)
 	}
 }

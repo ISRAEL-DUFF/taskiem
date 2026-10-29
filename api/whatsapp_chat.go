@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -603,6 +604,24 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 				if s.Stock.Ready() && m.Arg != "" {
 					return s.waStockCount(ctx, c, m.Arg)
 				}
+			case lang.IntentStock:
+				// An item's stock, or what is low (K5), read as English's
+				// "how many …" and "stock".
+				if s.Stock.Ready() {
+					if m.Arg == "" {
+						return s.waStockLow(ctx, c)
+					}
+					name, ok := stock.ParseHowMany("how many " + m.Arg)
+					if !ok {
+						name = m.Arg
+					}
+					return s.waStockShow(ctx, c, name)
+				}
+			case lang.IntentTakeOff:
+				// Stock taken off with why (K5): an adjustment down.
+				if s.Stock.Ready() && m.Arg != "" {
+					return s.waStockAdjust(ctx, c, takeOff(m.Arg))
+				}
 			case lang.IntentReceived:
 				// Goods received, read as English's "received ..." (K3).
 				if s.Stock.Ready() && m.Arg != "" {
@@ -614,7 +633,7 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		// Words that only looked like one ("I spend the whole day…") are
 		// ordinary chat, which the model may still route.
-		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold, lang.IntentReceived, lang.IntentCount}, m.Intent) {
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold, lang.IntentReceived, lang.IntentCount, lang.IntentStock, lang.IntentTakeOff}, m.Intent) {
 			matched = false
 		}
 		// A way into the web app for someone with no password (N6).

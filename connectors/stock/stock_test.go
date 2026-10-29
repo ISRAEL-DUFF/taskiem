@@ -128,6 +128,24 @@ func TestPurchaseActions(t *testing.T) {
 	}
 }
 
+func (o *ops) SalesDay(_ context.Context, _ uuid.UUID, day time.Time) (stock.Day, error) {
+	return stock.Day{Day: day.Format("2006-01-02"), TotalKobo: 4500000, Count: 2, ByHow: map[string]int64{stock.Cash: 4000000, stock.POS: 500000},
+		Top: []stock.TopItem{{Item: "Rice", Unit: "bag", Quantity: 2}}}, nil
+}
+
+func TestSalesDay(t *testing.T) {
+	c := conn.New(&ops{})
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New()})
+	out, err := call(t, c, ctx, "sales_day", map[string]any{"day": "2026-10-29"}, "")
+	if err != nil || out["day"] != "2026-10-29" || out["total_kobo"] != int64(4500000) || out["cash_kobo"] != int64(4000000) || out["transfer_kobo"] != int64(0) ||
+		out["top"] != "2 bags Rice" {
+		t.Fatalf("day: %v %v", out, err)
+	}
+	if _, err := call(t, c, ctx, "sales_day", map[string]any{"day": "yesterday"}, ""); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("a bad day: %v", err)
+	}
+}
+
 func call(t *testing.T, c *connector.Connector, ctx context.Context, action string, in map[string]any, key string) (map[string]any, error) {
 	t.Helper()
 	resp, err := c.Actions[action].Execute(ctx, connector.Request{Input: in, IdempotencyKey: key})

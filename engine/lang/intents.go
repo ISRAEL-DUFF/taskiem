@@ -64,12 +64,17 @@ const (
 	IntentReceived Intent = "received"
 	// A count of the shelf (stock K4): the words before what was counted.
 	IntentCount Intent = "count"
+	// An item's stock, or alone what is low (stock K5): "how many" and
+	// "stock" in the other languages.
+	IntentStock Intent = "stock"
+	// Stock taken off with why ("comot rice 2 spoilt", stock K5).
+	IntentTakeOff Intent = "take_off"
 )
 
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -99,7 +104,7 @@ type Words struct {
 
 // prefixIntents take what follows them; the others are whole messages.
 var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff}
 
 var (
 	wordsOnce sync.Once

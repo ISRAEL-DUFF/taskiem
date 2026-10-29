@@ -664,3 +664,19 @@ func (s *Server) waStockSaleApply(ctx context.Context, c *chat) error {
 	}
 	return c.say(ctx, s, strings.Join(lines, "\n"))
 }
+
+// takeOff turns "rice 2 spoilt" (stock taken off, in another language's
+// words) into an adjustment down: "rice -2 spoilt". A signed number stays.
+func takeOff(args string) string {
+	f := strings.Fields(args)
+	for i, w := range f {
+		if _, err := strconv.ParseInt(w, 10, 64); err == nil && i > 0 {
+			f[i] = "-" + w
+			break
+		}
+		if strings.HasPrefix(w, "-") || strings.HasPrefix(w, "+") {
+			break
+		}
+	}
+	return strings.Join(f, " ")
+}

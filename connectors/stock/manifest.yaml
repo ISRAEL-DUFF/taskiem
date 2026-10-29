@@ -26,7 +26,7 @@ actions:
     output:
       type: object
       properties:
-        items: { type: array, items: { type: object, description: "Each as get_item answers" } }
+        items: { type: array, items: { $ref: '#/actions/get_item/output' } }
         count: { type: integer }
   get_item:
     title: Read an item's stock
@@ -227,6 +227,26 @@ actions:
       properties:
         purchases: { type: array, items: { $ref: '#/actions/send_purchase/output' } }
         count:     { type: integer }
+  sales_day:
+    title: Add up a day's sales
+    description: "The sales recorded on a Lagos day (today when day is absent), by chat, on the Stock page or by record_sale: the total, by cash, transfer and terminal, how many, how many still wait for their money, what sold most, and how many terminal sales have no items."
+    class: read
+    input:
+      type: object
+      properties:
+        day: { type: string, description: "A date like 2026-10-29" }
+    output:
+      type: object
+      properties:
+        day:           { type: string }
+        total_kobo:    { type: integer }
+        count:         { type: integer }
+        waiting:       { type: integer }
+        cash_kobo:     { type: integer }
+        transfer_kobo: { type: integer }
+        pos_kobo:      { type: integer }
+        top:           { type: string, description: "2 bags Rice, 1 carton Indomie" }
+        unsold:        { type: integer, description: Terminal sales with no items recorded }
   movements:
     title: List stock movements
     description: An item's movements (or every item's), the latest first, since a time.

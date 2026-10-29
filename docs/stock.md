@@ -85,6 +85,19 @@ Every movement keeps the item's cost price when Taskiem knows it (sales, goods r
 
 Three things are **leaks**, valued at cost and closed with a reason as other [leaks](leaks.md) are: a sale of more than the stock, a count below zero in the table, and a count missing more than the business's limit (₦5,000 unless set on the Stock page; an item with no cost price always, in units). Two are **owner alerts**, not leaks: an item low for a week with nothing ordered, and an order confirmed and not received after its expected days (three by default). The stock watch looks every hour.
 
+## Templates
+
+Four templates start from the Stock record (Templates, or the Start page):
+
+| Template | What it does |
+| --- | --- |
+| `low-stock-alert` | Every morning, the items at or below their reorder level, each with how many are left and how many to order |
+| `reorder-from-supplier` | Every morning, an order to each supplier for their low items (on no open order), sent after one approval; above the business's limit an order is left for a second person |
+| `sales-day-total` | Every evening, the day's sales recorded by chat or the Stock page, by cash, transfer and terminal, with what sold most |
+| `stock-count-reminder` | Once a week, a reminder to count the shelf |
+
+The sheet-based `stock-reorder-alert` and `daily-sales-summary` stay for businesses that keep stock or sales in a Google Sheet; a business keeping stock in a table is offered `low-stock-alert` instead of the first, and one recording sales `sales-day-total` instead of the second.
+
 ## In chat
 
 On WhatsApp and Telegram (each change shown first, written on **yes**):
@@ -105,7 +118,7 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `count rice 12, indomie 40: rats` | A count, with its reason; `count` alone asks item by item |
 | `sold 3 bags of rice 45,000 cash` | A sale (`transfer`, `pos`; several items: `sold 2 cartons indomie, 1 bag rice 60,000 transfer`; no amount takes the prices) |
 
-Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review), and so do the words for goods received (`i don receive 10 bags rice`) and for a count (`i don count rice 12`). Suppliers and their orders need `storefront.manage`; goods received, `table.edit`. A voice note is read the same way, where voice notes are on.
+Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review), and so do the words for goods received (`i don receive 10 bags rice`), a count (`i don count rice 12`), an item's stock or what is low (`check stock`, `mélòó ni rice`), and stock taken off with why (`comot rice 2 spoil`). Suppliers and their orders need `storefront.manage`; goods received, `table.edit`. A voice note is read the same way, where voice notes are on.
 
 ## On the web
 
@@ -147,6 +160,7 @@ A platform connector acting on the run's own business, needing no connection:
 | `send_purchase` | A drafted order approved and sent; refused above the limit |
 | `list_purchases` | Orders, open ones only with `open` |
 | `record_sale` | A sale: lines by row id with quantity and price, the amount and how it was paid |
+| `sales_day` | A day's sales added up (today when `day` is absent): the total, by how paid, how many, what sold most |
 
 Changes carry the step's idempotency key: a retried step moves stock once.
 

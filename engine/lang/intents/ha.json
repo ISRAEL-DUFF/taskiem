@@ -33,7 +33,9 @@
     "cash_out": ["kuɗi ya fita"],
     "sold": ["na sayar da", "na sayar", "an sayar da", "an sayar"],
     "received": ["na karɓi", "an karɓi", "na karbi"],
-    "count": ["na ƙirga", "na kirga"]
+    "count": ["na ƙirga", "na kirga"],
+    "stock": ["guda nawa", "nawa ne"],
+    "take_off": ["cire", "ya lalace"]
   },
   "fillers": ["don allah", "dan allah"],
   "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana", "takardar kuɗi", "na kashe", "kuɗi ya shigo", "kuɗi ya fita"],

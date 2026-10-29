@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -128,4 +129,15 @@ func (s *Stock) Sell(ctx context.Context, tenant uuid.UUID, lines []SellLine, am
 		in.Lines = append(in.Lines, SaleLine{ItemID: it.ID, Item: it.Name, Quantity: l.Quantity, Unit: it.Unit, PriceKobo: price, CostKobo: it.CostKobo})
 	}
 	return s.RecordSale(ctx, tenant, in, s.MoneyLog)
+}
+
+// SalesDay adds up a Lagos day's sales (DayTx), for workflows.
+func (s *Stock) SalesDay(ctx context.Context, tenant uuid.UUID, day time.Time) (Day, error) {
+	var d Day
+	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		d, err = DayTx(ctx, tx, tenant, day)
+		return err
+	})
+	return d, err
 }

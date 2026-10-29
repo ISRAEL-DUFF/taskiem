@@ -32,6 +32,7 @@ type Ops interface {
 	Move(ctx context.Context, tenant uuid.UUID, mv stock.Move) (stock.Movement, error)
 	Movements(ctx context.Context, tenant uuid.UUID, f stock.Filter) ([]stock.Movement, error)
 	Sell(ctx context.Context, tenant uuid.UUID, lines []stock.SellLine, amount *int64, paidHow, note, actor, key string) (stock.CounterSale, error)
+	SalesDay(ctx context.Context, tenant uuid.UUID, day time.Time) (stock.Day, error)
 }
 
 // Buyer is the purchase actions' operations: *stock.Purchases. nil, or a
@@ -57,6 +58,7 @@ func New(ops Ops) *connector.Connector {
 		"movements":      connector.ActionFunc(a.movements),
 		"record_sale":    connector.ActionFunc(a.sell),
 		"low_items":      connector.ActionFunc(a.low),
+		"sales_day":      connector.ActionFunc(a.salesDay),
 		"draft_purchase": connector.ActionFunc(a.draft),
 		"send_purchase":  connector.ActionFunc(a.send),
 		"list_purchases": connector.ActionFunc(a.purchases),
@@ -175,6 +177,38 @@ func (a *actions) receive(ctx context.Context, req connector.Request) (connector
 	}
 	return a.move(ctx, req, stock.Received, &n, nil)
 }
+
+// salesDay adds up a Lagos day's sales (today when day is absent).
+func (a *actions) salesDay(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	day := time.Now().In(lagos)
+	if v, _ := req.Input["day"].(string); v != "" {
+		if day, err = time.ParseInLocation("2006-01-02", v, lagos); err != nil {
+			return connector.Response{}, fmt.Errorf("day is a date like 2026-10-29: %w", effects.ErrFatal)
+		}
+	}
+	d, err := a.ops.SalesDay(ctx, c.Tenant, day)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	var top []string
+	for _, t := range d.Top[:min(3, len(d.Top))] {
+		top = append(top, (stock.Item{Unit: t.Unit}).Quantity(t.Quantity)+" "+t.Item)
+	}
+	return connector.Response{Output: map[string]any{"day": d.Day, "total_kobo": d.TotalKobo, "count": d.Count, "waiting": d.Waiting,
+		"cash_kobo": d.ByHow[stock.Cash], "transfer_kobo": d.ByHow[stock.Transfer], "pos_kobo": d.ByHow[stock.POS],
+		"top": strings.Join(top, ", "), "unsold": len(d.Unsold)}}, nil
+}
+
+var lagos = func() *time.Location {
+	if l, err := time.LoadLocation("Africa/Lagos"); err == nil {
+		return l
+	}
+	return time.FixedZone("WAT", 3600)
+}()
 
 // buyer is the purchase operations, or why there are none.
 func (a *actions) buyer(ctx context.Context) (connector.Caller, Buyer, error) {
@@ -499,6 +533,10 @@ func (l *Late) Move(ctx context.Context, tenant uuid.UUID, mv stock.Move) (stock
 
 func (l *Late) Movements(ctx context.Context, tenant uuid.UUID, f stock.Filter) ([]stock.Movement, error) {
 	return l.get().Movements(ctx, tenant, f)
+}
+
+func (l *Late) SalesDay(ctx context.Context, tenant uuid.UUID, day time.Time) (stock.Day, error) {
+	return l.get().SalesDay(ctx, tenant, day)
 }
 
 func (l *Late) Sell(ctx context.Context, tenant uuid.UUID, lines []stock.SellLine, amount *int64, paidHow, note, actor, key string) (stock.CounterSale, error) {

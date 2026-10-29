@@ -1,0 +1,71 @@
+{
+  "schema": "wd-test/v1",
+  "template": "sales-day-total",
+  "params": {},
+  "cases": [
+    {
+      "name": "sends the day's total by how it was paid",
+      "trigger": {
+        "scheduled_time": "2026-10-29T20:00:00Z"
+      },
+      "mocks": {
+        "day": {
+          "output": {
+            "day": "2026-10-29",
+            "total_kobo": 4500000,
+            "count": 3,
+            "waiting": 0,
+            "cash_kobo": 4000000,
+            "transfer_kobo": 0,
+            "pos_kobo": 500000,
+            "top": "2 bags Rice",
+            "unsold": 0
+          }
+        },
+        "text_owner": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "text_owner": "completed"
+        },
+        "inputs": {
+          "text_owner": {
+            "message": "Today's sales: NGN 45000 from 3 sales (cash NGN 40000, transfer NGN 0, terminal NGN 5000). Sold most: 2 bags Rice"
+          }
+        }
+      }
+    },
+    {
+      "name": "a day with no sales sends nothing",
+      "trigger": {
+        "scheduled_time": "2026-10-30T20:00:00Z"
+      },
+      "mocks": {
+        "day": {
+          "output": {
+            "day": "2026-10-30",
+            "total_kobo": 0,
+            "count": 0,
+            "waiting": 0,
+            "cash_kobo": 0,
+            "transfer_kobo": 0,
+            "pos_kobo": 0,
+            "top": "",
+            "unsold": 0
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "text_owner": "skipped"
+        }
+      }
+    }
+  ]
+}

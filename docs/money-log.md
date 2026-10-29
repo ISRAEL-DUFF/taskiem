@@ -75,6 +75,8 @@ Members with `invoice.manage` can record cash and expenses from WhatsApp or Tele
 
 The money that came in and the money that went out are also checked for [leaks](leaks.md).
 
+**From stock.** A sale paid in cash ([stock](stock.md#sales)) is a `cash` entry in, recorded in the sale's transaction and naming it; a sale by transfer or on the terminal is matched to the money the rail reports. A payment to a supplier for a purchase order is an `expense` with the supplier as its vendor, the category `stock` and the order in its description.
+
 ## Money
 
 **Money** in the web app's sidebar is for anyone who may see invoices (`invoice.read`); assigning, closing, uploading and entering need `invoice.manage`. It has five tabs:

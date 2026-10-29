@@ -1,6 +1,6 @@
 # 0057 — Stock by chat: the catalogue table is the stock, every change is a kept movement, sales and purchases move it, suppliers are people outside the business
 
-Date: 2026-10-28 · Status: **Proposed** · Plan: [stock by chat](../spec/stock.md)
+Date: 2026-10-28 · Status: **Accepted** (built 29 October 2026) · Plan: [stock by chat](../spec/stock.md)
 
 ## Context
 
@@ -35,6 +35,15 @@ Taskiem has the pieces: the owner's own tables in their Xenibase project, **kept
 - A `stock@1` platform connector, movements and sales recorded in Taskiem's database with `stock_movements` as a kept copy, sales as a target for matching, chat commands for stock, sales, counts and purchases in the five languages, a Suppliers page beside Riders, purchase orders under approval, templates for the morning low list and reorders, leaks and summary lines.
 - The storefront's order acceptance writes a movement.
 - The POS terminals strategy's "who was at the terminal" and "what was sold" questions get their first answer from the sale by chat.
+
+## As built
+
+Built in five milestones on one branch (the plan's §4 to §8 say what each became). Where the build differs from the decision above:
+
+- The morning low list is a line in the morning money summary and the `low-stock-alert` template; the sheet template is offered only to businesses that keep no stock in a table (as `daily-sales-summary` is to those that record no sales).
+- A supplier's name is kept plain (the catalogue's supplier column holds it already); their phone is sealed. Their CONFIRM and CHANGE work as words too, outside WhatsApp's window, found across businesses by a definer that answers only the orders they may still answer.
+- "The daily close" is the morning money summary: it says the day's sales and what was lost to counts.
+- Paying a supplier through Taskiem (a payout to their bank account under approval) is not built: a payment made outside is recorded as an expense naming the supplier and the order, and what is owed shows on Suppliers. Payouts to suppliers come with their bank details, later.
 
 ## Provenance
 

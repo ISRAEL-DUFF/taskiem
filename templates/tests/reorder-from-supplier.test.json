@@ -1,0 +1,101 @@
+{
+  "schema": "wd-test/v1",
+  "template": "reorder-from-supplier",
+  "params": {},
+  "cases": [
+    {
+      "name": "drafts an order per supplier and sends them after one approval",
+      "trigger": {
+        "scheduled_time": "2026-10-29T07:00:00Z"
+      },
+      "mocks": {
+        "draft": {
+          "output": {
+            "count": 2,
+            "no_supplier": [
+              "Garri"
+            ],
+            "purchases": [
+              {
+                "id": "p1",
+                "reference": "P-7QX4KD",
+                "supplier": "Dangote Depot",
+                "status": "drafted",
+                "items": "46 cartons Indomie",
+                "total_kobo": 39100000
+              },
+              {
+                "id": "p2",
+                "reference": "P-K2M9PA",
+                "supplier": "Mama Rice",
+                "status": "drafted",
+                "items": "17 bags Rice",
+                "total_kobo": 68000000
+              }
+            ]
+          }
+        },
+        "tell": {
+          "output": {
+            "sent": true
+          }
+        },
+        "send[0].send_one": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "supplier": "Dangote Depot",
+            "status": "sent"
+          }
+        },
+        "send[1].send_one": {
+          "error": {
+            "kind": "fatal",
+            "message": "P-K2M9PA is above your limit of ₦500,000, so a person approves it"
+          }
+        }
+      },
+      "approvals": {
+        "approve": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "completed",
+          "send[0].send_one": "completed",
+          "tell": "completed"
+        },
+        "inputs": {
+          "tell": {
+            "message": "Orders sent: P-7QX4KD to Dangote Depot. Not sent: 1 (see the Stock page)"
+          }
+        }
+      }
+    },
+    {
+      "name": "nothing low: nothing to approve",
+      "trigger": {
+        "scheduled_time": "2026-10-30T07:00:00Z"
+      },
+      "mocks": {
+        "draft": {
+          "output": {
+            "count": 0,
+            "no_supplier": [],
+            "purchases": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "approve": "skipped",
+          "send": "skipped",
+          "tell": "skipped"
+        }
+      }
+    }
+  ]
+}
