@@ -91,7 +91,7 @@ Pages load the size the screen needs, lazily.
 
 ## Orders, questions and call-backs
 
-The page offers up to four **forms**: **order** (the catalogue as a basket), **enquiry** (a question), **call-back** (a request to be called) and **booking** (a time for a service, [below](#bookings)). Each starts a workflow.
+The page offers up to four **forms**: **order** (the catalogue as a basket), **enquiry** (a question), **call-back** (a request to be called) and **booking** (a time for a service, [below](#bookings)). Each starts a workflow. A storefront with more than one kind of thing on it, each with its own actions and workflows, is planned in [fronts](spec/fronts.md) ([decision 0059](decisions/0059-fronts.md), proposed).
 
 ### Setting up
 

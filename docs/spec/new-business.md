@@ -1,6 +1,6 @@
 # A second business: New business on the web and in chat, and switching between them
 
-Status: **Draft** 29 October 2026, for review · Builds on: [onboarding](../onboarding.md) ([0022](../decisions/0022-self-serve-onboarding.md)), [field agents](../agents.md), [governance: members and invitations](../governance.md#members-and-invitations), [WhatsApp](../whatsapp.md) (`switch`), [billing](../billing.md), the chat way in plan (`chat-way-in.md`, in review on PR 134) (C1's `new business`, which this piece gives the function to)
+Status: **Parked** 30 October 2026. The case that led to this plan turned out to be one business selling more than one thing, which [fronts](fronts.md) answers; this plan stands for the day an owner really has two businesses. Draft, not for building yet · Builds on: [onboarding](../onboarding.md) ([0022](../decisions/0022-self-serve-onboarding.md)), [field agents](../agents.md), [governance: members and invitations](../governance.md#members-and-invitations), [WhatsApp](../whatsapp.md) (`switch`), [billing](../billing.md), the chat way in plan (`chat-way-in.md`, in review on PR 134) (C1's `new business`, which this piece gives the function to)
 
 ## 1. Summary
 
