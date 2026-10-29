@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"testing"
 )
 
@@ -39,5 +40,14 @@ func TestListRunsByCorrelationKey(t *testing.T) {
 	}
 	if got := ids(acme, ""); len(got) != 2 {
 		t.Errorf("unfiltered: %v, want Acme's 2 runs", got)
+	}
+	// The run keeps a keyed hash of the key, never the key: a correlation
+	// built from a phone or an account number stays out of the clear.
+	var kept string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT correlation_key FROM runs WHERE id = $1`, a1).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept == "" || kept == "ORDER-1" {
+		t.Errorf("runs.correlation_key holds %q, want a keyed hash", kept)
 	}
 }

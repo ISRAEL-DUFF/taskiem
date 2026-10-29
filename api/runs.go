@@ -222,8 +222,18 @@ func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 		WHERE r.tenant_id = $6 AND r.started_at < $1 AND ($2::uuid IS NULL OR r.workflow_id = $2) AND ($3 = '' OR r.status = $3) AND ($4 = '' OR r.environment = $4)`
 	args := []any{before, wf, q.Get("status"), env, limit, p.TenantID}
 	if key := q.Get("correlation_key"); key != "" {
+		// Runs keep the key's keyed hash, not the key (runtime.CorrelationCategory).
+		if s.Vault == nil {
+			writeJSON(w, http.StatusOK, map[string]any{"runs": []runSummary{}})
+			return
+		}
+		digest, err := s.Vault.SubjectFor(r.Context(), p.TenantID, runtime.CorrelationCategory, key)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		query += ` AND r.correlation_key = $7`
-		args = append(args, key)
+		args = append(args, digest)
 	}
 	query += ` ORDER BY r.started_at DESC LIMIT $5`
 	var out []runSummary

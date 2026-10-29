@@ -17,7 +17,7 @@ Query parameters: `environment`, `workflow`, `days` (1–90, default 7), `tz` (a
 
 ## Finding runs
 
-**Activity** lists runs newest first through `GET /v1/runs` (`run.read`). Query parameters: `workflow`, `status`, `environment`, `correlation_key`, `before` (an RFC 3339 time, for the next page) and `limit` (1–200, default 50). `correlation_key` matches exactly: a run's correlation key is the correlation of the signal it last waited on (a payment or order reference, a form request's id), so support can find the run a customer's reference belongs to. Activity's **Reference** box, under More filters, sends it. A run that never waited on a signal has no correlation key. Results are always the caller's own tenant's.
+**Activity** lists runs newest first through `GET /v1/runs` (`run.read`). Query parameters: `workflow`, `status`, `environment`, `correlation_key`, `before` (an RFC 3339 time, for the next page) and `limit` (1–200, default 50). `correlation_key` matches exactly: a run's correlation key is the correlation of the signal it last waited on (a payment or order reference, a form request's id), so support can find the run a customer's reference belongs to. Activity's **Reference** box, under More filters, sends it. A run that never waited on a signal has no correlation key. The run keeps only a keyed hash of it, under the tenant's pseudonymisation key, so a reference built from a phone or an account number is never stored in the clear and is found only by someone who already knows it. Results are always the caller's own tenant's.
 
 ## Live run view
 

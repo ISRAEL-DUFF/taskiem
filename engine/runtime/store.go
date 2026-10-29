@@ -959,17 +959,32 @@ func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, co
 	return err
 }
 
+// CorrelationCategory is the pseudonym category runs.correlation_key is
+// kept under: a keyed hash of the correlation under the tenant's
+// pseudonymisation key, never the value. A correlation is often built from
+// personal data (a phone number, an account number), which the run's
+// history seals; the column must not keep it in the clear, past erasure,
+// for the run's whole retention. It is found only by someone who already
+// knows the value, which is what an exact search needs.
+const CorrelationCategory = "correlation"
+
 // registerWait records that a step waits for a signal, or delivers a
 // buffered one immediately. Only signals delivered to the run's own
-// environment match. The run keeps the correlation it last waited on as
-// its correlation key, which GET /v1/runs?correlation_key= finds it by
-// (spec 15.1).
+// environment match. The run keeps the correlation it last waited on, as
+// its keyed hash, which GET /v1/runs?correlation_key= finds it by (spec
+// 15.1).
 func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, env, step, event, correlation string) (func() error, error) {
 	if err := signalLock(ctx, tx, ref.TenantID, env, event, correlation); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE runs SET correlation_key = $2 WHERE id = $1 AND correlation_key IS DISTINCT FROM $2`, ref.ID, correlation); err != nil {
-		return nil, err
+	if ss, ok := s.PII.(pii.SubjectSealer); ok {
+		key, err := ss.SubjectForTx(ctx, tx, ref.TenantID, CorrelationCategory, correlation)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE runs SET correlation_key = $2 WHERE id = $1 AND correlation_key IS DISTINCT FROM $2`, ref.ID, key); err != nil {
+			return nil, err
+		}
 	}
 	var id uuid.UUID
 	var payload []byte
