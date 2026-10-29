@@ -821,6 +821,7 @@ export function StorefrontTabs() {
         Riders
       </NavLink>
       <NavLink to="/storefront/deliveries">Deliveries</NavLink>
+      <NavLink to="/storefront/stock">Stock</NavLink>
     </nav>
   );
 }

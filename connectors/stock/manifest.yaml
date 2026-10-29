@@ -1,0 +1,140 @@
+# The stock platform connector (docs/stock.md, decision 0057): a shop's
+# items and their stock, as its catalogue table holds them, and the
+# movements that explain each count. It acts on Taskiem's own records and
+# the business's catalogue, for the run's tenant only, and needs no
+# connection. Sales and orders move stock themselves; adjust, receive and
+# count are the changes a workflow makes.
+manifest: connector/v1
+id: stock
+version: 1.0.0
+name: Stock
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  list_items:
+    title: List items and their stock
+    description: The business's items with their stock, unit, prices, reorder and target levels and supplier, read from the catalogue table itself. low lists only those at or below their reorder level (each with suggest, how many to order); supplier and name narrow the list (name matches part of it, any case).
+    class: read
+    input:
+      type: object
+      properties:
+        low:      { type: boolean, description: Only items at or below their reorder level }
+        supplier: { type: string, description: Only this supplier's items }
+        name:     { type: string, description: Items whose name holds these words }
+    output:
+      type: object
+      properties:
+        items: { type: array, items: { type: object, description: "Each as get_item answers" } }
+        count: { type: integer }
+  get_item:
+    title: Read an item's stock
+    description: One item by its catalogue row id.
+    class: read
+    input:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+    output:
+      type: object
+      properties:
+        id:            { type: string }
+        name:          { type: string }
+        stock:         { type: integer, description: Absent when the row holds no count }
+        unit:          { type: string }
+        price_kobo:    { type: integer }
+        cost_kobo:     { type: integer, description: The last price paid for one }
+        reorder_level: { type: integer }
+        target_level:  { type: integer }
+        supplier:      { type: string }
+        low:           { type: boolean }
+        suggest:       { type: integer, description: How many to order when low }
+  adjust:
+    title: Adjust an item's stock
+    description: Changes an item's stock by change (never below zero), with a note saying why (spoilt, found, a gift). Recorded as a movement before it reaches the catalogue table; status is done, or pending while the table is out of reach (it is sent again).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id, change]
+      properties:
+        id:     { type: string }
+        change: { type: integer, minimum: -1000000, maximum: 1000000 }
+        note:   { type: string, maxLength: 200 }
+    output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  receive:
+    title: Record goods received
+    description: Adds goods received to an item's stock, naming where they came from (reference, such as a purchase order).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id, quantity]
+      properties:
+        id:        { type: string }
+        quantity:  { type: integer, minimum: 1, maximum: 1000000 }
+        reference: { type: string, maxLength: 100 }
+        note:      { type: string, maxLength: 200 }
+    output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  count:
+    title: Record a count
+    description: Sets an item's stock to what was counted on the shelf; the difference is the movement.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id, count]
+      properties:
+        id:    { type: string }
+        count: { type: integer, minimum: 0, maximum: 1000000 }
+        note:  { type: string, maxLength: 200 }
+    output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  movements:
+    title: List stock movements
+    description: An item's movements (or every item's), the latest first, since a time.
+    class: read
+    input:
+      type: object
+      properties:
+        id:     { type: string, description: An item's row id; empty for every item }
+        reason: { type: string, enum: [order, sale, received, adjustment, count, outside] }
+        since:  { type: string, description: RFC 3339 }
+        limit:  { type: integer, minimum: 1, maximum: 500 }
+    output:
+      type: object
+      properties:
+        movements:
+          type: array
+          items:
+            type: object
+            properties:
+              id:        { type: string }
+              item_id:   { type: string }
+              item:      { type: string }
+              reason:    { type: string }
+              status:    { type: string, enum: [pending, done, void] }
+              change:    { type: integer, description: What landed, once done }
+              before:    { type: integer }
+              after:     { type: integer }
+              short:     { type: integer, description: What a decrease asked for beyond the stock }
+              note:      { type: string }
+              reference: { type: string }
+              at:        { type: string, description: RFC 3339 }
+        count: { type: integer }

@@ -1,0 +1,300 @@
+// A shop's stock (docs/stock.md; GET /v1/stock): the API's shapes, how an
+// item and a movement read in a row, and the forms for adding an item,
+// changing its columns, and moving its stock.
+
+import { whenLabel } from "./bookings";
+import { feeInput, feeKobo } from "./orders";
+import { formatPrice } from "./storefront";
+
+export interface StockItem {
+  id: string;
+  name: string;
+  available: boolean;
+  /** null when the row holds no count. */
+  stock: number | null;
+  unit?: string;
+  price_kobo?: number;
+  /** The last price paid for one. */
+  cost_kobo?: number;
+  reorder_level?: number;
+  target_level?: number;
+  supplier?: string;
+  low?: boolean;
+  /** How many to order, when low. */
+  suggest?: number;
+  /** Its movements not yet in the table. */
+  waiting?: number;
+}
+
+export type MovementReason =
+  | "order"
+  | "sale"
+  | "received"
+  | "adjustment"
+  | "count"
+  | "outside";
+
+export interface Movement {
+  id: string;
+  item_id: string;
+  item: string;
+  reason: MovementReason;
+  status: "pending" | "done" | "void";
+  delta?: number;
+  set_to?: number;
+  before: number | null;
+  after: number | null;
+  change: number | null;
+  short?: number;
+  note?: string;
+  reference?: string;
+  by: string;
+  error?: string;
+  created_at: string;
+  done_at: string | null;
+}
+
+export interface StockView {
+  keeps_stock: boolean;
+  catalogue: string | null;
+  items: StockItem[];
+  low?: number;
+  stuck?: Movement[];
+  /** The page is published (items without a price are hidden from it). */
+  published?: boolean;
+}
+
+/** A unit for more than one: bag, bags; box, boxes; battery, batteries. */
+export function plural(unit: string): string {
+  const l = unit.toLowerCase();
+  if (/(s|x|ch|sh)$/.test(l))
+    return l.endsWith("s") && !l.endsWith("ss") ? unit : unit + "es";
+  if (/[^aeiou]y$/.test(l)) return unit.slice(0, -1) + "ies";
+  return unit + "s";
+}
+
+/** n of an item: "12 bags", "1 carton", "4". */
+export function quantity(n: number, unit?: string): string {
+  const u = unit?.trim();
+  if (!u) return String(n);
+  return `${n} ${Math.abs(n) === 1 ? u : plural(u)}`;
+}
+
+/** An item's stock as a row's side says it: "48 cartons", "No count". */
+export const stockLine = (it: StockItem) =>
+  it.stock === null ? "No count" : quantity(it.stock, it.unit);
+
+/** An item underneath its name: its levels, cost and supplier. */
+export function itemSub(it: StockItem): string {
+  const parts: string[] = [];
+  if (it.reorder_level !== undefined)
+    parts.push(`reorder at ${it.reorder_level}`);
+  if (it.target_level !== undefined) parts.push(`up to ${it.target_level}`);
+  if (it.cost_kobo !== undefined)
+    parts.push(`cost ${formatPrice(it.cost_kobo)}`);
+  if (it.price_kobo !== undefined)
+    parts.push(`sells at ${formatPrice(it.price_kobo)}`);
+  if (it.supplier) parts.push(it.supplier);
+  if (it.low && it.suggest)
+    parts.push(`order ${quantity(it.suggest, it.unit)}`);
+  if (it.waiting)
+    parts.push(
+      it.waiting === 1
+        ? "1 change on its way"
+        : `${it.waiting} changes on their way`,
+    );
+  return parts.join(" · ") || "No levels yet";
+}
+
+/** Why a movement was made, in a word or two. */
+export const REASON: Record<MovementReason, string> = {
+  order: "Order",
+  sale: "Sold",
+  received: "Received",
+  adjustment: "Adjusted",
+  count: "Counted",
+  outside: "Changed in the table",
+};
+
+/** A movement's title: "Indomie: received 50". */
+export function movementTitle(m: Movement): string {
+  const n = m.change ?? m.delta ?? m.set_to ?? 0;
+  if (m.reason === "count")
+    return `${m.item}: counted ${m.set_to ?? m.after ?? n}`;
+  const sign = n > 0 ? "+" : "";
+  return `${m.item}: ${REASON[m.reason].toLowerCase()} ${sign}${n}`;
+}
+
+/** A movement underneath its title: when, the count it left, what it came from, who, and why. */
+export function movementSub(m: Movement): string {
+  const parts = [whenLabel(m.done_at ?? m.created_at)];
+  if (m.status === "pending")
+    parts.push(
+      m.error
+        ? "not in the table yet: it is sent again"
+        : "on its way to the table",
+    );
+  else if (m.before !== null && m.after !== null)
+    parts.push(`${m.before} → ${m.after}`);
+  if (m.short) parts.push(`${m.short} more asked for than there was`);
+  if (m.reference)
+    parts.push(m.reason === "order" ? `order ${m.reference}` : m.reference);
+  if (m.note) parts.push(m.note);
+  return parts.join(" · ");
+}
+
+// --- the forms ---
+
+export interface ItemForm {
+  name: string;
+  quantity: string;
+  unit: string;
+  cost: string;
+  price: string;
+  reorder: string;
+  target: string;
+  supplier: string;
+}
+
+export const emptyItem = (): ItemForm => ({
+  name: "",
+  quantity: "",
+  unit: "",
+  cost: "",
+  price: "",
+  reorder: "",
+  target: "",
+  supplier: "",
+});
+
+export const itemForm = (it: StockItem): ItemForm => ({
+  name: it.name,
+  quantity: "",
+  unit: it.unit ?? "",
+  cost: it.cost_kobo === undefined ? "" : feeInput(it.cost_kobo),
+  price: it.price_kobo === undefined ? "" : feeInput(it.price_kobo),
+  reorder: it.reorder_level === undefined ? "" : String(it.reorder_level),
+  target: it.target_level === undefined ? "" : String(it.target_level),
+  supplier: it.supplier ?? "",
+});
+
+const whole = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
+
+/** Why an item form will be refused, or null. adding checks the quantity too. */
+export function itemProblem(f: ItemForm, adding: boolean): string | null {
+  if (f.name.trim() === "") return "Give the item a name.";
+  if (f.name.trim().length > 120) return "A name is up to 120 characters.";
+  if (
+    adding &&
+    f.quantity.trim() !== "" &&
+    !(whole(f.quantity) >= 0 && whole(f.quantity) <= 1_000_000)
+  )
+    return "How many there are is a whole number, like 50.";
+  if (f.unit.trim().length > 30)
+    return "A unit is one word, like bag or carton.";
+  for (const [v, what] of [
+    [f.cost, "The cost price"],
+    [f.price, "The selling price"],
+  ] as const) {
+    if (v.trim() !== "" && Number.isNaN(feeKobo(v)))
+      return `${what} is an amount, like 8500.`;
+  }
+  for (const [v, what] of [
+    [f.reorder, "The reorder level"],
+    [f.target, "The level to order up to"],
+  ] as const) {
+    if (v.trim() !== "" && Number.isNaN(whole(v)))
+      return `${what} is a whole number.`;
+  }
+  if (
+    f.reorder.trim() !== "" &&
+    f.target.trim() !== "" &&
+    whole(f.target) <= whole(f.reorder)
+  )
+    return "Order up to more than the reorder level.";
+  return null;
+}
+
+const opt = (v: string, conv: (s: string) => number) =>
+  v.trim() === "" ? undefined : conv(v);
+
+/** The POST /v1/stock/items body. */
+export const addRequest = (f: ItemForm) => ({
+  name: f.name.trim(),
+  quantity: f.quantity.trim() === "" ? 0 : whole(f.quantity),
+  unit: f.unit.trim(),
+  cost_kobo: opt(f.cost, feeKobo),
+  price_kobo: opt(f.price, feeKobo),
+  reorder_level: opt(f.reorder, whole),
+  target_level: opt(f.target, whole),
+  supplier: f.supplier.trim(),
+});
+
+/** The PATCH /v1/stock/items/{id} body: what changed only. */
+export function changeRequest(
+  it: StockItem,
+  f: ItemForm,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const before = itemForm(it);
+  if (f.name.trim() !== it.name) out.name = f.name.trim();
+  if (f.unit.trim() !== before.unit) out.unit = f.unit.trim();
+  if (f.supplier.trim() !== before.supplier) out.supplier = f.supplier.trim();
+  if (f.cost.trim() !== before.cost && f.cost.trim() !== "")
+    out.cost_kobo = feeKobo(f.cost);
+  if (f.price.trim() !== before.price && f.price.trim() !== "")
+    out.price_kobo = feeKobo(f.price);
+  if (f.reorder.trim() !== before.reorder && f.reorder.trim() !== "")
+    out.reorder_level = whole(f.reorder);
+  if (f.target.trim() !== before.target && f.target.trim() !== "")
+    out.target_level = whole(f.target);
+  return out;
+}
+
+/** A change to an item's stock from the web. */
+export interface MoveForm {
+  kind: "received" | "adjustment" | "count";
+  amount: string;
+  /** Adjustments: taken off (spoilt, lost) rather than added (found). */
+  off: boolean;
+  note: string;
+}
+
+/** Why a stock change will be refused, or null. */
+export function moveProblem(f: MoveForm): string | null {
+  const n = whole(f.amount);
+  if (Number.isNaN(n))
+    return f.kind === "count"
+      ? "Enter how many you counted, like 12."
+      : "Enter how many, like 5.";
+  if (f.kind !== "count" && n === 0) return "Enter how many, more than 0.";
+  if (n > 1_000_000) return "That is more than Taskiem keeps for one item.";
+  if (f.kind === "adjustment" && f.note.trim() === "")
+    return "Say why, like spoilt or found.";
+  if (f.note.length > 200) return "The reason is up to 200 characters.";
+  return null;
+}
+
+/** The POST /v1/stock/movements body. */
+export function moveRequest(it: StockItem, f: MoveForm) {
+  const n = whole(f.amount);
+  const body: Record<string, unknown> = {
+    item_id: it.id,
+    reason: f.kind,
+    note: f.note.trim(),
+  };
+  if (f.kind === "count") body.count = n;
+  else body.change = f.kind === "adjustment" && f.off ? -n : n;
+  return body;
+}
+
+/** What the stock will be after a change, as the form shows it ("48 → 45 cartons"). */
+export function movePreview(it: StockItem, f: MoveForm): string | null {
+  const n = whole(f.amount);
+  if (Number.isNaN(n) || it.stock === null) return null;
+  const to =
+    f.kind === "count"
+      ? n
+      : Math.max(0, it.stock + (f.kind === "adjustment" && f.off ? -n : n));
+  return `${it.stock} → ${quantity(to, it.unit)}`;
+}

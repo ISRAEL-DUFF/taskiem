@@ -62,6 +62,8 @@ type chatShop struct {
 	Pick []shopChoice `json:"pick,omitempty"`
 	// Nonce is the row write's idempotency key.
 	Nonce string `json:"nonce,omitempty"`
+	// StockChat is a stock change being confirmed (whatsapp_stock.go).
+	StockChat *stockChat `json:"stock_chat,omitempty"`
 }
 
 type shopChoice struct {
@@ -86,8 +88,14 @@ var (
 		{Name: "photo", Title: "Photo", Type: "text"},
 		{Name: "available", Title: "Available", Type: "boolean"},
 		{Name: "stock", Title: "Stock", Type: "integer"},
+		{Name: "unit", Title: "Unit", Type: "text"},
+		{Name: "cost_price", Title: "Cost price (₦)", Type: "number"},
+		{Name: "reorder_level", Title: "Reorder at", Type: "integer"},
+		{Name: "target_level", Title: "Order up to", Type: "integer"},
+		{Name: "supplier", Title: "Supplier", Type: "text"},
 	}
-	productMapping = storefront.Columns{Name: "name", Price: "price", PriceUnit: "naira", Photo: "photo", Available: "available", Stock: "stock"}
+	productMapping = storefront.Columns{Name: "name", Price: "price", PriceUnit: "naira", Photo: "photo", Available: "available", Stock: "stock",
+		Unit: "unit", CostPrice: "cost_price", ReorderLevel: "reorder_level", TargetLevel: "target_level", Supplier: "supplier"}
 	serviceColumns = []datatables.Column{
 		{Name: "name", Title: "Name", Type: "text", Required: true},
 		{Name: "price", Title: "Price (₦)", Type: "number"},
@@ -107,6 +115,9 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	words := strings.Fields(cmd)
 	if len(words) == 0 {
 		return false, nil
+	}
+	if done, err := s.waStockCommand(ctx, c, text, cmd); done || err != nil {
+		return done, err
 	}
 	args := func(n int) string {
 		f := strings.Fields(text)
@@ -178,11 +189,17 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 			return s.waShopSetup(ctx, c, text)
 		}
 		if len(sh.Pick) > 0 {
+			if strings.HasPrefix(sh.Action, "stock_") {
+				return s.waStockPick(ctx, c, text)
+			}
 			return s.waShopPick(ctx, c, text)
 		}
 	case stateConfirming:
 		switch cmd {
 		case "yes", "y", "confirm":
+			if strings.HasPrefix(sh.Action, "stock_") {
+				return s.waStockApply(ctx, c)
+			}
 			return s.waShopApply(ctx, c)
 		case "no", "n":
 			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
@@ -1423,6 +1440,9 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 		return err
 	}
 	m := sf.CatalogueColumns
+	if sh.Action == "stock" && s.Stock.Ready() && m.Stock != "" {
+		return s.shopCountItem(ctx, c, sf)
+	}
 	set := map[string]any{}
 	switch sh.Action {
 	case "price":

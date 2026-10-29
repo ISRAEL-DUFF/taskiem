@@ -2340,6 +2340,134 @@
       "text": "(with your photo for top)",
       "reviewed": false
     },
+    "wa.stock.off": {
+      "text": "{org} never dey keep stock for Taskiem. Send *add 50 cartons of Indomie at 8,500* to start, or press Keep my stock for di Stock page.",
+      "reviewed": false
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} never dey keep stock, and to start am need storefront.manage, wey your role no get.",
+      "reviewed": false
+    },
+    "wa.stock.denied": {
+      "text": "To change {org} stock need table.edit, wey your role no get.",
+      "reviewed": false
+    },
+    "wa.stock.denied_read": {
+      "text": "To see {org} stock need table.read, wey your role no get.",
+      "reviewed": false
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* never get count. Send *stock {name} 12* to set am.",
+      "reviewed": false
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.is_low": {
+      "text": "E don low: you dey reorder for {level}.",
+      "reviewed": false
+    },
+    "wa.stock.last": {
+      "text": "Last one: {what}, {when}.",
+      "reviewed": false
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} carry {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_sale": {
+      "text": "sell {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_received": {
+      "text": "collect {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "adjust by {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_count": {
+      "text": "count {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_outside": {
+      "text": "change for di table by {qty}",
+      "reviewed": false
+    },
+    "wa.stock.no_levels": {
+      "text": "{items} items dey keep stock, and none get reorder level. Set dem for di Stock page, Taskiem go tell you every morning wetin don low.",
+      "reviewed": false
+    },
+    "wa.stock.none_low": {
+      "text": "Nothing don reach im reorder level. {items} items dey keep stock.",
+      "reviewed": false
+    },
+    "wa.stock.low_title": {
+      "text": "Stock wey don low:",
+      "reviewed": false
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (reorder for {level}); order {suggest}",
+      "reviewed": false
+    },
+    "wa.stock.low_more": {
+      "text": "…and {count} more for di Stock page.",
+      "reviewed": false
+    },
+    "wa.stock.at_cost": {
+      "text": " for {price} each",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Add *{name}* with {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Start to keep stock with *{name}*: {qty}{cost}? Taskiem go make products table for your items.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Add {qty} to *{name}* ({from} → {to}){cost}?",
+      "reviewed": false
+    },
+    "wa.stock.adjust_how": {
+      "text": "Write am like *adjust rice -2 spoilt*: di item, di change, and why.",
+      "reviewed": false
+    },
+    "wa.stock.no_reason": {
+      "text": "no reason",
+      "reviewed": false
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Change *{name}* by {change} ({from} → {to}): {note}?",
+      "reviewed": false
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* don dey there before. Send di add again to add to am.",
+      "reviewed": false
+    },
+    "wa.stock.added": {
+      "text": "Don add *{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.no_price": {
+      "text": "E go show for your page once e get price: send *price {name} 9500*.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "E don record for *{name}*. E go reach your products table soon.",
+      "reviewed": false
+    },
+    "wa.stock.now": {
+      "text": "E don do: *{name}* na {count} now.",
+      "reviewed": false
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: add stock; *stock* and item, or *how many bags of rice*: im count; *stock* alone: wetin don low; *adjust rice -2 spoilt*: correct count",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (with di photo)",
       "reviewed": false

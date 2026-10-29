@@ -33,6 +33,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/notify"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
+	stockconn "github.com/israel-duff/taskiem/connectors/stock"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
@@ -67,6 +68,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/status"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -612,6 +614,8 @@ type engine struct {
 	// the message hash key. dispatch is their deliveries (D2 to D5).
 	riders   *riders.Riders
 	dispatch *dispatch.Dispatch
+	// stock is the shops' stock movements (docs/spec/stock.md K1).
+	stock    *stock.Stock
 	cfg      config
 	log      *slog.Logger
 	pool     *pgxpool.Pool
@@ -663,6 +667,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// once the vault exists (below).
 	orders := &sfconn.Late{}
 	riderOps := &ridersconn.Late{}
+	stockOps := &stockconn.Late{}
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
@@ -673,6 +678,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Riders = riderOps
+	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps
 	copts.Notify = tell
@@ -701,6 +707,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
+	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}}}
+	stockOps.Set(e.stock)
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
 		pool.Close()
 		return nil, err
@@ -1242,6 +1250,11 @@ func serve(ctx context.Context, args []string) error {
 		// The money log, copied to each business's kept money_log table.
 		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
+		// Stock movements still on their way to the catalogue table, and
+		// done ones copied to the kept stock_movements table.
+		stockSweep := &stock.Sweeper{Stock: e.stock, Logger: log.With("component", "stock"),
+			Mirror: &stock.Mirror{Stock: e.stock, Tables: e.tables(), Logger: log.With("component", "stock"),
+				Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}}
 		// The schools' students and classes, copied to their kept tables.
 		schoolCopies := &schools.Mirror{Schools: e.schools(), Tables: e.tables(), Logger: log.With("component", "schools"),
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
@@ -1255,7 +1268,7 @@ func serve(ctx context.Context, args []string) error {
 			money.Channels = append(money.Channels, "telegram")
 		}
 		log.Info("money summaries", "daily_chat", len(money.Channels) > 0, "monthly_email", money.Mailer != nil && money.From != "")
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run)
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run, stockSweep.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)
@@ -1564,6 +1577,7 @@ func (e *engine) chat(srv *api.Server) {
 	// STOP, and messages to them.
 	srv.Reach, srv.Messages = e.reach, e.messages
 	srv.Riders, srv.Dispatch = e.riders, e.dispatch
+	srv.Stock = e.stock
 	if e.forms != nil {
 		keys := e.forms.Keys
 		srv.ReachKeys = &keys

@@ -47,6 +47,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -193,6 +194,9 @@ type Server struct {
 	// set, keeps a rider's proof photo instead of Media (tests).
 	Dispatch   *dispatch.Dispatch
 	ProofStore func(ctx context.Context, tenant uuid.UUID, data []byte) (string, error)
+	// Stock is the shops' stock movements (docs/spec/stock.md); nil: the
+	// catalogue's stock is changed as before, with no movements.
+	Stock *stock.Stock
 	// ChatSigner signs approval decision and hand-off tokens when WhatsApp
 	// is off (with WhatsApp on, its signer is used for both channels).
 	ChatSigner whatsapp.Signer
@@ -441,6 +445,13 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/riders/{id}/bank", s.putRiderBank)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/payouts/{id}/not-paid", s.payoutNotPaid)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
+			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
+			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
+			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
+			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
 			// Deliveries with riders (dispatch.go, D2 to D4).
 			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)

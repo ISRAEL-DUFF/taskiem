@@ -83,6 +83,11 @@ type Span struct {
 // is accepted; Sort orders items (absent: the table's order). A services
 // table also maps Duration (minutes, required), Capacity (customers at
 // once, default 1) and Buffer (minutes kept free after, default 0).
+//
+// Stock by chat (docs/spec/stock.md §4) maps more of a catalogue that
+// tracks stock: Unit (text: bag, carton), CostPrice (the last price paid,
+// in PriceUnit), ReorderLevel and TargetLevel (integers) and Supplier
+// (text). None is shown on the public page.
 type Columns struct {
 	Name        string `json:"name"`
 	Price       string `json:"price,omitempty"`
@@ -96,6 +101,12 @@ type Columns struct {
 	Duration    string `json:"duration,omitempty"`
 	Capacity    string `json:"capacity,omitempty"`
 	Buffer      string `json:"buffer,omitempty"`
+	// Stock by chat's columns, all optional.
+	Unit         string `json:"unit,omitempty"`
+	CostPrice    string `json:"cost_price,omitempty"`
+	ReorderLevel string `json:"reorder_level,omitempty"`
+	TargetLevel  string `json:"target_level,omitempty"`
+	Supplier     string `json:"supplier,omitempty"`
 }
 
 var hhmm = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -185,6 +196,7 @@ func (m *Columns) Check(known func(string) (typ string, ok bool)) error {
 		m.Name: {"text"}, m.Description: {"text"}, m.Category: {"text"}, m.Photo: {"text"},
 		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"}, m.Stock: {"integer"},
 		m.Duration: {"integer", "number"}, m.Capacity: {"integer", "number"}, m.Buffer: {"integer", "number"},
+		m.Unit: {"text"}, m.CostPrice: {"integer", "number"}, m.ReorderLevel: {"integer"}, m.TargetLevel: {"integer"}, m.Supplier: {"text"},
 	}
 	for col, types := range want {
 		if col == "" {

@@ -2340,6 +2340,134 @@
       "text": "(pẹ̀lú fọ́tò rẹ lókè)",
       "reviewed": false
     },
+    "wa.stock.off": {
+      "text": "{org} kò tíì máa tọ́jú ọjà nínú Taskiem. Fi *add 50 cartons of Indomie at 8,500* ránṣẹ́ láti bẹ̀rẹ̀, tàbí tẹ Keep my stock lórí ojú-ìwé Stock.",
+      "reviewed": false
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} kò tíì máa tọ́jú ọjà, bíbẹ̀rẹ̀ rẹ̀ sì nílò storefront.manage, èyí tí ipa rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.stock.denied": {
+      "text": "Yíyí ọjà {org} padà nílò table.edit, èyí tí ipa rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.stock.denied_read": {
+      "text": "Rírí ọjà {org} nílò table.read, èyí tí ipa rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* kò tíì ní iye. Fi *stock {name} 12* ránṣẹ́ láti ṣètò rẹ̀.",
+      "reviewed": false
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.is_low": {
+      "text": "Ó ti kéré: o máa ń ra mìíràn ní {level}.",
+      "reviewed": false
+    },
+    "wa.stock.last": {
+      "text": "Èyí tó kẹ́yìn: {what}, {when}.",
+      "reviewed": false
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} mú {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_sale": {
+      "text": "ta {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_received": {
+      "text": "gba {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "ṣàtúnṣe ní {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_count": {
+      "text": "kà á sí {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_outside": {
+      "text": "yí padà nínú tábìlì ní {qty}",
+      "reviewed": false
+    },
+    "wa.stock.no_levels": {
+      "text": "Ọjà {items} ni a ń tọ́jú, kò sí èyí tó ní ìpele àtúnrà. Ṣètò wọn lórí ojú-ìwé Stock, Taskiem yóò sì máa sọ ohun tó kéré fún ọ ní òwúrọ̀ kọ̀ọ̀kan.",
+      "reviewed": false
+    },
+    "wa.stock.none_low": {
+      "text": "Kò sí èyí tó dé ìpele àtúnrà rẹ̀. Ọjà {items} ni a ń tọ́jú.",
+      "reviewed": false
+    },
+    "wa.stock.low_title": {
+      "text": "Ọjà tó ti kéré:",
+      "reviewed": false
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (rà mìíràn ní {level}); rà {suggest}",
+      "reviewed": false
+    },
+    "wa.stock.low_more": {
+      "text": "…àti {count} mìíràn lórí ojú-ìwé Stock.",
+      "reviewed": false
+    },
+    "wa.stock.at_cost": {
+      "text": " ní {price} ọ̀kọ̀ọ̀kan",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Ṣé kí a fi *{name}* kún un pẹ̀lú {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Ṣé kí a bẹ̀rẹ̀ sí í tọ́jú ọjà pẹ̀lú *{name}*: {qty}{cost}? Taskiem yóò ṣe tábìlì products fún àwọn ọjà rẹ.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Ṣé kí a fi {qty} kún *{name}* ({from} → {to}){cost}?",
+      "reviewed": false
+    },
+    "wa.stock.adjust_how": {
+      "text": "Kọ ọ́ báyìí *adjust rice -2 spoilt*: ọjà náà, ìyípadà, àti ìdí.",
+      "reviewed": false
+    },
+    "wa.stock.no_reason": {
+      "text": "kò sí ìdí",
+      "reviewed": false
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Ṣé kí a yí *{name}* padà ní {change} ({from} → {to}): {note}?",
+      "reviewed": false
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* ti wà níbẹ̀ tẹ́lẹ̀. Fi add ránṣẹ́ lẹ́ẹ̀kan sí i láti fi kún un.",
+      "reviewed": false
+    },
+    "wa.stock.added": {
+      "text": "A ti fi *{name}* kún un: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.no_price": {
+      "text": "Yóò hàn lórí ojú-ìwé rẹ nígbà tí ó bá ní iye owó: fi *price {name} 9500* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "A ti kọ ọ́ sílẹ̀ fún *{name}*. Yóò dé tábìlì products rẹ láìpẹ́.",
+      "reviewed": false
+    },
+    "wa.stock.now": {
+      "text": "Ó ti parí: *{name}* jẹ́ {count} báyìí.",
+      "reviewed": false
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: fi ọjà kún un; *stock* àti ọjà kan, tàbí *how many bags of rice*: iye rẹ̀; *stock* nìkan: ohun tó kéré; *adjust rice -2 spoilt*: ṣàtúnṣe iye",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (pẹ̀lú fọ́tò náà)",
       "reviewed": false

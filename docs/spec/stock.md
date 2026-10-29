@@ -10,7 +10,7 @@ Chat is the first door; everything is also on the web, on a **Stock** page in th
 
 **Availability.** Stock is a feature of the catalogue, not an area to turn on: a business has it the moment it has items with a count, from chat or from the Stock page, which makes the products table when there is none. The Start page offers **Keep my stock** to a business with no items, as it offers **Make my page**. Its only switches are settings with defaults (reorder levels, the evening total's time, the leak limits). On every plan unless billing says otherwise.
 
-Five milestones, K1 to K5, one PR each.
+Five milestones, K1 to K5, built in order on one branch and landing together in one PR (#117), as dispatch did.
 
 ## 2. Words used here
 
@@ -50,6 +50,14 @@ Five milestones, K1 to K5, one PR each.
 - `stock@1` platform connector: `list_items` (low, by supplier, by name), `get_item`, `adjust` (change, reason, note), `receive`, `count`, `movements` (item, since). Permissions: `table.edit` on the catalogue's table for changes, `table.read` to see, as the catalogue has today.
 - **Chat**: `add 50 cartons of Indomie at 8,500` (an item, or stock on an item, with the cost price); `stock indomie`, `how many bags of rice do I have?` (the count, the unit, the last movement); `stock` (the low list); `adjust rice -2 spoilt`. Items are found as `price` and `hide` find them today, with a numbered list when several match. Each change is shown and written on **yes**.
 - **Web**: a **Stock** page (Storefront > Stock): items with stock, unit, cost price, reorder level, target and supplier, edited inline (each edit a movement with a reason, written through `engine/stock`); the low list at the top; each item's movements, and a movements list filtered by item, reason and day; **Add items** making the products table when there is none. The catalogue page shows the stock columns too.
+- **As built (K1):**
+  - Migration 00256: `stock_movements` (a change, `delta`, or a count, `set_to`; `pending`, `done` or `void`; `count_before`, `count_after`, `change`, `short`), what was asked and why never changed after insert (a trigger, and column grants); `storefronts.keeps_stock`, so `taskiem_storefronts_due` refreshes a catalogue keeping stock whether or not its page is published; `taskiem_stock_due_tenants` for the sweep.
+  - `engine/stock`: `RecordTx`, `Apply` (the claim reads the count, records what it sends, and the change is sent under a key of the movement and the count read; a moved count is read again up to five times, then the sweep sends it, waiting a minute more after each attempt up to an hour), `Outside` (on each catalogue refresh; and in each claim), `OrderLines` (the storefront's `decide` lowers stock through it when set: lines of one row are one movement); the outside check compares the database's clock only, and skips an item with a change of Taskiem's on its way or landed since the read. The kept copy `stock_movements` is made by the sweep (`stock.Mirror`), and its name is reserved.
+  - A business with no storefront gets a draft one under its name to hold the catalogue (Keep my stock, or the first `add` in chat). The make-my-page questions are unchanged.
+  - The mapping gains `unit`, `cost_price`, `reorder_level`, `target_level`, `supplier`; the products table chat and Keep my stock make has them all. None reaches the public page; an item added for stock without a selling price is not available on it.
+  - Chat: `add <n> [<unit> of] <item> [at <price>]` (a unit is the word before "of", or a known unit word), `stock <item>`, `how many …`, `stock`, `adjust <item> <±n> <why>`, and `stock <item> <n>` as a count. English words in K1; `table.read` to see, `table.edit` to change, `storefront.manage` too to start keeping stock.
+  - The web page lists items as rows with **Record stock** (received, adjusted with a reason, counted), **Change** and **History** rather than editing inline; Get started offers **Keep my stock** while no item keeps stock.
+  - API: `GET /v1/stock`, `POST /v1/stock/setup`, `POST /v1/stock/items`, `PATCH /v1/stock/items/{id}`, `GET`/`POST /v1/stock/movements`. `stock@1`: `list_items`, `get_item`, `adjust`, `receive`, `count`, `movements`.
 
 ## 5. Sales (K2)
 
@@ -100,7 +108,7 @@ Five milestones, K1 to K5, one PR each.
 | K4 | Counts, shrinkage and leaks: counts by chat and CSV, adjustments with reasons, shrinkage in the close and the monthly email, the three leaks and two owner alerts | S | A count posts the differences with reasons; the close shows shrinkage at cost; a sale beyond stock raises a leak |
 | K5 | Templates, the rest of the chat words, docs, the AI builder; the sheet templates superseded where a table has stock or sales are recorded by chat | S | The four templates publish from the Start page; the builder answers "order from my supplier when rice is low" with `stock@1`; the guides are published |
 
-Order: K1 to K5, one PR each.
+Order: K1 to K5, on one branch, in one PR (#117).
 
 ## 10. Testing
 

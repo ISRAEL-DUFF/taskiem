@@ -2868,6 +2868,57 @@ export const slack = {
   upload_file: (input: SlackUploadFileInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "upload_file", input, extra),
 };
 
+// Stock (stock@1)
+export interface StockAdjustInput {
+  change: Val<number>;
+  id: Val<string>;
+  note?: Val<string>;
+}
+export interface StockCountInput {
+  count: Val<number>;
+  id: Val<string>;
+  note?: Val<string>;
+}
+export interface StockGetItemInput {
+  id: Val<string>;
+}
+export interface StockListItemsInput {
+  /** Only items at or below their reorder level */
+  low?: Val<boolean>;
+  /** Items whose name holds these words */
+  name?: Val<string>;
+  /** Only this supplier's items */
+  supplier?: Val<string>;
+}
+export interface StockMovementsInput {
+  /** An item's row id; empty for every item */
+  id?: Val<string>;
+  limit?: Val<number>;
+  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "outside">;
+  /** RFC 3339 */
+  since?: Val<string>;
+}
+export interface StockReceiveInput {
+  id: Val<string>;
+  note?: Val<string>;
+  quantity: Val<number>;
+  reference?: Val<string>;
+}
+export const stock = {
+  /** Adjust an item's stock (idempotent_write) */
+  adjust: (input: StockAdjustInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "adjust", input, extra),
+  /** Record a count (idempotent_write) */
+  count: (input: StockCountInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "count", input, extra),
+  /** Read an item's stock (read) */
+  get_item: (input: StockGetItemInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "get_item", input, extra),
+  /** List items and their stock (read) */
+  list_items: (input?: StockListItemsInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "list_items", input, extra),
+  /** List stock movements (read) */
+  movements: (input?: StockMovementsInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "movements", input, extra),
+  /** Record goods received (idempotent_write) */
+  receive: (input: StockReceiveInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "receive", input, extra),
+};
+
 // Storefront (storefront@1)
 export interface StorefrontDecideInput {
   decision: Val<"accept" | "decline" | "complete" | "cancel" | "no_show">;
@@ -3670,6 +3721,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "schools@1": "schools",
   "sftp@1": "sftp",
   "slack@1": "slack",
+  "stock@1": "stock",
   "storefront@1": "storefront",
   "telegram@1": "telegram",
   "termii@1": "termii",
@@ -3721,6 +3773,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
+  "stock@1": ["adjust", "count", "get_item", "list_items", "movements", "receive"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],

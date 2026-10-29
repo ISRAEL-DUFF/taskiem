@@ -2340,6 +2340,134 @@
       "text": "(ya na foto gị n'elu)",
       "reviewed": false
     },
+    "wa.stock.off": {
+      "text": "{org} anaghị edebe ngwa ahịa na Taskiem ka. Zipu *add 50 cartons of Indomie at 8,500* ịmalite, ma ọ bụ pịa Keep my stock na peeji Stock.",
+      "reviewed": false
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} anaghị edebe ngwa ahịa ka, ịmalite ya chọrọ storefront.manage, nke ọrụ gị enweghị.",
+      "reviewed": false
+    },
+    "wa.stock.denied": {
+      "text": "Ịgbanwe ngwa ahịa {org} chọrọ table.edit, nke ọrụ gị enweghị.",
+      "reviewed": false
+    },
+    "wa.stock.denied_read": {
+      "text": "Ịhụ ngwa ahịa {org} chọrọ table.read, nke ọrụ gị enweghị.",
+      "reviewed": false
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* enweghị ọnụ ọgụgụ ka. Zipu *stock {name} 12* iji tọọ ya.",
+      "reviewed": false
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.is_low": {
+      "text": "Ọ dị ala: ị na-azụtakwa na {level}.",
+      "reviewed": false
+    },
+    "wa.stock.last": {
+      "text": "Nke ikpeazụ: {what}, {when}.",
+      "reviewed": false
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} were {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_sale": {
+      "text": "erere {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_received": {
+      "text": "natara {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "edoziri site na {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_count": {
+      "text": "gụrụ {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_outside": {
+      "text": "gbanwere na tebụl site na {qty}",
+      "reviewed": false
+    },
+    "wa.stock.no_levels": {
+      "text": "Ngwa ahịa {items} ka a na-edebe, ọ nweghị nke nwere ọkwa ịzụtakwa. Tọọ ha na peeji Stock, Taskiem ga-agwa gị kwa ụtụtụ ihe dị ala.",
+      "reviewed": false
+    },
+    "wa.stock.none_low": {
+      "text": "Ọ dịghị ihe ruru ọkwa ịzụtakwa ya. Ngwa ahịa {items} ka a na-edebe.",
+      "reviewed": false
+    },
+    "wa.stock.low_title": {
+      "text": "Ngwa ahịa dị ala:",
+      "reviewed": false
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (zụtakwa na {level}); zụta {suggest}",
+      "reviewed": false
+    },
+    "wa.stock.low_more": {
+      "text": "…na {count} ọzọ na peeji Stock.",
+      "reviewed": false
+    },
+    "wa.stock.at_cost": {
+      "text": " na {price} nke ọ bụla",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Tinye *{name}* na {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Malite idebe ngwa ahịa na *{name}*: {qty}{cost}? Taskiem ga-eme tebụl products maka ngwa ahịa gị.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Tinye {qty} na *{name}* ({from} → {to}){cost}?",
+      "reviewed": false
+    },
+    "wa.stock.adjust_how": {
+      "text": "Dee ya dị ka *adjust rice -2 spoilt*: ngwa ahịa, mgbanwe, na ihe kpatara ya.",
+      "reviewed": false
+    },
+    "wa.stock.no_reason": {
+      "text": "enweghị ihe kpatara ya",
+      "reviewed": false
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Gbanwee *{name}* site na {change} ({from} → {to}): {note}?",
+      "reviewed": false
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* adịlarị ebe ahụ. Zipu add ọzọ iji tinye na ya.",
+      "reviewed": false
+    },
+    "wa.stock.added": {
+      "text": "Etinyela *{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.no_price": {
+      "text": "Ọ ga-apụta na peeji gị ozugbo o nwere ọnụ ahịa: zipu *price {name} 9500*.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "Edekọọla maka *{name}*. Ọ ga-eru tebụl products gị n'oge na-adịghị anya.",
+      "reviewed": false
+    },
+    "wa.stock.now": {
+      "text": "Emechala: *{name}* bụ {count} ugbu a.",
+      "reviewed": false
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: tinye ngwa ahịa; *stock* na ngwa ahịa, ma ọ bụ *how many bags of rice*: ọnụ ọgụgụ ya; *stock* naanị: ihe dị ala; *adjust rice -2 spoilt*: dozie ọnụ ọgụgụ",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (ya na foto ahụ)",
       "reviewed": false

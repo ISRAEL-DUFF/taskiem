@@ -2924,6 +2924,166 @@
       "reviewed": true,
       "context": "After the set-up: a logo was sent"
     },
+    "wa.stock.off": {
+      "text": "{org} keeps no stock in Taskiem yet. Send *add 50 cartons of Indomie at 8,500* to start, or press Keep my stock on the Stock page.",
+      "reviewed": true,
+      "context": "A stock question when nothing keeps stock yet"
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} keeps no stock yet, and starting it needs storefront.manage, which your role does not include.",
+      "reviewed": true,
+      "context": "Starting to keep stock needs storefront.manage"
+    },
+    "wa.stock.denied": {
+      "text": "Changing {org}'s stock needs table.edit, which your role does not include.",
+      "reviewed": true,
+      "context": "Changing stock needs table.edit"
+    },
+    "wa.stock.denied_read": {
+      "text": "Seeing {org}'s stock needs table.read, which your role does not include.",
+      "reviewed": true,
+      "context": "Seeing stock needs table.read"
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* has no count yet. Send *stock {name} 12* to set it.",
+      "reviewed": true,
+      "context": "stock <item> for an item with no count in the table"
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": true,
+      "context": "stock <item> or how many <item>: the count"
+    },
+    "wa.stock.is_low": {
+      "text": "Low: you reorder at {level}.",
+      "reviewed": true,
+      "context": "After the count, when the item is at or below its reorder level"
+    },
+    "wa.stock.last": {
+      "text": "Last: {what}, {when}.",
+      "reviewed": true,
+      "context": "After the count: the item's last movement and when"
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} took {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: an order took some"
+    },
+    "wa.stock.reason_sale": {
+      "text": "sold {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: sold"
+    },
+    "wa.stock.reason_received": {
+      "text": "received {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: goods received"
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "adjusted by {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: an adjustment"
+    },
+    "wa.stock.reason_count": {
+      "text": "counted {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: counted"
+    },
+    "wa.stock.reason_outside": {
+      "text": "changed in the table by {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: changed in the table by hand"
+    },
+    "wa.stock.no_levels": {
+      "text": "{items} items keep stock, and none has a reorder level yet. Set them on the Stock page, and Taskiem tells you each morning what is low.",
+      "reviewed": true,
+      "context": "stock alone, when no item has a reorder level"
+    },
+    "wa.stock.none_low": {
+      "text": "Nothing is at or below its reorder level. {items} items keep stock.",
+      "reviewed": true,
+      "context": "stock alone, when nothing is low"
+    },
+    "wa.stock.low_title": {
+      "text": "Low on stock:",
+      "reviewed": true,
+      "context": "stock alone: the heading of the low list"
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (reorder at {level}); order {suggest}",
+      "reviewed": true,
+      "context": "One low item: its count, reorder level and what to order"
+    },
+    "wa.stock.low_more": {
+      "text": "…and {count} more on the Stock page.",
+      "reviewed": true,
+      "context": "The low list was cut: how many more"
+    },
+    "wa.stock.at_cost": {
+      "text": " at {price} each",
+      "reviewed": true,
+      "context": "In an add's confirmation: the price paid for one"
+    },
+    "wa.stock.confirm_new": {
+      "text": "Add *{name}* with {qty}{cost}?",
+      "reviewed": true,
+      "context": "Confirming add <n> <item> for a new item"
+    },
+    "wa.stock.confirm_first": {
+      "text": "Start keeping stock with *{name}*: {qty}{cost}? Taskiem makes a products table for your items.",
+      "reviewed": true,
+      "context": "Confirming the first add, which starts keeping stock"
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Add {qty} to *{name}* ({from} → {to}){cost}?",
+      "reviewed": true,
+      "context": "Confirming add <n> <item> for an item there: goods received"
+    },
+    "wa.stock.adjust_how": {
+      "text": "Write it like *adjust rice -2 spoilt*: the item, the change, and why.",
+      "reviewed": true,
+      "context": "adjust with words that could not be read"
+    },
+    "wa.stock.no_reason": {
+      "text": "no reason given",
+      "reviewed": true,
+      "context": "In an adjustment's confirmation when no reason was given"
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Change *{name}* by {change} ({from} → {to}): {note}?",
+      "reviewed": true,
+      "context": "Confirming adjust <item> <change> <reason>"
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* is there already. Send the add again to add to it.",
+      "reviewed": true,
+      "context": "An add for a new item found one of that name meanwhile"
+    },
+    "wa.stock.added": {
+      "text": "Added *{name}*: {count}.",
+      "reviewed": true,
+      "context": "A new item added, with its count"
+    },
+    "wa.stock.no_price": {
+      "text": "It shows on your page once it has a price: send *price {name} 9500*.",
+      "reviewed": true,
+      "context": "After adding an item with no selling price"
+    },
+    "wa.stock.waiting": {
+      "text": "Recorded for *{name}*. It reaches your products table shortly.",
+      "reviewed": true,
+      "context": "A stock change recorded that has not reached the table yet"
+    },
+    "wa.stock.now": {
+      "text": "Done: *{name}* is {count} now.",
+      "reviewed": true,
+      "context": "A stock change done: the count now"
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: add stock; *stock* and an item, or *how many bags of rice*: its count; *stock* alone: what is low; *adjust rice -2 spoilt*: correct a count",
+      "reviewed": true,
+      "context": "Help: the stock commands"
+    },
     "wa.shop.with_photo": {
       "text": " (with the photo)",
       "reviewed": true,

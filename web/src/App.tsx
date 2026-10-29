@@ -36,6 +36,7 @@ import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
+import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
@@ -382,6 +383,7 @@ function SignedIn() {
           <Route path="/storefront/riders" element={<StorefrontRiders />} />
           <Route path="/storefront/riders/pay" element={<RidersPayPage />} />
           <Route path="/storefront/deliveries" element={<StorefrontDeliveries />} />
+          <Route path="/storefront/stock" element={<StorefrontStock />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/new" element={<InvoiceNew />} />
           <Route path="/invoices/settings" element={<InvoiceSettingsPage />} />

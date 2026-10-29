@@ -115,6 +115,9 @@ tags:
 - name: Riders
   description: The business's own riders, who deliver its orders (dispatch).
   x-taskiem-guide: dispatch
+- name: Stock
+  description: A shop's stock, kept in its catalogue table, with every change a movement Taskiem records.
+  x-taskiem-guide: stock
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
@@ -5839,6 +5842,330 @@ paths:
                 properties:
                   owed_kobo:
                     type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock:
+    get:
+      operationId: getStock
+      tags:
+      - Stock
+      summary: The shop's items and their stock
+      description: Read from the catalogue table itself, with the columns stock maps, low ones flagged with how many to order. keeps_stock is false until the catalogue keeps stock (Keep my stock). stuck lists movements that have not reached the table, with why.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      responses:
+        '200':
+          description: The stock
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keeps_stock, items]
+                properties:
+                  keeps_stock:
+                    type: boolean
+                  catalogue:
+                    type: [string, 'null']
+                  columns:
+                    $ref: '#/components/schemas/StorefrontColumns'
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItem'
+                  low:
+                    type: integer
+                  stuck:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockMovement'
+                  published:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/setup:
+    post:
+      operationId: setupStock
+      tags:
+      - Stock
+      summary: Keep my stock
+      description: Makes the catalogue keep stock. A shop with no page gets a draft one under its name, and a products table with the stock columns when it has no catalogue; an existing catalogue keeps its columns, the stock columns it lacks added and mapped. Safe to repeat.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,table.edit
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The catalogue and its mapping
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keeps_stock, catalogue, columns]
+                properties:
+                  keeps_stock:
+                    type: boolean
+                  catalogue:
+                    type: string
+                  columns:
+                    $ref: '#/components/schemas/StorefrontColumns'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/items:
+    post:
+      operationId: addStockItem
+      tags:
+      - Stock
+      summary: Add an item
+      description: Adds an item to the catalogue with a count of 0, then its quantity as goods received, so its count is explained from the start. An item with no selling price is not shown on the page until it has one. 409 item_exists, with its id, when an item of that name is there.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 120
+                quantity:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                unit:
+                  type: string
+                  maxLength: 30
+                cost_kobo:
+                  type: integer
+                  minimum: 0
+                price_kobo:
+                  type: integer
+                  minimum: 0
+                reorder_level:
+                  type: integer
+                  minimum: 0
+                target_level:
+                  type: integer
+                  minimum: 0
+                supplier:
+                  type: string
+                  maxLength: 120
+      responses:
+        '201':
+          description: The item, and the movement of its quantity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+                  movement:
+                    $ref: '#/components/schemas/StockMovement'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/items/{id}:
+    patch:
+      operationId: patchStockItem
+      tags:
+      - Stock
+      summary: Change an item's columns
+      description: Its name, prices, unit, reorder and target levels or supplier, written to the catalogue table. Its stock changes by movements only.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                unit:
+                  type: string
+                cost_kobo:
+                  type: integer
+                price_kobo:
+                  type: integer
+                reorder_level:
+                  type: integer
+                target_level:
+                  type: integer
+                supplier:
+                  type: string
+      responses:
+        '200':
+          description: The item
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/movements:
+    get:
+      operationId: listStockMovements
+      tags:
+      - Stock
+      summary: Stock movements
+      description: The latest to land first; an item's, or every item's, by reason and time.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: item
+        in: query
+        schema:
+          type: string
+      - name: reason
+        in: query
+        schema:
+          type: string
+          enum: [order, sale, received, adjustment, count, outside]
+      - name: since
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: until
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      responses:
+        '200':
+          description: The movements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [movements]
+                properties:
+                  movements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockMovement'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: moveStock
+      tags:
+      - Stock
+      summary: Record goods received, an adjustment or a count
+      description: Recorded first, then sent to the catalogue table; 202 when it has not reached the table yet (it is sent again). A decrease never takes the count below zero; what it asked for beyond is short. Sales and orders move stock themselves.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same change'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_id, reason]
+              properties:
+                item_id:
+                  type: string
+                reason:
+                  type: string
+                  enum: [received, adjustment, count]
+                change:
+                  type: integer
+                  description: received and adjustment
+                count:
+                  type: integer
+                  minimum: 0
+                  description: count
+                note:
+                  type: string
+                  maxLength: 200
+                reference:
+                  type: string
+                  maxLength: 100
+      responses:
+        '200':
+          description: The movement, done
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [movement]
+                properties:
+                  movement:
+                    $ref: '#/components/schemas/StockMovement'
+        '202':
+          description: The movement, on its way to the table
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [movement]
+                properties:
+                  movement:
+                    $ref: '#/components/schemas/StockMovement'
         default:
           $ref: '#/components/responses/Error'
   /v1/deliveries:
@@ -23764,6 +24091,17 @@ components:
         stock:
           type: string
           description: An integer column of how many are left; lowered when an order is accepted
+        unit:
+          type: string
+          description: Stock by chat's columns (docs/stock.md), none shown on the page
+        cost_price:
+          type: string
+        reorder_level:
+          type: string
+        target_level:
+          type: string
+        supplier:
+          type: string
         sort:
           type: string
         duration:
@@ -24254,6 +24592,82 @@ components:
           format: date-time
         retired_at:
           $ref: '#/components/schemas/NullableTimestamp'
+    StockItem:
+      type: object
+      required: [id, name, available, stock]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        available:
+          type: boolean
+        stock:
+          type: [integer, 'null']
+        unit:
+          type: string
+        price_kobo:
+          type: integer
+        cost_kobo:
+          type: integer
+          description: The last price paid for one
+        reorder_level:
+          type: integer
+        target_level:
+          type: integer
+        supplier:
+          type: string
+        low:
+          type: boolean
+        suggest:
+          type: integer
+          description: How many to order, when low
+        waiting:
+          type: integer
+          description: Its movements not yet in the table
+    StockMovement:
+      type: object
+      required: [id, item_id, item, reason, status, by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+        item:
+          type: string
+        reason:
+          type: string
+          enum: [order, sale, received, adjustment, count, outside]
+        status:
+          type: string
+          enum: [pending, done, void]
+        delta:
+          type: integer
+        set_to:
+          type: integer
+        before:
+          type: [integer, 'null']
+        after:
+          type: [integer, 'null']
+        change:
+          type: [integer, 'null']
+        short:
+          type: integer
+        note:
+          type: string
+        reference:
+          type: string
+        by:
+          type: string
+        error:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        done_at:
+          type: [string, 'null']
+          format: date-time
     RiderPayout:
       type: object
       properties:

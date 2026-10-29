@@ -708,6 +708,9 @@ func (s *Server) waHelp(c *chat) string {
 			lines = append(lines, c.t("wa.help.riders"))
 		}
 	}
+	if c.p.Can(PermTableRead) && s.Stock.Ready() {
+		lines = append(lines, c.t("wa.help.stock"))
+	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {
 		lines = append(lines, c.t("wa.help.bookings"))
 	}

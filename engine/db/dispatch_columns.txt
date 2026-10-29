@@ -870,6 +870,10 @@ sso_requests.return_to
 sso_requests.state
 sso_requests.tenant_id
 sso_requests.verifier
+stock_movements.claimed_at
+stock_movements.mirrored_at
+stock_movements.status
+stock_movements.tenant_id
 storefront_actions.enabled
 storefront_actions.kind
 storefront_actions.label
@@ -968,6 +972,7 @@ storefronts.availability
 storefronts.catalogue_synced_at
 storefronts.closed_message
 storefronts.id
+storefronts.keeps_stock
 storefronts.orders_paused
 storefronts.published_version
 storefronts.reopen_at

@@ -33,6 +33,13 @@ type Stock interface {
 	Change(ctx context.Context, tenant uuid.UUID, row string, from, to int64, key string) (applied bool, err error)
 }
 
+// Mover records an accepted order's lines as stock movements (reason
+// order) and sends them to the table, answering the items there were not
+// enough of (engine/stock). Lines of one row are one movement.
+type Mover interface {
+	OrderLines(ctx context.Context, tenant, order uuid.UUID, reference string, lines []Line) (short []string, err error)
+}
+
 // XenibaseStock is Stock over the tenant's data tables connection,
 // through the connector and the egress guard, so any role can use it.
 type XenibaseStock struct {
@@ -92,6 +99,62 @@ func (x *XenibaseStock) call(ctx context.Context, tenant uuid.UUID, action strin
 	}
 	out, _ := resp.Output.(map[string]any)
 	return out, nil
+}
+
+// Rows reads every row of the tenant's catalogue table (up to MaxItems +
+// 1), with its mapping: what stock reads items from, outside the API.
+func (x *XenibaseStock) Rows(ctx context.Context, tenant uuid.UUID) ([]map[string]any, Columns, error) {
+	var table string
+	var m Columns
+	err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		sf, err := Get(ctx, tx, tenant)
+		if err != nil || sf.CatalogueTable == nil {
+			return err
+		}
+		t, err := datatables.GetTable(ctx, tx, *sf.CatalogueTable)
+		if err != nil {
+			return err
+		}
+		table, m = t.Name, sf.CatalogueColumns
+		return nil
+	})
+	if err != nil || table == "" {
+		return nil, m, err
+	}
+	var out []map[string]any
+	cursor := ""
+	for len(out) <= MaxItems {
+		in := map[string]any{"table": table, "limit": min(200, MaxItems+1-len(out)), "order": []any{map[string]any{"column": "id"}}}
+		if cursor != "" {
+			in["cursor"] = cursor
+		}
+		page, err := x.call(ctx, tenant, "read_rows", in, "")
+		if err != nil {
+			return nil, m, err
+		}
+		rows, _ := page["rows"].([]any)
+		for _, r := range rows {
+			if row, ok := r.(map[string]any); ok {
+				out = append(out, row)
+			}
+		}
+		next, _ := page["next_cursor"].(string)
+		if next == "" || len(rows) == 0 {
+			break
+		}
+		cursor = next
+	}
+	return out, m, nil
+}
+
+// Tracks reports whether the tenant's catalogue keeps stock: a catalogue
+// table mapped with a stock column.
+func (x *XenibaseStock) Tracks(ctx context.Context, tenant uuid.UUID) (bool, error) {
+	_, col, err := x.target(ctx, tenant)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	return col != "", err
 }
 
 func (x *XenibaseStock) Read(ctx context.Context, tenant uuid.UUID, row string) (int64, bool, error) {
@@ -169,6 +232,28 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 	}
 	if rec == nil {
 		rec = map[string]stockStep{}
+	}
+	if o.Moves != nil {
+		// Lines lowered before stock movements (recorded on the order) stay
+		// lowered; the rest are movements.
+		var lines []Line
+		for _, l := range ord.Basket {
+			if st, ok := rec[l.ID]; ok && st.Done {
+				if st.Short {
+					short = append(short, l.Name)
+				}
+				continue
+			}
+			lines = append(lines, l)
+		}
+		if len(lines) == 0 {
+			return short, nil
+		}
+		more, err := o.Moves.OrderLines(ctx, tenant, ord.ID, ord.Reference, lines)
+		if err != nil {
+			return nil, err
+		}
+		return append(short, more...), nil
 	}
 	save := func() error {
 		raw, _ := json.Marshal(rec)
