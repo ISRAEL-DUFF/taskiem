@@ -116,6 +116,21 @@ The fixed build had the best throughput at 40 runs/s in both rounds and almost n
 
 **The knee after the fixes:** dispatch stays within its SLO at 20 runs/s in both rounds and breaks at 30 to 40 runs/s; run start stays within its SLO up to 40 runs/s in one round of two. On this machine that is a modest move (from 20 to between 20 and 30 runs/s for dispatch), within the noise.
 
+### Wake-ups per statement (migration 00258)
+
+The task trigger now runs once per statement, not per row: it reads the statement's new rows (a transition table) and sends one `NOTIFY taskiem_tasks` per distinct queue, with the same payload (the queue's name). A task not due within a second (a retry's backoff) sends none; an idle worker polls every second, which is how it finds such a task anyway. Tests: `TestTaskInsertsNotifyOncePerQueue` (20 tasks in one statement run the trigger once and send one wake-up; a mixed insert sends one per queue) and `TestFutureTasksDoNotNotify`, beside `TestListenWakesOnlyForWantedPayloads` and the runtime tests.
+
+What this does **not** do: the engine inserts each task with its own statement, and Postgres already delivers identical payloads once per transaction, so a transaction that schedules a task still notifies once and still takes the notify lock at commit. Ramp at 20, 40 and 60 runs/s, 30 s per stage, 4 tenants, 2 workers, the two builds interleaved twice (host CPU 76% to 98% busy, load average 3 to 16 on 4 CPUs, other agents' builds alongside):
+
+| Build | Round | Runs/s achieved at 20 / 40 / 60 | Dispatch ≤ 50 ms at 20 / 40 / 60 | Trigger calls per worker step | `Lock:object` share at 20 / 40 / 60 |
+| --- | --- | --- | --- | --- | --- |
+| per row | 1 | 19.9 / 33.2 / 34.2 | 85.1% / 43.1% / 42.2% | 0.99 | 3% / 8% / 6% |
+| per statement | 1 | 19.9 / 37.8 / 35.0 | 98.0% / 44.9% / 41.6% | 0.98 | 2% / 3% / 20% |
+| per row | 2 | 19.9 / 37.1 / 32.5 | 97.4% / 42.2% / 38.5% | 0.97 | — / 3% / 3% |
+| per statement | 2 | 19.9 / 29.5 / 30.4 | 96.4% / 35.8% / 37.1% | 0.98 | 2% / 3% / 9% |
+
+No difference beyond the noise, as expected: about one trigger call per worker step either way, and the ceiling stays at 30 to 38 runs/s. At 40 runs/s and above the largest waits in these runs were `Lock:transactionid` (23% to 33%, the run row and `connector_rate_buckets`) and WAL writes, more than the notify lock. The change removes per-row work for any batch insert and the wake-ups for retries; it is not the fix for the commit ceiling.
+
 ## Failure tests
 
 `tools/loadtest -mode chaos -scenario …` drives the same cluster:
@@ -130,12 +145,12 @@ The fixed build had the best throughput at 40 runs/s in both rounds and almost n
 
 ## What remains
 
-- **Commit serialisation by `NOTIFY`.** Above about 40 runs/s on this machine, transactions that insert tasks queue on Postgres's notify lock and the WAL flush, and throughput collapses instead of levelling off. Options, each needing a design decision: send `NOTIFY` from fewer transactions (for example only when the claimers of that queue may be idle), batch wake-ups through a single notifier, or rely on polling at a shorter interval when busy. Measure first on the target hardware, where a disk flush is far faster.
+- **Commit serialisation by `NOTIFY`.** Above about 40 runs/s on this machine, transactions that insert tasks queue on Postgres's notify lock and the WAL flush, and throughput collapses instead of levelling off. Sending wake-ups per statement rather than per row (00258, above) did not move this: each such transaction still notifies once. Options, each needing a design decision: send `NOTIFY` from fewer transactions (for example only when the claimers of that queue may be idle), batch wake-ups through a single notifier, or rely on polling at a shorter interval when busy. Measure first on the target hardware, where a disk flush is far faster.
 - **No back-pressure at the edge.** Webhooks were accepted (202) even while runs waited minutes to start. Durable acceptance is by design ("zero accepted events lost"), but the edge could shed or slow down (429 with `Retry-After`) when the backlog of ready tasks is large. A decision for the product, not a performance fix.
-- **The claim statement.** Still the most expensive single statement (2 to 3 ms here, about 2 calls per step after fix 1). Each call walks the queue's tenants and looks up each tenant's worker pool. Worth a closer look with real tenant counts.
+- **The claim statement.** Still the most expensive single statement (2 to 3 ms here, about 2 calls per step after fix 1). Each call walks the queue's tenants, one index probe each. Since migration 00259 only tenants with a task due now have their worker pool, cap and leased tasks looked up (with 2,000 tenants backing off and 20 with work due, a claim took 20 to 25 ms instead of 107 to 134 ms here); the probe per tenant remains. Worth a closer look with real tenant counts.
 - **The run row.** `FOR UPDATE` on the run row in decide waits on the worker's and the orchestrator's transactions for the same run (transactionid waits of 6 to 25% at and above the knee); expected, but it lengthens commits.
 - **Profiles.** The CPU and heap profiles of the baseline ramp were not captured (the profiler was turned on with `TASKIEM_PPROF=on`, which the server then read as false; the tool now sets `true`, and the server now accepts `on` and refuses values it does not understand). The database-side evidence above stands without them; take profiles on the next run.
-- **Run lists for large tenants.** `GET /v1/runs` orders a tenant's runs by `started_at` with no index on `(tenant_id, started_at)`; it was fast at these sizes (p95 under 300 ms at every rate), but was not measured with hundreds of thousands of runs per tenant.
+- **Run lists for large tenants.** Resolved: `GET /v1/runs` names the tenant in its query (row-level security alone gives the planner `tenant_id = ANY (...)`, which cannot read an index in order) and migration 00260 adds `runs (tenant_id, started_at DESC)`, built `CONCURRENTLY`. With 30,000 runs for one tenant among 300,000, the first page went from a bitmap scan of all 30,000 and a sort (23 to 33 ms) to an index scan that reads 50 rows (0.08 ms) on this machine. Not yet measured through the API at that size.
 - **Failure tests and failover**: run the three scenarios and a real standby promotion on a host where Postgres can be started and replicated (P4-R5).
 - **Target hardware**: everything here again on production-like hardware with no neighbours, before quoting capacity.
 

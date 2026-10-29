@@ -9,7 +9,7 @@ import { duration } from "../lib/timeline";
 import { dayAfter, dayGroups, dayStart, filterRuns, runLook } from "../lib/lists";
 
 const STATUSES = ["", "running", "waiting", "queued", "needs_reconciliation", "completed", "failed", "cancelled"];
-const FILTERS = ["q", "status", "workflow", "env", "from", "to"];
+const FILTERS = ["q", "status", "workflow", "env", "from", "to", "ref"];
 /** A bare id says nothing to a person; who started a run shows only when it reads as a name or address. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -17,11 +17,12 @@ export function Runs() {
   const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const p = (k: string) => params.get(k) ?? "";
-  const [q, status, workflow, env, from, to] = FILTERS.map(p) as [string, string, string, string, string, string];
-  // Status, workflow, environment and the end of the range go to the API;
-  // the search and the start of the range filter what it returned.
-  const query = new URLSearchParams({ ...(status && { status }), ...(workflow && { workflow }), ...(env && { environment: env }), ...(to && { before: dayAfter(to) }), limit: "50" });
-  const { data, error } = useLoad(() => get<{ runs: RunSummary[] }>(`/v1/runs?${query}`), [status, workflow, env, to], true);
+  const [q, status, workflow, env, from, to, ref] = FILTERS.map(p) as [string, string, string, string, string, string, string];
+  // Status, workflow, environment, the reference (the run's correlation key,
+  // spec 15.1) and the end of the range go to the API; the search and the
+  // start of the range filter what it returned.
+  const query = new URLSearchParams({ ...(status && { status }), ...(workflow && { workflow }), ...(env && { environment: env }), ...(ref && { correlation_key: ref }), ...(to && { before: dayAfter(to) }), limit: "50" });
+  const { data, error } = useLoad(() => get<{ runs: RunSummary[] }>(`/v1/runs?${query}`), [status, workflow, env, ref, to], true);
   const workflows = useLoad(() => (can("workflow.read") ? get<{ workflows: WorkflowSummary[] }>("/v1/workflows") : Promise.resolve({ workflows: [] })), []);
   const envs = useEnvironments();
   const [more, setMore] = useState<RunSummary[]>([]);
@@ -57,7 +58,7 @@ export function Runs() {
             ))}
           </select>
         </label>
-        <details className="more-filters" open={!!(workflow || env || from || to) || undefined}>
+        <details className="more-filters" open={!!(workflow || env || ref || from || to) || undefined}>
           <summary>More filters</summary>
           <div className="filters">
             {(workflows.data?.workflows.length ?? 0) > 0 && (
@@ -83,6 +84,18 @@ export function Runs() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label>
+              <span className="sr-only">Reference</span>
+              {/* An exact match on the server: sent on Enter or on leaving the box, not on every key. */}
+              <input
+                key={ref}
+                type="search"
+                placeholder="Order or payment reference"
+                defaultValue={ref}
+                onBlur={(e) => e.target.value.trim() !== ref && set("ref", e.target.value.trim())}
+                onKeyDown={(e) => e.key === "Enter" && set("ref", e.currentTarget.value.trim())}
+              />
             </label>
             <label>
               Started from
