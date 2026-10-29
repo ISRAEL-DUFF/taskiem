@@ -10,7 +10,9 @@ metadata:
     {{- include "taskiem.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $role }}
 spec:
-  {{- if not (and (eq $role "worker") $r.autoscaling.enabled) }}
+  {{- if eq $role "scheduler" }}
+  replicas: {{ include "taskiem.schedulerReplicas" $root }}
+  {{- else if not (and (eq $role "worker") $r.autoscaling.enabled) }}
   replicas: {{ $r.replicas }}
   {{- end }}
   {{- if or (eq $role "scheduler") (eq $role "all") }}

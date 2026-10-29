@@ -38,20 +38,23 @@ func ratio(f float64) string { return strconv.FormatFloat(math.Round(f*1e9)/1e9,
 // Rules builds the rule file.
 func Rules() RuleFile {
 	rec := Group{Name: "taskiem-slo-recording", Interval: "30s"}
+	// The 30-day ratio and the budget left, from the counters over the
+	// whole period: bad events over all events, so a busy hour weighs
+	// more than a quiet one, and an hour with no events (whose own ratio
+	// is NaN) changes nothing. A 30-day range is costly to read, and moves
+	// slowly, so it is evaluated every five minutes.
+	month := Group{Name: "taskiem-slo-" + Period, Interval: "5m"}
 	for _, s := range SLOs {
 		for _, w := range Windows {
 			rec.Rules = append(rec.Rules, Rule{Record: Record(w), Expr: s.ErrorRatio(w),
 				Labels: map[string]string{"slo": s.Name}})
 		}
-		// The share of the 30-day error budget left, from hourly ratios (an
-		// unweighted average: quiet hours count as much as busy ones).
 		rec.Rules = append(rec.Rules,
-			Rule{Record: "taskiem:slo_target:ratio", Expr: ratio(s.Target), Labels: map[string]string{"slo": s.Name}},
-			Rule{Record: "taskiem:slo_errors:ratio_avg" + Period,
-				Expr:   fmt.Sprintf(`avg_over_time(%s{slo=%q}[%s])`, Record("1h"), s.Name, Period),
-				Labels: map[string]string{"slo": s.Name}},
+			Rule{Record: "taskiem:slo_target:ratio", Expr: ratio(s.Target), Labels: map[string]string{"slo": s.Name}})
+		month.Rules = append(month.Rules,
+			Rule{Record: Record(Period), Expr: s.ErrorRatio(Period), Labels: map[string]string{"slo": s.Name}},
 			Rule{Record: "taskiem:slo_error_budget_remaining:ratio",
-				Expr:   fmt.Sprintf(`1 - taskiem:slo_errors:ratio_avg%s{slo=%q} / %s`, Period, s.Name, ratio(1-s.Target)),
+				Expr:   fmt.Sprintf(`1 - %s{slo=%q} / %s`, Record(Period), s.Name, ratio(1-s.Target)),
 				Labels: map[string]string{"slo": s.Name}})
 	}
 	alerts := Group{Name: "taskiem-slo-alerts"}
@@ -78,7 +81,7 @@ func Rules() RuleFile {
 			Labels:      map[string]string{"severity": a.Severity},
 			Annotations: map[string]string{"summary": a.Summary, "description": a.Description, "runbook_url": RunbookURL(a.Name)}})
 	}
-	return RuleFile{Groups: []Group{rec, alerts, other}}
+	return RuleFile{Groups: []Group{rec, month, alerts, other}}
 }
 
 func lasts(rate float64) string {
@@ -137,7 +140,7 @@ func Dashboard() ([]byte, error) {
 		y++
 		sel := fmt.Sprintf(`{slo=%q}`, s.Name)
 		add("stat", "SLI, last 30 days", s.Description, "percentunit", gridPos{6, 6, 0, y},
-			[]target{{Expr: "1 - taskiem:slo_errors:ratio_avg" + Period + sel, RefID: "A"}},
+			[]target{{Expr: "1 - " + Record(Period) + sel, RefID: "A"}},
 			map[string]any{"options": map[string]any{"reduceOptions": map[string]any{"calcs": []string{"lastNotNull"}}, "colorMode": "value"}})
 		add("stat", "Error budget left", "Share of the 30-day error budget not yet spent.", "percentunit", gridPos{6, 6, 6, y},
 			[]target{{Expr: "taskiem:slo_error_budget_remaining:ratio" + sel, RefID: "A"}},
@@ -161,8 +164,8 @@ func Dashboard() ([]byte, error) {
 			{Expr: "histogram_quantile(0.5, sum by (le, phase) (rate(taskiem_canary_duration_seconds_bucket[15m])))", LegendFormat: "p50 {{phase}}", RefID: "A"},
 			{Expr: "histogram_quantile(0.95, sum by (le, phase) (rate(taskiem_canary_duration_seconds_bucket[15m])))", LegendFormat: "p95 {{phase}}", RefID: "B"},
 		}, nil)
-	add("timeseries", "Oldest ready task", "Age of the oldest task waiting in each queue.", "s", gridPos{8, 8, 16, y},
-		[]target{{Expr: "max by (queue) (taskiem_queue_oldest_ready_seconds)", LegendFormat: "{{queue}}", RefID: "A"}}, nil)
+	add("timeseries", "Oldest ready task", "Age of the oldest task waiting in each worker pool and queue.", "s", gridPos{8, 8, 16, y},
+		[]target{{Expr: "max by (pool, queue) (taskiem_pool_oldest_ready_seconds)", LegendFormat: "{{pool}}/{{queue}}", RefID: "A"}}, nil)
 	y += 8
 	add("timeseries", "Step dispatch delay (p95)", "Spec 15.3: under 50 ms.", "s", gridPos{8, 8, 0, y},
 		[]target{{Expr: "histogram_quantile(0.95, sum by (le, queue) (rate(taskiem_step_dispatch_delay_seconds_bucket[5m])))", LegendFormat: "{{queue}}", RefID: "A"}}, nil)

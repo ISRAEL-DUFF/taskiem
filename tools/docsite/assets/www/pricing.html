@@ -1,427 +1,90 @@
 {{define "content"}}
-<div class="flex flex-col w-full">
-<!-- Visual Architectural Glow Backdrops -->
-<div class="relative w-full overflow-hidden">
-<div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[850px] h-[340px] bg-gradient-to-b from-primary-fixed-dim/20 via-surface-container-high/40 to-transparent blur-3xl pointer-events-none rounded-full"></div>
-<div class="absolute top-96 -left-32 w-80 h-80 bg-primary/5 blur-2xl pointer-events-none rounded-full"></div>
-<!-- Header & Hero Section -->
-<section class="relative max-w-7xl mx-auto px-gutter pt-space-xl pb-space-2xl flex flex-col items-center text-center">
-<!-- Cryptographic Trust Badge -->
-<div class="inline-flex items-center gap-space-xs px-space-md py-space-xs bg-surface-container rounded-full shadow-sm mb-space-lg">
-<span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim animate-pulse"></span>
-<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider font-bold">
-          No Per-Run Penalties • 100% Flat Monthly Billing in Naira
-        </span>
-<span class="material-symbols-outlined text-sm text-primary">verified</span>
-</div>
-<h1 class="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface max-w-4xl tracking-tight leading-none mb-space-md">
-        Simple, honest pricing. Run 10 or 10,000 tasks without paying extra.
-      </h1>
-<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mb-space-xl">
-        Unlike foreign automation tools that bill in fluctuating US Dollars and charge for every single step, Taskiem bills in flat Naira with unlimited daily workflow runs.
-      </p>
-<!-- Currency Stability & Predictability Matrix Mini-Banner -->
-<div class="w-full max-w-3xl bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col sm:flex-row items-center justify-between gap-space-md">
-<div class="flex items-center gap-space-sm text-left">
-<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
-<span class="material-symbols-outlined text-xl">currency_exchange</span>
-</div>
-<div>
-<div class="font-label-md text-label-md text-on-surface font-semibold">Zero FX Volatility Risk</div>
-<div class="font-body-sm text-body-sm text-on-surface-variant">Pegged purely in &#8358; (NGN) • No surprise dollar conversion card limits</div>
-</div>
-</div>
-<div class="flex items-center gap-space-xs px-space-sm py-space-xs bg-surface-container rounded-lg">
-<span class="font-code-sm text-code-sm text-primary font-medium">FX RATE: STATIC ₦ LOCKED</span>
-</div>
-</div>
+<section class="page-hero">
+  <div class="wrap head">
+    <p class="eyebrow">Pricing</p>
+    <h1>Flat prices in naira. No charge per run.</h1>
+    <p class="lead">VAT is shown separately. Change or cancel from the app at any time.{{if .Pricing.TrialDays}} Try it free for {{.Pricing.TrialDays}} days{{if .Pricing.TrialPlan}} on {{.Pricing.TrialPlan}}{{end}}.{{end}}</p>
+    {{- if not .Pricing.Placeholder}}
+    <div class="toggle" role="group" aria-label="Billing period">
+      <button type="button" id="period-monthly" aria-pressed="true" data-set="monthly">Monthly</button>
+      <button type="button" id="period-annual" aria-pressed="false" data-set="annual">Yearly: 12 months for 10</button>
+    </div>
+    {{- end}}
+  </div>
 </section>
-<!-- Pricing Plans Matrix (3 Bespoke Columns) -->
-<section class="relative max-w-7xl mx-auto px-gutter pb-space-3xl">
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-space-lg items-stretch">
-<!-- PLAN 1: Starter Trader -->
-<div class="flex flex-col bg-surface-container-lowest rounded-xl p-space-xl shadow-sm relative group hover:shadow-md transition-all">
-<div class="flex items-center justify-between mb-space-md">
-<div class="px-space-sm py-space-2xs bg-surface-container rounded text-on-surface font-label-sm text-label-sm uppercase font-semibold">
-              Tier 01
-            </div>
-<span class="font-code-sm text-code-sm text-secondary">Micro-SME</span>
-</div>
-<h3 class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight mb-space-xs">Starter Trader</h3>
-<p class="font-body-sm text-body-sm text-on-surface-variant mb-space-lg min-h-[40px]">
-            Best for retail shops, boutique merchants, and solo service providers automating operations.
-          </p>
-<div class="p-space-md bg-surface-container-low rounded-lg mb-space-xl flex items-baseline gap-space-xs">
-<span class="font-currency-lg text-currency-lg text-primary font-bold">{{index .Prices "starter"}}</span>
-<span class="font-body-sm text-body-sm text-on-surface-variant">/ month</span>
-</div>
-<!-- Feature Bullets -->
-<div class="flex flex-col space-y-space-sm mb-space-xl flex-grow">
-<div class="font-label-sm text-label-sm uppercase text-on-surface-variant font-bold tracking-wider mb-space-2xs">Included Workflows</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-<span class="font-body-sm text-body-sm text-on-surface">WhatsApp Voice & Text Conversational Engine</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-<span class="font-body-sm text-body-sm text-on-surface">Up to 10 automated daily business routines</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-<span class="font-body-sm text-body-sm text-on-surface">1 Instant Storefront with Paystack/Moniepoint checkout</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-<span class="font-body-sm text-body-sm text-on-surface">Debtor & Stock ledger tables (up to 1,000 active rows)</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-<span class="font-body-sm text-body-sm text-on-surface">Standard WhatsApp & Email Support</span>
-</div>
-</div>
-<button class="w-full py-space-sm px-space-md bg-surface-container-high hover:bg-surface-container text-on-surface font-label-md text-label-md font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-space-xs group-hover:bg-primary-container group-hover:text-on-primary">
-<span>Start 14-Day Free Trial</span>
-<span class="material-symbols-outlined text-base">arrow_forward</span>
-</button>
-<div class="text-center font-code-sm text-code-sm text-on-surface-variant mt-space-xs">
-            No credit card required upfront
-          </div>
-</div>
-<!-- PLAN 2: Growing Business (FEATURED / HIGH IMPACT) -->
-<div class="flex flex-col bg-primary text-on-primary rounded-xl p-space-xl shadow-xl relative lg:-mt-4 lg:mb-[-1rem] transition-all">
-<div class="absolute -top-3.5 right-6 px-space-md py-space-2xs bg-tertiary-fixed text-on-tertiary-fixed font-label-sm text-label-sm rounded-full font-bold uppercase tracking-wider shadow-sm flex items-center gap-1">
-<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">stars</span>
-            Most Selected by Supermarkets
-          </div>
-<div class="flex items-center justify-between mb-space-md">
-<div class="px-space-sm py-space-2xs bg-primary-container text-on-primary-container rounded font-label-sm text-label-sm uppercase font-semibold">
-              Tier 02 • Unlimited Velocity
-            </div>
-<span class="font-code-sm text-code-sm text-primary-fixed-dim">Multi-Branch Scale</span>
-</div>
-<h3 class="font-headline-lg text-headline-lg text-on-primary font-bold tracking-tight mb-space-xs">Growing Business</h3>
-<p class="font-body-sm text-body-sm text-primary-fixed-dim mb-space-lg min-h-[40px]">
-            Engineered for supermarkets, regional distributors, pharmacies, clinics, and multi-hub logistics firms.
-          </p>
-<div class="p-space-md bg-primary-container rounded-lg mb-space-xl flex items-baseline gap-space-xs">
-<span class="font-currency-lg text-currency-lg text-tertiary-fixed font-bold">{{index .Prices "growth"}}</span>
-<span class="font-body-sm text-body-sm text-on-primary-container">/ month (Billed flat)</span>
-</div>
-<!-- Feature Bullets with Contrast Alignment -->
-<div class="flex flex-col space-y-space-sm mb-space-xl flex-grow">
-<div class="font-label-sm text-label-sm uppercase text-primary-fixed font-bold tracking-wider mb-space-2xs">Everything in Starter, plus:</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">bolt</span>
-<span class="font-body-sm text-body-sm text-on-primary font-medium">Unlimited daily workflow & automation runs</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">storefront</span>
-<span class="font-body-sm text-body-sm text-on-primary">Unlimited instant storefronts per brand</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">point_of_sale</span>
-<span class="font-body-sm text-body-sm text-on-primary">Multi-POS auto sync (Moniepoint, OPay, Paystack)</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">group</span>
-<span class="font-body-sm text-body-sm text-on-primary">Team access for up to 5 verified staff WhatsApp lines</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">sms</span>
-<span class="font-body-sm text-body-sm text-on-primary">Custom debtor auto-reminders with Termii SMS fallback</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">history_edu</span>
-<span class="font-body-sm text-body-sm text-on-primary">Tamper-evident audit log with 90-day forensic retention</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-tertiary-fixed text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">support_agent</span>
-<span class="font-body-sm text-body-sm text-on-primary font-medium">Dedicated Priority WhatsApp Account Manager in Lagos</span>
-</div>
-</div>
-<button class="w-full py-space-sm px-space-md bg-tertiary-fixed hover:bg-tertiary-fixed-dim text-on-tertiary-fixed font-label-md text-label-md font-bold rounded-lg shadow-md transition-all flex items-center justify-center gap-space-xs">
-<span>Get Started Now</span>
-<span class="material-symbols-outlined text-base">forum</span>
-</button>
-<div class="text-center font-code-sm text-code-sm text-on-primary-container mt-space-xs">
-            Instant WhatsApp activation under 3 minutes
-          </div>
-</div>
-<!-- PLAN 3: Enterprise & Regulated -->
-<div class="flex flex-col bg-surface-container-lowest rounded-xl p-space-xl shadow-sm relative group hover:shadow-md transition-all">
-<div class="flex items-center justify-between mb-space-md">
-<div class="px-space-sm py-space-2xs bg-surface-container rounded text-on-surface font-label-sm text-label-sm uppercase font-semibold">
-              Tier 03
-            </div>
-<span class="font-code-sm text-code-sm text-secondary">Institutional</span>
-</div>
-<h3 class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight mb-space-xs">Enterprise & Regulated</h3>
-<p class="font-body-sm text-body-sm text-on-surface-variant mb-space-lg min-h-[40px]">
-            For digital lenders, microfinance banks, high-volume payroll processors, and fintech platforms.
-          </p>
-<div class="p-space-md bg-surface-container-low rounded-lg mb-space-xl flex flex-col justify-center">
-<div class="flex items-baseline gap-space-xs">
-<span class="font-currency-lg text-currency-lg text-primary font-bold">{{index .Prices "enterprise"}}</span>
-<span class="font-body-sm text-body-sm text-on-surface-variant">/ month</span>
-</div>
-<span class="font-code-sm text-code-sm text-secondary mt-1">Or custom SLA annual invoicing</span>
-</div>
-<!-- Feature Bullets -->
-<div class="flex flex-col space-y-space-sm mb-space-xl flex-grow">
-<div class="font-label-sm text-label-sm uppercase text-on-surface-variant font-bold tracking-wider mb-space-2xs">Institutional Protections</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">pin</span>
-<span class="font-body-sm text-body-sm text-on-surface">Bank-Grade PIN & Biometric Authorization module</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">security</span>
-<span class="font-body-sm text-body-sm text-on-surface">Self-hosted deployment option (On-Premise / BYOK)</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">enhanced_encryption</span>
-<span class="font-body-sm text-body-sm text-on-surface">Zero-Data-Leak AI masking guarantee for NDPR audits</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">branding_watermark</span>
-<span class="font-body-sm text-body-sm text-on-surface">White-label SDK & embedding under your fintech brand</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">manage_accounts</span>
-<span class="font-body-sm text-body-sm text-on-surface">Unlimited staff accounts & granular role permissions</span>
-</div>
-<div class="flex items-start gap-space-sm">
-<span class="material-symbols-outlined text-primary text-base mt-0.5" style="font-variation-settings: 'FILL' 1;">terminal</span>
-<span class="font-body-sm text-body-sm text-on-surface">Dedicated 24/7 SLA & compliance engineering squad</span>
-</div>
-</div>
-<button class="w-full py-space-sm px-space-md bg-on-background text-on-primary hover:bg-primary-container font-label-md text-label-md font-semibold rounded-lg shadow-sm transition-all flex items-center justify-center gap-space-xs">
-<span>Schedule Enterprise Consultation</span>
-<span class="material-symbols-outlined text-base">support</span>
-</button>
-<div class="text-center font-code-sm text-code-sm text-on-surface-variant mt-space-xs">
-            Custom NDA & Security Questionnaire ready
-          </div>
-</div>
-</div>
+
+<section class="section tight" id="plans" data-period="monthly">
+  <div class="wrap stack-lg">
+    {{- if .Pricing.Placeholder}}
+    <p class="lead">Prices are being set. They will appear here, in naira, before anyone is asked to pay.</p>
+    {{- end}}
+    <div class="plans">
+      {{- range .Pricing.Plans}}
+      <article class="plan{{if eq .ID "growth"}} pine{{end}}">
+        <p class="name">{{.Name}}</p>
+        {{- if .Monthly}}
+        <div class="monthly"><p class="price">{{if eq .ID "enterprise"}}<span class="per">from </span>{{end}}{{.Monthly}}</p><p class="per">a month</p></div>
+        <div class="annual"><p class="price">{{if eq .ID "enterprise"}}<span class="per">from </span>{{end}}{{.Annual}}</p><p class="per">a year</p></div>
+        {{- end}}
+        <ul class="ticks">
+          {{- range .Includes}}
+          <li>{{template "i-tick"}}<span>{{.}}</span></li>
+          {{- end}}
+        </ul>
+        {{- if eq .ID "enterprise"}}
+        <a class="btn ghost" href="{{$.Base}}contact">Talk to us</a>
+        {{- else}}
+        <a class="btn{{if ne .ID "growth"}} ghost{{end}}" href="{{$.Start}}">{{if $.WhatsApp}}Start on WhatsApp{{else if $.App}}Start free{{else}}Read the owner’s guide{{end}}</a>
+        {{- end}}
+      </article>
+      {{- end}}
+    </div>
+  </div>
 </section>
-<!-- Visual Interactive Comparison Table (Operational Clarity) -->
-<section class="max-w-7xl mx-auto px-gutter pb-space-3xl w-full">
-<div class="bg-surface-container-lowest rounded-xl p-space-xl shadow-sm">
-<div class="flex flex-col md:flex-row md:items-end justify-between mb-space-xl gap-space-md">
-<div>
-<span class="font-code-sm text-code-sm text-primary uppercase font-bold tracking-wider">Operational Matrix</span>
-<h2 class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight">
-              Compare architectural boundaries
-            </h2>
-</div>
-<div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm py-space-2xs rounded-full">
-<span class="material-symbols-outlined text-primary text-sm">lock_clock</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant">Guaranteed price-lock for 12 months</span>
-</div>
-</div>
-<div class="overflow-x-auto">
-<table class="w-full text-left font-body-sm text-body-sm">
-<thead>
-<tr class="bg-surface-container-low text-on-surface font-label-md text-label-md">
-<th class="py-space-sm px-space-md rounded-l-lg">Workflow Capacity</th>
-<th class="py-space-sm px-space-md">Starter Trader</th>
-<th class="py-space-sm px-space-md bg-surface-container-high text-primary font-bold">Growing Business</th>
-<th class="py-space-sm px-space-md rounded-r-lg">Enterprise</th>
-</tr>
-</thead>
-<tbody class="divide-y-0">
-<tr class="hover:bg-surface-container-low transition-colors">
-<td class="py-space-sm px-space-md font-medium text-on-surface">Daily Automation Runs</td>
-<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">10 Daily Tasks</td>
-<td class="py-space-sm px-space-md font-code-sm text-code-sm font-bold text-primary bg-surface-container-high/40">Unlimited • 0 Penalty</td>
-<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">Unlimited • High Concurrency</td>
-</tr>
-<tr class="bg-surface-container-low/30 hover:bg-surface-container-low transition-colors">
-<td class="py-space-sm px-space-md font-medium text-on-surface">Naira Monthly Fee</td>
-<td class="py-space-sm px-space-md font-currency-md text-currency-md text-on-surface">{{index .Prices "starter"}}</td>
-<td class="py-space-sm px-space-md font-currency-md text-currency-md font-bold text-primary bg-surface-container-high/40">{{index .Prices "growth"}}</td>
-<td class="py-space-sm px-space-md font-currency-md text-currency-md text-on-surface">{{index .Prices "enterprise"}}</td>
-</tr>
-<tr class="hover:bg-surface-container-low transition-colors">
-<td class="py-space-sm px-space-md font-medium text-on-surface">Owner Cashout PIN Verification</td>
-<td class="py-space-sm px-space-md text-on-surface-variant">• Manual</td>
-<td class="py-space-sm px-space-md font-semibold text-primary bg-surface-container-high/40">Automated WhatsApp Prompt</td>
-<td class="py-space-sm px-space-md text-on-surface font-semibold">Dual-Officer HSM / Biometric</td>
-</tr>
-<tr class="bg-surface-container-low/30 hover:bg-surface-container-low transition-colors">
-<td class="py-space-sm px-space-md font-medium text-on-surface">POS Stream Aggregation</td>
-<td class="py-space-sm px-space-md text-on-surface-variant">1 Direct Feed</td>
-<td class="py-space-sm px-space-md font-semibold text-primary bg-surface-container-high/40">Multi-POS (Paystack, Moniepoint, OPay)</td>
-<td class="py-space-sm px-space-md text-on-surface">Custom Core Banking Switch</td>
-</tr>
-<tr class="hover:bg-surface-container-low transition-colors">
-<td class="py-space-sm px-space-md font-medium text-on-surface">Audit Trail Lifespan</td>
-<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">30 Days</td>
-<td class="py-space-sm px-space-md font-code-sm text-code-sm font-bold text-primary bg-surface-container-high/40">90 Days (Forensic Grade)</td>
-<td class="py-space-sm px-space-md font-code-sm text-code-sm text-on-surface-variant">7 Years Tamper-Proof S3/WORM</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
+
+<section class="section tight">
+  <div class="wrap stack">
+    <h2 class="h3">Compare the plans</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th>{{range .Pricing.Plans}}<th class="c">{{.Name}}</th>{{end}}</tr></thead>
+        <tbody>
+          {{- range .Pricing.Compare}}
+          <tr><td>{{.Label}}</td>{{range .Cells}}<td class="c tabnum">{{.}}</td>{{end}}</tr>
+          {{- end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
-<!-- Visual Asymmetric Spotlight: The Anti-Metered Manifesto -->
-<section class="max-w-7xl mx-auto px-gutter pb-space-3xl w-full">
-<div class="bg-primary text-on-primary rounded-xl p-space-xl grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-center relative overflow-hidden">
-<div class="lg:col-span-7 space-y-space-md relative z-10">
-<div class="inline-flex items-center gap-space-xs px-space-sm py-space-2xs bg-primary-container rounded font-code-sm text-code-sm text-tertiary-fixed font-bold">
-            WHY TASKIEM REJECTED US-STYLE PER-TASK BILLING
-          </div>
-<h2 class="font-headline-xl text-headline-xl-mobile md:text-headline-xl text-on-primary font-bold tracking-tight">
-            Nigerian commerce does not stop at 5:00 PM. Neither should your ledger.
-          </h2>
-<p class="font-body-md text-body-md text-primary-fixed-dim leading-relaxed">
-            Foreign tools penalize your growth. When a TikTok video blows up your orders or Saturday supermarket rush spikes transactions, they charge you 3¢ per webhook trigger in US dollars. At Taskiem, whether you reconcile 20 POS slips or 20,000 on a busy festive day, your subscription remains exactly {{index .Prices "growth"}}.
-          </p>
-<div class="grid grid-cols-2 gap-space-md pt-space-sm">
-<div class="bg-primary-container p-space-md rounded-lg">
-<span class="font-headline-md text-headline-md text-tertiary-fixed font-bold block mb-1">0%</span>
-<span class="font-body-sm text-body-sm text-on-primary">Over-usage charges when traffic surges</span>
-</div>
-<div class="bg-primary-container p-space-md rounded-lg">
-<span class="font-headline-md text-headline-md text-tertiary-fixed font-bold block mb-1">100%</span>
-<span class="font-body-sm text-body-sm text-on-primary">Local Naira settlement via bank or POS</span>
-</div>
-</div>
-</div>
-<div class="lg:col-span-5 relative z-10 flex flex-col justify-center">
-<!-- WhatsApp Simulated Voice Reconcile Preview Card -->
-<div class="bg-surface-container-lowest text-on-surface rounded-xl p-space-md shadow-xl">
-<div class="flex items-center justify-between pb-space-sm border-b-0">
-<div class="flex items-center gap-space-xs">
-<span class="w-3 h-3 rounded-full bg-tertiary-fixed-dim inline-block"></span>
-<span class="font-label-md text-label-md font-bold text-primary">Taskiem WhatsApp Bot</span>
-</div>
-<span class="font-code-sm text-code-sm text-secondary">Active • Unlimited</span>
-</div>
-<div class="bg-surface-container-low p-space-sm rounded-lg my-space-sm space-y-space-xs">
-<div class="flex items-center justify-between">
-<span class="font-code-sm text-code-sm text-secondary">TASK RUN #84,201 (TODAY)</span>
-<span class="font-label-sm text-label-sm text-primary font-bold">₦0.00 Extra Fee</span>
-</div>
-<div class="bg-surface-container-lowest p-space-sm rounded text-xs font-mono text-on-surface-variant flex items-center justify-between">
-<span>Webhook: moniepoint.pos.settled</span>
-<span class="text-tertiary-container font-semibold">200 OK (28ms)</span>
-</div>
-</div>
-<div class="flex items-center justify-between pt-space-xs text-xs text-on-surface-variant font-medium">
-<span>Next Monthly Billing: {{index .Prices "growth"}} Flat</span>
-<span class="text-primary font-bold">Unmetered Engine</span>
-</div>
-</div>
-</div>
-</div>
+
+<section class="section paper">
+  <div class="wrap split">
+    <div class="stack">
+      <p class="eyebrow">The fine print, in plain words</p>
+      <h2>Questions about paying.</h2>
+    </div>
+    <div class="faq">
+      <details><summary>What happens when I go over?</summary><p>WhatsApp messages beyond your plan are charged at Meta’s rate, passed through at cost and shown on your invoice. You can move up a plan at any time.</p></details>
+      <details><summary>Can I pay yearly?</summary><p>Yes. A year costs ten months’ price.</p></details>
+      <details><summary>What if I stop paying?</summary><p>You get {{if .Pricing.GraceDays}}{{.Pricing.GraceDays}} days’{{else}}a period of{{end}} grace. After that new runs pause until you pay. Nothing is deleted during your plan’s retention period.</p></details>
+      <details><summary>Do you charge for failed runs?</summary><p>No. You never pay per run, failed or not.</p></details>
+      <details><summary>How do I pay?</summary><p>By card or bank transfer. Invoices come as numbered PDFs with VAT{{if .Pricing.VATPercent}} at {{.Pricing.VATPercent}}%{{end}}, to your email and your chat.</p></details>
+    </div>
+  </div>
 </section>
-<!-- Frequently Asked Questions Section (Accordion Interactions) -->
-<section class="max-w-4xl mx-auto px-gutter pb-space-3xl w-full">
-<div class="text-center mb-space-xl">
-<span class="font-code-sm text-code-sm text-primary uppercase font-bold tracking-wider">Predictable Operations</span>
-<h2 class="font-headline-lg text-headline-lg text-on-surface font-bold tracking-tight mt-space-2xs">
-          Frequently Answered Questions
-        </h2>
-<p class="font-body-md text-body-md text-on-surface-variant mt-space-xs">
-          Clear answers regarding billing, offline fallback, and security guarantees.
-        </p>
-</div>
-<div class="space-y-space-md">
-<!-- FAQ 1 -->
-<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
-<div class="flex items-start justify-between cursor-pointer" onclick="toggleFaq('faq-1')">
-<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold flex items-center gap-space-sm">
-<span class="material-symbols-outlined text-primary">all_inclusive</span>
-              Are there extra charges if my automated task runs 100 times a day?
-            </h3>
-<span class="material-symbols-outlined text-on-surface-variant transition-transform" id="faq-1-icon">expand_more</span>
-</div>
-<div class="mt-space-sm pt-space-sm text-on-surface-variant font-body-md text-body-md" id="faq-1-body">
-            Never. Taskiem is strictly flat-rate. You pay your fixed monthly subscription in Naira, and your automated workflows can run as frequently as needed—whether that is 5 times or 50,000 times during a promo season. No overage invoices.
-          </div>
-</div>
-<!-- FAQ 2 -->
-<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
-<div class="flex items-start justify-between cursor-pointer" onclick="toggleFaq('faq-2')">
-<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold flex items-center gap-space-sm">
-<span class="material-symbols-outlined text-primary">pin</span>
-              How does the owner approval PIN work for payments?
-            </h3>
-<span class="material-symbols-outlined text-on-surface-variant transition-transform" id="faq-2-icon">expand_more</span>
-</div>
-<div class="mt-space-sm pt-space-sm text-on-surface-variant font-body-md text-body-md" id="faq-2-body">
-            When an automated rule triggers a money movement (such as a supplier payout, refund, or driver diesel disbursement), Taskiem immediately halts execution and sends an encrypted WhatsApp prompt to the business owner’s registered number. Nothing leaves your bank or wallet until you explicitly enter your private PIN.
-          </div>
-</div>
-<!-- FAQ 3 -->
-<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
-<div class="flex items-start justify-between cursor-pointer" onclick="toggleFaq('faq-3')">
-<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold flex items-center gap-space-sm">
-<span class="material-symbols-outlined text-primary">payments</span>
-              Can I pay with local cards or direct bank transfer?
-            </h3>
-<span class="material-symbols-outlined text-on-surface-variant transition-transform" id="faq-3-icon">expand_more</span>
-</div>
-<div class="mt-space-sm pt-space-sm text-on-surface-variant font-body-md text-body-md" id="faq-3-body">
-            Yes. We natively support all Nigerian bank cards (Mastercard, Visa, Verve) via Paystack, instant NIP transfers to a dedicated corporate virtual account, and formal corporate invoicing with Nigerian VAT receipts for audited enterprise accounts.
-          </div>
-</div>
-<!-- FAQ 4 -->
-<div class="bg-surface-container-lowest rounded-xl p-space-lg shadow-sm">
-<div class="flex items-start justify-between cursor-pointer" onclick="toggleFaq('faq-4')">
-<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold flex items-center gap-space-sm">
-<span class="material-symbols-outlined text-primary">wifi_off</span>
-              What if the internet or GSM network is unstable?
-            </h3>
-<span class="material-symbols-outlined text-on-surface-variant transition-transform" id="faq-4-icon">expand_more</span>
-</div>
-<div class="mt-space-sm pt-space-sm text-on-surface-variant font-body-md text-body-md" id="faq-4-body">
-            Taskiem has built-in idempotency safeguards and message queue persistence. If network connectivity drops while sending an alert or processing a Moniepoint/OPay webhook, our engine cryptographically verifies state before retrying—guaranteeing that you never double-pay suppliers or duplicate debtor notifications.
-          </div>
-</div>
-</div>
-</section>
-<!-- Enterprise Guarantee & Reassurance Banner -->
-<section class="max-w-7xl mx-auto px-gutter pb-space-3xl w-full">
-<div class="bg-surface-container rounded-xl p-space-xl flex flex-col md:flex-row items-center justify-between gap-space-lg text-center md:text-left">
-<div class="flex items-center gap-space-md">
-<div class="w-16 h-16 rounded-full bg-primary-container text-tertiary-fixed flex items-center justify-center flex-shrink-0 shadow-sm">
-<span class="material-symbols-outlined text-3xl">verified_user</span>
-</div>
-<div>
-<h4 class="font-headline-sm text-headline-sm text-on-surface font-bold">
-              30-Day Unconditional Money-Back Guarantee
-            </h4>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">
-              Test Taskiem across your daily operations. If it doesn't streamline your ledger or save your team 20+ hours a week, cancel anytime with one WhatsApp message for a full 100% refund.
-            </p>
-</div>
-</div>
-<div class="flex-shrink-0">
-<a class="inline-flex items-center gap-space-xs px-space-lg py-space-sm bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md font-bold rounded-lg shadow-sm transition-all" data-path="start-on-whatsapp" href="{{.Start}}">
-<span class="material-symbols-outlined text-lg">chat</span>
-<span>Activate on WhatsApp in ₦</span>
-</a>
-</div>
-</div>
-</section>
-</div>
-</div>
+
+{{template "closing" .}}
 <script>
-  function toggleFaq(id) {
-    const body = document.getElementById(id + '-body');
-    const icon = document.getElementById(id + '-icon');
-    if (!body || !icon) return;
-    
-    if (body.classList.contains('hidden')) {
-      body.classList.remove('hidden');
-      icon.style.transform = 'rotate(180deg)';
-    } else {
-      body.classList.add('hidden');
-      icon.style.transform = 'rotate(0deg)';
-    }
-  }
+(function () {
+  var plans = document.getElementById("plans");
+  var buttons = document.querySelectorAll("[data-set]");
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () {
+      plans.setAttribute("data-period", b.getAttribute("data-set"));
+      buttons.forEach(function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+    });
+  });
+})();
 </script>
 {{end}}

@@ -340,7 +340,9 @@ func TestUnsafeWritesNeverRepeat(t *testing.T) {
 	t.Logf("runs=%d parked=%d", runs, parked)
 }
 
-// TestDeterminismSuite replays every history the runtime tests produce.
+// TestDeterminismSuite replays the histories of payment-shaped runs under
+// injected faults. Every other test's settled runs are replayed too, by
+// the harness when the test ends (runtimetest.New).
 func TestDeterminismSuite(t *testing.T) {
 	e := rt.New(t)
 	e.Provider.Faults = rt.RandomFaults(3, 0.2, 0.2)
@@ -385,7 +387,7 @@ func TestDatabaseCrashSuite(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cw := &chaosWorkers{e: e, queue: "sandbox", rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second}
+	cw := &chaosWorkers{e: e, rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second} // the connector queue, where paymentShaped's steps are
 	for i := 0; i < 4; i++ {
 		cw.start(ctx)
 	}

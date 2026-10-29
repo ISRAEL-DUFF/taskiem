@@ -16,3 +16,7 @@ Copyleft or source-available code linked into the product would compromise both 
 ## Provenance
 
 Our own policy. Licence identifiers are SPDX.
+
+## Amendment, 2026-10-28
+
+`Python-2.0` is also allowed for the vendored CPython in `engine/sandbox/pywasm` ([0056](0056-vendored-cpython-licence.md)).

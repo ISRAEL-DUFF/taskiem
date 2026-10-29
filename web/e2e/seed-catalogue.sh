@@ -5,13 +5,14 @@
 # for ops.spec.ts, p_e2e_ledger 1.1.0 waiting in the review queue. The
 # automated checks and the review run through their own tests; here the
 # rows are written directly, as the database superuser. Usage:
-#   seed-catalogue.sh DSN TENANT_ID
+#   seed-catalogue.sh DSN TENANT_ID [TASKIEM_BINARY]
 set -euo pipefail
 dsn=$1 tenant=$2
 root=$(cd "$(dirname "$0")/../.." && pwd)
+taskiem=${3:-$root/bin/taskiem-e2e}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-"$root/bin/taskiem" connector build -o "$tmp/connector.wasm" "$root/examples/wasm-connector" >/dev/null
+"$taskiem" connector build -o "$tmp/connector.wasm" "$root/examples/wasm-connector" >/dev/null
 sed 's/x_example_ledger/p_e2e_ledger/' "$root/examples/wasm-connector/manifest.yaml" >"$tmp/manifest.yaml"
 sed 's/^version: 1.0.0$/version: 1.1.0/' "$tmp/manifest.yaml" >"$tmp/manifest11.yaml"
 base64 -w0 "$tmp/connector.wasm" >"$tmp/module.b64"

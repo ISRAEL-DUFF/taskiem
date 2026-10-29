@@ -208,7 +208,17 @@ func migrate(args []string, stdout io.Writer) error {
 	if *dsn == "" {
 		return errors.New("migrate: --dsn or TASKIEM_DATABASE_URL is required")
 	}
-	results, err := db.Migrate(context.Background(), *dsn)
+	// How long each statement may wait for a lock before the migration
+	// fails (and the Job retries): never long enough to stall live pods.
+	lockTimeout := db.DefaultLockTimeout
+	if v := os.Getenv("TASKIEM_MIGRATE_LOCK_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 || d > time.Hour {
+			return fmt.Errorf("TASKIEM_MIGRATE_LOCK_TIMEOUT must be a duration from 0 (no limit) to 1h, not %q", v)
+		}
+		lockTimeout = d
+	}
+	results, err := db.MigrateWith(context.Background(), *dsn, lockTimeout)
 	if err != nil {
 		return err
 	}
@@ -217,6 +227,16 @@ func migrate(args []string, stdout io.Writer) error {
 	}
 	for _, r := range results {
 		fmt.Fprintf(stdout, "migrate: applied %s (%s)\n", r.Source.Path, r.Duration.Round(1e6))
+	}
+	// The pods' own login (the Helm chart's migrate Job passes the pods'
+	// TASKIEM_DATABASE_URL here): made a member of taskiem_app, never the
+	// owner (docs/kubernetes.md#database-logins).
+	if appDSN := os.Getenv("TASKIEM_APP_DATABASE_URL"); appDSN != "" {
+		login, err := db.EnsureAppLogin(context.Background(), *dsn, appDSN)
+		if err != nil {
+			return fmt.Errorf("migrate: TASKIEM_APP_DATABASE_URL: %w", err)
+		}
+		fmt.Fprintf(stdout, "migrate: %s signs in as a member of taskiem_app\n", login)
 	}
 	return nil
 }

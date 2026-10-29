@@ -102,7 +102,7 @@ func operatorsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 // openOpsPool connects as the CLI's own login (TASKIEM_OPS_DATABASE_URL,
 // default TASKIEM_DATABASE_URL) in taskiem_ops_admin
 // (TASKIEM_OPS_DATABASE_ROLE), the only role that may manage operator
-// accounts (migration 00253). The API server's login is not a member, so
+// accounts (migration 00256). The API server's login is not a member, so
 // nothing that runs in the server can make an operator.
 func openOpsPool(ctx context.Context, cfg config) (*pgxpool.Pool, error) {
 	cfg.DSN = env("TASKIEM_OPS_DATABASE_URL", cfg.DSN)
@@ -127,8 +127,8 @@ func printEnrol(ctx context.Context, stdout io.Writer, email, publicURL string, 
 // opsSettings is the operator console for the api role (TASKIEM_OPS_*);
 // nil when TASKIEM_OPS_CONSOLE is false.
 func opsSettings() (*api.OpsSettings, error) {
-	if !envBool("TASKIEM_OPS_CONSOLE", true) {
-		return nil, nil
+	if on, err := envBool("TASKIEM_OPS_CONSOLE", true); err != nil || !on {
+		return nil, err
 	}
 	s := &api.OpsSettings{}
 	if v := os.Getenv("TASKIEM_OPS_SESSION_TTL"); v != "" {

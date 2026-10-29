@@ -1,25 +1,25 @@
 {{define "content"}}
-<div class="legacy">
-<section class="page-head">
-  <h1>Contact</h1>
-  <p class="lead">The quickest way to reach us is the same way you use Taskiem.</p>
+<section class="page-hero">
+  <div class="wrap head">
+    <p class="eyebrow">Contact</p>
+    <h1>The quickest way to reach us is the way you use Taskiem.</h1>
+  </div>
 </section>
-<section class="tight">
-  <dl class="facts">
+<section class="section tight">
+  <div class="wrap grid g2">
     {{- if .WhatsApp}}
-    <dt>WhatsApp</dt>
-    <dd><a href="{{.WhatsApp}}">Message Taskiem</a>: send <em>help</em> for support, or just say what you need.</dd>
+    <article class="card pine">{{template "i-chat"}}<h3>WhatsApp</h3><p>Send <em>help</em> for support, or just say what you need.</p><p><a class="more" href="{{.WhatsApp}}">Message Taskiem {{template "i-arrow"}}</a></p></article>
     {{- end}}
     {{- if .Email}}
-    <dt>Email</dt>
-    <dd><a href="mailto:{{.Email}}">{{.Email}}</a></dd>
+    <article class="card">{{template "i-send"}}<h3>Email</h3><p><a class="more" href="mailto:{{.Email}}">{{.Email}}</a></p></article>
     {{- end}}
-    <dt>Partners</dt>
-    <dd>Building a product for Nigerian businesses? Start with <a href="{{.Base}}partners">the partners page</a>.</dd>
-    <dt>Documentation</dt>
-    <dd><a href="{{.Docs}}guide/index">The owner's guide</a> for business owners, and <a href="{{.Docs}}">the full documentation</a> for developers.</dd>
-  </dl>
+    <article class="card">{{template "i-plug"}}<h3>Partners</h3><p>Building a product for Nigerian businesses? Start with the partners page.</p><p><a class="more" href="{{.Base}}partners">For fintechs and partners {{template "i-arrow"}}</a></p></article>
+    <article class="card">{{template "i-book"}}<h3>Documentation</h3><p>The owner’s guide for business owners, and the full documentation for developers.</p><p><a class="more" href="{{.Docs}}guide/index">The owner’s guide {{template "i-arrow"}}</a></p><p><a class="more" href="{{.Docs}}">The full documentation {{template "i-arrow"}}</a></p></article>
+  </div>
 </section>
-<section class="closing"></section>
-</div>
+{{- if and (not .WhatsApp) (not .App)}}
+<section class="section tight">
+  <div class="wrap">{{template "cta" .}}</div>
+</section>
+{{- end}}
 {{end}}

@@ -35,3 +35,7 @@ Postgres is the queue (decision 0002), so these are database questions: who clai
 - During a failover, outcomes already fetched survive for the retry window; intents whose `COMMIT` was lost fall back to reconciliation; claims in flight wait for lease expiry (60 s).
 - Processes with a replica write one heartbeat row every two seconds on the primary.
 - A pgx quirk found while testing: an error from `COMMIT` on a connection cut just after the server received it can be reported as safe to retry. `InTenantTxRetry` therefore treats every connection loss during `COMMIT` as an unknown outcome.
+
+## Amendment, 2026-10-29
+
+Container steps are claimed by the shared pool whatever the tenant's routing (migration 00253): the only container workers are the shared container pool's, and a dedicated pool's worker refuses to start with the `container` queue. The live-worker check is per queue: a pool counts as live only when it serves each queue the shared pool's live workers serve, `container` left out.

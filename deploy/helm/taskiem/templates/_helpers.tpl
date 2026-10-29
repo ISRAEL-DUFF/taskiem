@@ -84,6 +84,21 @@ All of it must fit in the grace period, with room to release leases.
 {{- $s.gracePeriodSeconds -}}
 {{- end -}}
 
+{{/*
+The scheduler's replicas. Its claims are safe to run twice (SKIP LOCKED,
+leases, conditional updates), but each scheduler archives runs and writes
+audit anchors to its own local directory, and the default claim is
+ReadWriteOnce under a Recreate strategy: more than one needs the S3 archive
+and no volume, and then has no audit anchoring (docs/kubernetes.md#storage).
+*/}}
+{{- define "taskiem.schedulerReplicas" -}}
+{{- $n := int .Values.roles.scheduler.replicas -}}
+{{- if and (gt $n 1) (or .Values.storage.enabled (not (index .Values.config "TASKIEM_ARCHIVE_S3_BUCKET"))) -}}
+{{- fail "roles.scheduler.replicas above 1 needs the S3 archive (config.TASKIEM_ARCHIVE_S3_BUCKET) and storage.enabled: false; each scheduler would otherwise keep its own local archive, and the volume can be mounted once (docs/kubernetes.md#storage)" -}}
+{{- end -}}
+{{- $n -}}
+{{- end -}}
+
 {{- define "taskiem.shutdownEnv" -}}
 - name: TASKIEM_SHUTDOWN_DELAY
   value: {{ printf "%vs" .Values.shutdown.delaySeconds | quote }}

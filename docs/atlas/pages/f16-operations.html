@@ -4,29 +4,186 @@
   "title": "Operations",
   "part": "F",
   "order": 1,
-  "status": "planned",
-  "summary": "Deployment shapes, configuration, SLOs and alerts, telemetry, the canary and status page, worker pools, billing and quota enforcement.",
-  "scope": [
-    "Compose, Helm, Kubernetes and the VM kit",
-    "Configuration by environment variable",
-    "SLOs as code, alert rules and dashboards",
-    "Metrics and traces",
-    "The canary and the status page",
-    "Worker pools and dedicated tenants",
-    "Billing, plans and how limits are enforced",
-    "Runbooks"
-  ],
+  "summary": "Deployment shapes, configuration, SLOs and alerts, telemetry, the canary and status page, worker pools, billing and quota enforcement, migrations and backups, and the runbooks.",
+  "verified": "74f56c9ae62802d0c547d5ca566bef54b78c5bd7",
   "sources": [
-    "deploy/",
-    "engine/slo/",
-    "engine/telemetry/",
-    "engine/canary/",
-    "engine/status/",
-    "engine/billing/",
-    "engine/runtime/limits.go",
-    "engine/runtime/pools.go",
-    "cmd/taskiem/serve.go",
-    "docs/runbooks/"
+    "deploy/", "engine/slo/", "engine/telemetry/", "engine/canary/", "engine/status/", "engine/billing/",
+    "engine/runtime/limits.go", "engine/runtime/pools.go", "engine/runtime/worker.go", "engine/runtime/scheduler.go",
+    "engine/db/db.go", "engine/db/migrations/00045_subtenants.sql", "engine/db/migrations/00120_worker_pools.sql", "engine/db/migrations/00122_dispatch_timing.sql",
+    "cmd/taskiem/serve.go", "cmd/taskiem/dbconfig.go", "cmd/taskiem/reliability.go", "cmd/taskiem/archive.go", "cmd/taskiem/public.go",
+    "cmd/taskiem/hardening.go", "cmd/taskiem/pprof.go", "api/limits.go", "Dockerfile",
+    "docs/runbooks/", "docs/reliability.md", "docs/operations.md", "docs/kubernetes.md", "docs/cloud.md", "docs/vm.md",
+    "docs/spec/architecture.md", "docs/decisions/0023-slos-and-alerting.md", "docs/decisions/0024-production-cloud.md",
+    "docs/decisions/0032-deployment-target.md", "docs/decisions/0017-plans-and-billing.md"
   ]
 }
 -->
+<h2>One binary, several shapes</h2>
+<p>Taskiem ships as one Go binary in a distroless image that runs as uid 65532 (<x-ref path="Dockerfile">Dockerfile</x-ref>). <code>taskiem serve --role R</code> picks what a process does, from <x-ref path="cmd/taskiem/serve.go" symbol="var roles = map[string]bool{"><code>roles</code></x-ref>: <code>api</code>, <code>edge</code>, <code>orchestrator</code>, <code>scheduler</code>, <code>worker</code>, <code>public</code>, <code>mail</code>, or <code>all</code>. Each role is a list of tasks run side by side by <x-ref path="cmd/taskiem/serve.go" symbol="func runTasks("><code>runTasks</code></x-ref>. If one task fails, the process stops and its supervisor restarts it. Every role also serves <code>/metrics</code>, <code>/healthz</code> and <code>/readyz</code> on the metrics port, 9090.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Role</th><th>Runs</th><th>Scales</th></tr></thead>
+  <tbody>
+    <tr><td><code>api</code></td><td>The web app and <code>/v1</code> on 8080, the status page, and loops for Git sync, WhatsApp, USSD, storefronts, forms, invoices, self-repair and outbound messages</td><td>Horizontally; the chart runs 2</td></tr>
+    <tr><td><code>edge</code></td><td><code>/hooks</code>, <code>/git-hooks</code> and <code>/channels/*</code> on 8081</td><td>Horizontally. Ingest rate limiters live in each process, so with N edges a tenant gets N times its rate</td></tr>
+    <tr><td><code>orchestrator</code></td><td>The sweep only: a scheduler with <code>SweepOnly</code> every 100 ms, deciding runs that were not decided inline</td><td>Horizontally; claims use leases</td></tr>
+    <tr><td><code>scheduler</code></td><td>Timers, cron, retention, alerts, secret-read digests, partner webhooks, billing, domain checks, the BYOK key job, the poller, money mirrors and digests, the canary and audit anchoring</td><td>One. Claims use <code>SKIP LOCKED</code>, but there is no leader election and each keeps its own local archive, so more than one needs the S3 archive and no volume</td></tr>
+    <tr><td><code>worker</code></td><td>One <code>runtime.Worker</code> per queue in <code>TASKIEM_WORKER_QUEUES</code> (default <code>connector,sandbox,ai</code>), each with 16 slots, or 4 for <code>sandbox</code> and <code>container</code></td><td>Horizontally, optionally with a CPU HPA; dedicated pools below</td></tr>
+    <tr><td><code>public</code>, <code>mail</code></td><td>Storefronts and forms on 8082; SMTP for email triggers on 2525. Each connects as <code>taskiem_public</code> with its own login and none of the platform's secrets</td><td>Horizontally</td></tr>
+  </tbody>
+</table></div>
+<p>Four ways to deploy it are kept in <x-ref path="deploy/"><code>deploy/</code></x-ref>:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Shape</th><th>What it is</th><th>For</th></tr></thead>
+  <tbody>
+    <tr><td><x-ref path="deploy/docker-compose.yml">Compose</x-ref></td><td>Postgres 16, OpenBao in dev mode, a migrate job and <code>serve --role all</code></td><td>Development. OpenBao keeps its keys in memory, so restarting it loses every secret</td></tr>
+    <tr><td><x-ref path="deploy/vm/">VM kit</x-ref></td><td>Compose with Caddy for HTTPS, a persistent OpenBao that unseals itself, <code>all</code> in one container, optional <code>public</code>, <code>mail</code> and ClamAV, and an external managed Postgres. <x-ref path="deploy/vm/taskiem-vps"><code>taskiem-vps</code></x-ref> installs, upgrades to cosign-verified images every 15 minutes inside a window, rolls back on failed health, backs up and checks</td><td>Staging and a first production (<x-ref path="docs/decisions/0032-deployment-target.md">decision 0032</x-ref>)</td></tr>
+    <tr><td><x-ref path="deploy/helm/taskiem/">Helm chart</x-ref></td><td><code>mode: split</code> runs a Deployment per role; <code>mode: all</code> runs one. It also creates a pre-upgrade migrate Job, a PVC for the scheduler, PDBs, and optionally an HPA, NetworkPolicies, a ServiceMonitor, a PrometheusRule, the Grafana dashboard, dedicated worker pools, the container-step pool, the public host, mail and ClamAV</td><td>Cloud</td></tr>
+    <tr><td><x-ref path="deploy/kubernetes/taskiem.yaml">Plain manifests</x-ref></td><td>The chart rendered with its defaults and the ingress on. CI fails if the file is stale</td><td><code>kubectl apply</code> without Helm. Run <code>taskiem migrate</code> yourself, and delete the finished Job before applying a new version</td></tr>
+  </tbody>
+</table></div>
+<p>The chart's pods run as non-root with a read-only root filesystem, every capability dropped, the <code>RuntimeDefault</code> seccomp profile and no service-account token (except the container worker, which creates sandbox Pods). Each role has memory limits and CPU requests, but no CPU limits. NetworkPolicies are off by default. When on, they restrict ingress only, because connectors call many providers.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The chart used to read one Secret whose <code>TASKIEM_DATABASE_URL</code>, the schema owner's, served both the migrate Job and every pod, so anyone who read a pod's environment had a login that could <code>RESET ROLE</code> past row-level security and the append-only audit tables. The owner's URL now lives in a second Secret, <code>migrations.existingSecret</code>, that only the migrate Job reads. The Job passes the pods' URL to <code>taskiem migrate</code> as <code>TASKIEM_APP_DATABASE_URL</code>, and <x-ref path="engine/db/login.go" symbol="func EnsureAppLogin("><code>EnsureAppLogin</code></x-ref> creates that login as a member of <code>taskiem_app</code>, as the VM kit does for its <code>&lt;db&gt;_app</code>, refusing the owner, a superuser or a login that owns tables (<x-ref path="docs/kubernetes.md" symbol="## Database logins">database logins</x-ref>). A test reads the rendered manifests and fails if any pod can reach the owner's Secret (<x-ref path="deploy/manifests_test.go" symbol="func TestPodsNeverGetTheOwnersLogin(">TestPodsNeverGetTheOwnersLogin</x-ref>). Found while writing this page.</p>
+  <p>The dev Compose file used to publish Postgres (password <code>postgres</code>) and metrics on every interface, which Docker's published ports open past a host firewall such as ufw, and set no <code>stop_grace_period</code>, so Docker killed the process after 10 seconds while workers drained for 30. Both are now on <x-ref path="deploy/docker-compose.yml" symbol="ports: [&quot;127.0.0.1:5432:5432&quot;]"><code>127.0.0.1</code></x-ref>, with a 45-second grace period (<x-ref path="deploy/compose_test.go" symbol="func TestDevComposeStaysLocal(">TestDevComposeStaysLocal</x-ref>).</p>
+  <p>For <code>api</code>, <code>edge</code> and <code>all</code>, the chart's <code>service.type</code> used to apply to the metrics port too, so <code>LoadBalancer</code> made <code>/metrics</code> public, and <code>/debug/pprof</code> with it when <code>TASKIEM_PPROF</code> was on, which <x-ref path="cmd/taskiem/pprof.go" symbol="func profiling(">pprof.go</x-ref> says must never be exposed. Those roles' metrics are now on a <x-ref path="deploy/helm/taskiem/templates/service.yaml" symbol="name: {{ include &quot;taskiem.fullname&quot; $root }}-{{ $role }}-metrics">separate Service</x-ref> that is always ClusterIP, which the ServiceMonitor finds by its port name as before (<x-ref path="deploy/manifests_test.go" symbol="func TestMetricsStayInsideTheCluster(">TestMetricsStayInsideTheCluster</x-ref>).</p>
+</div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Spec 2.3 says schedulers are leader-elected with a session-level advisory lock (<x-ref path="docs/spec/architecture.md" symbol="Scheduler instances use a session-level Postgres advisory lock for leader election">spec 2.3</x-ref>). Nothing in the code takes such a lock. Each scheduler job relies on its own row claims, and every scheduler runs the canary.</p>
+</div>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The chart's values and the stalled-scheduler runbook used to say a second scheduler was safe. With the default storage it was not: the scheduler mounts a <code>ReadWriteOnce</code> claim under a <code>Recreate</code> strategy, which a second replica on another node cannot attach, and one on the same node would share a local archive directory that <x-ref path="cmd/taskiem/archive.go" symbol="func archiver(">archiver</x-ref> warns against. The scheduler's database work is safe to run twice, so the values, the runbook and <x-ref path="docs/kubernetes.md" symbol="**One scheduler, or a bucket and no volume.**">kubernetes.md</x-ref> now say a second scheduler needs the S3 archive and no volume, which leaves it without audit anchoring, and the chart refuses anything else (<x-ref path="deploy/helm/taskiem/templates/_helpers.tpl" symbol="define &quot;taskiem.schedulerReplicas&quot;"><code>taskiem.schedulerReplicas</code></x-ref>, <x-ref path="deploy/chart_test.go" symbol="func TestChartRefusesASecondSchedulerOnLocalStorage(">TestChartRefusesASecondSchedulerOnLocalStorage</x-ref>).</p>
+</div>
+
+<h2 id="operations--config">Configuration</h2>
+<p>Everything is read from the environment by <x-ref path="cmd/taskiem/serve.go" symbol="func loadConfig() (config, error) {"><code>loadConfig</code></x-ref> and the helpers it calls. Durations, numbers, booleans and keys are checked, and a bad value stops the process at start with an error naming the variable. The <code>public</code> and <code>mail</code> roles read a much smaller set (<x-ref path="cmd/taskiem/public.go" symbol="func loadPublicConfig() (config, error) {"><code>loadPublicConfig</code></x-ref>) and never need the platform's DSN or KMS. The settings that matter most:</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Variable</th><th>Default</th><th>In production</th></tr></thead>
+  <tbody>
+    <tr><td><code>TASKIEM_DATABASE_URL</code></td><td>none</td><td><strong>Required</strong>: the only setting whose absence stops every role. With several hosts, add <code>target_session_attrs=read-write</code>, or the process only warns</td></tr>
+    <tr><td><code>TASKIEM_DATABASE_ROLE</code>, <code>_POOL</code></td><td><code>taskiem_app</code>, 20</td><td>Leave the role alone (empty disables <code>SET ROLE</code>). The chart sets the pool per role. A pool size that is not a whole number above 0 stops the process</td></tr>
+    <tr><td><code>TASKIEM_DATABASE_READ_URL</code>, <code>_READ_MAX_LAG</code>, <code>_RETRY_WINDOW</code></td><td>none, 10s, 30s</td><td>Optional replica for run lists and dashboards (<x-ref path="cmd/taskiem/dbconfig.go" symbol="func cloudConfigFromEnv() (cloudConfig, error) {"><code>cloudConfigFromEnv</code></x-ref>)</td></tr>
+    <tr><td><code>TASKIEM_KMS</code></td><td><code>local</code></td><td><code>openbao</code>, with <code>TASKIEM_OPENBAO_ADDR</code> and <code>_TOKEN</code> required. With an https public URL, <code>local</code> is refused unless <code>TASKIEM_ALLOW_LOCAL_KMS=true</code> (<x-ref path="cmd/taskiem/serve.go" symbol="func (c config) kms() (secrets.KMS, error) {"><code>kms</code></x-ref>)</td></tr>
+    <tr><td><code>TASKIEM_PUBLIC_URL</code></td><td>none</td><td>Needed in practice. It turns on passkeys, admin passkeys, HSTS and the refusal of the local KMS, and it is the default for <code>TASKIEM_HOOKS_URL</code> and the canary's API URL. It must be https, or <code>http://localhost</code></td></tr>
+    <tr><td><code>TASKIEM_SECURE_COOKIES</code>, <code>TASKIEM_REQUIRE_ADMIN_PASSKEYS</code></td><td>true; true with a public URL</td><td>Leave them on</td></tr>
+    <tr><td><code>TASKIEM_TRUST_PROXY</code></td><td>false</td><td>true behind exactly one proxy that appends <code>X-Forwarded-For</code> (the chart and the VM kit set it). The last hop is taken</td></tr>
+    <tr><td><code>TASKIEM_ANCHOR_KEY</code>, <code>_DIR</code></td><td>none</td><td>Both on the scheduler, or audit anchoring is off. A malformed key <x-ref path="cmd/taskiem/serve.go" symbol="func (c config) anchorSigner() (*audit.Signer, error) {">stops the process</x-ref> at start</td></tr>
+    <tr><td><code>TASKIEM_ARCHIVE_S3_*</code> or <code>TASKIEM_ARCHIVE_DIR</code></td><td>none</td><td>Without either, nothing is ever purged (<x-page id="governance--retention">retention</x-page>)</td></tr>
+    <tr><td><code>TASKIEM_SMTP_URL</code>, <code>TASKIEM_ALERT_FROM</code></td><td>none</td><td>Email for alerts, password links and dunning. The sender is required once SMTP is set</td></tr>
+    <tr><td><code>TASKIEM_WORKER_QUEUES</code>, <code>TASKIEM_WORKER_POOL</code></td><td><code>connector,sandbox,ai</code>, <code>shared</code></td><td>A queue nobody serves holds its tasks until the run times out</td></tr>
+    <tr><td><code>TASKIEM_SHUTDOWN_DELAY</code>, <code>TASKIEM_WORKER_DRAIN</code></td><td>0, 30s</td><td>The chart sets 10s and 30s</td></tr>
+    <tr><td><code>TASKIEM_BILLING</code>, <code>_BILLING_PLANS</code></td><td>off, <code>deploy/plans.yaml</code> (the image: <code>/etc/taskiem/plans.yaml</code>)</td><td>Off: every tenant is on the internal plan with the platform defaults</td></tr>
+    <tr><td><code>TASKIEM_DEFAULT_&lt;LIMIT&gt;</code></td><td><x-ref path="engine/runtime/limits.go" symbol="func DefaultLimits() Limits {"><code>DefaultLimits</code></x-ref></td><td>The platform's base limits (<x-ref path="engine/runtime/limits.go" symbol="func LimitsFromEnv("><code>LimitsFromEnv</code></x-ref>)</td></tr>
+    <tr><td><code>TASKIEM_STATUS_PAGE</code>, <code>_STATUS_CANARY</code>, <code>_STATUS_TOKENS</code></td><td>on, on, none</td><td>Tokens are <code>name:sha256</code> (<x-ref path="cmd/taskiem/reliability.go" symbol="func statusConfig() (StatusConfig, error) {"><code>statusConfig</code></x-ref>)</td></tr>
+    <tr><td><code>TASKIEM_CANARY_*</code></td><td>off</td><td>A hook URL turns it on, and then the secret, the API key and an API URL are required (<x-ref path="cmd/taskiem/reliability.go" symbol="func canaryConfig() (CanaryConfig, error) {"><code>canaryConfig</code></x-ref>)</td></tr>
+    <tr><td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td><td>none</td><td>Without it, tracing does nothing</td></tr>
+    <tr><td><code>TASKIEM_HSTS</code>, <code>TASKIEM_PPROF</code>, <code>TASKIEM_EGRESS_PROXY</code></td><td>a year with https; off; none</td><td>A bad HSTS value or proxy stops the process (<x-ref path="cmd/taskiem/hardening.go" symbol="func hstsFromEnv("><code>hstsFromEnv</code></x-ref>)</td></tr>
+  </tbody>
+</table></div>
+<p>The full list, with every provider endpoint, is in <x-ref path="docs/operations.md">operations.md</x-ref>.</p>
+<x-code path="cmd/taskiem/serve.go" start="func envBool(k string, def bool) (bool, error) {" caption="every boolean setting"/>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>A boolean that did not parse used to become false with no error, including <code>on</code> and <code>yes</code>, the forms the docs use. <code>TASKIEM_SECURE_COOKIES=yes</code> sent cookies without <code>Secure</code>, and <code>TASKIEM_REQUIRE_ADMIN_PASSKEYS=on</code> turned admin passkeys off. An unparsable <code>TASKIEM_DATABASE_POOL</code> silently became 20, and a malformed <code>TASKIEM_ANCHOR_KEY</code> was only logged. <code>envBool</code> now accepts <code>true</code>/<code>false</code>, <code>1</code>/<code>0</code>, <code>yes</code>/<code>no</code> and <code>on</code>/<code>off</code> in any case, and <code>loadConfig</code> refuses any other value, a bad number or a bad anchor key at start, naming the variable (<x-ref path="cmd/taskiem/config_test.go" symbol="func TestConfigBooleans(">TestConfigBooleans</x-ref>). Found while writing this page.</p>
+</div>
+
+<h2 id="operations--shutdown">Probes and graceful shutdown</h2>
+<p>On SIGTERM, <x-ref path="cmd/taskiem/serve.go" symbol="func drainOnShutdown("><code>drainOnShutdown</code></x-ref> sets <code>draining</code> at once, so <code>/readyz</code> answers 503 on every port while <code>/healthz</code> stays 200. The process keeps serving for <code>TASKIEM_SHUTDOWN_DELAY</code> while load balancers take it out, then ends the run context. HTTP servers then have 20 seconds to finish open requests (<x-ref path="cmd/taskiem/serve.go" symbol="func httpTask("><code>httpTask</code></x-ref>). Workers stop claiming and let steps run on for <code>TASKIEM_WORKER_DRAIN</code>. Workers and schedulers then release the leases they still hold, so another pod picks the work up at once instead of after the 60-second lease. The chart refuses a grace period shorter than delay plus drain plus 10 seconds (<x-ref path="deploy/helm/taskiem/templates/_helpers.tpl" symbol="define &quot;taskiem.gracePeriod&quot;"><code>taskiem.gracePeriod</code></x-ref>). The VM kit's container stops after 45 seconds.</p>
+<p>Readiness on <code>api</code>, <code>edge</code>, <code>all</code>, <code>public</code> and <code>mail</code> pings the database with a 2-second timeout. The chart probes readiness only for <code>api</code>, <code>edge</code> and <code>all</code>. The other roles get liveness only, on the metrics port's <code>/healthz</code>, which answers 200 as long as the HTTP server runs. A wedged worker loop is not detected there. A task that fails stops the whole process.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Dedicated worker pools used to hard-code a 60-second grace period and get neither <code>TASKIEM_SHUTDOWN_DELAY</code> nor <code>TASKIEM_WORKER_DRAIN</code>, so <code>shutdown.*</code> changed the shared workers only. They now use <code>taskiem.gracePeriod</code> and <code>taskiem.shutdownEnv</code> like every other pod that runs <code>serve</code>, which a test of the chart's templates checks. Found while writing this page.</p>
+</div>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The public host's and the mail role's <code>/readyz</code> used to check only <code>draining</code>, so the VM kit and the chart judged them healthy while every storefront and form answered with an error. Both now use the same <x-ref path="cmd/taskiem/serve.go" symbol="func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {"><code>readiness</code></x-ref> handler as the API, which pings their own pool with a 2-second timeout (<x-ref path="cmd/taskiem/public_test.go" symbol="func TestPublicReadinessPingsTheDatabase(">TestPublicReadinessPingsTheDatabase</x-ref>).</p>
+</div>
+
+<h2 id="operations--migrations">Migrations at deploy time</h2>
+<p><code>taskiem migrate</code> applies the embedded goose migrations as the schema owner (<x-ref path="engine/db/db.go" symbol="func Migrate("><code>db.Migrate</code></x-ref>). They only go forward, and each runs in its own transaction. The chart runs them as a <x-ref path="deploy/helm/taskiem/templates/migrate-job.yaml" symbol="helm.sh/hook: pre-install,pre-upgrade">pre-install and pre-upgrade hook</x-ref>, while the old pods keep serving. The VM kit runs them as a Compose service that the app waits on. The rule that makes this safe is that a release must work with the schema of the release after it (spec 15.4, "backward-compatible for one release"). In the Up sections of the 163 migrations there is no <code>DROP COLUMN</code>, rename or type change, and the one privilege change (00201) re-grants the columns the old code wrote. A VM rollback runs the old image's migrate against a newer schema. Goose finds nothing to apply, and the old release starts.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>Nothing used to bound how long a migration waited for a lock, so an <code>ALTER TABLE</code> queued behind a long transaction blocked every query on that table while the old pods were live, and with no session locker two <code>migrate</code> runs at once raced. <x-ref path="engine/db/db.go" symbol="func migrate("><code>migrate</code></x-ref> now sets <code>lock_timeout</code> on every migration connection (10 seconds, <code>TASKIEM_MIGRATE_LOCK_TIMEOUT</code>, the chart's <code>migrations.lockTimeout</code>), so such a migration fails and the Job retries, and takes goose's Postgres session lock, so concurrent runs take turns (<x-ref path="engine/db/migrate_internal_test.go" symbol="func TestConcurrentMigrationsTakeTurns(">TestConcurrentMigrationsTakeTurns</x-ref>, <x-ref path="engine/db/migrate_internal_test.go" symbol="func TestMigrationsGiveUpOnALock(">TestMigrationsGiveUpOnALock</x-ref>).</p>
+</div>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>Shipped migrations are not edited, so their indexes stay built without <code>CONCURRENTLY</code>, and <code>00252</code>'s on <code>audit_log</code> blocked audited writes while it ran. The lock timeout does not bound a build once it has its lock. New indexes on large tables are to be built <code>CONCURRENTLY</code>, in a migration of their own marked <code>-- +goose NO TRANSACTION</code>; nothing checks this yet.</p>
+</div>
+
+<h2 id="operations--slos">SLOs, alerts and dashboards</h2>
+<x-packages names="slo,telemetry,canary,status,billing"/>
+<p>The objectives are one Go list, <x-ref path="engine/slo/slo.go" symbol="var SLOs = []SLO{"><code>slo.SLOs</code></x-ref>. <code>go generate ./engine/slo</code> turns it into the Prometheus recording rules, the burn-rate alerts, promtool unit tests and the Grafana dashboard. These are committed under <code>deploy/prometheus</code> and <code>deploy/grafana</code>, and copied into the chart (<x-ref path="docs/decisions/0023-slos-and-alerting.md">decision 0023</x-ref>). Tests check that the generated files are current, that every alert has a runbook section in <code>docs/reliability.md</code>, and that every metric a rule or panel reads is one <code>engine/telemetry</code> exports. A further test runs promtool when it is installed. All of them pass at this commit.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>SLO</th><th>Target</th><th>Good events</th></tr></thead>
+  <tbody>
+    <tr><td>API availability</td><td>99.9%</td><td>Requests without a 5xx, leaving out probes, the status page and run streams</td></tr>
+    <tr><td>API latency</td><td>99%</td><td>The same requests, answered within 1 s</td></tr>
+    <tr><td>Webhook ingest</td><td>99.9%</td><td><code>webhook</code> and <code>connector</code> deliveries without a 5xx</td></tr>
+    <tr><td>Run start</td><td>99%</td><td>First worker step claimed within 5 s of the trigger being accepted</td></tr>
+    <tr><td>Step dispatch</td><td>95%</td><td>Tasks on every queue, in every worker pool, claimed within 50 ms of being ready (database clock)</td></tr>
+    <tr><td>Scheduler timeliness</td><td>99%</td><td>Timers and schedules fired within 5 s of being due</td></tr>
+  </tbody>
+</table></div>
+<x-code path="engine/slo/slo.go" start="var Burns = []BurnRule{" caption="the four burn-rate conditions every SLO gets"/>
+<p>Next to the burn rates are six symptom alerts: the canary failing or stopped, the scheduler stalled, any worker pool's queue with a task over 10 minutes old, leases expiring, and a target that cannot be scraped (<x-ref path="engine/slo/slo.go" symbol="var Alerts = []Alert{"><code>slo.Alerts</code></x-ref>). Every metric the rules read exists, with the labels they use.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The 30-day SLI and the error budget left used to go blank for a month after any hour with no events: they were <code>avg_over_time</code> of the hourly ratio, and an empty hour's ratio is <code>0/0</code>, <code>NaN</code>. They are now bad events over all events from the counters across the 30 days (<code>taskiem:slo_errors:ratio_rate30d</code>, evaluated every five minutes), with a promtool test of a quiet hour. Found while writing this page.</p>
+</div>
+
+<h2 id="operations--telemetry">Metrics and traces</h2>
+<p><x-ref path="engine/telemetry/telemetry.go">engine/telemetry</x-ref> registers counters and histograms on the default registry: HTTP requests by chi route pattern, ingest deliveries by kind and status, steps by queue and connector, dispatch delay, run start, scheduler lateness, the scheduler's last tick, leases recovered and released, the canary, limit hits, signups, key-check failures and refused tenant code. No metric has a tenant label. Which tenant hit a limit is recorded in <code>tenant_limit_hits</code> instead. Two collectors query the database at scrape time: <x-ref path="engine/telemetry/telemetry.go" symbol="type QueueCollector struct"><code>QueueCollector</code></x-ref> (queue depth and oldest ready task, and runs held back by tenant or workflow limits) and <code>PoolCollector</code> (the same by worker pool). Every role registers both, so each pod's scrape runs those queries, with no timeout. <x-ref path="engine/telemetry/database.go">database.go</x-ref> adds failover retries and replica lag.</p>
+<p>Tracing is OpenTelemetry over OTLP/HTTP and stays a no-op until <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set (<x-ref path="engine/telemetry/telemetry.go" symbol="func Setup(ctx context.Context, service, version string)"><code>Setup</code></x-ref>). HTTP requests, ingest and worker steps start spans, with <code>tenant_id</code>, <code>run_id</code> and <code>step_id</code> as attributes. Logs are JSON on stderr, with every string and error passed through <code>pii.Redact</code>.</p>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Spec 15.2 lists orchestrator latency and connector error rates by provider. There is no orchestrator latency histogram. Connector outcomes exist only as <code>taskiem_steps_total{target}</code>, with no rule or alert on them. Spec 15.3's "time to detect a provider outage: under 5 minutes" has no SLO or alert behind it.</p>
+</div>
+
+<h2 id="operations--canary">The canary and the status page</h2>
+<p>The canary is a black-box probe (<x-ref path="engine/canary/canary.go" symbol="func (p *Prober) Probe(ctx context.Context) Result {"><code>Prober.Probe</code></x-ref>). Once a minute, it signs a webhook to a canary workflow in an internal tenant through the public hooks URL. It then follows the run through the public API, using a key that can only read runs, and checks that the code step returned <code>n * 2 + 1</code>. <code>taskiem canary setup</code> creates the workflow, the webhook key and a 365-day API key, all through the public API. The scheduler runs it when <code>TASKIEM_CANARY_HOOK_URL</code> is set, and records each result for the status page. <code>taskiem canary run</code> runs it from outside the cluster.</p>
+<p>The <code>api</code> role serves <code>/status</code>, <code>/status.json</code> and an Atom feed. These show components, operator-declared incidents and maintenance, and the canary's last 24 hours. <x-ref path="engine/status/status.go" symbol="func Build(now time.Time, incidents []Incident, ps []probe, o Options) *Page {"><code>status.Build</code></x-ref> marks <code>runs</code> degraded, or <code>webhooks</code> when the probe's webhook was not accepted, once the last three probes have failed and the newest is fresh. A declared incident takes precedence. Declarations go through the CLI, the operator console or an admin API with hashed tokens, into tables that refuse updates and deletes. Each pod rebuilds the page at most every 15 seconds, and a CDN may serve it for 30 seconds and keep serving the last copy when Taskiem is down.</p>
+
+<h2 id="operations--pools">Worker pools and dedicated tenants</h2>
+<p>A worker serves one pool (<code>TASKIEM_WORKER_POOL</code>, default <code>shared</code>) on the queues it lists. The claim function picks only tenants whose pool, from <code>taskiem_tenant_worker_pool</code>, is the worker's own. That function checks the tenant's own routing, then its partner's, then its plan's, then falls back to <code>shared</code>:</p>
+<x-code path="engine/db/migrations/00253_container_shared_pool.sql" start="  mine AS (" lines="4" lang="sql" caption="the claim, in the current Up migration"/>
+<p>The <code>container</code> queue is the exception: its tasks belong to the shared pool whoever owns them, because the only container workers are the chart's <code>containerSteps</code> Deployment. <code>taskiem pools assign POOL --tenant ID</code> (or <code>--plan</code>) refuses a pool unless a worker of that pool has reported in five minutes on each queue the shared pool's live workers serve, <code>container</code> aside (<x-ref path="engine/runtime/pools.go" symbol="func (s *Store) checkLive("><code>checkLive</code></x-ref>). It compares with the shared pool rather than with the queues a tenant's workflows use, because a plan routing has no single tenant and a workflow published later may use a new queue. The chart's <code>workerPools</code> entries each become a Deployment, a metrics Service, and optionally an HPA, a PDB and a NetworkPolicy. An entry may not list the <code>container</code> queue. Within a pool, each tenant's tasks are still capped at its <code>worker_concurrency</code>, or its <code>container_concurrency</code> for container steps.</p>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>A tenant routed to a dedicated pool used to lose its container steps: the claim filtered the <code>container</code> queue by routing too, so the shared container workers skipped the tenant and no other worker could take them. <code>checkLive</code> counted a pool live if it served any queue, so a pool running only <code>connector</code> also stranded <code>sandbox</code> and <code>ai</code>. And no alert noticed, because <code>TaskiemQueueBacklog</code> and the dispatch SLO matched only <code>connector|sandbox</code>. Migration 00253 claims container tasks for the shared pool and reports their depth there; <code>checkLive</code> checks each queue; the backlog alert now reads <code>taskiem_pool_oldest_ready_seconds</code> by pool and queue, and the dispatch SLO counts every queue. All three were found while writing this page.</p>
+</div>
+
+<h2 id="operations--billing">Billing, plans and where limits are enforced</h2>
+<p>With <code>TASKIEM_BILLING=on</code>, every role but <code>public</code> and <code>mail</code> loads <x-ref path="deploy/plans.yaml">deploy/plans.yaml</x-ref> at start and syncs it to <code>plans</code>. Plans removed from the file are retired, never deleted. A tenant's limits are layered: the platform defaults, then its plan's limits, then the operator's overrides, which win. A sub-tenant is held to its partner's. The scheduler's <x-ref path="engine/billing/job.go" symbol="func (s *Service) Run(ctx context.Context) error {">billing job</x-ref> runs every minute. It enrols unsubscribed tenants in a 14-day <code>growth</code> trial and moves subscriptions through renewal, dunning (days 0, 3 and 5), a 7-day grace and degradation, charging saved cards after commit and never twice for an invoice. It also reconciles pending payments, and snapshots usage hourly. A degraded or cancelled subscription refuses new runs while running ones go on.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Limit or feature</th><th>Enforced in</th></tr></thead>
+  <tbody>
+    <tr><td><code>ingest_rate</code>/<code>_burst</code>, <code>ingest_ceiling</code>/<code>_burst</code>, <code>max_payload_bytes</code></td><td><x-ref path="engine/ingest/hooks.go">ingest</x-ref> (per edge process); queued runs are admitted by <x-ref path="engine/runtime/admission.go">admission</x-ref></td></tr>
+    <tr><td><code>max_running_runs</code>, <code>max_queued_runs</code>, <code>runs_per_day</code>/<code>_month</code>, <code>max_steps_per_run</code>, billing refusal, <code>max_retention_days</code></td><td>Starting a run and scheduling steps (<x-ref path="engine/runtime/store.go">store.go</x-ref>, <x-ref path="engine/runtime/limits.go">limits.go</x-ref>)</td></tr>
+    <tr><td><code>worker_concurrency</code>, <code>container_concurrency</code></td><td>The claim function, per queue</td></tr>
+    <tr><td><code>max_workflows</code>, <code>max_secrets</code>, <code>max_connections</code>, <code>max_data_tables</code></td><td>At creation (<x-ref path="api/limits.go" symbol="func (s *Server) checkCount("><code>checkCount</code></x-ref>), and on a downgrade (<x-ref path="engine/billing/change.go">change.go</x-ref>)</td></tr>
+    <tr><td><code>ai_monthly_tokens</code>, <code>container_minutes_monthly</code></td><td>AI building and AI steps; container steps (<x-ref path="engine/runtime/containerstep.go">containerstep.go</x-ref>)</td></tr>
+    <tr><td><code>whatsapp_templates_monthly</code>, <code>sms_monthly</code></td><td>The WhatsApp usage meter and the message queue, wired in <code>serve.go</code></td></tr>
+    <tr><td><code>max_data_table_columns</code>, <code>storefront_*</code>, <code>embed_sites</code></td><td>The data tables, storefront moderation and order forms, and embed-site APIs</td></tr>
+    <tr><td>Features (<code>ai</code>, <code>git</code>, <code>sso</code>, <code>scim</code>, <code>custom_roles</code>, <code>byok</code>, <code>embedded</code>, <code>white_label</code>, <code>receive_money</code>, <code>storefront_pay_on_order</code>)</td><td>Route gates in <x-ref path="api/server.go">api/server.go</x-ref> and <x-ref path="api/billing.go">api/billing.go</x-ref>, and checks at the point of use</td></tr>
+    <tr><td><code>partner.subtenant_runs_per_day</code>/<code>_month</code></td><td>Run starts, when the operator set none on the partner</td></tr>
+    <tr><td><code>partner.max_subtenants</code></td><td>Only a downgrade below the current count is refused</td></tr>
+  </tbody>
+</table></div>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The Business plan declares <x-ref path="deploy/plans.yaml" symbol="max_subtenants: 50"><code>max_subtenants: 50</code></x-ref>, but creating a sub-tenant used to check only <code>partners.max_subtenants</code>, which defaults to 0, meaning no cap, so a Business partner could create any number. <x-ref path="engine/db/migrations/00255_subtenant_plan_cap.sql" symbol="IF v_max = 0 THEN">00255</x-ref> falls back to the partner's plan's cap when the operator set none (<x-ref path="engine/db/subtenants_test.go" symbol="func TestSubtenantCapFallsBackToThePlan(">TestSubtenantCapFallsBackToThePlan</x-ref>). <code>GET /v1/partner</code> reports the same cap.</p>
+</div>
+<div class="callout risk"><span class="callout-label">Risk</span>
+  <p>The active but unlisted Business plan costs ₦250,000 a month, more than Enterprise at ₦180,000, which has more features. That is a pricing question for the founder.</p>
+</div>
+<div class="callout drift"><span class="callout-label">Spec and code differ</span>
+  <p>Spec 16.2 says excess runs "<x-ref path="docs/spec/architecture.md" symbol="Excess runs queue, they are never rejected.">queue, they are never rejected</x-ref>". The code rejects them in four cases: past <code>max_queued_runs</code> (429 <code>backlog_full</code>), beyond optional run quotas, above the ingest ceiling, and while billing is degraded. Throughput is "a token bucket per tenant in the task dispatcher" in steps per second. The code has a token bucket for run admission, and a cap on concurrent tasks per queue. The per-tier "environments" limit in spec 16.1 is not a limit at all.</p>
+</div>
+
+<h2 id="operations--backups">Backups and restore</h2>
+<p>The database is the provider's. Both the VM kit and the cloud guide assume a managed Postgres with point-in-time recovery, and <x-ref path="docs/cloud.md">cloud.md</x-ref> sets out a monthly restore drill that also checks audit anchors and that a secret still decrypts. On the VM, <x-ref path="deploy/vm/taskiem-vps" symbol="cmd_backup() {"><code>taskiem-vps backup</code></x-ref> runs nightly at 02:30 Lagos time. It stops OpenBao for a moment, copies its Raft storage, and backs that copy up with restic, together with the archive and anchor volume and the kit's env files. It leaves out the unseal key, which is only on the offline recovery sheet. It keeps 14 daily, 8 weekly and 12 monthly snapshots. <x-ref path="deploy/vm/taskiem-vps" symbol="cmd_restore() {"><code>restore</code></x-ref> rebuilds a new server from the newest snapshot and the unseal key. <x-ref path="deploy/vm/taskiem-vps" symbol="run_checks() {"><code>check</code></x-ref> runs every 5 minutes. It alerts by email or webhook when a backup is over 36 hours old, when the recovery sheet is still on the server, and on health, OpenBao seal, token renewal, disk and certificate problems. On Kubernetes, the scheduler's PVC (archives and anchors) is kept when the release is deleted, and OpenBao is the operator's own.</p>
+<div class="callout note"><span class="callout-label">Accepted</span>
+  <p>On the VM, OpenBao's static unseal key sits in <code>openbao-unseal.env</code> on the same disk as the storage it unseals (decision 0032's amendment). A copy of the disk opens every tenant's secrets. Backups leave the key out, so the off-site copy is safe.</p>
+</div>
+
+<h2 id="operations--runbooks">Runbooks</h2>
+<p>The alert runbooks are in <x-ref path="docs/reliability.md">reliability.md</x-ref>, one section per alert, which a test enforces. Three procedures are in <x-ref path="docs/runbooks/">docs/runbooks/</x-ref>: deploying staging on one VM, Taskiem's own iswallet client, and a scan for unsafe writes before a release. Each command and variable in them was checked against the code:</p>
+<ul>
+  <li><strong>staging.md.</strong> The installer's questions, the env file paths, <code>TASKIEM_SMS_TERMII_*</code>, <code>TASKIEM_PUBLIC_ADDRESSES</code>, <code>ANTHROPIC_API_KEY</code>, <code>TASKIEM_AI_RETENTION</code>, <code>_STEP_MODELS</code> and <code>_MODERATION_MODEL</code>, <code>taskiem operators add EMAIL --name</code>, the 15-minute update timer, and the warning that re-running setup resets <code>TASKIEM_ALLOW_SIGNUP</code> all match. So do the staging Postgres file's user and database (<code>taskiem_owner</code>, <code>taskiem_staging</code>).</li>
+  <li><strong>iswallet-platform.md.</strong> The four <code>TASKIEM_ISWALLET_*</code> variables, <code>TASKIEM_ISWALLET_PAYOUT_FEE_KOBO</code>, <code>taskiem iswallet subscribe|status|unsubscribe -mode</code>, and the 404 before a secret is set all match.</li>
+  <li><strong>write-safety-scan.md.</strong> Its queries use real columns (<code>workflow_versions.state</code>, <code>definition</code>, <code>tenant_id</code>).</li>
+  <li><strong>reliability.md.</strong> The canary's setup output, <code>taskiem canary probe</code>, <code>taskiem runs tail</code>, the metric names in every query, and the shutdown sequence all match. So do the two tests it names, <code>TestShutdownFlipsReadinessFirst</code> and <code>TestWorkerDrainsThenReleasesLeases</code>.</li>
+</ul>
+<div class="callout"><span class="callout-label">Resolved</span>
+  <p>The lease-expiry runbook used to say to "lower <code>TASKIEM_WORKER_QUEUES</code> concurrency", which no setting does: that variable names queues, and concurrency is fixed in <x-ref path="engine/runtime/worker.go" symbol="w.Concurrency = 16">the worker</x-ref> (16 per queue, 4 for <code>sandbox</code> and <code>container</code>). The runbook now states those numbers, says to size memory for them or serve fewer queues per pod, and a test holds it to the worker's defaults. Found while writing this page.</p>
+</div>

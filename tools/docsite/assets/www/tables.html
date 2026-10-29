@@ -1,27 +1,47 @@
 {{define "content"}}
-<div class="legacy">
-<section class="page-head">
-  <h1>Your debtors, stock and staff, kept in Taskiem.</h1>
-  <p class="lead">Most small businesses keep their lists in a notebook or a spreadsheet, if anywhere. A table in Taskiem is a list your workflows can read and write: your debtors with their balances, your stock with reorder levels, your staff with their account numbers.</p>
-</section>
-<section class="tight">
-  {{template "window-tables" .}}
-</section>
-<section class="tight">
-  <div class="cards">
-    <article class="card"><span class="tile">{{template "icon-chat"}}</span><h3>Make one in chat.</h3><p><em>make a debtors table with name, phone and balance</em>. Or let a workflow make the one it needs.</p></article>
-    <article class="card"><span class="tile">{{template "icon-table"}}</span><h3>Bring in your spreadsheet.</h3><p>Upload the CSV. Taskiem matches the columns and asks about any it cannot place.</p></article>
-    <article class="card"><span class="tile">{{template "icon-wa"}}</span><h3>Add and find from WhatsApp.</h3><p><em>add debtors</em> asks you column by column and shows the row before saving. <em>find debtors Chidi</em> answers with the matches.</p></article>
-    <article class="card"><span class="tile">{{template "icon-list"}}</span><h3>Edit in the web app.</h3><p>A grid you can search, edit, import and export.</p></article>
-    <article class="card"><span class="tile">{{template "icon-bolt"}}</span><h3>Your workflows use it.</h3><p>Remind everyone with a balance. Mark a debtor paid when Paystack confirms. Start a workflow the moment a row is added.</p></article>
-    <article class="card"><span class="tile">{{template "icon-door"}}</span><h3>Take it with you.</h3><p>Export everything as a CSV at any time. Your tables are yours.</p></article>
+<section class="page-hero">
+  <div class="wrap split">
+    <div class="head">
+      <p class="eyebrow">Your records</p>
+      <h1>Your debtors, stock and staff, kept in Taskiem.</h1>
+      <p class="lead">Most small businesses keep their lists in a notebook or a spreadsheet, if anywhere. A table in Taskiem is a list your workflows can read and write.</p>
+    </div>
+    <div class="screen" role="img" aria-label="A Debtors table with four customers, their phone numbers and balances.">
+      <div class="bar"><i></i><i></i><i></i><span>Debtors</span></div>
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Balance</th></tr></thead>
+        <tbody>
+          <tr><td>Chidi Okafor</td><td>080 ••• •• 21</td><td class="tabnum"><span class="pill owe">₦12,500</span></td></tr>
+          <tr><td>Amina Bello</td><td>081 ••• •• 07</td><td class="tabnum"><span class="pill owe">₦4,000</span></td></tr>
+          <tr><td>Tunde Adeyemi</td><td>090 ••• •• 63</td><td class="tabnum"><span class="pill">₦0</span></td></tr>
+          <tr><td>Ngozi Eze</td><td>070 ••• •• 48</td><td class="tabnum"><span class="pill owe">₦27,000</span></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
-<section>
-  <h2>Private by default</h2>
-  <p>Phone numbers and emails in a table are personal data: hidden in logs, never shown to the AI, and visible only to the people you have given the permission. Your records live in a database project of your own, which you can also reach with your own tools.</p>
-  <p><a class="more" href="{{.Docs}}guide/tables">The owner's guide to tables {{template "icon-arrow"}}</a> · <a class="more" href="{{.Docs}}data-tables">The full documentation {{template "icon-arrow"}}</a></p>
+<section class="section tight">
+  <div class="wrap grid g3">
+    <article class="card">{{template "i-chat"}}<h3>Make one in chat</h3><p><em>make a debtors table with name, phone and balance</em>. Or let a workflow make the one it needs.</p></article>
+    <article class="card">{{template "i-table"}}<h3>Bring in your spreadsheet</h3><p>Upload the CSV. Taskiem matches the columns and asks about any it can’t place.</p></article>
+    <article class="card pine">{{template "i-chat"}}<h3>Add and find from WhatsApp</h3><p><em>add debtors</em> asks you column by column and shows the row before saving. <em>find debtors Chidi</em> answers with the matches.</p></article>
+    <article class="card">{{template "i-screen"}}<h3>Edit in the web app</h3><p>A grid you can search, edit, import and export.</p></article>
+    <article class="card">{{template "i-spark"}}<h3>Your workflows use it</h3><p>Remind everyone with a balance. Mark a debtor paid when Paystack confirms. Start a workflow the moment a row is added.</p></article>
+    <article class="card">{{template "i-door"}}<h3>Take it with you</h3><p>Export everything as a CSV at any time. Your tables are yours.</p></article>
+  </div>
 </section>
-{{template "banner" .}}
-</div>
+<section class="band section">
+  <div class="wrap split">
+    <div class="stack">
+      <p class="eyebrow">Private by default</p>
+      <h2>Your customers’ details stay private.</h2>
+    </div>
+    <div class="stack">
+      <p class="lead">Phone numbers and emails in a table are personal data: hidden in logs, never shown to the AI, and visible only to the people you have given the permission. Your records live in a database project of your own, which you can also reach with your own tools.</p>
+      <p><a class="more" href="{{.Docs}}guide/tables">The owner’s guide to tables {{template "i-arrow"}}</a></p>
+      <p><a class="more" href="{{.Docs}}data-tables">The full documentation {{template "i-arrow"}}</a></p>
+    </div>
+  </div>
+</section>
+{{template "closing" .}}
 {{end}}

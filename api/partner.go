@@ -170,6 +170,14 @@ func (s *Server) getPartner(w http.ResponseWriter, r *http.Request) {
 			Scan(&maxSubs, &day, &month); err != nil {
 			return err
 		}
+		// No cap of the operator's own: the plan's applies (migration 00255).
+		if maxSubs == 0 && s.Billing != nil && s.Billing.On() {
+			plan, _, err := s.Billing.PlanOf(ctx, tx, p.TenantID)
+			if err != nil {
+				return err
+			}
+			maxSubs = plan.Partner.MaxSubtenants
+		}
 		var subs int
 		var today, thisMonth int64
 		if err := tx.QueryRow(ctx, `SELECT count(*), COALESCE(sum(runs_today), 0)::bigint, COALESCE(sum(runs_month), 0)::bigint FROM taskiem_partner_usage($1)`, p.TenantID).

@@ -1,695 +1,223 @@
 {{define "content"}}
-<div class="flex flex-col w-full">
-<!-- Announcement & Hero Banner -->
-<section class="relative overflow-hidden pt-space-xl pb-space-3xl px-gutter max-w-7xl mx-auto w-full">
-<!-- Atmospheric Ambient Glows -->
-<div class="absolute -top-24 left-1/2 -translate-x-1/2 w-[820px] h-[340px] bg-gradient-to-b from-primary-fixed/30 via-surface-container-high/20 to-transparent blur-3xl pointer-events-none -z-10 rounded-full"></div>
-<div class="flex flex-col items-center text-center max-w-4xl mx-auto space-y-space-md">
-<!-- Institutional Announcement Badge -->
-<div class="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container-high text-on-surface shadow-sm">
-<span class="text-base">🇳🇬</span>
-<span class="font-label-sm text-label-sm text-primary font-bold tracking-tight">Built for Nigerian Commerce</span>
-<span class="w-1 h-1 rounded-full bg-outline"></span>
-<span class="font-label-sm text-label-sm text-secondary font-medium">Bank-Grade Security</span>
-<span class="w-1 h-1 rounded-full bg-outline"></span>
-<span class="font-label-sm text-label-sm text-on-surface-variant">Runs 100% on WhatsApp & Web</span>
-</div>
-<!-- Main Headline -->
-<h1 class="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface tracking-tight mt-space-sm">
-        Tell Taskiem what to do in your own words. <br class="hidden sm:inline"/>
-<span class="text-primary-container">It runs every day without being reminded.</span>
-</h1>
-<!-- Subtitle with Nigerian business vernacular -->
-<p class="font-body-lg text-body-lg text-on-surface-variant max-w-3xl leading-relaxed">
-        Type or send a voice note on WhatsApp: <span class="text-on-surface font-semibold bg-surface-container px-space-xs py-space-2xs rounded-lg">“Every Friday text the customers who owe me”</span> or <span class="text-on-surface font-semibold bg-surface-container px-space-xs py-space-2xs rounded-lg">“Every evening tell me how much I sold”</span>. Taskiem reads back the steps, you say yes, and it connects automatically to Paystack, Moniepoint, OPay, Flutterwave, and Google Sheets.
-      </p>
-<!-- CTA Cluster -->
-<div class="flex flex-wrap items-center justify-center gap-space-md pt-space-md w-full">
-<a class="inline-flex items-center gap-space-sm px-space-lg py-space-md bg-[#25D366] text-[#0a2e1d] font-label-md text-label-md font-bold rounded-xl shadow-md hover:shadow-lg hover:brightness-105 transition-all" href="{{.Start}}" rel="noopener noreferrer" target="_blank">
-<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">chat</span>
-<span>Try Taskiem on WhatsApp (Free 14-day trial)</span>
-</a>
-<button class="inline-flex items-center gap-space-xs px-space-lg py-space-md bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md font-semibold rounded-xl transition-all shadow-sm" onclick="document.getElementById('interactive-demo').scrollIntoView({behavior: 'smooth'})">
-<span class="material-symbols-outlined text-lg">play_circle</span>
-<span>Explore Interactive Demo</span>
-</button>
-<button class="inline-flex items-center gap-space-xs px-space-md py-space-md text-secondary hover:text-on-surface font-label-md text-label-md font-semibold transition-colors" onclick="document.getElementById('sales-modal').classList.remove('hidden')">
-<span>Talk to Enterprise Sales</span>
-<span class="material-symbols-outlined text-sm">arrow_forward</span>
-</button>
-</div>
-<!-- Social Proof Strip -->
-<div class="pt-space-xl flex flex-col items-center gap-space-sm w-full">
-<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider font-semibold">
-          Trusted by 1,400+ Nigerian merchants, micro-lenders, supermarket chains, and logistics companies across Lagos, Abuja, Ibadan, and Port Harcourt
-        </p>
-<div class="flex flex-wrap items-center justify-center gap-space-xl pt-space-xs opacity-75">
-<div class="flex items-center gap-space-xs font-label-md text-label-md font-bold text-on-surface-variant">
-<span class="material-symbols-outlined text-primary text-xl">account_balance</span> Moniepoint POS Fleet
-          </div>
-<div class="flex items-center gap-space-xs font-label-md text-label-md font-bold text-on-surface-variant">
-<span class="material-symbols-outlined text-primary text-xl">credit_card</span> Paystack Merchants
-          </div>
-<div class="flex items-center gap-space-xs font-label-md text-label-md font-bold text-on-surface-variant">
-<span class="material-symbols-outlined text-primary text-xl">account_balance_wallet</span> OPay Agents
-          </div>
-<div class="flex items-center gap-space-xs font-label-md text-label-md font-bold text-on-surface-variant">
-<span class="material-symbols-outlined text-primary text-xl">table_chart</span> Google Sheets Automations
-          </div>
-</div>
-</div>
-</div>
+<section class="band glow hero">
+  <div class="wrap split wide-left">
+    <div class="copy">
+      <p class="eyebrow">Automation for Nigerian businesses</p>
+      <h1 class="display">Run your business from WhatsApp.</h1>
+      <p class="lead">Tell Taskiem what to do in your own words. Remind the customers who owe you. Thank each one who pays. Pay your staff after you approve. It runs every day, whether you remember or not.</p>
+      {{template "cta" .}}
+      <p class="small">{{if .Pricing.TrialDays}}Free for {{.Pricing.TrialDays}} days. {{end}}Flat prices in naira. No charge per run.</p>
+    </div>
+    {{template "phone-debtors" .}}
+  </div>
 </section>
-<!-- Interactive WhatsApp Simulation / Hero Visual Showcase -->
-<section class="relative px-gutter max-w-7xl mx-auto w-full pb-space-3xl" id="interactive-demo">
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-stretch">
-<!-- Left Column: Authentic WhatsApp Conversational Engine Card -->
-<div class="lg:col-span-6 flex flex-col rounded-xl overflow-hidden shadow-xl bg-[#EFEAE2] relative">
-<!-- WhatsApp Header Bar -->
-<div class="bg-[#005E54] text-white px-space-md py-space-sm flex items-center justify-between shadow-sm">
-<div class="flex items-center gap-space-sm">
-<div class="relative">
-<div class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed font-bold font-display-lg text-lg">
-                T
-              </div>
-<span class="absolute bottom-0 right-0 w-3 h-3 bg-[#25D366] rounded-full ring-2 ring-white"></span>
-</div>
-<div class="flex flex-col">
-<div class="flex items-center gap-space-xs">
-<span class="font-headline-sm text-sm text-white font-bold leading-tight">Taskiem Ledger Bot</span>
-<span class="material-symbols-outlined text-white text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
-</div>
-<span class="font-code-sm text-code-sm text-emerald-100">Verified Business • Bank Node 01</span>
-</div>
-</div>
-<div class="flex items-center gap-space-sm text-white/90">
-<span class="material-symbols-outlined text-xl cursor-pointer">videocam</span>
-<span class="material-symbols-outlined text-xl cursor-pointer">call</span>
-<span class="material-symbols-outlined text-xl cursor-pointer">more_vert</span>
-</div>
-</div>
-<!-- Chat Canvas with Subtle Watermark Simulation -->
-<div class="p-space-md flex-1 flex flex-col space-y-space-md justify-between overflow-y-auto">
-<!-- Date Chip -->
-<div class="flex justify-center">
-<span class="bg-surface-container-high/80 text-secondary font-label-sm text-label-sm px-space-sm py-space-2xs rounded-lg uppercase tracking-wider font-semibold">
-              Today • Balogun Wholesale Hub
-            </span>
-</div>
-<!-- Message 1: Merchant Audio Voice Note -->
-<div class="flex justify-end">
-<div class="max-w-[90%] bg-surface-container-lowest rounded-xl rounded-tr-none p-space-sm shadow-md space-y-space-xs">
-<div class="flex items-center gap-space-sm">
-<!-- Play Audio Button -->
-<button class="w-10 h-10 rounded-full bg-[#005E54] hover:bg-primary-container text-white flex items-center justify-center shrink-0 shadow-sm transition-transform active:scale-95" id="voice-play-btn" onclick="toggleVoiceAudio()">
-<span class="material-symbols-outlined text-xl" id="voice-play-icon">play_arrow</span>
-</button>
-<!-- Audio Waveform Visual -->
-<div class="flex-1 flex flex-col justify-center space-y-1">
-<div class="flex items-center gap-[3px] h-6 px-1">
-<span class="w-1 h-3 bg-secondary rounded-full"></span>
-<span class="w-1 h-5 bg-[#005E54] rounded-full animate-pulse"></span>
-<span class="w-1 h-2 bg-secondary rounded-full"></span>
-<span class="w-1 h-6 bg-[#005E54] rounded-full"></span>
-<span class="w-1 h-4 bg-secondary rounded-full"></span>
-<span class="w-1 h-6 bg-[#005E54] rounded-full"></span>
-<span class="w-1 h-3 bg-secondary rounded-full"></span>
-<span class="w-1 h-5 bg-[#005E54] rounded-full animate-pulse"></span>
-<span class="w-1 h-2 bg-secondary rounded-full"></span>
-<span class="w-1 h-6 bg-[#005E54] rounded-full"></span>
-<span class="w-1 h-4 bg-secondary rounded-full"></span>
-<span class="w-1 h-2 bg-secondary rounded-full"></span>
-</div>
-<div class="flex justify-between items-center text-secondary font-code-sm text-[10px] px-1">
-<span id="voice-timer">0:14</span>
-<span class="material-symbols-outlined text-xs">mic</span>
-</div>
-</div>
-</div>
-<div class="bg-surface-container-low px-space-xs py-space-2xs rounded text-on-surface-variant font-body-sm text-body-sm italic border-l-2 border-[#005E54]">
-                “Every Friday at 10am, check debtors in my Sheet, send polite WhatsApp reminder with Paystack link to pay, don't send if balance is zero”
-              </div>
-<div class="flex justify-end items-center gap-1 font-code-sm text-[10px] text-secondary">
-<span>09:41 AM</span>
-<span class="material-symbols-outlined text-[#34B7F1] text-xs font-bold">done_all</span>
-</div>
-</div>
-</div>
-<!-- Message 2: Taskiem Instant Readback Response -->
-<div class="flex justify-start">
-<div class="max-w-[94%] bg-[#D9FDD3] rounded-xl rounded-tl-none p-space-sm shadow-md space-y-space-xs text-on-surface">
-<div class="flex items-center gap-space-xs text-[#005E54] font-headline-sm text-body-sm font-bold">
-<span class="material-symbols-outlined text-base">smart_toy</span>
-<span>Taskiem Readback Dispatch</span>
-</div>
-<p class="font-body-md text-body-md font-medium text-on-surface">
-                Got it, Chief. Here is what I will run every Friday at 10:00 AM:
-              </p>
-<div class="bg-white/80 rounded-lg p-space-xs font-body-sm text-body-sm space-y-1 shadow-sm">
-<div class="flex items-center gap-space-xs">
-<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center font-bold text-xs text-primary font-code-sm">1</span>
-<span>Read Google Sheet <strong>‘Shop Debtors’</strong></span>
-</div>
-<div class="flex items-center gap-space-xs">
-<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center font-bold text-xs text-primary font-code-sm">2</span>
-<span>Filter records where <strong>Balance > ₦0</strong></span>
-</div>
-<div class="flex items-center gap-space-xs">
-<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center font-bold text-xs text-primary font-code-sm">3</span>
-<span>Generate unique <strong>Paystack payment link</strong></span>
-</div>
-<div class="flex items-center gap-space-xs">
-<span class="w-5 h-5 rounded-full bg-primary-fixed flex items-center justify-center font-bold text-xs text-primary font-code-sm">4</span>
-<span>Send personalized WhatsApp message with invoice breakdown</span>
-</div>
-</div>
-<p class="font-headline-sm text-body-sm font-bold text-primary">
-                Should I lock this in?
-              </p>
-<div class="flex justify-end items-center gap-1 font-code-sm text-[10px] text-secondary">
-<span>09:41 AM</span>
-</div>
-</div>
-</div>
-<!-- Message 3: Merchant Confirmation -->
-<div class="flex justify-end">
-<div class="bg-surface-container-lowest rounded-xl rounded-tr-none px-space-md py-space-xs shadow-md">
-<span class="font-body-md text-body-md font-semibold text-on-surface">Yes, go ahead</span>
-<div class="flex justify-end items-center gap-1 font-code-sm text-[10px] text-secondary mt-1">
-<span>09:42 AM</span>
-<span class="material-symbols-outlined text-[#34B7F1] text-xs font-bold">done_all</span>
-</div>
-</div>
-</div>
-<!-- Message 4: System Confirmation Seal -->
-<div class="flex justify-center">
-<div class="bg-surface-container-lowest px-space-md py-space-xs rounded-xl shadow-md flex items-center gap-space-sm">
-<div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center">
-<span class="material-symbols-outlined text-sm font-bold">check</span>
-</div>
-<div class="flex flex-col text-left">
-<span class="font-headline-sm text-body-sm font-bold text-primary">Automation Locked</span>
-<span class="font-code-sm text-code-sm text-secondary">Next run: Friday 10:00 AM • 0 missed runs in 6 months</span>
-</div>
-</div>
-</div>
-</div>
-<!-- Chat Input Footer Dummy -->
-<div class="bg-surface-container-high px-space-sm py-space-xs flex items-center gap-space-sm">
-<span class="material-symbols-outlined text-secondary cursor-pointer">sentiment_satisfied</span>
-<span class="material-symbols-outlined text-secondary cursor-pointer">attach_file</span>
-<div class="flex-1 bg-surface-container-lowest rounded-full px-space-md py-space-xs text-secondary font-body-sm text-body-sm flex items-center justify-between">
-<span>Type or tap mic for Pidgin/English workflow...</span>
-</div>
-<div class="w-10 h-10 rounded-full bg-[#005E54] text-white flex items-center justify-center shadow-sm">
-<span class="material-symbols-outlined text-xl">mic</span>
-</div>
-</div>
-</div>
-<!-- Right Column: Live Execution & Real-Time Business Dashboard -->
-<div class="lg:col-span-6 flex flex-col justify-between space-y-space-md">
-<!-- Live Ledger Metrics Card -->
-<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-md space-y-space-md">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-space-xs">
-<span class="w-2.5 h-2.5 rounded-full bg-[#25D366] animate-pulse"></span>
-<span class="font-label-sm text-label-sm text-primary font-bold uppercase tracking-wider">Live System Telemetry</span>
-</div>
-<span class="font-code-sm text-code-sm text-on-surface-variant bg-surface-container px-space-xs py-space-2xs rounded">Node: LOS-1</span>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
-<div class="bg-surface-container-low p-space-md rounded-xl">
-<span class="font-label-sm text-label-sm text-secondary font-medium">Total Automated Collections (This Month)</span>
-<div class="flex items-baseline gap-space-xs mt-space-2xs">
-<span class="font-currency-lg text-currency-lg text-on-surface font-bold">₦14,850,000</span>
-</div>
-<div class="flex items-center gap-1 mt-space-xs text-on-tertiary-fixed-variant font-label-sm text-label-sm font-semibold">
-<span class="material-symbols-outlined text-sm">trending_up</span>
-<span>+28.4% recovered vs manual chasing</span>
-</div>
-</div>
-<div class="bg-surface-container-low p-space-md rounded-xl">
-<span class="font-label-sm text-label-sm text-secondary font-medium">Active Automated Tasks</span>
-<div class="flex items-baseline gap-space-xs mt-space-2xs">
-<span class="font-currency-lg text-currency-lg text-on-surface font-bold">18 Running</span>
-</div>
-<div class="flex items-center gap-1 mt-space-xs text-primary font-label-sm text-label-sm font-semibold">
-<span class="material-symbols-outlined text-sm">check_circle</span>
-<span>Zero duplicate transactions guaranteed</span>
-</div>
-</div>
-</div>
-<!-- Micro Sparkline SVG Chart for Collections Velocity -->
-<div class="bg-surface-container-low p-space-md rounded-xl space-y-space-xs">
-<div class="flex justify-between items-center">
-<span class="font-label-sm text-label-sm text-on-surface font-semibold">7-Day WhatsApp Collection Throughput</span>
-<span class="font-code-sm text-code-sm text-primary font-bold">99.98% Moniepoint Webhook Ping</span>
-</div>
-<div class="w-full h-16 pt-2">
-<svg class="w-full h-full text-primary" fill="none" preserveaspectratio="none" viewbox="0 0 300 60">
-<path d="M0 45 C 30 50, 45 20, 75 25 C 105 30, 120 10, 150 15 C 180 20, 210 5, 240 8 C 270 12, 285 2, 300 4 L 300 60 L 0 60 Z" fill="currentColor" fill-opacity="0.12"></path>
-<path d="M0 45 C 30 50, 45 20, 75 25 C 105 30, 120 10, 150 15 C 180 20, 210 5, 240 8 C 270 12, 285 2, 300 4" stroke="currentColor" stroke-linecap="round" stroke-width="2.5"></path>
-</svg>
-</div>
-</div>
-</div>
-<!-- Instant Storefront Generator Card Preview -->
-<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-md space-y-space-sm relative overflow-hidden">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-space-xs">
-<span class="material-symbols-outlined text-primary text-xl">storefront</span>
-<span class="font-headline-sm text-headline-sm text-on-surface font-bold">Instant WhatsApp Storefronts</span>
-</div>
-<span class="bg-tertiary-fixed-dim/30 text-primary font-code-sm text-code-sm px-space-xs py-space-2xs rounded-full font-bold">
-              Sub-60s Deployment
-            </span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant">
-            Created from 1 WhatsApp voice note: <em class="text-on-surface">“Make storefront with 5 items and Pay button”</em> → Live instant checkout page synced to inventory ledger.
-          </p>
-<!-- Storefront Mini Interactive Simulator -->
-<div class="bg-surface-container-low p-space-sm rounded-xl space-y-space-xs">
-<div class="flex items-center justify-between text-secondary font-code-sm text-xs">
-<span class="flex items-center gap-1 text-primary font-bold">
-<span class="w-2 h-2 rounded-full bg-primary inline-block"></span>
-                taskiem.store/balogun-fabrics
-              </span>
-<span class="bg-surface-container px-2 py-0.5 rounded text-on-surface">SSL Encrypted</span>
-</div>
-<div class="grid grid-cols-3 gap-space-xs pt-1">
-<div class="bg-surface-container-lowest p-space-xs rounded-lg flex flex-col justify-between">
-<span class="font-label-sm text-label-sm font-semibold truncate text-on-surface">Swiss Voile Lace</span>
-<span class="font-code-sm text-code-sm text-primary font-bold mt-1">₦35,000</span>
-<button class="mt-space-2xs bg-primary text-white text-[10px] font-bold py-1 rounded">Quick Buy</button>
-</div>
-<div class="bg-surface-container-lowest p-space-xs rounded-lg flex flex-col justify-between">
-<span class="font-label-sm text-label-sm font-semibold truncate text-on-surface">Cashmere Brocade</span>
-<span class="font-code-sm text-code-sm text-primary font-bold mt-1">₦48,000</span>
-<button class="mt-space-2xs bg-primary text-white text-[10px] font-bold py-1 rounded">Quick Buy</button>
-</div>
-<div class="bg-surface-container-lowest p-space-xs rounded-lg flex flex-col justify-between">
-<span class="font-label-sm text-label-sm font-semibold truncate text-on-surface">Atiku Cotton VIP</span>
-<span class="font-code-sm text-code-sm text-primary font-bold mt-1">₦22,500</span>
-<button class="mt-space-2xs bg-primary text-white text-[10px] font-bold py-1 rounded">Quick Buy</button>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Core Capabilities Bento Grid -->
-<section class="py-space-3xl px-gutter max-w-7xl mx-auto w-full">
-<div class="flex flex-col md:flex-row md:items-end justify-between mb-space-2xl gap-space-md">
-<div class="max-w-2xl space-y-space-xs">
-<span class="font-label-sm text-label-sm text-primary font-bold uppercase tracking-wider">Engineered for Street & Boardroom</span>
-<h2 class="font-headline-xl text-headline-xl-mobile md:text-headline-xl text-on-surface">
-          Everything your business does by hand, now running autonomously.
-        </h2>
-</div>
-<p class="font-body-md text-body-md text-on-surface-variant max-w-md">
-        No complicated triggers, no coding setups, no broken Zapier zaps. If you know how to chat on WhatsApp, you already know how to run Taskiem.
-      </p>
-</div>
-<!-- 4-Tile High-Impact Bento -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-space-lg">
-<!-- Bento 1: Speaks Plain Nigerian Business -->
-<div class="lg:col-span-7 bg-surface-container-lowest p-space-xl rounded-xl shadow-md flex flex-col justify-between space-y-space-md">
-<div class="space-y-space-xs">
-<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary mb-space-sm">
-<span class="material-symbols-outlined text-2xl">translate</span>
-</div>
-<h3 class="font-headline-md text-headline-md text-on-surface">1. Speaks Plain Nigerian Business</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">
-            Understood in voice notes or plain text. Handles English, Pidgin, market abbreviations, and trade phrases without complex coding or Zapier gymnastics.
-          </p>
-</div>
-<!-- Localized Pidgin & English Lexicon Showcase -->
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm pt-space-sm">
-<div class="bg-surface-container-low p-space-sm rounded-lg space-y-1">
-<div class="flex items-center gap-1 text-primary font-bold font-code-sm text-xs">
-<span class="material-symbols-outlined text-xs">mic</span>
-<span>Voice Note: Market Pidgin</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface italic">
-              “Alert me once Alhaji pay for the 20 bags of rice so boys fit load trailer.”
-            </p>
-<div class="text-[11px] font-code-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded">
-              → Webhook listening on Moniepoint Virtual Acct #38210
-            </div>
-</div>
-<div class="bg-surface-container-low p-space-sm rounded-lg space-y-1">
-<div class="flex items-center gap-1 text-primary font-bold font-code-sm text-xs">
-<span class="material-symbols-outlined text-xs">chat</span>
-<span>Text Note: Standard Commercial</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface italic">
-              “Send weekly sales summary to my accountant's email every Monday at 8am.”
-            </p>
-<div class="text-[11px] font-code-sm text-on-surface-variant bg-surface-container px-2 py-1 rounded">
-              → Reconciles Google Sheet + Dispatches PDF Readout
-            </div>
-</div>
-</div>
-</div>
-<!-- Bento 2: Instant Storefronts -->
-<div class="lg:col-span-5 bg-surface-container-lowest p-space-xl rounded-xl shadow-md flex flex-col justify-between space-y-space-md">
-<div class="space-y-space-xs">
-<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary mb-space-sm">
-<span class="material-symbols-outlined text-2xl">shopping_cart_checkout</span>
-</div>
-<h3 class="font-headline-md text-headline-md text-on-surface">2. Instant Storefronts</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">
-            Send product photos or text descriptions in chat; Taskiem generates a clean, mobile-optimized checkout page with Moniepoint and Paystack payments in under 60 seconds.
-          </p>
-</div>
-<div class="relative overflow-hidden rounded-xl bg-surface-container-low p-space-md flex items-center justify-between">
-<div class="space-y-1">
-<span class="font-code-sm text-code-sm text-primary font-bold">Fast-Track Settlement</span>
-<div class="font-currency-md text-currency-md text-on-surface font-semibold">₦0 Maintenance Fees</div>
-<span class="font-body-sm text-body-sm text-secondary">Funds drop straight into your commercial account</span>
-</div>
-<div class="w-16 h-16 rounded-full bg-primary-fixed flex items-center justify-center text-primary">
-<span class="material-symbols-outlined text-3xl">bolt</span>
-</div>
-</div>
-</div>
-<!-- Bento 3: Automatic Simple Tables -->
-<div class="lg:col-span-5 bg-surface-container-lowest p-space-xl rounded-xl shadow-md flex flex-col justify-between space-y-space-md">
-<div class="space-y-space-xs">
-<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary mb-space-sm">
-<span class="material-symbols-outlined text-2xl">table_chart_view</span>
-</div>
-<h3 class="font-headline-md text-headline-md text-on-surface">3. Automatic Simple Tables</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">
-            Debtors, inventory, daily sales, and staff payroll tracked in effortless cloud tables synced to WhatsApp queries. Ask “Who owes me more than ₦50k?” and receive an instant list.
-          </p>
-</div>
-<!-- Micro Ledger Row Preview -->
-<div class="bg-surface-container-low rounded-lg p-space-xs space-y-1 font-code-sm text-xs">
-<div class="flex justify-between py-1 px-2 font-bold text-secondary">
-<span>Customer / Debtor</span>
-<span>Ledger Status</span>
-<span>Balance</span>
-</div>
-<div class="flex justify-between items-center py-1.5 px-2 bg-surface-container-lowest rounded shadow-sm">
-<span class="font-medium text-on-surface">Emeka Stores Ikeja</span>
-<span class="text-error font-semibold flex items-center gap-0.5">
-<span class="w-1.5 h-1.5 rounded-full bg-error"></span> 4d Overdue
-            </span>
-<span class="font-bold text-on-surface">₦185,000</span>
-</div>
-<div class="flex justify-between items-center py-1.5 px-2 bg-surface-container-lowest rounded shadow-sm">
-<span class="font-medium text-on-surface">Fadekemi Beauty Saloon</span>
-<span class="text-primary font-semibold flex items-center gap-0.5">
-<span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Paid Via Paystack
-            </span>
-<span class="font-bold text-on-surface">₦0.00</span>
-</div>
-</div>
-</div>
-<!-- Bento 4: Guaranteed Zero Duplicates -->
-<div class="lg:col-span-7 bg-surface-container-lowest p-space-xl rounded-xl shadow-md flex flex-col justify-between space-y-space-md">
-<div class="space-y-space-xs">
-<div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary mb-space-sm">
-<span class="material-symbols-outlined text-2xl">lock_clock</span>
-</div>
-<h3 class="font-headline-md text-headline-md text-on-surface">4. Guaranteed Zero Duplicates (Idempotency Engine)</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">
-            Never charges or messages twice, even if telecommunication networks drop, phone batteries die, or bank API timeouts occur. Built on institutional-grade cryptographic locks.
-          </p>
-</div>
-<!-- Visual Idempotency Guard Architecture -->
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm pt-space-xs">
-<div class="p-space-sm rounded-lg bg-surface-container-low text-center space-y-1">
-<span class="material-symbols-outlined text-primary text-xl">network_check</span>
-<div class="font-label-sm text-label-sm font-bold text-on-surface">Telco Flake Shield</div>
-<p class="font-body-sm text-[11px] text-secondary">Handles MTN, Airtel, and 9mobile packet drops without re-firing</p>
-</div>
-<div class="p-space-sm rounded-lg bg-surface-container-low text-center space-y-1">
-<span class="material-symbols-outlined text-primary text-xl">fingerprint</span>
-<div class="font-label-sm text-label-sm font-bold text-on-surface">SHA-256 Webhook Seal</div>
-<p class="font-body-sm text-[11px] text-secondary">Every settlement verification checked against unique hash</p>
-</div>
-<div class="p-space-sm rounded-lg bg-surface-container-low text-center space-y-1">
-<span class="material-symbols-outlined text-primary text-xl">security</span>
-<div class="font-label-sm text-label-sm font-bold text-on-surface">Zero Data Leak</div>
-<p class="font-body-sm text-[11px] text-secondary">Full NDPR compliance with local Lagos storage nodes</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Customer Story / High-Contrast Quote Card -->
-<section class="py-space-2xl px-gutter max-w-7xl mx-auto w-full">
-<div class="bg-primary text-on-primary rounded-xl p-space-xl md:p-space-3xl shadow-xl relative overflow-hidden">
-<!-- Background subtle decorative emblem -->
-<div class="absolute -right-16 -bottom-16 w-80 h-80 rounded-full bg-white/5 pointer-events-none"></div>
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-center relative z-10">
-<!-- Customer Photo Placeholder -->
-<div class="lg:col-span-4 flex flex-col items-center sm:items-start">
-<div class="relative">
-<img class="w-36 h-36 md:w-44 md:h-44 rounded-xl object-cover shadow-lg ring-4 ring-primary-fixed/20" data-alt="Portrait of an authoritative and joyful Nigerian female business owner standing proudly in front of a high-end wholesale textile showroom in Lagos Island, dressed in modern bespoke African business attire, natural warm lighting with high-resolution clarity." src="{{.Base}}img/customer-folashade-adeyemi.jpg"/>
-<span class="absolute -bottom-2 -right-2 bg-[#25D366] text-on-surface px-2 py-0.5 rounded-full font-label-sm text-[11px] font-bold shadow-md flex items-center gap-1">
-<span class="material-symbols-outlined text-xs">verified</span> Balogun Merchant
-            </span>
-</div>
-<div class="mt-space-md text-center sm:text-left">
-<h4 class="font-headline-sm text-headline-sm text-white font-bold">Mrs. Folashade Adeyemi</h4>
-<p class="font-body-sm text-body-sm text-primary-fixed-dim">Managing Director, Adeyemi & Sons Textiles</p>
-<p class="font-code-sm text-code-sm text-white/60 mt-1">Lagos Wholesale District • User for 11 months</p>
-</div>
-</div>
-<!-- Verified Quote -->
-<div class="lg:col-span-8 flex flex-col justify-center space-y-space-md">
-<div class="flex items-center gap-space-xs text-primary-fixed">
-<span class="material-symbols-outlined text-3xl">format_quote</span>
-<span class="font-label-sm text-label-sm uppercase tracking-wider font-bold">Verified Field Case Study</span>
-</div>
-<blockquote class="font-body-lg text-body-lg md:text-headline-sm md:leading-relaxed text-white font-medium">
-            “Before Taskiem, my staff spent 3 hours every night tallying Moniepoint POS slips and updating Google Sheets. Now I just drop a voice note on WhatsApp on my way home from Balogun market, and my entire ledger reconciles automatically.”
-          </blockquote>
-<div class="grid grid-cols-2 sm:grid-cols-3 gap-space-md pt-space-xs text-white/90">
-<div>
-<span class="font-currency-md text-currency-md text-tertiary-fixed font-bold">3.5 hrs</span>
-<p class="font-body-sm text-xs text-white/70">Saved every single night</p>
-</div>
-<div>
-<span class="font-currency-md text-currency-md text-tertiary-fixed font-bold">₦4.2M</span>
-<p class="font-body-sm text-xs text-white/70">Unpaid credit recovered in 60 days</p>
-</div>
-<div class="col-span-2 sm:col-span-1">
-<span class="font-currency-md text-currency-md text-tertiary-fixed font-bold">0 Errors</span>
-<p class="font-body-sm text-xs text-white/70">Eliminated double-entry mistakes</p>
-</div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Interactive Workflow Builder Preview Section -->
-<section class="py-space-2xl px-gutter max-w-7xl mx-auto w-full">
-<div class="bg-surface-container-low rounded-xl p-space-lg md:p-space-xl shadow-sm space-y-space-lg">
-<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
-<div>
-<span class="font-label-sm text-label-sm text-primary font-bold uppercase tracking-wider">Try A Voice Note Scenario</span>
-<h3 class="font-headline-lg text-headline-lg text-on-surface">Click any business prompt to see how Taskiem structures it:</h3>
-</div>
-<span class="font-code-sm text-code-sm text-secondary bg-surface-container px-3 py-1.5 rounded-full">No Credit Card Needed</span>
-</div>
-<!-- Preset Prompt Tabs -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
-<button class="workflow-tab active-tab text-left p-space-md rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-all" id="prompt-btn-0" onclick="switchWorkflow(0)">
-<div class="flex items-center justify-between">
-<span class="font-headline-sm text-body-sm font-bold text-primary">Debt Recovery Alert</span>
-<span class="material-symbols-outlined text-primary text-base">payments</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
-            “Every morning at 9am check who owes for cement and send a WhatsApp bill with Paystack.”
-          </p>
-</button>
-<button class="workflow-tab text-left p-space-md rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-all opacity-75" id="prompt-btn-1" onclick="switchWorkflow(1)">
-<div class="flex items-center justify-between">
-<span class="font-headline-sm text-body-sm font-bold text-on-surface">Daily POS Tally</span>
-<span class="material-symbols-outlined text-secondary text-base">point_of_sale</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
-            “At 8pm pull all Moniepoint transactions and write the total into my Google Sheet.”
-          </p>
-</button>
-<button class="workflow-tab text-left p-space-md rounded-xl bg-surface-container-lowest shadow-sm hover:shadow-md transition-all opacity-75" id="prompt-btn-2" onclick="switchWorkflow(2)">
-<div class="flex items-center justify-between">
-<span class="font-headline-sm text-body-sm font-bold text-on-surface">Stock Reorder Prompt</span>
-<span class="material-symbols-outlined text-secondary text-base">inventory</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
-            “When warehouse carton count drops below 10, WhatsApp my supplier in Kano to prepare restock.”
-          </p>
-</button>
-</div>
-<!-- Active Workflow Execution Result -->
-<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-space-md" id="workflow-display">
-<div class="space-y-1">
-<div class="flex items-center gap-2">
-<span class="w-2.5 h-2.5 rounded-full bg-tertiary-fixed-dim"></span>
-<span class="font-label-md text-label-md font-bold text-on-surface" id="workflow-title">Automation Logic: Debt Recovery Alert</span>
-</div>
-<p class="font-body-sm text-body-sm text-on-surface-variant" id="workflow-desc">
-            Connects Google Sheet [Debtors Master] → Filter [Balance > 0] → Dynamic Paystack Checkout → WhatsApp Template with NDPR-compliant opt-out.
-          </p>
-</div>
-<a class="shrink-0 inline-flex items-center gap-space-xs px-space-md py-space-sm bg-primary text-white rounded-lg font-label-md text-label-md font-semibold hover:bg-primary-container transition-all" href="{{.Start}}" rel="noopener noreferrer" target="_blank">
-<span>Run this in WhatsApp</span>
-<span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-</section>
-<!-- Bottom Conversion Banner -->
-<section class="py-space-3xl px-gutter max-w-7xl mx-auto w-full">
-<div class="bg-surface-container-highest rounded-xl p-space-xl md:p-space-3xl shadow-lg relative overflow-hidden flex flex-col items-center text-center space-y-space-lg">
-<div class="space-y-space-xs max-w-3xl">
-<span class="font-label-sm text-label-sm text-primary font-bold uppercase tracking-wider">Zero Setup Stress • Zero Hardware</span>
-<h2 class="font-headline-xl text-headline-xl-mobile md:text-headline-xl text-on-surface">
-          Run your business like a bank. Get started on WhatsApp in 2 minutes.
-        </h2>
-<p class="font-body-lg text-body-lg text-on-surface-variant">
-          Flat monthly Naira pricing with no fee per run. If your business uses WhatsApp, you are already equipped to automate.
-        </p>
-</div>
-<!-- Trust Badges & Flat Pricing Micro-Pill -->
-<div class="flex flex-wrap items-center justify-center gap-space-md font-code-sm text-code-sm text-on-surface">
-<div class="flex items-center gap-1 bg-surface-container px-space-sm py-space-xs rounded-lg shadow-sm">
-<span class="material-symbols-outlined text-primary text-base">check</span>
-<span>14-Day Full Free Access</span>
-</div>
-<div class="flex items-center gap-1 bg-surface-container px-space-sm py-space-xs rounded-lg shadow-sm">
-<span class="material-symbols-outlined text-primary text-base">check</span>
-<span>Billed Flat in Naira (₦)</span>
-</div>
-<div class="flex items-center gap-1 bg-surface-container px-space-sm py-space-xs rounded-lg shadow-sm">
-<span class="material-symbols-outlined text-primary text-base">check</span>
-<span>No Credit Card to Begin</span>
-</div>
-</div>
-<!-- Main Action Buttons -->
-<div class="flex flex-wrap items-center justify-center gap-space-md pt-space-xs">
-<a class="inline-flex items-center gap-space-sm px-space-xl py-space-md bg-[#25D366] text-[#0a2e1d] font-label-md text-label-md font-bold rounded-xl shadow-md hover:brightness-105 transition-all" href="{{.Start}}" rel="noopener noreferrer" target="_blank">
-<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">chat</span>
-<span>Start Free on WhatsApp Now</span>
-</a>
-<button class="inline-flex items-center gap-space-xs px-space-lg py-space-md bg-surface-container-lowest hover:bg-surface-container text-on-surface font-label-md text-label-md font-semibold rounded-xl shadow-sm transition-all" onclick="document.getElementById('sales-modal').classList.remove('hidden')">
-<span class="material-symbols-outlined text-base">support_agent</span>
-<span>Schedule Enterprise Demo</span>
-</button>
-</div>
-</div>
-</section>
-<!-- Sales Contact Slide-over / Modal (Hidden by Default) -->
-<div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-gutter" id="sales-modal">
-<div class="bg-surface-container-lowest rounded-xl max-w-lg w-full p-space-xl shadow-2xl relative space-y-space-md">
-<button class="absolute top-4 right-4 text-secondary hover:text-on-surface" onclick="document.getElementById('sales-modal').classList.add('hidden')">
-<span class="material-symbols-outlined text-2xl">close</span>
-</button>
-<div class="space-y-1">
-<span class="font-label-sm text-label-sm text-primary font-bold uppercase tracking-wider">Enterprise Inquiries</span>
-<h3 class="font-headline-md text-headline-md text-on-surface">Speak with Taskiem Lagos</h3>
-<p class="font-body-sm text-body-sm text-on-surface-variant">
-          For institutions managing over 500+ daily POS settlements, custom webhooks, or multi-location inventory syncing.
-        </p>
-</div>
-<form class="space-y-space-sm" onsubmit="handleSalesSubmit(event)">
-<div>
-<label class="block font-label-sm text-label-sm text-on-surface font-semibold mb-1">Your Full Name</label>
-<input class="w-full px-space-sm py-space-xs rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. Babatunde Alabi" required="" type="text"/>
-</div>
-<div>
-<label class="block font-label-sm text-label-sm text-on-surface font-semibold mb-1">WhatsApp Phone Number</label>
-<input class="w-full px-space-sm py-space-xs rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm focus:outline-none focus:ring-2 focus:ring-primary" placeholder="+234 803 000 0000" required="" type="tel"/>
-</div>
-<div>
-<label class="block font-label-sm text-label-sm text-on-surface font-semibold mb-1">Company / Branch Count</label>
-<input class="w-full px-space-sm py-space-xs rounded-lg bg-surface-container-low text-on-surface font-body-sm text-body-sm focus:outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. 14 Supermarkets in Lagos & Abuja" type="text"/>
-</div>
-<div class="pt-space-xs">
-<button class="w-full py-space-sm bg-primary text-white font-label-md text-label-md font-bold rounded-lg shadow-sm hover:bg-primary-container transition-all" type="submit">
-            Connect via WhatsApp Sales Rep
-          </button>
-</div>
-</form>
-</div>
-</div>
-<!-- Interactive Logic Script -->
-<script>
-    // Voice note simulation toggle
-    let isPlaying = false;
-    let timerInterval = null;
-    let seconds = 0;
 
-    function toggleVoiceAudio() {
-      const btn = document.getElementById('voice-play-btn');
-      const icon = document.getElementById('voice-play-icon');
-      const timer = document.getElementById('voice-timer');
-      
-      isPlaying = !isPlaying;
-      if (isPlaying) {
-        icon.innerText = 'pause';
-        btn.classList.add('bg-tertiary-container');
-        seconds = 0;
-        timerInterval = setInterval(() => {
-          seconds++;
-          if (seconds > 14) {
-            toggleVoiceAudio();
-            return;
-          }
-          timer.innerText = '0:' + (seconds < 10 ? '0' : '') + seconds;
-        }, 1000);
-      } else {
-        icon.innerText = 'play_arrow';
-        btn.classList.remove('bg-tertiary-container');
-        clearInterval(timerInterval);
-        timer.innerText = '0:14';
-      }
-    }
+<section class="section">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Sound familiar?</p>
+      <h2>A business owner’s day goes on chasing, checking and paying, by hand.</h2>
+    </div>
+    <div class="grid g4">
+      <article class="card">{{template "i-chat"}}<h3>Chasing debtors</h3><p>One WhatsApp message at a time, from memory, every week.</p></article>
+      <article class="card">{{template "i-eye"}}<h3>Checking transfers</h3><p>Did it land? Was it reversed? Goods leave on a screenshot.</p></article>
+      <article class="card">{{template "i-users"}}<h3>Paying people</h3><p>Salaries and suppliers sent one transfer at a time, with no second check.</p></article>
+      <article class="card">{{template "i-book"}}<h3>Keeping records</h3><p>A notebook and three apps that never add up at closing time.</p></article>
+    </div>
+    <p class="lead"><strong>Taskiem does this work for you</strong>, in the chat you already have open, with the payment services you already use.</p>
+  </div>
+</section>
 
-    // Workflow scenarios switcher
-    const workflowData = [
-      {
-        title: "Automation Logic: Debt Recovery Alert",
-        desc: "Connects Google Sheet [Debtors Master] → Filter [Balance > ₦0] → Dynamic Paystack Checkout → WhatsApp Template with NDPR-compliant opt-out."
-      },
-      {
-        title: "Automation Logic: Daily Moniepoint POS Tally",
-        desc: "Pulls terminal batch settlement at 20:00 → Verifies total against Moniepoint Webhook hash → Appends line item to Google Sheet [Q3 Revenue]."
-      },
-      {
-        title: "Automation Logic: Stock Reorder Trigger",
-        desc: "Reads inventory tally daily → Checks if warehouse SKU < 10 → Dispatches official purchase order WhatsApp draft directly to Kano Supplier."
-      }
-    ];
+<section class="band section" id="how">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">How it works</p>
+      <h2>Three steps. Nothing to install.</h2>
+    </div>
+    <div class="grid g3">
+      <article class="card"><p class="num">01</p><h3>Say it</h3><p>Type it, or pick one of our ready-made workflows.</p></article>
+      <article class="card"><p class="num">02</p><h3>Connect once</h3><p>Your Paystack, Moniepoint, OPay or Google Sheet. One screen, one key. Taskiem keeps it locked away.</p></article>
+      <article class="card"><p class="num">03</p><h3>Approve and go</h3><p>Taskiem reads back exactly what it will do and who it will message. Say yes. It starts.</p></article>
+    </div>
+    <p><a class="more" href="{{.Base}}how-it-works">See a full conversation {{template "i-arrow"}}</a></p>
+  </div>
+</section>
 
-    function switchWorkflow(index) {
-      // Toggle button styles
-      for (let i = 0; i < 3; i++) {
-        const btn = document.getElementById('prompt-btn-' + i);
-        if (i === index) {
-          btn.classList.remove('opacity-75');
-          btn.classList.add('shadow-md');
-        } else {
-          btn.classList.add('opacity-75');
-          btn.classList.remove('shadow-md');
-        }
-      }
+<section class="section">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Things Taskiem does for people like you</p>
+      <h2>Pick one. It’s running in minutes.</h2>
+      <p class="lead">A workflow is something Taskiem does for you again and again: on a schedule, or when something happens, like a payment arriving.</p>
+    </div>
+    <div class="grid g3">
+      {{- range $i, $t := .Featured}}
+      <article class="card{{if eq $i 0}} pine{{end}}">
+        <h3>{{$t.Title}}</h3>
+        <p>{{$t.Summary}}</p>
+        {{- if $t.Uses}}<p class="uses">Uses {{join $t.Uses}}</p>{{end}}
+        {{- if $t.SetupURL}}<p><a class="more" href="{{$t.SetupURL}}">Set it up {{template "i-arrow"}}</a></p>{{end}}
+      </article>
+      {{- end}}
+    </div>
+    <p><a class="more" href="{{.Base}}templates">All workflows {{template "i-arrow"}}</a></p>
+  </div>
+</section>
 
-      document.getElementById('workflow-title').innerText = workflowData[index].title;
-      document.getElementById('workflow-desc').innerText = workflowData[index].desc;
-    }
+<section class="section paper">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Wherever you are</p>
+      <h2>WhatsApp isn’t just for alerts. You run the whole thing from it.</h2>
+    </div>
+    <div class="grid g3">
+      <article class="card pine">{{template "i-chat"}}<h3>WhatsApp</h3><p>Set things up, run them, ask for <em>status</em>, and approve payouts with buttons and a PIN.</p></article>
+      <article class="card">{{template "i-send"}}<h3>Telegram</h3><p>The same commands and approvals, if your team lives there.</p></article>
+      <article class="card">{{template "i-keypad"}}<h3>USSD</h3><p>A short-code menu for customers and agents on feature phones.</p></article>
+      <article class="card">{{template "i-screen"}}<h3>The web app</h3><p>Every workflow as plain steps, every run and what it did, your tables and your team. Works on a phone too.</p></article>
+      <article class="card">{{template "i-voice"}}<h3>Voice notes</h3><p>Say it instead of typing it. In beta.</p></article>
+      <article class="card">{{template "i-users"}}<h3>Your whole team</h3><p>Add staff by phone number. Your accountant can see payments; your manager can approve up to a limit you set.</p></article>
+    </div>
+  </div>
+</section>
 
-    function handleSalesSubmit(e) {
-      e.preventDefault();
-      alert('Thank you, Chief! Our enterprise operations node will contact you on WhatsApp in under 5 minutes.');
-      document.getElementById('sales-modal').classList.add('hidden');
-    }
-  </script>
-</div>
+<section class="section">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Paying people</p>
+      <h2>Payroll, suppliers and refunds, from the payments account you already use.</h2>
+    </div>
+    <ol class="flow" aria-label="Payday, step by step">
+      <li><b>Payday arrives</b><span class="small">Taskiem checks the staff list and the balance.</span></li>
+      <li class="key"><b>You approve with a PIN</b><span class="small">From WhatsApp, in one tap.</span></li>
+      <li><b>Each person is paid once</b><span class="small">Never twice, even if the network drops.</span></li>
+      <li><b>The bank confirms</b><span class="small">Returned salaries are caught and reported.</span></li>
+      <li><b>Staff get a text</b><span class="small">You get a summary when it’s done.</span></li>
+    </ol>
+    <div class="grid g2">
+      <div class="stack"><h3>Keep your provider</h3><p>Run payroll works with Paystack, Moniepoint, Flutterwave, iswallet and the other payment services Taskiem connects to. You pick the one you already trust.</p></div>
+      <div class="stack"><h3>Approvals that fit your business</h3><p>Set who approves, up to what amount, and whether a PIN or passkey is needed. Nobody can approve their own request.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section paper">
+  <div class="wrap split">
+    <div class="stack">
+      <p class="eyebrow">Getting paid</p>
+      <h2>Invoices that mark themselves paid.</h2>
+      <p class="lead">Each invoice comes with a <strong>Pay by bank transfer</strong> button that gives your customer an account number for that invoice. When the money lands, Taskiem matches it and marks the invoice paid.</p>
+    </div>
+    <div class="grid">
+      <article class="card">{{template "i-receipt"}}<h3>Invoices with VAT</h3><p>Numbered, sent by WhatsApp, SMS or email, and chased until paid.</p></article>
+      <article class="card">{{template "i-book"}}<h3>A record of every naira</h3><p>Every payment, payout, refund and POS sale is written down once. Nobody can quietly change it.</p></article>
+      <article class="card pine">{{template "i-match"}}<h3>Matched for you</h3><p>Payments are matched to invoices by their reference. Anything unclear comes to you with a suggestion.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Your records and your page</p>
+      <h2>No spreadsheet. No website. No problem.</h2>
+    </div>
+    <div class="grid g3">
+      <article class="card">{{template "i-table"}}<h3>Your records</h3><p>Debtors, stock and staff as tables. Add a row from WhatsApp with <em>add debtors</em>, or bring in the spreadsheet you have.</p><p><a class="more" href="{{.Base}}tables">Your records {{template "i-arrow"}}</a></p></article>
+      <article class="card pine">{{template "i-store"}}<h3>Your page</h3><p>Say <em>make my page</em>. Get your products, a Pay button and a QR card. Orders come to you in chat to accept.</p><p><a class="more" href="{{.Base}}storefront">Your page {{template "i-arrow"}}</a></p></article>
+      <article class="card">{{template "i-form"}}<h3>Forms</h3><p>A form can start a workflow, like a leave request or an application, or ask someone for details halfway through one.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="section paper">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Made for your trade</p>
+      <h2>Ready for schools and shops with POS terminals.</h2>
+    </div>
+    <div class="grid g2">
+      <article class="card">
+        {{template "i-cap"}}<h3>Schools</h3>
+        <ul class="ticks">
+          <li>{{template "i-tick"}}<span>Every student gets their own account number, so a parent’s transfer lands on the right child by itself.</span></li>
+          <li>{{template "i-tick"}}<span>Term invoices, receipts, and a family page with no login.</span></li>
+          <li>{{template "i-tick"}}<span>Gentle fee reminders, payment plans, and a gate list with no amounts.</span></li>
+        </ul>
+      </article>
+      <article class="card pine">
+        {{template "i-pos"}}<h3>POS terminals</h3>
+        <ul class="ticks">
+          <li>{{template "i-tick"}}<span>Every Moniepoint terminal sale, the moment it happens.</span></li>
+          <li>{{template "i-tick"}}<span>An alert when a big sale lands or a payment fails or is reversed.</span></li>
+          <li>{{template "i-tick"}}<span>Takings per terminal and a cash-up every evening.</span></li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="band section">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Money is handled carefully</p>
+      <h2>Built for businesses that handle money.</h2>
+      <p class="lead">Taskiem was designed first for banks and lenders, where a mistake costs real money. Your shop gets the same protection.</p>
+    </div>
+    <div class="grid g3">
+      <article class="card"><h3>Nothing moves without you</h3><p>Payments wait for your yes, with a PIN where you set one.</p></article>
+      <article class="card"><h3>Done once, never twice</h3><p>If the network drops, a payment is never sent twice and a message is never resent.</p></article>
+      <article class="card"><h3>Every action is on record</h3><p>Who approved what, when, and what happened. Show it to your accountant.</p></article>
+    </div>
+    <p><a class="more" href="{{.Base}}security">How Taskiem keeps your money and data safe {{template "i-arrow"}}</a></p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap stack-lg">
+    <div class="head">
+      <p class="eyebrow">Works with what you already use</p>
+      <h2>{{.ConnectorCount}} services, Nigerian ones first.</h2>
+    </div>
+    <ul class="chips">
+      {{- range .FeaturedServices}}
+      <li>{{.}}</li>
+      {{- end}}
+    </ul>
+    <p><a class="more" href="{{.Base}}integrations">Everything Taskiem works with {{template "i-arrow"}}</a></p>
+  </div>
+</section>
+
+{{- if index .Prices "starter"}}
+<section class="section paper">
+  <div class="wrap split">
+    <div class="stack">
+      <p class="eyebrow">Pricing</p>
+      <h2>Flat prices in naira. Never a charge per run.</h2>
+      <p class="lead">VAT is shown separately.{{if .Pricing.TrialDays}} Try it free for {{.Pricing.TrialDays}} days.{{end}}</p>
+      <p><a class="more" href="{{.Base}}pricing">See every plan {{template "i-arrow"}}</a></p>
+    </div>
+    <div class="grid">
+      <div class="card"><p class="small">Starter Trader</p><p class="stat"><span class="fig tabnum">{{index .Prices "starter"}}</span></p><p class="small">a month, for one owner</p></div>
+      <div class="card pine"><p class="small">Growing Business</p><p class="stat"><span class="fig tabnum">{{index .Prices "growth"}}</span></p><p class="small">a month, for a business with staff</p></div>
+    </div>
+  </div>
+</section>
+{{- end}}
+
+<section class="section">
+  <div class="wrap split">
+    <div class="stack">
+      <p class="eyebrow">For fintechs and software companies</p>
+      <h2>Taskiem inside your product, under your brand.</h2>
+      <p class="lead">Lenders, payroll companies and banks embed Taskiem so their customers get approvals, payouts and reminders. Your users never see Taskiem; you keep the relationship.</p>
+      <p><a class="more" href="{{.Base}}partners">For fintechs and partners {{template "i-arrow"}}</a></p>
+    </div>
+    <ul class="chips">
+      <li>Embedded builder</li><li>White-label</li><li>Sub-accounts per customer</li><li>Partner API</li><li>TypeScript SDK</li><li>Single sign-on</li><li>Bring your own key</li><li>Self-hosted</li>
+    </ul>
+  </div>
+</section>
+
+{{template "closing" .}}
 {{end}}

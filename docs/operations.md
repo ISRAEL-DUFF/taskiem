@@ -6,7 +6,7 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 
 | Command | What it does |
 | --- | --- |
-| `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. |
+| `taskiem migrate` | Applies database migrations as the schema owner. Forward-only. Two runs at once take turns (goose's session-level advisory lock; a second run waits up to 5 minutes), and a statement that waits longer than `TASKIEM_MIGRATE_LOCK_TIMEOUT` for a lock fails the run instead of stalling live pods behind it; run it again once the long transaction is gone. |
 | `taskiem bootstrap --tenant NAME --email EMAIL [--name NAME]` | Creates the first tenant, its owner, a Default workspace, and the `dev` and `prod` environments. Password from `TASKIEM_BOOTSTRAP_PASSWORD` (12+ characters). |
 | `taskiem serve [--role ROLE]` | Runs `api`, `edge`, `orchestrator`, `scheduler`, `worker`, `public`, or `all` (default; also `TASKIEM_ROLE`). |
 | `taskiem tenants limits TENANT_ID [--set KEY=VALUE]...` | Shows a tenant's plan limits, usage and recent limit hits; `--set` changes a limit (`default` returns it to the platform default). Audited as `limits.set`. See [plan limits](#plan-limits). |
@@ -34,13 +34,17 @@ One binary runs every role (spec 2.1, 15.4). A small install runs `taskiem serve
 | `scheduler` | Timers, lease recovery, the synthetic canary when configured ([reliability](reliability.md#synthetic-canary)), the orchestrator sweep, cron triggers, admission of queued runs, retention purge, partitions, audit anchoring, alerts, partner webhooks ([embedding](embedding.md#6-partner-webhooks)), and the hourly digest of secret reads into the audit chain ([compliance](compliance.md#secret-use)) | — |
 | `worker` | Steps from `TASKIEM_WORKER_QUEUES` (`connector,sandbox,ai`, where `ai` is [AI steps](ai.md#ai-steps): a list without it leaves them queued until their runs time out; `container` for container steps, on their own pool with `TASKIEM_CONTAINER_*`, see [container steps](container-steps.md#operator-setup)), for the tenants of its worker pool (`TASKIEM_WORKER_POOL`, [cloud](cloud.md#dedicated-worker-pools)); drains in-flight steps for up to `TASKIEM_WORKER_DRAIN` (30 s) on shutdown, then releases what it still holds | — |
 
-Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`) and a readiness check (`/readyz`, 503 while shutting down) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. On SIGTERM readiness flips first and the process keeps serving for `TASKIEM_SHUTDOWN_DELAY` before it stops ([graceful shutdown](reliability.md#graceful-shutdown)). Running several schedulers or orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated.
+Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`) and a readiness check (`/readyz`, 503 while shutting down) on `TASKIEM_METRICS_LISTEN` (`:9090`), so roles without the API can be probed too. On SIGTERM readiness flips first and the process keeps serving for `TASKIEM_SHUTDOWN_DELAY` before it stops ([graceful shutdown](reliability.md#graceful-shutdown)). Running several orchestrators is safe: every claim uses `SKIP LOCKED` and every firing is deduplicated. The same holds for the scheduler's database work, but not for its files: each scheduler archives runs and writes audit anchors to its own local directory, so run one, or several only with the S3 archive (`TASKIEM_ARCHIVE_S3_BUCKET`) and no shared local archive ([Kubernetes](kubernetes.md#storage)).
 
 ## Configuration
 
+Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in any case; unset or empty is the default. Any other value, a number that is not a whole number above 0 (such as `TASKIEM_DATABASE_POOL`), or a `TASKIEM_ANCHOR_KEY` that is not a valid key stops the process at start with an error naming the variable, instead of falling back to the default.
+
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). |
+| `TASKIEM_DATABASE_URL` | — | Required. For a highly available Postgres, every host with `target_session_attrs=read-write` ([cloud](cloud.md#connection-strings)). For `taskiem serve`, a login that is a member of `taskiem_app` and owns nothing; for `taskiem migrate`, the schema owner ([database roles](#database-roles)). |
+| `TASKIEM_MIGRATE_LOCK_TIMEOUT` | `10s` | `taskiem migrate` only: how long a statement waits for a lock before the migration fails (`0`: for ever). |
+| `TASKIEM_APP_DATABASE_URL` | — | `taskiem migrate` only: the engine's login, which it creates or updates and grants `taskiem_app` after migrating ([database roles](#database-roles)). |
 | `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
 | `TASKIEM_OPS_DATABASE_URL`, `TASKIEM_OPS_DATABASE_ROLE` | `TASKIEM_DATABASE_URL`, `taskiem_ops_admin` | `taskiem operators` only: its own login (a member of `taskiem_ops_admin`, which the server's login is not) and the role it sets ([operator console](operator-console.md#accounts)) |
 | `TASKIEM_PUBLIC_DATABASE_URL`, `TASKIEM_PUBLIC_DATABASE_ROLE`, `TASKIEM_PUBLIC_DATABASE_POOL` | `TASKIEM_DATABASE_URL`, `taskiem_public`, `5` | The [public host](public-host.md)'s own login (a member of `taskiem_public` only), the role it sets, and its pool's size |
@@ -60,7 +64,7 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | `TASKIEM_DATABASE_RETRY_WINDOW` | `30s` | How long a worker keeps a step's outcome through a database failover before giving up to lease expiry ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `TASKIEM_WORKER_POOL` | `shared` | The worker pool this worker serves ([cloud](cloud.md#dedicated-worker-pools)) |
 | `TASKIEM_DATABASE_ROLE` | `taskiem_app` | Role set on every connection (`SET ROLE`); row-level security applies to it. Empty disables. |
-| `TASKIEM_DATABASE_POOL` | `20` | Connections per process. |
+| `TASKIEM_DATABASE_POOL` | `20` | Connections per process. A value that is not a whole number above 0 stops the process. |
 | `TASKIEM_KMS` | `local` | `openbao` in production: transit key `TASKIEM_KMS_KEY` (`taskiem`) at `TASKIEM_OPENBAO_ADDR` with `TASKIEM_OPENBAO_TOKEN`. `local` takes a 32-byte base64 `TASKIEM_LOCAL_KMS_KEY` and is for development: with an `https://` `TASKIEM_PUBLIC_URL` it is refused at start unless `TASKIEM_ALLOW_LOCAL_KMS=true`. |
 | `TASKIEM_ARCHIVE_S3_BUCKET` | — | The S3-compatible bucket runs past retention are archived to before purging: one object per run, `<prefix><tenant>/<run>.jsonl.gz` (gzipped JSON lines, one event each). Use it in production and whenever more than one scheduler runs. Set, it wins over `TASKIEM_ARCHIVE_DIR` |
 | `TASKIEM_ARCHIVE_S3_ENDPOINT` | `https://s3.<region>.amazonaws.com` | The service's URL: AWS's regional endpoint, or a self-hosted one such as `http://seaweedfs:8333` |
@@ -70,7 +74,7 @@ Every role serves Prometheus metrics (`/metrics`), a liveness check (`/healthz`)
 | `TASKIEM_ARCHIVE_S3_PATH_STYLE` | `false` | `true` addresses the bucket in the path (`endpoint/bucket/key`), as SeaweedFS and MinIO expect. AWS buckets use the default |
 | `TASKIEM_ARCHIVE_S3_SSE`, `TASKIEM_ARCHIVE_S3_KMS_KEY_ID` | — | Server-side encryption of each archive: `AES256`, or `aws:kms` with the key's id (or the bucket's default key). Personal data inside is already sealed per data subject; this encrypts the rest at rest |
 | `TASKIEM_ARCHIVE_DIR` | — | Single-node installs only: a mounted directory runs past retention are archived to, in the same layout as the bucket. With neither this nor a bucket, nothing is purged |
-| `TASKIEM_ANCHOR_KEY` | — | Ed25519 seed (32 bytes, base64: `openssl rand -base64 32`) that signs the daily audit-chain anchors. Keep it like a KMS key; its public half is served at `GET /v1/audit/anchors`. Unset: no anchoring. |
+| `TASKIEM_ANCHOR_KEY` | — | Ed25519 seed (32 bytes, base64: `openssl rand -base64 32`) that signs the daily audit-chain anchors. Keep it like a KMS key; its public half is served at `GET /v1/audit/anchors`. Unset: no anchoring. A value that is not such a key stops the process at start. |
 | `TASKIEM_ANCHOR_DIR` | — | Where the scheduler role appends each tenant's anchors (`<tenant>.jsonl`). Point it at write-once storage (an object-lock bucket, an append-only volume): anchors are only worth as much as their copy outside the database. |
 | `TASKIEM_SMTP_URL` | — | Mail server for alert emails and password-reset links: `smtp://user:pass@host:587` (STARTTLS, required when a password is given) or `smtps://user:pass@host:465`. Without it, email alert deliveries fail with a reason ([alerts](alerts.md)), and "Forgot password?" sends nothing (it still answers, and logs a warning; [passwords](governance.md#passwords)) |
 | `TASKIEM_ALERT_FROM` | — | Sender address of alert and password emails; required with `TASKIEM_SMTP_URL` |
@@ -145,7 +149,7 @@ CREATE ROLE taskiem LOGIN PASSWORD '...';
 GRANT taskiem_app TO taskiem;
 ```
 
-Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`.
+Run `taskiem migrate` as the schema owner, and `taskiem serve` as `taskiem`. Or let `taskiem migrate` do it: with `TASKIEM_APP_DATABASE_URL` set to the engine's URL, it creates that login after migrating (or sets its password), and grants it `taskiem_app`. It refuses the owner's own login, a superuser, a login that owns tables, and Taskiem's own role names. The owner needs `CREATEROLE`. The Helm chart's migration Job always does this ([Kubernetes](kubernetes.md#database-logins)).
 
 ## Webhooks
 
@@ -232,7 +236,7 @@ High availability Postgres (synchronous standby, failover, point-in-time recover
 
 ## Docker Compose
 
-`deploy/docker-compose.yml` runs Postgres, OpenBao (dev mode), and Taskiem with every role; see the comments at its top. OpenBao dev mode keeps keys in memory: restarting it loses every encrypted secret. Use a persistent, unsealed OpenBao in any shared environment.
+`deploy/docker-compose.yml` runs Postgres, OpenBao (dev mode), and Taskiem with every role; see the comments at its top. Only the web app (8080) is published on every interface; Postgres (5432, password `postgres`) and metrics (9090) are published on `127.0.0.1`, because Docker's published ports bypass a host firewall such as ufw. Taskiem gets 45 seconds to stop (`stop_grace_period`), longer than workers' 30-second drain. OpenBao dev mode keeps keys in memory: restarting it loses every encrypted secret. Use a persistent, unsealed OpenBao in any shared environment.
 
 For staging or a first production environment on one VM, use `deploy/vm` instead: one command installs it, and the server upgrades, rolls back, backs up and watches itself (persistent auto-unsealed OpenBao, HTTPS through Caddy, an external Postgres, container steps off) ([one VM](vm.md), [decision 0032](decisions/0032-deployment-target.md)).
 

@@ -47,7 +47,7 @@
       },
       "targets": [
         {
-          "expr": "1 - taskiem:slo_errors:ratio_avg30d{slo=\"api_availability\"}",
+          "expr": "1 - taskiem:slo_errors:ratio_rate30d{slo=\"api_availability\"}",
           "refId": "A"
         }
       ],
@@ -190,7 +190,7 @@
       },
       "targets": [
         {
-          "expr": "1 - taskiem:slo_errors:ratio_avg30d{slo=\"api_latency\"}",
+          "expr": "1 - taskiem:slo_errors:ratio_rate30d{slo=\"api_latency\"}",
           "refId": "A"
         }
       ],
@@ -333,7 +333,7 @@
       },
       "targets": [
         {
-          "expr": "1 - taskiem:slo_errors:ratio_avg30d{slo=\"webhook_ingest\"}",
+          "expr": "1 - taskiem:slo_errors:ratio_rate30d{slo=\"webhook_ingest\"}",
           "refId": "A"
         }
       ],
@@ -476,7 +476,7 @@
       },
       "targets": [
         {
-          "expr": "1 - taskiem:slo_errors:ratio_avg30d{slo=\"run_start\"}",
+          "expr": "1 - taskiem:slo_errors:ratio_rate30d{slo=\"run_start\"}",
           "refId": "A"
         }
       ],
@@ -595,7 +595,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Share of connector and sandbox steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms).",
+      "description": "Share of steps, on every queue and in every worker pool, claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms).",
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit"
@@ -619,7 +619,7 @@
       },
       "targets": [
         {
-          "expr": "1 - taskiem:slo_errors:ratio_avg30d{slo=\"step_dispatch\"}",
+          "expr": "1 - taskiem:slo_errors:ratio_rate30d{slo=\"step_dispatch\"}",
           "refId": "A"
         }
       ],
@@ -762,7 +762,7 @@
       },
       "targets": [
         {
-          "expr": "1 - taskiem:slo_errors:ratio_avg30d{slo=\"scheduler_timeliness\"}",
+          "expr": "1 - taskiem:slo_errors:ratio_rate30d{slo=\"scheduler_timeliness\"}",
           "refId": "A"
         }
       ],
@@ -944,7 +944,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Age of the oldest task waiting in each queue.",
+      "description": "Age of the oldest task waiting in each worker pool and queue.",
       "fieldConfig": {
         "defaults": {
           "unit": "s"
@@ -960,8 +960,8 @@
       "id": 28,
       "targets": [
         {
-          "expr": "max by (queue) (taskiem_queue_oldest_ready_seconds)",
-          "legendFormat": "{{queue}}",
+          "expr": "max by (pool, queue) (taskiem_pool_oldest_ready_seconds)",
+          "legendFormat": "{{pool}}/{{queue}}",
           "refId": "A"
         }
       ],

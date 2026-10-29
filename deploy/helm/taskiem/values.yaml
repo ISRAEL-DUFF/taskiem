@@ -16,7 +16,10 @@ mode: split
 publicURL: ""
 
 # A Secret you create (kubectl create secret generic ...) whose keys are
-# environment variables: TASKIEM_DATABASE_URL is required; also, as you use
+# environment variables, given to every pod: TASKIEM_DATABASE_URL is
+# required, as the pods' own login, never the schema owner (the migrate Job
+# makes it a member of taskiem_app; docs/kubernetes.md#database-logins);
+# also, as you use
 # them, TASKIEM_LOCAL_KMS_KEY or TASKIEM_OPENBAO_TOKEN, TASKIEM_ANCHOR_KEY,
 # TASKIEM_SMTP_URL, for the platform WhatsApp number TASKIEM_WHATSAPP_*
 # (docs/whatsapp.md), and for the Telegram bot TASKIEM_TELEGRAM_* and, without
@@ -70,8 +73,11 @@ roles:
     resources:
       requests: { cpu: 250m, memory: 256Mi }
       limits: { memory: 512Mi }
-  # Schedules, timers, retention archiving, audit anchoring, alerts. Several
-  # replicas are safe (claims use SKIP LOCKED); one is usually enough.
+  # Schedules, timers, retention archiving, audit anchoring, alerts. One is
+  # enough. Its claims are safe to run twice (SKIP LOCKED), but a second
+  # replica needs the S3 archive (config.TASKIEM_ARCHIVE_S3_BUCKET) and
+  # storage.enabled: false, which turns audit anchoring off; the chart
+  # refuses anything else (docs/kubernetes.md#storage).
   scheduler:
     replicas: 1
     databasePool: 10
@@ -139,6 +145,15 @@ storage:
 migrations:
   # Runs `taskiem migrate` before every install and upgrade.
   enabled: true
+  # A second Secret, read only by the migrate Job, whose
+  # TASKIEM_DATABASE_URL is the schema owner's login (with CREATEROLE).
+  # The Job also signs the pods' login (existingSecret's
+  # TASKIEM_DATABASE_URL) up as a member of taskiem_app, and refuses the
+  # owner's (docs/kubernetes.md#database-logins).
+  existingSecret: taskiem-migrate
+  # How long a migration statement waits for a lock before the Job fails
+  # and retries, rather than stalling live pods' queries behind it.
+  lockTimeout: 10s
   resources:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { memory: 256Mi }

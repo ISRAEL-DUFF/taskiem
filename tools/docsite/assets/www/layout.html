@@ -2,20 +2,94 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{.Page.Title}}</title>
 {{- if .Page.Description}}
 <meta name="description" content="{{.Page.Description}}">
+<meta property="og:description" content="{{.Page.Description}}">
 {{- end}}
+<meta property="og:title" content="{{.Page.Title}}">
+<meta property="og:image" content="{{.Base}}img/og.png">
+<meta name="theme-color" content="#0d3b2e">
+<link rel="icon" href="{{.Base}}img/mark-small.svg" type="image/svg+xml">
 <link rel="preload" href="{{.Base}}fonts/plus-jakarta-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="{{.Base}}fonts/material-symbols-outlined.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{.Base}}www.css">
 </head>
-<body class="bg-surface font-body-md text-body-md text-on-surface antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
-<header class="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(13,28,47,0.05)]"><div class="h-20 max-w-7xl mx-auto px-gutter flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-lg"><a class="flex items-center gap-space-sm group" data-path="product-and-whatsapp" href="{{.Base}}"><img alt="Taskiem Brand Logo" class="h-8 w-auto object-contain" src="{{.Base}}img/logo.png"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-primary tracking-tight leading-none group-hover:opacity-90 transition-opacity">Taskiem</span><span class="font-code-sm text-code-sm text-on-surface-variant uppercase tracking-wider mt-space-2xs">Financial Ledger OS</span></div></a><nav class="hidden xl:flex items-center gap-space-xs" data-active-classes="bg-surface-container-high text-on-surface font-semibold rounded-lg"><a class="px-space-sm py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors{{if eq $.Page.Name "index"}} bg-surface-container-high text-on-surface font-semibold{{end}}" data-path="product-and-whatsapp" href="{{.Base}}">Product & WhatsApp</a><a class="px-space-sm py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors{{if eq $.Page.Name "security"}} bg-surface-container-high text-on-surface font-semibold{{end}}" data-path="security-and-bank-grade" href="{{.Base}}security">Security & Bank-Grade</a><a class="px-space-sm py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors{{if eq $.Page.Name "integrations"}} bg-surface-container-high text-on-surface font-semibold{{end}}" data-path="integrations" href="{{.Base}}integrations">Integrations</a><a class="px-space-sm py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors{{if eq $.Page.Name "pricing"}} bg-surface-container-high text-on-surface font-semibold{{end}}" data-path="pricing-in-naira" href="{{.Base}}pricing">Pricing in ₦</a><a class="px-space-sm py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors{{if eq $.Page.Name "partners"}} bg-surface-container-high text-on-surface font-semibold{{end}}" data-path="developers-and-white-label" href="{{.Base}}partners">Developers & White-label</a><a class="px-space-sm py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-lg transition-colors" href="{{.Docs}}">Docs</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden md:flex items-center gap-space-xs px-space-sm py-space-2xs bg-surface-container rounded-full shadow-[0_1px_3px_0_rgba(15,23,42,0.05)]"><span class="material-symbols-outlined text-primary text-base">verified_user</span><span class="font-label-sm text-label-sm text-primary tracking-tight font-semibold">NDPR & Bank-Grade Certified</span></div><a class="inline-flex items-center gap-space-xs px-space-md py-space-xs bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container font-label-md text-label-md font-semibold rounded-lg shadow-sm transition-all" data-path="start-on-whatsapp" href="{{.Start}}"><span class="material-symbols-outlined text-base">forum</span><span>Start on WhatsApp</span></a></div></div></header>
-<main class="w-full pt-20 bg-surface min-h-[calc(100vh-80px)]">
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="logo" href="{{.Base}}" aria-label="Taskiem, home">{{template "mark"}}<img class="word on-light" src="{{.Base}}img/wordmark.svg" alt="" width="111" height="24"><img class="word on-dark" src="{{.Base}}img/wordmark-reversed.svg" alt="" width="111" height="24"></a>
+    <nav class="nav" aria-label="Main">
+      <a href="{{.Base}}how-it-works"{{if eq .Page.Name "how-it-works"}} aria-current="page"{{end}}>How it works</a>
+      <a href="{{.Base}}templates"{{if eq .Page.Name "templates"}} aria-current="page"{{end}}>Templates</a>
+      <a href="{{.Base}}integrations"{{if eq .Page.Name "integrations"}} aria-current="page"{{end}}>Works with</a>
+      <a href="{{.Base}}pricing"{{if eq .Page.Name "pricing"}} aria-current="page"{{end}}>Pricing</a>
+      <a href="{{.Base}}security"{{if eq .Page.Name "security"}} aria-current="page"{{end}}>Trust</a>
+      <a href="{{.Docs}}">Docs</a>
+    </nav>
+    <div class="head-cta">
+      <details class="menu">
+        <summary>Menu</summary>
+        <nav aria-label="Main">
+          <a href="{{.Base}}how-it-works">How it works</a>
+          <a href="{{.Base}}templates">Templates</a>
+          <a href="{{.Base}}integrations">Works with</a>
+          <a href="{{.Base}}pricing">Pricing</a>
+          <a href="{{.Base}}security">Trust</a>
+          <a href="{{.Base}}partners">For fintechs</a>
+          <a href="{{.Docs}}">Docs</a>
+        </nav>
+      </details>
+      <a class="btn sm" href="{{.Start}}">{{if .WhatsApp}}{{template "i-wa"}} <span class="long">Start on WhatsApp</span>{{else if .App}}Start free{{else}}Owner’s guide{{end}}</a>
+    </div>
+  </div>
+</header>
+<main>
 {{template "content" .}}
 </main>
-<footer class="w-full bg-surface-container-low shadow-[0_-1px_6px_rgba(13,28,47,0.03)]"><div class="max-w-7xl mx-auto px-gutter pt-space-3xl pb-space-2xl"><div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-space-xl pb-space-2xl"><div class="col-span-2 md:col-span-3 lg:col-span-2 flex flex-col justify-between pr-space-md"><div class="space-y-space-md"><div class="flex items-center gap-space-sm"><img alt="Taskiem Brand Logo" class="h-8 w-auto object-contain" src="{{.Base}}img/logo.png"/><span class="font-headline-sm text-headline-sm text-primary tracking-tight">Taskiem</span></div><p class="font-body-sm text-body-sm text-on-surface-variant max-w-sm">High-performance financial infrastructure powering conversational automated workflows, instant ledger updates, and bank-grade disbursement verifications across Nigeria.</p></div><div class="mt-space-lg flex flex-col gap-space-xs"><span class="font-code-sm text-code-sm text-secondary uppercase">System Cryptographic Node</span><div class="flex items-center gap-space-xs font-code-sm text-code-sm text-on-surface-variant"><span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim inline-block animate-pulse"></span><span>Lagos IX Node (LOS-1) • 99.99% Uptime</span></div></div></div><div class="flex flex-col space-y-space-sm"><span class="font-label-sm text-label-sm text-on-surface font-bold uppercase tracking-wider">Solutions</span><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li class="hover:text-on-surface transition-colors cursor-pointer">Traders & Retail</li><li class="hover:text-on-surface transition-colors cursor-pointer">Lenders & Recovery</li><li class="hover:text-on-surface transition-colors cursor-pointer">Payroll Operations</li><li class="hover:text-on-surface transition-colors cursor-pointer">Service Businesses</li></ul></div><div class="flex flex-col space-y-space-sm"><span class="font-label-sm text-label-sm text-on-surface font-bold uppercase tracking-wider">Platform</span><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li class="hover:text-on-surface transition-colors cursor-pointer">WhatsApp Engine</li><li class="hover:text-on-surface transition-colors cursor-pointer">Enterprise Web App</li><li class="hover:text-on-surface transition-colors cursor-pointer">Tamper-Evident Audit</li><li class="hover:text-on-surface transition-colors cursor-pointer">White-Label Embed</li><li class="hover:text-on-surface transition-colors cursor-pointer">On-Premise Deployment</li></ul></div><div class="flex flex-col space-y-space-sm"><span class="font-label-sm text-label-sm text-on-surface font-bold uppercase tracking-wider">Integrations</span><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li class="hover:text-on-surface transition-colors cursor-pointer">Paystack</li><li class="hover:text-on-surface transition-colors cursor-pointer">Moniepoint</li><li class="hover:text-on-surface transition-colors cursor-pointer">OPay</li><li class="hover:text-on-surface transition-colors cursor-pointer">Flutterwave</li><li class="hover:text-on-surface transition-colors cursor-pointer">Termii Engine</li><li class="hover:text-on-surface transition-colors cursor-pointer">Google Sheets Sync</li></ul></div><div class="flex flex-col space-y-space-sm"><span class="font-label-sm text-label-sm text-on-surface font-bold uppercase tracking-wider">Security & Legal</span><ul class="space-y-space-xs font-body-sm text-body-sm text-on-surface-variant"><li class="hover:text-on-surface transition-colors cursor-pointer">Zero Data Leak</li><li class="hover:text-on-surface transition-colors cursor-pointer">Bank PIN Authorization</li><li class="hover:text-on-surface transition-colors cursor-pointer">NDPR Compliance</li><li class="hover:text-on-surface transition-colors cursor-pointer">SOC-2 Readout</li><li class="hover:text-on-surface transition-colors cursor-pointer">Security Audits</li></ul></div></div><div class="pt-space-lg flex flex-col md:flex-row items-center justify-between gap-space-md"><div class="flex items-center gap-space-md"><span class="font-body-sm text-body-sm text-on-surface-variant">© 2025 Taskiem Technologies Nigeria Ltd. All rights reserved.</span></div><div class="flex items-center gap-space-lg font-body-sm text-body-sm text-on-surface-variant"><a class="hover:text-on-surface transition-colors" data-path="product-and-whatsapp" href="{{.Base}}about">About</a><a class="hover:text-on-surface transition-colors" data-path="security-and-bank-grade" href="{{.Base}}about">Careers in Lagos</a><a class="hover:text-on-surface transition-colors" data-path="integrations" href="{{.Base}}contact">Contact Support</a><a class="hover:text-on-surface transition-colors" data-path="security-and-bank-grade" href="{{.Docs}}privacy">Privacy Policy</a></div></div></div></footer>
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="cols">
+      <div class="brandcol">
+        <a class="logo" href="{{.Base}}" aria-label="Taskiem, home">{{template "mark-reversed"}}<img class="word" src="{{.Base}}img/wordmark-reversed.svg" alt="" width="111" height="24"></a>
+        <p>Automation Nigerian businesses can trust with their money. Made in Lagos. Prices in naira.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="{{.Base}}how-it-works">How it works</a></li>
+          <li><a href="{{.Base}}templates">Templates</a></li>
+          <li><a href="{{.Base}}integrations">Works with</a></li>
+          <li><a href="{{.Base}}tables">Your records</a></li>
+          <li><a href="{{.Base}}storefront">Your page</a></li>
+          <li><a href="{{.Base}}pricing">Pricing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <ul>
+          <li><a href="{{.Base}}about">About</a></li>
+          <li><a href="{{.Base}}security">Trust</a></li>
+          <li><a href="{{.Base}}partners">For fintechs and partners</a></li>
+          <li><a href="{{.Base}}contact">Contact</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Help</h4>
+        <ul>
+          <li><a href="{{.Docs}}guide/index">Owner’s guide</a></li>
+          <li><a href="{{.Docs}}">Documentation</a></li>
+          {{- if .WhatsApp}}
+          <li><a href="{{.WhatsApp}}">WhatsApp support</a></li>
+          {{- end}}
+        </ul>
+      </div>
+    </div>
+    <div class="base">
+      <span>© 2026 Taskiem</span>
+      <span>Made in Lagos · Prices in naira</span>
+    </div>
+  </div>
+</footer>
 </body>
 </html>

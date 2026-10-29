@@ -11,7 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 )
 
-// What the definer review changed (migration 00253), as each caller meets it.
+// What the definer review changed (migration 00256), as each caller meets it.
 func TestDefinerReview(t *testing.T) {
 	d := dbtest.New(t)
 	partner := d.SeedTenant(t, nil)
