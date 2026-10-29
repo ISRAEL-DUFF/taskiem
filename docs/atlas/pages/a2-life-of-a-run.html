@@ -43,7 +43,7 @@
     </li>
     <li class="stage" data-lit="s3">
       <h3 id="life-of-a-run--claim">The worker wakes and claims the task</h3>
-      <p>A trigger on <code>tasks</code> calls <code>pg_notify('taskiem_tasks', queue)</code>, which wakes idle workers on that queue at once; polling every second is the fallback. <x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) Run(ctx"><code>Worker.Run</code></x-ref> has one claimer feeding a fixed set of executors, and it only claims as many tasks as it has free executors.</p>
+      <p>A trigger on <code>tasks</code> calls <code>pg_notify('taskiem_tasks', queue)</code>, once per statement for each queue with a task due now, which wakes idle workers on that queue at once; polling every second is the fallback. <x-ref path="engine/runtime/worker.go" symbol="func (w *Worker) Run(ctx"><code>Worker.Run</code></x-ref> has one claimer feeding a fixed set of executors, and it only claims as many tasks as it has free executors.</p>
       <p>The claim calls <code>taskiem_claim_tasks</code>, a <code>SECURITY DEFINER</code> function that can see every tenant's tasks but returns only routing columns. It takes ready tasks with <code>FOR UPDATE SKIP LOCKED</code>, sets a 60-second lease, and increments <code>lease_epoch</code>. That epoch is the fencing token for everything the worker writes about this task. A heartbeat extends the lease while the step runs.</p>
     </li>
     <li class="stage" data-lit="s4">

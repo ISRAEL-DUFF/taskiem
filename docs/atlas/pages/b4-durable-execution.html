@@ -76,7 +76,7 @@
 </div>
 
 <h2>The task queue</h2>
-<p>A <span class="evt">StepScheduled</span> of kind <code>task</code> becomes a row in <code>tasks</code> with a queue chosen by step type (<x-ref path="engine/wd/model.go" symbol="func (s *Step) Queue()"><code>Step.Queue</code></x-ref>): <code>sandbox</code> for code, <code>container</code>, <code>ai</code>, and <code>connector</code> for everything else, including <code>http</code>. An insert trigger sends <code>NOTIFY taskiem_tasks</code> with the queue name.</p>
+<p>A <span class="evt">StepScheduled</span> of kind <code>task</code> becomes a row in <code>tasks</code> with a queue chosen by step type (<x-ref path="engine/wd/model.go" symbol="func (s *Step) Queue()"><code>Step.Queue</code></x-ref>): <code>sandbox</code> for code, <code>container</code>, <code>ai</code>, and <code>connector</code> for everything else, including <code>http</code>. An insert trigger sends <code>NOTIFY taskiem_tasks</code> with the queue name, once per statement and queue, and only for tasks due now (<x-ref path="engine/db/migrations/00258_task_notify_per_statement.sql" symbol="CREATE OR REPLACE FUNCTION taskiem_notify_task()">00258</x-ref>). A task waiting on a retry's backoff wakes nobody; workers poll every second and find it once it is due.</p>
 <div class="table-wrap"><table>
   <thead><tr><th>Mechanism</th><th>How it works</th><th>Where</th></tr></thead>
   <tbody>
