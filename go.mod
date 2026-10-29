@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	blitiri.com.ar/go/spf v1.6.0
 	cel.dev/cel-go v0.32.0
-	github.com/anthropics/anthropic-sdk-go v1.78.0
+	github.com/anthropics/anthropic-sdk-go v1.84.0
 	github.com/beevik/etree v1.7.0
 	github.com/emersion/go-msgauth v0.7.0
 	github.com/emersion/go-smtp v0.25.0
