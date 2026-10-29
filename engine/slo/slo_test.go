@@ -82,13 +82,22 @@ var metricRe = regexp.MustCompile(`\btaskiem_[a-z_]+`)
 
 // Every metric the rules and the dashboard read is one the engine exports.
 func TestRulesReadExportedMetrics(t *testing.T) {
-	src, err := os.ReadFile(filepath.Join("..", "telemetry", "telemetry.go"))
+	srcs, err := filepath.Glob(filepath.Join("..", "telemetry", "*.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	exported := map[string]bool{}
-	for _, m := range regexp.MustCompile(`"(taskiem_[a-z_]+)"`).FindAllStringSubmatch(string(src), -1) {
-		exported[m[1]] = true
+	for _, f := range srcs {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range regexp.MustCompile(`"(taskiem_[a-z_]+)"`).FindAllStringSubmatch(string(src), -1) {
+			exported[m[1]] = true
+		}
 	}
 	check := func(where, expr string) {
 		for _, m := range metricRe.FindAllString(expr, -1) {
@@ -176,6 +185,71 @@ func TestBurnRates(t *testing.T) {
 	}
 	if n := strings.Count(string(b), "alert: TaskiemAPIAvailabilityBudgetBurn"); n != len(slo.Burns) {
 		t.Errorf("%d burn-rate rules for API availability", n)
+	}
+}
+
+// Every queue and every worker pool is watched: a queue a dedicated pool
+// does not run (or the container queue) must not wait unseen.
+func TestBacklogAndDispatchCoverEveryQueueAndPool(t *testing.T) {
+	queueMatcher := regexp.MustCompile(`queue\s*=~?`)
+	for _, s := range slo.SLOs {
+		if s.Name != "step_dispatch" {
+			continue
+		}
+		for _, sel := range []string{s.Good, s.Total} {
+			if queueMatcher.MatchString(sel) {
+				t.Errorf("step_dispatch selects some queues only: %s", sel)
+			}
+		}
+	}
+	found := false
+	for _, a := range slo.Alerts {
+		if a.Name != "TaskiemQueueBacklog" {
+			continue
+		}
+		found = true
+		if queueMatcher.MatchString(a.Expr) || !strings.Contains(a.Expr, "by (pool, queue)") || !strings.Contains(a.Expr, "taskiem_pool_oldest_ready_seconds") {
+			t.Errorf("TaskiemQueueBacklog does not cover every pool and queue: %s", a.Expr)
+		}
+	}
+	if !found {
+		t.Error("no TaskiemQueueBacklog")
+	}
+}
+
+// The 30-day SLI and budget are bad events over all events in the period,
+// not an average of hourly ratios: an hour with no events has a NaN ratio,
+// and averaging it in blanks the 30-day figure for a month.
+func TestThirtyDaySLIIsARatioOfCounters(t *testing.T) {
+	month := map[string]string{}
+	budget := map[string]string{}
+	for _, g := range slo.Rules().Groups {
+		for _, r := range g.Rules {
+			if strings.Contains(r.Expr, "_over_time") {
+				t.Errorf("%s%s averages over time: %s", r.Record, r.Alert, r.Expr)
+			}
+			switch r.Record {
+			case slo.Record(slo.Period):
+				month[r.Labels["slo"]] = r.Expr
+			case "taskiem:slo_error_budget_remaining:ratio":
+				budget[r.Labels["slo"]] = r.Expr
+			}
+		}
+	}
+	for _, s := range slo.SLOs {
+		if month[s.Name] != s.ErrorRatio(slo.Period) {
+			t.Errorf("%s: 30-day ratio %q, want the counters over %s", s.Name, month[s.Name], slo.Period)
+		}
+		if !strings.Contains(budget[s.Name], slo.Record(slo.Period)) {
+			t.Errorf("%s: budget %q does not read the 30-day ratio", s.Name, budget[s.Name])
+		}
+	}
+	dash, err := slo.Dashboard()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(dash), "_over_time") {
+		t.Error("the dashboard averages over time")
 	}
 }
 

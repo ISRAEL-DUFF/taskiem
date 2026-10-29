@@ -63,7 +63,7 @@ The milestone 2 iSpend top-up reconciliation draft is now an example workflow (`
 
 ## Suites (build plan, "Testing")
 
-**Determinism.** `decide.Verify` replays a recorded history and checks every block of decide-written events, byte for byte in canonical JSON. It runs on every history the crash and determinism suites produce, and on every simulator test.
+**Determinism.** `decide.Verify` replays a recorded history and checks every block of decide-written events, byte for byte in canonical JSON. It runs on every history the crash and determinism suites produce, on every simulator test, and, when each engine test ends, on every run the test left settled (the `runtimetest` harness's cleanup).
 
 **Crash recovery** (`engine/runtime/suites_test.go`, `TASKIEM_CHAOS_RUNS`). Payment-shaped runs (an idempotent transfer, a reconcilable bank transfer against a provider that ignores keys, a foreach of three transfers) under 8% provider failures before execution, 8% unknown outcomes after execution, 4% worker crashes after intent and after the call, 1% stalls past the lease, and a worker process killed every 300 ms.
 

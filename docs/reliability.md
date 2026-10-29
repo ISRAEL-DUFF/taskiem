@@ -25,7 +25,7 @@ Every objective is over a rolling 30 days. The SLI is good events over all event
 | `api_latency` | 99% | Those requests answered within 1 s | The same requests | `taskiem_http_request_duration_seconds` |
 | `webhook_ingest` | 99.9% | Webhook and connector-event deliveries answered without a 5xx | Deliveries to `/hooks` | `taskiem_ingest_deliveries_total` |
 | `run_start` | 99% | Runs whose first worker step is claimed within 5 s of the trigger being accepted | Runs whose first step runs on a worker | `taskiem_run_start_seconds` |
-| `step_dispatch` | 95% | Connector and sandbox steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms) | Claimed connector and sandbox steps | `taskiem_step_dispatch_delay_seconds` |
+| `step_dispatch` | 95% | Steps claimed within 50 ms of becoming ready (spec 15.3: p95 under 50 ms) | Claimed steps, every queue and worker pool | `taskiem_step_dispatch_delay_seconds` |
 | `scheduler_timeliness` | 99% | Timers and schedules fired within 5 s of being due | Timers and schedules fired | `taskiem_scheduler_lateness_seconds` |
 
 Spec 15.3 sets the first and the dispatch latency; the others are ours. "Zero accepted events lost" (spec 15.3) is a design property (an accepted delivery is a committed row), not a ratio, and is checked by the chaos and load tests, not here.
@@ -52,14 +52,15 @@ Each SLO has one alert name with four conditions (the Google SRE workbook's reco
 
 For the 95% dispatch objective the 1-hour page needs more than 72% of steps to be slow; the 6-hour page catches a sustained 30%.
 
-Recording rules: `taskiem:slo_errors:ratio_rate<window>{slo}` for 5m, 30m, 1h, 2h, 6h, 1d and 3d; `taskiem:slo_target:ratio`; `taskiem:slo_errors:ratio_avg30d` (the average of hourly ratios: quiet hours weigh as much as busy ones); and `taskiem:slo_error_budget_remaining:ratio` (1 is untouched, 0 is spent, below 0 is over).
+Recording rules: `taskiem:slo_errors:ratio_rate<window>{slo}` for 5m, 30m, 1h, 2h, 6h, 1d and 3d; `taskiem:slo_target:ratio`; `taskiem:slo_errors:ratio_rate30d` (bad events over all events in the last 30 days, from the counters: a busy hour weighs more than a quiet one, and an hour with no events changes nothing); and `taskiem:slo_error_budget_remaining:ratio` (1 is untouched, 0 is spent, below 0 is over). The two 30-day rules are evaluated every five minutes. Earlier releases recorded `ratio_avg30d` instead, an average of hourly ratios that one hour with no events (a `NaN` ratio) blanked for a month; a dashboard or alert of your own that reads it should read `ratio_rate30d`.
 
 ### Measuring G4
 
-G4's availability criterion is `api_availability` and `webhook_ingest`, each at or above 99.9% over 60 consecutive days, plus the canary. Take the SLI over each 30-day half from `1 - taskiem:slo_errors:ratio_avg30d`, or for one 60-day figure:
+G4's availability criterion is `api_availability` and `webhook_ingest`, each at or above 99.9% over 60 consecutive days, plus the canary. Take the SLI over each 30-day half from `1 - taskiem:slo_errors:ratio_rate30d`, or for one 60-day figure, from the counters:
 
 ```promql
-1 - avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="api_availability"}[60d])
+1 - sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",code=~"5.."}[60d]))
+  / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[60d]))
 ```
 
 Keep Prometheus retention (or a long-term store) above 60 days. Record any period excluded from the window (declared maintenance) in the status page; maintenance does not pause the measurement unless the decision owner says so beforehand. The owner of this measurement is a needs-people item (P4-R4).
@@ -90,7 +91,7 @@ Planned maintenance spends budget like any outage. During the G4 window a spent 
 | `TaskiemCanaryFailing` | page | 5 canary probes failed in 15 min and none passed | [runbook](#runbook-taskiemcanaryfailing) |
 | `TaskiemCanaryStopped` | ticket | No canary probes for 15 min | [runbook](#runbook-taskiemcanarystopped) |
 | `TaskiemSchedulerStalled` | page | No scheduler tick for 2 min, or no scheduler | [runbook](#runbook-taskiemschedulerstalled) |
-| `TaskiemQueueBacklog` | page | A connector or sandbox task has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
+| `TaskiemQueueBacklog` | page | A task in some worker pool and queue has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
 | `TaskiemLeaseExpiries` | ticket | Over 10 leases expired in 15 min | [runbook](#runbook-taskiemleaseexpiries) |
 | `TaskiemTargetDown` | ticket | A pod's metrics cannot be scraped for 10 min | [runbook](#runbook-taskiemtargetdown) |
 
@@ -353,9 +354,9 @@ No scheduler has finished a tick for 2 minutes. Timers, schedules, lease recover
 
 ### Runbook: TaskiemQueueBacklog
 
-A connector or sandbox task has waited over 10 minutes.
+A ready task has waited over 10 minutes; the alert's `pool` and `queue` labels say where (`taskiem_pool_oldest_ready_seconds`).
 
-1. Workers running for that queue (`TASKIEM_WORKER_QUEUES`)? A queue with no worker never drains.
+1. Workers running for that pool and queue (`TASKIEM_WORKER_POOL`, `TASKIEM_WORKER_QUEUES`; `taskiem pools` lists live ones)? A queue with no worker in that pool never drains. A dedicated pool must run every queue its tenants use except `container`, which always runs in the shared container pool; the `ai` queue needs `TASKIEM_AI_PROVIDER` too.
 2. `taskiem_queue_leased`: workers busy (scale them) or idle (they cannot claim: logs, database)?
 3. One tenant's backlog at its `worker_concurrency` cap ages its own tasks; that is the plan working. Tell the tenant, or raise the cap with `taskiem tenants limits`.
 4. Sandbox queue only: Python steps need memory; OOM-killed workers show as restarts and `TaskiemLeaseExpiries`.
@@ -364,7 +365,7 @@ A connector or sandbox task has waited over 10 minutes.
 
 Leases expire instead of being completed or released: processes die mid-step.
 
-1. Restarts and OOM kills on worker pods; raise memory limits or lower `TASKIEM_WORKER_QUEUES` concurrency.
+1. Restarts and OOM kills on worker pods: raise their memory limits (`roles.worker.resources` in the chart). A worker process runs up to 16 steps at once on each queue it serves (4 on `sandbox` and `container`), and no setting changes that; `TASKIEM_WORKER_QUEUES` only chooses the queues. Size the limit for the queues a pod serves: four Python steps at the interpreter's 256 MiB cap need 1 GiB on top of the process. Outside the chart, a pod can also serve fewer queues (say `sandbox` on a Deployment of its own), which bounds what one pod holds.
 2. Pods killed before draining: the grace period is shorter than delay + drain (the chart refuses this; a manual manifest may not), or nodes are being drained without respecting the PodDisruptionBudget.
 3. A step that hangs past its lease without heartbeats: its logs; the step's `timeout`.
 

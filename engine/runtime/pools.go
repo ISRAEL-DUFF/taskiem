@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -130,18 +131,32 @@ func (s *Store) TenantPool(ctx context.Context, tenant uuid.UUID) (string, error
 	return pool, err
 }
 
-// checkLive refuses a pool with no live workers, unless force.
+// checkLive refuses, unless force, a pool that would strand work routed
+// to it. A routed tenant's tasks on every queue but container are claimed
+// by that pool's workers alone (container steps stay in the shared pool,
+// migration 00253), so the pool needs a live worker on some other queue,
+// and one on each queue the shared pool's live workers serve. Queues
+// nobody serves in the shared pool either are not asked for.
 func (s *Store) checkLive(ctx context.Context, pool string, force bool) error {
 	if force || pool == SharedPool {
 		return nil
 	}
 	var n int
-	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM worker_pool_workers WHERE pool = $1 AND seen_at > now() - $2::interval`,
-		pool, liveWindow.String()).Scan(&n); err != nil {
+	var missing []string
+	if err := s.Pool.QueryRow(ctx, `WITH live AS (
+		SELECT pool, queue FROM worker_pool_workers WHERE seen_at > now() - $2::interval AND queue <> 'container')
+		SELECT (SELECT count(*) FROM live WHERE pool = $1)::int,
+		       ARRAY(SELECT queue FROM live WHERE pool = $3 EXCEPT SELECT queue FROM live WHERE pool = $1 ORDER BY 1)`,
+		pool, liveWindow.String(), SharedPool).Scan(&n, &missing); err != nil {
 		return err
 	}
 	if n == 0 {
 		return fmt.Errorf("pool %q: %w (start workers with TASKIEM_WORKER_POOL=%s first, or force)", pool, ErrNoWorkers, pool)
+	}
+	if len(missing) > 0 {
+		q := strings.Join(missing, ",")
+		return fmt.Errorf("pool %q: %w on queue %s, which the shared pool serves (start workers with TASKIEM_WORKER_POOL=%s TASKIEM_WORKER_QUEUES=%s first, or force)",
+			pool, ErrNoWorkers, q, pool, q)
 	}
 	return nil
 }

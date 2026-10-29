@@ -2,10 +2,12 @@ package runtime_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
@@ -162,5 +164,71 @@ func TestPoolClaimsFairAcrossTenants(t *testing.T) {
 	rows.Close()
 	if len(tenants) != 2 || tenants[0] == tenants[1] {
 		t.Errorf("two claims went to %v, want one per tenant", tenants)
+	}
+}
+
+// A pool is live for routing only if it serves every queue the shared pool
+// serves: a tenant moved there has all its work but container steps
+// claimed by that pool alone, so a queue it lacks would strand that work.
+// Serving the container queue does not count (that queue stays shared).
+func TestPoolLiveCheckIsPerQueue(t *testing.T) {
+	e := rt.New(t)
+	seen := func(worker, queue, pool string) {
+		t.Helper()
+		if _, err := e.DB.App.Exec(ctx, `SELECT taskiem_worker_seen($1, $2, $3)`, worker, queue, pool); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seen("w-c", "connector", "shared")
+	seen("w-s", "sandbox", "shared")
+	seen("w-k", "container", "shared")
+	seen("w-acme-k", "container", "acme")
+	if err := e.Store.AssignTenantPool(ctx, e.Tenant, "acme", "cli:ops", false); !errors.Is(err, runtime.ErrNoWorkers) {
+		t.Fatalf("a pool serving only the container queue: %v", err)
+	}
+	seen("w-acme-c", "connector", "acme")
+	err := e.Store.AssignTenantPool(ctx, e.Tenant, "acme", "cli:ops", false)
+	if !errors.Is(err, runtime.ErrNoWorkers) || !strings.Contains(err.Error(), "sandbox") || strings.Contains(err.Error(), "connector,") {
+		t.Fatalf("a pool lacking the sandbox queue: %v", err)
+	}
+	if err := e.Store.AssignPlanPool(ctx, "no_such_plan", "acme", "cli:ops", false); !errors.Is(err, runtime.ErrNoWorkers) {
+		t.Fatalf("plan to a pool lacking the sandbox queue: %v", err)
+	}
+	seen("w-acme-s", "sandbox", "acme")
+	if err := e.Store.AssignTenantPool(ctx, e.Tenant, "acme", "cli:ops", false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Container steps run in the shared container pool whoever's they are:
+// there is no dedicated container capacity, so a tenant routed to a
+// dedicated pool still has its container steps claimed by the shared
+// container workers, and queue depth reports them under the shared pool.
+func TestDedicatedTenantContainerStepsRunInSharedPool(t *testing.T) {
+	e := rt.New(t)
+	enableContainers(t, e, 10)
+	e.Containers = &container.Fake{}
+	if err := e.Store.AssignTenantPool(ctx, e.Tenant, "acme", "cli:ops", true); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(containerStep(`,"class":"read"`), ""))
+	ref := e.Start(t, wf, map[string]any{"html": "<p>hi</p>"})
+	depth, err := e.Store.PoolStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(depth) != 1 || depth[0].Pool != "shared" || depth[0].Queue != "container" || depth[0].Ready != 1 {
+		t.Errorf("pool stats %+v, want one ready container task in the shared pool", depth)
+	}
+	e.Drain(t) // the shared pool's workers
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("status %s, want completed by the shared container workers", st)
+	}
+	// A dedicated pool's worker does not take container work.
+	e.Start(t, wf, map[string]any{"html": "<p>again</p>"})
+	w := e.ContainerWorker("w-acme")
+	w.Pool = "acme"
+	if n, err := w.RunOnce(ctx); err != nil || n != 0 {
+		t.Fatalf("acme container worker ran %d (%v), want 0", n, err)
 	}
 }
