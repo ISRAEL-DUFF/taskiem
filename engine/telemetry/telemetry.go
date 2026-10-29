@@ -67,6 +67,25 @@ var (
 	RunsAdmitted = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_runs_admitted_total", Help: "Runs held back by their tenant's limits and admitted later by the scheduler.",
 	})
+	// Retention: runs archived and deleted past their retention date. The
+	// gauges are set by the scheduler at the end of each purge pass (and
+	// at least every minute while it is behind), only where an archive is
+	// configured: without one nothing is purged, by design.
+	RunsPurged = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_runs_purged_total", Help: "Runs archived and deleted after their retention date.",
+	})
+	PurgeFailures = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_retention_purge_failures_total", Help: "Runs past retention that could not be read, archived or deleted; each is retried after a backoff.",
+	})
+	PurgeBacklog = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "taskiem_retention_purge_backlog_runs", Help: "Ended runs past their retention date not yet purged.",
+	})
+	PurgeOldestOverdue = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "taskiem_retention_purge_oldest_overdue_seconds", Help: "How long the oldest run past its retention date has waited to be purged (0: none waiting).",
+	})
+	PurgeFailing = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "taskiem_retention_purge_failing_runs", Help: "Runs past retention whose purge has failed at least once and that are still waiting.",
+	})
 	// FirstRunSeconds is gate G4's measure: the share of observations at
 	// or under 900 seconds is the share of signups that reached a first
 	// successful run within 15 minutes of signing up.
