@@ -43,11 +43,11 @@ Not built, and what this plan adds: signing up from chat (gap 1), connecting fro
 
 ## 4. What stays as it is
 
-- **The web form.** `POST /v1/signup`, its checks and limits, the email confirmation and its holds, the checklist and the guided first workflow: unchanged, and still behind `TASKIEM_ALLOW_SIGNUP`.
+- **The web form.** `POST /v1/signup`, its checks and limits, the email confirmation and its holds, the checklist and the guided first workflow: unchanged, and still behind `TASKIEM_ALLOW_SIGNUP`. It gains one thing, the terms checkbox and its record (§6.4).
 - **Linking after web signup.** Account > WhatsApp and Account > Telegram, the code and the one-time link: unchanged.
 - **Field agents.** Their flow is unchanged; a chat-born owner and an agent-made owner are the same kind of account, so an owner an agent signed up who later writes to the number is simply bound already.
 - **Own WhatsApp numbers and public menus.** A stranger on a business's own number is that business's customer: they get its public menu or its updates, never a sign-up (decision 0058, point 6).
-- **People outside a business** (customers who asked for updates, riders, suppliers, family pages): what they send is handled first, exactly as now (`reachStart`, the invoice, rider and supplier buttons). Only a message nothing else claims reaches the sign-up offer, and the offer never interrupts them.
+- **People outside a business** (customers who asked for updates, riders, suppliers, family pages): what they send is handled first, exactly as now (`reachStart`, the invoice, rider and supplier buttons). Only a message nothing else claims reaches the sign-up offer, and the offer never interrupts them. A number Taskiem already knows as some business's customer, rider or supplier (a contact with a tenant) is not offered a sign-up on an unclaimed message, so a customer asking about their order is not advertised to; it gets the offer only when it sends **start**.
 
 ## 5. The channels
 
@@ -87,13 +87,14 @@ On the shared WhatsApp number, a message from a number linked to no one, that no
 >
 > **Start my business** · **I already use Taskiem** · **Not now**
 
+- The offer is in the language the message's words route to ([languages](../languages.md)), English when nothing matches; the first question is preceded by a language choice, a list message on WhatsApp (reply buttons stop at three) and an inline keyboard on Telegram. The language chosen is the person's, as today.
 - **Start my business**: the privacy notice and terms, as a short message and a link: "Taskiem keeps your business's records and the details you give it. Read how: <link>. Reply **Yes** to agree and start." Nothing is made before **Yes**; the acceptance is recorded (§6.4).
 - Then, one question at a time (buttons where they fit, a typed answer otherwise, `cancel` at any point):
   1. "What is your business called?" (the web form's checks: no links, no addresses, 100 characters)
   2. "And your name?"
   3. "What do you sell or do?" (food, provisions, fashion, phones, school, salon, services, other) (story 2)
   4. "How do customers pay you?" (cash, transfer, POS, Paystack, Moniepoint, OPay; several)
-- The business is made (§6.3), and the chat says so: "Done: **Ada Foods** is on Taskiem, free for 14 days. Here are three things businesses like yours start with:" and the three [templates](../templates.md) that fit best, by the answers to 3 and 4 (the templates' own goals, as `templates.Match` reads them), each a button, the first one that needs nothing connected (**Remind me every day**) so a run can come at once (story 7). Or "say what you want in your own words".
+- The business is made (§6.3), and the chat says so: "Done: **Ada Foods** is on Taskiem, free for 14 days." (the days from billing's `trial_days`, [billing](../billing.md), 14 today) "Here are three things businesses like yours start with:" and the three [templates](../templates.md) that fit best, by the answers to 3 and 4 against each template's `category`, `tags` and `keywords` in the library (there is no matcher today; C1 adds one, a table from the two answers to template ids), each a button, the first one that needs nothing connected (**Remind me every day**) so a run can come at once (story 7). Or "say what you want in your own words".
 - Picking one goes into the build conversation that exists (N6): its details one at a time, connections (C2), **Publish it now?**, and the first run.
 
 On Telegram the same, from `/start` or the website's `t.me/<bot>?start=signup` link, with one more step before the business is made: "Tap **Share my number** so we can text you when Telegram can't." Sharing is required and must be their own contact (the check the agent flow makes), so a Telegram-born owner has a proven number like a WhatsApp-born one; tapping **Not now** stops there and says why.
@@ -108,25 +109,27 @@ A linked person with no business left (`wa.no_org` today) is offered **Start my 
 - Per channel identity: one sign-up in progress at a time; three businesses made a day per number, Telegram account or Slack user; the web form's names checks.
 - Per deployment: `TASKIEM_CHAT_SIGNUP_PER_HOUR` (default 60), counted in the database across replicas like `TASKIEM_SIGNUP_PER_ADDRESS`; over it, "we are busy, try again in an hour", and an operator alert.
 - Countries: a WhatsApp number or shared Telegram contact outside `TASKIEM_CHAT_SIGNUP_COUNTRIES` (calling codes; default `234`) is told sign-up is not open there yet.
-- Every outcome counted in `taskiem_signups_total{outcome, source}`, `source` now `web`, `agent`, `whatsapp`, `telegram` or `slack`.
+- Every outcome counted in `taskiem_signups_total`, which gains a `source` label (`signup` for the web form, as `tenant_onboarding.source` names it today, `agent`, `whatsapp`, `telegram`, `slack`); its `outcome` values stay as they are.
 
 ### 6.3 What a sign-up makes
 
 In one transaction, as `agentNewBusiness` does today, lifted into a shared function both now call:
 
-- the person, if the channel identity is linked to no one: an account with the channel's placeholder sign-in name (`ownerPlaceholderEmail` by number for WhatsApp and a shared Telegram contact, so a number's placeholder is one account whichever way it came), their name, no password;
+- the person, if the channel identity is linked to no one: an account with the channel's placeholder sign-in name (`ownerPlaceholderEmail` by number for WhatsApp, by account id for Telegram, by workspace and user for Slack), their name, no password;
 - the business, its default workspace and environments, the person its owner;
-- `tenant_onboarding` with `source` set to the channel;
-- the channel bound to the person (the WhatsApp binding by number; the Telegram binding by account; for a shared contact whose number is already a WhatsApp-bound person, the same person, §10.3), and the conversation set to the new business;
+- `tenant_onboarding` with `source` set to the channel (its check constraint, `signup`, `existing` and `agent` today, widened);
+- the channel bound to the person (the WhatsApp binding by number; the Telegram binding by account; a shared contact whose number is already a WhatsApp-bound person's is §10.3's case, and makes no new account), and the conversation set to the new business;
 - the audit entry `tenant.create` with the channel and the identity masked, and `terms.accept`.
 
 Then the trial starts (`Billing.Ensure`), as for every way in.
 
-**The holds.** A web sign-up is held back until its email is confirmed. A chat-born owner has proven their channel instead, which counts for the holds that protect other people from a stranger: inviting members (by chat, §10.2) and the API keys of the web app. What sends email for the business (email alert channels, invitations by email) still needs a confirmed email of their own (§10.4).
+**The holds.** A web sign-up is held back until its email is confirmed. A chat-born owner has proven their channel instead, which counts for the holds that protect other people from a stranger: inviting members (by chat, §10.2) and the API keys of the web app. What sends email for the business (email alert channels, invitations by email) still needs a confirmed email of their own (§10.4). The cleanup of unconfirmed tenants that [phase 4](../phase-4-status.md) still owes applies to chat-born tenants by the owner's last message, not by a confirmation they will never make.
+
+**The PIN.** Until an email is added, the chat is the account's only credential, so after the first run the chat offers to set a six-digit PIN (`pin`): typed in the `taskiem_pin` form on WhatsApp, or the Mini App on Telegram (C2), and kept as the WhatsApp PIN is today (`whatsapp_pins`, [WhatsApp](../whatsapp.md#approval-pin)). Setting that PIN today needs a passkey or authenticator, which a chat-born person has neither of; for them the proven channel and the chat it is typed in are the proof. The PIN is what re-proves a dormant binding (§12) and what approval policies that accept `whatsapp_pin` use.
 
 ### 6.4 Agreeing to the terms
 
-A new `terms_acceptances` record, the person's, not a tenant's: who, which document and version (`TASKIEM_TERMS_VERSION`, `TASKIEM_PRIVACY_VERSION`), when, and where (`web`, `whatsapp`, `telegram`, `slack`). A sign-up in chat records it on **Yes**. The web form gains the same checkbox and record, so both ways in prove consent the same way, and a new version can be asked for once in whichever door the person uses next. The texts themselves are a people item (C0-2).
+A new `terms_acceptances` record, the person's, not a tenant's: who, which document and version (`TASKIEM_TERMS_VERSION`, `TASKIEM_PRIVACY_VERSION`), when, and where (`web`, `whatsapp`, `telegram`, `slack`). A sign-up in chat records it on **Yes**. The web form gains the same checkbox and record, so both ways in prove consent the same way, and a new version can be asked for once in whichever door the person uses next. Accounts that exist before this have no record: the next sign-in on the web, or the next message in chat, asks once (one line with **Yes**), and nothing is held back meanwhile. The texts themselves are a people item (C0-2).
 
 ### 6.5 State before there is a business
 
@@ -152,13 +155,13 @@ A key-based service (Paystack, Moniepoint, OPay, Termii, Flutterwave and the res
 - **Telegram**: a Mini App. The button opens a Taskiem page inside Telegram; the page sends Telegram's signed `initData` with the form, and Taskiem checks it (HMAC-SHA-256 under a key derived from the bot token, and its `auth_date` within ten minutes) and that its user is the account the form was sent to. The page is the web's guided connect form, in Telegram's colours. The same Mini App gives Telegram the forms WhatsApp has for a run's inputs and a table's row (`run`, `add to`), where it now asks one field at a time.
 - **Slack**, and **everywhere as the fallback** (WhatsApp without Flows set up, a form that does not fit five fields): the connect page (§7.3).
 
-**A key typed into the chat** is never kept: inbound text is checked against every manifest's secret prefixes (`sk_live_`, `sk_test_`, and the rest) before it is stored or acted on, the match is masked in the conversation's record, and the reply says to use the form and to replace the key at the provider, since the chat app has it now.
+**A key typed into the chat** is never kept: inbound text is checked against every manifest's secret prefixes (`sk_live_`, `sk_test_`, and the rest) before it is stored or acted on, and, while a connect is pending in that chat, any token-shaped message (one word, 20 characters or more, letters, digits and `-_` only) is treated as a key too, since many providers' keys carry no prefix. The match is masked before anything keeps it: the conversation's record, the outbox, the audit entry and a voice note's transcript. The reply says to use the form and to replace the key at the provider, since the chat app has it now.
 
 ### 7.3 The connect page: OAuth, and keys in a browser
 
 A service that signs in (Google, Zoho, QuickBooks, Mailchimp, Xenibase) needs a browser. Chat sends a connect link: `https://<public URL>/c/<token>`, a one-time token (24 random bytes, kept only as its SHA-256), for one service, one business, one person and the chat that asked, good for 15 minutes. It needs no web sign-in: the token is the authority, for that one connection only.
 
-- Opening it shows the business's name and the service ("Connect Google to **Ada Foods**"), and **Continue** starts the provider's consent as the web does, with the browser cookie and PKCE of 0034; the token is spent then.
+- Opening it shows the business's name and the service ("Connect Google to **Ada Foods**"), and **Continue** starts the provider's consent as the web does, with the browser cookie and PKCE of 0034. The token is spent when the callback completes the connection, or at 15 minutes, so a denied consent or the wrong account can try again from the same link meanwhile.
 - The provider sends the browser back to the callback that exists; when the connection came from a connect link, the page ends with "Google is connected. You can go back to WhatsApp" (a `wa.me` or `t.me` link back, or Slack's), and the chat says so too: "Google is connected (ada@example.com). Carrying on with **Remind my debtors**."
 - A key-based service on the connect page is the web's guided form, saved the same way.
 
@@ -170,8 +173,8 @@ A service that signs in (Google, Zoho, QuickBooks, Mailchimp, Xenibase) needs a 
 
 ## 8. C3: Slack as a conversation
 
-- **Events.** Taskiem's Slack app gets one Events request URL, `/channels/slack/events`, verified with its signing secret as `/channels/slack/interactions` is. A direct message to the bot (`message.im`, `channel_type: im`, not from a bot) from a linked member goes to `converse`; every other event goes on, unchanged, to `/hooks/apps/slack@1/events`, the `slack@1` triggers (0051), as clicks already do. The operator sets the URL, subscribes to `message.im`, and turns the App Home **Messages** tab on ([needs people](#13-c0-people-and-decisions)).
-- **The channel.** `slackChannel` gains `Contact` and `Touch` (a contact per `sl:<team>:<user>`, as Telegram's are) so a Slack DM keeps a conversation, and its messages render the chat's buttons as Block Kit buttons and its numbered lists as menus. A Slack link speaks for its workspace's business alone, like an own number (`OwnTenant`).
+- **Events.** Taskiem's Slack app gets one Events request URL, `/channels/slack/events`, verified with its signing secret as `/channels/slack/interactions` is. It answers within Slack's three seconds and handles the event after, keeps each `event_id` for a day so Slack's retries (`X-Slack-Retry-Num`) do nothing twice, and ignores the subtypes that are not a person writing (`message_changed`, `message_deleted`, `bot_message`, the bot's own messages). A direct message to the bot (`message.im`, `channel_type: im`) from a linked member goes to `converse`; every other event goes on, unchanged, to `/hooks/apps/slack@1/events`, the `slack@1` triggers (0051), as clicks already do. The operator sets the URL, subscribes to `message.im`, and turns the App Home **Messages** tab on ([needs people](#13-c0-people-and-decisions)).
+- **The channel.** `slackChannel` gains `Contact` and `Touch` (a contact per `sl:<team>:<user>`, kept at the platform level as WhatsApp's and Telegram's are) so a Slack DM keeps a conversation, and its messages render the chat's buttons as Block Kit buttons and its numbered lists as menus. A DM carries only the workspace and the user, and a workspace may hold more than one business (0051; `slack_bindings` are per business), so the conversation has a current business and `switch`, as on WhatsApp: the DM reaches the business the person last worked in among those they are linked to in that workspace, not the workspace's business as an own number's `OwnTenant` would. Today's approval DMs, which name their business, are unchanged.
 - **Forms.** A run's inputs and a table's row come as a modal (`views.open`, from the button's `trigger_id`), checked as the other forms are; a key goes through the connect page (§7.3).
 - **Voice notes and photos**: a file shared in the DM is fetched with the bot token (`files:read` added to the app's scopes) where voice notes are on; a product photo likewise.
 - **Accept:** the WhatsApp conversation tests (status, run, build, tables, invoices, stock) run on Slack through the same harness, and approvals in Slack still work as today.
@@ -179,9 +182,9 @@ A service that signs in (Google, Zoho, QuickBooks, Mailchimp, Xenibase) needs a 
 ## 9. C4: signing up from Slack
 
 - **Add to Slack, from anywhere.** A public install link (the website, and Slack's Marketplace once listed) starts Slack's OAuth v2 install with no Taskiem business behind it. The install request is the platform's, not a tenant's: kept, single use, for 10 minutes, with the browser cookie and PKCE, as a tenant's OAuth request is.
-- **The callback** has the workspace (`team.id`, its name), the bot token and the installer (`authed_user.id`). The bot then writes to the installer in Slack, with the same steps as §6.1: the terms with **Yes**, the business's name (the workspace's name offered), the installer's name (from Slack), what they do and how they get paid. The business is made as in §6.3 with the Slack connection as its `main` Slack connection and `source = 'slack'`.
+- **The callback** has the workspace (`team.id`, its name), the bot token and the installer (`authed_user.id`). The token is sealed in the platform-level install record, which outlives the 10-minute request for a day; if no business is made by then, the token is given back (`auth.revoke`, as deleting a connection does) so the workspace is not left with a dead install. The bot then writes to the installer in Slack, with the same steps as §6.1: the terms with **Yes**, the business's name (the workspace's name offered), the installer's name (from Slack), what they do and how they get paid. The business is made as in §6.3 with the Slack connection as its `main` Slack connection and `source = 'slack'`.
 - **The installer's email.** Slack gives it (`users:read.email`), and it becomes the account's email **unconfirmed**: a workspace's administrators can set members' emails, so Slack holding an address does not prove the person holds its mailbox. If an account with that email already exists, nothing is merged: the installer is asked to link that account (§10.1), or to start a new business under a Slack-only account.
-- **A workspace already on Taskiem.** If another business already connected this workspace (0051 lets more than one), the installer is told which (its name only) and offered **Ask to join** (§10.2) or **Start a separate business**.
+- **A workspace already on Taskiem.** If another business already connected this workspace (0051 lets more than one), the installer is told which (its name only) and offered **Ask to join** (§10.2) or **Start a separate business**. Slack issues one bot token per app per workspace, and a reinstall replaces it, so the install writes the new token into every connection of that workspace, as 0051's revoke events mark them all expired.
 - **Uninstalling** marks the connection expired, as 0051 says; the business and its people stay, and anyone linked by WhatsApp, Telegram or the web keeps working there.
 - **Accept:** an install with no account makes a business whose owner can build and run from the DM; an installer whose email is someone's account is not merged; a second install of a known workspace makes nothing without the installer's choice; the platform-level install request cannot be completed in another browser.
 
@@ -193,12 +196,12 @@ From an unbound chat, **I already use Taskiem** asks for the email they sign in 
 
 ### 10.2 Bringing people in from chat
 
-- `invite +234… as manager` (WhatsApp and Telegram; a Slack member by mention: `invite @ada as viewer`): the owner sees the invitation and confirms with **Yes**. The person invited gets a WhatsApp message (a new template, `taskiem_invite`, outside the 24-hour window), or, on Telegram, a link the owner forwards (a bot cannot write first), or a Slack DM. They accept with **Join**, and are bound and made a member with that role; the web's invitations by email stay.
+- `invite +234… as manager` (WhatsApp and Telegram; a Slack member by mention: `invite @ada as viewer`): the owner sees the invitation and confirms with **Yes**. The person invited gets a WhatsApp message (a new template, `taskiem_invite`, outside the 24-hour window), or, on Telegram, a link the owner forwards (a bot cannot write first), or a Slack DM. Joining is a way in like any other: **Join** shows the terms and takes **Yes** (§6.4) before anything is made, then binds the person and makes them a member with that role. On Telegram the link alone is not enough, since anyone it is forwarded to holds it: the person must share their own contact (§6.1's check) and its number must be the one invited. On WhatsApp the template goes to a number that may never have written to Taskiem, so the owner's invitation is the opt-in Meta asks for, and the invitation says who invited them and that replying **Stop** ends it. The web's invitations by email stay.
 - In Slack, a member of an installed workspace who writes to the bot and is not in the business is told who runs it and offered **Ask to join**; the owner gets **Approve** with a role, or **Decline**. Being in the workspace is never enough on its own.
 
 ### 10.3 One person on several channels
 
-- A Telegram-born person who shares a number that is a WhatsApp-bound person's is asked "Is this you on WhatsApp too? We'll keep one account" and, on **Yes**, both bind to one account (both channels proved the number).
+- A Telegram sign-up whose shared number is already a WhatsApp-bound person's makes no new account. If that account is chat-born (no email, no password), the number is its only proof and Telegram's own-contact check is the same proof, so the Telegram account binds to it and the chat carries on as a linked person's (`new business` if they want another). If the account has an email or a password, a number alone is not enough, as it is not on the web today: the chat says the number is on an account already and sends §10.1's email link, or the person starts a new business under a Telegram-only account.
 - On the web, Account shows every linked channel, as today, and links or unlinks each.
 
 ### 10.4 Email, password and paying
@@ -224,7 +227,7 @@ The paths of §10.1 to §10.4, each on WhatsApp and Telegram, Slack where it app
 | --- | --- |
 | Someone signs up as another person | The channel proves the identity: WhatsApp delivers from the number; Telegram's contact must be the sender's own; Slack's user is in the installing workspace. No account is ever joined by a claim (an email typed, a name) without the existing proof: the code, the Telegram link, the email link |
 | Mass sign-ups | Off by default per channel; per identity, per day and per hour limits counted in the database; the country list; names checked as on the web; every outcome counted |
-| A recycled phone number | As today for bindings: a number's binding speaks for the person who proved it. A new sign-up on a recycled number makes a new business for the new holder and never reaches the old one's |
+| A recycled phone number | A chat-born account's number is its only credential until it adds an email, and operators reissue silent numbers, so a number's new holder writing to Taskiem would otherwise land in the old holder's businesses, not at a sign-up. A binding silent for 90 days (`TASKIEM_CHAT_DORMANT_DAYS`) is dormant: the next message gets no business until the person re-proves it, with the chat PIN (§6.3) or, if the account has an email, §10.1's link; with neither set, the owner's other channel or the web is the way back, and after a further 90 days the binding is removed and the number is a stranger again. Money actions and approvals from a dormant binding wait for the same proof |
 | Secrets in chat | Keys are typed only in the Flow (encrypted to Taskiem), the Telegram Mini App (straight to Taskiem) or the connect page. A key sent as a message is masked before it is kept, and the person is told to replace it |
 | A connect link that leaks | One connection, one business, 15 minutes, once; its page names the business; the chat says what was connected (the service and the account it signed in as), so a wrong one is seen; making it needs `secret.manage` still held when it is opened |
 | OAuth from a link | 0034's state, browser cookie and PKCE, unchanged; the link only starts it |
@@ -249,11 +252,11 @@ The paths of §10.1 to §10.4, each on WhatsApp and Telegram, Slack where it app
 
 | Id | Milestone | Size |
 | --- | --- | --- |
-| C1 | Sign up from WhatsApp and Telegram: the offer to strangers, terms with **Yes**, four questions, the business made through the agent flow's function, three templates offered, `new business`, the switches and limits, `terms_acceptances` (web too), `chat_signups`, the metrics by source | M |
+| C1 | Sign up from WhatsApp and Telegram: the offer to strangers, the language choice, terms with **Yes**, four questions, the business made through the agent flow's function, three templates offered, `new business`, the chat PIN (WhatsApp; Telegram in C2), dormant bindings, the switches and limits, `terms_acceptances` (web and existing accounts too), `chat_signups`, the metrics by source | M |
 | C2 | Connect from chat: **Connect** wherever chat linked to Connections, `connect <service>`, the `taskiem_connect` Flow, the Telegram Mini App (also for inputs and rows), the connect page and its links (OAuth and keys), the pasted-key guard, the build carrying on | L |
 | C3 | Slack as a conversation: `/channels/slack/events`, DMs to `converse`, contacts, Block Kit buttons, modals, files | M |
 | C4 | Sign up from Slack: the platform install, the business for a workspace, the installer's email unconfirmed and never merged, known workspaces | M |
-| C5 | One person, many doors: linking an existing account from chat, invitations by chat, one account across WhatsApp and Telegram, **Add your email**, `plan` and **Pay** | M |
+| C5 | One person, many doors: linking an existing account from chat, invitations by chat (terms on **Join**, the number proven on Telegram), one account across WhatsApp and Telegram, **Add your email**, `plan` and **Pay** | M |
 | C6 | Words in five languages, intents and routing, `taskiem_invite`, docs and the guide, the decision accepted | S |
 
 In order, one branch and one PR for C1 to C6, as stock was. C1 and C2 are the pilot's prerequisites and are worth landing first if the pilot comes before the rest.
@@ -277,6 +280,7 @@ In order, one branch and one PR for C1 to C6, as stock was. C1 and C2 are the pi
 | A Telegram user without a phone they will share | They cannot sign up on Telegram (the proven number is needed for SMS, WhatsApp and limits); they can on the web or WhatsApp. Revisit if the pilot says many refuse |
 | Two accounts for one person (signed up on the web, then in chat without saying so) | **I already use Taskiem** first in the offer; later, linking by the email link or by a shared number brings them to one account; businesses can be moved by inviting the other account and leaving (merging accounts is out of scope) |
 | Mini Apps change | The Mini App is a page Taskiem serves; only its check of `initData` depends on Telegram, and the connect page is the fallback |
+| Google refuses OAuth inside embedded web views | A connect link must open in the phone's browser. WhatsApp hands links to the system browser; Telegram's in-app browser is a Custom Tab or Safari view, which Google allows, and the connect page shows **Open in browser** if the provider refuses. Checked on real phones, both platforms, in the pilot |
 
 ## 17. Out of scope
 
