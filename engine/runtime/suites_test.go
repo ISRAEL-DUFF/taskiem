@@ -387,7 +387,7 @@ func TestDatabaseCrashSuite(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cw := &chaosWorkers{e: e, queue: "sandbox", rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second}
+	cw := &chaosWorkers{e: e, rng: rand.New(rand.NewPCG(3, 4)), lease: 2 * time.Second} // the connector queue, where paymentShaped's steps are
 	for i := 0; i < 4; i++ {
 		cw.start(ctx)
 	}
