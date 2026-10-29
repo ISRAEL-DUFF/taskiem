@@ -3376,6 +3376,10 @@
       "text": "Set your PIN for the web app, for {where}: e go first ask for your passkey, authenticator or password.",
       "reviewed": false
     },
+    "chatpin.set_already": {
+      "text": "You don get chat PIN already. If you wan change am, sign in for web (send sign in make we give you link), add passkey or authenticator, then change am for your Account page for {where}.",
+      "reviewed": false
+    },
     "chatpin.not_here": {
       "text": "You no fit set chat PIN from here yet: set am from WhatsApp, where Taskiem dey send secure form.",
       "reviewed": false

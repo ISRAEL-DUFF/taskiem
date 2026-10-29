@@ -412,6 +412,7 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var email string
+	var wrong bool
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var user uuid.UUID
 		var hash []byte
@@ -425,10 +426,10 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if subtle.ConstantTimeCompare(hash, secretHash) != 1 {
-			if _, err := tx.Exec(ctx, `UPDATE email_verifications SET failures = failures + 1 WHERE selector = $1`, selector); err != nil {
-				return err
-			}
-			return errEmailLinkWrong
+			// Counted, and committed: five lock the link.
+			wrong = true
+			_, err := tx.Exec(ctx, `UPDATE email_verifications SET failures = failures + 1 WHERE selector = $1`, selector)
+			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE email_verifications SET used_at = now() WHERE selector = $1`, selector); err != nil {
 			return err
@@ -445,7 +446,7 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 	})
 	var pgErr interface{ SQLState() string }
 	switch {
-	case errors.Is(err, errEmailLinkWrong):
+	case err == nil && wrong:
 		writeErr(w, http.StatusBadRequest, verifyLinkBadMsg)
 	case errors.As(err, &pgErr) && pgErr.SQLState() == "23505":
 		s.fail(w, r, fmt.Errorf("%w: %s belongs to another Taskiem account; use another email", errConflict, email))
@@ -455,9 +456,6 @@ func (s *Server) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"email": email, "email_verified": true})
 	}
 }
-
-// errEmailLinkWrong: a link's secret did not match (counted, then 400).
-var errEmailLinkWrong = errors.New("email link: wrong secret")
 
 // waEmail answers "email" in chat: the account's email, or a link to
 // confirm a new one.

@@ -287,7 +287,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	}
 	// Started from a connect link sent in chat (connect_links.go): the
 	// browser ends on the connect page, and the chat is told.
-	link := s.oauthLinkOf(ctx, req, c)
+	link := s.oauthLinkOf(ctx, req, c, q.Get("state"))
 	done := func(id string, err error) {
 		if link == nil {
 			s.oauthDone(w, r, id, err)

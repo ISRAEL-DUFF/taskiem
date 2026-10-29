@@ -74,7 +74,7 @@ Beside the web form, a person can sign up from Taskiem's shared WhatsApp number 
 
 **The holds.** A web signup is held back until its email is confirmed ([below](#confirming-the-email)). A chat-born owner proved their channel instead, which counts for API keys; what sends email for the business (inviting by email, email alert channels) waits for a confirmed email of their own.
 
-**The chat PIN and dormant chats.** Until an email is added, the chat is the account's only credential: a chat-born person sets a six-digit PIN from the chat with `pin`, in the PIN form ([WhatsApp](whatsapp.md#the-chat-pin-and-dormant-chats)). Every chat binding silent for `TASKIEM_BINDING_DORMANT_DAYS` (90) is dormant until it is proven again.
+**The chat PIN and dormant chats.** Until an email is added, the chat is the account's only credential: a chat-born person sets a six-digit PIN from the chat with `pin`, in the PIN form ([WhatsApp](whatsapp.md#the-chat-pin-and-dormant-chats)). Every chat binding silent for `TASKIEM_BINDING_DORMANT_DAYS` (90) is dormant until it is proven again. A resting number proves nothing (a Telegram sign-up sharing it is not joined to its account), and when the sweep removes a binding, an account made in chat loses the sign-in name derived from that number, so the number's next holder signs up as a new person.
 
 ## One person, many doors
 

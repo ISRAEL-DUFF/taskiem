@@ -73,6 +73,14 @@ func (s *Server) waChatPin(ctx context.Context, c *chat) error {
 	if f.Passkey || f.TOTP || f.Password {
 		return c.say(ctx, s, c.t("chatpin.web", "where", s.accountWhere()))
 	}
+	// A PIN is set once from the chat: holding the chat is not enough to
+	// replace it (nor to undo its lock); changing it takes the web, behind
+	// a passkey or an authenticator.
+	if pin, err := s.waPinInfo(ctx, c.p.UserID); err != nil {
+		return err
+	} else if pin.Set {
+		return c.say(ctx, s, c.t("chatpin.set_already", "where", s.accountWhere()))
+	}
 	if c.wa == nil || c.wa.Config.FlowKey == nil {
 		return c.say(ctx, s, c.t("chatpin.not_here"))
 	}
@@ -154,6 +162,14 @@ func (s *Server) waFlowChatPin(ctx context.Context, row flowRow, req whatsapp.Fl
 			return screen(wrong)
 		} else if f.Passkey || f.TOTP || f.Password {
 			const m = "Set your PIN in the web app, on your Account page."
+			return finish("refused", m)
+		}
+		// Only a first PIN: one set meanwhile is not replaced from here.
+		if pinNow, err := s.waPinInfo(ctx, user); err != nil {
+			s.Logger.Error("whatsapp: a chat PIN", "err", err)
+			return screen(wrong)
+		} else if pinNow.Set {
+			const m = "You have a chat PIN already. To change it, sign in on the web (send sign in for a link), add a passkey or an authenticator, then change it on your Account page."
 			return finish("refused", m)
 		}
 		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_wa_pin_set($1, $2)`, user, hashPassword(pin)); err != nil {

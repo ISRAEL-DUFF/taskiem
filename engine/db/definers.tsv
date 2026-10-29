@@ -90,6 +90,7 @@ taskiem_chat_signup_counts(bytea)	@ISRAEL-DUFF (onboarding)	The limits: business
 taskiem_chat_signup_drop(bytea)	@ISRAEL-DUFF (onboarding)	Ends a sign-up (00266)
 taskiem_chat_signup_get(bytea)	@ISRAEL-DUFF (onboarding)	A sign-up's state at an address, while live (00266)
 taskiem_chat_signup_put(bytea,text,text,jsonb,interval)	@ISRAEL-DUFF (onboarding)	Starts or moves a sign-up on (00266)
+taskiem_chat_signup_take(bytea)	@ISRAEL-DUFF (messaging)	Claims a chat sign-up's record once, to make its business (00272)
 taskiem_claim_due_schedules(integer,integer,interval)	@ISRAEL-DUFF (engine)	part of: A suspended tenant (a partner's suspended sub-tenant, or any tenant an operator suspends) does no new work (docs/embedding.md, docs/governance.md) (00088)
 taskiem_claim_due_timers(text,integer,interval)	@ISRAEL-DUFF (engine)	Scheduler (00006)
 taskiem_claim_git_syncs(integer,interval)	@ISRAEL-DUFF (engine)	part of: Git integration (spec 10.3) (00015)

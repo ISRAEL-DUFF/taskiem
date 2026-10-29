@@ -3376,6 +3376,10 @@
       "text": "Ṣètò PIN rẹ nínú ohun èlò wẹ́ẹ̀bù, ní {where}: yóò kọ́kọ́ béèrè passkey, authenticator tàbí ọ̀rọ̀ aṣínà rẹ.",
       "reviewed": false
     },
+    "chatpin.set_already": {
+      "text": "O ti ní PIN ìjíròrò tẹ́lẹ̀. Láti yí i padà, wọlé lórí wẹ́ẹ̀bù (fi sign in ránṣẹ́ fún ìjápọ̀), ṣàfikún passkey tàbí authenticator, lẹ́yìn náà yí i padà lójú-ìwé Account rẹ ní {where}.",
+      "reviewed": false
+    },
     "chatpin.not_here": {
       "text": "A kò tíì lè ṣètò PIN ìjíròrò láti ibí: ṣètò rẹ̀ láti WhatsApp, níbi tí Taskiem ti ń fi fọ́ọ̀mù tó ní ààbò ránṣẹ́.",
       "reviewed": false

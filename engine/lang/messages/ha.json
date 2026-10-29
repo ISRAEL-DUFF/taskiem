@@ -3376,6 +3376,10 @@
       "text": "Saita PIN ɗinka a manhajar yanar gizo, a {where}: zai fara tambayar passkey, authenticator ko kalmar sirrinka.",
       "reviewed": false
     },
+    "chatpin.set_already": {
+      "text": "Kana da PIN na hira tuni. Don canza shi, shiga a yanar gizo (aika sign in don mahaɗa), ƙara passkey ko authenticator, sannan ka canza shi a shafin Account ɗinka a {where}.",
+      "reviewed": false
+    },
     "chatpin.not_here": {
       "text": "Ba za a iya saita PIN na hira daga nan ba tukuna: saita shi daga WhatsApp, inda Taskiem ke aika fom mai tsaro.",
       "reviewed": false

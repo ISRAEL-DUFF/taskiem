@@ -335,6 +335,10 @@ func TestBindingDormant(t *testing.T) {
 	if got := w.send(t, ada, whatsapptest.FlowCompleted(form[0].FlowToken)); len(got) != 1 || !strings.Contains(got[0].Text, "chat PIN is set") {
 		t.Fatalf("completion: %+v", got)
 	}
+	// Set once from the chat: holding the chat does not replace it.
+	if got := w.say(t, ada, "change pin"); !strings.Contains(got, "You have a chat PIN already") {
+		t.Fatalf("change pin: %q", got)
+	}
 
 	// Silent 91 days: dormant, sent nothing, and asked for the PIN.
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE whatsapp_bindings SET last_active_at = now() - interval '91 days' WHERE user_id = $1`, user); err != nil {
@@ -377,7 +381,7 @@ func TestBindingDormant(t *testing.T) {
 	if got := w.say(t, bisi, "help"); strings.Contains(got, "quiet for") {
 		t.Fatalf("linked again: %q", got)
 	}
-	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE whatsapp_bindings SET last_active_at = now() - interval '91 days', dormant_at = now() - interval '91 days' WHERE number = $1`, bisi); err != nil {
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE whatsapp_bindings SET last_active_at = now() - interval '91 days', dormant_at = now() - interval '91 days' WHERE number IN ($1, $2)`, bisi, ada); err != nil {
 		t.Fatal(err)
 	}
 	w.tick(t)
@@ -386,6 +390,19 @@ func TestBindingDormant(t *testing.T) {
 	}
 	if got := w.say(t, bisi, "hello"); !strings.Contains(got, "Do you want to start") {
 		t.Fatalf("a stranger again: %q", got)
+	}
+	// A number reissued after its account made in chat was swept: its new
+	// holder signs up as a new person, never the old owner.
+	var email string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, user).Scan(&email); err != nil || !strings.HasPrefix(email, "released+") {
+		t.Fatalf("the old sign-in name: %q %v", email, err)
+	}
+	for _, m := range []string{"start", "yes", "Bola Phones", "Bola", "4", "1"} {
+		w.say(t, ada, m)
+	}
+	again, _ := w.wa.UserOf(ctx, ada)
+	if again == uuid.Nil || again == user || memberRoles(t, w.world, again, "Ada Foods") != "" {
+		t.Fatalf("the new holder is %v (old %v), in Ada Foods as %q", again, user, memberRoles(t, w.world, again, "Ada Foods"))
 	}
 }
 

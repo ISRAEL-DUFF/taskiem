@@ -155,6 +155,14 @@ func (s *Server) signupSave(ctx context.Context, sc *signupChat, st *signupState
 	return err
 }
 
+// signupTake claims a sign-up's record: true for the one caller that
+// removed it.
+func (s *Server) signupTake(ctx context.Context, addr string) (bool, error) {
+	var took bool
+	err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_chat_signup_take($1)`, signupKey(addr)).Scan(&took)
+	return took, err
+}
+
 func (s *Server) signupDrop(ctx context.Context, addr string) error {
 	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_signup_drop($1)`, signupKey(addr))
 	return err
@@ -351,6 +359,12 @@ func (s *Server) signupAsk(ctx context.Context, sc *signupChat, st *signupState)
 		}
 	case suEmail:
 		return s.suSay(ctx, sc, sc.t("door.ask_email"))
+	case suInvite:
+		// A Telegram invitation waits for the person's own contact
+		// (chat_invites.go): anything typed asks for it again.
+		if id, ok := telegram.ParseAddress(sc.addr); ok && s.Telegram != nil {
+			return s.Telegram.Client.AskContact(ctx, id, sc.t("invite.ask_contact"), sc.t("agent.share_button"))
+		}
 	}
 	return nil
 }
@@ -446,6 +460,8 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		return s.signupAsk(ctx, sc, st)
 	case suEmail:
 		return s.chatLinkEmail(ctx, sc, text)
+	case suInvite:
+		return s.signupAsk(ctx, sc, st)
 	}
 	return stop("cancelled", "signup.cancelled")
 }
@@ -589,19 +605,28 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 			return s.termsAcceptTx(ctx, tx, tenant, owner, channel, st.Agreed)
 		}
 	}
+	// The last answer claims the sign-up: two at once (a double tap) make
+	// one business.
+	took, err := s.signupTake(ctx, sc.addr)
+	if err != nil || !took {
+		return err
+	}
 	tenant, _, err := s.makeBusiness(ctx, nb)
 	if be := (errSignupBind{}); errors.As(err, &be) {
-		if err := s.signupDrop(ctx, sc.addr); err != nil {
-			return err
-		}
 		signupCount(channel, "exists")
 		return s.suSay(ctx, sc, sc.t("signup.number_taken", "where", s.accountWhere()))
 	}
-	if err != nil {
+	switch {
+	case err != nil && tenant == uuid.Nil:
+		// Nothing was made: the answers wait again for another try.
+		if serr := s.signupSave(ctx, sc, st); serr != nil {
+			s.Logger.Warn("chat sign-up: keeping the answers", "err", serr)
+		}
 		return err
-	}
-	if err := s.signupDrop(ctx, sc.addr); err != nil {
-		return err
+	case err != nil:
+		// The business is made; only its trial did not start, which
+		// starts on its first visit to billing.
+		s.Logger.Warn("chat sign-up: starting the trial", "err", err)
 	}
 	if err := sc.ch.Touch(ctx, sc.addr, false, true, &tenant); err != nil {
 		return err

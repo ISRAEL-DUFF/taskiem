@@ -3376,6 +3376,10 @@
       "text": "Tọọ PIN gị na ngwa weebụ, na {where}: ọ ga-ebu ụzọ jụọ passkey, authenticator ma ọ bụ okwuntughe gị.",
       "reviewed": false
     },
+    "chatpin.set_already": {
+      "text": "Ị nweelarị PIN mkparịta ụka. Iji gbanwee ya, banye na weebụ (zipu sign in maka njikọ), tinye passkey ma ọ bụ authenticator, wee gbanwee ya na peeji Account gị na {where}.",
+      "reviewed": false
+    },
     "chatpin.not_here": {
       "text": "Enweghị ike ịtọ PIN nkata site ebe a ugbu a: tọọ ya site na WhatsApp, ebe Taskiem na-ezipu fọm echekwara.",
       "reviewed": false

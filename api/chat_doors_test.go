@@ -136,6 +136,22 @@ func TestTelegramWithAWhatsAppNumber(t *testing.T) {
 		}
 		return w.update(t, acct, func(id int64) []byte { return telegramtest.ContactMessage(id, acct, phone, acct) })
 	}
+	// A resting number proves nothing: it may be someone else's now.
+	w.tenant(t, "Dami Shop", "dami@shop.test")
+	for _, q := range []string{
+		`UPDATE users SET email = 'owner+0033cc@phone.taskiem.invalid', password_hash = NULL WHERE email = 'dami@shop.test'`,
+		`INSERT INTO whatsapp_bindings (user_id, number, dormant_at) SELECT id, '+2348035550003', now() FROM users WHERE email = 'owner+0033cc@phone.taskiem.invalid'`,
+	} {
+		if _, err := w.env.DB.Admin.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := signUp(8203, "+2348035550003"); len(got) != 1 || !strings.Contains(got[0].Text, "already uses Taskiem") {
+		t.Fatalf("a resting number: %+v", got)
+	}
+	if u, _ := w.tg.UserOf(ctx, 8203); u != uuid.Nil {
+		t.Fatal("joined by a resting number")
+	}
 	// Chat-born: the number was its only proof, and the same proof joins.
 	if got := signUp(8201, "+2348035550001"); len(got) != 1 || !strings.Contains(got[0].Text, "This Telegram is now linked to it too") {
 		t.Fatalf("chat-born: %+v", got)
@@ -224,8 +240,18 @@ func TestEmailAndPlanFromChat(t *testing.T) {
 	}
 	q, _ := url.ParseQuery(m[1])
 	anon := &client{t: t, base: w.base}
-	if st, _ := anon.do("POST", "/v1/auth/email/confirm", map[string]any{"tenant": q.Get("t"), "token": q.Get("token") + "x"}); st != 400 {
+	sel, secret, _ := strings.Cut(q.Get("token"), ".")
+	other := "A"
+	if secret[0] == 'A' {
+		other = "B"
+	}
+	if st, _ := anon.do("POST", "/v1/auth/email/confirm", map[string]any{"tenant": q.Get("t"), "token": sel + "." + other + secret[1:]}); st != 400 {
 		t.Fatalf("a wrong secret: %d", st)
+	}
+	// Counted, toward the link's lock.
+	var failures int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT failures FROM email_verifications WHERE email = 'ada@foods.test'`).Scan(&failures); err != nil || failures != 1 {
+		t.Fatalf("failures: %d %v", failures, err)
 	}
 	if out := anon.must(200, "POST", "/v1/auth/email/confirm", map[string]any{"tenant": q.Get("t"), "token": q.Get("token")}); out["email"] != "ada@foods.test" {
 		t.Fatalf("confirm: %v", out)

@@ -4219,6 +4219,11 @@
       "reviewed": true,
       "context": "pin: the person has a password, passkey or authenticator, so sets the PIN on the web. {where} is the account page"
     },
+    "chatpin.set_already": {
+      "text": "You have a chat PIN already. To change it, sign in on the web (send sign in for a link), add a passkey or an authenticator, then change it on your Account page at {where}.",
+      "reviewed": true,
+      "context": "'pin' in chat from someone who has a chat PIN already: changing it is not done from the chat. {where} is the web app's Account page"
+    },
     "chatpin.not_here": {
       "text": "The chat PIN cannot be set from here yet: set it from WhatsApp, where Taskiem sends a secure form.",
       "reviewed": true,

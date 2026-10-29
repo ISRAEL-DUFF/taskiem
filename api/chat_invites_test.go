@@ -131,6 +131,10 @@ func TestInviteOnTelegram(t *testing.T) {
 	if ask := press(chidi, terms[0], "Yes"); len(ask) != 1 || !ask[0].AskContact {
 		t.Fatalf("contact asked: %+v", ask)
 	}
+	// Typing instead of sharing asks again; the invitation still waits.
+	if again := w.say(t, chidi, "ok"); !again.AskContact {
+		t.Fatalf("typed: %+v", again)
+	}
 	contact := func(phone string, of int64) []telegramtest.Call {
 		return w.update(t, chidi, func(id int64) []byte { return telegramtest.ContactMessage(id, chidi, phone, of) })
 	}

@@ -282,8 +282,16 @@ func (s *Server) connectWithOAuth(w http.ResponseWriter, r *http.Request) {
 		s.failOAuth(w, r, err)
 		return
 	}
+	// The request this link started, by its state: only its callback is
+	// the link's (a connection made on the web meanwhile is not).
+	u, err := url.Parse(consent)
+	if err != nil || u.Query().Get("state") == "" {
+		s.fail(w, r, fmt.Errorf("connect links: a consent URL without its state"))
+		return
+	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{l.Tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE connect_links SET oauth_name = $2, oauth_started_at = now() WHERE token_hash = $1`, l.Hash, name)
+		_, err := tx.Exec(ctx, `UPDATE connect_links SET oauth_name = $2, oauth_started_at = now(), oauth_state_hash = $3 WHERE token_hash = $1`,
+			l.Hash, name, oauthStateHash(u.Query().Get("state")))
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -295,12 +303,12 @@ func (s *Server) connectWithOAuth(w http.ResponseWriter, r *http.Request) {
 
 // oauthLinkOf is the live connect link an OAuth request was started from,
 // if any: the same business, connector, environment and connection name.
-func (s *Server) oauthLinkOf(ctx context.Context, req *secrets.OAuthRequest, c *connector.Connector) *connectLink {
+func (s *Server) oauthLinkOf(ctx context.Context, req *secrets.OAuthRequest, c *connector.Connector, state string) *connectLink {
 	l := &connectLink{Tenant: req.Tenant}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT token_hash, user_id, connector, environment, channel, address, workflow_id, expires_at FROM connect_links
-			WHERE connector = $1 AND environment = $2 AND oauth_name = $3 AND spent_at IS NULL AND expires_at > now() - $4::interval
-			ORDER BY oauth_started_at DESC LIMIT 1`, c.Manifest.ID, req.Environment, req.Name, secrets.OAuthRequestTTL.String()).
+			WHERE oauth_state_hash = $1 AND connector = $2 AND environment = $3 AND spent_at IS NULL AND expires_at > now() - $4::interval`,
+			oauthStateHash(state), c.Manifest.ID, req.Environment, secrets.OAuthRequestTTL.String()).
 			Scan(&l.Hash, &l.User, &l.Connector, &l.Environment, &l.Channel, &l.Address, &l.Workflow, &l.Expires)
 	})
 	if err != nil {
@@ -310,6 +318,12 @@ func (s *Server) oauthLinkOf(ctx context.Context, req *secrets.OAuthRequest, c *
 		return nil
 	}
 	return l
+}
+
+// oauthStateHash is how a connect link keeps the OAuth request it started.
+func oauthStateHash(state string) []byte {
+	h := sha256.Sum256([]byte("connect-link-oauth:" + state))
+	return h[:]
 }
 
 // connectDone sends the browser that used a connect link to the page that
@@ -477,7 +491,10 @@ var tokenShaped = regexp.MustCompile(`^[A-Za-z0-9_-]{20,}$`)
 // replace the key, since the chat app has it now.
 func (s *Server) keyInChat(ctx context.Context, tenant uuid.UUID, addr, text string) (bool, error) {
 	text = strings.TrimSpace(text)
-	if len(text) < 8 {
+	// Every key below is one word of at least 11 characters (a prefix of
+	// 3 or more and 8 after it, or tokenShaped's): ordinary messages need
+	// no registry.
+	if !slices.ContainsFunc(strings.Fields(text), func(w string) bool { return len(strings.Trim(w, `"'.,;:()[]<>`)) >= 11 }) {
 		return false, nil
 	}
 	who := ""
