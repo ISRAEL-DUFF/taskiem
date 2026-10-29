@@ -961,9 +961,14 @@ func signalLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env, event, co
 
 // registerWait records that a step waits for a signal, or delivers a
 // buffered one immediately. Only signals delivered to the run's own
-// environment match.
+// environment match. The run keeps the correlation it last waited on as
+// its correlation key, which GET /v1/runs?correlation_key= finds it by
+// (spec 15.1).
 func (s *Store) registerWait(ctx context.Context, tx pgx.Tx, ref RunRef, env, step, event, correlation string) (func() error, error) {
 	if err := signalLock(ctx, tx, ref.TenantID, env, event, correlation); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE runs SET correlation_key = $2 WHERE id = $1 AND correlation_key IS DISTINCT FROM $2`, ref.ID, correlation); err != nil {
 		return nil, err
 	}
 	var id uuid.UUID

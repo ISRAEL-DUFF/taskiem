@@ -181,8 +181,9 @@ type runSummary struct {
 
 const runColumns = `r.id, r.workflow_id, w.name, r.version, r.environment, r.status, r.started_by, r.started_at, r.ended_at`
 
-// listRuns lists runs, newest first. Filters: workflow, status, environment;
-// paging with before (a started_at timestamp) and limit.
+// listRuns lists runs, newest first. Filters: workflow, status, environment,
+// correlation_key (exact); paging with before (a started_at timestamp) and
+// limit.
 func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	q := r.URL.Query()
@@ -214,11 +215,20 @@ func (s *Server) listRuns(w http.ResponseWriter, r *http.Request) {
 		}
 		wf = &id
 	}
+	// The tenant is named, not only left to row-level security, so the
+	// list reads runs (tenant_id, started_at) in order and stops at the
+	// limit; a correlation key is looked up in its own index.
+	query := `SELECT ` + runColumns + ` FROM runs r JOIN workflows w ON w.id = r.workflow_id
+		WHERE r.tenant_id = $6 AND r.started_at < $1 AND ($2::uuid IS NULL OR r.workflow_id = $2) AND ($3 = '' OR r.status = $3) AND ($4 = '' OR r.environment = $4)`
+	args := []any{before, wf, q.Get("status"), env, limit, p.TenantID}
+	if key := q.Get("correlation_key"); key != "" {
+		query += ` AND r.correlation_key = $7`
+		args = append(args, key)
+	}
+	query += ` ORDER BY r.started_at DESC LIMIT $5`
 	var out []runSummary
 	err = s.readTx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT `+runColumns+` FROM runs r JOIN workflows w ON w.id = r.workflow_id
-			WHERE r.started_at < $1 AND ($2::uuid IS NULL OR r.workflow_id = $2) AND ($3 = '' OR r.status = $3) AND ($4 = '' OR r.environment = $4)
-			ORDER BY r.started_at DESC LIMIT $5`, before, wf, q.Get("status"), env, limit)
+		rows, err := tx.Query(r.Context(), query, args...)
 		if err != nil {
 			return err
 		}
