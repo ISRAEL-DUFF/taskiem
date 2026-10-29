@@ -233,3 +233,144 @@ test("the Stock page before stock is kept, and with items", async ({
     change: -1,
   });
 });
+
+const sales = {
+  day: "2026-10-29",
+  total_kobo: 12000000,
+  by_how: { cash: 9000000, transfer: 3000000, pos: 0 },
+  count: 2,
+  waiting: 1,
+  top: [{ item: "Rice", unit: "bag", quantity: 2, total_kobo: 9000000 }],
+  unsold: [
+    {
+      entry_id: "8d0c4a8e-2f7b-4a11-9a53-3c1e7a0f9b10",
+      amount_kobo: 450000,
+      channel: "moniepointpos/shop",
+      at: new Date().toISOString(),
+    },
+  ],
+  sales: [
+    {
+      id: "s1",
+      reference: "S-7QX4KD",
+      lines: [
+        {
+          item_id: "2",
+          item: "Rice",
+          quantity: 2,
+          unit: "bag",
+          price_kobo: 4500000,
+          line_kobo: 9000000,
+        },
+      ],
+      amount_kobo: 9000000,
+      paid_how: "cash",
+      status: "recorded",
+      by: "user:ada",
+      sold_at: new Date().toISOString(),
+    },
+    {
+      id: "s2",
+      reference: "S-K2M9PA",
+      lines: [
+        {
+          item_id: "1",
+          item: "Indomie",
+          quantity: 3,
+          unit: "carton",
+          price_kobo: 1000000,
+          line_kobo: 3000000,
+        },
+      ],
+      amount_kobo: 3000000,
+      paid_how: "transfer",
+      status: "waiting",
+      by: "user:ada",
+      sold_at: new Date().toISOString(),
+      short: ["Indomie"],
+    },
+  ],
+};
+
+test("sales on the Stock page: today's total, Record a sale, Say what was sold", async ({
+  page,
+}) => {
+  await signUp(page);
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+  await page.route("**/v1/stock", (route) => route.fulfill(json(stock)));
+  await page.route("**/v1/stock/movements?**", (route) =>
+    route.fulfill(json(movements)),
+  );
+  const sent: unknown[] = [];
+  await page.route("**/v1/stock/sales", async (route) => {
+    if (route.request().method() === "POST") {
+      expect(route.request().headers()["idempotency-key"]).toBeTruthy();
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ ...json({ sale: sales.sales[0] }), status: 201 });
+      return;
+    }
+    await route.fulfill(json(sales));
+  });
+  await page.goto("/storefront/stock");
+  const hero = page.getByTestId("sales-hero");
+  await expect(hero).toContainText("₦120,000");
+  await expect(hero).toContainText("2 sales · Cash ₦90,000 · Transfer ₦30,000");
+  await expect(hero).toContainText("1 waiting for money");
+  await expect(page.getByTestId("sale")).toHaveCount(2);
+  await expect(page.getByTestId("sale").last()).toContainText(
+    "3 cartons Indomie",
+  );
+  await expect(page.getByTestId("sale").last()).toContainText(
+    "waiting for the transfer · S-K2M9PA · more Indomie sold than counted",
+  );
+  await expect(page.getByTestId("unsold")).toContainText("₦4,500");
+  await axeBoth(page, "/storefront/stock, with sales");
+
+  // Record a sale: Indomie has no price, so the amount is needed.
+  await page.getByRole("button", { name: "Record a sale" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("What was sold").selectOption("1");
+  await dialog.getByLabel("How many").fill("2");
+  await expect(dialog).toContainText(
+    "Indomie has no price: give its price or the amount taken.",
+  );
+  await dialog.getByRole("button", { name: "Add another item" }).click();
+  await dialog.getByLabel("What was sold").last().selectOption("2");
+  await dialog.getByLabel("Transfer").check();
+  await dialog.getByLabel("Amount taken (₦)").fill("65,000");
+  await expect(dialog).toContainText("matched when the transfer comes in");
+  await axeBoth(page, "record a sale");
+  await dialog.getByRole("button", { name: "Record the sale" }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent[0]).toEqual({
+    lines: [
+      { item_id: "1", quantity: 2 },
+      { item_id: "2", quantity: 1 },
+    ],
+    paid_how: "transfer",
+    note: "",
+    amount_kobo: 6500000,
+  });
+
+  // Say what a terminal's sale was: paid on the terminal, for its amount.
+  await page
+    .getByRole("button", { name: "Say what was sold for ₦4,500" })
+    .click();
+  await expect(dialog).toContainText("What was sold for ₦4,500");
+  await expect(dialog.getByLabel("Amount taken (₦)")).toHaveCount(0);
+  await dialog.getByLabel("What was sold").selectOption("2");
+  await dialog.getByLabel("Price for one (₦)").fill("4500");
+  await dialog.getByRole("button", { name: "Record the sale" }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent[1]).toEqual({
+    lines: [{ item_id: "2", quantity: 1, price_kobo: 450000 }],
+    paid_how: "pos",
+    note: "",
+    amount_kobo: 450000,
+    entry_id: "8d0c4a8e-2f7b-4a11-9a53-3c1e7a0f9b10",
+  });
+});

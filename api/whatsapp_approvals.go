@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/schools"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -252,6 +253,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendMatchItem(ctx, it)
 		case moneydigest.OutboxDaily:
 			sendErr = s.sendMoneyDailyItem(ctx, it)
+		case stock.OutboxEvening:
+			sendErr = s.sendSalesEveningItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}

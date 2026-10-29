@@ -54,12 +54,16 @@ const (
 	IntentExpense Intent = "expense"
 	IntentCashIn  Intent = "cash_in"
 	IntentCashOut Intent = "cash_out"
+	// A sale at the counter (docs/stock.md): the words before what was
+	// sold, in the other languages. English's ("sold", "sell") are read by
+	// the API, so en.json lists none.
+	IntentSold Intent = "sold"
 )
 
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -89,7 +93,7 @@ type Words struct {
 
 // prefixIntents take what follows them; the others are whole messages.
 var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold}
 
 var (
 	wordsOnce sync.Once

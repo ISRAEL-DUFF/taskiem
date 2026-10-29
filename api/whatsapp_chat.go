@@ -585,11 +585,17 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 				if done, err := s.waMoneyWords(ctx, c, m); done || err != nil {
 					return err
 				}
+			case lang.IntentSold:
+				// A sale in the person's language: what follows the sale
+				// word is read as English's is (stock K2).
+				if s.Stock.Ready() && m.Arg != "" {
+					return s.waStockSale(ctx, c, m.Arg)
+				}
 			}
 		}
 		// Words that only looked like one ("I spend the whole day…") are
 		// ordinary chat, which the model may still route.
-		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut}, m.Intent) {
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold}, m.Intent) {
 			matched = false
 		}
 		// A way into the web app for someone with no password (N6).
@@ -710,6 +716,9 @@ func (s *Server) waHelp(c *chat) string {
 	}
 	if c.p.Can(PermTableRead) && s.Stock.Ready() {
 		lines = append(lines, c.t("wa.help.stock"))
+		if c.p.Can(PermTableEdit) {
+			lines = append(lines, c.t("wa.help.sales"))
+		}
 	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {
 		lines = append(lines, c.t("wa.help.bookings"))

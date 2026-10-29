@@ -24,6 +24,20 @@ Each time, Taskiem shows you the change first. Reply **yes** to make it.
 
 When a customer's order is accepted on your page, the stock goes down by itself.
 
+## Sales
+
+When you sell, send what you sold, the amount and how you were paid:
+
+*sold 3 bags of rice 45,000 cash*
+
+Use *transfer* or *pos* instead of *cash* for those. Several items go in one message: *sold 2 cartons indomie, 1 bag rice 60,000 transfer*. Leave out the amount and Taskiem uses your prices. You can say it in Pidgin, Yoruba, Hausa or Igbo too: *i don sell 3 bags rice 45,000 cash*.
+
+Reply **yes**, and the items come off your stock. Cash goes into your money record at once. A transfer or a terminal sale waits until the money comes in, then Taskiem matches them.
+
+On the web, press **Record a sale** on the Stock page. Today's sales are at the top.
+
+Each evening after you close, Taskiem sends you the day's total: how much, by cash, transfer and terminal, what sold most, and what is low. If your terminal took money that nobody said the items for, it says so: press **Say what was sold** on the Stock page, or send *sold* with the items, the amount and *pos*.
+
 ## Low stock
 
 Give each item a **reorder level** on the Stock page: when the count is at that or less, the item is low. Give it an **order up to** level too, and Taskiem says how many to order. *stock* lists what is low.

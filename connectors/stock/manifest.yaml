@@ -106,6 +106,43 @@ actions:
         count: { type: integer, minimum: 0, maximum: 1000000 }
         note:  { type: string, maxLength: 200 }
     output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  record_sale:
+    title: Record a sale
+    description: A sale at the counter, as chat records one. Each line is an item by its row id and how many, at its price unless one is given; amount_kobo is the sale's total (the lines' prices added up when absent). paid_how is cash (its takings go into the money log), transfer or pos (the money the rail reports is matched to it; status waiting until then). The items' stock goes down, never below zero; short names the items sold beyond the stock there was.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [lines, paid_how]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [id, quantity]
+            properties:
+              id:         { type: string }
+              quantity:   { type: integer, minimum: 1, maximum: 1000000 }
+              price_kobo: { type: integer, minimum: 0 }
+        amount_kobo: { type: integer, minimum: 1 }
+        paid_how:    { type: string, enum: [cash, transfer, pos] }
+        note:        { type: string, maxLength: 200 }
+    output:
+      type: object
+      properties:
+        id:          { type: string }
+        reference:   { type: string, description: "S-7QX4KD" }
+        amount_kobo: { type: integer }
+        paid_how:    { type: string }
+        status:      { type: string, enum: [recorded, waiting, matched] }
+        short:       { type: array, items: { type: string } }
   movements:
     title: List stock movements
     description: An item's movements (or every item's), the latest first, since a time.

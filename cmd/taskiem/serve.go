@@ -707,7 +707,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
-	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}}}
+	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
+		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
 		pool.Close()
@@ -1268,7 +1269,9 @@ func serve(ctx context.Context, args []string) error {
 			money.Channels = append(money.Channels, "telegram")
 		}
 		log.Info("money summaries", "daily_chat", len(money.Channels) > 0, "monthly_email", money.Mailer != nil && money.From != "")
-		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run, stockSweep.Run)
+		// The evening sales total in chat, at each shop's closing time.
+		evening := &stock.Evening{Pool: e.pool, Channels: money.Channels, Logger: log.With("component", "stock")}
+		tasks = append(tasks, s.Run, cron.Run, alerter.Run, digests.Run, hooks.Run, bill.Run, domains.Run, sites.Run, sfDomains.Run, e.remote().Run, keys.Run, e.tables().RunRenewals, poller.Run, reopener.Run, mirror.Run, schoolCopies.Run, money.Run, stockSweep.Run, evening.Run)
 		if cfg.Canary.On() {
 			// The synthetic end-to-end probe (docs/reliability.md).
 			p := cfg.Canary.prober(log)

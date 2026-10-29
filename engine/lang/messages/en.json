@@ -3084,6 +3084,121 @@
       "reviewed": true,
       "context": "Help: the stock commands"
     },
+    "sales.how_cash": {
+      "text": "in cash",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence: Sold … for ₦45,000, in cash?"
+    },
+    "sales.how_transfer": {
+      "text": "by transfer",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence"
+    },
+    "sales.how_pos": {
+      "text": "on the terminal",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence: on the POS terminal"
+    },
+    "sales.by_cash": {
+      "text": "Cash",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid: Cash ₦45,000"
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid"
+    },
+    "sales.by_pos": {
+      "text": "Terminal",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid"
+    },
+    "sales.evening.title": {
+      "text": "*Today's sales*: {total} from {count} sales.",
+      "reviewed": true,
+      "context": "The evening total's first line"
+    },
+    "sales.evening.top": {
+      "text": "Sold most: {list}.",
+      "reviewed": true,
+      "context": "The evening total: what sold most"
+    },
+    "sales.evening.waiting": {
+      "text": "{count} sales by transfer or on the terminal are waiting for their money.",
+      "reviewed": true,
+      "context": "The evening total: sales still waiting for their money"
+    },
+    "sales.evening.unsold": {
+      "text": "{count} terminal sales, {amount}, have no items: send *sold* with the items, the amount and *pos* to say what was sold.",
+      "reviewed": true,
+      "context": "The evening total: terminal sales with no items recorded"
+    },
+    "sales.evening.low": {
+      "text": "Low now: {list}.",
+      "reviewed": true,
+      "context": "The evening total: what is low now"
+    },
+    "money.daily.sales": {
+      "text": "Sales you recorded: {total} from {count} sales ({by}).",
+      "reviewed": true,
+      "context": "The morning summary: the sales recorded by chat or the web that day"
+    },
+    "wa.sale.how": {
+      "text": "Write it like *sold 3 bags of rice 45,000 cash*: how many, the item, the amount, and cash, transfer or pos.",
+      "reviewed": true,
+      "context": "sold with words that could not be read"
+    },
+    "wa.sale.which": {
+      "text": "More than one item matches *{name}*: {list}. Send the sale again with the name in full.",
+      "reviewed": true,
+      "context": "A sale naming an item several items match"
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* has no price. Send the sale again with the amount, like *sold 2 {name} 4,500 cash*.",
+      "reviewed": true,
+      "context": "A sale with no amount, of an item with no price"
+    },
+    "wa.sale.confirm": {
+      "text": "Sold {items} for {amount}, {how}?",
+      "reviewed": true,
+      "context": "Confirming a sale"
+    },
+    "wa.sale.beyond": {
+      "text": "That is more {names} than Taskiem counts on your shelf: the count goes to 0, and the sale is kept.",
+      "reviewed": true,
+      "context": "A sale of more than the stock there is: recorded, never refused"
+    },
+    "wa.sale.recorded": {
+      "text": "Recorded {reference}: {items}, {amount} {how}.",
+      "reviewed": true,
+      "context": "A sale recorded"
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "Waiting for the transfer: it is matched when it comes.",
+      "reviewed": true,
+      "context": "A sale by transfer whose money has not come yet"
+    },
+    "wa.sale.waiting_pos": {
+      "text": "Waiting for the terminal's sale: it is matched when the money is reported.",
+      "reviewed": true,
+      "context": "A sale on the terminal whose money has not come yet"
+    },
+    "wa.sale.matched": {
+      "text": "Matched to the money that came in.",
+      "reviewed": true,
+      "context": "A sale whose money was found at once"
+    },
+    "wa.sale.short": {
+      "text": "You sold more {names} than Taskiem counted: count your shelf when you can (*stock {name} 12*).",
+      "reviewed": true,
+      "context": "After a sale of more than the stock there was"
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (or *transfer*, *pos*): record a sale; it takes the items off your stock",
+      "reviewed": true,
+      "context": "Help: recording a sale"
+    },
     "wa.shop.with_photo": {
       "text": " (with the photo)",
       "reviewed": true,

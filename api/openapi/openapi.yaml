@@ -6168,6 +6168,103 @@ paths:
                     $ref: '#/components/schemas/StockMovement'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/sales:
+    get:
+      operationId: getSales
+      tags:
+      - Stock
+      summary: A day's sales
+      description: The sales recorded on a Lagos day (today when day is absent), added up by how they were paid, what sold most, how many still wait for their money, and the terminal's sales with no items recorded.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The day
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockDay'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: recordSale
+      tags:
+      - Stock
+      summary: Record a sale
+      description: Items sold at the counter, the amount (their prices added up when absent) and how it was paid. A cash sale writes its takings into the money log; a sale by transfer or on the terminal waits for the money the rail reports, matched to it once. entry_id gives a terminal's sale with no items its items. Each item's stock goes down, never below zero; short names the items sold beyond the stock there was.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key is the same sale'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines, paid_how]
+              properties:
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [item_id, quantity]
+                    properties:
+                      item_id:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      price_kobo:
+                        type: integer
+                        minimum: 0
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                paid_how:
+                  type: string
+                  enum: [cash, transfer, pos]
+                note:
+                  type: string
+                  maxLength: 200
+                entry_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: The sale
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sale]
+                properties:
+                  sale:
+                    $ref: '#/components/schemas/StockSale'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/deliveries:
     get:
       operationId: listDeliveries
@@ -24592,6 +24689,112 @@ components:
           format: date-time
         retired_at:
           $ref: '#/components/schemas/NullableTimestamp'
+    StockSale:
+      type: object
+      required: [id, reference, lines, amount_kobo, paid_how, status, by, sold_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+              item:
+                type: string
+              quantity:
+                type: integer
+              unit:
+                type: string
+              price_kobo:
+                type: integer
+              line_kobo:
+                type: integer
+        amount_kobo:
+          type: integer
+        paid_how:
+          type: string
+          enum: [cash, transfer, pos]
+        status:
+          type: string
+          enum: [recorded, waiting, matched]
+          description: recorded (cash), waiting for its money, or matched to it
+        entry_id:
+          type: string
+          format: uuid
+        matched_how:
+          type: string
+          enum: [reference, amount, owner]
+        note:
+          type: string
+        by:
+          type: string
+        sold_at:
+          type: string
+          format: date-time
+        short:
+          type: array
+          items:
+            type: string
+    StockDay:
+      type: object
+      required: [day, total_kobo, by_how, count, waiting, top, unsold, sales]
+      properties:
+        day:
+          type: string
+          format: date
+        total_kobo:
+          type: integer
+        by_how:
+          type: object
+          additionalProperties:
+            type: integer
+        count:
+          type: integer
+        waiting:
+          type: integer
+        top:
+          type: array
+          items:
+            type: object
+            properties:
+              item:
+                type: string
+              unit:
+                type: string
+              quantity:
+                type: integer
+              total_kobo:
+                type: integer
+        unsold:
+          type: array
+          description: The terminal's sales with no sale recorded for them
+          items:
+            type: object
+            properties:
+              entry_id:
+                type: string
+                format: uuid
+              amount_kobo:
+                type: integer
+              channel:
+                type: string
+              at:
+                type: string
+                format: date-time
+        sales:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockSale'
+        low:
+          type: array
+          items:
+            type: object
     StockItem:
       type: object
       required: [id, name, available, stock]

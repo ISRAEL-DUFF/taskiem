@@ -2468,6 +2468,98 @@
       "text": "• *add 50 cartons of Indomie at 8,500*: tinye ngwa ahịa; *stock* na ngwa ahịa, ma ọ bụ *how many bags of rice*: ọnụ ọgụgụ ya; *stock* naanị: ihe dị ala; *adjust rice -2 spoilt*: dozie ọnụ ọgụgụ",
       "reviewed": false
     },
+    "sales.how_cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "sales.how_transfer": {
+      "text": "site na transfer",
+      "reviewed": false
+    },
+    "sales.how_pos": {
+      "text": "na POS",
+      "reviewed": false
+    },
+    "sales.by_cash": {
+      "text": "Ego aka",
+      "reviewed": false
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": false
+    },
+    "sales.by_pos": {
+      "text": "POS",
+      "reviewed": false
+    },
+    "sales.evening.title": {
+      "text": "*Ire taa*: {total} site na ire {count}.",
+      "reviewed": false
+    },
+    "sales.evening.top": {
+      "text": "Ihe e rere karịa: {list}.",
+      "reviewed": false
+    },
+    "sales.evening.waiting": {
+      "text": "Ire {count} site na transfer ma ọ bụ POS ka na-eche ego ha.",
+      "reviewed": false
+    },
+    "sales.evening.unsold": {
+      "text": "Ire POS {count}, {amount}, enweghị ngwa ahịa: zipu *sold* na ngwa ahịa, ego ahụ na *pos* iji kwuo ihe e rere.",
+      "reviewed": false
+    },
+    "sales.evening.low": {
+      "text": "Ihe dị ala ugbu a: {list}.",
+      "reviewed": false
+    },
+    "money.daily.sales": {
+      "text": "Ire i dekọrọ: {total} site na ire {count} ({by}).",
+      "reviewed": false
+    },
+    "wa.sale.how": {
+      "text": "Dee ya dị ka *sold 3 bags of rice 45,000 cash*: ole, ngwa ahịa, ego ahụ, na cash, transfer ma ọ bụ pos.",
+      "reviewed": false
+    },
+    "wa.sale.which": {
+      "text": "Ihe karịrị otu ngwa ahịa dabara na *{name}*: {list}. Zipu ire ahụ ọzọ na aha zuru ezu.",
+      "reviewed": false
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* enweghị ọnụ ahịa. Zipu ire ahụ ọzọ na ego ahụ, dị ka *sold 2 {name} 4,500 cash*.",
+      "reviewed": false
+    },
+    "wa.sale.confirm": {
+      "text": "Ị rere {items} na {amount}, {how}?",
+      "reviewed": false
+    },
+    "wa.sale.beyond": {
+      "text": "Nke ahụ karịrị {names} Taskiem gụrụ n'ebe ị na-edebe ihe: ọnụ ọgụgụ ga-abụ 0, a ga-edebe ire ahụ.",
+      "reviewed": false
+    },
+    "wa.sale.recorded": {
+      "text": "Edekọọla {reference}: {items}, {amount} {how}.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "Ọ na-eche transfer ahụ: a ga-ejikọ ya mgbe ọ bịara.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_pos": {
+      "text": "Ọ na-eche ire POS ahụ: a ga-ejikọ ya mgbe e kwuru maka ego ahụ.",
+      "reviewed": false
+    },
+    "wa.sale.matched": {
+      "text": "Ejikọọla ya na ego batara.",
+      "reviewed": false
+    },
+    "wa.sale.short": {
+      "text": "Ị rere {names} karịa ihe Taskiem gụrụ: gụọ ihe dị n'ebe ị na-edebe ihe mgbe ị nwere ike (*stock {name} 12*).",
+      "reviewed": false
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (ma ọ bụ *transfer*, *pos*): dekọọ ire; ọ ga-ewepụ ngwa ahịa n'ime ngwa ahịa gị",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (ya na foto ahụ)",
       "reviewed": false

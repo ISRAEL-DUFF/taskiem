@@ -28,7 +28,7 @@ A movement is one change to one item's stock: the change, the count before and a
 | Reason | Made by |
 | --- | --- |
 | `order` | A storefront order accepted (`decide`), one per catalogue row, naming the order's reference |
-| `sale` | A sale recorded (K2) |
+| `sale` | A sale recorded: `sold 3 bags of rice 45,000 cash`, **Record a sale**, `record_sale`, one per item, naming the sale's reference |
 | `received` | Goods received: an item added with its quantity, `add 20 cartons of Indomie`, **Record stock** |
 | `adjustment` | A correction with a reason: `adjust rice -2 spoilt` |
 | `count` | A count: `stock rice 12`, **Record stock > I counted** |
@@ -47,6 +47,22 @@ A movement that cannot reach the table (the project is down) stays pending and i
 
 Movements are a record: what was asked and why never change after they are made, and done or void ones never change at all. They are copied, within a minute of landing, to a [kept table](data-tables.md#kept-tables) `stock_movements` in the business's project, for reading, exporting and workflows.
 
+## Sales
+
+A sale is items, how many, the amount and how it was paid: `cash`, `transfer` or `pos` (the terminal). Recording one writes, in one transaction of Taskiem's database:
+
+- the sale (`stock_sales`, with a reference like `S-7QX4KD`), `recorded` when paid in cash, else `waiting` for its money;
+- a `sale` movement per item, sent to the table as any movement is; a sale of more than the count is recorded, never refused, and the item is named in the sale's `short`;
+- for cash, a `cash` entry in the [money log](money-log.md), naming the sale.
+
+With no amount, the amount is the items' catalogue prices; an item with no price needs the amount.
+
+**Matching.** A sale by transfer or on the terminal waits for its money. Every minute, a waiting sale is matched to money in of that amount (a transfer or payment for `transfer`, a terminal's `pos_sale` for `pos`) within 12 hours of it, the sale's reference in the money's reference first, then the nearest in time. Each money entry counts for one sale only, and once matched it is no longer an unmatched leak.
+
+**Terminal sales with no items.** A terminal's sale is money, not items. Those of a day that no sale names are listed on the Stock page and in the evening total, so the owner can say what was sold (**Say what was sold**, or `sold … pos`): the sale takes that money, for its amount, and the items come off the stock. Nothing is guessed.
+
+**The evening total.** After closing (the storefront's hours for the day, else 21:00 Lagos), the people who get the [money summary](money-reports.md#who-gets-them) are sent today's sales once: the total, by cash, transfer and terminal, what sold most, the sales still waiting for their money, the terminal's sales with no items, and what is low now. A day with no sales sends nothing. Outside WhatsApp's 24-hour window it goes as the alert template. The next morning's money summary carries a line for the sales recorded too.
+
 ## In chat
 
 On WhatsApp and Telegram (each change shown first, written on **yes**):
@@ -58,12 +74,13 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `stock` | The items at or below their reorder level, with how many to order |
 | `adjust rice -2 spoilt` | An adjustment with its reason (`+3 found` adds) |
 | `stock rice 12` | A count |
+| `sold 3 bags of rice 45,000 cash` | A sale (`transfer`, `pos`; several items: `sold 2 cartons indomie, 1 bag rice 60,000 transfer`; no amount takes the prices) |
 
-Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. The words are English for now; the other languages' come with sales (K2).
+Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review). A voice note is read the same way, where voice notes are on.
 
 ## On the web
 
-**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are.
+**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day.
 
 ## API
 
@@ -75,6 +92,8 @@ Items are found as `price` finds them: the exact name, else the one the words st
 | `PATCH /v1/stock/items/{id}` | An item's name, prices, unit, levels or supplier; its stock changes by movements only |
 | `GET /v1/stock/movements` | Movements, the latest to land first, by `item`, `reason`, `since`, `until` |
 | `POST /v1/stock/movements` | Goods received, an adjustment or a count, with an `Idempotency-Key`; 202 while it has not reached the table |
+| `POST /v1/stock/sales` | A sale, with an `Idempotency-Key`: `lines` (`item_id`, `quantity`, `price_kobo`), `amount_kobo`, `paid_how`, `note`; `entry_id` gives a terminal's sale its items (409 when that money counts for something already) |
+| `GET /v1/stock/sales?day=2026-10-29` | A day's sales (today in Lagos by default), added up by how paid, the top items, how many wait, and the terminal's sales with no items |
 
 ## In workflows: `stock@1`
 
@@ -88,9 +107,12 @@ A platform connector acting on the run's own business, needing no connection:
 | `receive` | Goods received, naming where from (`reference`) |
 | `count` | A count |
 | `movements` | Movements, by item, reason and time |
+| `record_sale` | A sale: lines by row id with quantity and price, the amount and how it was paid |
 
 Changes carry the step's idempotency key: a retried step moves stock once.
 
 ## For developers
 
 `engine/stock` records and sends movements (`RecordTx`, `Apply`, `Outside`, `OrderLines`), reads items (`Items`), and sweeps (`Sweeper`: pending movements, and the kept copy). The table is reached through `storefront.XenibaseStock`, whose `Change` is the storefront's compare-and-set. The movements are migration 00256; `taskiem_stock_due_tenants` (a definer) finds the businesses with work for the sweep, and `storefronts.keeps_stock` makes `taskiem_storefronts_due` refresh a catalogue keeping stock whether or not its page is published.
+
+Sales are `engine/stock/sales.go` (`RecordSale`, `MatchSales`, `DayTx`), the sentence parser `salewords.go`, and the evening total `evening.go` (`Evening`, queued as `money_digests` kind `sales_evening` and sent by the WhatsApp/Telegram outbox, written at send time). Migration 00257 holds `stock_sales`; a sale's money entry is unique to it.

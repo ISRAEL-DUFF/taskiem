@@ -14,7 +14,17 @@ import {
   plural,
   quantity,
   stockLine,
+  byHowLine,
+  emptySale,
+  saleProblem,
+  saleRequest,
+  saleSub,
+  saleTitle,
+  saleTotal,
+  unsoldSale,
   type Movement,
+  type Sale,
+  type SalesDay,
   type StockItem,
 } from "./stock";
 
@@ -198,5 +208,115 @@ describe("stock", () => {
         note: "",
       }),
     ).toBe("4 → 50 cartons");
+  });
+});
+
+describe("sales", () => {
+  const items: StockItem[] = [
+    { id: "1", name: "Indomie", available: true, stock: 4, unit: "carton" },
+    {
+      id: "2",
+      name: "Rice",
+      available: true,
+      stock: 30,
+      unit: "bag",
+      price_kobo: 4500000,
+    },
+  ];
+  it("reads a day's takings by how they were paid", () => {
+    const d = {
+      by_how: { cash: 9000000, transfer: 0, pos: 450000 },
+    } as SalesDay;
+    expect(byHowLine(d)).toBe("Cash ₦90,000 · Terminal ₦4,500");
+  });
+  it("titles a sale and says whether its money came", () => {
+    const s: Sale = {
+      id: "s",
+      reference: "S-7QX4KD",
+      lines: [
+        {
+          item_id: "2",
+          item: "Rice",
+          quantity: 2,
+          unit: "bag",
+          price_kobo: 4500000,
+          line_kobo: 9000000,
+        },
+        {
+          item_id: "1",
+          item: "Indomie",
+          quantity: 1,
+          unit: "carton",
+          price_kobo: 1000000,
+          line_kobo: 1000000,
+        },
+      ],
+      amount_kobo: 10000000,
+      paid_how: "pos",
+      status: "waiting",
+      by: "user:ada",
+      sold_at: new Date().toISOString(),
+      short: ["Indomie"],
+    };
+    expect(saleTitle(s)).toBe("2 bags Rice, 1 carton Indomie");
+    expect(saleSub(s)).toContain(
+      "Terminal · waiting for the terminal's report · S-7QX4KD · more Indomie sold than counted",
+    );
+    expect(saleSub({ ...s, status: "matched" })).toContain("money came in");
+  });
+  it("prices a sale from its items, or needs the amount", () => {
+    const f = {
+      ...emptySale(),
+      lines: [{ item_id: "2", quantity: "2", price: "" }],
+    };
+    expect(saleTotal(items, f)).toBe(9000000);
+    expect(saleProblem(items, f)).toBeNull();
+    const noPrice = {
+      ...f,
+      lines: [{ item_id: "1", quantity: "2", price: "" }],
+    };
+    expect(saleProblem(items, noPrice)).toBe(
+      "Indomie has no price: give its price or the amount taken.",
+    );
+    expect(saleProblem(items, { ...noPrice, amount: "20,000" })).toBeNull();
+    expect(
+      saleProblem(items, {
+        ...f,
+        lines: [{ item_id: "", quantity: "1", price: "" }],
+      }),
+    ).toBe("Choose the item sold on each line.");
+    expect(
+      saleProblem(items, {
+        ...f,
+        lines: [{ item_id: "2", quantity: "1.5", price: "" }],
+      }),
+    ).toContain("whole number");
+    expect(saleProblem(items, { ...f, amount: "0" })).toContain("is an amount");
+    expect(
+      saleRequest({ ...noPrice, amount: "20,000", how: "transfer" }),
+    ).toEqual({
+      lines: [{ item_id: "1", quantity: 2, price_kobo: undefined }],
+      paid_how: "transfer",
+      note: "",
+      amount_kobo: 2000000,
+    });
+  });
+  it("gives a terminal's sale its items for the amount it reported", () => {
+    const u = { entry_id: "e1", amount_kobo: 450050, channel: "pos", at: "" };
+    const f = unsoldSale(u);
+    expect(f.how).toBe("pos");
+    expect(f.amount).toBe("4500.50");
+    expect(
+      saleRequest(
+        { ...f, lines: [{ item_id: "1", quantity: "1", price: "" }] },
+        u,
+      ),
+    ).toEqual({
+      lines: [{ item_id: "1", quantity: 1, price_kobo: undefined }],
+      paid_how: "pos",
+      note: "",
+      amount_kobo: 450050,
+      entry_id: "e1",
+    });
   });
 });

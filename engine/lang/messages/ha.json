@@ -2468,6 +2468,98 @@
       "text": "• *add 50 cartons of Indomie at 8,500*: ƙara kaya; *stock* da wani kaya, ko *how many bags of rice*: adadinsa; *stock* kaɗai: abin da ya yi kaɗan; *adjust rice -2 spoilt*: gyara adadi",
       "reviewed": false
     },
+    "sales.how_cash": {
+      "text": "da kuɗi a hannu",
+      "reviewed": false
+    },
+    "sales.how_transfer": {
+      "text": "ta hanyar transfer",
+      "reviewed": false
+    },
+    "sales.how_pos": {
+      "text": "ta POS",
+      "reviewed": false
+    },
+    "sales.by_cash": {
+      "text": "Kuɗi a hannu",
+      "reviewed": false
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": false
+    },
+    "sales.by_pos": {
+      "text": "POS",
+      "reviewed": false
+    },
+    "sales.evening.title": {
+      "text": "*Sayarwar yau*: {total} daga sayarwa {count}.",
+      "reviewed": false
+    },
+    "sales.evening.top": {
+      "text": "Abin da aka fi sayarwa: {list}.",
+      "reviewed": false
+    },
+    "sales.evening.waiting": {
+      "text": "Sayarwa {count} ta transfer ko POS suna jiran kuɗinsu.",
+      "reviewed": false
+    },
+    "sales.evening.unsold": {
+      "text": "Sayarwar POS {count}, {amount}, ba su da kaya: aika *sold* tare da kayan, adadin kuɗi da *pos* don faɗin abin da aka sayar.",
+      "reviewed": false
+    },
+    "sales.evening.low": {
+      "text": "Abin da ya yi kaɗan yanzu: {list}.",
+      "reviewed": false
+    },
+    "money.daily.sales": {
+      "text": "Sayarwar da ka rubuta: {total} daga sayarwa {count} ({by}).",
+      "reviewed": false
+    },
+    "wa.sale.how": {
+      "text": "Rubuta shi kamar *sold 3 bags of rice 45,000 cash*: guda nawa, kayan, adadin kuɗi, da cash, transfer ko pos.",
+      "reviewed": false
+    },
+    "wa.sale.which": {
+      "text": "Kaya fiye da ɗaya sun dace da *{name}*: {list}. Sake aika sayarwar da cikakken suna.",
+      "reviewed": false
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* ba shi da farashi. Sake aika sayarwar da adadin kuɗi, kamar *sold 2 {name} 4,500 cash*.",
+      "reviewed": false
+    },
+    "wa.sale.confirm": {
+      "text": "An sayar da {items} a {amount}, {how}?",
+      "reviewed": false
+    },
+    "wa.sale.beyond": {
+      "text": "Wannan ya fi {names} da Taskiem ya ƙirga a shiryayyenka: adadin zai zama 0, kuma za a ajiye sayarwar.",
+      "reviewed": false
+    },
+    "wa.sale.recorded": {
+      "text": "An rubuta {reference}: {items}, {amount} {how}.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "Ana jiran transfer ɗin: za a haɗa shi idan ya zo.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_pos": {
+      "text": "Ana jiran sayarwar POS: za a haɗa ta idan an ba da rahoton kuɗin.",
+      "reviewed": false
+    },
+    "wa.sale.matched": {
+      "text": "An haɗa shi da kuɗin da ya shigo.",
+      "reviewed": false
+    },
+    "wa.sale.short": {
+      "text": "Ka sayar da {names} fiye da abin da Taskiem ya ƙirga: ƙirga shiryayyenka idan ka sami dama (*stock {name} 12*).",
+      "reviewed": false
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (ko *transfer*, *pos*): rubuta sayarwa; za ta cire kayan daga kayanka",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (da hoton)",
       "reviewed": false

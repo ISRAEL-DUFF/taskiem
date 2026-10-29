@@ -30,7 +30,8 @@
     "invoice": ["takardar kuɗi", "aika takardar kuɗi ga"],
     "expense": ["na kashe", "kashewa"],
     "cash_in": ["kuɗi ya shigo"],
-    "cash_out": ["kuɗi ya fita"]
+    "cash_out": ["kuɗi ya fita"],
+    "sold": ["na sayar da", "na sayar", "an sayar da", "an sayar"]
   },
   "fillers": ["don allah", "dan allah"],
   "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana", "takardar kuɗi", "na kashe", "kuɗi ya shigo", "kuɗi ya fita"],

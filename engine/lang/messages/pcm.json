@@ -2468,6 +2468,98 @@
       "text": "• *add 50 cartons of Indomie at 8,500*: add stock; *stock* and item, or *how many bags of rice*: im count; *stock* alone: wetin don low; *adjust rice -2 spoilt*: correct count",
       "reviewed": false
     },
+    "sales.how_cash": {
+      "text": "for cash",
+      "reviewed": false
+    },
+    "sales.how_transfer": {
+      "text": "by transfer",
+      "reviewed": false
+    },
+    "sales.how_pos": {
+      "text": "for POS",
+      "reviewed": false
+    },
+    "sales.by_cash": {
+      "text": "Cash",
+      "reviewed": false
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": false
+    },
+    "sales.by_pos": {
+      "text": "POS",
+      "reviewed": false
+    },
+    "sales.evening.title": {
+      "text": "*Today sales*: {total} from {count} sales.",
+      "reviewed": false
+    },
+    "sales.evening.top": {
+      "text": "Wetin sell pass: {list}.",
+      "reviewed": false
+    },
+    "sales.evening.waiting": {
+      "text": "{count} sales by transfer or POS still dey wait for dia money.",
+      "reviewed": false
+    },
+    "sales.evening.unsold": {
+      "text": "{count} POS sales, {amount}, no get items: send *sold* with di items, di amount and *pos* to talk wetin you sell.",
+      "reviewed": false
+    },
+    "sales.evening.low": {
+      "text": "Wetin don low now: {list}.",
+      "reviewed": false
+    },
+    "money.daily.sales": {
+      "text": "Sales wey you record: {total} from {count} sales ({by}).",
+      "reviewed": false
+    },
+    "wa.sale.how": {
+      "text": "Write am like *sold 3 bags of rice 45,000 cash*: how many, di item, di amount, and cash, transfer or pos.",
+      "reviewed": false
+    },
+    "wa.sale.which": {
+      "text": "Pass one item match *{name}*: {list}. Send di sale again with di full name.",
+      "reviewed": false
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* no get price. Send di sale again with di amount, like *sold 2 {name} 4,500 cash*.",
+      "reviewed": false
+    },
+    "wa.sale.confirm": {
+      "text": "You sell {items} for {amount}, {how}?",
+      "reviewed": false
+    },
+    "wa.sale.beyond": {
+      "text": "Dat one pass the {names} wey Taskiem count for your shelf: di count go reach 0, and di sale go stay.",
+      "reviewed": false
+    },
+    "wa.sale.recorded": {
+      "text": "E don record {reference}: {items}, {amount} {how}.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "E dey wait for di transfer: e go match am when e land.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_pos": {
+      "text": "E dey wait for di POS sale: e go match am when di money show.",
+      "reviewed": false
+    },
+    "wa.sale.matched": {
+      "text": "E don match di money wey enter.",
+      "reviewed": false
+    },
+    "wa.sale.short": {
+      "text": "You sell pass di {names} wey Taskiem count: count your shelf when you fit (*stock {name} 12*).",
+      "reviewed": false
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (or *transfer*, *pos*): record sale; e go comot di items from your stock",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (with di photo)",
       "reviewed": false

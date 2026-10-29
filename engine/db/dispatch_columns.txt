@@ -874,6 +874,8 @@ stock_movements.claimed_at
 stock_movements.mirrored_at
 stock_movements.status
 stock_movements.tenant_id
+stock_sales.status
+stock_sales.tenant_id
 storefront_actions.enabled
 storefront_actions.kind
 storefront_actions.label

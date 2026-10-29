@@ -152,8 +152,9 @@ func rowKey(id uuid.UUID) string {
 	return "tsk-" + base64.RawURLEncoding.EncodeToString(h[:])[:22]
 }
 
-// Sweeper sends movements still on their way and copies done ones, for
-// every business with some, every 30 seconds.
+// Sweeper sends movements still on their way, matches sales waiting for
+// their money, and copies done movements, for every business with some,
+// every 30 seconds.
 type Sweeper struct {
 	Stock  *Stock
 	Mirror *Mirror
@@ -195,6 +196,9 @@ func (w *Sweeper) Tick(ctx context.Context) error {
 	for _, t := range tenants {
 		if err := w.Stock.ApplyPending(ctx, t); err != nil && ctx.Err() == nil {
 			w.log().Warn("stock: sending movements", "tenant", t, "err", err)
+		}
+		if _, err := w.Stock.MatchSales(ctx, t); err != nil && ctx.Err() == nil {
+			w.log().Warn("stock: matching sales to their money", "tenant", t, "err", err)
 		}
 		if w.Mirror == nil {
 			continue

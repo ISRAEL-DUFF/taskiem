@@ -35,6 +35,8 @@ type stockChat struct {
 	Setup bool `json:"setup,omitempty"`
 	// Shown is the item's unit, as the answer says the count in it.
 	Shown string `json:"shown,omitempty"`
+	// Sale is a sale being confirmed.
+	Sale *saleChat `json:"sale,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -51,6 +53,8 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 		return true, s.waStockAdd(ctx, c, a)
 	}
 	switch {
+	case (words[0] == "sold" || words[0] == "sell") && len(words) > 1:
+		return true, s.waStockSale(ctx, c, strings.Join(strings.Fields(text)[1:], " "))
 	case cmd == "stock" || cmd == "low stock" || cmd == "what is low" || cmd == "what's low":
 		return true, s.waStockLow(ctx, c)
 	case words[0] == "how" && len(words) > 2 && (words[1] == "many" || words[1] == "much"):
@@ -383,6 +387,12 @@ func (s *Server) stockAskAdjust(ctx context.Context, c *chat, sh *chatShop, it s
 func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 	sh := c.data.Shop
 	in := sh.StockChat
+	if sh.Action == "stock_sale" && in != nil && in.Sale != nil && c.p.Can(PermTableEdit) {
+		if !s.limiter("wa-shop:"+c.addr, 20*time.Second, 10).Allow() {
+			return c.say(ctx, s, c.t("wa.shop.too_many"))
+		}
+		return s.waStockSaleApply(ctx, c)
+	}
 	if !c.p.Can(PermTableEdit) || in == nil {
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
@@ -516,4 +526,122 @@ func (s *Server) shopCountItem(ctx context.Context, c *chat, sf storefront.Store
 		return c.say(ctx, s, c.t("wa.stock.waiting", "name", whatsapp.SafeText(sh.Name)))
 	}
 	return c.say(ctx, s, c.t("wa.shop.changed", "name", whatsapp.SafeText(sh.Name))+" "+s.shopPublishedNote(c, sf))
+}
+
+// saleChat is a sale being confirmed.
+type saleChat struct {
+	Lines      []stock.SaleLine `json:"lines"`
+	AmountKobo *int64           `json:"amount_kobo,omitempty"`
+	PaidHow    string           `json:"paid_how"`
+	// Beyond names the items sold beyond the stock there is.
+	Beyond []string `json:"beyond,omitempty"`
+}
+
+// waStockSale answers "sold 3 bags of rice 45,000 cash" (and the same in
+// the other languages, after their sale word): the sale shown, recorded on
+// yes. Items are found as the other stock words find them; one that
+// matches several, or none, is said, and nothing is recorded.
+func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
+	if !c.p.Can(PermTableEdit) {
+		return c.say(ctx, s, c.t("wa.stock.denied", "org", c.tenant.Name))
+	}
+	said, ok := stock.ParseSale(args)
+	if !ok {
+		return c.say(ctx, s, c.t("wa.sale.how"))
+	}
+	_, items, ok, err := s.stockChatItems(ctx, c)
+	if !ok || err != nil {
+		return err
+	}
+	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow}
+	if sale.PaidHow == "" {
+		sale.PaidHow = stock.Cash
+	}
+	var total int64
+	for _, x := range said.Items {
+		match := matchStock(items, x.Name)
+		if len(match) > 1 {
+			var exact []stock.Item
+			for _, it := range match {
+				if matchKey(it.Name) == matchKey(x.Name) {
+					exact = append(exact, it)
+				}
+			}
+			if len(exact) == 1 {
+				match = exact
+			}
+		}
+		switch {
+		case len(match) == 0:
+			return c.say(ctx, s, c.t("wa.shop.no_item", "name", whatsapp.SafeText(x.Name)))
+		case len(match) > 1:
+			names := make([]string, 0, min(shopPickMax, len(match)))
+			for _, it := range match[:min(shopPickMax, len(match))] {
+				names = append(names, whatsapp.SafeText(it.Name))
+			}
+			return c.say(ctx, s, c.t("wa.sale.which", "name", whatsapp.SafeText(x.Name), "list", strings.Join(names, ", ")))
+		}
+		it := match[0]
+		price := int64(0)
+		if it.PriceKobo != nil {
+			price = *it.PriceKobo
+		} else if said.AmountKobo == nil {
+			return c.say(ctx, s, c.t("wa.sale.no_price", "name", whatsapp.SafeText(it.Name)))
+		}
+		unit := it.Unit
+		sale.Lines = append(sale.Lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: x.Quantity, Unit: unit, PriceKobo: price, LineKobo: price * x.Quantity})
+		total += price * x.Quantity
+		if it.Stock != nil && *it.Stock < x.Quantity {
+			sale.Beyond = append(sale.Beyond, it.Name)
+		}
+	}
+	if sale.AmountKobo == nil {
+		sale.AmountKobo = &total
+	}
+	if *sale.AmountKobo <= 0 {
+		return c.say(ctx, s, c.t("wa.sale.how"))
+	}
+	text := c.t("wa.sale.confirm", "items", whatsapp.SafeText(stock.SaleWords(sale.Lines)), "amount", storefront.FormatNaira(*sale.AmountKobo),
+		"how", c.t("sales.how_"+sale.PaidHow))
+	if len(sale.Beyond) > 0 {
+		text += "\n" + c.t("wa.sale.beyond", "names", whatsapp.SafeText(strings.Join(sale.Beyond, ", ")))
+	}
+	return s.shopAsk(ctx, c, &chatShop{Action: "stock_sale", StockChat: &stockChat{Sale: sale}}, text)
+}
+
+// waStockSaleApply records a confirmed sale.
+func (s *Server) waStockSaleApply(ctx context.Context, c *chat) error {
+	sh := c.data.Shop
+	sale := sh.StockChat.Sale
+	x, err := s.Stock.RecordSale(s.waTablesCtx(ctx, c), c.tenant.ID, stock.SaleIn{Lines: sale.Lines, AmountKobo: sale.AmountKobo, PaidHow: sale.PaidHow,
+		Actor: c.p.Actor(), Key: "wa-" + sh.Nonce}, s.moneyLog())
+	if err != nil {
+		if errors.Is(err, stock.ErrSaleInvalid) {
+			if serr := s.saveSession(ctx, c, stateIdle, chatData{}, 0); serr != nil {
+				return serr
+			}
+			return c.say(ctx, s, c.t("wa.sale.how"))
+		}
+		return s.stockChatFail(ctx, c, err)
+	}
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		return waAudit(ctx, tx, c.ch.Name(), c.p, "stock.sale", x.Reference, map[string]any{"sale_id": x.ID, "amount_kobo": x.AmountKobo, "paid_how": x.PaidHow})
+	}); err != nil {
+		return err
+	}
+	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		return err
+	}
+	lines := []string{c.t("wa.sale.recorded", "reference", x.Reference, "items", whatsapp.SafeText(stock.SaleWords(x.Lines)),
+		"amount", storefront.FormatNaira(x.AmountKobo), "how", c.t("sales.how_"+x.PaidHow))}
+	switch x.Status {
+	case "waiting":
+		lines = append(lines, c.t("wa.sale.waiting_"+x.PaidHow))
+	case "matched":
+		lines = append(lines, c.t("wa.sale.matched"))
+	}
+	if len(x.Short) > 0 {
+		lines = append(lines, c.t("wa.sale.short", "names", whatsapp.SafeText(strings.Join(x.Short, ", ")), "name", whatsapp.SafeText(x.Short[0])))
+	}
+	return c.say(ctx, s, strings.Join(lines, "\n"))
 }

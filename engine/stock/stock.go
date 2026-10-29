@@ -35,6 +35,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
 // Reasons a movement is made for.
@@ -71,6 +72,9 @@ type Table interface {
 type Stock struct {
 	Pool  *pgxpool.Pool
 	Table Table
+	// MoneyLog takes a cash sale's takings (Sell, for workflows); the API
+	// passes its own.
+	MoneyLog *moneylog.Log
 }
 
 // Ready reports whether stock can be kept here.

@@ -74,6 +74,12 @@ Five milestones, K1 to K5, built in order on one branch and landing together in 
 - **POS sales without items**: a terminal's sale is money, not items. When the business has stock, a `pos.sale` matched to no sale by chat within the day is listed in the evening ("3 terminal sales, ₦21,500, with no items recorded") so the owner can say what was sold or leave it; nothing is guessed.
 - **Web**: **Record a sale** on the Stock page (items, quantities, amount, how paid), today's sales and the evening total, and the terminal sales with no items beside them with **Say what was sold**.
 - `stock@1` `record_sale` for workflows; the storefront's orders unchanged.
+- **As built (K2):**
+  - Migration 00257: `stock_sales` (lines as JSON, the amount, how paid, `recorded`/`waiting`/`matched`, the money entry it takes, unique, and how it was matched); a sale changes only from waiting to matched (a trigger). `taskiem_stock_due_tenants` also returns businesses with waiting sales; `money_digests` and the outbox gain the kind `sales_evening`.
+  - `engine/stock`: `RecordSale` (sale, movements and the cash entry in one transaction, then the movements are sent), `MatchSales` (in the sweep: the sale's reference in the money's reference first, else the amount and the nearest time within 12 hours; `money_match_state` set to matched so the entry raises no unmatched leak), `DayTx` (a Lagos day added up, with the terminal's sales no sale names), `Evening` (queued once a day after closing, quiet with no sales, written at send time). A sale beyond the stock is recorded with the item in `short`; its leak comes in K4.
+  - Chat: `sold …` in English, and after the sale word of Pidgin, Yoruba, Hausa and Igbo (`engine/lang` intent `sold`; the rest of the sentence is read as in English). The money summary gains a sales line.
+  - Web: **Today's sales** as a pine card with **Record a sale**, the terminal's sales with no items with **Say what was sold**, and the day's sales as rows.
+  - API: `POST /v1/stock/sales` (`entry_id` for a terminal's sale), `GET /v1/stock/sales?day=`.
 
 ## 6. Reorders, suppliers and purchase orders (K3)
 

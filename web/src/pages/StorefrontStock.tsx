@@ -7,6 +7,7 @@ import {
   ErrorBox,
   Field,
   Items,
+  fmtTime,
   Modal,
   PageHeader,
   Row,
@@ -15,8 +16,21 @@ import {
   useLoad,
 } from "../ui";
 import {
+  PAID_HOW,
   REASON,
   addRequest,
+  byHowLine,
+  emptySale,
+  saleProblem,
+  saleRequest,
+  saleSub,
+  saleTitle,
+  saleTotal,
+  unsoldSale,
+  type PaidHow,
+  type SaleForm,
+  type SalesDay,
+  type UnsoldEntry,
   changeRequest,
   emptyItem,
   itemForm,
@@ -35,6 +49,7 @@ import {
   type StockItem,
   type StockView,
 } from "../lib/stock";
+import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
 
 /** A shop's stock (docs/stock.md): its items and how many are left, the
@@ -53,11 +68,18 @@ export function StorefrontStock() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<StockItem | null>(null);
   const [moving, setMoving] = useState<StockItem | null>(null);
+  const [selling, setSelling] = useState<{ entry?: UnsoldEntry } | null>(null);
   const act = useAction();
   const v = view.data;
+  const sales = useLoad(
+    () =>
+      v?.keeps_stock ? get<SalesDay>("/v1/stock/sales") : Promise.resolve(null),
+    [v?.keeps_stock],
+  );
   const reload = () => {
     view.reload();
     moves.reload();
+    sales.reload();
   };
   const low = v?.items.filter((i) => i.low) ?? [];
   const stuck = v?.stuck?.length ?? 0;
@@ -112,6 +134,14 @@ export function StorefrontStock() {
       )}
       {v?.keeps_stock && (
         <>
+          <ErrorBox error={sales.error} />
+          {sales.data && (
+            <SalesToday
+              day={sales.data}
+              onSell={(entry) => setSelling({ entry })}
+              canSell={v.items.length > 0}
+            />
+          )}
           {stuck > 0 && (
             <div className="notice" role="status">
               {stuck === 1 ? "1 change has" : `${stuck} changes have`} not
@@ -284,6 +314,17 @@ export function StorefrontStock() {
           }}
         />
       )}
+      {selling && v && (
+        <SaleModal
+          items={v.items}
+          entry={selling.entry}
+          onClose={() => setSelling(null)}
+          onSaved={() => {
+            setSelling(null);
+            reload();
+          }}
+        />
+      )}
       {moving && (
         <MoveModal
           item={moving}
@@ -295,6 +336,297 @@ export function StorefrontStock() {
         />
       )}
     </>
+  );
+}
+
+/** Today's sales (docs/stock.md "Sales"): the total in a pine card with
+ * Record a sale, the terminal's sales with no items, then each sale. */
+function SalesToday({
+  day,
+  onSell,
+  canSell,
+}: {
+  day: SalesDay;
+  onSell: (entry?: UnsoldEntry) => void;
+  canSell: boolean;
+}) {
+  const by = byHowLine(day);
+  return (
+    <>
+      <section
+        className="hero"
+        aria-label="Today's sales"
+        data-testid="sales-hero"
+      >
+        <div className="hero-top">
+          <span className="hero-label">Today's sales</span>
+          {day.waiting > 0 && (
+            <span className="hero-tag">{day.waiting} waiting for money</span>
+          )}
+        </div>
+        <div className="hero-amount">{formatPrice(day.total_kobo)}</div>
+        <p className="hero-sub">
+          {day.count === 0
+            ? "No sales recorded today."
+            : `${day.count === 1 ? "1 sale" : `${day.count} sales`}${by ? ` · ${by}` : ""}`}
+        </p>
+        <div className="toolbar">
+          <button
+            type="button"
+            className="primary"
+            disabled={!canSell}
+            onClick={() => onSell()}
+          >
+            Record a sale
+          </button>
+        </div>
+      </section>
+      {day.unsold.length > 0 && (
+        <section className="card" aria-labelledby="sales-unsold">
+          <h2 id="sales-unsold" style={{ marginTop: 0 }}>
+            Terminal sales with no items
+          </h2>
+          <p className="hint">
+            Your terminal reported these, but nobody said what was sold. Say it,
+            and the items come off your stock.
+          </p>
+          <Items label="Terminal sales with no items">
+            {day.unsold.map((u) => (
+              <Row
+                key={u.entry_id}
+                letter="₦"
+                title={formatPrice(u.amount_kobo)}
+                sub={
+                  <span className="sub">On the terminal · {fmtTime(u.at)}</span>
+                }
+                testid="unsold"
+              >
+                <button
+                  type="button"
+                  className="small"
+                  disabled={!canSell}
+                  onClick={() => onSell(u)}
+                >
+                  Say what was sold
+                  <span className="sr-only">
+                    {" "}
+                    for {formatPrice(u.amount_kobo)}
+                  </span>
+                </button>
+              </Row>
+            ))}
+          </Items>
+        </section>
+      )}
+      {day.sales.length > 0 && (
+        <section className="card" aria-labelledby="sales-list">
+          <h2 id="sales-list" style={{ marginTop: 0 }}>
+            Sold today
+          </h2>
+          <Items label="Sold today">
+            {day.sales.map((x) => (
+              <Row
+                key={x.id}
+                letter={x.lines[0]?.item ?? "₦"}
+                title={saleTitle(x)}
+                side={
+                  <span
+                    className={`badge ${x.status === "waiting" ? "warn" : "ok"}`}
+                  >
+                    {formatPrice(x.amount_kobo)}
+                  </span>
+                }
+                sub={<span className="sub">{saleSub(x)}</span>}
+                testid="sale"
+              />
+            ))}
+          </Items>
+        </section>
+      )}
+    </>
+  );
+}
+
+/** Record a sale: the items, how many, how it was paid; or say what a
+ * terminal's sale was. */
+function SaleModal({
+  items,
+  entry,
+  onClose,
+  onSaved,
+}: {
+  items: StockItem[];
+  entry?: UnsoldEntry;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [f, setF] = useState<SaleForm>(() =>
+    entry ? unsoldSale(entry) : emptySale(),
+  );
+  const [key] = useState(() => crypto.randomUUID());
+  const act = useAction();
+  const set = (p: Partial<SaleForm>) => setF((x) => ({ ...x, ...p }));
+  const setLine = (i: number, p: Partial<SaleForm["lines"][number]>) =>
+    setF((x) => ({
+      ...x,
+      lines: x.lines.map((l, j) => (j === i ? { ...l, ...p } : l)),
+    }));
+  const problem = saleProblem(items, f);
+  const total = saleTotal(items, f);
+  const touched = f.lines.some((l) => l.item_id !== "");
+  return (
+    <Modal
+      title={
+        entry
+          ? `What was sold for ${formatPrice(entry.amount_kobo)}`
+          : "Record a sale"
+      }
+      onClose={onClose}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(
+            async () => (
+              await postOnce("/v1/stock/sales", key, saleRequest(f, entry)),
+              onSaved()
+            ),
+            "Sale recorded",
+          );
+        }}
+      >
+        {f.lines.map((l, i) => {
+          const it = items.find((x) => x.id === l.item_id);
+          return (
+            <fieldset key={i} className="sf-choices" data-testid="sale-line">
+              <legend>{f.lines.length > 1 ? `Item ${i + 1}` : "Item"}</legend>
+              <Field label="What was sold">
+                <select
+                  value={l.item_id}
+                  onChange={(e) => setLine(i, { item_id: e.target.value })}
+                >
+                  <option value="">Choose an item</option>
+                  {items.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name} ({stockLine(x)})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="How many">
+                <input
+                  value={l.quantity}
+                  inputMode="numeric"
+                  onChange={(e) => setLine(i, { quantity: e.target.value })}
+                />
+              </Field>
+              <Field
+                label="Price for one (₦)"
+                hint={
+                  it?.price_kobo !== undefined
+                    ? `Leave it empty for ${formatPrice(it.price_kobo)}.`
+                    : undefined
+                }
+              >
+                <input
+                  value={l.price}
+                  inputMode="decimal"
+                  placeholder={
+                    it?.price_kobo !== undefined
+                      ? String(it.price_kobo / 100)
+                      : ""
+                  }
+                  onChange={(e) => setLine(i, { price: e.target.value })}
+                />
+              </Field>
+              {f.lines.length > 1 && (
+                <button
+                  type="button"
+                  className="small"
+                  onClick={() =>
+                    set({ lines: f.lines.filter((_, j) => j !== i) })
+                  }
+                >
+                  Take this item off<span className="sr-only"> {i + 1}</span>
+                </button>
+              )}
+            </fieldset>
+          );
+        })}
+        <div className="toolbar">
+          <button
+            type="button"
+            className="small"
+            onClick={() =>
+              set({
+                lines: [...f.lines, { item_id: "", quantity: "1", price: "" }],
+              })
+            }
+          >
+            Add another item
+          </button>
+        </div>
+        {!entry && (
+          <>
+            <fieldset className="sf-choices">
+              <legend>How it was paid</legend>
+              {(Object.keys(PAID_HOW) as PaidHow[]).map((h) => (
+                <label key={h} className="sf-radio">
+                  <input
+                    type="radio"
+                    name="how"
+                    checked={f.how === h}
+                    onChange={() => set({ how: h })}
+                  />
+                  {PAID_HOW[h]}
+                </label>
+              ))}
+            </fieldset>
+            <Field
+              label="Amount taken (₦)"
+              hint={
+                total !== null
+                  ? `Leave it empty for ${formatPrice(total)}, the items' prices.`
+                  : "Needed when an item has no price."
+              }
+            >
+              <input
+                value={f.amount}
+                inputMode="decimal"
+                onChange={(e) => set({ amount: e.target.value })}
+              />
+            </Field>
+          </>
+        )}
+        <Field label="Note">
+          <input
+            value={f.note}
+            maxLength={200}
+            onChange={(e) => set({ note: e.target.value })}
+          />
+        </Field>
+        {!entry && f.how !== "cash" && (
+          <p className="hint">
+            The sale waits for its money, and is matched when the{" "}
+            {f.how === "pos" ? "terminal reports it" : "transfer comes in"}.
+          </p>
+        )}
+        {problem && touched && <p className="error-text">{problem}</p>}
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !!problem}
+          >
+            Record the sale
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

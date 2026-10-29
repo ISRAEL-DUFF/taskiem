@@ -31,6 +31,7 @@ type Ops interface {
 	Item(ctx context.Context, tenant uuid.UUID, id string) (stock.Item, error)
 	Move(ctx context.Context, tenant uuid.UUID, mv stock.Move) (stock.Movement, error)
 	Movements(ctx context.Context, tenant uuid.UUID, f stock.Filter) ([]stock.Movement, error)
+	Sell(ctx context.Context, tenant uuid.UUID, lines []stock.SellLine, amount *int64, paidHow, note, actor, key string) (stock.CounterSale, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -38,12 +39,13 @@ func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"list_items": connector.ActionFunc(a.list),
-		"get_item":   connector.ActionFunc(a.get),
-		"adjust":     connector.ActionFunc(a.adjust),
-		"receive":    connector.ActionFunc(a.receive),
-		"count":      connector.ActionFunc(a.count),
-		"movements":  connector.ActionFunc(a.movements),
+		"list_items":  connector.ActionFunc(a.list),
+		"get_item":    connector.ActionFunc(a.get),
+		"adjust":      connector.ActionFunc(a.adjust),
+		"receive":     connector.ActionFunc(a.receive),
+		"count":       connector.ActionFunc(a.count),
+		"movements":   connector.ActionFunc(a.movements),
+		"record_sale": connector.ActionFunc(a.sell),
 	}}
 }
 
@@ -180,6 +182,47 @@ func (a *actions) movements(ctx context.Context, req connector.Request) (connect
 	return connector.Response{Output: map[string]any{"movements": out, "count": len(out)}}, nil
 }
 
+func (a *actions) sell(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if req.IdempotencyKey == "" {
+		return connector.Response{}, fmt.Errorf("a sale needs its idempotency key: %w", effects.ErrFatal)
+	}
+	list, _ := req.Input["lines"].([]any)
+	var lines []stock.SellLine
+	for _, x := range list {
+		m, _ := x.(map[string]any)
+		id, _ := m["id"].(string)
+		q, ok := number(m["quantity"])
+		if id == "" || !ok || q <= 0 {
+			return connector.Response{}, fmt.Errorf("each line is an item's id and how many: %w", effects.ErrFatal)
+		}
+		l := stock.SellLine{ItemID: id, Quantity: q}
+		if p, ok := number(m["price_kobo"]); ok {
+			l.PriceKobo = &p
+		}
+		lines = append(lines, l)
+	}
+	var amount *int64
+	if n, ok := number(req.Input["amount_kobo"]); ok {
+		amount = &n
+	}
+	how, _ := req.Input["paid_how"].(string)
+	note, _ := req.Input["note"].(string)
+	x, err := a.ops.Sell(ctx, c.Tenant, lines, amount, how, note, "workflow:"+c.Run.String(), "wf-"+req.IdempotencyKey)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	short := x.Short
+	if short == nil {
+		short = []string{}
+	}
+	return connector.Response{Output: map[string]any{"id": x.ID.String(), "reference": x.Reference, "amount_kobo": x.AmountKobo, "paid_how": x.PaidHow,
+		"status": x.Status, "short": short}}, nil
+}
+
 // ItemOut is an item as workflows read it.
 func ItemOut(it stock.Item) map[string]any {
 	out := map[string]any{"id": it.ID, "name": it.Name, "low": it.Low()}
@@ -242,7 +285,8 @@ func classify(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, stock.ErrInvalid), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked):
+	case errors.Is(err, stock.ErrInvalid), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked), errors.Is(err, stock.ErrSaleInvalid),
+		errors.Is(err, stock.ErrEntryTaken):
 		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	return err
@@ -276,4 +320,8 @@ func (l *Late) Move(ctx context.Context, tenant uuid.UUID, mv stock.Move) (stock
 
 func (l *Late) Movements(ctx context.Context, tenant uuid.UUID, f stock.Filter) ([]stock.Movement, error) {
 	return l.get().Movements(ctx, tenant, f)
+}
+
+func (l *Late) Sell(ctx context.Context, tenant uuid.UUID, lines []stock.SellLine, amount *int64, paidHow, note, actor, key string) (stock.CounterSale, error) {
+	return l.get().Sell(ctx, tenant, lines, amount, paidHow, note, actor, key)
 }

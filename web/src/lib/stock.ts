@@ -298,3 +298,175 @@ export function movePreview(it: StockItem, f: MoveForm): string | null {
       : Math.max(0, it.stock + (f.kind === "adjustment" && f.off ? -n : n));
   return `${it.stock} → ${quantity(to, it.unit)}`;
 }
+
+// --- sales (docs/stock.md "Sales"; /v1/stock/sales) ---
+
+export type PaidHow = "cash" | "transfer" | "pos";
+
+export interface SaleLine {
+  item_id: string;
+  item: string;
+  quantity: number;
+  unit?: string;
+  price_kobo: number;
+  line_kobo: number;
+}
+
+export interface Sale {
+  id: string;
+  reference: string;
+  lines: SaleLine[];
+  amount_kobo: number;
+  paid_how: PaidHow;
+  /** recorded (cash), waiting (its money not yet seen) or matched. */
+  status: "recorded" | "waiting" | "matched";
+  entry_id?: string;
+  matched_how?: string;
+  note?: string;
+  by: string;
+  sold_at: string;
+  /** Items sold beyond the count there was. */
+  short?: string[];
+}
+
+/** A terminal's sale with no items said yet. */
+export interface UnsoldEntry {
+  entry_id: string;
+  amount_kobo: number;
+  channel: string;
+  at: string;
+}
+
+export interface SalesDay {
+  day: string;
+  total_kobo: number;
+  by_how: Record<PaidHow, number>;
+  count: number;
+  waiting: number;
+  top: { item: string; unit?: string; quantity: number; total_kobo: number }[];
+  unsold: UnsoldEntry[];
+  sales: Sale[];
+}
+
+/** How a sale was paid, as a word. */
+export const PAID_HOW: Record<PaidHow, string> = {
+  cash: "Cash",
+  transfer: "Transfer",
+  pos: "Terminal",
+};
+
+/** A day's takings by how they were paid, the ways with none left out. */
+export function byHowLine(d: SalesDay): string {
+  return (Object.keys(PAID_HOW) as PaidHow[])
+    .filter((h) => (d.by_how[h] ?? 0) > 0)
+    .map((h) => `${PAID_HOW[h]} ${formatPrice(d.by_how[h])}`)
+    .join(" · ");
+}
+
+/** A sale's title: what was sold. */
+export const saleTitle = (s: Sale) =>
+  s.lines.map((l) => `${quantity(l.quantity, l.unit)} ${l.item}`).join(", ");
+
+/** A sale underneath its title: when, how paid, whether its money came, its reference. */
+export function saleSub(s: Sale): string {
+  const parts = [whenLabel(s.sold_at), PAID_HOW[s.paid_how]];
+  if (s.status === "waiting")
+    parts.push(
+      s.paid_how === "pos"
+        ? "waiting for the terminal's report"
+        : "waiting for the transfer",
+    );
+  else if (s.status === "matched") parts.push("money came in");
+  parts.push(s.reference);
+  if (s.short?.length)
+    parts.push(`more ${s.short.join(", ")} sold than counted`);
+  if (s.note) parts.push(s.note);
+  return parts.join(" · ");
+}
+
+export interface SaleForm {
+  lines: { item_id: string; quantity: string; price: string }[];
+  /** The amount taken, when it differs from the prices. */
+  amount: string;
+  how: PaidHow;
+  note: string;
+}
+
+export const emptySale = (how: PaidHow = "cash"): SaleForm => ({
+  lines: [{ item_id: "", quantity: "1", price: "" }],
+  amount: "",
+  how,
+  note: "",
+});
+
+/** A line's price in kobo: as typed, else the item's, else NaN. */
+function linePrice(items: StockItem[], l: SaleForm["lines"][number]): number {
+  if (l.price.trim() !== "") return feeKobo(l.price);
+  return items.find((i) => i.id === l.item_id)?.price_kobo ?? NaN;
+}
+
+/** The sale's total from its lines' prices, or null when one has none. */
+export function saleTotal(items: StockItem[], f: SaleForm): number | null {
+  let sum = 0;
+  for (const l of f.lines) {
+    const p = linePrice(items, l);
+    const n = whole(l.quantity);
+    if (Number.isNaN(p) || Number.isNaN(n)) return null;
+    sum += p * n;
+  }
+  return sum;
+}
+
+/** Why a sale will be refused, or null. */
+export function saleProblem(items: StockItem[], f: SaleForm): string | null {
+  if (f.lines.length === 0) return "Add what was sold.";
+  for (const l of f.lines) {
+    const it = items.find((i) => i.id === l.item_id);
+    if (!it) return "Choose the item sold on each line.";
+    const n = whole(l.quantity);
+    if (Number.isNaN(n) || n <= 0 || n > 1_000_000)
+      return `How many ${it.name} is a whole number, like 2.`;
+    if (l.price.trim() !== "" && Number.isNaN(feeKobo(l.price)))
+      return `The price of ${it.name} is an amount, like 4500.`;
+  }
+  if (f.amount.trim() !== "") {
+    const a = feeKobo(f.amount);
+    if (Number.isNaN(a) || a <= 0)
+      return "The amount taken is an amount, like 45000.";
+  } else {
+    const missing = f.lines
+      .filter((l) => l.price.trim() === "")
+      .map((l) => items.find((i) => i.id === l.item_id))
+      .find((it) => it && it.price_kobo === undefined);
+    if (missing)
+      return `${missing.name} has no price: give its price or the amount taken.`;
+    if (saleTotal(items, f) === 0) return "The sale comes to ₦0.";
+  }
+  if (f.note.length > 200) return "The note is up to 200 characters.";
+  return null;
+}
+
+/** The POST /v1/stock/sales body; entry gives a terminal's sale its
+ * items, for the amount the terminal reported. */
+export function saleRequest(f: SaleForm, entry?: UnsoldEntry) {
+  const body: Record<string, unknown> = {
+    lines: f.lines.map((l) => ({
+      item_id: l.item_id,
+      quantity: whole(l.quantity),
+      price_kobo: l.price.trim() === "" ? undefined : feeKobo(l.price),
+    })),
+    paid_how: entry ? "pos" : f.how,
+    note: f.note.trim(),
+  };
+  if (entry) {
+    body.amount_kobo = entry.amount_kobo;
+    body.entry_id = entry.entry_id;
+  } else if (f.amount.trim() !== "") body.amount_kobo = feeKobo(f.amount);
+  return body;
+}
+
+/** A terminal's sale's form: paid on the terminal, for its amount. */
+export const unsoldSale = (u: UnsoldEntry): SaleForm => ({
+  ...emptySale("pos"),
+  amount: feeInput(u.amount_kobo),
+});

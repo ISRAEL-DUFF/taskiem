@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -85,4 +86,46 @@ func (s *Stock) Movements(ctx context.Context, tenant uuid.UUID, f Filter) ([]Mo
 		return err
 	})
 	return out, err
+}
+
+// SellLine is a line of a sale a workflow records: an item by its row id,
+// how many, and its price (the item's when nil).
+type SellLine struct {
+	ItemID    string
+	Quantity  int64
+	PriceKobo *int64
+}
+
+// Sell records a sale for a workflow (stock@1 record_sale): the items'
+// names, units and prices from the catalogue, then RecordSale.
+func (s *Stock) Sell(ctx context.Context, tenant uuid.UUID, lines []SellLine, amount *int64, paidHow, note, actor, key string) (CounterSale, error) {
+	if s.MoneyLog == nil {
+		return CounterSale{}, errors.New("stock: sales are not available here")
+	}
+	items, err := s.Items(ctx, tenant)
+	if err != nil {
+		return CounterSale{}, err
+	}
+	byID := map[string]Item{}
+	for _, it := range items {
+		byID[it.ID] = it
+	}
+	in := SaleIn{AmountKobo: amount, PaidHow: paidHow, Note: note, Actor: actor, Key: key}
+	for _, l := range lines {
+		it, ok := byID[l.ItemID]
+		if !ok {
+			return CounterSale{}, ErrNoItem
+		}
+		price := int64(0)
+		switch {
+		case l.PriceKobo != nil:
+			price = *l.PriceKobo
+		case it.PriceKobo != nil:
+			price = *it.PriceKobo
+		case amount == nil:
+			return CounterSale{}, fmt.Errorf("%w: %s has no price; give the amount", ErrSaleInvalid, it.Name)
+		}
+		in.Lines = append(in.Lines, SaleLine{ItemID: it.ID, Item: it.Name, Quantity: l.Quantity, Unit: it.Unit, PriceKobo: price})
+	}
+	return s.RecordSale(ctx, tenant, in, s.MoneyLog)
 }

@@ -2904,6 +2904,12 @@ export interface StockReceiveInput {
   quantity: Val<number>;
   reference?: Val<string>;
 }
+export interface StockRecordSaleInput {
+  amount_kobo?: Val<number>;
+  lines: Value;
+  note?: Val<string>;
+  paid_how: Val<"cash" | "transfer" | "pos">;
+}
 export const stock = {
   /** Adjust an item's stock (idempotent_write) */
   adjust: (input: StockAdjustInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "adjust", input, extra),
@@ -2917,6 +2923,8 @@ export const stock = {
   movements: (input?: StockMovementsInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "movements", input, extra),
   /** Record goods received (idempotent_write) */
   receive: (input: StockReceiveInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "receive", input, extra),
+  /** Record a sale (idempotent_write) */
+  record_sale: (input: StockRecordSaleInput, extra?: ConnectorExtra): StepSpec => connector("stock@1", "record_sale", input, extra),
 };
 
 // Storefront (storefront@1)
@@ -3773,7 +3781,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
-  "stock@1": ["adjust", "count", "get_item", "list_items", "movements", "receive"],
+  "stock@1": ["adjust", "count", "get_item", "list_items", "movements", "receive", "record_sale"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],

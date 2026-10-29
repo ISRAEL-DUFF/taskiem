@@ -17,9 +17,11 @@ import (
 func n(v int64) *int64 { return &v }
 
 type ops struct {
-	tenant uuid.UUID
-	moved  stock.Move
-	filter stock.Filter
+	tenant  uuid.UUID
+	moved   stock.Move
+	filter  stock.Filter
+	sold    []stock.SellLine
+	soldKey string
 }
 
 var items = []stock.Item{
@@ -50,6 +52,11 @@ func (o *ops) Move(_ context.Context, _ uuid.UUID, mv stock.Move) (stock.Movemen
 func (o *ops) Movements(_ context.Context, _ uuid.UUID, f stock.Filter) ([]stock.Movement, error) {
 	o.filter = f
 	return []stock.Movement{{ID: uuid.New(), ItemID: "1", Item: "Indomie", Reason: stock.Sale, Status: "done", Change: n(-2), CreatedAt: time.Now()}}, nil
+}
+
+func (o *ops) Sell(_ context.Context, _ uuid.UUID, lines []stock.SellLine, amount *int64, paidHow, note, actor, key string) (stock.CounterSale, error) {
+	o.sold, o.soldKey = lines, key
+	return stock.CounterSale{ID: uuid.New(), Reference: "S-7QX4KD", AmountKobo: *amount, PaidHow: paidHow, Status: "recorded", Actor: actor}, nil
 }
 
 func call(t *testing.T, c *connector.Connector, ctx context.Context, action string, in map[string]any, key string) (map[string]any, error) {
@@ -111,6 +118,15 @@ func TestStockConnector(t *testing.T) {
 	list, err := call(t, c, ctx, "movements", map[string]any{"id": "1", "since": "2026-10-01T00:00:00Z", "limit": float64(10)}, "")
 	if err != nil || list["count"] != 1 || o.filter.ItemID != "1" || o.filter.Limit != 10 || o.filter.Since == nil {
 		t.Fatalf("movements: %v %v %+v", list, err, o.filter)
+	}
+
+	sale, err := call(t, c, ctx, "record_sale", map[string]any{"lines": []any{map[string]any{"id": "1", "quantity": float64(2), "price_kobo": float64(950000)}},
+		"amount_kobo": float64(1900000), "paid_how": "cash"}, "tsk_abcdefghijklmnot")
+	if err != nil || sale["reference"] != "S-7QX4KD" || len(o.sold) != 1 || o.sold[0].Quantity != 2 || *o.sold[0].PriceKobo != 950000 || o.soldKey != "wf-tsk_abcdefghijklmnot" {
+		t.Fatalf("sale: %v %v %+v", sale, err, o.sold)
+	}
+	if _, err := call(t, c, ctx, "record_sale", map[string]any{"lines": []any{map[string]any{"id": "1"}}, "paid_how": "cash"}, "tsk_abcdefghijklmnou"); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("a line with no quantity: %v", err)
 	}
 
 	// Outside a run, or unbound: refused plainly.

@@ -859,6 +859,10 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusNotFound, "no such item")
 	case errors.Is(err, stock.ErrInvalid):
 		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "stock: invalid: ")))
+	case errors.Is(err, stock.ErrSaleInvalid):
+		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "stock: invalid sale: ")))
+	case errors.Is(err, stock.ErrEntryTaken):
+		s.fail(w, r, fmt.Errorf("%w: that terminal sale counts for something else already, or is not of that amount", errConflict))
 	case errors.Is(err, storefront.ErrInvalid), errors.Is(err, storefront.ErrSlugTaken):
 		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(strings.TrimPrefix(err.Error(), "storefront: "), "invalid: ")))
 	case errors.Is(err, datatables.ErrKept), errors.Is(err, datatables.ErrUnavailable), errors.Is(err, datatables.ErrProvisioning),
