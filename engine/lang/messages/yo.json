@@ -2340,6 +2340,438 @@
       "text": "(pẹ̀lú fọ́tò rẹ lókè)",
       "reviewed": false
     },
+    "wa.stock.off": {
+      "text": "{org} kò tíì máa tọ́jú ọjà nínú Taskiem. Fi *add 50 cartons of Indomie at 8,500* ránṣẹ́ láti bẹ̀rẹ̀, tàbí tẹ Keep my stock lórí ojú-ìwé Stock.",
+      "reviewed": false
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} kò tíì máa tọ́jú ọjà, bíbẹ̀rẹ̀ rẹ̀ sì nílò storefront.manage, èyí tí ipa rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.stock.denied": {
+      "text": "Yíyí ọjà {org} padà nílò table.edit, èyí tí ipa rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.stock.denied_read": {
+      "text": "Rírí ọjà {org} nílò table.read, èyí tí ipa rẹ kò ní.",
+      "reviewed": false
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* kò tíì ní iye. Fi *stock {name} 12* ránṣẹ́ láti ṣètò rẹ̀.",
+      "reviewed": false
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.is_low": {
+      "text": "Ó ti kéré: o máa ń ra mìíràn ní {level}.",
+      "reviewed": false
+    },
+    "wa.stock.last": {
+      "text": "Èyí tó kẹ́yìn: {what}, {when}.",
+      "reviewed": false
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} mú {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_sale": {
+      "text": "ta {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_received": {
+      "text": "gba {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "ṣàtúnṣe ní {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_count": {
+      "text": "kà á sí {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_outside": {
+      "text": "yí padà nínú tábìlì ní {qty}",
+      "reviewed": false
+    },
+    "wa.stock.no_levels": {
+      "text": "Ọjà {items} ni a ń tọ́jú, kò sí èyí tó ní ìpele àtúnrà. Ṣètò wọn lórí ojú-ìwé Stock, Taskiem yóò sì máa sọ ohun tó kéré fún ọ ní òwúrọ̀ kọ̀ọ̀kan.",
+      "reviewed": false
+    },
+    "wa.stock.none_low": {
+      "text": "Kò sí èyí tó dé ìpele àtúnrà rẹ̀. Ọjà {items} ni a ń tọ́jú.",
+      "reviewed": false
+    },
+    "wa.stock.low_title": {
+      "text": "Ọjà tó ti kéré:",
+      "reviewed": false
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (rà mìíràn ní {level}); rà {suggest}",
+      "reviewed": false
+    },
+    "wa.stock.low_more": {
+      "text": "…àti {count} mìíràn lórí ojú-ìwé Stock.",
+      "reviewed": false
+    },
+    "wa.stock.at_cost": {
+      "text": " ní {price} ọ̀kọ̀ọ̀kan",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Ṣé kí a fi *{name}* kún un pẹ̀lú {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Ṣé kí a bẹ̀rẹ̀ sí í tọ́jú ọjà pẹ̀lú *{name}*: {qty}{cost}? Taskiem yóò ṣe tábìlì products fún àwọn ọjà rẹ.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Ṣé kí a fi {qty} kún *{name}* ({from} → {to}){cost}?",
+      "reviewed": false
+    },
+    "wa.stock.adjust_how": {
+      "text": "Kọ ọ́ báyìí *adjust rice -2 spoilt*: ọjà náà, ìyípadà, àti ìdí.",
+      "reviewed": false
+    },
+    "wa.stock.no_reason": {
+      "text": "kò sí ìdí",
+      "reviewed": false
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Ṣé kí a yí *{name}* padà ní {change} ({from} → {to}): {note}?",
+      "reviewed": false
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* ti wà níbẹ̀ tẹ́lẹ̀. Fi add ránṣẹ́ lẹ́ẹ̀kan sí i láti fi kún un.",
+      "reviewed": false
+    },
+    "wa.stock.added": {
+      "text": "A ti fi *{name}* kún un: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.no_price": {
+      "text": "Yóò hàn lórí ojú-ìwé rẹ nígbà tí ó bá ní iye owó: fi *price {name} 9500* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "A ti kọ ọ́ sílẹ̀ fún *{name}*. Yóò dé tábìlì products rẹ láìpẹ́.",
+      "reviewed": false
+    },
+    "wa.stock.now": {
+      "text": "Ó ti parí: *{name}* jẹ́ {count} báyìí.",
+      "reviewed": false
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: fi ọjà kún un; *stock* àti ọjà kan, tàbí *how many bags of rice*: iye rẹ̀; *stock* nìkan: ohun tó kéré; *adjust rice -2 spoilt*: ṣàtúnṣe iye",
+      "reviewed": false
+    },
+    "sales.how_cash": {
+      "text": "ní owó lọ́wọ́",
+      "reviewed": false
+    },
+    "sales.how_transfer": {
+      "text": "nípasẹ̀ transfer",
+      "reviewed": false
+    },
+    "sales.how_pos": {
+      "text": "lórí POS",
+      "reviewed": false
+    },
+    "sales.by_cash": {
+      "text": "Owó lọ́wọ́",
+      "reviewed": false
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": false
+    },
+    "sales.by_pos": {
+      "text": "POS",
+      "reviewed": false
+    },
+    "sales.evening.title": {
+      "text": "*Títà òní*: {total} láti inú títà {count}.",
+      "reviewed": false
+    },
+    "sales.evening.top": {
+      "text": "Èyí tí a tà jù: {list}.",
+      "reviewed": false
+    },
+    "sales.evening.waiting": {
+      "text": "Títà {count} nípasẹ̀ transfer tàbí POS ṣì ń dúró de owó wọn.",
+      "reviewed": false
+    },
+    "sales.evening.unsold": {
+      "text": "Títà POS {count}, {amount}, kò ní ọjà: fi *sold* ránṣẹ́ pẹ̀lú àwọn ọjà, iye owó àti *pos* láti sọ ohun tí a tà.",
+      "reviewed": false
+    },
+    "sales.evening.low": {
+      "text": "Ohun tó kéré báyìí: {list}.",
+      "reviewed": false
+    },
+    "money.daily.sales": {
+      "text": "Títà tí o kọ sílẹ̀: {total} láti inú títà {count} ({by}).",
+      "reviewed": false
+    },
+    "money.daily.low": {
+      "text": "Ọjà tó kéré: {list}.",
+      "reviewed": false
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, pàṣẹ {order})",
+      "reviewed": false
+    },
+    "money.daily.low_more": {
+      "text": "{count} mìíràn lórí ojú-ìwé Stock",
+      "reviewed": false
+    },
+    "wa.sale.how": {
+      "text": "Kọ ọ́ báyìí *sold 3 bags of rice 45,000 cash*: iye mélòó, ọjà náà, iye owó, àti cash, transfer tàbí pos.",
+      "reviewed": false
+    },
+    "wa.sale.which": {
+      "text": "Ọjà ju ẹyọ kan lọ ló bá *{name}* mu: {list}. Fi títà náà ránṣẹ́ lẹ́ẹ̀kan sí i pẹ̀lú orúkọ kíkún.",
+      "reviewed": false
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* kò ní iye owó. Fi títà náà ránṣẹ́ lẹ́ẹ̀kan sí i pẹ̀lú iye owó, bíi *sold 2 {name} 4,500 cash*.",
+      "reviewed": false
+    },
+    "wa.sale.confirm": {
+      "text": "Ṣé o ta {items} ní {amount}, {how}?",
+      "reviewed": false
+    },
+    "wa.sale.beyond": {
+      "text": "Ìyẹn ju {names} tí Taskiem kà lórí àpò rẹ lọ: iye rẹ̀ yóò di 0, a ó sì pa títà náà mọ́.",
+      "reviewed": false
+    },
+    "wa.sale.recorded": {
+      "text": "A ti kọ {reference} sílẹ̀: {items}, {amount} {how}.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "Ó ń dúró de transfer náà: a ó so ó pọ̀ nígbà tó bá dé.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_pos": {
+      "text": "Ó ń dúró de títà POS náà: a ó so ó pọ̀ nígbà tí owó bá hàn.",
+      "reviewed": false
+    },
+    "wa.sale.matched": {
+      "text": "A ti so ó pọ̀ mọ́ owó tó wọlé.",
+      "reviewed": false
+    },
+    "wa.sale.short": {
+      "text": "O ta {names} ju èyí tí Taskiem kà lọ: ka ohun tó wà lórí àpò rẹ nígbà tí o bá lè ṣe é (*stock {name} 12*).",
+      "reviewed": false
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (tàbí *transfer*, *pos*): kọ títà sílẹ̀; yóò yọ àwọn ọjà kúrò nínú ọjà rẹ",
+      "reviewed": false
+    },
+    "supplier.order": {
+      "text": "Àṣẹ {reference}: {items}. Àpapọ̀ {total}. Ṣé o lè pèsè rẹ̀?",
+      "reviewed": false
+    },
+    "supplier.reply_words": {
+      "text": "Fèsì CONFIRM, tàbí CHANGE {reference} àti ohun tí o lè pèsè.",
+      "reviewed": false
+    },
+    "supplier.btn.confirm": {
+      "text": "Fìdí rẹ̀ múlẹ̀",
+      "reviewed": false
+    },
+    "supplier.btn.change": {
+      "text": "Yí i padà",
+      "reviewed": false
+    },
+    "supplier.button_invalid": {
+      "text": "A kò lè dáhùn àṣẹ yẹn níbí mọ́.",
+      "reviewed": false
+    },
+    "supplier.change_ask": {
+      "text": "Fi *change {reference}* ránṣẹ́ àti ohun tí o lè pèsè, bíi *change {reference} only 10 bags of rice this week*.",
+      "reviewed": false
+    },
+    "supplier.changed": {
+      "text": "A ti fi ránṣẹ́ sí {business}: wọn yóò dá ọ lóhùn nípa {reference}.",
+      "reviewed": false
+    },
+    "supplier.confirmed": {
+      "text": "O ṣé. A ti sọ fún {business} pé o fìdí {reference} múlẹ̀.",
+      "reviewed": false
+    },
+    "supplier.which": {
+      "text": "Àṣẹ wo? Fi ọ̀rọ̀ náà ránṣẹ́ pẹ̀lú nọ́mbà rẹ̀: {list}.",
+      "reviewed": false
+    },
+    "purchase.status_drafted": {
+      "text": "àkọ́kọ́",
+      "reviewed": false
+    },
+    "purchase.status_sent": {
+      "text": "a ti fi ránṣẹ́",
+      "reviewed": false
+    },
+    "purchase.status_confirmed": {
+      "text": "a ti fìdí rẹ̀ múlẹ̀",
+      "reviewed": false
+    },
+    "purchase.status_part_received": {
+      "text": "apá kan ti dé",
+      "reviewed": false
+    },
+    "purchase.status_received": {
+      "text": "gbogbo rẹ̀ ti dé",
+      "reviewed": false
+    },
+    "purchase.status_cancelled": {
+      "text": "a ti fagilé",
+      "reviewed": false
+    },
+    "wa.supplier.denied": {
+      "text": "Àwọn olùní àti alábòójútó ni ó ń tọ́jú àwọn olùpèsè àti àṣẹ ní {org}.",
+      "reviewed": false
+    },
+    "wa.supplier.how": {
+      "text": "Kọ ọ́ báyìí *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.supplier.for": {
+      "text": " fún {list}",
+      "reviewed": false
+    },
+    "wa.supplier.add_confirm": {
+      "text": "Ṣé kí a fi *{name}* kún olùpèsè{items}? Wọn yóò gba ìjápọ̀ nípasẹ̀ SMS láti gba àṣẹ rẹ lórí WhatsApp.",
+      "reviewed": false
+    },
+    "wa.supplier.added": {
+      "text": "A ti fi {name} kún un. Fi *order from {name}* ránṣẹ́ nígbà tí ọjà wọn bá kéré.",
+      "reviewed": false
+    },
+    "wa.suppliers.none": {
+      "text": "Kò sí olùpèsè síbẹ̀. Fi *add supplier Dangote Depot 0803 123 4567 for rice, indomie* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.suppliers.title": {
+      "text": "*Àwọn olùpèsè rẹ*:",
+      "reviewed": false
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: àṣẹ {open} tí ó ṣí sílẹ̀, gbèsè {owed}",
+      "reviewed": false
+    },
+    "wa.order.which": {
+      "text": "Olùpèsè ju ẹyọ kan lọ ló bá *{name}* mu: {list}.",
+      "reviewed": false
+    },
+    "wa.order.no_supplier": {
+      "text": "Kò sí olùpèsè tí orúkọ rẹ̀ ń jẹ́ *{name}*. Fi *suppliers* ránṣẹ́ fún àkójọ.",
+      "reviewed": false
+    },
+    "wa.order.none": {
+      "text": "Kò sí ohun kankan láti ọ̀dọ̀ *{name}* tí ó kéré tí a kò tíì pàṣẹ.",
+      "reviewed": false
+    },
+    "wa.order.confirm": {
+      "text": "Àṣẹ {reference} láti ọ̀dọ̀ *{supplier}*: {items}, {total}. Ṣé kí a fi ránṣẹ́ sí wọn?",
+      "reviewed": false
+    },
+    "wa.order.sent": {
+      "text": "A ti fi {reference} ránṣẹ́ sí {supplier}. A ó sọ fún ọ nígbà tí wọn bá fìdí rẹ̀ múlẹ̀.",
+      "reviewed": false
+    },
+    "wa.order.second": {
+      "text": "A ti kọ {reference} sílẹ̀. Ó ju ààlà rẹ ti {limit} lọ, nítorí náà olùní mìíràn tàbí alábòójútó ni yóò fi ránṣẹ́: *send {reference}*, tàbí Approve and send lórí ojú-ìwé Stock.",
+      "reviewed": false
+    },
+    "wa.order.marked_confirmed": {
+      "text": "A ti sàmì sí {reference} pé ó ti fìdí múlẹ̀.",
+      "reviewed": false
+    },
+    "wa.order.unknown": {
+      "text": "Kò sí àṣẹ tí ó ní nọ́mbà yẹn. Ojú-ìwé Stock ní àkójọ wọn.",
+      "reviewed": false
+    },
+    "wa.received.confirm": {
+      "text": "Ṣé {count} {item} ti dé lórí àṣẹ {reference} láti ọ̀dọ̀ {supplier}?",
+      "reviewed": false
+    },
+    "wa.received.done": {
+      "text": "Ó ti dé lórí {reference}; àṣẹ náà jẹ́ {status}. A ti ṣe àtúnṣe ọjà rẹ àti iye owó rírà.",
+      "reviewed": false
+    },
+    "wa.paid.how": {
+      "text": "Kọ ọ́ báyìí *paid Dangote 425,000 transfer*.",
+      "reviewed": false
+    },
+    "wa.paid.none": {
+      "text": "Kò sí àṣẹ sí *{name}* tí ó ń dúró de ìsanwó.",
+      "reviewed": false
+    },
+    "wa.paid.confirm": {
+      "text": "Ṣé o san {amount} fún *{supplier}* {how}, fún {reference}?",
+      "reviewed": false
+    },
+    "wa.paid.done": {
+      "text": "A ti kọ {amount} tí o san fún {supplier} fún {reference} sílẹ̀. Gbèsè tí ó kù: {owed}.",
+      "reviewed": false
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: àwọn olùpèsè àti àṣẹ wọn",
+      "reviewed": false
+    },
+    "wa.count.how": {
+      "text": "Kọ ọ́ báyìí *count rice 12, indomie 40*, pẹ̀lú ìdí lẹ́yìn colon tí o bá fẹ́ (*count rice 12: rats*). Tàbí fi *count* ránṣẹ́ kí n béèrè lọ́kọ̀ọ̀kan.",
+      "reviewed": false
+    },
+    "wa.count.none": {
+      "text": "Kò sí ohun tí a lè kà síbẹ̀. Kọ́kọ́ fi àwọn ọjà rẹ kún un.",
+      "reviewed": false
+    },
+    "wa.count.start": {
+      "text": "A ń ka ọjà {count}. Fi iye tí ó wà lórí àpò ránṣẹ́, *skip* láti fo ọ̀kan, tàbí *done* láti dúró.",
+      "reviewed": false
+    },
+    "wa.count.ask": {
+      "text": "*{item}* mélòó? (Taskiem ní {had}.)",
+      "reviewed": false
+    },
+    "wa.count.number": {
+      "text": "Fi nọ́mbà odidi ránṣẹ́, bíi 12, tàbí *skip*.",
+      "reviewed": false
+    },
+    "wa.count.confirm": {
+      "text": "Ìkà ọjà {count}:",
+      "reviewed": false
+    },
+    "wa.count.line": {
+      "text": "• {item}: {had} → {counted}",
+      "reviewed": false
+    },
+    "wa.count.same": {
+      "text": "{count} rí bí Taskiem ṣe ní wọn.",
+      "reviewed": false
+    },
+    "wa.count.done": {
+      "text": "A ti ka {reference}: ọjà {changed} yí padà.",
+      "reviewed": false
+    },
+    "wa.count.lost": {
+      "text": "Ohun tí ó sọnù: {amount} ní iye owó rírà.",
+      "reviewed": false
+    },
+    "money.daily.shrink": {
+      "text": "Ọjà tí ó sọnù: {count}, {amount} ní iye owó rírà; èyí tó pọ̀ jù ni {item} ({lost}).",
+      "reviewed": false
+    },
+    "wa.help.counts": {
+      "text": "• *count rice 12, indomie 40* (tàbí *count* kí n béèrè lọ́kọ̀ọ̀kan): ka ohun tí ó wà lórí àpò",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (pẹ̀lú fọ́tò náà)",
       "reviewed": false

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtext"
 	"github.com/israel-duff/taskiem/templates"
@@ -138,6 +139,9 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 			list = append(list, m.Template)
 		}
 	}
+	// The sheet-based stock and sales templates give way, for a business
+	// keeping stock in a table or recording sales, to stock's own (K5).
+	list = templates.For(list, s.templateHolds(r.Context(), principalFrom(r.Context()).TenantID))
 	if r.URL.Query().Get("callable") == "true" {
 		var kept []*templates.Template
 		for _, t := range list {
@@ -419,4 +423,23 @@ func addService(list [][]string, by []string) [][]string {
 		}
 	}
 	return append(list, by)
+}
+
+// templateHolds is which of the templates' replacement conditions hold
+// for a business.
+func (s *Server) templateHolds(ctx context.Context, tenant uuid.UUID) map[string]bool {
+	holds := map[string]bool{}
+	if !s.Stock.Ready() {
+		return holds
+	}
+	if _, err := s.stockShopOf(ctx, tenant); err == nil {
+		holds[templates.WhenKeepsStock] = true
+	}
+	var sales bool
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_sales WHERE tenant_id = $1)`, tenant).Scan(&sales)
+	}); err == nil && sales {
+		holds[templates.WhenRecordsSales] = true
+	}
+	return holds
 }

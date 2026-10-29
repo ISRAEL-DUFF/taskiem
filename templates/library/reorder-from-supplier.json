@@ -1,0 +1,41 @@
+{
+  "id": "reorder-from-supplier",
+  "title": "Order from your suppliers when stock is low",
+  "summary": "Every morning, draft an order to each supplier for their low items, and send it once you approve.",
+  "description": "Every day at the time you choose, puts each supplier's low items into one purchase order, for enough to reach each item's order-up-to level at what you paid last time. You approve the orders once; each then goes to its supplier on WhatsApp with Confirm and Change, or by text message until they tap your link. Items whose supplier Taskiem does not know are named, so you can add the supplier. An order above your approval limit is left for a second person to send on the Stock page. Nothing is ordered twice: an item already on an open order is left out.",
+  "category": "operations",
+  "tags": ["inventory", "stock", "suppliers", "purchase orders", "approval", "daily"],
+  "keywords": ["order", "reorder", "supplier", "suppliers", "purchase order", "purchase orders", "restock", "buy from", "order from"],
+  "connectors": ["stock@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the orders are drafted, Lagos time.", "required": false, "default": "08:00", "example": "08:00"},
+    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves the orders.", "required": false, "default": "owner", "example": "owner", "pattern": "^[a-z][a-z0-9_]{0,39}$", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_reorderFromSupplier",
+    "version": 1,
+    "name": "Order from suppliers",
+    "description": "Drafts an order per supplier for their low items, and sends them after one approval.",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+    "settings": {"timeout": "48h"},
+    "steps": [
+      {"id": "draft", "type": "connector", "name": "Draft an order to each supplier", "connector": "stock@1", "action": "draft_purchase", "input": {}},
+      {"id": "approve", "type": "approval", "name": "Approve the orders", "needs": ["draft"], "when": "=steps.draft.output.count > 0",
+       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "24h", "on_timeout": "reject",
+        "subject": {"orders": "=steps.draft.output.purchases.map(p, p.reference + ' to ' + p.supplier + ': ' + p.items + ', NGN ' + string(double(p.total_kobo) / 100.0)).join('; ')",
+         "no_supplier": "=steps.draft.output.no_supplier.join(', ')"}}},
+      {"id": "send", "type": "foreach", "name": "Send each order", "needs": ["approve"], "when": "=steps.draft.output.count > 0",
+       "config": {"items": "=steps.draft.output.purchases", "max_concurrency": 3, "max_items": 50,
+        "steps": [
+          {"id": "send_one", "type": "connector", "name": "Send the order to the supplier", "connector": "stock@1", "action": "send_purchase",
+           "input": {"reference": "=item.reference"},
+           "on_error": {"steps": [{"id": "not_sent", "type": "transform", "config": {"output": {"reason": "=steps.send_one.error.message"}}}]}}
+        ]}},
+      {"id": "tell", "type": "connector", "name": "Tell the owner what was sent", "connector": "notify@1", "action": "tell", "needs": ["send"],
+       "when": "=steps.draft.output.count > 0",
+       "input": {"message": "='Orders sent: ' + steps.send.output.filter(o, !has(o.not_sent)).map(o, o.send_one.reference + ' to ' + o.send_one.supplier).join(', ') + (size(steps.send.output.filter(o, has(o.not_sent))) > 0 ? '. Not sent: ' + string(size(steps.send.output.filter(o, has(o.not_sent)))) + ' (see the Stock page)' : '')"}}
+    ]
+  }
+}

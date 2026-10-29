@@ -1,0 +1,28 @@
+{
+  "id": "sales-day-total",
+  "title": "Today's sales total from the sales you record",
+  "summary": "Every evening, add up the sales you recorded by chat or on the Stock page and send the owner the total.",
+  "description": "Every day at the time you choose, adds up the day's sales you recorded with *sold …* in chat or Record a sale on the Stock page: the total, by cash, transfer and terminal, how many sales, and what sold most. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email. A day with no sales sends nothing.",
+  "category": "reporting",
+  "tags": ["reporting", "sales", "stock"],
+  "keywords": ["sold", "takings", "sales i record", "recorded sales", "sales by chat", "sales total"],
+  "connectors": ["stock@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the total is sent, Lagos time.", "required": false, "default": "21:00", "example": "21:00"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_salesDayTotal",
+    "version": 1,
+    "name": "Today's sales total",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "day", "type": "connector", "name": "Add up today's sales", "connector": "stock@1", "action": "sales_day", "input": {}},
+      {"id": "text_owner", "type": "connector", "name": "Tell the owner today's total", "connector": "notify@1", "action": "tell", "needs": ["day"],
+       "when": "=steps.day.output.count > 0",
+       "input": {"message": "=\"Today's sales: NGN \" + string(double(steps.day.output.total_kobo) / 100.0) + ' from ' + string(steps.day.output.count) + ' sales (cash NGN ' + string(double(steps.day.output.cash_kobo) / 100.0) + ', transfer NGN ' + string(double(steps.day.output.transfer_kobo) / 100.0) + ', terminal NGN ' + string(double(steps.day.output.pos_kobo) / 100.0) + ')' + (steps.day.output.top != '' ? '. Sold most: ' + steps.day.output.top : '')"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

@@ -30,7 +30,12 @@
     "invoice": ["ìwé owó", "ìwé ìsanwó", "fi ìwé owó ránṣẹ́ sí"],
     "expense": ["mo ná", "mo ti ná", "ìnáwó"],
     "cash_in": ["owó wọlé"],
-    "cash_out": ["owó jáde"]
+    "cash_out": ["owó jáde"],
+    "sold": ["mo ti ta", "mo ta", "a ta"],
+    "received": ["mo ti gba", "a ti gba"],
+    "count": ["mo ka", "mo ti ka"],
+    "stock": ["mélòó ni", "melo ni", "ọjà mélòó"],
+    "take_off": ["yọ kúrò", "yo kuro", "bàjẹ́"]
   },
   "fillers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "ẹ jọ̀ọ́"],
   "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà", "ìwé owó", "mo ná", "owó wọlé", "owó jáde"],

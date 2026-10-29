@@ -70,7 +70,11 @@ type Orders struct {
 	InboxKey []byte
 	Payments Payments
 	// Stock lowers the catalogue's stock on Accept (nil: not tracked).
-	Stock    Stock
+	Stock Stock
+	// Moves records the lowering as stock movements and sends them
+	// (engine/stock, docs/spec/stock.md §4); nil lowers through Stock
+	// alone.
+	Moves    Mover
 	Messages *sender.Queue
 	// Start starts a run (runtime.Store.Start); Signal delivers a signal
 	// (runtime.Store.DeliverSignalOnce).

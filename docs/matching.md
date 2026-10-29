@@ -2,7 +2,7 @@
 
 Matching decides which invoice or [storefront order](storefronts.md#payments-and-matching) a payment is for. Taskiem looks at every payment the [money log](money-log.md) records as money in and settled, once, and either matches it, suggests where it may belong, or leaves it for a person. It follows [decision 0045](decisions/0045-tally-in-taskiem.md) and the [build plan](spec/invoices-and-money-log.md) (§8, T5); customers' own account numbers, split payments, payer memory and counting what the payer sent follow [decision 0046](decisions/0046-balans-in-taskiem.md) (points 5 to 7) and the [schools plan](spec/schools.md) (§7, B1), and work for every business.
 
-A match is a payment counted towards an invoice or an order, listed on it with how it was matched and why. **Nothing else marks an invoice paid**, and an order is marked paid along the same path whether its own payment check or matching hears of the money first.
+A match is a payment counted towards an invoice or an order, listed on it with how it was matched and why. **Nothing else marks an invoice paid**, and an order is marked paid along the same path whether its own payment check or matching hears of the money first. Money a [counter sale](stock.md#sales) took (its cash takings, or a transfer or terminal sale matched to it) counts for that sale: it is never suggested or matched for an invoice or order.
 
 ## Exact matches
 

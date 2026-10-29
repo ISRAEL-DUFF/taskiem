@@ -162,6 +162,12 @@ var Alerts = []Alert{
 		Expr:        `sum(increase(taskiem_lease_expiries_total[15m])) > 10`,
 	},
 	{
+		Name: "TaskiemRetentionPurgeBehind", Severity: "ticket", For: "30m",
+		Summary:     "Runs past retention have waited over 6 hours to be purged",
+		Description: "The oldest run past its retention date has not been archived and deleted for over 6 hours (a healthy purge takes minutes): the archive is refusing writes, a run keeps failing to purge, or purging cannot keep up. Personal data is kept past its retention, and run_events grows.",
+		Expr:        `max(taskiem_retention_purge_oldest_overdue_seconds) > 21600`,
+	},
+	{
 		Name: "TaskiemTargetDown", Severity: "ticket", For: "10m",
 		Summary:     "A Taskiem pod's metrics cannot be scraped",
 		Description: "Prometheus cannot scrape a Taskiem pod. If it serves traffic, the API and ingest SLIs miss its requests.",

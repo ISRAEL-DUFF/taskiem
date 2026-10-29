@@ -54,7 +54,7 @@
 <p>This is how a worker process starts one loop per queue:</p>
 <x-code path="cmd/taskiem/serve.go" start="if is(&quot;worker&quot;) {" max="50"/>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>The spec lists five roles (<x-ref path="docs/spec/architecture.md" symbol="### 2.1 Components">spec 2.1</x-ref>). The code adds <code>public</code> and <code>mail</code>, which the spec only mentions as a proposal. The spec also says schedulers are leader-elected with a session advisory lock (<x-ref path="docs/spec/architecture.md" symbol="Scheduler instances use a session-level Postgres advisory lock">spec 2.3</x-ref>). The code has no leader election. Instead, <x-ref path="engine/runtime/scheduler.go" symbol="// Scheduler fires timers">the scheduler</x-ref> is written to be safe when several run at once: every claim uses <code>SKIP LOCKED</code> and every timer firing is guarded by <code>fired_at</code>. Running several schedulers costs some duplicated work and nothing worse.</p>
+  <p>The spec lists five roles (<x-ref path="docs/spec/architecture.md" symbol="### 2.1 Components">spec 2.1</x-ref>). The code adds <code>public</code> and <code>mail</code>, which the spec only mentions as a proposal. The spec also says schedulers are leader-elected with a session advisory lock (<x-ref path="docs/spec/architecture.md" symbol="Scheduler instances use a session-level Postgres advisory lock">spec 2.3</x-ref>). The code has no leader election. Instead, <x-ref path="engine/runtime/scheduler.go" symbol="// Scheduler fires timers">the scheduler</x-ref> is written to be safe when several run at once: every claim uses <code>SKIP LOCKED</code> and every timer firing is guarded by <code>fired_at</code>. Its database work is safe twice over, but its local archive and anchor directories are not, so a second scheduler needs the S3 archive and no local volume, which the chart enforces (<x-page id="operations--backups">Operations</x-page>).</p>
 </div>
 <h3>Starting and stopping</h3>
 <p><x-ref path="cmd/taskiem/serve.go" symbol="func runTasks("><code>runTasks</code></x-ref> runs every loop a role needs as a goroutine. If any loop returns an error, the whole process stops so its supervisor (systemd or Kubernetes) restarts it clean. On SIGTERM, <x-ref path="cmd/taskiem/serve.go" symbol="func drainOnShutdown("><code>drainOnShutdown</code></x-ref> fails readiness at once, keeps serving for a delay so load balancers stop sending traffic, and only then stops the loops. Workers let calls already in flight finish (<code>TASKIEM_WORKER_DRAIN</code>, 30 seconds by default) and hand their leases back, so their tasks can be claimed again at once. Every role serves <code>/metrics</code>, <code>/healthz</code> and <code>/readyz</code> on the metrics listener, so roles without an HTTP API can still be probed.</p>
@@ -109,7 +109,7 @@
 <x-packages names="moneylog,matching,invoicing,leaks,lookback,moneydigest,moneyreport,billing"/>
 
 <h3>Public pages and business products</h3>
-<x-packages names="storefront,dispatch,riders,publicweb,forms,formguard,publicnames,brand,moderation,media,embedsites,datatables,schools,pdf"/>
+<x-packages names="storefront,stock,dispatch,riders,publicweb,forms,formguard,publicnames,brand,moderation,media,embedsites,datatables,schools,pdf"/>
 
 <h3>Operations and the connector catalogue</h3>
 <x-packages names="telemetry,slo,alerts,status,canary,catalogue,connpkg,conntest,spike"/>

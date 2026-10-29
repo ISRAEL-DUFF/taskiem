@@ -23,7 +23,7 @@ type section struct {
 }
 
 var nav = []section{
-	{"For business owners", []string{"guide/index", "guide/start", "guide/templates", "guide/connections", "guide/paying-people", "guide/receiving-money", "guide/your-riders", "guide/schools", "guide/tables", "guide/changing-a-workflow", "guide/settings", "guide/own-domain", "guide/your-website", "guide/own-whatsapp-number", "guide/on-your-phone"}},
+	{"For business owners", []string{"guide/index", "guide/start", "guide/templates", "guide/connections", "guide/paying-people", "guide/receiving-money", "guide/your-riders", "guide/your-stock", "guide/schools", "guide/tables", "guide/changing-a-workflow", "guide/settings", "guide/own-domain", "guide/your-website", "guide/own-whatsapp-number", "guide/on-your-phone"}},
 	{"Get started", []string{"onboarding", "templates", "schools", "data-tables", "dashboard", "environments", "cli"}},
 	{"Money", []string{"invoices", "money-log", "matching", "leaks", "money-reports"}},
 	{"Build workflows", []string{"workflow-builder", "sdk", "readiness", "code-steps", "container-steps", "ai", "alerts"}},
@@ -61,6 +61,7 @@ var internal = []struct{ pattern, why string }{
 	{"embed-sites", "embedding storefronts and forms is built but off until Phase 5 ships; publish it with storefronts"},
 	{"storefronts", "storefronts are built but off until Phase 5 ships; publish with them"},
 	{"dispatch", "riders and deliveries ride on storefront orders, off until Phase 5 ships; publish them with storefronts"},
+	{"stock", "stock rides on the storefront's catalogue, off until Phase 5 ships; publish it with storefronts"},
 	{"forms", "hosted forms are built but off until Phase 5 ships; publish them with storefronts"},
 	{"moderation", "storefront trust and safety is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"agents", "field agents are built but idle until Phase 5 ships; publish them with storefronts"},

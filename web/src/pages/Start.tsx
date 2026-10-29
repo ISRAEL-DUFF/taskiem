@@ -14,6 +14,7 @@ import { plainValue, resolveSchema } from "../lib/values";
 import { SchemaForm } from "../forms/SchemaForm";
 import { NewConnection, startLink } from "./Connections";
 import { ReceiveMoneyOffer } from "./ReceiveMoney";
+import { StockOffer } from "./StorefrontStock";
 import { needsConnection } from "../lib/connections";
 import { railsForAll, templateCapabilities } from "../lib/capabilities";
 import type { ConnectionName } from "../forms/ConnectionPicker";
@@ -112,6 +113,7 @@ export function Start() {
         </section>
       )}
       {can("invoice.read") && <ReceiveMoneyOffer />}
+      {can("table.edit") && can("storefront.manage") && <StockOffer />}
       {(me?.schools || me?.roles.includes("owner")) && can("school.read") && <SchoolStart on={!!me?.schools} owner={!!me?.roles.includes("owner")} />}
       {can("workflow.edit") && (
         <section>

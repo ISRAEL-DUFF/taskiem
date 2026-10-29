@@ -77,6 +77,10 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 			warns = append(warns, Warning{Kind: "table", Rule: RuleSchoolTable, Message: fmt.Sprintf("the table %q keeps students with a paid or cleared column: a school's students, their term fees and their clearance are Taskiem's own (the Schools area and schools@1); "+
 				"a student's fees are invoices paid only by the payments counted towards them, and clearance is read from the money (schools@1 clearance), never written; read the kept tables school_students and school_term_fees, or schools@1, instead of a table", t.Name)})
 		}
+		if stockTable(t) {
+			warns = append(warns, Warning{Kind: "table", Rule: RuleStockTable, Message: fmt.Sprintf("the table %q keeps items with a quantity: a shop's stock is Taskiem's own (the Stock page and stock@1), "+
+				"kept in its catalogue with every change a movement that explains the count; use stock@1 (list_items, low_items, adjust, receive, count, record_sale) instead of a table", t.Name)})
+		}
 		err := checkTableShape(t)
 		if err == nil && check != nil {
 			err = check(t)
@@ -136,6 +140,31 @@ func invoiceTable(t TableSpec) bool {
 	}
 	for _, c := range t.Columns {
 		if slices.Contains([]string{"status", "paid", "is_paid", "payment_status", "invoice_status", "paid_at", "paid_on"}, c.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+// RuleStockTable flags a proposed table of stock with a quantity: a
+// shop's stock is the stock record's (rule 24).
+const RuleStockTable = "stock_as_table"
+
+// stockTable reports whether a proposed table keeps items with how many
+// there are.
+func stockTable(t TableSpec) bool {
+	parts := strings.Split(t.Name, "_")
+	named := false
+	for _, p := range parts {
+		if slices.Contains([]string{"stock", "stocks", "inventory", "inventories", "store", "shelf", "warehouse"}, p) {
+			named = true
+		}
+	}
+	if !named {
+		return false
+	}
+	for _, c := range t.Columns {
+		if slices.Contains([]string{"quantity", "qty", "stock", "count", "in_stock", "quantity_left", "on_hand", "units", "balance"}, c.Name) {
 			return true
 		}
 	}

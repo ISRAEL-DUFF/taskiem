@@ -3,6 +3,7 @@
   "title": "Low stock alert from your inventory sheet",
   "summary": "Every morning, find items at or below their reorder level in your inventory sheet and tell the owner the list.",
   "description": "Every day at the time you choose, reads your inventory sheet (columns: item, quantity, reorder_level), picks the items at or below their reorder level, and, if there are any, tells the owner the list so stock can be reordered in time. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "replaced_where": {"by": "low-stock-alert", "when": "keeps_stock"},
   "category": "operations",
   "tags": ["inventory", "stock", "alerts", "reorder", "google sheets", "sms", "daily"],
   "keywords": ["stock", "inventory", "reorder", "restock", "running", "low", "items", "goods", "shop", "supplies", "out"],

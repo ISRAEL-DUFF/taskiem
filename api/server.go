@@ -47,6 +47,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
@@ -193,6 +194,12 @@ type Server struct {
 	// set, keeps a rider's proof photo instead of Media (tests).
 	Dispatch   *dispatch.Dispatch
 	ProofStore func(ctx context.Context, tenant uuid.UUID, data []byte) (string, error)
+	// Stock is the shops' stock movements (docs/spec/stock.md); nil: the
+	// catalogue's stock is changed as before, with no movements.
+	Stock *stock.Stock
+	// Purchases is the shops' suppliers and purchase orders (stock K3);
+	// nil: none.
+	Purchases *stock.Purchases
 	// ChatSigner signs approval decision and hand-off tokens when WhatsApp
 	// is off (with WhatsApp on, its signer is used for both channels).
 	ChatSigner whatsapp.Signer
@@ -238,6 +245,7 @@ type Server struct {
 	limiters     limiterSet                          // sign-in and other unauthenticated attempts
 	hosts        hostCache                           // custom domains: Host to embed app
 	defs         lru.Cache[string, *wd.Definition]   // "workflow/version"; versions are immutable, bounded (S34)
+	stockLow     lru.Cache[uuid.UUID, lowSeen]       // businesses' low items, for the evening and morning messages (stock_sales.go)
 	bg           sync.WaitGroup
 	bgActive     atomic.Int64 // work running after its request was answered (reset emails)
 }
@@ -441,6 +449,35 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/riders/{id}/bank", s.putRiderBank)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/payouts/{id}/not-paid", s.payoutNotPaid)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
+			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
+			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
+			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
+			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
+			r.With(s.need(PermTableRead)).Get("/stock/sales", s.getSales)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/sales", s.recordSale)
+			// Counts and shrinkage (stock_counts.go, K4).
+			r.With(s.need(PermTableRead)).Get("/stock/counts", s.listCounts)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/counts", s.recordCount)
+			r.With(s.need(PermTableRead)).Get("/stock/shrinkage", s.getShrinkage)
+			// Suppliers and purchase orders (stock_purchases.go, K3).
+			r.With(s.need(PermStorefrontManage)).Get("/stock/suppliers", s.listSuppliers)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/suppliers", s.addSupplier)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/stock/suppliers/{id}", s.patchSupplier)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/suppliers/{id}/retire", s.retireSupplier)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/suppliers/{id}/invite", s.inviteSupplier)
+			r.With(s.need(PermStorefrontManage)).Get("/stock/settings", s.getStockSettings)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/settings", s.putStockSettings)
+			r.With(s.need(PermTableRead)).Get("/stock/purchases", s.listPurchases)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases", s.draftPurchase)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/low", s.draftLowPurchases)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/send", s.sendPurchase)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/confirm", s.confirmPurchase)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/cancel", s.cancelPurchase)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/receive", s.receivePurchase)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/pay", s.payPurchase)
 			// Deliveries with riders (dispatch.go, D2 to D4).
 			r.With(s.need(PermStorefrontManage)).Get("/deliveries", s.listDeliveries)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)

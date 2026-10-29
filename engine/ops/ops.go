@@ -171,7 +171,7 @@ func Audit(ctx context.Context, pool *pgxpool.Pool, actor, action, target string
 // scoped to the platform chain: no change is left unrecorded. For account
 // changes the pool is the CLI's own login as taskiem_ops_admin
 // (TASKIEM_OPS_DATABASE_URL): the API server's role may not call the
-// account functions (migration 00256).
+// account functions (migration 00266).
 func inChain(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, fn)
 }

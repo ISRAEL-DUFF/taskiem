@@ -2340,6 +2340,438 @@
       "text": "(ya na foto gị n'elu)",
       "reviewed": false
     },
+    "wa.stock.off": {
+      "text": "{org} anaghị edebe ngwa ahịa na Taskiem ka. Zipu *add 50 cartons of Indomie at 8,500* ịmalite, ma ọ bụ pịa Keep my stock na peeji Stock.",
+      "reviewed": false
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} anaghị edebe ngwa ahịa ka, ịmalite ya chọrọ storefront.manage, nke ọrụ gị enweghị.",
+      "reviewed": false
+    },
+    "wa.stock.denied": {
+      "text": "Ịgbanwe ngwa ahịa {org} chọrọ table.edit, nke ọrụ gị enweghị.",
+      "reviewed": false
+    },
+    "wa.stock.denied_read": {
+      "text": "Ịhụ ngwa ahịa {org} chọrọ table.read, nke ọrụ gị enweghị.",
+      "reviewed": false
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* enweghị ọnụ ọgụgụ ka. Zipu *stock {name} 12* iji tọọ ya.",
+      "reviewed": false
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.is_low": {
+      "text": "Ọ dị ala: ị na-azụtakwa na {level}.",
+      "reviewed": false
+    },
+    "wa.stock.last": {
+      "text": "Nke ikpeazụ: {what}, {when}.",
+      "reviewed": false
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} were {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_sale": {
+      "text": "erere {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_received": {
+      "text": "natara {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "edoziri site na {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_count": {
+      "text": "gụrụ {qty}",
+      "reviewed": false
+    },
+    "wa.stock.reason_outside": {
+      "text": "gbanwere na tebụl site na {qty}",
+      "reviewed": false
+    },
+    "wa.stock.no_levels": {
+      "text": "Ngwa ahịa {items} ka a na-edebe, ọ nweghị nke nwere ọkwa ịzụtakwa. Tọọ ha na peeji Stock, Taskiem ga-agwa gị kwa ụtụtụ ihe dị ala.",
+      "reviewed": false
+    },
+    "wa.stock.none_low": {
+      "text": "Ọ dịghị ihe ruru ọkwa ịzụtakwa ya. Ngwa ahịa {items} ka a na-edebe.",
+      "reviewed": false
+    },
+    "wa.stock.low_title": {
+      "text": "Ngwa ahịa dị ala:",
+      "reviewed": false
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (zụtakwa na {level}); zụta {suggest}",
+      "reviewed": false
+    },
+    "wa.stock.low_more": {
+      "text": "…na {count} ọzọ na peeji Stock.",
+      "reviewed": false
+    },
+    "wa.stock.at_cost": {
+      "text": " na {price} nke ọ bụla",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Tinye *{name}* na {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Malite idebe ngwa ahịa na *{name}*: {qty}{cost}? Taskiem ga-eme tebụl products maka ngwa ahịa gị.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Tinye {qty} na *{name}* ({from} → {to}){cost}?",
+      "reviewed": false
+    },
+    "wa.stock.adjust_how": {
+      "text": "Dee ya dị ka *adjust rice -2 spoilt*: ngwa ahịa, mgbanwe, na ihe kpatara ya.",
+      "reviewed": false
+    },
+    "wa.stock.no_reason": {
+      "text": "enweghị ihe kpatara ya",
+      "reviewed": false
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Gbanwee *{name}* site na {change} ({from} → {to}): {note}?",
+      "reviewed": false
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* adịlarị ebe ahụ. Zipu add ọzọ iji tinye na ya.",
+      "reviewed": false
+    },
+    "wa.stock.added": {
+      "text": "Etinyela *{name}*: {count}.",
+      "reviewed": false
+    },
+    "wa.stock.no_price": {
+      "text": "Ọ ga-apụta na peeji gị ozugbo o nwere ọnụ ahịa: zipu *price {name} 9500*.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "Edekọọla maka *{name}*. Ọ ga-eru tebụl products gị n'oge na-adịghị anya.",
+      "reviewed": false
+    },
+    "wa.stock.now": {
+      "text": "Emechala: *{name}* bụ {count} ugbu a.",
+      "reviewed": false
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: tinye ngwa ahịa; *stock* na ngwa ahịa, ma ọ bụ *how many bags of rice*: ọnụ ọgụgụ ya; *stock* naanị: ihe dị ala; *adjust rice -2 spoilt*: dozie ọnụ ọgụgụ",
+      "reviewed": false
+    },
+    "sales.how_cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "sales.how_transfer": {
+      "text": "site na transfer",
+      "reviewed": false
+    },
+    "sales.how_pos": {
+      "text": "na POS",
+      "reviewed": false
+    },
+    "sales.by_cash": {
+      "text": "Ego aka",
+      "reviewed": false
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": false
+    },
+    "sales.by_pos": {
+      "text": "POS",
+      "reviewed": false
+    },
+    "sales.evening.title": {
+      "text": "*Ire taa*: {total} site na ire {count}.",
+      "reviewed": false
+    },
+    "sales.evening.top": {
+      "text": "Ihe e rere karịa: {list}.",
+      "reviewed": false
+    },
+    "sales.evening.waiting": {
+      "text": "Ire {count} site na transfer ma ọ bụ POS ka na-eche ego ha.",
+      "reviewed": false
+    },
+    "sales.evening.unsold": {
+      "text": "Ire POS {count}, {amount}, enweghị ngwa ahịa: zipu *sold* na ngwa ahịa, ego ahụ na *pos* iji kwuo ihe e rere.",
+      "reviewed": false
+    },
+    "sales.evening.low": {
+      "text": "Ihe dị ala ugbu a: {list}.",
+      "reviewed": false
+    },
+    "money.daily.sales": {
+      "text": "Ire i dekọrọ: {total} site na ire {count} ({by}).",
+      "reviewed": false
+    },
+    "money.daily.low": {
+      "text": "Ngwa ahịa dị ala: {list}.",
+      "reviewed": false
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, tụọ {order})",
+      "reviewed": false
+    },
+    "money.daily.low_more": {
+      "text": "{count} ọzọ na peeji Stock",
+      "reviewed": false
+    },
+    "wa.sale.how": {
+      "text": "Dee ya dị ka *sold 3 bags of rice 45,000 cash*: ole, ngwa ahịa, ego ahụ, na cash, transfer ma ọ bụ pos.",
+      "reviewed": false
+    },
+    "wa.sale.which": {
+      "text": "Ihe karịrị otu ngwa ahịa dabara na *{name}*: {list}. Zipu ire ahụ ọzọ na aha zuru ezu.",
+      "reviewed": false
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* enweghị ọnụ ahịa. Zipu ire ahụ ọzọ na ego ahụ, dị ka *sold 2 {name} 4,500 cash*.",
+      "reviewed": false
+    },
+    "wa.sale.confirm": {
+      "text": "Ị rere {items} na {amount}, {how}?",
+      "reviewed": false
+    },
+    "wa.sale.beyond": {
+      "text": "Nke ahụ karịrị {names} Taskiem gụrụ n'ebe ị na-edebe ihe: ọnụ ọgụgụ ga-abụ 0, a ga-edebe ire ahụ.",
+      "reviewed": false
+    },
+    "wa.sale.recorded": {
+      "text": "Edekọọla {reference}: {items}, {amount} {how}.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "Ọ na-eche transfer ahụ: a ga-ejikọ ya mgbe ọ bịara.",
+      "reviewed": false
+    },
+    "wa.sale.waiting_pos": {
+      "text": "Ọ na-eche ire POS ahụ: a ga-ejikọ ya mgbe e kwuru maka ego ahụ.",
+      "reviewed": false
+    },
+    "wa.sale.matched": {
+      "text": "Ejikọọla ya na ego batara.",
+      "reviewed": false
+    },
+    "wa.sale.short": {
+      "text": "Ị rere {names} karịa ihe Taskiem gụrụ: gụọ ihe dị n'ebe ị na-edebe ihe mgbe ị nwere ike (*stock {name} 12*).",
+      "reviewed": false
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (ma ọ bụ *transfer*, *pos*): dekọọ ire; ọ ga-ewepụ ngwa ahịa n'ime ngwa ahịa gị",
+      "reviewed": false
+    },
+    "supplier.order": {
+      "text": "Ịtụ {reference}: {items}. Ngụkọta {total}. Ị nwere ike iweta ya?",
+      "reviewed": false
+    },
+    "supplier.reply_words": {
+      "text": "Zaa CONFIRM, ma ọ bụ CHANGE {reference} na ihe ị nwere ike iweta.",
+      "reviewed": false
+    },
+    "supplier.btn.confirm": {
+      "text": "Kwado",
+      "reviewed": false
+    },
+    "supplier.btn.change": {
+      "text": "Gbanwee",
+      "reviewed": false
+    },
+    "supplier.button_invalid": {
+      "text": "A pụghị ịza ịtụ ahụ ebe a ọzọ.",
+      "reviewed": false
+    },
+    "supplier.change_ask": {
+      "text": "Zipu *change {reference}* na ihe ị nwere ike iweta, dị ka *change {reference} only 10 bags of rice this week*.",
+      "reviewed": false
+    },
+    "supplier.changed": {
+      "text": "Ezigara {business}: ha ga-aza gị maka {reference}.",
+      "reviewed": false
+    },
+    "supplier.confirmed": {
+      "text": "Daalụ. Agwala {business} na ị kwadoro {reference}.",
+      "reviewed": false
+    },
+    "supplier.which": {
+      "text": "Kedu ịtụ? Zipu okwu ahụ na nọmba ya: {list}.",
+      "reviewed": false
+    },
+    "purchase.status_drafted": {
+      "text": "akwụkwọ mbụ",
+      "reviewed": false
+    },
+    "purchase.status_sent": {
+      "text": "ezigara",
+      "reviewed": false
+    },
+    "purchase.status_confirmed": {
+      "text": "akwadoro",
+      "reviewed": false
+    },
+    "purchase.status_part_received": {
+      "text": "ụfọdụ abatala",
+      "reviewed": false
+    },
+    "purchase.status_received": {
+      "text": "ihe niile abatala",
+      "reviewed": false
+    },
+    "purchase.status_cancelled": {
+      "text": "akagbuola",
+      "reviewed": false
+    },
+    "wa.supplier.denied": {
+      "text": "Ndị nwe na ndị nchịkwa na-edebe ndị na-ebute ihe na ịtụ na {org}.",
+      "reviewed": false
+    },
+    "wa.supplier.how": {
+      "text": "Dee ya dị ka *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.supplier.for": {
+      "text": " maka {list}",
+      "reviewed": false
+    },
+    "wa.supplier.add_confirm": {
+      "text": "Tinye *{name}* dị ka onye na-ebute ihe{items}? Ha ga-enweta njikọ site na SMS iji nata ịtụ gị na WhatsApp.",
+      "reviewed": false
+    },
+    "wa.supplier.added": {
+      "text": "Etinyela {name}. Zipu *order from {name}* mgbe ngwa ahịa ha dị ala.",
+      "reviewed": false
+    },
+    "wa.suppliers.none": {
+      "text": "Enweghị onye na-ebute ihe ka. Zipu *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.suppliers.title": {
+      "text": "*Ndị na-ebute gị ihe*:",
+      "reviewed": false
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: ịtụ {open} ka mepere emepe, ụgwọ {owed}",
+      "reviewed": false
+    },
+    "wa.order.which": {
+      "text": "Ihe karịrị otu onye na-ebute ihe dabara na *{name}*: {list}.",
+      "reviewed": false
+    },
+    "wa.order.no_supplier": {
+      "text": "Ọ dịghị onye na-ebute ihe aha ya bụ *{name}*. Zipu *suppliers* maka ndepụta.",
+      "reviewed": false
+    },
+    "wa.order.none": {
+      "text": "Ọ dịghị ihe sitere na *{name}* dị ala nke a na-atụbeghị.",
+      "reviewed": false
+    },
+    "wa.order.confirm": {
+      "text": "Ịtụ {reference} site na *{supplier}*: {items}, {total}. Zigara ha ya?",
+      "reviewed": false
+    },
+    "wa.order.sent": {
+      "text": "Ezigara {reference} {supplier}. A ga-agwa gị mgbe ha kwadoro ya.",
+      "reviewed": false
+    },
+    "wa.order.second": {
+      "text": "Edeela {reference}. Ọ karịrị oke gị nke {limit}, ya mere onye nwe ọzọ ma ọ bụ onye nchịkwa ga-ezipu ya: *send {reference}*, ma ọ bụ Approve and send na peeji Stock.",
+      "reviewed": false
+    },
+    "wa.order.marked_confirmed": {
+      "text": "Akara {reference} dị ka akwadoro.",
+      "reviewed": false
+    },
+    "wa.order.unknown": {
+      "text": "Ọ dịghị ịtụ nwere nọmba ahụ. Peeji Stock nwere ndepụta ha.",
+      "reviewed": false
+    },
+    "wa.received.confirm": {
+      "text": "Anatala {count} {item} n'ịtụ {reference} site na {supplier}?",
+      "reviewed": false
+    },
+    "wa.received.done": {
+      "text": "Anatala na {reference}; ịtụ ahụ bụ {status}. Emelitere ngwa ahịa gị na ọnụ ahịa ịzụ.",
+      "reviewed": false
+    },
+    "wa.paid.how": {
+      "text": "Dee ya dị ka *paid Dangote 425,000 transfer*.",
+      "reviewed": false
+    },
+    "wa.paid.none": {
+      "text": "Ọ dịghị ịtụ nye *{name}* na-eche ịkwụ ụgwọ.",
+      "reviewed": false
+    },
+    "wa.paid.confirm": {
+      "text": "Ị kwụrụ *{supplier}* {amount} {how}, maka {reference}?",
+      "reviewed": false
+    },
+    "wa.paid.done": {
+      "text": "Edekọọla {amount} a kwụrụ {supplier} maka {reference}. Ụgwọ fọdụrụ: {owed}.",
+      "reviewed": false
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: ndị na-ebute ihe na ịtụ ha",
+      "reviewed": false
+    },
+    "wa.count.how": {
+      "text": "Dee ya dị ka *count rice 12, indomie 40*, na ihe kpatara ya mgbe colon gasịrị ma ọ bụrụ na ịchọrọ (*count rice 12: rats*). Ma ọ bụ zipu *count* ka m jụọ otu otu.",
+      "reviewed": false
+    },
+    "wa.count.none": {
+      "text": "Ọ dịghị ihe a ga-agụ ka. Buru ụzọ tinye ngwa ahịa gị.",
+      "reviewed": false
+    },
+    "wa.count.start": {
+      "text": "Anyị na-agụ ngwa ahịa {count}. Zipu ole dị n'ebe a na-edebe ihe, *skip* iji wụfee otu, ma ọ bụ *done* iji kwụsị.",
+      "reviewed": false
+    },
+    "wa.count.ask": {
+      "text": "*{item}* ole? (Taskiem nwere {had}.)",
+      "reviewed": false
+    },
+    "wa.count.number": {
+      "text": "Zipu nọmba zuru ezu, dị ka 12, ma ọ bụ *skip*.",
+      "reviewed": false
+    },
+    "wa.count.confirm": {
+      "text": "Ọgụgụ ngwa ahịa {count}:",
+      "reviewed": false
+    },
+    "wa.count.line": {
+      "text": "• {item}: {had} → {counted}",
+      "reviewed": false
+    },
+    "wa.count.same": {
+      "text": "{count} dị ka Taskiem nwere ha.",
+      "reviewed": false
+    },
+    "wa.count.done": {
+      "text": "Agụọla {reference}: ngwa ahịa {changed} gbanwere.",
+      "reviewed": false
+    },
+    "wa.count.lost": {
+      "text": "Ihe furu efu: {amount} n'ọnụ ahịa ịzụ.",
+      "reviewed": false
+    },
+    "money.daily.shrink": {
+      "text": "Ngwa ahịa furu efu: {count}, {amount} n'ọnụ ahịa ịzụ; nke kacha bụ {item} ({lost}).",
+      "reviewed": false
+    },
+    "wa.help.counts": {
+      "text": "• *count rice 12, indomie 40* (ma ọ bụ *count* ka m jụọ otu otu): gụọ ihe dị n'ebe a na-edebe ihe",
+      "reviewed": false
+    },
     "wa.shop.with_photo": {
       "text": " (ya na foto ahụ)",
       "reviewed": false
