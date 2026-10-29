@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -240,9 +242,11 @@ func (e *Engine) Resolve(v any, act map[string]any, keepSecrets bool) (any, erro
 		}
 		return e.Eval(t, act)
 	case map[string]any:
+		// In key order, so the error a run records is the one its replay
+		// finds when more than one key fails.
 		out := make(map[string]any, len(t))
-		for k, c := range t {
-			r, err := e.Resolve(c, act, keepSecrets)
+		for _, k := range slices.Sorted(maps.Keys(t)) {
+			r, err := e.Resolve(t[k], act, keepSecrets)
 			if err != nil {
 				return nil, err
 			}

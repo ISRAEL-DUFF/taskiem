@@ -110,9 +110,16 @@ func (m *Masker) maskKnown(v any) any {
 	case map[string]any:
 		// Keys too: an input built as {name: balance} carries the name in
 		// its key, and the key reaches the model like any value.
+		// In key order, so a value's placeholder number is the same each
+		// time the same input is masked.
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		out := make(map[string]any, len(t))
-		for k, x := range t {
-			out[m.maskString(k)] = m.maskKnown(x)
+		for _, k := range keys {
+			out[m.maskString(k)] = m.maskKnown(t[k])
 		}
 		return out
 	case []any:

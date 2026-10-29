@@ -3,6 +3,7 @@ package pii
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -258,8 +259,15 @@ func walkDetect(v any, path, key string, siblings map[string]any, found func(pat
 		if IsEnvelope(t) {
 			return t
 		}
-		for k, x := range t {
-			if r := walkDetect(x, path+"/"+k, k, t, found); r != nil {
+		// In key order, as maskKnown: placeholder numbers, and the siblings
+		// a key is classified beside, are the same on every run.
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if r := walkDetect(t[k], path+"/"+k, k, t, found); r != nil {
 				t[k] = r
 			}
 		}
