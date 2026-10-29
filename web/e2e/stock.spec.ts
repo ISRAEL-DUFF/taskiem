@@ -374,3 +374,212 @@ test("sales on the Stock page: today's total, Record a sale, Say what was sold",
     entry_id: "8d0c4a8e-2f7b-4a11-9a53-3c1e7a0f9b10",
   });
 });
+
+const purchases = {
+  purchases: [
+    {
+      id: "p2",
+      reference: "P-7QX4KD",
+      supplier_id: "s1",
+      supplier: "Dangote Depot",
+      lines: [
+        {
+          item_id: "1",
+          item: "Indomie",
+          unit: "carton",
+          quantity: 46,
+          cost_kobo: 850000,
+          received: 0,
+        },
+      ],
+      total_kobo: 39100000,
+      status: "drafted",
+      drafted_by: "user:ada",
+      approved_by: null,
+      sent_at: null,
+      confirmed_at: null,
+      confirmed_how: null,
+      counter: null,
+      counter_at: null,
+      received_at: null,
+      cancelled_at: null,
+      received_kobo: 0,
+      paid_kobo: 0,
+      owed_kobo: 0,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: "p1",
+      reference: "P-K2M9PA",
+      supplier_id: "s1",
+      supplier: "Dangote Depot",
+      lines: [
+        {
+          item_id: "1",
+          item: "Indomie",
+          unit: "carton",
+          quantity: 46,
+          cost_kobo: 850000,
+          received: 46,
+        },
+        {
+          item_id: "2",
+          item: "Rice",
+          unit: "bag",
+          quantity: 17,
+          cost_kobo: 4000000,
+          received: 10,
+        },
+      ],
+      total_kobo: 107100000,
+      status: "part_received",
+      drafted_by: "user:ada",
+      approved_by: "user:ada",
+      sent_at: new Date().toISOString(),
+      confirmed_at: new Date().toISOString(),
+      confirmed_how: "supplier",
+      counter: "only 10 bags of rice this week",
+      counter_at: new Date().toISOString(),
+      received_at: null,
+      cancelled_at: null,
+      received_kobo: 79100000,
+      paid_kobo: 0,
+      owed_kobo: 79100000,
+      created_at: new Date().toISOString(),
+    },
+  ],
+};
+
+const suppliers = {
+  suppliers: [
+    {
+      id: "s1",
+      name: "Dangote Depot",
+      phone: "+2348031234567",
+      reached: "whatsapp",
+      owed_kobo: 79100000,
+      open: 2,
+      invited_at: null,
+      created_at: "2026-10-28T09:00:00Z",
+      retired_at: null,
+    },
+  ],
+  settings: { purchase_limit_kobo: null },
+};
+
+test("suppliers and orders to them", async ({ page }) => {
+  await signUp(page);
+  const json = (body: unknown, status = 200) => ({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(body),
+  });
+  const sent: { url: string; body: unknown }[] = [];
+  await page.route("**/v1/stock", (route) => route.fulfill(json(stock)));
+  await page.route("**/v1/stock/movements?**", (route) =>
+    route.fulfill(json(movements)),
+  );
+  await page.route("**/v1/stock/sales", (route) =>
+    route.fulfill(
+      json({
+        day: "2026-10-29",
+        total_kobo: 0,
+        by_how: { cash: 0, transfer: 0, pos: 0 },
+        count: 0,
+        waiting: 0,
+        top: [],
+        unsold: [],
+        sales: [],
+      }),
+    ),
+  );
+  await page.route("**/v1/stock/purchases**", async (route) => {
+    const r = route.request();
+    if (r.method() === "POST") {
+      sent.push({ url: new URL(r.url()).pathname, body: r.postDataJSON() });
+      if (r.url().endsWith("/low"))
+        return route.fulfill(json({ purchases: [], no_supplier: ["Garri"] }));
+      return route.fulfill(json({ purchase: purchases.purchases[0] }));
+    }
+    await route.fulfill(json(purchases));
+  });
+  await page.route("**/v1/stock/suppliers**", async (route) => {
+    const r = route.request();
+    if (r.method() === "POST") {
+      sent.push({ url: new URL(r.url()).pathname, body: r.postDataJSON() });
+      return route.fulfill(json({ supplier: suppliers.suppliers[0] }, 201));
+    }
+    await route.fulfill(json(suppliers));
+  });
+
+  // The orders on the Stock page.
+  await page.goto("/storefront/stock");
+  const rows = page.getByTestId("purchase");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText(
+    "P-7QX4KD · Dangote Depot · ₦391,000",
+  );
+  await expect(rows.first()).toContainText("Draft");
+  await expect(rows.last()).toContainText(
+    "the supplier confirmed · 1 item still to come · owed ₦791,000",
+  );
+  await expect(rows.last()).toContainText(
+    "Dangote Depot asked: “only 10 bags of rice this week”",
+  );
+  await axeBoth(page, "/storefront/stock, with orders");
+  await page.getByRole("button", { name: "Order what is low" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Garri has no supplier" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Approve and send P-7QX4KD" }).click();
+  await expect
+    .poll(() => sent.map((s) => s.url))
+    .toContain("/v1/stock/purchases/p2/send");
+
+  // Goods in: what is still to come, filled in.
+  await page.getByRole("button", { name: "Goods came in on P-K2M9PA" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Rice: how many came")).toHaveValue("7");
+  await expect(dialog.getByLabel("Indomie: how many came")).toHaveValue("0");
+  await axeBoth(page, "goods in");
+  await dialog.getByRole("button", { name: "Record" }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent.at(-1)).toEqual({
+    url: "/v1/stock/purchases/p1/receive",
+    body: { lines: [{ item_id: "2", quantity: 7 }] },
+  });
+
+  // A payment: what is owed, by transfer.
+  await page
+    .getByRole("button", { name: "Record a payment for P-K2M9PA" })
+    .click();
+  await expect(dialog.getByLabel("Amount paid (₦)")).toHaveValue("791000");
+  await dialog.getByLabel("Amount paid (₦)").fill("500,000");
+  await dialog.getByRole("button", { name: "Record the payment" }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent.at(-1)).toEqual({
+    url: "/v1/stock/purchases/p1/pay",
+    body: { amount_kobo: 50000000, paid_how: "transfer" },
+  });
+
+  // The Suppliers page.
+  await page.goto("/storefront/suppliers");
+  await expect(page.getByTestId("supplier")).toContainText("Owed ₦791,000");
+  await expect(page.getByTestId("supplier")).toContainText(
+    "+2348031234567 · Gets orders on WhatsApp · 2 open orders",
+  );
+  await axeBoth(page, "/storefront/suppliers");
+  await page.getByRole("button", { name: "Add a supplier" }).click();
+  await dialog.getByLabel("Name").fill("Mama Rice");
+  await dialog.getByLabel("Mobile number").fill("12");
+  await expect(dialog).toContainText("Enter a mobile number");
+  await dialog.getByLabel("Mobile number").fill("0805 555 1234");
+  await dialog.getByLabel("Rice").check();
+  await axeBoth(page, "add a supplier");
+  await dialog.getByRole("button", { name: "Add the supplier" }).click();
+  await expect(dialog).toBeHidden();
+  expect(sent.at(-1)).toEqual({
+    url: "/v1/stock/suppliers",
+    body: { name: "Mama Rice", phone: "0805 555 1234", items: ["2"] },
+  });
+});

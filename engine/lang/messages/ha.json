@@ -2516,6 +2516,18 @@
       "text": "Sayarwar da ka rubuta: {total} daga sayarwa {count} ({by}).",
       "reviewed": false
     },
+    "money.daily.low": {
+      "text": "Kayan da suka yi kaɗan: {list}.",
+      "reviewed": false
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, yi odar {order})",
+      "reviewed": false
+    },
+    "money.daily.low_more": {
+      "text": "Ƙarin {count} a shafin Stock",
+      "reviewed": false
+    },
     "wa.sale.how": {
       "text": "Rubuta shi kamar *sold 3 bags of rice 45,000 cash*: guda nawa, kayan, adadin kuɗi, da cash, transfer ko pos.",
       "reviewed": false
@@ -2558,6 +2570,158 @@
     },
     "wa.help.sales": {
       "text": "• *sold 3 bags of rice 45,000 cash* (ko *transfer*, *pos*): rubuta sayarwa; za ta cire kayan daga kayanka",
+      "reviewed": false
+    },
+    "supplier.order": {
+      "text": "Oda {reference}: {items}. Jimilla {total}. Za ka iya kawowa?",
+      "reviewed": false
+    },
+    "supplier.reply_words": {
+      "text": "Amsa CONFIRM, ko CHANGE {reference} da abin da za ka iya kawowa.",
+      "reviewed": false
+    },
+    "supplier.btn.confirm": {
+      "text": "Tabbatar",
+      "reviewed": false
+    },
+    "supplier.btn.change": {
+      "text": "Canza",
+      "reviewed": false
+    },
+    "supplier.button_invalid": {
+      "text": "Ba za a iya amsa wannan odar a nan ba kuma.",
+      "reviewed": false
+    },
+    "supplier.change_ask": {
+      "text": "Aika *change {reference}* da abin da za ka iya kawowa, kamar *change {reference} only 10 bags of rice this week*.",
+      "reviewed": false
+    },
+    "supplier.changed": {
+      "text": "An aika wa {business}: za su amsa maka game da {reference}.",
+      "reviewed": false
+    },
+    "supplier.confirmed": {
+      "text": "Na gode. An sanar da {business} cewa ka tabbatar da {reference}.",
+      "reviewed": false
+    },
+    "supplier.which": {
+      "text": "Wace oda? Aika kalmar tare da lambarta: {list}.",
+      "reviewed": false
+    },
+    "purchase.status_drafted": {
+      "text": "daftari",
+      "reviewed": false
+    },
+    "purchase.status_sent": {
+      "text": "an aika",
+      "reviewed": false
+    },
+    "purchase.status_confirmed": {
+      "text": "an tabbatar",
+      "reviewed": false
+    },
+    "purchase.status_part_received": {
+      "text": "wani sashe ya iso",
+      "reviewed": false
+    },
+    "purchase.status_received": {
+      "text": "duka ya iso",
+      "reviewed": false
+    },
+    "purchase.status_cancelled": {
+      "text": "an soke",
+      "reviewed": false
+    },
+    "wa.supplier.denied": {
+      "text": "Masu shi da manajoji ne ke kula da masu kawowa da odoji a {org}.",
+      "reviewed": false
+    },
+    "wa.supplier.how": {
+      "text": "Rubuta shi kamar *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.supplier.for": {
+      "text": " don {list}",
+      "reviewed": false
+    },
+    "wa.supplier.add_confirm": {
+      "text": "A ƙara *{name}* a matsayin mai kawowa{items}? Za su sami hanyar haɗi ta SMS don karɓar odojinka a WhatsApp.",
+      "reviewed": false
+    },
+    "wa.supplier.added": {
+      "text": "An ƙara {name}. Aika *order from {name}* idan kayansu sun yi kaɗan.",
+      "reviewed": false
+    },
+    "wa.suppliers.none": {
+      "text": "Babu mai kawowa tukuna. Aika *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.suppliers.title": {
+      "text": "*Masu kawowa naka*:",
+      "reviewed": false
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: odoji {open} a buɗe, bashi {owed}",
+      "reviewed": false
+    },
+    "wa.order.which": {
+      "text": "Masu kawowa fiye da ɗaya sun dace da *{name}*: {list}.",
+      "reviewed": false
+    },
+    "wa.order.no_supplier": {
+      "text": "Babu mai kawowa mai suna *{name}*. Aika *suppliers* don jerin.",
+      "reviewed": false
+    },
+    "wa.order.none": {
+      "text": "Babu wani abu daga *{name}* da ya yi kaɗan kuma ba a yi oda ba.",
+      "reviewed": false
+    },
+    "wa.order.confirm": {
+      "text": "Oda {reference} daga *{supplier}*: {items}, {total}. A aika musu?",
+      "reviewed": false
+    },
+    "wa.order.sent": {
+      "text": "An aika {reference} zuwa {supplier}. Za a sanar da kai idan sun tabbatar.",
+      "reviewed": false
+    },
+    "wa.order.second": {
+      "text": "An rubuta {reference}. Ya wuce iyakarka ta {limit}, don haka wani mai shi ko manaja ne zai aika: *send {reference}*, ko Approve and send a shafin Stock.",
+      "reviewed": false
+    },
+    "wa.order.marked_confirmed": {
+      "text": "An yi wa {reference} alamar an tabbatar.",
+      "reviewed": false
+    },
+    "wa.order.unknown": {
+      "text": "Babu odar da ke da wannan lamba. Shafin Stock na da jerinsu.",
+      "reviewed": false
+    },
+    "wa.received.confirm": {
+      "text": "An karɓi {count} {item} a kan oda {reference} daga {supplier}?",
+      "reviewed": false
+    },
+    "wa.received.done": {
+      "text": "An karɓa a kan {reference}; odar ta zama {status}. An sabunta kayanka da farashin saye.",
+      "reviewed": false
+    },
+    "wa.paid.how": {
+      "text": "Rubuta shi kamar *paid Dangote 425,000 transfer*.",
+      "reviewed": false
+    },
+    "wa.paid.none": {
+      "text": "Babu odar zuwa *{name}* da ke jiran biya.",
+      "reviewed": false
+    },
+    "wa.paid.confirm": {
+      "text": "Ka biya *{supplier}* {amount} {how}, don {reference}?",
+      "reviewed": false
+    },
+    "wa.paid.done": {
+      "text": "An rubuta {amount} da aka biya {supplier} don {reference}. Bashin da ya rage: {owed}.",
+      "reviewed": false
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: masu kawowa da odojinsu",
       "reviewed": false
     },
     "wa.shop.with_photo": {

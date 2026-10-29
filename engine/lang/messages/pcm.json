@@ -2516,6 +2516,18 @@
       "text": "Sales wey you record: {total} from {count} sales ({by}).",
       "reviewed": false
     },
+    "money.daily.low": {
+      "text": "Wetin don low for stock: {list}.",
+      "reviewed": false
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, order {order})",
+      "reviewed": false
+    },
+    "money.daily.low_more": {
+      "text": "{count} more for Stock page",
+      "reviewed": false
+    },
     "wa.sale.how": {
       "text": "Write am like *sold 3 bags of rice 45,000 cash*: how many, di item, di amount, and cash, transfer or pos.",
       "reviewed": false
@@ -2558,6 +2570,158 @@
     },
     "wa.help.sales": {
       "text": "• *sold 3 bags of rice 45,000 cash* (or *transfer*, *pos*): record sale; e go comot di items from your stock",
+      "reviewed": false
+    },
+    "supplier.order": {
+      "text": "Order {reference}: {items}. Total {total}. You fit supply am?",
+      "reviewed": false
+    },
+    "supplier.reply_words": {
+      "text": "Reply CONFIRM, or CHANGE {reference} and wetin you fit supply.",
+      "reviewed": false
+    },
+    "supplier.btn.confirm": {
+      "text": "Confirm",
+      "reviewed": false
+    },
+    "supplier.btn.change": {
+      "text": "Change am",
+      "reviewed": false
+    },
+    "supplier.button_invalid": {
+      "text": "You no fit answer dat order here again.",
+      "reviewed": false
+    },
+    "supplier.change_ask": {
+      "text": "Send *change {reference}* and wetin you fit supply, like *change {reference} only 10 bags of rice this week*.",
+      "reviewed": false
+    },
+    "supplier.changed": {
+      "text": "E don reach {business}: dem go answer you about {reference}.",
+      "reviewed": false
+    },
+    "supplier.confirmed": {
+      "text": "Thank you. {business} don hear say you confirm {reference}.",
+      "reviewed": false
+    },
+    "supplier.which": {
+      "text": "Which order? Send di word with im number: {list}.",
+      "reviewed": false
+    },
+    "purchase.status_drafted": {
+      "text": "draft",
+      "reviewed": false
+    },
+    "purchase.status_sent": {
+      "text": "don send",
+      "reviewed": false
+    },
+    "purchase.status_confirmed": {
+      "text": "don confirm",
+      "reviewed": false
+    },
+    "purchase.status_part_received": {
+      "text": "some don land",
+      "reviewed": false
+    },
+    "purchase.status_received": {
+      "text": "everything don land",
+      "reviewed": false
+    },
+    "purchase.status_cancelled": {
+      "text": "don cancel",
+      "reviewed": false
+    },
+    "wa.supplier.denied": {
+      "text": "Na owners and admins dey keep suppliers and orders for {org}.",
+      "reviewed": false
+    },
+    "wa.supplier.how": {
+      "text": "Write am like *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.supplier.for": {
+      "text": " for {list}",
+      "reviewed": false
+    },
+    "wa.supplier.add_confirm": {
+      "text": "Add *{name}* as supplier{items}? Dem go get link by SMS to dey receive your orders for WhatsApp.",
+      "reviewed": false
+    },
+    "wa.supplier.added": {
+      "text": "{name} don enter. Send *order from {name}* when dia items don low.",
+      "reviewed": false
+    },
+    "wa.suppliers.none": {
+      "text": "No supplier yet. Send *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.suppliers.title": {
+      "text": "*Your suppliers*:",
+      "reviewed": false
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: {open} orders wey still dey open, you owe {owed}",
+      "reviewed": false
+    },
+    "wa.order.which": {
+      "text": "Pass one supplier match *{name}*: {list}.",
+      "reviewed": false
+    },
+    "wa.order.no_supplier": {
+      "text": "No supplier get di name *{name}*. Send *suppliers* for di list.",
+      "reviewed": false
+    },
+    "wa.order.none": {
+      "text": "Nothing from *{name}* don low wey never order.",
+      "reviewed": false
+    },
+    "wa.order.confirm": {
+      "text": "Order {reference} from *{supplier}*: {items}, {total}. Make I send am give dem?",
+      "reviewed": false
+    },
+    "wa.order.sent": {
+      "text": "{reference} don reach {supplier}. You go hear when dem confirm.",
+      "reviewed": false
+    },
+    "wa.order.second": {
+      "text": "{reference} don draft. E pass your limit of {limit}, so another owner or admin go send am: *send {reference}*, or Approve and send for Stock page.",
+      "reviewed": false
+    },
+    "wa.order.marked_confirmed": {
+      "text": "{reference} don mark as confirmed.",
+      "reviewed": false
+    },
+    "wa.order.unknown": {
+      "text": "No order get dat number. Stock page get di list.",
+      "reviewed": false
+    },
+    "wa.received.confirm": {
+      "text": "{count} {item} don land for order {reference} from {supplier}?",
+      "reviewed": false
+    },
+    "wa.received.done": {
+      "text": "E don land for {reference}; di order {status}. Your stock and cost price don update.",
+      "reviewed": false
+    },
+    "wa.paid.how": {
+      "text": "Write am like *paid Dangote 425,000 transfer*.",
+      "reviewed": false
+    },
+    "wa.paid.none": {
+      "text": "No order to *{name}* dey wait for payment.",
+      "reviewed": false
+    },
+    "wa.paid.confirm": {
+      "text": "You pay *{supplier}* {amount} {how}, for {reference}?",
+      "reviewed": false
+    },
+    "wa.paid.done": {
+      "text": "E don record {amount} wey you pay {supplier} for {reference}. Wetin remain: {owed}.",
+      "reviewed": false
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: suppliers and dia orders",
       "reviewed": false
     },
     "wa.shop.with_photo": {

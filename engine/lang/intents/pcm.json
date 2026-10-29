@@ -31,7 +31,8 @@
     "expense": ["i spend", "i don spend"],
     "cash_in": ["cash enter", "money enter"],
     "cash_out": ["cash comot", "money comot"],
-    "sold": ["i don sell", "i sell", "don sell"]
+    "sold": ["i don sell", "i sell", "don sell"],
+    "received": ["i don receive", "e don land", "don receive"]
   },
   "fillers": ["abeg", "abeg o", "please"],
   "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat", "i spend", "i don spend"],

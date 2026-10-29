@@ -3144,6 +3144,21 @@
       "reviewed": true,
       "context": "The morning summary: the sales recorded by chat or the web that day"
     },
+    "money.daily.low": {
+      "text": "Low on stock: {list}.",
+      "reviewed": true,
+      "context": "The morning summary: the items at or below their reorder level"
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, order {order})",
+      "reviewed": true,
+      "context": "One low item in the morning summary: Rice (3 bags, order 17 bags)"
+    },
+    "money.daily.low_more": {
+      "text": "{count} more on the Stock page",
+      "reviewed": true,
+      "context": "The morning summary: how many more low items are not named"
+    },
     "wa.sale.how": {
       "text": "Write it like *sold 3 bags of rice 45,000 cash*: how many, the item, the amount, and cash, transfer or pos.",
       "reviewed": true,
@@ -3198,6 +3213,196 @@
       "text": "• *sold 3 bags of rice 45,000 cash* (or *transfer*, *pos*): record a sale; it takes the items off your stock",
       "reviewed": true,
       "context": "Help: recording a sale"
+    },
+    "supplier.order": {
+      "text": "Order {reference}: {items}. Total {total}. Can you supply it?",
+      "reviewed": true,
+      "context": "A purchase order sent to a supplier in chat, with Confirm and Change buttons"
+    },
+    "supplier.reply_words": {
+      "text": "Reply CONFIRM, or CHANGE {reference} and what you can supply.",
+      "reviewed": true,
+      "context": "Added to an order sent outside WhatsApp's window, where it has no buttons"
+    },
+    "supplier.btn.confirm": {
+      "text": "Confirm",
+      "reviewed": true,
+      "context": "A supplier's button on an order (at most 20 characters)"
+    },
+    "supplier.btn.change": {
+      "text": "Change",
+      "reviewed": true,
+      "context": "A supplier's button on an order (at most 20 characters)"
+    },
+    "supplier.button_invalid": {
+      "text": "That order can no longer be answered here.",
+      "reviewed": true,
+      "context": "A supplier's button or word that no longer fits an order"
+    },
+    "supplier.change_ask": {
+      "text": "Send *change {reference}* and what you can supply, like *change {reference} only 10 bags of rice this week*.",
+      "reviewed": true,
+      "context": "A supplier tapped Change"
+    },
+    "supplier.changed": {
+      "text": "Sent to {business}: they will answer you about {reference}.",
+      "reviewed": true,
+      "context": "A supplier's change was passed on"
+    },
+    "supplier.confirmed": {
+      "text": "Thank you. {business} is told you confirmed {reference}.",
+      "reviewed": true,
+      "context": "A supplier confirmed an order"
+    },
+    "supplier.which": {
+      "text": "Which order? Send the word with its number: {list}.",
+      "reviewed": true,
+      "context": "A supplier's word fits several orders"
+    },
+    "purchase.status_drafted": {
+      "text": "a draft",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_sent": {
+      "text": "sent",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_confirmed": {
+      "text": "confirmed",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_part_received": {
+      "text": "part received",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_received": {
+      "text": "all received",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_cancelled": {
+      "text": "cancelled",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "wa.supplier.denied": {
+      "text": "Suppliers and orders at {org} are kept by its owners and admins.",
+      "reviewed": true,
+      "context": "Suppliers and purchase orders need storefront.manage"
+    },
+    "wa.supplier.how": {
+      "text": "Write it like *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": true,
+      "context": "add supplier with words that could not be read"
+    },
+    "wa.supplier.for": {
+      "text": " for {list}",
+      "reviewed": true,
+      "context": "Part of confirming a new supplier: the items they supply"
+    },
+    "wa.supplier.add_confirm": {
+      "text": "Add *{name}* as a supplier{items}? They get a link by SMS to receive your orders on WhatsApp.",
+      "reviewed": true,
+      "context": "Confirming a new supplier; items is wa.supplier.for or empty"
+    },
+    "wa.supplier.added": {
+      "text": "Added {name}. Send *order from {name}* when their items are low.",
+      "reviewed": true,
+      "context": "A supplier added"
+    },
+    "wa.suppliers.none": {
+      "text": "No suppliers yet. Send *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": true,
+      "context": "suppliers with none kept"
+    },
+    "wa.suppliers.title": {
+      "text": "*Your suppliers*:",
+      "reviewed": true,
+      "context": "The suppliers list's first line"
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: {open} open orders, owed {owed}",
+      "reviewed": true,
+      "context": "A supplier in the list"
+    },
+    "wa.order.which": {
+      "text": "More than one supplier matches *{name}*: {list}.",
+      "reviewed": true,
+      "context": "order from naming several suppliers"
+    },
+    "wa.order.no_supplier": {
+      "text": "No supplier is called *{name}*. Send *suppliers* for the list.",
+      "reviewed": true,
+      "context": "order from naming no supplier"
+    },
+    "wa.order.none": {
+      "text": "Nothing from *{name}* is low and waiting to be ordered.",
+      "reviewed": true,
+      "context": "order from with nothing low to order"
+    },
+    "wa.order.confirm": {
+      "text": "Order {reference} from *{supplier}*: {items}, {total}. Send it to them?",
+      "reviewed": true,
+      "context": "Confirming a drafted purchase order before it is sent"
+    },
+    "wa.order.sent": {
+      "text": "Sent {reference} to {supplier}. You are told when they confirm.",
+      "reviewed": true,
+      "context": "A purchase order sent"
+    },
+    "wa.order.second": {
+      "text": "{reference} is drafted. It is above your limit of {limit}, so another owner or admin sends it: *send {reference}*, or Approve and send on the Stock page.",
+      "reviewed": true,
+      "context": "A purchase order above the business's limit waits for a second person"
+    },
+    "wa.order.marked_confirmed": {
+      "text": "Marked {reference} confirmed.",
+      "reviewed": true,
+      "context": "The owner marked an order confirmed (the supplier said yes by phone or SMS)"
+    },
+    "wa.order.unknown": {
+      "text": "No order has that number. The Stock page lists them.",
+      "reviewed": true,
+      "context": "A purchase order reference that is not the business's"
+    },
+    "wa.received.confirm": {
+      "text": "Received {count} {item} on order {reference} from {supplier}?",
+      "reviewed": true,
+      "context": "Confirming goods received on an open purchase order"
+    },
+    "wa.received.done": {
+      "text": "Received on {reference}; the order is {status}. Your stock and cost price are updated.",
+      "reviewed": true,
+      "context": "Goods received on a purchase order; status is purchase.status_*"
+    },
+    "wa.paid.how": {
+      "text": "Write it like *paid Dangote 425,000 transfer*.",
+      "reviewed": true,
+      "context": "paid a supplier with an amount that could not be read"
+    },
+    "wa.paid.none": {
+      "text": "No order to *{name}* is waiting to be paid.",
+      "reviewed": true,
+      "context": "paid a supplier with no order"
+    },
+    "wa.paid.confirm": {
+      "text": "Paid *{supplier}* {amount} {how}, for {reference}?",
+      "reviewed": true,
+      "context": "Confirming a payment to a supplier"
+    },
+    "wa.paid.done": {
+      "text": "Recorded {amount} paid to {supplier} for {reference}. Still owed on it: {owed}.",
+      "reviewed": true,
+      "context": "A payment to a supplier recorded as an expense"
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: suppliers and their orders",
+      "reviewed": true,
+      "context": "Help: suppliers and purchase orders"
     },
     "wa.shop.with_photo": {
       "text": " (with the photo)",

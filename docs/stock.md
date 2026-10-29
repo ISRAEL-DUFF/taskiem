@@ -63,6 +63,20 @@ With no amount, the amount is the items' catalogue prices; an item with no price
 
 **The evening total.** After closing (the storefront's hours for the day, else 21:00 Lagos), the people who get the [money summary](money-reports.md#who-gets-them) are sent today's sales once: the total, by cash, transfer and terminal, what sold most, the sales still waiting for their money, the terminal's sales with no items, and what is low now. A day with no sales sends nothing. Outside WhatsApp's 24-hour window it goes as the alert template. The next morning's money summary carries a line for the sales recorded too.
 
+## Suppliers and purchase orders
+
+A **supplier** is a person or business outside yours ([decision 0039](decisions/0039-reaching-people-outside.md)), kept by name and mobile number (the number sealed, as a rider's is). Added, they get the business's tap-in link by SMS; one tap opens WhatsApp, and from then on their orders reach them there. The items they supply are the catalogue's items whose `supplier` column names them: adding a supplier with items sets it, and renaming one carries the new name to their items.
+
+A **purchase order** is a supplier, lines (an item, how many, the price of one: the item's last cost price when drafted) and a total. It is:
+
+1. **Drafted**, by hand or from the low list: **Order what is low** (`order from Dangote` in chat, `draft_purchase` in a workflow) drafts one order per supplier for the low items naming them and on no open order, each for how many to order (up to its order-up-to level, else twice its reorder level). A low item whose supplier Taskiem does not know is named, not guessed.
+2. **Approved and sent** in one step. Above the business's limit (**Suppliers > Approving orders**), the person who drafted it may not send it, nor may a workflow: another owner or admin does. Sent, it goes to the supplier on the chat app they tapped in on, with **Confirm** and **Change**; outside WhatsApp's 24-hour window as the update template, which says to reply CONFIRM or CHANGE. A supplier not yet tapped in gets it by SMS with the link.
+3. **Confirmed** by the supplier's tap or word (CONFIRM), which works from their own number only, or marked confirmed by the owner when they answered by phone. **Change** asks them to send `change P-7QX4KD` and what they can supply instead; it is kept on the order and the owners are told. Their words find their order across businesses through a definer function that answers only orders they may still answer.
+4. **Received**, in part or in full (**Goods came in**, `received 10 bags of rice` in chat, `receive` with `purchase` in a workflow): a `received` movement per item naming the order, the item's cost price set to the order's, and the value received owed to the supplier until paid. Once every line has come, the order is received.
+5. **Paid**, in cash or by transfer (**Record a payment**, `paid Dangote 425,000 transfer`): an `expense` in the [money log](money-log.md) with the supplier as its vendor and the order in its description. What is received and not yet paid is owed to the supplier, shown on **Suppliers** and in chat (`suppliers`).
+
+An order can be cancelled until anything is received on it. The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+
 ## In chat
 
 On WhatsApp and Telegram (each change shown first, written on **yes**):
@@ -74,13 +88,19 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `stock` | The items at or below their reorder level, with how many to order |
 | `adjust rice -2 spoilt` | An adjustment with its reason (`+3 found` adds) |
 | `stock rice 12` | A count |
+| `add supplier Dangote Depot 0803 123 4567 for rice, indomie` | A supplier, with the items they supply |
+| `suppliers` | Each supplier, their open orders and what is owed to them |
+| `order from Dangote` | Their low items as an order, sent on **yes** (or left for a second person above the limit: `send P-7QX4KD`) |
+| `received 10 bags of rice` | Goods received on the open order from the item's supplier; with none, goods received as `add` |
+| `paid Dangote 425,000 transfer` | A payment on the supplier's oldest order with something owed |
+| `confirmed P-7QX4KD` | The supplier said yes by phone |
 | `sold 3 bags of rice 45,000 cash` | A sale (`transfer`, `pos`; several items: `sold 2 cartons indomie, 1 bag rice 60,000 transfer`; no amount takes the prices) |
 
-Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review). A voice note is read the same way, where voice notes are on.
+Items are found as `price` finds them: the exact name, else the one the words start, else one containing them, a unit's plural or singular alike; several give a numbered list. Seeing stock needs `table.read`; changing it, `table.edit`; starting to keep stock where nothing does, `storefront.manage` too. Recording a sale needs `table.edit`. The stock words are English; the sale words come in Pidgin, Yoruba, Hausa and Igbo too (`i don sell 3 bags rice 45,000 cash`), after the person's language is set (drafts, under review), and so do the words for goods received (`i don receive 10 bags rice`). Suppliers and their orders need `storefront.manage`; goods received, `table.edit`. A voice note is read the same way, where voice notes are on.
 
 ## On the web
 
-**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day.
+**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day. **Orders to suppliers** lists the recent orders with **Approve and send**, **Mark confirmed**, **Goods came in**, **Record a payment** and **Cancel** as each fits, and **Order what is low**. **Storefront > Suppliers** lists the suppliers with where their orders reach them and what is owed, **Add a supplier** (with the items they supply), **Change**, **Send the link again**, **Retire**, and the approval limit.
 
 ## API
 
@@ -93,6 +113,10 @@ Items are found as `price` finds them: the exact name, else the one the words st
 | `GET /v1/stock/movements` | Movements, the latest to land first, by `item`, `reason`, `since`, `until` |
 | `POST /v1/stock/movements` | Goods received, an adjustment or a count, with an `Idempotency-Key`; 202 while it has not reached the table |
 | `POST /v1/stock/sales` | A sale, with an `Idempotency-Key`: `lines` (`item_id`, `quantity`, `price_kobo`), `amount_kobo`, `paid_how`, `note`; `entry_id` gives a terminal's sale its items (409 when that money counts for something already) |
+| `GET`/`POST /v1/stock/suppliers`, `PATCH /v1/stock/suppliers/{id}`, `POST .../retire`, `POST .../invite` | Suppliers (`storefront.manage`) |
+| `PUT /v1/stock/settings` | `purchase_limit_kobo`: above it, a second person sends an order |
+| `GET`/`POST /v1/stock/purchases`, `POST /v1/stock/purchases/low` | Orders, drafted by hand or for what is low, with an `Idempotency-Key` |
+| `POST /v1/stock/purchases/{id}/send`, `/confirm`, `/cancel`, `/receive`, `/pay` | An order's steps; `receive` and `pay` take an `Idempotency-Key` |
 | `GET /v1/stock/sales?day=2026-10-29` | A day's sales (today in Lagos by default), added up by how paid, the top items, how many wait, and the terminal's sales with no items |
 
 ## In workflows: `stock@1`
@@ -104,9 +128,13 @@ A platform connector acting on the run's own business, needing no connection:
 | `list_items` | Items and their stock; `low` for those at or below their reorder level (each with `suggest`), by `supplier` or `name` |
 | `get_item` | One item by its row id |
 | `adjust` | A change with a note |
-| `receive` | Goods received, naming where from (`reference`) |
+| `receive` | Goods received, naming where from (`reference`), or on a purchase order (`purchase`) |
 | `count` | A count |
 | `movements` | Movements, by item, reason and time |
+| `low_items` | The low items, by supplier |
+| `draft_purchase` | Orders for what is low (one per supplier, or one supplier's), or an order of lines to a supplier |
+| `send_purchase` | A drafted order approved and sent; refused above the limit |
+| `list_purchases` | Orders, open ones only with `open` |
 | `record_sale` | A sale: lines by row id with quantity and price, the amount and how it was paid |
 
 Changes carry the step's idempotency key: a retried step moves stock once.
@@ -116,3 +144,5 @@ Changes carry the step's idempotency key: a retried step moves stock once.
 `engine/stock` records and sends movements (`RecordTx`, `Apply`, `Outside`, `OrderLines`), reads items (`Items`), and sweeps (`Sweeper`: pending movements, and the kept copy). The table is reached through `storefront.XenibaseStock`, whose `Change` is the storefront's compare-and-set. The movements are migration 00256; `taskiem_stock_due_tenants` (a definer) finds the businesses with work for the sweep, and `storefronts.keeps_stock` makes `taskiem_storefronts_due` refresh a catalogue keeping stock whether or not its page is published.
 
 Sales are `engine/stock/sales.go` (`RecordSale`, `MatchSales`, `DayTx`), the sentence parser `salewords.go`, and the evening total `evening.go` (`Evening`, queued as `money_digests` kind `sales_evening` and sent by the WhatsApp/Telegram outbox, written at send time). Migration 00257 holds `stock_sales`; a sale's money entry is unique to it.
+
+Suppliers and purchase orders are `engine/stock/purchases.go` (`Purchases`: suppliers, `DraftLowTx`, `SendTx`, `ConfirmTx`, `CounterTx`, `ReceiveTx`, `PayTx`) and migration 00258 (`suppliers`, `purchase_orders`, `purchase_payments`, `stock_settings`, `taskiem_supplier_orders`). The order goes through the chat outbox (kind `supplier`, the order and the supplier's contact); its buttons are signed for the business, the order and the contact (`api/whatsapp_purchases.go`).

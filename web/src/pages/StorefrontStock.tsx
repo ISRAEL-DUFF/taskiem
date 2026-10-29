@@ -50,6 +50,7 @@ import {
   type StockView,
 } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
+import { PurchasesCard } from "./StockPurchases";
 import { StorefrontTabs } from "./Storefront";
 
 /** A shop's stock (docs/stock.md): its items and how many are left, the
@@ -182,6 +183,7 @@ export function StorefrontStock() {
               </Items>
             )}
           </section>
+          <PurchasesCard onChanged={reload} />
           <section className="card" aria-labelledby="stock-items">
             <h2 id="stock-items" style={{ marginTop: 0 }}>
               Your items

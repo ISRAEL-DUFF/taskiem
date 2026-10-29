@@ -42,6 +42,8 @@ const OWNER_FILES = [
   "pages/StorefrontRiders.tsx",
   "pages/Dispatch.tsx",
   "pages/StorefrontStock.tsx",
+  "pages/StockPurchases.tsx",
+  "pages/StorefrontSuppliers.tsx",
   "pages/Invoices.tsx",
   "pages/ReceiveMoney.tsx",
   "pages/StorefrontTrust.tsx",

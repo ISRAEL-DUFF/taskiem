@@ -59,6 +59,75 @@ func (o *ops) Sell(_ context.Context, _ uuid.UUID, lines []stock.SellLine, amoun
 	return stock.CounterSale{ID: uuid.New(), Reference: "S-7QX4KD", AmountKobo: *amount, PaidHow: paidHow, Status: "recorded", Actor: actor}, nil
 }
 
+// The purchase operations (a Buyer).
+type buyer struct {
+	ops
+	ask  stock.DraftAsk
+	sent string
+	got  map[string]int64
+}
+
+var po = stock.Purchase{ID: uuid.New(), Reference: "P-K2M9PA", Supplier: "Dangote Depot", Status: stock.Drafted, TotalKobo: 39100000,
+	Lines: []stock.PurchaseLine{{ItemID: "1", Item: "Indomie", Unit: "carton", Quantity: 46, CostKobo: 850000}}}
+
+func (b *buyer) DraftPurchase(_ context.Context, _ uuid.UUID, a stock.DraftAsk) ([]stock.Purchase, []string, error) {
+	b.ask = a
+	return []stock.Purchase{po}, []string{"Garri"}, nil
+}
+
+func (b *buyer) SendPurchase(_ context.Context, _ uuid.UUID, ref, _ string) (stock.Purchase, error) {
+	b.sent = ref
+	x := po
+	x.Status = stock.Sent
+	return x, nil
+}
+
+func (b *buyer) ReceivePurchase(_ context.Context, _ uuid.UUID, _ string, got map[string]int64, _, _ string) (stock.Purchase, error) {
+	b.got = got
+	x := po
+	x.Status = stock.PartReceived
+	return x, nil
+}
+
+func (b *buyer) ListPurchases(context.Context, uuid.UUID, stock.PurchaseFilter) ([]stock.Purchase, error) {
+	return []stock.Purchase{po}, nil
+}
+
+func TestPurchaseActions(t *testing.T) {
+	b := &buyer{}
+	c := conn.New(b)
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New()})
+	if out, err := call(t, c, ctx, "low_items", map[string]any{"supplier": "dangote depot"}, ""); err != nil || out["count"] != 1 {
+		t.Fatalf("low: %v %v", out, err)
+	}
+	out, err := call(t, c, ctx, "draft_purchase", map[string]any{"supplier": "Dangote"}, "tsk_abcdefghijklmnop")
+	if err != nil || out["count"] != 1 || b.ask.Supplier != "Dangote" || b.ask.Key != "wf-tsk_abcdefghijklmnop" || len(b.ask.Lines) != 0 ||
+		out["purchases"].([]any)[0].(map[string]any)["items"] != "46 cartons Indomie" || out["no_supplier"].([]string)[0] != "Garri" {
+		t.Fatalf("draft: %v %v %+v", out, err, b.ask)
+	}
+	if _, err := call(t, c, ctx, "draft_purchase", map[string]any{"supplier": "Dangote", "lines": []any{map[string]any{"id": "1", "quantity": float64(5)}}},
+		"tsk_abcdefghijklmnoq"); err != nil || len(b.ask.Lines) != 1 || b.ask.Lines[0].Quantity != 5 {
+		t.Fatalf("draft lines: %v %+v", err, b.ask)
+	}
+	if out, err := call(t, c, ctx, "send_purchase", map[string]any{"reference": "P-K2M9PA"}, "tsk_abcdefghijklmnor"); err != nil || out["status"] != stock.Sent || b.sent != "P-K2M9PA" {
+		t.Fatalf("send: %v %v", out, err)
+	}
+	if out, err := call(t, c, ctx, "receive", map[string]any{"id": "1", "quantity": float64(20), "purchase": "P-K2M9PA"}, "tsk_abcdefghijklmnos"); err != nil ||
+		b.got["1"] != 20 || out["purchase"].(map[string]any)["status"] != stock.PartReceived {
+		t.Fatalf("receive: %v %v", out, err)
+	}
+	if out, err := call(t, c, ctx, "list_purchases", map[string]any{"supplier": "dangote depot"}, ""); err != nil || out["count"] != 1 {
+		t.Fatalf("list: %v %v", out, err)
+	}
+	// Without the purchase operations: refused plainly.
+	if _, err := call(t, conn.New(&ops{}), ctx, "send_purchase", map[string]any{"reference": "P-K2M9PA"}, "tsk_abcdefghijklmnot"); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("no buyer: %v", err)
+	}
+	if _, err := call(t, conn.New(&conn.Late{}), ctx, "list_purchases", nil, ""); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("unbound: %v", err)
+	}
+}
+
 func call(t *testing.T, c *connector.Connector, ctx context.Context, action string, in map[string]any, key string) (map[string]any, error) {
 	t.Helper()
 	resp, err := c.Actions[action].Execute(ctx, connector.Request{Input: in, IdempotencyKey: key})

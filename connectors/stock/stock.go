@@ -34,18 +34,32 @@ type Ops interface {
 	Sell(ctx context.Context, tenant uuid.UUID, lines []stock.SellLine, amount *int64, paidHow, note, actor, key string) (stock.CounterSale, error)
 }
 
-// New returns the connector; ops nil makes every action fail plainly.
+// Buyer is the purchase actions' operations: *stock.Purchases. nil, or a
+// Late with none set, makes them fail plainly.
+type Buyer interface {
+	DraftPurchase(ctx context.Context, tenant uuid.UUID, a stock.DraftAsk) ([]stock.Purchase, []string, error)
+	SendPurchase(ctx context.Context, tenant uuid.UUID, ref, actor string) (stock.Purchase, error)
+	ReceivePurchase(ctx context.Context, tenant uuid.UUID, ref string, got map[string]int64, actor, key string) (stock.Purchase, error)
+	ListPurchases(ctx context.Context, tenant uuid.UUID, f stock.PurchaseFilter) ([]stock.Purchase, error)
+}
+
+// New returns the connector; ops nil makes every action fail plainly. The
+// purchase actions use ops when it is also a Buyer (Late is).
 func New(ops Ops) *connector.Connector {
 	m := connector.MustParse(manifest)
 	a := &actions{ops: ops}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
-		"list_items":  connector.ActionFunc(a.list),
-		"get_item":    connector.ActionFunc(a.get),
-		"adjust":      connector.ActionFunc(a.adjust),
-		"receive":     connector.ActionFunc(a.receive),
-		"count":       connector.ActionFunc(a.count),
-		"movements":   connector.ActionFunc(a.movements),
-		"record_sale": connector.ActionFunc(a.sell),
+		"list_items":     connector.ActionFunc(a.list),
+		"get_item":       connector.ActionFunc(a.get),
+		"adjust":         connector.ActionFunc(a.adjust),
+		"receive":        connector.ActionFunc(a.receive),
+		"count":          connector.ActionFunc(a.count),
+		"movements":      connector.ActionFunc(a.movements),
+		"record_sale":    connector.ActionFunc(a.sell),
+		"low_items":      connector.ActionFunc(a.low),
+		"draft_purchase": connector.ActionFunc(a.draft),
+		"send_purchase":  connector.ActionFunc(a.send),
+		"list_purchases": connector.ActionFunc(a.purchases),
 	}}
 }
 
@@ -142,7 +156,147 @@ func (a *actions) receive(ctx context.Context, req connector.Request) (connector
 	if !ok || n <= 0 {
 		return connector.Response{}, fmt.Errorf("quantity is a whole number above 0: %w", effects.ErrFatal)
 	}
+	// Against a purchase order: received on it, naming it.
+	if ref, _ := req.Input["purchase"].(string); ref != "" {
+		c, b, err := a.buyer(ctx)
+		if err != nil {
+			return connector.Response{}, err
+		}
+		if req.IdempotencyKey == "" {
+			return connector.Response{}, fmt.Errorf("a stock change needs its idempotency key: %w", effects.ErrFatal)
+		}
+		id, _ := req.Input["id"].(string)
+		x, err := b.ReceivePurchase(ctx, c.Tenant, ref, map[string]int64{id: n}, "workflow:"+c.Run.String(), "wf-"+req.IdempotencyKey)
+		if err != nil {
+			return connector.Response{}, classify(err)
+		}
+		return connector.Response{Output: map[string]any{"item_id": id, "reason": stock.Received, "status": "done", "change": n, "reference": x.Reference,
+			"purchase": PurchaseOut(x)}}, nil
+	}
 	return a.move(ctx, req, stock.Received, &n, nil)
+}
+
+// buyer is the purchase operations, or why there are none.
+func (a *actions) buyer(ctx context.Context) (connector.Caller, Buyer, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return c, nil, err
+	}
+	b, ok := a.ops.(Buyer)
+	if l, isLate := a.ops.(*Late); isLate && !l.buying() {
+		ok = false
+	}
+	if !ok {
+		return c, nil, fmt.Errorf("purchase orders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return c, b, nil
+}
+
+func (a *actions) low(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	items, err := a.ops.Items(ctx, c.Tenant)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	supplier, _ := req.Input["supplier"].(string)
+	out := []any{}
+	for _, it := range stock.Low(items) {
+		if supplier != "" && !strings.EqualFold(strings.TrimSpace(it.Supplier), strings.TrimSpace(supplier)) {
+			continue
+		}
+		out = append(out, ItemOut(it))
+	}
+	return connector.Response{Output: map[string]any{"items": out, "count": len(out)}}, nil
+}
+
+func (a *actions) draft(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, b, err := a.buyer(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	if req.IdempotencyKey == "" {
+		return connector.Response{}, fmt.Errorf("drafting an order needs its idempotency key: %w", effects.ErrFatal)
+	}
+	ask := stock.DraftAsk{Actor: "workflow:" + c.Run.String(), Key: "wf-" + req.IdempotencyKey}
+	ask.Supplier, _ = req.Input["supplier"].(string)
+	ask.Note, _ = req.Input["note"].(string)
+	list, _ := req.Input["lines"].([]any)
+	for _, x := range list {
+		m, _ := x.(map[string]any)
+		id, _ := m["id"].(string)
+		q, ok := number(m["quantity"])
+		if id == "" || !ok || q <= 0 {
+			return connector.Response{}, fmt.Errorf("each line is an item's id and how many: %w", effects.ErrFatal)
+		}
+		l := stock.PurchaseLine{ItemID: id, Quantity: q}
+		if p, ok := number(m["cost_kobo"]); ok {
+			l.CostKobo = p
+		}
+		ask.Lines = append(ask.Lines, l)
+	}
+	drafted, skipped, err := b.DraftPurchase(ctx, c.Tenant, ask)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	out := make([]any, len(drafted))
+	for i, x := range drafted {
+		out[i] = PurchaseOut(x)
+	}
+	if skipped == nil {
+		skipped = []string{}
+	}
+	return connector.Response{Output: map[string]any{"purchases": out, "count": len(out), "no_supplier": skipped}}, nil
+}
+
+func (a *actions) send(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, b, err := a.buyer(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	ref, _ := req.Input["reference"].(string)
+	x, err := b.SendPurchase(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: PurchaseOut(x)}, nil
+}
+
+func (a *actions) purchases(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, b, err := a.buyer(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	f := stock.PurchaseFilter{}
+	f.Open, _ = req.Input["open"].(bool)
+	if n, ok := number(req.Input["limit"]); ok {
+		f.Limit = int(n)
+	}
+	list, err := b.ListPurchases(ctx, c.Tenant, f)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	supplier, _ := req.Input["supplier"].(string)
+	out := []any{}
+	for _, x := range list {
+		if supplier != "" && !strings.EqualFold(x.Supplier, strings.TrimSpace(supplier)) {
+			continue
+		}
+		out = append(out, PurchaseOut(x))
+	}
+	return connector.Response{Output: map[string]any{"purchases": out, "count": len(out)}}, nil
+}
+
+// PurchaseOut is a purchase order as workflows read it.
+func PurchaseOut(x stock.Purchase) map[string]any {
+	lines := make([]any, len(x.Lines))
+	for i, l := range x.Lines {
+		lines[i] = map[string]any{"id": l.ItemID, "item": l.Item, "unit": l.Unit, "quantity": l.Quantity, "cost_kobo": l.CostKobo, "received": l.Received}
+	}
+	return map[string]any{"id": x.ID.String(), "reference": x.Reference, "supplier": x.Supplier, "status": x.Status, "lines": lines,
+		"total_kobo": x.TotalKobo, "received_kobo": x.ReceivedKobo, "paid_kobo": x.PaidKobo, "owed_kobo": x.OwedKobo, "items": x.Words()}
 }
 
 func (a *actions) count(ctx context.Context, req connector.Request) (connector.Response, error) {
@@ -286,7 +440,8 @@ func classify(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, stock.ErrInvalid), errors.Is(err, stock.ErrNoItem), errors.Is(err, stock.ErrNotTracked), errors.Is(err, stock.ErrSaleInvalid),
-		errors.Is(err, stock.ErrEntryTaken):
+		errors.Is(err, stock.ErrEntryTaken), errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoPurchase), errors.Is(err, stock.ErrNoSupplier),
+		errors.Is(err, stock.ErrSecondApproval):
 		return fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	return err
@@ -295,8 +450,32 @@ func classify(err error) error {
 // Late is Ops set after the connector is registered: the registry is built
 // before the vault and the database stock needs.
 type Late struct {
-	mu  sync.RWMutex
-	ops Ops
+	mu    sync.RWMutex
+	ops   Ops
+	buyer Buyer
+}
+
+// SetBuyer binds the purchase operations.
+func (l *Late) SetBuyer(b Buyer) { l.mu.Lock(); l.buyer = b; l.mu.Unlock() }
+
+func (l *Late) buying() bool { l.mu.RLock(); defer l.mu.RUnlock(); return l.buyer != nil }
+
+func (l *Late) getBuyer() Buyer { l.mu.RLock(); defer l.mu.RUnlock(); return l.buyer }
+
+func (l *Late) DraftPurchase(ctx context.Context, tenant uuid.UUID, a stock.DraftAsk) ([]stock.Purchase, []string, error) {
+	return l.getBuyer().DraftPurchase(ctx, tenant, a)
+}
+
+func (l *Late) SendPurchase(ctx context.Context, tenant uuid.UUID, ref, actor string) (stock.Purchase, error) {
+	return l.getBuyer().SendPurchase(ctx, tenant, ref, actor)
+}
+
+func (l *Late) ReceivePurchase(ctx context.Context, tenant uuid.UUID, ref string, got map[string]int64, actor, key string) (stock.Purchase, error) {
+	return l.getBuyer().ReceivePurchase(ctx, tenant, ref, got, actor, key)
+}
+
+func (l *Late) ListPurchases(ctx context.Context, tenant uuid.UUID, f stock.PurchaseFilter) ([]stock.Purchase, error) {
+	return l.getBuyer().ListPurchases(ctx, tenant, f)
 }
 
 // Set binds the operations.

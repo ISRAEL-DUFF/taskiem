@@ -86,6 +86,7 @@ actions:
         id:        { type: string }
         quantity:  { type: integer, minimum: 1, maximum: 1000000 }
         reference: { type: string, maxLength: 100 }
+        purchase:  { type: string, description: "A purchase order's reference (P-7QX4KD): received on it, naming it" }
         note:      { type: string, maxLength: 200 }
     output: { $ref: '#/actions/movements/output/properties/movements/items' }
   count:
@@ -143,6 +144,89 @@ actions:
         paid_how:    { type: string }
         status:      { type: string, enum: [recorded, waiting, matched] }
         short:       { type: array, items: { type: string } }
+  low_items:
+    title: List low items
+    description: The items at or below their reorder level, each with suggest (how many to order, up to its target level) and its supplier; supplier narrows the list.
+    class: read
+    input:
+      type: object
+      properties:
+        supplier: { type: string }
+    output: { $ref: '#/actions/list_items/output' }
+  draft_purchase:
+    title: Draft purchase orders
+    description: Drafts orders to the business's suppliers. With no lines, one order per supplier for the low items naming them and on no open order, each for its suggested quantity at its last cost (no_supplier names the low items with no supplier Taskiem knows); supplier narrows it to one. With lines (item ids and how many), one order to the supplier named. A drafted order is sent by send_purchase, or approved on the Stock page.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        supplier: { type: string, description: A supplier's name }
+        lines:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [id, quantity]
+            properties:
+              id:        { type: string }
+              quantity:  { type: integer, minimum: 1, maximum: 1000000 }
+              cost_kobo: { type: integer, minimum: 0, description: The price of one; the item's last cost when absent }
+        note: { type: string, maxLength: 500 }
+    output:
+      type: object
+      properties:
+        purchases:   { type: array, items: { $ref: '#/actions/send_purchase/output' } }
+        count:       { type: integer }
+        no_supplier: { type: array, items: { type: string } }
+  send_purchase:
+    title: Send a purchase order
+    description: Approves a drafted order and sends it to its supplier on the chat app they tapped in on, with Confirm and Change, else by SMS with the link to tap in. An order above the business's approval limit is refused here; a person approves it on the Stock page. Sending one already sent answers it as it is.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string, description: "P-7QX4KD" }
+    output:
+      type: object
+      properties:
+        id:            { type: string }
+        reference:     { type: string }
+        supplier:      { type: string }
+        status:        { type: string, enum: [drafted, sent, confirmed, part_received, received, cancelled] }
+        items:         { type: string, description: "50 cartons Indomie, 20 bags Rice" }
+        lines:         { type: array, items: { type: object } }
+        total_kobo:    { type: integer }
+        received_kobo: { type: integer }
+        paid_kobo:     { type: integer }
+        owed_kobo:     { type: integer }
+  list_purchases:
+    title: List purchase orders
+    description: The business's purchase orders, the newest first; open lists those not yet received or cancelled.
+    class: read
+    input:
+      type: object
+      properties:
+        open:     { type: boolean }
+        supplier: { type: string }
+        limit:    { type: integer, minimum: 1, maximum: 200 }
+    output:
+      type: object
+      properties:
+        purchases: { type: array, items: { $ref: '#/actions/send_purchase/output' } }
+        count:     { type: integer }
   movements:
     title: List stock movements
     description: An item's movements (or every item's), the latest first, since a time.

@@ -615,13 +615,15 @@ type engine struct {
 	riders   *riders.Riders
 	dispatch *dispatch.Dispatch
 	// stock is the shops' stock movements (docs/spec/stock.md K1).
-	stock    *stock.Stock
-	cfg      config
-	log      *slog.Logger
-	pool     *pgxpool.Pool
-	store    *runtime.Store
-	vault    *secrets.Vault
-	registry *connector.Registry
+	stock *stock.Stock
+	// purchases is the shops' suppliers and purchase orders (stock K3).
+	purchases *stock.Purchases
+	cfg       config
+	log       *slog.Logger
+	pool      *pgxpool.Pool
+	store     *runtime.Store
+	vault     *secrets.Vault
+	registry  *connector.Registry
 	// connectors loads tenants' own WebAssembly connectors.
 	connectors *wasmconn.Source
 	// wa is the platform WhatsApp number, when configured.
@@ -772,6 +774,18 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 			e.riders.PageBase = "https://" + e.forms.FormHost
 		}
 		riderOps.Set(e.riders)
+	}
+	// Suppliers and purchase orders (stock K3): reached as riders are,
+	// their orders sent in chat with Confirm and Change.
+	if e.reach != nil {
+		e.purchases = &stock.Purchases{Pool: pool, Vault: vault, Book: e.reach, Chat: n.Chat, Stock: e.stock}
+		if e.messages != nil {
+			e.purchases.Messages = e.messages
+		}
+		if e.forms != nil && e.forms.FormHost != "" {
+			e.purchases.PageBase = "https://" + e.forms.FormHost
+		}
+		stockOps.SetBuyer(e.purchases)
 	}
 	// Their deliveries (dispatch D2 to D5): offers, the rider's taps, the
 	// door payment, told to the order's run.
@@ -1581,6 +1595,10 @@ func (e *engine) chat(srv *api.Server) {
 	srv.Reach, srv.Messages = e.reach, e.messages
 	srv.Riders, srv.Dispatch = e.riders, e.dispatch
 	srv.Stock = e.stock
+	if e.purchases != nil {
+		srv.Purchases = e.purchases
+		e.purchases.Cost = srv.StockCost
+	}
 	if e.forms != nil {
 		keys := e.forms.Keys
 		srv.ReachKeys = &keys

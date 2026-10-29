@@ -97,7 +97,7 @@ func TestStockSalesByChat(t *testing.T) {
 	tenant := uuid.MustParse(tenantOf(t, owner))
 	owner.must(200, "POST", "/v1/stock/setup", nil)
 	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Indomie", "quantity": 10, "unit": "carton", "price_kobo": 1000000}, "Idempotency-Key", "i")
-	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 5, "unit": "bag"}, "Idempotency-Key", "r")
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 5, "unit": "bag", "reorder_level": 5}, "Idempotency-Key", "r")
 
 	if r := w.say(t, on, "help"); !strings.Contains(r, "*sold 3 bags of rice 45,000 cash*") {
 		t.Errorf("help: %q", r)
@@ -159,7 +159,8 @@ func TestStockSalesByChat(t *testing.T) {
 	}
 	before = len(w.graph.Sent(on))
 	w.tick(t)
-	if got := w.lastTo(t, on, before); len(got) != 1 || !strings.Contains(got[0].Text, "Sales you recorded: ₦310,000 from 3 sales (Cash ₦30,000 · Transfer ₦280,000).") {
+	if got := w.lastTo(t, on, before); len(got) != 1 || !strings.Contains(got[0].Text, "Sales you recorded: ₦310,000 from 3 sales (Cash ₦30,000 · Transfer ₦280,000).") ||
+		!strings.Contains(got[0].Text, "Low on stock: Rice (0 bags, order 10 bags).") {
 		t.Fatalf("morning summary: %+v", got)
 	}
 	// Before closing, nothing.

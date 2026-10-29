@@ -58,12 +58,16 @@ const (
 	// sold, in the other languages. English's ("sold", "sell") are read by
 	// the API, so en.json lists none.
 	IntentSold Intent = "sold"
+	// Goods received from a supplier (stock K3): the words before what
+	// came, in the other languages; English's "received" is read by the
+	// API.
+	IntentReceived Intent = "received"
 )
 
 // Intents are every intent, in a fixed order.
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -93,7 +97,7 @@ type Words struct {
 
 // prefixIntents take what follows them; the others are whole messages.
 var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived}
 
 var (
 	wordsOnce sync.Once

@@ -2516,6 +2516,18 @@
       "text": "Ire i dekọrọ: {total} site na ire {count} ({by}).",
       "reviewed": false
     },
+    "money.daily.low": {
+      "text": "Ngwa ahịa dị ala: {list}.",
+      "reviewed": false
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, tụọ {order})",
+      "reviewed": false
+    },
+    "money.daily.low_more": {
+      "text": "{count} ọzọ na peeji Stock",
+      "reviewed": false
+    },
     "wa.sale.how": {
       "text": "Dee ya dị ka *sold 3 bags of rice 45,000 cash*: ole, ngwa ahịa, ego ahụ, na cash, transfer ma ọ bụ pos.",
       "reviewed": false
@@ -2558,6 +2570,158 @@
     },
     "wa.help.sales": {
       "text": "• *sold 3 bags of rice 45,000 cash* (ma ọ bụ *transfer*, *pos*): dekọọ ire; ọ ga-ewepụ ngwa ahịa n'ime ngwa ahịa gị",
+      "reviewed": false
+    },
+    "supplier.order": {
+      "text": "Ịtụ {reference}: {items}. Ngụkọta {total}. Ị nwere ike iweta ya?",
+      "reviewed": false
+    },
+    "supplier.reply_words": {
+      "text": "Zaa CONFIRM, ma ọ bụ CHANGE {reference} na ihe ị nwere ike iweta.",
+      "reviewed": false
+    },
+    "supplier.btn.confirm": {
+      "text": "Kwado",
+      "reviewed": false
+    },
+    "supplier.btn.change": {
+      "text": "Gbanwee",
+      "reviewed": false
+    },
+    "supplier.button_invalid": {
+      "text": "A pụghị ịza ịtụ ahụ ebe a ọzọ.",
+      "reviewed": false
+    },
+    "supplier.change_ask": {
+      "text": "Zipu *change {reference}* na ihe ị nwere ike iweta, dị ka *change {reference} only 10 bags of rice this week*.",
+      "reviewed": false
+    },
+    "supplier.changed": {
+      "text": "Ezigara {business}: ha ga-aza gị maka {reference}.",
+      "reviewed": false
+    },
+    "supplier.confirmed": {
+      "text": "Daalụ. Agwala {business} na ị kwadoro {reference}.",
+      "reviewed": false
+    },
+    "supplier.which": {
+      "text": "Kedu ịtụ? Zipu okwu ahụ na nọmba ya: {list}.",
+      "reviewed": false
+    },
+    "purchase.status_drafted": {
+      "text": "akwụkwọ mbụ",
+      "reviewed": false
+    },
+    "purchase.status_sent": {
+      "text": "ezigara",
+      "reviewed": false
+    },
+    "purchase.status_confirmed": {
+      "text": "akwadoro",
+      "reviewed": false
+    },
+    "purchase.status_part_received": {
+      "text": "ụfọdụ abatala",
+      "reviewed": false
+    },
+    "purchase.status_received": {
+      "text": "ihe niile abatala",
+      "reviewed": false
+    },
+    "purchase.status_cancelled": {
+      "text": "akagbuola",
+      "reviewed": false
+    },
+    "wa.supplier.denied": {
+      "text": "Ndị nwe na ndị nchịkwa na-edebe ndị na-ebute ihe na ịtụ na {org}.",
+      "reviewed": false
+    },
+    "wa.supplier.how": {
+      "text": "Dee ya dị ka *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.supplier.for": {
+      "text": " maka {list}",
+      "reviewed": false
+    },
+    "wa.supplier.add_confirm": {
+      "text": "Tinye *{name}* dị ka onye na-ebute ihe{items}? Ha ga-enweta njikọ site na SMS iji nata ịtụ gị na WhatsApp.",
+      "reviewed": false
+    },
+    "wa.supplier.added": {
+      "text": "Etinyela {name}. Zipu *order from {name}* mgbe ngwa ahịa ha dị ala.",
+      "reviewed": false
+    },
+    "wa.suppliers.none": {
+      "text": "Enweghị onye na-ebute ihe ka. Zipu *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": false
+    },
+    "wa.suppliers.title": {
+      "text": "*Ndị na-ebute gị ihe*:",
+      "reviewed": false
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: ịtụ {open} ka mepere emepe, ụgwọ {owed}",
+      "reviewed": false
+    },
+    "wa.order.which": {
+      "text": "Ihe karịrị otu onye na-ebute ihe dabara na *{name}*: {list}.",
+      "reviewed": false
+    },
+    "wa.order.no_supplier": {
+      "text": "Ọ dịghị onye na-ebute ihe aha ya bụ *{name}*. Zipu *suppliers* maka ndepụta.",
+      "reviewed": false
+    },
+    "wa.order.none": {
+      "text": "Ọ dịghị ihe sitere na *{name}* dị ala nke a na-atụbeghị.",
+      "reviewed": false
+    },
+    "wa.order.confirm": {
+      "text": "Ịtụ {reference} site na *{supplier}*: {items}, {total}. Zigara ha ya?",
+      "reviewed": false
+    },
+    "wa.order.sent": {
+      "text": "Ezigara {reference} {supplier}. A ga-agwa gị mgbe ha kwadoro ya.",
+      "reviewed": false
+    },
+    "wa.order.second": {
+      "text": "Edeela {reference}. Ọ karịrị oke gị nke {limit}, ya mere onye nwe ọzọ ma ọ bụ onye nchịkwa ga-ezipu ya: *send {reference}*, ma ọ bụ Approve and send na peeji Stock.",
+      "reviewed": false
+    },
+    "wa.order.marked_confirmed": {
+      "text": "Akara {reference} dị ka akwadoro.",
+      "reviewed": false
+    },
+    "wa.order.unknown": {
+      "text": "Ọ dịghị ịtụ nwere nọmba ahụ. Peeji Stock nwere ndepụta ha.",
+      "reviewed": false
+    },
+    "wa.received.confirm": {
+      "text": "Anatala {count} {item} n'ịtụ {reference} site na {supplier}?",
+      "reviewed": false
+    },
+    "wa.received.done": {
+      "text": "Anatala na {reference}; ịtụ ahụ bụ {status}. Emelitere ngwa ahịa gị na ọnụ ahịa ịzụ.",
+      "reviewed": false
+    },
+    "wa.paid.how": {
+      "text": "Dee ya dị ka *paid Dangote 425,000 transfer*.",
+      "reviewed": false
+    },
+    "wa.paid.none": {
+      "text": "Ọ dịghị ịtụ nye *{name}* na-eche ịkwụ ụgwọ.",
+      "reviewed": false
+    },
+    "wa.paid.confirm": {
+      "text": "Ị kwụrụ *{supplier}* {amount} {how}, maka {reference}?",
+      "reviewed": false
+    },
+    "wa.paid.done": {
+      "text": "Edekọọla {amount} a kwụrụ {supplier} maka {reference}. Ụgwọ fọdụrụ: {owed}.",
+      "reviewed": false
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: ndị na-ebute ihe na ịtụ ha",
       "reviewed": false
     },
     "wa.shop.with_photo": {

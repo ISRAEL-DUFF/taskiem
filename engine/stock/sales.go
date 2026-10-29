@@ -139,14 +139,17 @@ func scanSale(r pgx.Row) (CounterSale, error) {
 
 // saleReference is a new sale's reference: S- and six of the
 // storefront's unambiguous letters and digits.
-func saleReference() string {
+func saleReference() string { return reference("S") }
+
+// reference is a fresh reference with a prefix: S-7QX4KD, P-K2M9PA.
+func reference(prefix string) string {
 	const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 	b := make([]byte, 6)
 	_, _ = rand.Read(b)
 	for i := range b {
 		b[i] = alphabet[int(b[i])%len(alphabet)]
 	}
-	return "S-" + string(b)
+	return prefix + "-" + string(b)
 }
 
 // SaleWords says a sale's items in a few words: "3 bags Rice, 1 Indomie".

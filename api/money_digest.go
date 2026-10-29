@@ -113,6 +113,10 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	if line := salesDailyLine(l, sales); line != "" {
 		text += "\n\n" + line
 	}
+	// What is low this morning, with how many to order (stock K3).
+	if line := s.lowDailyLine(ctx, l, it.Tenant); line != "" {
+		text += "\n\n" + line
+	}
 	// Each rider's day (dispatch D4), before the link.
 	if len(riderDays) > 0 {
 		text += "\n\n" + tr(l, "money.daily.riders")

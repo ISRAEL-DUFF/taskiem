@@ -643,6 +643,12 @@ public_hosts.site_id
 public_hosts.status
 public_hosts.tenant_id
 public_hosts.verified_at
+purchase_orders.id
+purchase_orders.reference
+purchase_orders.sent_at
+purchase_orders.status
+purchase_orders.supplier_id
+purchase_orders.tenant_id
 reach_channels.address
 reach_channels.address_hash
 reach_channels.channel
@@ -986,6 +992,10 @@ subscriptions.next_action_at
 subscriptions.plan_id
 subscriptions.status
 subscriptions.tenant_id
+suppliers.id
+suppliers.phone_hash
+suppliers.retired_at
+suppliers.tenant_id
 tasks.attempt
 tasks.available_at
 tasks.id

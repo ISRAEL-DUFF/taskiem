@@ -269,3 +269,28 @@ func salesDailyLine(l lang.Tag, d stock.Day) string {
 	}
 	return tr(l, "money.daily.sales", "total", storefront.FormatNaira(d.TotalKobo), "count", strconv.Itoa(d.Count), "by", salesBy(l, d))
 }
+
+// lowDailyLine is the items at or below their reorder level, each with
+// how many to order, for the morning's money summary; "" when none is
+// low, or the catalogue cannot be read now.
+func (s *Server) lowDailyLine(ctx context.Context, l lang.Tag, tenant uuid.UUID) string {
+	if !s.Stock.Ready() {
+		return ""
+	}
+	_, items, err := s.stockItems(ctx, tenant)
+	if err != nil {
+		return ""
+	}
+	low := stock.Low(items)
+	if len(low) == 0 {
+		return ""
+	}
+	names := make([]string, 0, 5)
+	for _, it := range low[:min(5, len(low))] {
+		names = append(names, tr(l, "money.daily.low_item", "name", whatsapp.SafeText(it.Name), "count", it.Quantity(*it.Stock), "order", it.Quantity(it.Suggest())))
+	}
+	if len(low) > 5 {
+		names = append(names, tr(l, "money.daily.low_more", "count", strconv.Itoa(len(low)-5)))
+	}
+	return tr(l, "money.daily.low", "list", strings.Join(names, "; "))
+}

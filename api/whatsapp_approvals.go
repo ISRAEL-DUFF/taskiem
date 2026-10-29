@@ -255,6 +255,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendMoneyDailyItem(ctx, it)
 		case stock.OutboxEvening:
 			sendErr = s.sendSalesEveningItem(ctx, it)
+		case stock.OutboxSupplier:
+			sendErr = s.sendSupplierItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}

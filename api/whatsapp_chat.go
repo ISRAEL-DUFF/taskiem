@@ -270,6 +270,10 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		if done, err := s.riderPress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
 			return err
 		}
+		// A supplier's Confirm and Change (whatsapp_purchases.go).
+		if done, err := s.supplierPress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
@@ -396,6 +400,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		return err
 	}
 	if done, err := s.riderDeliveryWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
+	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
 	if wa.Own() {
@@ -591,11 +598,18 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 				if s.Stock.Ready() && m.Arg != "" {
 					return s.waStockSale(ctx, c, m.Arg)
 				}
+			case lang.IntentReceived:
+				// Goods received, read as English's "received ..." (K3).
+				if s.Stock.Ready() && m.Arg != "" {
+					if done, err := s.waReceived(ctx, c, m.Arg); done || err != nil {
+						return err
+					}
+				}
 			}
 		}
 		// Words that only looked like one ("I spend the whole day…") are
 		// ordinary chat, which the model may still route.
-		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold}, m.Intent) {
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold, lang.IntentReceived}, m.Intent) {
 			matched = false
 		}
 		// A way into the web app for someone with no password (N6).
@@ -718,6 +732,9 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.stock"))
 		if c.p.Can(PermTableEdit) {
 			lines = append(lines, c.t("wa.help.sales"))
+		}
+		if c.p.Can(PermStorefrontManage) && s.Purchases.Ready() {
+			lines = append(lines, c.t("wa.help.purchases"))
 		}
 	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {

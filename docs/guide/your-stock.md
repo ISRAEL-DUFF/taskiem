@@ -38,9 +38,23 @@ On the web, press **Record a sale** on the Stock page. Today's sales are at the 
 
 Each evening after you close, Taskiem sends you the day's total: how much, by cash, transfer and terminal, what sold most, and what is low. If your terminal took money that nobody said the items for, it says so: press **Say what was sold** on the Stock page, or send *sold* with the items, the amount and *pos*.
 
+## Buying stock
+
+Add the people you buy from, with the items they supply:
+
+*add supplier Dangote Depot 0803 123 4567 for rice, indomie*
+
+They get a link by text message. One tap, and your orders reach them on WhatsApp.
+
+When items run low, send *order from Dangote*. Taskiem puts the low items into one order, with how many to buy and what you paid last time. Reply **yes** and it goes to the supplier, who taps **Confirm**, or **Change** to say what they can bring instead. You hear either way.
+
+When the goods come, send *received 10 bags of rice*. Your stock goes up, and the item's cost price becomes what you paid. When you pay the supplier, send *paid Dangote 425,000 transfer*: it goes into your money record, and *suppliers* shows what you still owe.
+
+On the web, the Stock page has **Orders to suppliers** with **Order what is low**, and **Storefront > Suppliers** keeps your suppliers. If more than one person runs your shop, set **Approving orders** there: a big order is then sent by someone other than the person who drafted it.
+
 ## Low stock
 
-Give each item a **reorder level** on the Stock page: when the count is at that or less, the item is low. Give it an **order up to** level too, and Taskiem says how many to order. *stock* lists what is low.
+Give each item a **reorder level** on the Stock page: when the count is at that or less, the item is low. Give it an **order up to** level too, and Taskiem says how many to order. *stock* lists what is low, and each morning's money summary says it too.
 
 ## When the count looks wrong
 

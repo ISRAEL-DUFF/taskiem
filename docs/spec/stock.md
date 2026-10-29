@@ -91,6 +91,13 @@ Five milestones, K1 to K5, built in order on one branch and landing together in 
 - **Web**: **Suppliers** (beside Riders) and **Purchase orders** on the Stock page: draft from the low list, approve, send, receive in part or full, mark paid.
 - `stock@1`: `low_items`, `draft_purchase`, `send_purchase`, `receive`, `list_purchases`.
 
+- **As built (K3):**
+  - Migration 00258: `suppliers` (name plain, as the catalogue's supplier column holds it; the phone sealed and keyed as riders' are), `purchase_orders` (lines as JSON with what was received, the total, status, who drafted and approved, the supplier's change, the value received and paid), `purchase_payments` (one money log entry each), `stock_settings` (`purchase_limit_kobo`), `taskiem_supplier_orders` (a definer: the orders a sender may still confirm or change, across businesses, never their items), the outbox kind `supplier`.
+  - `engine/stock`: `Purchases` (suppliers added with the tap-in link by SMS, `DraftLowTx`, `SendTx` with the limit: above it the drafter and workflows may not send, `ConfirmTx`, `CounterTx` with an owner alert, `CancelTx` until anything came, `ReceiveTx` with a received movement per item naming the order and the cost price set after, `PayTx` as an expense naming the supplier). The suggested quantity is up to the target level, else twice the reorder level (not the last received quantity).
+  - Chat: `add supplier`, `suppliers`, `order from`, `received`, `paid <supplier>`, `send P-…`, `confirmed P-…`; the supplier's Confirm and Change (signed buttons), and CONFIRM / CHANGE P-… in words. `received` in the other four languages after their word. The morning summary lists what is low.
+  - Web: **Orders to suppliers** on the Stock page, **Storefront > Suppliers** with the approval limit. API and `stock@1` as in [docs/stock.md](../stock.md).
+  - Paying through Taskiem (a payout to the supplier's bank account under approval) comes with the templates in K5.
+
 ## 7. Counts, shrinkage and leaks (K4)
 
 - **A count by chat**: `count rice 12, indomie 40` (or `count` to be asked item by item, or **Count** on the Stock page: a sheet to fill item by item, or a CSV): each difference from the table becomes a `count` movement with the owner's reason, shown first and written on **yes**; a count of everything closes a counting period.

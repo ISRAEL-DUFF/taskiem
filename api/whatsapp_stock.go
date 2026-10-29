@@ -37,6 +37,9 @@ type stockChat struct {
 	Shown string `json:"shown,omitempty"`
 	// Sale is a sale being confirmed.
 	Sale *saleChat `json:"sale,omitempty"`
+	// Purchase is a supplier or purchase step being confirmed
+	// (whatsapp_purchases.go).
+	Purchase *purchaseChat `json:"purchase,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -48,6 +51,10 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 	words := strings.Fields(cmd)
 	if len(words) == 0 {
 		return false, nil
+	}
+	// Suppliers and purchase orders (K3).
+	if done, err := s.waPurchaseCommand(ctx, c, text, cmd); done || err != nil {
+		return done, err
 	}
 	if a, ok := stock.ParseAdd(text); ok {
 		return true, s.waStockAdd(ctx, c, a)
@@ -387,6 +394,9 @@ func (s *Server) stockAskAdjust(ctx context.Context, c *chat, sh *chatShop, it s
 func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 	sh := c.data.Shop
 	in := sh.StockChat
+	if in != nil && in.Purchase != nil {
+		return s.waPurchaseApply(ctx, c)
+	}
 	if sh.Action == "stock_sale" && in != nil && in.Sale != nil && c.p.Can(PermTableEdit) {
 		if !s.limiter("wa-shop:"+c.addr, 20*time.Second, 10).Allow() {
 			return c.say(ctx, s, c.t("wa.shop.too_many"))
