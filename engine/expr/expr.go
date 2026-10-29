@@ -242,8 +242,9 @@ func (e *Engine) Resolve(v any, act map[string]any, keepSecrets bool) (any, erro
 		}
 		return e.Eval(t, act)
 	case map[string]any:
-		// In key order, so the error a run records is the one its replay
-		// finds when more than one key fails.
+		// Keys in order, so that of several failing expressions the same
+		// one is reported every time: the error is recorded in history and
+		// a replay must reproduce it exactly.
 		out := make(map[string]any, len(t))
 		for _, k := range slices.Sorted(maps.Keys(t)) {
 			r, err := e.Resolve(t[k], act, keepSecrets)

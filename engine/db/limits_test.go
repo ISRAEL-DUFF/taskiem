@@ -118,3 +118,39 @@ func TestTenantsCannotChangeTheirLimits(t *testing.T) {
 		t.Errorf("tenant B sees %d limit rows", n)
 	}
 }
+
+// A tenant whose only tasks are not due yet (a retry's backoff) is passed
+// over by the claim's tenant walk: its worker pool, cap and leased tasks
+// are not looked up, so claim cost does not grow with such tenants, and
+// the tenant with work due is still served.
+func TestClaimWalksOnlyTenantsWithTasksDue(t *testing.T) {
+	d := dbtest.New(t)
+	for i := 0; i < 20; i++ {
+		tn := d.SeedTenant(t, nil)
+		run := d.StartRun(t, tn)
+		if _, err := d.Admin.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, 's', 1, 'connector', now() + interval '1 hour')`,
+			uuid.Must(uuid.NewV7()), tn.ID, run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	due := d.SeedTenant(t, nil)
+	addTasks(t, d, due, d.StartRun(t, due), 2)
+	var claimed, mine, lookups int
+	if err := pgx.BeginFunc(ctx, d.Admin, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SET LOCAL track_functions = 'all'`); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE tenant_id = $1) FROM taskiem_claim_tasks('connector', 'w1', 10, '60 seconds', 0, 'shared')`, due.ID).Scan(&claimed, &mine); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT COALESCE(sum(calls), 0) FROM pg_stat_xact_user_functions WHERE funcname = 'taskiem_tenant_worker_pool'`).Scan(&lookups)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if claimed != 2 || mine != 2 {
+		t.Errorf("claimed %d tasks (%d of the tenant with work due), want its 2 and no future task", claimed, mine)
+	}
+	if lookups != 1 {
+		t.Errorf("the claim looked up %d tenants' worker pools, want 1 (only the tenant with work due)", lookups)
+	}
+}

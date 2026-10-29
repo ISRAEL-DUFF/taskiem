@@ -15,6 +15,10 @@
 
 Query parameters: `environment`, `workflow`, `days` (1–90, default 7), `tz` (an IANA zone, default `Africa/Lagos`). An API key limited to one environment sees that environment only. To be told rather than having to look, set up [alerts](alerts.md).
 
+## Finding runs
+
+**Activity** lists runs newest first through `GET /v1/runs` (`run.read`). Query parameters: `workflow`, `status`, `environment`, `correlation_key`, `before` (an RFC 3339 time, for the next page) and `limit` (1–200, default 50). `correlation_key` matches exactly: a run's correlation key is the correlation of the signal it last waited on (a payment or order reference, a form request's id), so support can find the run a customer's reference belongs to. Activity's **Reference** box, under More filters, sends it. A run that never waited on a signal has no correlation key. The run keeps only a keyed hash of it, under the tenant's pseudonymisation key, so a reference built from a phone or an account number is never stored in the clear and is found only by someone who already knows it. Results are always the caller's own tenant's.
+
 ## Live run view
 
 A run's page opens on its **canvas**: the workflow as drawn, each step lit by its state (scheduled or running pulses, waiting, completed, failed or parked, skipped or cancelled) and updated as the run goes, without reloading. Steps inside a `foreach`, `branch` or `parallel` roll up into their parent until it finishes. Click a step for its inputs, outputs and attempts in the timeline.

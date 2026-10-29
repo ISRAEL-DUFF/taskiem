@@ -231,3 +231,26 @@ tests:
     values: 0+0x20
   interval: 1m
   name: a queue nobody serves, in any pool
+- alert_rule_test:
+  - alertname: TaskiemRetentionPurgeBehind
+    eval_time: 20m
+    exp_alerts: []
+  - alertname: TaskiemRetentionPurgeBehind
+    eval_time: 50m
+    exp_alerts:
+    - exp_annotations:
+        description: 'The oldest run past its retention date has not been archived
+          and deleted for over 6 hours (a healthy purge takes minutes): the archive
+          is refusing writes, a run keeps failing to purge, or purging cannot keep
+          up. Personal data is kept past its retention, and run_events grows.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemretentionpurgebehind
+        summary: Runs past retention have waited over 6 hours to be purged
+      exp_labels:
+        severity: ticket
+  input_series:
+  - series: taskiem_retention_purge_oldest_overdue_seconds{instance="a"}
+    values: 21000+60x60
+  - series: taskiem_retention_purge_oldest_overdue_seconds{instance="b"}
+    values: "0x60"
+  interval: 1m
+  name: the retention purge falls behind on one scheduler

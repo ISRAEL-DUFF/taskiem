@@ -718,6 +718,8 @@ runs.id
 runs.last_seq
 runs.orch_lease_owner
 runs.orch_lease_until
+runs.purge_after
+runs.purge_attempts
 runs.queue_reason
 runs.retain_until
 runs.started_at

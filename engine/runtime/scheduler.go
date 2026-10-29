@@ -29,8 +29,16 @@ type Scheduler struct {
 	// SweepOnly limits the scheduler to deciding swept runs: the
 	// "orchestrator" role, when it runs apart from the "scheduler" role.
 	SweepOnly bool
+	// PurgeBatch and PurgeBudget pace the retention purge: runs claimed
+	// per batch (default 25), and how long a tick may spend purging
+	// before the rest waits for the next tick (default a second; the
+	// batch under way when it runs out is finished).
+	PurgeBatch  int
+	PurgeBudget time.Duration
 
-	lastPartitions, lastPurge, lastReceipts time.Time
+	lastPartitions, lastPurge, lastReceipts, lastPurgeReport time.Time
+	// purgeBehind: the last purge pass ran out of budget with runs left.
+	purgeBehind bool
 }
 
 // TickStats reports one tick's work.
@@ -112,10 +120,12 @@ func (s *Scheduler) Tick(ctx context.Context) (TickStats, error) {
 	n, err = s.Store.AdmitQueued(ctx)
 	st.RunsAdmitted = n
 	errs = append(errs, err)
-	if time.Since(s.lastPurge) > 10*time.Minute {
-		if _, err := s.PurgeExpired(ctx, 500); err != nil {
+	if s.purgeBehind || time.Since(s.lastPurge) > purgeEvery { // retention.go
+		done, err := s.purgeRetention(ctx)
+		s.purgeBehind = err == nil && !done
+		if err != nil {
 			errs = append(errs, err)
-		} else {
+		} else if done {
 			s.lastPurge = time.Now()
 		}
 	}

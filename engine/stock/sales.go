@@ -207,7 +207,7 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 			}
 			// The takings are the sale's: the invoice matcher never offers
 			// them for an invoice or order (taskiem_money_entry_counted
-			// counts them too, 00260).
+			// counts them too, 00265).
 			if _, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state) VALUES ($1, $2, 'matched')
 				ON CONFLICT (entry_id) DO UPDATE SET state = 'matched', considered_at = now()`, id, tenant); err != nil {
 				return err

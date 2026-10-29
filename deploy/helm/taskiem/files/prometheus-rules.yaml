@@ -713,6 +713,18 @@ groups:
     for: 15m
     labels:
       severity: ticket
+  - alert: TaskiemRetentionPurgeBehind
+    annotations:
+      description: 'The oldest run past its retention date has not been archived and
+        deleted for over 6 hours (a healthy purge takes minutes): the archive is refusing
+        writes, a run keeps failing to purge, or purging cannot keep up. Personal
+        data is kept past its retention, and run_events grows.'
+      runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemretentionpurgebehind
+      summary: Runs past retention have waited over 6 hours to be purged
+    expr: max(taskiem_retention_purge_oldest_overdue_seconds) > 21600
+    for: 30m
+    labels:
+      severity: ticket
   - alert: TaskiemTargetDown
     annotations:
       description: Prometheus cannot scrape a Taskiem pod. If it serves traffic, the

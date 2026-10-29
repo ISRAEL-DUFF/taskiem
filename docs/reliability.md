@@ -93,6 +93,7 @@ Planned maintenance spends budget like any outage. During the G4 window a spent 
 | `TaskiemSchedulerStalled` | page | No scheduler tick for 2 min, or no scheduler | [runbook](#runbook-taskiemschedulerstalled) |
 | `TaskiemQueueBacklog` | page | A task in some worker pool and queue has waited over 10 min | [runbook](#runbook-taskiemqueuebacklog) |
 | `TaskiemLeaseExpiries` | ticket | Over 10 leases expired in 15 min | [runbook](#runbook-taskiemleaseexpiries) |
+| `TaskiemRetentionPurgeBehind` | ticket | A run past retention has waited over 6 h to be purged | [runbook](#runbook-taskiemretentionpurgebehind) |
 | `TaskiemTargetDown` | ticket | A pod's metrics cannot be scraped for 10 min | [runbook](#runbook-taskiemtargetdown) |
 
 Every alert carries `severity` and a `runbook_url` to its section below. Route `severity="page"` to the paging tool and `severity="ticket"` to the team's tracker or channel in Alertmanager:
@@ -368,6 +369,15 @@ Leases expire instead of being completed or released: processes die mid-step.
 1. Restarts and OOM kills on worker pods: raise their memory limits (`roles.worker.resources` in the chart). A worker process runs up to 16 steps at once on each queue it serves (4 on `sandbox` and `container`), and no setting changes that; `TASKIEM_WORKER_QUEUES` only chooses the queues. Size the limit for the queues a pod serves: four Python steps at the interpreter's 256 MiB cap need 1 GiB on top of the process. Outside the chart, a pod can also serve fewer queues (say `sandbox` on a Deployment of its own), which bounds what one pod holds.
 2. Pods killed before draining: the grace period is shorter than delay + drain (the chart refuses this; a manual manifest may not), or nodes are being drained without respecting the PodDisruptionBudget.
 3. A step that hangs past its lease without heartbeats: its logs; the step's `timeout`.
+
+### Runbook: TaskiemRetentionPurgeBehind
+
+The oldest run past its retention date has waited over 6 hours to be archived and deleted (`taskiem_retention_purge_oldest_overdue_seconds`, set by each scheduler with an archive configured). A healthy purge clears runs within about 10 minutes of their date: the scheduler loops over batches of 25 while they come back full, spending up to a second a tick, and carries on next tick if runs remain. While this fires, personal data is kept past its retention and `run_events` grows.
+
+1. `taskiem_retention_purge_failures_total` rising? The scheduler logs `retention purge skipped runs` with the first failing run and its error. Find the rest with `SELECT id, tenant_id, purge_attempts, purge_after, purge_error FROM runs WHERE purge_attempts > 0 ORDER BY retain_until`. A failing run is retried after 1 minute, doubling each attempt up to a day, and does not hold back the others.
+2. Every run failing (`archive run ...: ...`): the archive refuses writes. Check the bucket's credentials, policy, KMS key and reachability (`TASKIEM_ARCHIVE_S3_*`), or the directory's space and permissions (`TASKIEM_ARCHIVE_DIR`). A pass stops early when a whole batch fails, so an outage does not spin through the backlog. Once it is fixed, failed runs come back on their own as their backoff ends; to retry them at once, `UPDATE runs SET purge_after = NULL WHERE purge_attempts > 0`.
+3. One run failing (`read run ...` or `delete run ...`): its history cannot be read or deleted. Look at the error; the run stays, and nothing else waits on it.
+4. No failures, but `taskiem_retention_purge_backlog_runs` keeps growing and `taskiem_runs_purged_total` is flat: is a scheduler running (`TaskiemSchedulerStalled`)? Rising steadily: purging is too slow for the volume (a slow archive is the usual cause). More schedulers split the work (each claim leases its runs for 10 minutes, `SKIP LOCKED`), but only with the S3 archive.
 
 ### Runbook: TaskiemTargetDown
 
