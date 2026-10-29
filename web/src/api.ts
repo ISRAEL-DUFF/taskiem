@@ -2,7 +2,12 @@
 // HttpOnly cookie; every request carries the CSRF header the API requires.
 // A field agent working in a business adds its session's header (below).
 
-import { parseSession, sessionEnded, withAgentHeader, type AgentSession } from "./lib/agent";
+import {
+  parseSession,
+  sessionEnded,
+  withAgentHeader,
+  type AgentSession,
+} from "./lib/agent";
 import type { Trigger } from "@sdk/wd";
 
 export interface Problem {
@@ -36,7 +41,9 @@ const AGENT_KEY = "taskiem.agent-session";
 let agentSession: AgentSession | null = null;
 const agentListeners = new Set<() => void>();
 try {
-  agentSession = parseSession(globalThis.sessionStorage?.getItem(AGENT_KEY) ?? null);
+  agentSession = parseSession(
+    globalThis.sessionStorage?.getItem(AGENT_KEY) ?? null,
+  );
 } catch {
   // storage blocked: no session survives a reload
 }
@@ -64,8 +71,15 @@ export function subscribeAgentSession(fn: () => void): () => void {
   return () => agentListeners.delete(fn);
 }
 
-function headersFor(path: string, headers: Record<string, string>): Record<string, string> {
-  return withAgentHeader(path, { ...headers, "X-Taskiem-Request": "1" }, agentSession?.id);
+function headersFor(
+  path: string,
+  headers: Record<string, string>,
+): Record<string, string> {
+  return withAgentHeader(
+    path,
+    { ...headers, "X-Taskiem-Request": "1" },
+    agentSession?.id,
+  );
 }
 
 /** A refusal saying the session ended: leave it, and tell the agent app. */
@@ -73,11 +87,22 @@ function noteEnded(status: number, body: Record<string, unknown>) {
   if (!agentSession || !sessionEnded(status, body)) return;
   const was = agentSession;
   setAgentSession(null);
-  window.dispatchEvent(new CustomEvent("taskiem:agent-session-ended", { detail: was }));
+  window.dispatchEvent(
+    new CustomEvent("taskiem:agent-session-ended", { detail: was }),
+  );
 }
 
-export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  return request<T>(method, path, body === undefined ? undefined : JSON.stringify(body), { "Content-Type": "application/json" });
+export async function api<T = unknown>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  return request<T>(
+    method,
+    path,
+    body === undefined ? undefined : JSON.stringify(body),
+    { "Content-Type": "application/json" },
+  );
 }
 
 /** POSTs a multipart form (file uploads); the browser sets its boundary. */
@@ -87,12 +112,17 @@ export function upload<T = unknown>(path: string, form: FormData): Promise<T> {
 
 /** POSTs a file as the raw request body, with its own Content-Type (storefront photos). */
 export function uploadFile<T = unknown>(path: string, file: Blob): Promise<T> {
-  return request<T>("POST", path, file, { "Content-Type": file.type || "application/octet-stream" });
+  return request<T>("POST", path, file, {
+    "Content-Type": file.type || "application/octet-stream",
+  });
 }
 
 /** GETs a binary response (an image) with the session, as a Blob. */
 export async function getBlob(path: string): Promise<Blob> {
-  const res = await fetch(path, { credentials: "same-origin", headers: headersFor(path, {}) });
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    headers: headersFor(path, {}),
+  });
   if (!res.ok) {
     const text = await res.text();
     let msg = text || res.statusText;
@@ -103,16 +133,23 @@ export async function getBlob(path: string): Promise<Blob> {
     } catch {
       // not JSON: the text itself
     }
-    if (res.status === 401) window.dispatchEvent(new Event("taskiem:unauthorised"));
+    if (res.status === 401)
+      window.dispatchEvent(new Event("taskiem:unauthorised"));
     throw new ApiError(res.status, msg);
   }
   return res.blob();
 }
 
 /** The message for a request that never reached Taskiem. */
-export const OFFLINE = "You're offline, or Taskiem can't be reached. Check your connection and try again.";
+export const OFFLINE =
+  "You're offline, or Taskiem can't be reached. Check your connection and try again.";
 
-async function request<T>(method: string, path: string, body: BodyInit | undefined, headers: Record<string, string>): Promise<T> {
+async function request<T>(
+  method: string,
+  path: string,
+  body: BodyInit | undefined,
+  headers: Record<string, string>,
+): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -133,13 +170,21 @@ async function request<T>(method: string, path: string, body: BodyInit | undefin
     data = { error: text };
   }
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith("/v1/auth/")) window.dispatchEvent(new Event("taskiem:unauthorised"));
+    if (res.status === 401 && !path.startsWith("/v1/auth/"))
+      window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
-    throw new ApiError(res.status, (data.error as string) ?? res.statusText, (data.problems as Problem[]) ?? [], data);
+    throw new ApiError(
+      res.status,
+      (data.error as string) ?? res.statusText,
+      (data.problems as Problem[]) ?? [],
+      data,
+    );
   }
   // Publishing ends an onboarding on the server: the agent app checks.
   if (agentSession && method === "POST" && path === "/v1/storefront/publish") {
-    window.dispatchEvent(new CustomEvent("taskiem:agent-published", { detail: agentSession }));
+    window.dispatchEvent(
+      new CustomEvent("taskiem:agent-published", { detail: agentSession }),
+    );
   }
   return data as T;
 }
@@ -154,15 +199,22 @@ export interface MergeConflict {
 }
 
 export const get = <T>(path: string) => api<T>("GET", path);
-export const post = <T>(path: string, body?: unknown) => api<T>("POST", path, body ?? {});
-export const put = <T>(path: string, body?: unknown) => api<T>("PUT", path, body ?? {});
-export const patch = <T>(path: string, body?: unknown) => api<T>("PATCH", path, body ?? {});
-export const del = <T>(path: string, body?: unknown) => api<T>("DELETE", path, body);
+export const post = <T>(path: string, body?: unknown) =>
+  api<T>("POST", path, body ?? {});
+export const put = <T>(path: string, body?: unknown) =>
+  api<T>("PUT", path, body ?? {});
+export const patch = <T>(path: string, body?: unknown) =>
+  api<T>("PATCH", path, body ?? {});
+export const del = <T>(path: string, body?: unknown) =>
+  api<T>("DELETE", path, body);
 
 /** A POST with an Idempotency-Key header: retried with the same key, the
  * server makes or sends nothing more (invoices: creating and sending). */
 export const postOnce = <T>(path: string, key: string, body?: unknown) =>
-  request<T>("POST", path, JSON.stringify(body ?? {}), { "Content-Type": "application/json", "Idempotency-Key": key });
+  request<T>("POST", path, JSON.stringify(body ?? {}), {
+    "Content-Type": "application/json",
+    "Idempotency-Key": key,
+  });
 
 // --- response shapes ---
 
@@ -209,7 +261,13 @@ export interface Me {
   invitations_only?: boolean;
   roles: string[];
   permissions: string[];
-  user?: { id: string; email: string; name: string; email_verified?: boolean };
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    email_verified?: boolean;
+    email_placeholder?: boolean;
+  };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */
@@ -276,7 +334,18 @@ export interface GitSync {
   commit: string;
   requested_by: string;
   status: "queued" | "running" | "deployed" | "unchanged" | "failed";
-  report?: { commit?: string; error?: string; problems?: string[]; tests?: { passed: number; failed: number; failures?: string[] }; workflows?: { path: string; key: string; action: string; version?: number }[] };
+  report?: {
+    commit?: string;
+    error?: string;
+    problems?: string[];
+    tests?: { passed: number; failed: number; failures?: string[] };
+    workflows?: {
+      path: string;
+      key: string;
+      action: string;
+      version?: number;
+    }[];
+  };
   requested_at: string;
   finished_at?: string;
 }
@@ -307,7 +376,14 @@ export interface RunSummary {
   ended_at: string | null;
 }
 
-export type RunStatus = "queued" | "running" | "waiting" | "needs_reconciliation" | "completed" | "failed" | "cancelled";
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "waiting"
+  | "needs_reconciliation"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface RunEvent {
   seq: number;
@@ -354,7 +430,11 @@ export interface CapabilityInfo {
   kind?: "event";
 }
 
-type JSONSchemaLike = { type?: string; properties?: Record<string, unknown>; required?: string[] } & Record<string, unknown>;
+type JSONSchemaLike = {
+  type?: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
+} & Record<string, unknown>;
 
 export interface ConnectorInfo {
   ref: string;
@@ -387,7 +467,10 @@ export interface ConnectorInfo {
   oauth_linkable?: boolean;
   /** For a connector whose modes are hosts: the modes it can be connected in by OAuth here. */
   oauth_modes?: string[];
-  actions: Record<string, { title: string; class: string; input?: JSONSchema; output?: JSONSchema }>;
+  actions: Record<
+    string,
+    { title: string; class: string; input?: JSONSchema; output?: JSONSchema }
+  >;
   triggers: string[];
 }
 

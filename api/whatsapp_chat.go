@@ -235,6 +235,8 @@ type chatData struct {
 	Invoice *chatInvoice `json:"invoice,omitempty"`
 	// Money is cash or an expense being recorded (whatsapp_money.go).
 	Money *chatMoney `json:"money,omitempty"`
+	// Invite is an invitation the owner is confirming (chat_invites.go).
+	Invite *chatInvite `json:"invite,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -322,6 +324,13 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// way (connect_links.go).
 	if done, err := s.keyGuard(ctx, c, text); done || err != nil {
 		return err
+	}
+	// An invitation's Join or No, and an owner's answer to a request to
+	// join (chat_invites.go).
+	if strings.HasPrefix(in.Reply, invPrefix) || normalizeCommand(text) == "join" {
+		if done, err := s.chatInviteMessage(ctx, &inviteChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}, text, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
@@ -456,6 +465,12 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.keyGuard(ctx, &chat{ch: wa, wa: wa, addr: number, lang: langChoice{Tag: l}}, text); done || err != nil {
 		return err
 	}
+	// An invitation to this number (chat_invites.go), before sign-up.
+	if !wa.Own() {
+		if done, err := s.chatInviteMessage(ctx, &inviteChat{ch: wa, addr: number, lang: l}, text, in.Reply); done || err != nil {
+			return err
+		}
+	}
 	// Signing up from chat (chat_signup.go): a sign-up under way, a word
 	// or button that starts one.
 	sc := &signupChat{ch: wa, addr: number, lang: l}
@@ -582,6 +597,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Money != nil && c.state != stateIdle {
 		return s.waMoneyReply(ctx, c, cmd)
 	}
+	if c.data.Invite != nil && c.state != stateIdle {
+		return s.waInviteReply(ctx, c, cmd)
+	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
@@ -703,6 +721,26 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			// The chat PIN, set from the chat by a person with no other
 			// credential (chat_dormant.go).
 			return s.waChatPin(ctx, c)
+		case "plan", "my plan", "subscription", "trial":
+			// The plan and paying for it (chat_doors.go).
+			return s.waPlan(ctx, c)
+		case "pay", "plan:pay", "pay now", "pay for taskiem":
+			return s.waPay(ctx, c, "")
+		case "email", "my email", "add email", "add my email":
+			return s.waEmail(ctx, c, "")
+		}
+		// Bringing someone in (chat_invites.go).
+		if strings.HasPrefix(cmd, "invite ") {
+			return s.waInvite(ctx, c, text)
+		}
+		// An email of one's own, and paying with one (chat_doors.go).
+		if f := strings.Fields(text); len(f) == 2 && strings.Contains(f[1], "@") {
+			switch strings.ToLower(f[0]) {
+			case "email":
+				return s.waEmail(ctx, c, f[1])
+			case "pay":
+				return s.waPay(ctx, c, f[1])
+			}
 		}
 		// A service connected from the chat (connect_links.go).
 		if name, ok := strings.CutPrefix(cmd, "connect "); ok {

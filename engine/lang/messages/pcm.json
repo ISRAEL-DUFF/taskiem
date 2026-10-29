@@ -688,6 +688,210 @@
       "text": "Start new business",
       "reviewed": false
     },
+    "door.ask_email": {
+      "text": "Which email you dey take sign in for Taskiem? Send am here, we go send link to that email so you fit join this chat to your account.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "That one no be email address. Send am like this: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "Dem don ask for link many times already. Check your inbox and spam, or try again after one hour.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "If {email} get Taskiem account, link dey go there now. Open am for phone or computer wey you don sign in to Taskiem; e go work once, for one hour. After that, this chat na your own.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "E don do: this chat don join your Taskiem account. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "That number don already be your Taskiem account from WhatsApp. This Telegram don join am too: your business dem dey here. Send help, or new business if you wan start another one.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "That number don dey for Taskiem account already. We don send link to that account email: open am when you don sign in to Taskiem, this Telegram go join am.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Your account email na {email}. If you wan change am, use your profile for web.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Add your email so Taskiem go dey send receipt and invoice to your mail. Send email, then the address, like this: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem no fit send email for here yet, so you no fit add email now.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Link dey go {email} now. Open am to confirm; e go work once, for 24 hours. Till then, nothing go change.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Nothing dey to pay for this Taskiem.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "This business dey on {plan} through the company wey set am up; na dem dey handle payment.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "You dey on {plan}, free for {days} more days. After that na {price} every month.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Payment for {plan} don pass time. Pay now make everything continue to run.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "You dey on {plan}, {price} every month. E go renew on {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Pay",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Na only person wey dey manage billing for {org} fit pay.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "Dem dey send receipt by email. Send pay, then your email, like this: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Payment no fit start: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Nothing dey owe now.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "Pay {amount} here, by card or bank transfer:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Na only person wey dey manage people for {org} fit invite or approve.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "To invite person, send: invite +2348012345678 as viewer. For Slack, mention dem: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Na only owner fit make another person owner.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "No role wey dem call {role}. Roles: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "You no fit give {role} role: e fit do things wey you no fit do.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "Make we invite {who} join {org} as {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "We no send any invitation.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "The invitation no fit go now. Try again later, or invite dem for web.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "Invitation don go to {who}. Dem go join when dem tap Join; e go work for 7 days.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Forward this link give {who}: {link}\nWhen dem open am, Taskiem go ask dem to share dem own number, wey must be {who}. E go work for 7 days.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} don invite you to work with {org} for Taskiem, as {role}. You go join?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Join",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "That invitation don end or dem don answer am already.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "OK, you no join. We no go send anything again about am.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "To join {org}, agree to Taskiem terms and privacy notice: {link}\nReply Yes to agree and join.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "To join, share your own number with the button wey dey below. E must be the number wey dem invite.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "That no be the number wey this invitation dey for. Share your own number, the one wey dem invite.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "This chat don join another Taskiem account, so e no fit join here.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "You don join {org}. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Ask to join {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "Na {businesses} dey run Taskiem for this workspace. To dey the workspace no reach to see dem business: ask to join, and the owner go decide.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Your request don reach the owners of {org}. You go hear here when dem decide.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} for your Slack workspace dey ask to join {org}. Make dem enter as?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Viewer",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Operator",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Decline",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "The owners of {org} no let you enter this time.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "E don decline: dem don tell {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "Dem don invite {who} as {role}. Dem go join when dem tap Join.",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "We dey check your request {reference}. We go let you know.",
       "reviewed": false

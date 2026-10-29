@@ -196,12 +196,9 @@ func (s *Server) chatSignupMessage(ctx context.Context, sc *signupChat, text, re
 	case reply == "su:start" || signupWord(text, sc.user != uuid.Nil):
 		return true, s.signupBegin(ctx, sc)
 	case reply == "su:have" && sc.user == uuid.Nil:
-		// Linking an account made on the web: from its Account page (C5
-		// brings an email link).
-		if sc.ch.Name() == "telegram" {
-			return true, s.suSay(ctx, sc, sc.t("tg.unbound", "where", s.accountWhere()))
-		}
-		return true, s.suSay(ctx, sc, sc.t("wa.unbound", "where", s.accountWhere()))
+		// Linking an account made on the web, by a link to its email
+		// (chat_doors.go).
+		return true, s.chatLinkAsk(ctx, sc)
 	case reply == "su:no":
 		return true, s.suSay(ctx, sc, sc.t("signup.later"))
 	}
@@ -316,6 +313,8 @@ func (s *Server) signupAsk(ctx context.Context, sc *signupChat, st *signupState)
 		if sc.tg != nil && s.Telegram != nil {
 			return s.Telegram.Client.AskContact(ctx, sc.tg.FromID, sc.t("signup.ask_contact"), sc.t("agent.share_button"))
 		}
+	case suEmail:
+		return s.suSay(ctx, sc, sc.t("door.ask_email"))
 	}
 	return nil
 }
@@ -409,6 +408,8 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		return s.signupMake(ctx, sc, st, signupNumber(sc))
 	case suContact:
 		return s.signupAsk(ctx, sc, st)
+	case suEmail:
+		return s.chatLinkEmail(ctx, sc, text)
 	}
 	return stop("cancelled", "signup.cancelled")
 }
@@ -456,6 +457,10 @@ func (s *Server) chatSignupContact(ctx context.Context, sc *signupChat, c *teleg
 		return true, err
 	}
 	if taken {
+		// One person, many doors (chat_doors.go).
+		if done, err := s.chatNumberDoor(ctx, sc, st, number); done || err != nil {
+			return true, err
+		}
 		if err := s.signupDrop(ctx, sc.addr); err != nil {
 			return true, err
 		}

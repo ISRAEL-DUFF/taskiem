@@ -12198,6 +12198,93 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/email:
+    post:
+      operationId: addEmail
+      tags:
+      - Account
+      summary: Add your email
+      description: |
+        Sends a confirmation link to an email for the signed-in person's account, when its sign-in name receives no mail
+        (an account made in chat) or is not confirmed yet. Opening the link (POST /v1/auth/email/confirm) makes it the
+        account's email, confirmed. 409 when the account's email is confirmed already; 503 when this deployment cannot send
+        email; three links per twenty minutes.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              properties:
+                email:
+                  type: string
+              additionalProperties: false
+      responses:
+        '202':
+          description: A link is on its way.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chat-link:
+    post:
+      operationId: linkChat
+      tags:
+      - Account
+      summary: Link a chat by its emailed link
+      description: |
+        Binds the chat an emailed link names (a WhatsApp number, a Telegram account, or a Slack user in this business's
+        workspace) to the signed-in person, who must be the account the link was sent to. The link was asked for from the
+        chat with "I already use Taskiem"; it works once, for an hour. 400 for a link that is unknown, used, expired or
+        another account's; 409 when the chat is someone else's or the person has another of its kind.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - token
+              properties:
+                token:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: The chat is linked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - channel
+                - linked
+                properties:
+                  channel:
+                    type: string
+                    enum:
+                    - whatsapp
+                    - telegram
+                    - slack
+                  linked:
+                    type: boolean
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/email/verify/resend:
     post:
       operationId: resendVerification
@@ -17357,6 +17444,51 @@ paths:
                       type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/auth/email/confirm:
+    post:
+      operationId: confirmEmailChange
+      tags:
+      - Authentication
+      summary: Confirm an added email
+      description: |
+        Confirms an email added to an account (POST /v1/me/email, or "email" in chat) from its link, signed in or not: an
+        account made in chat may have no other way to sign in. The address becomes the account's, confirmed. The link works
+        once, for 24 hours; five wrong secrets lock it. 409 when the address is another account's.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - tenant
+              - token
+              properties:
+                tenant:
+                  type: string
+                  format: uuid
+                token:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: The email is the account's, confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - email
+                - email_verified
+                properties:
+                  email:
+                    type: string
+                  email_verified:
+                    type: boolean
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
   /v1/slack/install:
     get:
       operationId: slackInstallStart
@@ -21946,6 +22078,9 @@ components:
               type: string
             email_verified:
               type: boolean
+            email_placeholder:
+              type: boolean
+              description: The sign-in name receives no mail (an account made in chat); the web app offers Add your email.
         totp:
           type: boolean
           description: Whether an authenticator is enrolled.
@@ -32960,6 +33095,9 @@ components:
         flows:
           type: boolean
           description: Whether WhatsApp forms are available.
+        dormant:
+          type: boolean
+          description: The number was silent too long and acts for no one until proven again (a new code links it again).
       additionalProperties: false
     SlackLink:
       type: object
@@ -33007,6 +33145,9 @@ components:
           type: string
           format: date-time
           description: A link made and not opened yet works until then.
+        dormant:
+          type: boolean
+          description: The account was silent too long and acts for no one until proven again (a new link links it again).
       additionalProperties: false
     TelegramLinkMade:
       type: object

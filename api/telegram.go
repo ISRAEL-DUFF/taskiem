@@ -36,6 +36,8 @@ type tgBindingInfo struct {
 	VerifiedAt  *time.Time `json:"verified_at,omitempty"`
 	// PendingExpiresAt: a link made and not opened yet, until then.
 	PendingExpiresAt *time.Time `json:"pending_expires_at,omitempty"`
+	// Dormant: silent too long; a new link proves it again.
+	Dormant bool `json:"dormant"`
 }
 
 // getTelegram is the caller's Telegram link.
@@ -57,6 +59,12 @@ func (s *Server) getTelegram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Linked, out.Username, out.VerifiedAt, out.PendingExpiresAt = b.TelegramID != 0, b.Username, b.VerifiedAt, b.PendingExpires
+	if out.Linked {
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_binding_dormant('telegram', $1)`, p.UserID).Scan(&out.Dormant); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -222,6 +230,17 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		}
 	}
 	sc := &signupChat{ch: tg, addr: addr, user: user, lang: s.chooseLang(ctx, uuid.Nil, addr, "").Tag, tg: &u}
+	ic := &inviteChat{ch: tg, addr: addr, user: user, lang: sc.lang, tg: &u}
+	// An invitation's link, and the contact joining asked for
+	// (chat_invites.go).
+	if token, ok := strings.CutPrefix(in.Text, "/start inv_"); ok && u.Kind == "message" {
+		return s.inviteStart(ctx, ic, strings.TrimSpace(token))
+	}
+	if u.Kind == "message" && u.Contact != nil {
+		if done, err := s.inviteContact(ctx, ic, u.Contact); done || err != nil {
+			return err
+		}
+	}
 	// The contact a sign-up asked for (chat_signup.go), before an agent's.
 	if u.Kind == "message" && u.Contact != nil && user == uuid.Nil {
 		if done, err := s.chatSignupContact(ctx, sc, u.Contact); done || err != nil {
@@ -288,6 +307,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 			return err
 		}
 		if done, err := s.keyGuard(ctx, &chat{ch: tg, addr: addr, lang: langChoice{Tag: sc.lang}}, in.Text); done || err != nil {
+			return err
+		}
+		if done, err := s.chatInviteMessage(ctx, ic, in.Text, payload); done || err != nil {
 			return err
 		}
 		if done, err := s.chatSignupMessage(ctx, sc, in.Text, payload); done || err != nil {

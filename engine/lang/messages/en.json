@@ -859,6 +859,261 @@
       "reviewed": true,
       "context": "Button under slack.install.email_taken (75 characters at most)"
     },
+    "door.ask_email": {
+      "text": "What email do you sign in to Taskiem with? Send it here and we will email you a link to connect this chat to your account.",
+      "reviewed": true,
+      "context": "After 'I already use Taskiem' in a chat no one is linked to: the person types the email they sign in to Taskiem with"
+    },
+    "door.email_bad": {
+      "text": "That does not look like an email address. Send it like this: ada@example.com",
+      "reviewed": true,
+      "context": "The text sent as an email is not one Taskiem can use"
+    },
+    "door.too_many": {
+      "text": "A link was asked for a few times already. Check your inbox and spam folder, or try again in an hour.",
+      "reviewed": true,
+      "context": "Too many link emails asked for from this chat or for this email in an hour"
+    },
+    "door.email_sent": {
+      "text": "If {email} has a Taskiem account, a link is on its way there. Open it on a device where you are signed in to Taskiem; it works once, for an hour. Then this chat is yours.",
+      "reviewed": true,
+      "context": "Sent whether or not the email has an account, so nobody learns who is on Taskiem. {email} is what they typed"
+    },
+    "door.linked": {
+      "text": "Done: this chat is linked to your Taskiem account. Send help to see what you can do here.",
+      "reviewed": true,
+      "context": "Sent to the chat after its emailed link was opened and the chat is linked to the account"
+    },
+    "door.tg_joined": {
+      "text": "That number is your Taskiem account already, from WhatsApp. This Telegram is now linked to it too: your businesses are here. Send help, or new business to start another.",
+      "reviewed": true,
+      "context": "A Telegram sign-up shared a number that is already a chat-born WhatsApp account's: the Telegram account is now linked to that same account"
+    },
+    "door.tg_number_email": {
+      "text": "That number is on a Taskiem account already. We emailed that account a link: open it while signed in to Taskiem and this Telegram will be linked to it.",
+      "reviewed": true,
+      "context": "A Telegram sign-up shared a number that is an account with an email or password: a link to link this Telegram went to that account's email"
+    },
+    "door.email_is": {
+      "text": "Your account's email is {email}. To change it, use your profile on the web.",
+      "reviewed": true,
+      "context": "'email' in chat from someone whose account's email is confirmed already. {email} is it"
+    },
+    "door.email_ask": {
+      "text": "Add your email to get receipts and invoices from Taskiem by mail. Send email, then the address, like this: email ada@example.com",
+      "reviewed": true,
+      "context": "'email' in chat from someone with no email of their own yet: how to add one"
+    },
+    "door.email_off": {
+      "text": "Taskiem cannot send email here yet, so an email cannot be added now.",
+      "reviewed": true,
+      "context": "'email' in chat on a deployment that cannot send email"
+    },
+    "door.email_confirm": {
+      "text": "A link is on its way to {email}. Open it to confirm; it works once, for 24 hours. Until then nothing changes.",
+      "reviewed": true,
+      "context": "After 'email ada@example.com' in chat: a confirmation link went to {email}"
+    },
+    "door.plan_off": {
+      "text": "There is nothing to pay on this Taskiem.",
+      "reviewed": true,
+      "context": "'plan' in chat on a deployment without billing"
+    },
+    "door.plan_partner": {
+      "text": "This business is on {plan} through the company that set it up; they handle paying.",
+      "reviewed": true,
+      "context": "'plan' in chat for a business on its partner's plan. {plan} is the plan's name"
+    },
+    "door.plan_trial": {
+      "text": "You are on {plan}, free for {days} more days. After that it is {price} a month.",
+      "reviewed": true,
+      "context": "'plan' in chat during the free trial; a Pay button may follow. {plan} the plan, {days} days left, {price} a month after"
+    },
+    "door.plan_due": {
+      "text": "Payment for {plan} is overdue. Pay now to keep everything running.",
+      "reviewed": true,
+      "context": "'plan' in chat when a payment is overdue; a Pay button may follow. {plan} is the plan"
+    },
+    "door.plan_active": {
+      "text": "You are on {plan}, {price} a month. It renews on {date}.",
+      "reviewed": true,
+      "context": "'plan' in chat for a paid plan. {plan} the plan, {price} a month, {date} when it renews"
+    },
+    "door.button_pay": {
+      "text": "Pay",
+      "reviewed": true,
+      "context": "Button to pay for Taskiem (20 characters at most)"
+    },
+    "door.pay_denied": {
+      "text": "Only someone who manages billing for {org} can pay.",
+      "reviewed": true,
+      "context": "Pay from someone who may not pay for the business. {org} is the business"
+    },
+    "door.pay_email": {
+      "text": "Receipts are sent by email. Send pay, then your email, like this: pay ada@example.com",
+      "reviewed": true,
+      "context": "Pay from an account with no email: the payment provider sends receipts by email, so one is asked for first"
+    },
+    "door.pay_failed": {
+      "text": "Paying could not start: {reason}",
+      "reviewed": true,
+      "context": "A checkout could not start. {reason} is why"
+    },
+    "door.pay_nothing": {
+      "text": "Nothing is owed right now.",
+      "reviewed": true,
+      "context": "Pay when nothing is owed"
+    },
+    "door.pay_link": {
+      "text": "Pay {amount} here, by card or bank transfer:",
+      "reviewed": true,
+      "context": "A checkout link follows (on its own line, or as a button on Slack). {amount} is what is paid"
+    },
+    "invite.denied": {
+      "text": "Only someone who manages the people of {org} can invite or approve.",
+      "reviewed": true,
+      "context": "invite from someone who may not manage members. {org} is the business"
+    },
+    "invite.how": {
+      "text": "To invite someone, send: invite +2348012345678 as viewer. In Slack, mention them: invite @ada as viewer.",
+      "reviewed": true,
+      "context": "How to invite from chat; the role names stay in English"
+    },
+    "invite.owner_only": {
+      "text": "Only an owner can make someone an owner.",
+      "reviewed": true,
+      "context": "Only an owner may make someone an owner"
+    },
+    "invite.role_unknown": {
+      "text": "There is no role called {role}. Roles: {roles}.",
+      "reviewed": true,
+      "context": "The role named in invite does not exist. {role} what was typed, {roles} the usual ones"
+    },
+    "invite.cannot_grant": {
+      "text": "You cannot give the {role} role: it can do things you cannot.",
+      "reviewed": true,
+      "context": "The inviter may not give that role. {role} is it"
+    },
+    "invite.confirm": {
+      "text": "Invite {who} to {org} as {role}?",
+      "reviewed": true,
+      "context": "The owner confirms an invitation; Yes and No follow. {who} the person, {org} the business, {role} the role"
+    },
+    "invite.cancelled": {
+      "text": "No invitation sent.",
+      "reviewed": true,
+      "context": "No to an invitation being confirmed"
+    },
+    "invite.send_failed": {
+      "text": "The invitation could not be sent just now. Try again later, or invite them on the web.",
+      "reviewed": true,
+      "context": "The invitation could not be delivered"
+    },
+    "invite.sent": {
+      "text": "Invitation sent to {who}. They join when they tap Join; it works for 7 days.",
+      "reviewed": true,
+      "context": "The invitation went to the person. {who} is them"
+    },
+    "invite.sent_telegram": {
+      "text": "Forward this link to {who}: {link}\nWhen they open it, Taskiem asks them to share their own number, which must be {who}. It works for 7 days.",
+      "reviewed": true,
+      "context": "On Telegram the owner forwards the link. {who} the number invited, {link} the link"
+    },
+    "invite.offer": {
+      "text": "{inviter} invited you to work with {org} on Taskiem, as {role}. Join?",
+      "reviewed": true,
+      "context": "The invitation as the person invited reads it; Join and No follow. {inviter} who invited, {org} the business, {role} the role"
+    },
+    "invite.button_join": {
+      "text": "Join",
+      "reviewed": true,
+      "context": "Button to accept an invitation (20 characters at most)"
+    },
+    "invite.gone": {
+      "text": "That invitation has ended or was answered already.",
+      "reviewed": true,
+      "context": "An invitation or request that was answered, expired, or is not for this chat"
+    },
+    "invite.declined": {
+      "text": "OK, you did not join. Nothing more will be sent about it.",
+      "reviewed": true,
+      "context": "The person said No (or Stop) to an invitation"
+    },
+    "invite.terms": {
+      "text": "To join {org}, agree to Taskiem's terms and privacy notice: {link}\nReply Yes to agree and join.",
+      "reviewed": true,
+      "context": "Before joining, someone with no account agrees to the terms; Yes and No follow. {org} the business, {link} the terms"
+    },
+    "invite.ask_contact": {
+      "text": "To join, share your own number with the button below. It must be the number you were invited on.",
+      "reviewed": true,
+      "context": "Telegram: to join, the person shares their own number; a Share my number button follows"
+    },
+    "invite.contact_wrong": {
+      "text": "That is not the number this invitation was for. Share your own number, the one you were invited on.",
+      "reviewed": true,
+      "context": "Telegram: the contact shared is not the person's own, or not the number invited"
+    },
+    "invite.chat_taken": {
+      "text": "This chat is linked to another Taskiem account, so it cannot join here.",
+      "reviewed": true,
+      "context": "Joining could not link this chat: it belongs to another account"
+    },
+    "invite.joined": {
+      "text": "You are in {org}. Send help to see what you can do here.",
+      "reviewed": true,
+      "context": "The person joined the business. {org} is it"
+    },
+    "invite.button_ask": {
+      "text": "Ask to join {org}",
+      "reviewed": true,
+      "context": "Slack: button to ask to join a business (75 characters at most). {org} is it"
+    },
+    "invite.ask_offer": {
+      "text": "Taskiem in this workspace is run by {businesses}. Being in the workspace is not enough to see their business: ask to join, and an owner decides.",
+      "reviewed": true,
+      "context": "Slack: a member of a workspace whose businesses on Taskiem they are not in; Ask to join buttons follow. {businesses} their names"
+    },
+    "invite.asked": {
+      "text": "Your request went to the owners of {org}. You will hear here when they decide.",
+      "reviewed": true,
+      "context": "Slack: the request to join went to the owners. {org} is the business"
+    },
+    "invite.ask_owner": {
+      "text": "{who} in your Slack workspace asks to join {org}. Let them in as?",
+      "reviewed": true,
+      "context": "To an owner: someone in their Slack workspace asks to join; buttons approve as a role, or decline. {who} the person, {org} the business"
+    },
+    "invite.button_viewer": {
+      "text": "Viewer",
+      "reviewed": true,
+      "context": "Approve a request as viewer (20 characters at most)"
+    },
+    "invite.button_operator": {
+      "text": "Operator",
+      "reviewed": true,
+      "context": "Approve a request as operator (20 characters at most)"
+    },
+    "invite.button_decline": {
+      "text": "Decline",
+      "reviewed": true,
+      "context": "Decline a request to join (20 characters at most)"
+    },
+    "invite.ask_declined": {
+      "text": "The owners of {org} did not let you in this time.",
+      "reviewed": true,
+      "context": "Slack: to the person whose request to join was declined. {org} is the business"
+    },
+    "invite.decided_no": {
+      "text": "Declined: {who} was told.",
+      "reviewed": true,
+      "context": "To the owner who declined a request. {who} is the person"
+    },
+    "invite.decided_yes": {
+      "text": "{who} was invited as {role}. They join when they tap Join.",
+      "reviewed": true,
+      "context": "To the owner who approved a request. {who} the person, {role} the role"
+    },
     "sms.reconcile": {
       "text": "Your request {reference} is being checked. We will let you know.",
       "reviewed": true,

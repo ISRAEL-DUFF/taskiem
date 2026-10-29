@@ -285,12 +285,18 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 // issueVerification stores a new confirmation link for user's email in
 // tenant, replacing their unused ones, and returns its token.
 func issueVerification(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, email string) (string, error) {
+	return issueVerificationFor(ctx, tx, tenant, user, email, false)
+}
+
+// issueVerificationFor is issueVerification for an email that, with
+// change, becomes the person's when confirmed (chat_doors.go).
+func issueVerificationFor(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, email string, change bool) (string, error) {
 	token, selector, secretHash := newResetToken()
 	if _, err := tx.Exec(ctx, `DELETE FROM email_verifications WHERE user_id = $1 AND used_at IS NULL`, user); err != nil {
 		return "", err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO email_verifications (selector, secret_hash, tenant_id, user_id, email, expires_at)
-		VALUES ($1, $2, $3, $4, $5, now() + $6::interval)`, selector, secretHash, tenant, user, email, verifyTTL.String())
+	_, err := tx.Exec(ctx, `INSERT INTO email_verifications (selector, secret_hash, tenant_id, user_id, email, expires_at, change)
+		VALUES ($1, $2, $3, $4, $5, now() + $6::interval, $7)`, selector, secretHash, tenant, user, email, verifyTTL.String(), change)
 	return token, err
 }
 

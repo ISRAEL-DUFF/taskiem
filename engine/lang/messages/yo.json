@@ -688,6 +688,210 @@
       "text": "Bẹ̀rẹ̀ iṣẹ́ tuntun",
       "reviewed": false
     },
+    "door.ask_email": {
+      "text": "Imeeli wo ni o fi ń wọlé sí Taskiem? Fi ránṣẹ́ síbí, a ó fi ìjápọ̀ ránṣẹ́ sí imeeli náà láti so ìjíròrò yìí mọ́ àkọọ́lẹ̀ rẹ.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "Ìyẹn kò jọ àdírẹ́sì imeeli. Fi ránṣẹ́ báyìí: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "A ti béèrè ìjápọ̀ ní ọ̀pọ̀ ìgbà. Wo àpótí imeeli rẹ àti spam, tàbí gbìyànjú lẹ́yìn wákàtí kan.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "Bí {email} bá ní àkọọ́lẹ̀ Taskiem, ìjápọ̀ kan ń bọ̀ síbẹ̀. Ṣí i lórí ẹ̀rọ tí o ti wọlé sí Taskiem; ẹ̀ẹ̀kan ṣoṣo ló máa ṣiṣẹ́, fún wákàtí kan. Lẹ́yìn náà, ìjíròrò yìí jẹ́ tìrẹ.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "Ó ti parí: ìjíròrò yìí ti so mọ́ àkọọ́lẹ̀ Taskiem rẹ. Fi help ránṣẹ́ láti rí ohun tí o lè ṣe níbí.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "Nọ́mbà yẹn ti jẹ́ àkọọ́lẹ̀ Taskiem rẹ tẹ́lẹ̀, láti WhatsApp. Telegram yìí náà ti so mọ́ ọn báyìí: àwọn iṣẹ́ rẹ wà níbí. Fi help ránṣẹ́, tàbí new business láti bẹ̀rẹ̀ òmíràn.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "Nọ́mbà yẹn ti wà lórí àkọọ́lẹ̀ Taskiem kan tẹ́lẹ̀. A ti fi ìjápọ̀ ránṣẹ́ sí imeeli àkọọ́lẹ̀ náà: ṣí i nígbà tí o bá ti wọlé sí Taskiem, Telegram yìí yóò sì so mọ́ ọn.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Imeeli àkọọ́lẹ̀ rẹ ni {email}. Láti yí i padà, lo ojú-ìwé rẹ lórí wẹ́ẹ̀bù.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Ṣàfikún imeeli rẹ láti máa gba ìwé ẹ̀rí àti invoice láti Taskiem. Fi email ránṣẹ́, lẹ́yìn náà àdírẹ́sì náà, báyìí: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem kò tíì lè fi imeeli ránṣẹ́ níbí, nítorí náà a kò lè ṣàfikún imeeli báyìí.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Ìjápọ̀ kan ń bọ̀ sí {email}. Ṣí i láti fìdí rẹ̀ múlẹ̀; ẹ̀ẹ̀kan ṣoṣo ló máa ṣiṣẹ́, fún wákàtí 24. Títí di ìgbà náà, kò sí ohun tó yí padà.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Kò sí ohun tí a ó san lórí Taskiem yìí.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "Iṣẹ́ yìí wà lórí {plan} nípasẹ̀ ilé-iṣẹ́ tó ṣètò rẹ̀; àwọn ló ń bójútó sísan.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "O wà lórí {plan}, lọ́fẹ̀ẹ́ fún ọjọ́ {days} sí i. Lẹ́yìn náà, {price} lóṣooṣù ni.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Ìsanwó fún {plan} ti kọjá àkókò. Sanwó báyìí kí ohun gbogbo máa ṣiṣẹ́.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "O wà lórí {plan}, {price} lóṣooṣù. Yóò túnṣe ní {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Sanwó",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Ẹni tó ń ṣàkóso ìsanwó fún {org} nìkan ló lè sanwó.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "A ń fi ìwé ẹ̀rí ránṣẹ́ nípasẹ̀ imeeli. Fi pay ránṣẹ́, lẹ́yìn náà imeeli rẹ, báyìí: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Ìsanwó kò lè bẹ̀rẹ̀: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Kò sí gbèsè kankan báyìí.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "San {amount} níbí, pẹ̀lú káàdì tàbí ìfiránṣẹ́ owó láti báńkì:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Ẹni tó ń ṣàkóso àwọn ènìyàn {org} nìkan ló lè pe tàbí fọwọ́ sí.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "Láti pe ẹnìkan, fi ránṣẹ́: invite +2348012345678 as viewer. Nínú Slack, dárúkọ wọn: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Olùní nìkan ló lè sọ ẹnìkan di olùní.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "Kò sí ipa tí a ń pè ní {role}. Àwọn ipa: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "O kò lè fún ẹnìkan ní ipa {role}: ó lè ṣe ohun tí ìwọ kò lè ṣe.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "Ṣé kí a pe {who} sí {org} gẹ́gẹ́ bí {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "A kò fi ìpè kankan ránṣẹ́.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "A kò lè fi ìpè náà ránṣẹ́ báyìí. Gbìyànjú lẹ́yìn náà, tàbí pè wọ́n lórí wẹ́ẹ̀bù.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "A ti fi ìpè ránṣẹ́ sí {who}. Wọ́n á darapọ̀ nígbà tí wọ́n bá tẹ Join; yóò ṣiṣẹ́ fún ọjọ́ 7.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Fi ìjápọ̀ yìí ránṣẹ́ sí {who}: {link}\nNígbà tí wọ́n bá ṣí i, Taskiem yóò ní kí wọ́n pín nọ́mbà tiwọn, tí ó gbọ́dọ̀ jẹ́ {who}. Yóò ṣiṣẹ́ fún ọjọ́ 7.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} ti pè ọ́ láti ṣiṣẹ́ pẹ̀lú {org} lórí Taskiem, gẹ́gẹ́ bí {role}. Ṣé o fẹ́ darapọ̀?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Darapọ̀",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "Ìpè yẹn ti parí tàbí a ti dáhùn rẹ̀.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "Ó dáa, o kò darapọ̀. A kò ní fi nǹkan kan ránṣẹ́ mọ́ nípa rẹ̀.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "Láti darapọ̀ mọ́ {org}, gbà sí òfin àti ìkéde ìpamọ́ Taskiem: {link}\nDáhùn Yes láti gbà kí o sì darapọ̀.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "Láti darapọ̀, pín nọ́mbà tìrẹ pẹ̀lú bọ́tìnnì ìsàlẹ̀. Ó gbọ́dọ̀ jẹ́ nọ́mbà tí a fi pè ọ́.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "Ìyẹn kì í ṣe nọ́mbà tí ìpè yìí wà fún. Pín nọ́mbà tìrẹ, èyí tí a fi pè ọ́.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "Ìjíròrò yìí ti so mọ́ àkọọ́lẹ̀ Taskiem míràn, nítorí náà kò lè darapọ̀ níbí.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "O ti wà nínú {org}. Fi help ránṣẹ́ láti rí ohun tí o lè ṣe níbí.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Béèrè láti darapọ̀ mọ́ {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "{businesses} ló ń ṣiṣẹ́ Taskiem nínú workspace yìí. Wíwà nínú workspace kò tó láti rí iṣẹ́ wọn: béèrè láti darapọ̀, olùní yóò sì pinnu.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Ìbéèrè rẹ ti dé ọ̀dọ̀ àwọn olùní {org}. Wàá gbọ́ níbí nígbà tí wọ́n bá pinnu.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} nínú workspace Slack rẹ ń béèrè láti darapọ̀ mọ́ {org}. Gbà wọ́n wọlé gẹ́gẹ́ bí?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Olùwò",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Olùṣiṣẹ́",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Kọ̀",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "Àwọn olùní {org} kò gbà ọ́ wọlé lọ́tẹ̀ yìí.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "A ti kọ̀: a ti sọ fún {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "A ti pe {who} gẹ́gẹ́ bí {role}. Wọ́n á darapọ̀ nígbà tí wọ́n bá tẹ Join.",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "A n se ayewo ibeere yin {reference}. A o je ki e mo.",
       "reviewed": false

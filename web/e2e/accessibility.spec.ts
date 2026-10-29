@@ -22,6 +22,7 @@ const PAGES = [
   "/reports",
   "/members",
   "/account",
+  "/link-chat",
   "/dashboard",
   "/templates",
   "/settings/keys",
@@ -191,6 +192,7 @@ for (const scheme of ["light", "dark"] as const) {
       "/c/done?service=Google&connected=1",
       "/slack/added",
       "/slack/added?error=You+did+not+add+Taskiem+to+Slack.",
+      "/confirm-email",
     ]) {
       await page.goto(path);
       await expect(page.locator("main h1").first()).toBeVisible();

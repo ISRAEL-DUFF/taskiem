@@ -41,6 +41,7 @@ import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
 import { ConnectDone, ConnectPage, SlackAdded } from "./pages/Connect";
+import { ConfirmEmail, LinkChat } from "./pages/ChatDoors";
 import { Signup, TermsBanner, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
@@ -214,6 +215,8 @@ function Shell() {
   if (loc.pathname === "/c/done") return alone(<ConnectDone />);
   // Add to Slack's outcome, when Slack could not open the bot.
   if (loc.pathname === "/slack/added") return alone(<SlackAdded />);
+  // An email added from chat, confirmed signed in or not.
+  if (loc.pathname === "/confirm-email") return alone(<ConfirmEmail />);
   if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
     return alone(
       <Routes>
@@ -669,6 +672,7 @@ function SignedIn() {
               <Route path="/start" element={<Start />} />
               <Route path="/start/guide" element={<Guide />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/link-chat" element={<LinkChat />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/runs" element={<Runs />} />
               <Route path="/runs/:id" element={<RunPage />} />

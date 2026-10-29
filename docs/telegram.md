@@ -21,7 +21,9 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 ## For people: using Taskiem on Telegram
 
-**No account yet?** Where the operator turned it on, open the bot (or the website's `t.me/<bot>?start=signup` link) and choose **Start my business**: the same questions as on WhatsApp, then **Share my number**, which must be your own. The business and your account are made from the chat ([signing up from chat](onboarding.md#signing-up-from-chat)). A number that already uses Taskiem on WhatsApp makes no second account.
+**No account yet?** Where the operator turned it on, open the bot (or the website's `t.me/<bot>?start=signup` link) and choose **Start my business**: the same questions as on WhatsApp, then **Share my number**, which must be your own. The business and your account are made from the chat ([signing up from chat](onboarding.md#signing-up-from-chat)). A number that already uses Taskiem on WhatsApp makes no second account: an account made in chat gets this Telegram account too, and any other gets a link by email ([one person, many doors](onboarding.md#one-person-many-doors)).
+
+**Invited.** An owner's `invite +234… as viewer` on Telegram gives them a `t.me/<bot>?start=inv_…` link to forward, since a bot cannot write first. Opening it shows the invitation with **Join**; after the terms, Taskiem asks you to share your own number, which must be the one invited: the link alone, which anyone could be forwarded, joins no one.
 
 **Link your account.** Under Account > Telegram, choose **Link Telegram** and confirm it is you (passkey, authenticator code or password, as when adding a passkey). Open the link it shows on the device where you use Telegram, and press **Start**: the Telegram account that opens the link is linked to you. A link works once, for 10 minutes; at most five are made an hour. An account can be linked to one Taskiem account, and you have one Telegram account at a time (linking another replaces it). Unlink it on the same page.
 

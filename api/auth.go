@@ -541,7 +541,9 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
 		})
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified}
+		// A sign-in name that receives no mail (an account made in chat):
+		// the web app offers Add your email (chat_doors.go).
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email)}
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil

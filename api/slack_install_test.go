@@ -200,10 +200,10 @@ func TestSlackSignup(t *testing.T) {
 		t.Errorf("the second business's Slack: %v", v)
 	}
 
-	// Someone else in the workspace is not answered by a business they
-	// are not in.
+	// Someone else in the workspace gets nothing of a business they are
+	// not in: only Ask to join (chat_invites_test.go), never a sign-up.
 	w.event(t, dm("Ev9", "U0EVE", "start"), slackSecret)
-	if got := w.fake.to("U0EVE"); len(got) != 0 {
+	if got := w.fake.to("U0EVE"); len(got) != 1 || !strings.Contains(got[0]["text"].(string), "ask to join") || !strings.HasPrefix(buttons(got[0])[0], "inv:ask:") {
 		t.Errorf("a stranger answered: %v", got)
 	}
 }

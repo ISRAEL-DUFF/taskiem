@@ -688,6 +688,210 @@
       "text": "Fara sabon kasuwanci",
       "reviewed": false
     },
+    "door.ask_email": {
+      "text": "Wane imel kake shiga Taskiem da shi? Aiko shi nan, za mu aika mahaɗa zuwa imel ɗin don haɗa wannan hira da asusunka.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "Wannan bai yi kama da adireshin imel ba. Aiko shi kamar haka: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "An nemi mahaɗa sau da yawa. Duba akwatin imel ɗinka da spam, ko ka sake gwadawa bayan awa ɗaya.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "Idan {email} yana da asusun Taskiem, mahaɗa tana kan hanyar zuwa can. Buɗe ta a na'urar da ka shiga Taskiem; tana aiki sau ɗaya, na awa ɗaya. Sannan wannan hira taka ce.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "An gama: wannan hira ta haɗu da asusunka na Taskiem. Aika help don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "Wannan lambar asusunka na Taskiem ce tuni, daga WhatsApp. Wannan Telegram ma ta haɗu da shi yanzu: kasuwancinka suna nan. Aika help, ko new business don fara wani.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "Wannan lambar tana kan wani asusun Taskiem tuni. Mun aika mahaɗa zuwa imel ɗin asusun: buɗe ta lokacin da ka shiga Taskiem, wannan Telegram za ta haɗu da shi.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Imel ɗin asusunka shine {email}. Don canza shi, yi amfani da bayananka a yanar gizo.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Ƙara imel ɗinka don karɓar rasidai da invoice daga Taskiem. Aika email, sannan adireshin, kamar haka: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem ba za ta iya aika imel a nan ba tukuna, don haka ba za a iya ƙara imel yanzu ba.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Mahaɗa tana kan hanyar zuwa {email}. Buɗe ta don tabbatarwa; tana aiki sau ɗaya, na awa 24. Har zuwa lokacin, babu abin da zai canza.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Babu abin da za a biya a wannan Taskiem.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "Wannan kasuwancin yana kan {plan} ta kamfanin da ya kafa shi; su ke kula da biyan kuɗi.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "Kana kan {plan}, kyauta na ƙarin kwanaki {days}. Bayan haka {price} ne a wata.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Biyan kuɗin {plan} ya wuce lokaci. Biya yanzu don komai ya ci gaba da aiki.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "Kana kan {plan}, {price} a wata. Zai sabunta a {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Biya",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Wanda ke kula da biyan kuɗi na {org} ne kaɗai zai iya biya.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "Ana aika rasidai ta imel. Aika pay, sannan imel ɗinka, kamar haka: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Biyan kuɗi bai iya farawa ba: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Babu bashin da ake bi yanzu.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "Biya {amount} a nan, da kati ko canja wurin banki:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Wanda ke kula da mutanen {org} ne kaɗai zai iya gayyata ko amincewa.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "Don gayyatar wani, aika: invite +2348012345678 as viewer. A Slack, ambace su: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Mai shi ne kaɗai zai iya mai da wani mai shi.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "Babu matsayi da ake kira {role}. Matsayi: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "Ba za ka iya ba da matsayin {role} ba: yana iya yin abin da kai ba za ka iya ba.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "A gayyaci {who} zuwa {org} a matsayin {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "Ba a aika gayyata ba.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "Ba a iya aika gayyatar yanzu ba. Sake gwadawa daga baya, ko ka gayyace su a yanar gizo.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "An aika gayyata zuwa {who}. Za su shiga idan sun danna Join; tana aiki na kwanaki 7.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Tura wannan mahaɗar zuwa {who}: {link}\nIdan suka buɗe ta, Taskiem za ta nemi su raba lambar su, wadda dole ta zama {who}. Tana aiki na kwanaki 7.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} ya gayyace ka don yin aiki tare da {org} a Taskiem, a matsayin {role}. Za ka shiga?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Shiga",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "Wannan gayyatar ta ƙare ko an amsa ta tuni.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "To, ba ka shiga ba. Ba za a sake aika komai game da shi ba.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "Don shiga {org}, amince da sharuɗɗan Taskiem da sanarwar sirri: {link}\nAmsa Yes don amincewa da shiga.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "Don shiga, raba lambarka da maɓallin da ke ƙasa. Dole ta zama lambar da aka gayyace ka da ita.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "Wannan ba lambar da gayyatar take ba ce. Raba lambarka, wadda aka gayyace ka da ita.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "Wannan hira ta haɗu da wani asusun Taskiem, don haka ba za ta iya shiga nan ba.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "Kana cikin {org}. Aika help don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Nemi shiga {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "{businesses} ne ke tafiyar da Taskiem a wannan workspace. Kasancewa a workspace bai isa ganin kasuwancinsu ba: nemi shiga, mai shi zai yanke shawara.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Buƙatarka ta je wurin masu {org}. Za ka ji a nan idan sun yanke shawara.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} a workspace ɗinka na Slack yana neman shiga {org}. A shigar da su a matsayin?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Mai kallo",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Mai aiki",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "Masu {org} ba su bar ka ka shiga a wannan karon ba.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "An ƙi: an gaya wa {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "An gayyaci {who} a matsayin {role}. Za su shiga idan sun danna Join.",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
       "reviewed": false

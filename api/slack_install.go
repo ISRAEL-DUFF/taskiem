@@ -389,13 +389,18 @@ func (s *Server) slackInstall(ctx context.Context, team string) (*slackSignup, e
 // gets nothing until a business brings them in.
 func (s *Server) slackStranger(ctx context.Context, team, user string, in whatsapp.Inbound) error {
 	ss, err := s.slackInstall(ctx, team)
-	if err != nil || ss == nil || ss.user != user {
+	if err != nil {
 		return err
 	}
 	addr := slackAddr(team, user)
 	text := ""
 	if in.Type == "text" {
 		text = in.Text
+	}
+	if ss == nil || ss.user != user {
+		// Someone else in a workspace that is some business's: an
+		// invitation waiting for them, or Ask to join (chat_invites.go).
+		return s.slackWorkspaceStranger(ctx, team, addr, text, in.Reply)
 	}
 	sc := &signupChat{ch: &slackInstallChannel{s: s, team: team, token: ss.token}, addr: addr, lang: s.chooseLang(ctx, uuid.Nil, addr, text).Tag, slack: ss}
 	if done, err := s.keyGuard(ctx, &chat{ch: sc.ch, addr: addr, lang: langChoice{Tag: sc.lang}}, text); done || err != nil {
@@ -408,6 +413,24 @@ func (s *Server) slackStranger(ctx context.Context, team, user string, in whatsa
 		return nil
 	}
 	return s.signupOffer(ctx, sc, text)
+}
+
+// slackWorkspaceStranger answers a member of a workspace with businesses
+// that are not theirs: an invitation's Join or No, else Ask to join.
+func (s *Server) slackWorkspaceStranger(ctx context.Context, team, addr, text, reply string) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT DISTINCT tenant_id FROM taskiem_slack_team_businesses($1)`, team)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil || len(tenants) == 0 {
+		return err
+	}
+	ic := &inviteChat{ch: &slackDMChannel{s: s, team: team, linked: tenants}, addr: addr, lang: s.chooseLang(ctx, uuid.Nil, addr, text).Tag}
+	if done, err := s.chatInviteMessage(ctx, ic, text, reply); done || err != nil {
+		return err
+	}
+	return s.slackAskToJoin(ctx, ic, reply)
 }
 
 // slackSignupToken fills in the token a linked person's new business

@@ -257,6 +257,18 @@ From an unbound chat, **I already use Taskiem** asks for the email they sign in 
 
 The paths of §10.1 to §10.4, each on WhatsApp and Telegram, Slack where it applies; an invite by number accepted on WhatsApp; an existing web user linked from chat by the email link and not otherwise; the email link's answer the same for an address with no account.
 
+### 10.6 As built (C5, first part)
+
+Built as above ([onboarding](../onboarding.md#one-person-many-doors), [WhatsApp](../whatsapp.md#signing-in-on-the-web)), with these choices:
+
+- **The email link** (`chat_link_requests`, a person's record through definers) is kept only when the email has an account; the chat's answer is the same either way, and three asks an hour per chat and per email. The link is `/link-chat#token=…` (24 bytes, in the fragment); `POST /v1/me/chat-link` takes it only for the account it was sent to, so another signed-in person neither uses nor spends it. A WhatsApp number or Telegram account is bound as the code would bind it; one already the person's (resting) is woken; one that is someone else's, or a second of its kind, is refused. A Slack user is linked in the signed-in business when its Slack connection reaches that workspace.
+- **A Telegram sign-up with a WhatsApp person's number**: chat-born means no password and a `.taskiem.invalid` sign-in name. Their Telegram account binds to them and their Yes to the terms is recorded; no business is made. Otherwise the link goes to the account's email; without email on the deployment, the old answer stands. The separate Telegram-only account the plan allowed here is not offered: every chat-born owner keeps a proven number.
+- **Add your email**: the confirmation link (`email_verifications.change`) is `/confirm-email#t=<business>&token=…` and works signed out, since an account made in chat may have no other sign-in; it replaces a placeholder or unconfirmed email only. Taken addresses are refused when the link is opened, not when it is asked for.
+- **Resting chats** show on Account (`dormant` on `GET /v1/me/whatsapp` and `/v1/me/telegram`) with **Link again**: today's code or link.
+- **`plan`, `pay` and `email`** in chat; **Pay** needs `billing.manage`, and `pay <email>` sets the address receipts go to.
+- **Invitations from chat** (`chat_invites`, the business's; the person invited is found by their address through definers) need `member.manage` and a role the inviter could grant on the web (an owner only by an owner); they last seven days and work once. The Telegram link's token is 24 bytes, kept hashed. Joining makes the person with the sign-in name a chat sign-up would (an earlier one by the same chat is found and reused), binds the chat when it is bound to no one, adds the roles, and records the terms when they were just agreed. In Slack the invited member's binding is made in that business, and their Slack email kept unconfirmed when it is free.
+- **Ask to join** offers at most three of the workspace's businesses, twice in ten minutes; one request per business an hour; owners are told on Slack, WhatsApp or Telegram, whichever they linked, with **Viewer**, **Operator** or **Decline** (other roles from the web). Approving turns the request into an invitation.
+
 ## 11. C6: words, templates and the gate
 
 - Every new message in the five languages' catalogues (drafts for review, as the rest), the sign-up's words in each language's intents (`start`, "I want to open account", `new business`, `connect`, `invite`, `plan`), and the model routing for free text that means "sign me up" (the strategy's fourth gap, for these intents only).

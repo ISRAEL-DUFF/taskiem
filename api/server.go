@@ -316,6 +316,9 @@ func (s *Server) Handler() http.Handler {
 		// (slack_install.go).
 		r.Get("/slack/install", s.slackInstallStart)
 		r.Get("/slack/install/callback", s.slackInstallCallback)
+		// An email added to an account, confirmed from its link signed in
+		// or not (chat_doors.go).
+		r.Post("/auth/email/confirm", s.confirmEmailChange)
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
@@ -338,6 +341,8 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/password", s.changePassword)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
+			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
+			r.Post("/me/chat-link", s.linkChat)   // a chat linked by an emailed link (chat_doors.go)
 			r.Get("/onboarding", s.getOnboarding) // the getting-started checklist (onboarding.go)
 			r.With(s.need(PermWorkflowEdit)).Post("/onboarding/dismiss", s.dismissOnboarding)
 			r.Route("/agent", s.agentRoutes) // field agents' own work (agents.go)
