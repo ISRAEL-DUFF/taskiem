@@ -22,7 +22,7 @@ func taskWakeups(t *testing.T, d *dbtest.DB, queues []string, due string) (int, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close(ctx)
+	defer func() { _ = l.Close(ctx) }()
 	if _, err := l.Exec(ctx, `LISTEN taskiem_tasks`); err != nil {
 		t.Fatal(err)
 	}
