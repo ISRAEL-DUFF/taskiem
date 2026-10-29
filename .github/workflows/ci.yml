@@ -101,17 +101,8 @@ jobs:
   # runs are in flight, starts it again, and checks every effect happened
   # once. In a job of its own, because the crash would fail every other
   # database test running at the time.
-  #
-  # Not yet a gate (continue-on-error): run locally against a private
-  # Postgres, the suite never finishes, since its workers poll the "sandbox"
-  # queue while the payment steps are on the connector queue
-  # (suites_test.go). With that one word fixed, every effect happens exactly
-  # once across three crashes, but about 10 of 200 runs then fail
-  # decide.Verify ("decide produced 0 events, history has 3"). Remove
-  # continue-on-error once both are fixed.
   chaos:
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 30
     services:
       postgres:
