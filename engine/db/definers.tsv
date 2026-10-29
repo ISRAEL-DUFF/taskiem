@@ -91,6 +91,8 @@ taskiem_claim_purgeable_runs(integer)	@ISRAEL-DUFF (engine)	claims ended runs pa
 taskiem_claim_runs_to_orchestrate(text,integer,interval)	@ISRAEL-DUFF (engine)	Orchestrators (00006)
 taskiem_claim_tasks(text,text,integer,interval,integer)	@ISRAEL-DUFF (engine)	part of: Reliability (Phase 4, P4-4; decision 0023) (00122)
 taskiem_claim_tasks(text,text,integer,interval,integer,text)	@ISRAEL-DUFF (engine)	part of: Reliability (Phase 4, P4-4; decision 0023) (00122)
+taskiem_connect_link_tenant(bytea)	@ISRAEL-DUFF (connections)	The business a live, unspent connect link is for (00267)
+taskiem_connect_pending(text)	@ISRAEL-DUFF (connections)	Whether a chat address has a connect link waiting, for the pasted-key guard (00267)
 taskiem_customer_invoices_overdue()	@ISRAEL-DUFF (money)	The daily overdue check (00197)
 taskiem_data_table_keep(uuid,uuid,text,text,text,text)	@ISRAEL-DUFF (engine)	Records a kept table of the tenant in scope, without columns, unless a table of that name exists (00201)
 taskiem_data_table_keep_column(uuid,uuid,text,text,text,boolean,boolean)	@ISRAEL-DUFF (engine)	Records a column of a kept table after its others, once (00201)

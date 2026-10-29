@@ -3954,6 +3954,66 @@
       "reviewed": true,
       "context": "Summary line in the PIN form"
     },
+    "connect.hint": {
+      "text": "Send *connect {service}* to connect it from here.",
+      "reviewed": true,
+      "context": "After something a draft needs: how to connect the service from the chat. {service} is its id, typed as is"
+    },
+    "connect.link": {
+      "text": "Connect {service} here: {link}\n\nThe link works once, for {minutes} minutes, and only for you. Never send a key in this chat: type it on that page.",
+      "reviewed": true,
+      "context": "A one-time connect link. {service} is the service, {link} the link, {minutes} how long it works"
+    },
+    "connect.link_button": {
+      "text": "Tap the button below to connect {service}. It works once, for {minutes} minutes, and only for you. Never send a key in this chat: type it in the form.",
+      "reviewed": true,
+      "context": "Telegram: the connect page is on the button below. {service} is the service, {minutes} how long it works"
+    },
+    "connect.button": {
+      "text": "Connect {service}",
+      "reviewed": true,
+      "context": "Telegram button that opens the connect page. {service} is the service"
+    },
+    "connect.denied": {
+      "text": "Only someone who manages connections in {org} can connect services. Ask the owner.",
+      "reviewed": true,
+      "context": "The person may not connect services. {org} is the business"
+    },
+    "connect.unknown": {
+      "text": "Taskiem has no service called {service}. Check the name, like *connect paystack*.",
+      "reviewed": true,
+      "context": "connect named a service Taskiem does not have. {service} is what was typed"
+    },
+    "connect.done": {
+      "text": "{service} is connected to *{org}*.",
+      "reviewed": true,
+      "context": "A service was connected from a connect link. {service} is the service, {org} the business"
+    },
+    "connect.carry_on": {
+      "text": "Carrying on with *{name}*:",
+      "reviewed": true,
+      "context": "After a connection, carrying on with the draft it was for. {name} is the workflow"
+    },
+    "connect.key_in_chat": {
+      "text": "That looks like a secret key, so Taskiem did not keep or use it. Keys go only in the secure form: send *connect* and the service. The chat app has the key now, so replace it at the service and use the new one.",
+      "reviewed": true,
+      "context": "A key was sent as a chat message: it was not kept or used"
+    },
+    "connect.form": {
+      "text": "Tap the button to connect {service}. Type the key in the form, never in this chat: Taskiem checks it with {service} before saving it.",
+      "reviewed": true,
+      "context": "With the WhatsApp key form. {service} is the service"
+    },
+    "connect.form_intro": {
+      "text": "Copy each value from {service} and paste it here. Taskiem checks it with {service} before saving it.",
+      "reviewed": true,
+      "context": "The first line of the WhatsApp key form. {service} is the service"
+    },
+    "connect.form_cta": {
+      "text": "Connect",
+      "reviewed": true,
+      "context": "Button that opens the WhatsApp key form, at most 30 characters"
+    },
     "terms.ask": {
       "text": "Taskiem has terms and a privacy notice you have not agreed to yet: {link}\n\nTap *I agree*, or reply *I agree*. Taskiem carries on either way.",
       "reviewed": true,

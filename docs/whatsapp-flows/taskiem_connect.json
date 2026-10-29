@@ -1,0 +1,370 @@
+{
+  "data_api_version": "3.0",
+  "routing_model": {
+    "CONNECT": []
+  },
+  "screens": [
+    {
+      "data": {
+        "error": {
+          "__example__": "",
+          "type": "string"
+        },
+        "has_error": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "intro": {
+          "__example__": "Copy your secret key from Paystack and paste it here.",
+          "type": "string"
+        },
+        "p1_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p1_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p1_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "p1_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p1_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p2_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p2_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p2_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "p2_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p2_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p3_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p3_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p3_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "p3_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p3_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p4_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p4_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p4_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "p4_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p4_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p5_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p5_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "p5_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "p5_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "p5_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "title": {
+          "__example__": "Connect Paystack",
+          "type": "string"
+        },
+        "x1_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x1_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x1_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "x1_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x1_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x2_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x2_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x2_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "x2_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x2_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x3_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x3_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x3_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "x3_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x3_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x4_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x4_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x4_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "x4_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x4_req": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x5_err": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x5_help": {
+          "__example__": "",
+          "type": "string"
+        },
+        "x5_label": {
+          "__example__": "-",
+          "type": "string"
+        },
+        "x5_on": {
+          "__example__": false,
+          "type": "boolean"
+        },
+        "x5_req": {
+          "__example__": false,
+          "type": "boolean"
+        }
+      },
+      "id": "CONNECT",
+      "layout": {
+        "children": [
+          {
+            "text": "${data.title}",
+            "type": "TextHeading"
+          },
+          {
+            "text": "${data.intro}",
+            "type": "TextBody"
+          },
+          {
+            "font-weight": "bold",
+            "text": "${data.error}",
+            "type": "TextBody",
+            "visible": "${data.has_error}"
+          },
+          {
+            "error-message": "${data.p1_err}",
+            "helper-text": "${data.p1_help}",
+            "input-type": "password",
+            "label": "${data.p1_label}",
+            "name": "p1",
+            "required": "${data.p1_req}",
+            "type": "TextInput",
+            "visible": "${data.p1_on}"
+          },
+          {
+            "error-message": "${data.x1_err}",
+            "helper-text": "${data.x1_help}",
+            "input-type": "text",
+            "label": "${data.x1_label}",
+            "name": "x1",
+            "required": "${data.x1_req}",
+            "type": "TextInput",
+            "visible": "${data.x1_on}"
+          },
+          {
+            "error-message": "${data.p2_err}",
+            "helper-text": "${data.p2_help}",
+            "input-type": "password",
+            "label": "${data.p2_label}",
+            "name": "p2",
+            "required": "${data.p2_req}",
+            "type": "TextInput",
+            "visible": "${data.p2_on}"
+          },
+          {
+            "error-message": "${data.x2_err}",
+            "helper-text": "${data.x2_help}",
+            "input-type": "text",
+            "label": "${data.x2_label}",
+            "name": "x2",
+            "required": "${data.x2_req}",
+            "type": "TextInput",
+            "visible": "${data.x2_on}"
+          },
+          {
+            "error-message": "${data.p3_err}",
+            "helper-text": "${data.p3_help}",
+            "input-type": "password",
+            "label": "${data.p3_label}",
+            "name": "p3",
+            "required": "${data.p3_req}",
+            "type": "TextInput",
+            "visible": "${data.p3_on}"
+          },
+          {
+            "error-message": "${data.x3_err}",
+            "helper-text": "${data.x3_help}",
+            "input-type": "text",
+            "label": "${data.x3_label}",
+            "name": "x3",
+            "required": "${data.x3_req}",
+            "type": "TextInput",
+            "visible": "${data.x3_on}"
+          },
+          {
+            "error-message": "${data.p4_err}",
+            "helper-text": "${data.p4_help}",
+            "input-type": "password",
+            "label": "${data.p4_label}",
+            "name": "p4",
+            "required": "${data.p4_req}",
+            "type": "TextInput",
+            "visible": "${data.p4_on}"
+          },
+          {
+            "error-message": "${data.x4_err}",
+            "helper-text": "${data.x4_help}",
+            "input-type": "text",
+            "label": "${data.x4_label}",
+            "name": "x4",
+            "required": "${data.x4_req}",
+            "type": "TextInput",
+            "visible": "${data.x4_on}"
+          },
+          {
+            "error-message": "${data.p5_err}",
+            "helper-text": "${data.p5_help}",
+            "input-type": "password",
+            "label": "${data.p5_label}",
+            "name": "p5",
+            "required": "${data.p5_req}",
+            "type": "TextInput",
+            "visible": "${data.p5_on}"
+          },
+          {
+            "error-message": "${data.x5_err}",
+            "helper-text": "${data.x5_help}",
+            "input-type": "text",
+            "label": "${data.x5_label}",
+            "name": "x5",
+            "required": "${data.x5_req}",
+            "type": "TextInput",
+            "visible": "${data.x5_on}"
+          },
+          {
+            "label": "Connect",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "p1": "${form.p1}",
+                "p2": "${form.p2}",
+                "p3": "${form.p3}",
+                "p4": "${form.p4}",
+                "p5": "${form.p5}",
+                "x1": "${form.x1}",
+                "x2": "${form.x2}",
+                "x3": "${form.x3}",
+                "x4": "${form.x4}",
+                "x5": "${form.x5}"
+              }
+            },
+            "type": "Footer"
+          }
+        ],
+        "type": "SingleColumnLayout"
+      },
+      "terminal": true,
+      "title": "Connect"
+    }
+  ],
+  "version": "7.3"
+}

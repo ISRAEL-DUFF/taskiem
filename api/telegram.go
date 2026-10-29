@@ -287,6 +287,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		if done, err := s.supplierWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
+		if done, err := s.keyGuard(ctx, &chat{ch: tg, addr: addr, lang: langChoice{Tag: sc.lang}}, in.Text); done || err != nil {
+			return err
+		}
 		if done, err := s.chatSignupMessage(ctx, sc, in.Text, payload); done || err != nil {
 			return err
 		}

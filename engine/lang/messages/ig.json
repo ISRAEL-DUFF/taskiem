@@ -3164,6 +3164,54 @@
       "text": "Ọnụọgụ isii na-echekwa nkata a maka gị",
       "reviewed": false
     },
+    "connect.hint": {
+      "text": "Zipu *connect {service}* iji jikọọ ya site ebe a.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Jikọọ {service} ebe a: {link}\n\nNjikọ ahụ na-arụ ọrụ otu ugboro, ruo nkeji {minutes}, naanị maka gị. Ezitela igodo na nkata a: dee ya na ibe ahụ.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Pịa bọtịnụ dị n'okpuru iji jikọọ {service}. Ọ na-arụ ọrụ otu ugboro, ruo nkeji {minutes}, naanị maka gị. Ezitela igodo na nkata a: dee ya n'ime fọm ahụ.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Jikọọ {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Naanị onye na-ahụ maka njikọ na {org} nwere ike ijikọ ọrụ. Jụọ onye nwe ya.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem enweghị ọrụ a na-akpọ {service}. Lelee aha ya, dịka *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "Ejikọọla {service} na *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "Anyị na-aga n'ihu na *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "Nke ahụ dị ka igodo nzuzo, ya mere Taskiem edebeghị ya ma ọ bụ jiri ya. Igodo na-aba naanị n'ime fọm echekwara: zipu *connect* na aha ọrụ ahụ. Ngwa nkata nwere igodo ahụ ugbu a, ya mere gbanwee ya n'ọrụ ahụ ma jiri nke ọhụrụ.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Pịa bọtịnụ ahụ iji jikọọ {service}. Dee igodo ahụ n'ime fọm, ọ bụghị na nkata a: Taskiem ga-elele ya na {service} tupu ọ chekwaa ya.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Detuo uru ọ bụla site na {service} ma tinye ya ebe a. Taskiem ga-elele ya na {service} tupu ọ chekwaa ya.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Jikọọ",
+      "reviewed": false
+    },
     "terms.ask": {
       "text": "Taskiem nwere usoro na ọkwa nzuzo ị kwenyebeghị: {link}\n\nPịa *I agree*, ma ọ bụ zaa *I agree*. Taskiem ga-aga n'ihu n'ụzọ ọ bụla.",
       "reviewed": false

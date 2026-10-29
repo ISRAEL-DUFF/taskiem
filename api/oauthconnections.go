@@ -173,40 +173,51 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: connector %q is not available", errBadRequest, req.Connector))
 		return
 	}
-	mode, err := connectionMode(c, nil, req.Mode)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	prov, err := s.oauthFor(c, mode)
+	link, browser, _, err := s.beginOAuthConnection(r.Context(), p, c, env, req.Name, req.Mode)
 	if err != nil {
 		s.failOAuth(w, r, err)
 		return
 	}
-	var state, browser, verifier string
-	err = s.tx(r, func(tx pgx.Tx) error {
-		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_connections"); err != nil {
+	s.setOAuthBrowser(w, browser)
+	writeJSON(w, http.StatusOK, map[string]any{"url": link, "expires_in": int(secrets.OAuthRequestTTL.Seconds())})
+}
+
+// beginOAuthConnection records a linking request for p (a connection
+// named name, or the first free name) and answers the provider's consent
+// URL, with the state and the PKCE challenge (S256), the browser binding
+// to set as a cookie, and the name.
+func (s *Server) beginOAuthConnection(ctx context.Context, p *Principal, c *connector.Connector, env, name, chosen string) (consent, browser, _ string, err error) {
+	mode, err := connectionMode(c, nil, chosen)
+	if err != nil {
+		return "", "", "", err
+	}
+	prov, err := s.oauthFor(c, mode)
+	if err != nil {
+		return "", "", "", err
+	}
+	var state, verifier string
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if err := s.checkCount(ctx, tx, p.TenantID, "max_connections"); err != nil {
 			return err
 		}
-		if req.Name == "" {
+		if name == "" {
 			var err error
-			if req.Name, err = freeConnectionName(r.Context(), tx, env, c.Manifest.ID); err != nil {
+			if name, err = freeConnectionName(ctx, tx, env, c.Manifest.ID); err != nil {
 				return err
 			}
 		}
 		var exists bool
-		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = $1 AND connector = $2 AND name = $3)`, env, c.Manifest.ID, req.Name).Scan(&exists); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connections WHERE environment = $1 AND connector = $2 AND name = $3)`, env, c.Manifest.ID, name).Scan(&exists); err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, req.Name, env)
+			return fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, name, env)
 		}
-		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(r.Context(), tx, p.TenantID, c.Ref(), env, req.Name, mode, p.Actor())
+		state, browser, verifier, err = s.Vault.BeginOAuthRequestTx(ctx, tx, p.TenantID, c.Ref(), env, name, mode, p.Actor())
 		return err
 	})
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return "", "", "", err
 	}
 	sum := sha256.Sum256([]byte(verifier))
 	q := url.Values{
@@ -223,9 +234,13 @@ func (s *Server) startOAuthConnection(w http.ResponseWriter, r *http.Request) {
 	for k, v := range c.Manifest.Auth.OAuth2.AuthorizeParams {
 		q.Set(k, v)
 	}
+	return prov.authorize + "?" + q.Encode(), browser, name, nil
+}
+
+// setOAuthBrowser binds a linking request to this browser.
+func (s *Server) setOAuthBrowser(w http.ResponseWriter, browser string) {
 	http.SetCookie(w, &http.Cookie{Name: oauthBrowserCookie, Value: browser, Path: oauthCallbackPath, MaxAge: int(secrets.OAuthRequestTTL.Seconds()), //nolint:gosec // Secure is TASKIEM_SECURE_COOKIES (on by default), as for the session cookie
 		HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode})
-	writeJSON(w, http.StatusOK, map[string]any{"url": prov.authorize + "?" + q.Encode(), "expires_in": int(secrets.OAuthRequestTTL.Seconds())})
 }
 
 // failOAuth answers a linking refusal: 503 oauth_unavailable for a
@@ -267,28 +282,44 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		s.oauthDone(w, r, "", fmt.Errorf("%w: connector %s is no longer available", errBadRequest, req.Connector))
 		return
 	}
+	// Started from a connect link sent in chat (connect_links.go): the
+	// browser ends on the connect page, and the chat is told.
+	link := s.oauthLinkOf(ctx, req, c)
+	done := func(id string, err error) {
+		if link == nil {
+			s.oauthDone(w, r, id, err)
+			return
+		}
+		if err == nil {
+			if p, perr := s.principalOf(ctx, req.Tenant, link.User); perr == nil {
+				s.connectMade(ctx, link, p, c, uuid.MustParse(id), req.Name, "connect_link")
+			}
+		}
+		s.connectDone(w, r, link, c.Manifest.Name, err)
+	}
+
 	if e := q.Get("error"); e != "" {
 		if e == "access_denied" {
-			s.oauthDone(w, r, "", fmt.Errorf("%w: you did not approve the connection in %s", errOAuthGrant, c.Manifest.Name))
+			done("", fmt.Errorf("%w: you did not approve the connection in %s", errOAuthGrant, c.Manifest.Name))
 		} else {
-			s.oauthDone(w, r, "", fmt.Errorf("%w: %s refused the request (%s: %s)", errOAuthProvider, c.Manifest.Name, e, q.Get("error_description")))
+			done("", fmt.Errorf("%w: %s refused the request (%s: %s)", errOAuthProvider, c.Manifest.Name, e, q.Get("error_description")))
 		}
 		return
 	}
 	code := q.Get("code")
 	if code == "" {
-		s.oauthDone(w, r, "", fmt.Errorf("%w: %s sent the browser back without a code", errOAuthProvider, c.Manifest.Name))
+		done("", fmt.Errorf("%w: %s sent the browser back without a code", errOAuthProvider, c.Manifest.Name))
 		return
 	}
 	prov, err := s.oauthFor(c, req.Mode)
 	if err != nil {
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	fromCallback := map[string]string{}
 	applyCallbackFields(c.Manifest, fromCallback, q)
 	if prov, err = prov.forAccount(c.Manifest, fromCallback); err != nil {
-		s.oauthDone(w, r, "", fmt.Errorf("%w: %s sent the browser back naming a server Taskiem does not use: %w", errOAuthProvider, c.Manifest.Name, err))
+		done("", fmt.Errorf("%w: %s sent the browser back naming a server Taskiem does not use: %w", errOAuthProvider, c.Manifest.Name, err))
 		return
 	}
 	var verifier string
@@ -296,12 +327,12 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 		verifier, err = s.Vault.OAuthVerifierTx(ctx, tx, req)
 		return err
 	}); err != nil {
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	answer, err := s.oauthExchange(ctx, req.Tenant, c, prov, code, verifier)
 	if err != nil {
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	// A token that makes no connection is given back to the provider.
@@ -311,7 +342,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	applyCallbackFields(c.Manifest, creds, q)
 	if err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	if err == nil && c.Link != nil {
@@ -324,12 +355,12 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	}
 	if err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	if err := checkCredentials(c, creds); err != nil {
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	// A field from the callback (QuickBooks' realmId) came through the
@@ -339,7 +370,7 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 	if len(c.Manifest.Auth.OAuth2.FieldsFromCallback) > 0 {
 		if err := s.testCredentials(ctx, req.Tenant, c, withMode(withGrantedToken(c.Manifest, creds, answer), req.Mode)); err != nil {
 			s.oauthRevoke(ctx, req.Tenant, c, prov, token)
-			s.oauthDone(w, r, "", err)
+			done("", err)
 			return
 		}
 	}
@@ -367,13 +398,13 @@ func (s *Server) oauthConnectionCallback(w http.ResponseWriter, r *http.Request)
 			err = fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, req.Name, req.Environment)
 		}
 		s.oauthRevoke(ctx, req.Tenant, c, prov, token)
-		s.oauthDone(w, r, "", err)
+		done("", err)
 		return
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{req.Tenant}, func(tx pgx.Tx) error { return remote.Retry(ctx, tx, req.Environment, c.Ref()) }); err != nil {
 		s.Logger.Warn("remote subscriptions: retrying after a new connection", "err", err)
 	}
-	s.oauthDone(w, r, id.String(), nil)
+	done(id.String(), nil)
 }
 
 // oauthDone sends the browser to the Connections page: ?linked=<id>, or

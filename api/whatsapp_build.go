@@ -61,6 +61,9 @@ const (
 	// After saving (N6): asking its settings, then offering to publish.
 	buildSettings = "settings"
 	buildPublish  = "publish"
+	// Saved, waiting for a connection: the next message is read as usual,
+	// and "connect <service>" carries on with it (connect_links.go).
+	buildBlocked = "blocked"
 )
 
 // waBuildPhrase recognises a goal written without "build": a schedule or
@@ -355,6 +358,12 @@ func (s *Server) waBuildReply(ctx context.Context, c *chat, text, cmd string) er
 		return s.waBuildSetting(ctx, c, text)
 	case buildPublish:
 		return s.waBuildPublishAnswer(ctx, c, cmd)
+	case buildBlocked:
+		c.blocked = b.Workflow
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return err
+		}
+		return s.waCommand(ctx, c)
 	}
 	return s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 }

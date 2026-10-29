@@ -128,6 +128,13 @@ for (const scheme of ["light", "dark"] as const) {
       if (vs.length > 0) found.push(describe(where, vs));
     };
     await check("/login");
+    // The connect page a chat's link opens, signed out (connect_links.go):
+    // a link that has ended, and how a consent from one ended.
+    for (const path of [`/c/${"A".repeat(32)}`, "/c/done?service=Google&error=You+did+not+approve", "/c/done?service=Google&connected=1"]) {
+      await page.goto(path);
+      await expect(page.locator("main h1").first()).toBeVisible();
+      await check(path);
+    }
     await signIn(page);
     for (const path of PAGES) {
       await open(page, path);

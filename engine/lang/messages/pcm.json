@@ -3164,6 +3164,54 @@
       "text": "Six numbers wey keep this chat for you",
       "reviewed": false
     },
+    "connect.hint": {
+      "text": "Send *connect {service}* to connect am from here.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Connect {service} for here: {link}\n\nThe link go work once, for {minutes} minutes, and na only you fit use am. No ever send key for this chat: type am for that page.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Tap the button wey dey below to connect {service}. E go work once, for {minutes} minutes, and na only you fit use am. No ever send key for this chat: type am for the form.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Connect {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Na only person wey dey manage connections for {org} fit connect services. Ask the owner.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem no get service wey dem call {service}. Check the name, like *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "{service} don connect to *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "We dey continue with *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "That one be like secret key, so Taskiem no keep am or use am. Na only for the secure form key dey go: send *connect* and the service. The chat app don get the key now, so change am for the service and use the new one.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Tap the button to connect {service}. Type the key for the form, no type am for this chat: Taskiem go check am with {service} before e save am.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Copy each value from {service} and paste am here. Taskiem go check am with {service} before e save am.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Connect",
+      "reviewed": false
+    },
     "terms.ask": {
       "text": "Taskiem get terms and privacy notice wey you never agree to: {link}\n\nTap *I agree*, or reply *I agree*. Taskiem go still dey work anyhow.",
       "reviewed": false

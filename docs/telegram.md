@@ -37,6 +37,10 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 **People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START.
 
+## Connecting a service
+
+`connect <service>` works as on WhatsApp ([connecting a service from the chat](whatsapp.md#connecting-a-service-from-the-chat)), with a connect link on a button. For a key-based service the button opens the connect page as a Mini App inside Telegram: Telegram hands the page its signed `initData`, and the key is taken only when that is signed for Taskiem's bot (HMAC-SHA-256 under the key derived from the bot token), at most ten minutes old, and for the account the link was sent to. A service that signs in (Google) opens in the browser instead, since Google refuses sign-in inside apps' own browsers. Telegram's web client shows Mini Apps in a frame, which the console's frame policy refuses: on the web, open the link in the browser.
+
 ## Alerts to Telegram
 
 An alert channel of kind `telegram` names members by email; each alert goes to those who have linked Telegram, one message each, retried on its own (Settings > Alerts, or `POST /v1/alerts/channels` with `{"kind": "telegram", "to": [...]}`).

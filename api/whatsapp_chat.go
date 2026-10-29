@@ -194,6 +194,9 @@ type chat struct {
 	lang langChoice
 	// note goes before the next reply (a voice note's transcript).
 	note string
+	// blocked is the draft waiting for a connection, while this message is
+	// read (connect_links.go).
+	blocked uuid.UUID
 }
 
 // t is a message in the conversation's language.
@@ -305,11 +308,16 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if dormant, err := s.bindingGate(ctx, c, user); dormant || err != nil {
 		return err
 	}
-	// Another business, or one when none is left (chat_signup.go).
 	text := ""
 	if in.Type == "text" {
 		text = in.Text
 	}
+	// A key typed into the chat is never acted on or kept: the form is the
+	// way (connect_links.go).
+	if done, err := s.keyGuard(ctx, c, text); done || err != nil {
+		return err
+	}
+	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
 	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
@@ -431,6 +439,10 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		return err
 	}
 	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
+	// A key typed into the chat is never acted on or kept (connect_links.go).
+	if done, err := s.keyGuard(ctx, &chat{ch: wa, wa: wa, addr: number, lang: langChoice{Tag: l}}, text); done || err != nil {
 		return err
 	}
 	// Signing up from chat (chat_signup.go): a sign-up under way, a word
@@ -680,6 +692,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			// The chat PIN, set from the chat by a person with no other
 			// credential (chat_dormant.go).
 			return s.waChatPin(ctx, c)
+		}
+		// A service connected from the chat (connect_links.go).
+		if name, ok := strings.CutPrefix(cmd, "connect "); ok {
+			return s.waConnect(ctx, c, name)
 		}
 		// "publish <workflow>": a draft published from chat (N6).
 		if name, ok := strings.CutPrefix(cmd, "publish "); ok && name != "" {

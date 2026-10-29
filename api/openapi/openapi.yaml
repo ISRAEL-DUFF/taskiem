@@ -10045,6 +10045,168 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/connect/{token}:
+    get:
+      operationId: getConnectLink
+      tags:
+      - Connectors
+      summary: What a connect link connects
+      description: A connect link sent from chat (docs/spec/chat-way-in.md 7) names one service, one business and one person,
+        for 15 minutes; the token is the authority. Answers the business, the connector (as GET /v1/connectors lists it) and
+        where to go back to. 410 when the link is used or expired; 403 when the person can no longer manage connections.
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The connect link's one-time token, as chat sent it.
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - business
+                - connector
+                - channel
+                - expires_at
+                properties:
+                  business:
+                    type: string
+                  connector:
+                    $ref: '#/components/schemas/Connector'
+                  channel:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+                  back:
+                    type: string
+                    description: A link back to the chat.
+                  mini_app:
+                    type: boolean
+                    description: On Telegram the key form needs the Mini App's initData.
+        '410':
+          description: Used or expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: connectWithKey
+      tags:
+      - Connectors
+      summary: Connect a key-based service through a connect link
+      description: Checks the keys as the web's form does (their starts, the mode, and with the service) and saves the
+        connection as the link's person, in prod; the link is spent, and the chat is told. On Telegram, `init_data` must be
+        the Mini App's, signed for the bot, for the account the link was sent to.
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The connect link's one-time token, as chat sent it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - credentials
+              properties:
+                credentials:
+                  type: object
+                  additionalProperties:
+                    type: string
+                mode:
+                  type: string
+                init_data:
+                  type: string
+      responses:
+        '201':
+          description: Connected
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - connected
+                - business
+                - name
+                properties:
+                  connected:
+                    type: string
+                  business:
+                    type: string
+                  name:
+                    type: string
+                  back:
+                    type: string
+        '400':
+          description: A key refused, by its start or by the service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '410':
+          description: Used or expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/connect/{token}/oauth:
+    post:
+      operationId: connectWithOAuth
+      tags:
+      - Connectors
+      summary: Start a service's consent from a connect link
+      description: As POST /v1/connections/oauth/start, for the link's person and service; the callback ends on the connect
+        page and spends the link.
+      security: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The connect link's one-time token, as chat sent it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+      responses:
+        '200':
+          description: The consent URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - url
+                - expires_in
+                properties:
+                  url:
+                    type: string
+                  expires_in:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/connections/oauth/callback:
     get:
       operationId: oauthConnectionCallback

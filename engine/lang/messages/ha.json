@@ -3164,6 +3164,54 @@
       "text": "Lambobi shida da ke kiyaye wannan hira taka",
       "reviewed": false
     },
+    "connect.hint": {
+      "text": "Aika *connect {service}* don haɗa shi daga nan.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Haɗa {service} a nan: {link}\n\nHanyar haɗin tana aiki sau ɗaya, na mintuna {minutes}, kuma kai kaɗai. Kada ka taɓa aika maɓalli a wannan hira: rubuta shi a wancan shafin.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Matsa maɓallin da ke ƙasa don haɗa {service}. Yana aiki sau ɗaya, na mintuna {minutes}, kuma kai kaɗai. Kada ka taɓa aika maɓalli a wannan hira: rubuta shi a cikin fom.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Haɗa {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Wanda ke kula da haɗe-haɗe a {org} ne kaɗai zai iya haɗa ayyuka. Tambayi mai shi.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem ba shi da sabis mai suna {service}. Duba sunan, kamar *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "An haɗa {service} da *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "Muna ci gaba da *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "Wannan yana kama da maɓallin sirri, don haka Taskiem bai ajiye shi ko amfani da shi ba. Maɓallai suna shiga fom mai tsaro ne kaɗai: aika *connect* da sunan sabis ɗin. Manhajar hira tana da maɓallin yanzu, don haka canza shi a wurin sabis ɗin ka yi amfani da sabon.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Matsa maɓallin don haɗa {service}. Rubuta maɓallin a cikin fom, ba a wannan hira ba: Taskiem zai duba shi da {service} kafin ya ajiye shi.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Kwafi kowace ƙima daga {service} ka liƙa ta nan. Taskiem zai duba ta da {service} kafin ya ajiye ta.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Haɗa",
+      "reviewed": false
+    },
     "terms.ask": {
       "text": "Taskiem yana da sharuɗɗa da sanarwar sirri da ba ka amince da su ba tukuna: {link}\n\nMatsa *I agree*, ko ka amsa *I agree*. Taskiem zai ci gaba ko ta yaya.",
       "reviewed": false

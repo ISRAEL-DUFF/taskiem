@@ -3164,6 +3164,54 @@
       "text": "Nọ́mbà mẹ́fà tí ó pa ìjíròrò yìí mọ́ fún ọ",
       "reviewed": false
     },
+    "connect.hint": {
+      "text": "Fi *connect {service}* ránṣẹ́ láti so ó pọ̀ láti ibí.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "So {service} pọ̀ níbí: {link}\n\nÌjápọ̀ náà ń ṣiṣẹ́ lẹ́ẹ̀kan, fún ìṣẹ́jú {minutes}, fún ìwọ nìkan. Má ṣe fi kọ́kọ́rọ́ ránṣẹ́ nínú ìjíròrò yìí: tẹ̀ ẹ́ sórí ojú-ìwé yẹn.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Tẹ bọ́tìnnì ìsàlẹ̀ láti so {service} pọ̀. Ó ń ṣiṣẹ́ lẹ́ẹ̀kan, fún ìṣẹ́jú {minutes}, fún ìwọ nìkan. Má ṣe fi kọ́kọ́rọ́ ránṣẹ́ nínú ìjíròrò yìí: tẹ̀ ẹ́ sínú fọ́ọ̀mù náà.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "So {service} pọ̀",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Ẹni tí ó ń ṣàkóso àwọn ìsopọ̀ ní {org} nìkan ló lè so àwọn iṣẹ́ pọ̀. Béèrè lọ́wọ́ ẹni tó ni.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem kò ní iṣẹ́ tí a ń pè ní {service}. Ṣàyẹ̀wò orúkọ náà, bí *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "{service} ti so pọ̀ mọ́ *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "A ń tẹ̀síwájú pẹ̀lú *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "Ìyẹn dàbí kọ́kọ́rọ́ àṣírí, nítorí náà Taskiem kò pa á mọ́ tàbí lò ó. Inú fọ́ọ̀mù tó ní ààbò nìkan ni kọ́kọ́rọ́ ń lọ: fi *connect* àti orúkọ iṣẹ́ náà ránṣẹ́. Ohun èlò ìjíròrò ti ní kọ́kọ́rọ́ náà báyìí, nítorí náà pààrọ̀ rẹ̀ lọ́dọ̀ iṣẹ́ náà kí o sì lo èyí tuntun.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Tẹ bọ́tìnnì náà láti so {service} pọ̀. Tẹ kọ́kọ́rọ́ náà sínú fọ́ọ̀mù, kì í ṣe nínú ìjíròrò yìí: Taskiem yóò ṣàyẹ̀wò rẹ̀ pẹ̀lú {service} kí ó tó fi pamọ́.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Da ìkọ̀ọ̀kan kọ láti {service} kí o sì lẹ̀ ẹ́ síbí. Taskiem yóò ṣàyẹ̀wò rẹ̀ pẹ̀lú {service} kí ó tó fi pamọ́.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "So pọ̀",
+      "reviewed": false
+    },
     "terms.ask": {
       "text": "Taskiem ní àwọn òfin àti ìkéde ìpamọ́ tí o kò tíì gbà: {link}\n\nTẹ *I agree*, tàbí fèsì *I agree*. Taskiem yóò máa bá iṣẹ́ lọ bí ó ti wù kí ó rí.",
       "reviewed": false

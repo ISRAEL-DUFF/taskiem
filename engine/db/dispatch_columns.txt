@@ -121,6 +121,11 @@ chat_signups.expires_at
 chat_signups.step
 chat_signups.updated_at
 concurrency_slots.run_id
+connect_links.address
+connect_links.expires_at
+connect_links.spent_at
+connect_links.tenant_id
+connect_links.token_hash
 connection_app_accounts.account_key
 connection_app_accounts.client
 connection_app_accounts.connection

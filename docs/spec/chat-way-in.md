@@ -183,6 +183,16 @@ A service that signs in (Google, Zoho, QuickBooks, Mailchimp, Xenibase) needs a 
 - A connect link used twice, after 15 minutes, or by a member who lost `secret.manage` meanwhile, makes nothing; the state and cookie checks of 0034 still hold.
 - A Paystack key sent as a chat message is not stored anywhere Taskiem keeps the conversation (a test reads every table that keeps chat).
 
+### 7.5 As built (C2)
+
+Built as above ([WhatsApp](../whatsapp.md#connecting-a-service-from-the-chat), [Telegram](../telegram.md#connecting-a-service)), migration `00267_connect_links`, where it differs:
+
+- **Where chat offers Connect**: a draft's publishing blockers (after a build, or `publish <name>`) and **make my page** without Paystack say `connect <service>` (WhatsApp reply buttons stop at three and carry no link, so it is a word to send). The draft waiting is remembered with the conversation, so `connect` carries on with it. A run that failed for an expired key still points at the web.
+- **The connect link's connection** is the first free name (`main` unless one exists), in `prod`; the web form's audit (`connection.create`) is kept, and `connection.from_chat` added beside it with `via` and the channel.
+- **The Telegram Mini App** reads `initData` from the page's address (Telegram puts it in the fragment), so the page needs no script from Telegram. It is the connect form only: Telegram's forms for a run's inputs and a table's row are not built yet.
+- **The pasted-key guard** drops the message before anything reads it, so there is nothing to mask: it is never stored. Keys from strangers are checked against the platform's connectors.
+- **Not yet:** the account a sign-in connected as, in the chat's message ("Google is connected (ada@example.com)"); setting the chat PIN and waking a dormant chat from Telegram (the PIN form is WhatsApp's; on Telegram the Mini App is the connect form only); Slack's connect link (C3).
+
 ## 8. C3: Slack as a conversation
 
 - **Events.** Taskiem's Slack app gets one Events request URL, `/channels/slack/events`, verified with its signing secret as `/channels/slack/interactions` is. It answers within Slack's three seconds and handles the event after, keeps each `event_id` for a day so Slack's retries (`X-Slack-Retry-Num`) do nothing twice, and ignores the subtypes that are not a person writing (`message_changed`, `message_deleted`, `bot_message`, the bot's own messages). A direct message to the bot (`message.im`, `channel_type: im`) from a linked member goes to `converse`; every other event goes on, unchanged, to `/hooks/apps/slack@1/events`, the `slack@1` triggers (0051), as clicks already do. The operator sets the URL, subscribes to `message.im`, and turns the App Home **Messages** tab on ([needs people](#13-c0-people-and-decisions)).

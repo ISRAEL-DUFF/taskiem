@@ -40,6 +40,7 @@ import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
+import { ConnectDone, ConnectPage } from "./pages/Connect";
 import { Signup, TermsBanner, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
@@ -209,6 +210,14 @@ function Shell() {
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
   // An emailed invitation link, for someone with no account yet.
   if (loc.pathname === "/accept-invitation") return alone(<AcceptInvitation />);
+  // A connect link sent from chat: no sign-in, the link is the authority.
+  if (loc.pathname === "/c/done") return alone(<ConnectDone />);
+  if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
+    return alone(
+      <Routes>
+        <Route path="/c/:token" element={<ConnectPage />} />
+      </Routes>,
+    );
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);

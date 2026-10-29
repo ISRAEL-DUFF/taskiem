@@ -306,6 +306,11 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
 		r.Get("/connections/oauth/callback", s.oauthConnectionCallback) // providers send the browser back here (oauthconnections.go)
+		// Connect links sent from chat: the token is the authority, for one
+		// connection (connect_links.go).
+		r.Get("/connect/{token}", s.getConnectLink)
+		r.Post("/connect/{token}", s.connectWithKey)
+		r.Post("/connect/{token}/oauth", s.connectWithOAuth)
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
@@ -824,6 +829,8 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusForbidden, strings.TrimPrefix(err.Error(), "forbidden: "))
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
+	case errors.Is(err, errGone):
+		writeErr(w, http.StatusGone, strings.TrimPrefix(err.Error(), "gone: "))
 	case errors.As(err, new(*runtime.CapabilityError)):
 		// A capability step its environment's connections cannot run.
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "capability"})
@@ -857,6 +864,9 @@ var (
 	errBadRequest = errors.New("bad request")
 	errForbidden  = errors.New("forbidden")
 	errConflict   = errors.New("conflict")
+	// errGone: something that was there and is used up or expired (a
+	// connect link): 410 with the message.
+	errGone = errors.New("gone")
 )
 
 func decodeBody(r *http.Request, v any) error {
