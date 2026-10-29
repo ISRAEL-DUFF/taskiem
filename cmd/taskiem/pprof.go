@@ -11,7 +11,7 @@ import (
 // show the process's internals and taking one costs CPU. The metrics port
 // is internal to the cluster; never expose it publicly with this on.
 func profiling(mux *http.ServeMux, log *slog.Logger) {
-	if !envBool("TASKIEM_PPROF", false) {
+	if on, _ := envBool("TASKIEM_PPROF", false); !on { // loadConfig refuses a bad value
 		return
 	}
 	mux.HandleFunc("/debug/pprof/", pprof.Index)

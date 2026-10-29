@@ -37,7 +37,12 @@ type StatusConfig struct {
 }
 
 func statusConfig() (StatusConfig, error) {
-	c := StatusConfig{Page: envBool("TASKIEM_STATUS_PAGE", true), Canary: envBool("TASKIEM_STATUS_CANARY", true)}
+	var bad []error
+	flag := envBools(&bad)
+	c := StatusConfig{Page: flag("TASKIEM_STATUS_PAGE", true), Canary: flag("TASKIEM_STATUS_CANARY", true)}
+	if err := errors.Join(bad...); err != nil {
+		return c, err
+	}
 	var err error
 	c.Tokens, err = api.ParseOperatorTokens(os.Getenv("TASKIEM_STATUS_TOKENS"))
 	if err != nil {

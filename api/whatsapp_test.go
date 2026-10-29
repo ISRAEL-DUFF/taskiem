@@ -529,7 +529,7 @@ func TestWhatsAppStepUpHandoff(t *testing.T) {
 	if st != 403 || body["step_up"] == nil {
 		t.Errorf("without step-up: %d %v", st, body)
 	}
-	alice.must(403, "POST", "/v1/whatsapp/handoff/"+tok, map[string]any{"totp": "000000"})
+	alice.must(403, "POST", "/v1/whatsapp/handoff/"+tok, map[string]any{"totp": wrongCode(secret)})
 	res := alice.must(200, "POST", "/v1/whatsapp/handoff/"+tok, map[string]any{"totp": codeAfter(secret, 1)})
 	if res["status"] != "approved" {
 		t.Fatalf("decided: %v", res)

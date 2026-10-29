@@ -22,19 +22,51 @@ jobs:
           --health-cmd "pg_isready -U postgres"
           --health-interval 2s
           --health-retries 30
+      # The MySQL connector against a real server (connectors/mysql/integration_test.go).
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: taskiem_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval 2s
+          --health-retries 60
     env:
       TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      TASKIEM_TEST_MYSQL_DSN: mysql://root:mysql@127.0.0.1:3306/taskiem_test?sslmode=require
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v8
+      # The Prometheus rule tests (engine/slo TestPromtool) run with promtool.
+      # sha256 from the release's sha256sums.txt; change both together.
+      - name: Install promtool
+        run: |
+          curl -fsSL -o prometheus.tgz https://github.com/prometheus/prometheus/releases/download/v3.15.1/prometheus-3.15.1.linux-amd64.tar.gz
+          echo "6a726885328ad9efebbf36e876ce2fb6225468a71fd1e7ce3ba666d5f4d97a84  prometheus.tgz" | sha256sum -c -
+          tar xzf prometheus.tgz -C "$RUNNER_TEMP" --strip-components=1 prometheus-3.15.1.linux-amd64/promtool
+          rm prometheus.tgz
+          echo "TASKIEM_PROMTOOL=$RUNNER_TEMP/promtool" >> "$GITHUB_ENV"
+      - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
         with:
           version: v2.15.0
+      # The QuickJS fork is a module of its own, so ./... above neither lints
+      # nor tests it; it has its own, upstream-friendly lint configuration.
+      - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
+        with:
+          version: v2.15.0
+          working-directory: third_party/qjs
+      - name: The QuickJS fork builds and its tests pass
+        working-directory: third_party/qjs
+        run: go test -count=1 ./...
       - name: Start OpenBao (transit engine for the secrets tests)
         run: |
-          curl -sSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          # sha256 from the release's checksums-linux.txt; change both together.
+          curl -fsSL -o bao.tgz https://github.com/openbao/openbao/releases/download/v2.4.1/bao_2.4.1_Linux_x86_64.tar.gz
+          echo "b82f5d05d0ab83244340893b8860542dccb9ff25422a30b3b9d60df0e34fb19d  bao.tgz" | sha256sum -c -
           tar xzf bao.tgz bao
           ./bao server -dev -dev-root-token-id=dev -dev-listen-address=127.0.0.1:8200 > bao.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8200/v1/sys/health >/dev/null && break; sleep 1; done
@@ -63,12 +95,77 @@ jobs:
       - name: Migrations apply cleanly with the CLI
         run: go run ./cmd/taskiem migrate --dsn "$TASKIEM_TEST_DATABASE_URL"
 
+  # The database crash suite (G1: "the database primary killed mid-run"):
+  # TestDatabaseCrashSuite kills this job's Postgres container (SIGKILL, so
+  # Postgres recovers from its WAL as after a power cut) while payment-shaped
+  # runs are in flight, starts it again, and checks every effect happened
+  # once. In a job of its own, because the crash would fail every other
+  # database test running at the time.
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Database crash suite
+        shell: bash # -eo pipefail: go test failing before "| tee" fails the step
+        env:
+          PG: ${{ job.services.postgres.id }}
+        run: |
+          export TASKIEM_CHAOS_PG_CRASH="docker kill $PG >/dev/null && docker start $PG >/dev/null && timeout 60 sh -c 'until pg_isready -q -h 127.0.0.1 -U postgres; do sleep 0.2; done'"
+          go test -count=1 -timeout 20m -run '^TestDatabaseCrashSuite$' -v ./engine/runtime/ | tee crash.log
+          grep -q -- '--- PASS: TestDatabaseCrashSuite' crash.log # ran, not skipped
+
+  # The race detector over the packages whose correctness rests on
+  # concurrency: the runtime (workers, leases, fencing, the scheduler), its
+  # replay and the effects contract. Its own job: under -race the runtime's
+  # tests take about 14 minutes on 4 cores, where the go job's whole suite
+  # already takes most of its 25. TestPythonCodeStepInRun is skipped: the
+  # interpreted CPython build runs past the code step's time limit under
+  # -race, and it exercises the sandbox, not concurrency.
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Race detector on the runtime, replay and effects
+        run: go test -race -count=1 -timeout 40m -skip '^TestPythonCodeStepInRun$' ./engine/runtime/... ./engine/decide/... ./engine/effects/...
+
   typescript:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -93,32 +190,147 @@ jobs:
     env:
       TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
+      - name: ShellCheck the scripts that start the browser tests' server
+        run: shellcheck web/e2e/*.sh
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @taskiem/web build
       - run: pnpm --filter @taskiem/web exec playwright install --with-deps chromium
       - run: pnpm --filter @taskiem/web e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
           name: playwright-traces
           path: web/test-results/
 
-  # The image builds and the Compose stack comes up healthy.
-  docker:
+  # The image, built once (decision 0032). The docker and vps jobs run this
+  # build, and on a push the image job signs and tags this same digest, so
+  # the image servers pull is the one the smoke tests ran. On a push it goes
+  # to GHCR by digest, untagged, with an SBOM and build provenance; nothing
+  # trusts it until it is signed. The base images are pinned by digest in the
+  # Dockerfile.
+  image-build:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      # A v* tag is a release: only a commit already on main, which went
+      # through review, may be built, signed and offered to production.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: ${{ github.ref_type == 'tag' && '0' || '1' }}
+      - name: A release tag names a commit on main
+        if: github.ref_type == 'tag'
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          commit=$(git rev-parse HEAD)
+          if ! git merge-base --is-ancestor "$commit" origin/main; then
+            echo "::error title=Not a release::$GITHUB_REF_NAME names $commit, which is not on main. Tag a commit on main."
+            exit 1
+          fi
+      - name: Image name and version
+        id: name
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"; fi
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        id: meta
+        with:
+          images: ${{ steps.name.outputs.image }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        id: build
+        with:
+          context: .
+          build-args: VERSION=${{ steps.name.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ steps.name.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          provenance: mode=max
+          sbom: true
+      - name: Summary
+        env:
+          REF: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: echo "Built and pushed \`$REF\` (untagged, unsigned until the image job)" >> "$GITHUB_STEP_SUMMARY"
+
+  # The same build on a pull request: not pushed, handed to the smoke tests
+  # as an artifact. No registry token.
+  image-build-pr:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - name: Build and start the stack
-        run: docker compose -f deploy/docker-compose.yml up -d --build --wait taskiem
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          build-args: VERSION=ci
+          tags: taskiem:ci
+          outputs: type=docker,dest=${{ runner.temp }}/taskiem.tar
+          provenance: false
+          sbom: false
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image
+          path: ${{ runner.temp }}/taskiem.tar
+          retention-days: 1
+
+  # The Compose stack comes up healthy on the image built above.
+  docker:
+    runs-on: ubuntu-latest
+    needs: [image-build, image-build-pr]
+    # One of the two builds runs (push or pull request); the other is skipped.
+    if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: read # pull the image by digest on a push
+    env:
+      TASKIEM_IMAGE: taskiem:ci # deploy/docker-compose.yml's image for migrate and taskiem
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # This run's image (image-build or image-build-pr), as taskiem:ci.
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.event_name != 'push'
+        with:
+          name: image
+          path: ${{ runner.temp }}
+      - name: This run's image
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ needs.image-build.outputs.image }}@${{ needs.image-build.outputs.digest }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            docker pull "$REF"
+            docker tag "$REF" taskiem:ci
+          else
+            docker load -i "$RUNNER_TEMP/taskiem.tar"
+          fi
+          echo "taskiem:ci is $(docker image inspect taskiem:ci --format '{{.Id}}')"
+      - name: Start the stack
+        run: docker compose -f deploy/docker-compose.yml up -d --no-build --wait taskiem
       - name: Bootstrap and sign in
         run: |
           docker compose -f deploy/docker-compose.yml run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD='ci password 123' taskiem bootstrap --tenant CI --email ci@example.com
@@ -130,12 +342,12 @@ jobs:
   licences:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -143,16 +355,41 @@ jobs:
       - run: pnpm licenses list --json > npm-licences.json
       - run: go run ./tools/licencecheck -npm npm-licences.json
 
-  # The AI evaluation gate (spec 12.4, docs/ai.md#evaluation): the builder
+  # Migrations are forward-only (CONTRIBUTING.md#migrations): a pull request
+  # may add files under engine/db/migrations but not change, rename or
+  # delete one its base branch has. goose keeps no checksums, so nothing
+  # else would notice an edited migration that databases have already run.
+  migrations:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - name: Merged migrations are unchanged
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-status --diff-filter=MDRT "origin/$BASE_REF...HEAD" -- engine/db/migrations/)
+          if [ -n "$changed" ]; then
+            echo "::error title=Migrations are forward-only::This pull request changes migrations its base branch has. Add a new migration instead."
+            echo "$changed"
+            exit 1
+          fi
+
+  # The AI evaluation report (spec 12.4, docs/ai.md#evaluation): the builder
   # and repair suites through the real pipelines with the offline heuristic
   # provider, compared with the committed baselines (no API key, no cost,
-  # deterministic). Runs on main and on pull requests touching the AI
-  # layer, the suites, the template library or the runner. The real-model
-  # run is .github/workflows/ai-eval.yml.
+  # deterministic), written to the job summary and kept as an artifact. This
+  # job is not the gate: TestBaselinesHold (tools/aieval) makes the same two
+  # comparisons inside the go job's go test ./..., on every pull request. This
+  # job runs on main and on pull requests touching the AI layer, the suites,
+  # the template library or the runner, so its path filter may miss changes
+  # the gate still catches. The real-model run is .github/workflows/ai-eval.yml.
   ai-eval:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
       - name: Does this change touch the AI layer?
@@ -168,7 +405,7 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "No change to the AI layer (engine/ai, evals, templates, tools/aieval, api/ai.go, api/repair.go, the checks, masking, shadow runs or connector manifests): the AI evaluation is skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         if: steps.changes.outputs.run == 'true'
         with:
           go-version-file: go.mod
@@ -181,7 +418,7 @@ jobs:
       - name: Summary
         if: always() && steps.changes.outputs.run == 'true'
         run: cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.changes.outputs.run == 'true'
         with:
           name: ai-eval
@@ -192,12 +429,53 @@ jobs:
             repair-eval.md
           if-no-files-found: ignore
 
+  # The engineering atlas (docs/atlas/README.md). Every reference on its pages
+  # must resolve, so a renamed function or a moved line fails here instead
+  # of leaving a broken link. And a pull request that changes the atlas's
+  # pages, partials or build must commit the rebuilt site/index.html too.
+  # (CI cannot compare the committed file with a rebuild byte for byte: a
+  # build records the commit and date it was made at, line counts of the
+  # whole tree and excerpts of the code it quotes, so it differs after any
+  # later commit.)
+  atlas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          # The atlas needs no packages; without this, setup-node sees
+          # package.json's packageManager and looks for pnpm to cache.
+          package-manager-cache: false
+      - name: Every atlas reference resolves
+        run: node docs/atlas/atlas.mjs check
+      - name: Changed pages come with the rebuilt site
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- docs/atlas/pages docs/atlas/partials docs/atlas/src docs/atlas/atlas.json docs/atlas/atlas.mjs)
+          if [ -n "$changed" ] && ! git diff --quiet "origin/$BASE_REF...HEAD" -- docs/atlas/site/index.html; then exit 0; fi
+          if [ -n "$changed" ]; then
+            echo "::error title=Atlas not rebuilt::These atlas sources changed but docs/atlas/site/index.html did not. Run make atlas and commit it."
+            echo "$changed"
+            exit 1
+          fi
+
   # The one-VM deployment, end to end on a fresh runner (decision 0032,
   # docs/vm.md): install.sh and taskiem-vps setup against a real Postgres,
   # OpenBao initialised and auto-unsealed, Caddy in front; then a restart
   # (auto-unseal), a broken release (rolled back), a good one, and rollback.
   vps:
     runs-on: ubuntu-latest
+    needs: [image-build, image-build-pr]
+    # One of the two builds runs (push or pull request); the other is skipped.
+    if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: read # pull the image by digest on a push
     defaults:
       run:
         shell: bash # -eo pipefail: a failure before "| tee" fails the step
@@ -225,12 +503,35 @@ jobs:
       TASKIEM_VPS_PREVIEW_DOMAIN: shops.localhost
       TASKIEM_VPS_MAIL_DOMAIN: in.localhost
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: ShellCheck
         run: shellcheck deploy/vm/install.sh deploy/vm/taskiem-vps
-      - name: Images (a good one, a renamed copy, and one that cannot start)
+      # This run's image (image-build or image-build-pr), as taskiem:ci.
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: github.event_name != 'push'
+        with:
+          name: image
+          path: ${{ runner.temp }}
+      - name: This run's image
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ needs.image-build.outputs.image }}@${{ needs.image-build.outputs.digest }}
         run: |
-          docker build --build-arg VERSION=ci -t taskiem:ci .
+          if [ "$EVENT" = push ]; then
+            docker pull "$REF"
+            docker tag "$REF" taskiem:ci
+          else
+            docker load -i "$RUNNER_TEMP/taskiem.tar"
+          fi
+          echo "taskiem:ci is $(docker image inspect taskiem:ci --format '{{.Id}}')"
+      - name: Images (this run's, a renamed copy, and one that cannot start)
+        run: |
           docker tag taskiem:ci taskiem:ci-next
           printf 'FROM taskiem:ci\nENTRYPOINT ["/taskiem", "no-such-command"]\n' | docker build -t taskiem:broken -
           PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres taskiem_ci
@@ -319,67 +620,90 @@ jobs:
           sudo docker compose --project-directory /opt/taskiem logs --tail 200 || true
           sudo cat /var/lib/taskiem-vps/last-update.log || true
 
-  # The image the Helm chart and the VM deployment pull (decision 0032):
-  # pushed to GHCR on every merge to main and every v* tag, signed keylessly
-  # with cosign, with an SBOM and build provenance attached. Tags: sha-<12>
-  # and the version (immutable), and the channel "staging", which servers on
-  # the staging channel follow (taskiem-vps). "production" is moved only by
-  # the promote job below.
+  # The image the Helm chart and the VM deployment pull (decision 0032), on
+  # every merge to main and every v* tag: the digest image-build pushed and
+  # the docker and vps jobs ran, signed keylessly with cosign (its SBOM and
+  # build provenance were attached when it was built), then tagged. Tags:
+  # sha-<12> and the version (immutable), and the channel "staging", which
+  # servers on the staging channel follow (taskiem-vps). "production" is
+  # moved only by the promote job below. Signing comes before tagging, so a
+  # server never finds a tag on an image without a signature.
+  #
+  # One image job runs at a time per branch or tag, and none is cancelled, so
+  # two merges close together tag one after the other. A run tags "staging"
+  # only if its commit is still the head of main when it gets there: an older
+  # commit whose run finishes last keeps its sha- tag and signature but does
+  # not move staging servers back. (GitHub keeps one waiting run per group: a
+  # third merge replaces the waiting one, whose image is then not tagged.)
   image:
     if: github.event_name == 'push'
-    needs: [go, typescript, web, docker, licences, vps]
+    needs: [image-build, go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
+    concurrency:
+      group: image-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
       id-token: write # keyless cosign signing via GitHub OIDC
     outputs:
-      image: ${{ steps.name.outputs.image }}
-      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ needs.image-build.outputs.image }}
+      digest: ${{ needs.image-build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v5
-      - name: Image name and version
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Short commit
         id: name
+        run: echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Is this commit still the head of main?
+        id: head
+        if: github.ref == 'refs/heads/main'
         run: |
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"; else echo "version=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"; fi
-      - uses: docker/metadata-action@v5
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "staging=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "staging=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=staging not moved::main is at $head, newer than $GITHUB_SHA; this image is tagged sha-${GITHUB_SHA::12} only."
+          fi
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         id: meta
         with:
-          images: ${{ steps.name.outputs.image }}
+          images: ${{ needs.image-build.outputs.image }}
           tags: |
             type=raw,value=sha-${{ steps.name.outputs.sha }}
-            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/main' && steps.head.outputs.staging == 'true' }}
             type=semver,pattern={{version}}
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
-        id: build
-        with:
-          context: .
-          push: true
-          build-args: VERSION=${{ steps.name.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: mode=max
-          sbom: true
       # cosign-installer v4: v3 cannot install cosign v3 (it fetches a .sig
       # cosign v3 no longer publishes).
-      - uses: sigstore/cosign-installer@v4.1.2 # no v4 major tag is published
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2 (no v4 major tag is published)
         with:
           cosign-release: v3.1.3 # the version taskiem-vps verifies with (deploy/vm/install.sh)
-      - name: Sign the image
+      - name: Sign the image the smoke tests ran
         env:
-          REF: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+          REF: ${{ needs.image-build.outputs.image }}@${{ needs.image-build.outputs.digest }}
+        run: cosign sign --yes "$REF"
+      # imagetools create with one source copies its manifest as it is, so
+      # every tag names the signed digest; the loop checks that it does.
+      - name: Tag it
+        env:
+          IMAGE: ${{ needs.image-build.outputs.image }}
+          DIGEST: ${{ needs.image-build.outputs.digest }}
           TAGS: ${{ steps.meta.outputs.tags }}
         run: |
-          cosign sign --yes "$REF"
-          { echo "Pushed and signed \`$REF\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
+          args=()
+          for t in $TAGS; do args+=(-t "$t"); done
+          docker buildx imagetools create "${args[@]}" "$IMAGE@$DIGEST"
+          for t in $TAGS; do
+            got=$(docker buildx imagetools inspect "$t" --format '{{json .Manifest}}' | jq -r .digest)
+            if [ "$got" != "$DIGEST" ]; then echo "::error::$t names $got, not the signed $DIGEST"; exit 1; fi
+          done
+          { echo "Signed and tagged \`$IMAGE@$DIGEST\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
 
   # Production servers follow the "production" tag. A version tag (v1.2.0)
   # builds and signs its image above; this job moves "production" to it once
@@ -395,8 +719,8 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -409,29 +733,47 @@ jobs:
           docker buildx imagetools create -t "$IMAGE:production" "$IMAGE@$DIGEST"
           echo "production → \`$IMAGE@$DIGEST\` ($GITHUB_REF_NAME)" >> "$GITHUB_STEP_SUMMARY"
 
-  # Signed builds and SBOM (build plan Phase 0). Runs on main only.
+  # Signed builds and SBOM (build plan Phase 0): the static binary and an SPDX
+  # SBOM of the source tree, signed with cosign sign-blob and kept as a
+  # workflow artifact, for every merge to main and every v* tag (a release
+  # has a signed binary as well as a signed image).
   release-build:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [go, typescript, web, docker, licences]
+    if: github.event_name == 'push'
+    needs: [go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write # keyless cosign signing via GitHub OIDC
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      # A v* tag is a release: only a commit already on main, which went
+      # through review, may be built, signed and offered to production.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: ${{ github.ref_type == 'tag' && '0' || '1' }}
+      - name: A release tag names a commit on main
+        if: github.ref_type == 'tag'
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          commit=$(git rev-parse HEAD)
+          if ! git merge-base --is-ancestor "$commit" origin/main; then
+            echo "::error title=Not a release::$GITHUB_REF_NAME names $commit, which is not on main. Tag a commit on main."
+            exit 1
+          fi
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
       - name: Build
-        run: make build VERSION=${GITHUB_SHA::12}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=${GITHUB_REF_NAME#v}; else version=${GITHUB_SHA::12}; fi
+          make build VERSION="$version"
       - name: SBOM (SPDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json
           output-file: bin/taskiem.spdx.json
           upload-artifact: false
-      - uses: sigstore/cosign-installer@v4.1.2 # no v4 major tag is published
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2 (no v4 major tag is published)
         with:
           cosign-release: v3.1.3 # as the image is signed
       - name: Sign binary and SBOM
@@ -439,17 +781,18 @@ jobs:
           for f in bin/taskiem bin/taskiem.spdx.json; do
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: taskiem-${{ github.sha }}
+          name: taskiem-${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           path: bin/
 
-  # The image builds, the chart lints, and deploy/kubernetes is regenerated from it.
+  # The chart lints, deploy/kubernetes is regenerated from it, and the VM
+  # Compose file parses. (The image is built once, by image-build.)
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.19.0
       - name: Chart and generated manifests
@@ -462,5 +805,3 @@ jobs:
           printf "TASKIEM_DOMAIN='ci.example'\nTASKIEM_IMAGE='taskiem:ci'\n" > .env
           touch taskiem.env migrate.env openbao.env openbao-unseal.env
           docker compose config --quiet
-      - name: Image
-        run: docker build --build-arg VERSION=ci -t taskiem:ci .

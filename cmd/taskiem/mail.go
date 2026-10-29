@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -48,8 +49,12 @@ type mailConfig struct {
 var mailDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
 func mailConfigFromEnv() (mailConfig, error) {
+	enabled, err := envBool("TASKIEM_MAIL_ENABLED", false)
+	if err != nil {
+		return mailConfig{}, err
+	}
 	c := mailConfig{
-		Enabled:  envBool("TASKIEM_MAIL_ENABLED", false),
+		Enabled:  enabled,
 		Domain:   strings.TrimSuffix(strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_DOMAIN"))), "."),
 		Listen:   env("TASKIEM_MAIL_LISTEN", ":2525"),
 		Hostname: strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_HOSTNAME"))),
@@ -99,7 +104,7 @@ func emailService(cfg config, e *engine, log *slog.Logger) (*inmail.Service, err
 // mailTask is the mail role's SMTP server on its own pool, connected as
 // taskiem_public like the public host's: it may only check recipients and
 // leave sealed messages in the inbox.
-func mailTask(ctx context.Context, cfg config, log *slog.Logger) (func(context.Context) error, func(), error) {
+func mailTask(ctx context.Context, cfg config, log *slog.Logger) (func(context.Context) error, *pgxpool.Pool, error) {
 	if cfg.Mail.Domain == "" {
 		return nil, nil, errors.New("TASKIEM_MAIL_DOMAIN is required to take mail")
 	}
@@ -132,29 +137,23 @@ func mailTask(ctx context.Context, cfg config, log *slog.Logger) (func(context.C
 		log.Info("mail listening", "addr", cfg.Mail.Listen, "domain", cfg.Mail.Domain)
 		return srv.Serve(ctx, l)
 	}
-	return task, pool.Close, nil
+	return task, pool, nil
 }
 
 // serveMail runs `--role mail`: the SMTP server and an internal listener
 // for metrics and health, with nothing of the engine.
 func serveMail(ctx context.Context, cfg config, log *slog.Logger) error {
-	task, closePool, err := mailTask(ctx, cfg, log)
+	task, pool, err := mailTask(ctx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
-	defer closePool()
+	defer pool.Close()
 	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
 	internal := http.NewServeMux()
 	internal.Handle("/metrics", promhttp.Handler())
 	internal.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	internal.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
-		if draining.Load() {
-			http.Error(w, "draining", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	})
+	internal.HandleFunc("/readyz", readiness(draining, pool))
 	return runTasks(runCtx, stopRun, []func(context.Context) error{task, httpTask("metrics", cfg.MetricsListen, internal, log)}, log)
 }
 

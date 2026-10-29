@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/israel-duff/taskiem/engine/db/dbtest"
 )
 
 func TestLoadPublicConfig(t *testing.T) {
@@ -119,4 +124,50 @@ func TestHealthcheckAddress(t *testing.T) {
 			t.Errorf("%s accepted", addr)
 		}
 	}
+}
+
+// TestPublicReadinessPingsTheDatabase: the public host is not ready while
+// its database is unreachable, so the proxy in front stops sending it
+// pages it can only answer with errors.
+func TestPublicReadinessPingsTheDatabase(t *testing.T) {
+	d := dbtest.New(t)
+	proxy := d.NewProxy(t)
+	metrics := freeAddr(t)
+	t.Setenv("TASKIEM_DATABASE_URL", "")
+	t.Setenv("TASKIEM_PUBLIC_DATABASE_URL", proxy.DSN(d))
+	t.Setenv("TASKIEM_PUBLIC_LISTEN", freeAddr(t))
+	t.Setenv("TASKIEM_METRICS_LISTEN", metrics)
+	cfg, err := loadPublicConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- servePublic(ctx, cfg, slog.New(slog.DiscardHandler)) }()
+	t.Cleanup(func() {
+		stop()
+		if err := <-done; err != nil {
+			t.Errorf("public host: %v", err)
+		}
+	})
+
+	waitFor := func(want int) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			code, body, _ := get(t, "http://"+metrics+"/readyz")
+			if code == want {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("readyz %d %q, want %d", code, body, want)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	waitFor(http.StatusOK)
+	proxy.SetDown(true)
+	waitFor(http.StatusServiceUnavailable)
+	proxy.SetDown(false)
+	waitFor(http.StatusOK)
 }

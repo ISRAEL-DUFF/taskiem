@@ -67,8 +67,12 @@ type publicConfig struct {
 }
 
 func publicConfigFromEnv() (publicConfig, error) {
+	enabled, err := envBool("TASKIEM_PUBLIC_ENABLED", false)
+	if err != nil {
+		return publicConfig{}, err
+	}
 	c := publicConfig{
-		Enabled:  envBool("TASKIEM_PUBLIC_ENABLED", false),
+		Enabled:  enabled,
 		Listen:   env("TASKIEM_PUBLIC_LISTEN", ":8082"),
 		DSN:      os.Getenv("TASKIEM_PUBLIC_DATABASE_URL"),
 		Role:     env("TASKIEM_PUBLIC_DATABASE_ROLE", "taskiem_public"),
@@ -126,12 +130,15 @@ func publicConfigFromEnv() (publicConfig, error) {
 // secret of the platform, so the public host's pods can be given only
 // their own database login.
 func loadPublicConfig() (config, error) {
+	trustProxy, err := envBool("TASKIEM_TRUST_PROXY", false)
+	if err != nil {
+		return config{}, err
+	}
 	c := config{
 		DSN:           os.Getenv("TASKIEM_DATABASE_URL"),
 		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
-		TrustProxy:    envBool("TASKIEM_TRUST_PROXY", false),
+		TrustProxy:    trustProxy,
 	}
-	var err error
 	if c.Public, err = publicConfigFromEnv(); err != nil {
 		return c, err
 	}
@@ -173,8 +180,8 @@ func publicPool(ctx context.Context, cfg config, log *slog.Logger) (*pgxpool.Poo
 }
 
 // publicTask opens the public host's own pool and returns its server, the
-// task that serves it, and the pool's close.
-func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.Server, func(context.Context) error, func(), error) {
+// task that serves it, and the pool, which the caller closes.
+func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.Server, func(context.Context) error, *pgxpool.Pool, error) {
 	pool, err := publicPool(ctx, cfg, log)
 	if err != nil {
 		return nil, nil, nil, err
@@ -209,31 +216,26 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 	if srv.FormHost == "" {
 		log.Warn("no form host: set TASKIEM_PUBLIC_DOMAINS or TASKIEM_PUBLIC_FORM_HOST to serve hosted forms (docs/public-host.md)")
 	}
-	return srv, httpTask("public", cfg.Public.Listen, srv.Handler(), log), pool.Close, nil
+	return srv, httpTask("public", cfg.Public.Listen, srv.Handler(), log), pool, nil
 }
 
 // servePublic runs `--role public`: the public host and an internal
 // listener for metrics, health and the proxy's TLS check, with nothing of
 // the engine.
 func servePublic(ctx context.Context, cfg config, log *slog.Logger) error {
-	srv, task, closePool, err := publicTask(ctx, cfg, log)
+	srv, task, pool, err := publicTask(ctx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
-	defer closePool()
+	defer pool.Close()
 	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
 
 	internal := http.NewServeMux()
 	internal.Handle("/metrics", promhttp.Handler())
 	internal.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-	internal.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
-		if draining.Load() {
-			http.Error(w, "draining", http.StatusServiceUnavailable)
-			return
-		}
-		_, _ = w.Write([]byte("ok"))
-	})
+	// Not ready without its database: every page and form needs it.
+	internal.HandleFunc("/readyz", readiness(draining, pool))
 	internal.HandleFunc("/tls/ask", srv.TLSAsk)
 	profiling(internal, log) // TASKIEM_PPROF (pprof.go)
 	return runTasks(runCtx, stopRun, []func(context.Context) error{task, httpTask("metrics", cfg.MetricsListen, internal, log)}, log)

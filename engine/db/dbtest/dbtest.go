@@ -4,6 +4,7 @@ package dbtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
@@ -53,7 +55,7 @@ func New(t testing.TB) *DB {
 	}
 	u.Path = "/" + name
 	dsn := u.String()
-	if _, err := db.Migrate(ctx, dsn); err != nil {
+	if err := migrate(ctx, dsn); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
@@ -155,4 +157,23 @@ func (d *DB) StartRun(t testing.TB, tn Tenant) uuid.UUID {
 		t.Fatal(err)
 	}
 	return runID
+}
+
+// migrate migrates a test database. Roles belong to the whole server, so
+// two packages migrating their own databases at once can both try to
+// create the same role, and one loses with a unique violation on
+// pg_authid. That migration rolled back; running it again finds the role
+// and carries on.
+func migrate(ctx context.Context, dsn string) error {
+	for attempt := 1; ; attempt++ {
+		_, err := db.Migrate(ctx, dsn)
+		if err == nil || attempt == 5 || !roleRace(err) {
+			return err
+		}
+	}
+}
+
+func roleRace(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == "pg_authid_rolname_index"
 }

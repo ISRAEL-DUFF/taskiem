@@ -45,14 +45,6 @@ groups:
     labels:
       slo: api_availability
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="api_availability"}[30d])
-    labels:
-      slo: api_availability
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="api_availability"} / 0.001
-    labels:
-      slo: api_availability
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_http_request_duration_seconds_bucket{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",le="1"}[5m]))
       / sum(rate(taskiem_http_request_duration_seconds_count{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[5m]))
     labels:
@@ -92,14 +84,6 @@ groups:
     labels:
       slo: api_latency
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="api_latency"}[30d])
-    labels:
-      slo: api_latency
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="api_latency"} / 0.01
-    labels:
-      slo: api_latency
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector",result=~"5.."}[5m]))
       / sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector"}[5m]))
     labels:
@@ -139,14 +123,6 @@ groups:
     labels:
       slo: webhook_ingest
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="webhook_ingest"}[30d])
-    labels:
-      slo: webhook_ingest
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="webhook_ingest"} / 0.001
-    labels:
-      slo: webhook_ingest
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_run_start_seconds_bucket{le="5"}[5m])) / sum(rate(taskiem_run_start_seconds_count[5m]))
     labels:
       slo: run_start
@@ -179,46 +155,38 @@ groups:
     labels:
       slo: run_start
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="run_start"}[30d])
-    labels:
-      slo: run_start
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="run_start"} / 0.01
-    labels:
-      slo: run_start
-    record: taskiem:slo_error_budget_remaining:ratio
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[5m]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[5m]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[5m]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[5m]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate5m
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[30m]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[30m]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[30m]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[30m]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate30m
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[1h]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[1h]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[1h]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[1h]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate1h
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[2h]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[2h]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[2h]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[2h]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate2h
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[6h]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[6h]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[6h]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[6h]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate6h
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[1d]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[1d]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[1d]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[1d]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate1d
-  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{queue=~"connector|sandbox",le="0.05"}[3d]))
-      / sum(rate(taskiem_step_dispatch_delay_seconds_count{queue=~"connector|sandbox"}[3d]))
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[3d]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[3d]))
     labels:
       slo: step_dispatch
     record: taskiem:slo_errors:ratio_rate3d
@@ -226,14 +194,6 @@ groups:
     labels:
       slo: step_dispatch
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="step_dispatch"}[30d])
-    labels:
-      slo: step_dispatch
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="step_dispatch"} / 0.05
-    labels:
-      slo: step_dispatch
-    record: taskiem:slo_error_budget_remaining:ratio
   - expr: 1 - sum(rate(taskiem_scheduler_lateness_seconds_bucket{le="5"}[5m])) / sum(rate(taskiem_scheduler_lateness_seconds_count[5m]))
     labels:
       slo: scheduler_timeliness
@@ -267,11 +227,59 @@ groups:
     labels:
       slo: scheduler_timeliness
     record: taskiem:slo_target:ratio
-  - expr: avg_over_time(taskiem:slo_errors:ratio_rate1h{slo="scheduler_timeliness"}[30d])
+- interval: 5m
+  name: taskiem-slo-30d
+  rules:
+  - expr: sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",code=~"5.."}[30d]))
+      / sum(rate(taskiem_http_requests_total{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[30d]))
+    labels:
+      slo: api_availability
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="api_availability"} / 0.001
+    labels:
+      slo: api_availability
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_http_request_duration_seconds_bucket{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream",le="1"}[30d]))
+      / sum(rate(taskiem_http_request_duration_seconds_count{route!~"/healthz|/readyz|/status|/status.json|/status/feed.atom|/v1/runs/\\{run\\}/stream"}[30d]))
+    labels:
+      slo: api_latency
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="api_latency"} / 0.01
+    labels:
+      slo: api_latency
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector",result=~"5.."}[30d]))
+      / sum(rate(taskiem_ingest_deliveries_total{kind=~"webhook|connector"}[30d]))
+    labels:
+      slo: webhook_ingest
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="webhook_ingest"} / 0.001
+    labels:
+      slo: webhook_ingest
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_run_start_seconds_bucket{le="5"}[30d])) / sum(rate(taskiem_run_start_seconds_count[30d]))
+    labels:
+      slo: run_start
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="run_start"} / 0.01
+    labels:
+      slo: run_start
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_step_dispatch_delay_seconds_bucket{le="0.05"}[30d]))
+      / sum(rate(taskiem_step_dispatch_delay_seconds_count[30d]))
+    labels:
+      slo: step_dispatch
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="step_dispatch"} / 0.05
+    labels:
+      slo: step_dispatch
+    record: taskiem:slo_error_budget_remaining:ratio
+  - expr: 1 - sum(rate(taskiem_scheduler_lateness_seconds_bucket{le="5"}[30d])) /
+      sum(rate(taskiem_scheduler_lateness_seconds_count[30d]))
     labels:
       slo: scheduler_timeliness
-    record: taskiem:slo_errors:ratio_avg30d
-  - expr: 1 - taskiem:slo_errors:ratio_avg30d{slo="scheduler_timeliness"} / 0.01
+    record: taskiem:slo_errors:ratio_rate30d
+  - expr: 1 - taskiem:slo_errors:ratio_rate30d{slo="scheduler_timeliness"} / 0.01
     labels:
       slo: scheduler_timeliness
     record: taskiem:slo_error_budget_remaining:ratio
@@ -525,9 +533,9 @@ groups:
       window: 3d
   - alert: TaskiemStepDispatchBudgetBurn
     annotations:
-      description: 'Share of connector and sandbox steps claimed within 50 ms of becoming
-        ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At this rate
-        the whole budget lasts 2.1 days.'
+      description: 'Share of steps, on every queue and in every worker pool, claimed
+        within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective: 95%
+        over 30d. At this rate the whole budget lasts 2.1 days.'
       runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
       summary: Step dispatch latency is burning its error budget 14.4x too fast (1h
         and 5m windows)
@@ -541,9 +549,9 @@ groups:
       window: 1h
   - alert: TaskiemStepDispatchBudgetBurn
     annotations:
-      description: 'Share of connector and sandbox steps claimed within 50 ms of becoming
-        ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At this rate
-        the whole budget lasts 5 days.'
+      description: 'Share of steps, on every queue and in every worker pool, claimed
+        within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective: 95%
+        over 30d. At this rate the whole budget lasts 5 days.'
       runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
       summary: Step dispatch latency is burning its error budget 6x too fast (6h and
         30m windows)
@@ -557,9 +565,9 @@ groups:
       window: 6h
   - alert: TaskiemStepDispatchBudgetBurn
     annotations:
-      description: 'Share of connector and sandbox steps claimed within 50 ms of becoming
-        ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At this rate
-        the whole budget lasts 10 days.'
+      description: 'Share of steps, on every queue and in every worker pool, claimed
+        within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective: 95%
+        over 30d. At this rate the whole budget lasts 10 days.'
       runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
       summary: Step dispatch latency is burning its error budget 3x too fast (1d and
         2h windows)
@@ -573,9 +581,9 @@ groups:
       window: 1d
   - alert: TaskiemStepDispatchBudgetBurn
     annotations:
-      description: 'Share of connector and sandbox steps claimed within 50 ms of becoming
-        ready (spec 15.3: p95 under 50 ms). Objective: 95% over 30d. At this rate
-        the whole budget lasts 30 days.'
+      description: 'Share of steps, on every queue and in every worker pool, claimed
+        within 50 ms of becoming ready (spec 15.3: p95 under 50 ms). Objective: 95%
+        over 30d. At this rate the whole budget lasts 30 days.'
       runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemstepdispatchbudgetburn
       summary: Step dispatch latency is burning its error budget 1x too fast (3d and
         6h windows)
@@ -685,13 +693,13 @@ groups:
       severity: page
   - alert: TaskiemQueueBacklog
     annotations:
-      description: 'The oldest ready task in a connector or sandbox queue is over
-        10 minutes old: workers are down, stuck or saturated. The dispatch SLO only
-        sees steps that are claimed, so this catches a queue nobody serves.'
+      description: 'The oldest ready task in a queue of a worker pool is over 10 minutes
+        old: that pool''s workers for the queue are down, stuck, saturated or were
+        never started. The dispatch SLO only sees steps that are claimed, so this
+        catches a queue or pool nobody serves.'
       runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemqueuebacklog
       summary: Steps have waited over 10 minutes in a queue
-    expr: max by (queue) (taskiem_queue_oldest_ready_seconds{queue=~"connector|sandbox"})
-      > 600
+    expr: max by (pool, queue) (taskiem_pool_oldest_ready_seconds) > 600
     for: 5m
     labels:
       severity: page

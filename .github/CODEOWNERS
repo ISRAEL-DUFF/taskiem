@@ -9,3 +9,11 @@
 /engine/db/dispatch_columns.txt   @ISRAEL-DUFF
 /engine/db/definers_test.go       @ISRAEL-DUFF
 /.github/CODEOWNERS               @ISRAEL-DUFF
+
+# The licence gate (decision 0007): the checker, its allow-list and
+# exceptions, and the workflows that run it. Loosening the gate needs a
+# decision-log entry or founder approval, so its review comes here, as does
+# any change to what CI runs or which identity signs releases.
+/tools/licencecheck/              @ISRAEL-DUFF
+/.github/workflows/               @ISRAEL-DUFF
+/.github/dependabot.yml           @ISRAEL-DUFF

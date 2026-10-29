@@ -18,16 +18,27 @@ import (
 const decideCacheSize = 2048
 
 // folded is a run's history folded up to State.Seq(), with the personal
-// data it opened. Only events committed before the deciding transaction
-// began are ever folded into a cached State, so a rolled-back decision
-// cannot leave events in it that do not exist.
+// data it opened. It is cached while the deciding transaction is still
+// open, and may hold events that transaction wrote (a worker appends a
+// step's outcome, then decides, in one transaction). If that transaction
+// does not commit, those events never existed, and another may later be
+// written at the same seq; so before a cached State is used, the event it
+// was last folded to is checked against the database (last), and a State
+// whose last event is not there is folded again from scratch.
 type folded struct {
 	workflowID uuid.UUID
 	version    int
 	erasedAt   *time.Time // the tenant's latest erasure when folded
 	state      *decide.State
 	taint      pii.Taint
+	last       history.Event // the last event folded, as stored (sealed)
 	used       uint64
+}
+
+// sameEvent reports whether a stored event is the one a State was folded
+// to: the same seq, kind and step, recorded by the same transaction.
+func sameEvent(a, b history.Event) bool {
+	return a.Seq == b.Seq && a.Type == b.Type && a.StepID == b.StepID && a.Attempt == b.Attempt && a.RecordedAt.Equal(b.RecordedAt)
 }
 
 type decideCache struct {
@@ -103,16 +114,23 @@ func (s *Store) foldRun(ctx context.Context, tx pgx.Tx, run runRow) (*decide.Sta
 		f = nil
 	}
 	if f != nil {
-		raw, err := HistoryAfter(ctx, tx, run.ref.ID, f.state.Seq())
+		// From the last event folded, to check that it is still there.
+		raw, err := HistoryAfter(ctx, tx, run.ref.ID, f.state.Seq()-1)
 		if err != nil {
 			return nil, nil, err
 		}
-		hist, _, err := s.openHistoryInto(ctx, tx, run.ref.TenantID, raw, f.taint)
-		if err == nil {
-			err = f.state.Extend(hist)
-		}
-		if err != nil {
-			f = nil // a gap (history purged and restarted) or bad event: fold from scratch
+		if len(raw) == 0 || !sameEvent(raw[0], f.last) {
+			f = nil // folded from a transaction that did not commit
+		} else if raw = raw[1:]; len(raw) > 0 {
+			hist, _, err := s.openHistoryInto(ctx, tx, run.ref.TenantID, raw, f.taint)
+			if err == nil {
+				err = f.state.Extend(hist)
+			}
+			if err != nil {
+				f = nil // a gap (history purged and restarted) or bad event: fold from scratch
+			} else {
+				f.last = raw[len(raw)-1]
+			}
 		}
 	}
 	if f == nil {
@@ -129,6 +147,9 @@ func (s *Store) foldRun(ctx context.Context, tx pgx.Tx, run runRow) (*decide.Sta
 			return nil, nil, err
 		}
 		f = &folded{workflowID: run.workflowID, version: run.version, erasedAt: erased, state: st, taint: taint}
+		if len(raw) > 0 {
+			f.last = raw[len(raw)-1]
+		}
 	}
 	s.folds.put(run.ref.ID, f)
 	return f.state.Clone(), cloneTaint(f.taint), nil

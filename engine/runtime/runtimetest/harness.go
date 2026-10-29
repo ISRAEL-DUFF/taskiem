@@ -15,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
@@ -50,10 +51,17 @@ type Env struct {
 	Containers container.Runner
 	Proxy      *egress.Proxy
 	ProxyAddr  string
-	// CallTimeout bounds each provider call a worker makes (default
-	// 200ms); tests whose fakes do real work set more.
+	// CallTimeout bounds each provider call a worker makes (default 5s, so
+	// a loaded machine does not time calls out); tests of timeouts set
+	// less.
 	CallTimeout time.Duration
+	// NoReplay skips replaying run histories at cleanup, for a test that
+	// writes a history the engine would not (to test that replay fails).
+	NoReplay bool
 }
+
+// DefaultCallTimeout is the provider call bound when CallTimeout is unset.
+const DefaultCallTimeout = 5 * time.Second
 
 // New creates an engine environment; it skips without a test database.
 func New(t testing.TB) *Env {
@@ -79,8 +87,55 @@ func New(t testing.TB) *Env {
 	reg.SetVersionSource(src.Version)
 	guard := &egress.Guard{Blocked: func(a netip.Addr) bool { return !a.IsLoopback() && egress.BlockedAddr(a) }}
 	vault := &secrets.Vault{Pool: d.App, KMS: kms, RootKey: "root"}
-	return &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault, HooksURL: "https://hooks.test/hooks"}, Registry: reg, Provider: prov, Tenant: tn.ID,
+	e := &Env{DB: d, Store: &runtime.Store{Pool: d.App, Registry: reg, PII: vault, HooksURL: "https://hooks.test/hooks"}, Registry: reg, Provider: prov, Tenant: tn.ID,
 		Secrets: runtime.MapSecrets{}, Vault: vault, Egress: guard, Connectors: src}
+	// Before the database is dropped (cleanups run last-registered first).
+	t.Cleanup(func() {
+		if !e.NoReplay {
+			e.replayHistories(t)
+		}
+	})
+	return e
+}
+
+// replayHistories checks that every run the test left settled (not running
+// or queued) has a history that replays to the same decisions
+// (decide.Verify): determinism is checked on every history the engine
+// tests produce, not on one suite's. Skipped when the test already failed
+// (New's cleanup also skips it with NoReplay).
+func (e *Env) replayHistories(t testing.TB) {
+	if t.Failed() || t.Skipped() {
+		return
+	}
+	ctx := context.Background()
+	// A tenant that erased someone has histories that open with [erased]
+	// where decide saw the value, so they cannot replay byte for byte.
+	rows, err := e.DB.Admin.Query(ctx, `SELECT r.id, r.tenant_id FROM runs r WHERE r.status NOT IN ('running', 'queued')
+		AND NOT EXISTS (SELECT 1 FROM subject_keys k WHERE k.tenant_id = r.tenant_id AND k.shredded_at IS NOT NULL) ORDER BY r.id`)
+	if err != nil {
+		t.Errorf("replay: listing runs: %v", err)
+		return
+	}
+	refs, err := pgx.CollectRows(rows, pgx.RowToStructByPos[runtime.RunRef])
+	if err != nil {
+		t.Errorf("replay: listing runs: %v", err)
+		return
+	}
+	for _, ref := range refs {
+		def, err := e.Store.RunDefinition(ctx, ref.TenantID, ref.ID)
+		if err != nil {
+			t.Errorf("replay: run %s: definition: %v", ref.ID, err)
+			continue
+		}
+		h, err := e.Store.OpenedHistory(ctx, ref)
+		if err != nil {
+			t.Errorf("replay: run %s: history: %v", ref.ID, err)
+			continue
+		}
+		if err := decide.Verify(def, h); err != nil {
+			t.Errorf("replay: run %s does not replay deterministically: %v", ref.ID, err)
+		}
+	}
 }
 
 // Publish stores a published workflow version and returns its workflow id.
@@ -148,7 +203,7 @@ func (e *Env) Worker(id string) *runtime.Worker {
 	}
 	timeout := e.CallTimeout
 	if timeout == 0 {
-		timeout = 200 * time.Millisecond
+		timeout = DefaultCallTimeout
 	}
 	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: s, Connections: e.Vault, Egress: e.Egress,
 		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: timeout}

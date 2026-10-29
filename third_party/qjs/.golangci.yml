@@ -1,0 +1,17 @@
+# The QuickJS fork (FORK.md) is upstream code with a few marked edits, so it
+# is linted with golangci-lint's standard set rather than the repository's
+# stricter configuration (UK spelling, gosec), which would ask for changes to
+# code we keep identical to upstream. CI runs this from this directory.
+version: "2"
+linters:
+  default: standard
+  exclusions:
+    rules:
+      # Upstream ignores the error from closing the module; kept as upstream.
+      - path: runtime\.go
+        linters: [errcheck]
+        text: "r.module.Close"
+      # govet's inline analyser suggests replacing deprecated aliases such
+      # as reflect.Ptr; upstream uses them, and they are kept as upstream.
+      - linters: [govet]
+        text: "^inline: "
