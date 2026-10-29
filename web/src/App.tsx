@@ -1,4 +1,11 @@
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
 import { Login } from "./pages/Login";
@@ -19,7 +26,14 @@ import { Policies } from "./pages/Policies";
 import { Account, Invitations, Passkeys } from "./pages/Account";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
-import { EmptyState, ErrorBox, Skeleton, useAction, useFocusTrap, useScrollableTables } from "./ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Skeleton,
+  useAction,
+  useFocusTrap,
+  useScrollableTables,
+} from "./ui";
 import { Reports } from "./pages/Reports";
 import { ForgotPassword, ResetPassword } from "./pages/Password";
 import { AcceptInvitation } from "./pages/AcceptInvitation";
@@ -36,21 +50,54 @@ import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
 import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
+import { StorefrontStock } from "./pages/StorefrontStock";
+import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
-import { InvoiceEdit, InvoiceMatch, InvoiceNew, InvoicePage, InvoiceSettingsPage, Invoices } from "./pages/Invoices";
-import { MoneyEntries, MoneyFees, MoneyLeaks, MoneyOverview, MoneyStatements } from "./pages/Money";
-import { SchoolClasses, SchoolFamilies, SchoolImport, SchoolPromotionPage, SchoolSettingsPage, SchoolStudentNew, SchoolStudentPage, Schools } from "./pages/Schools";
+import {
+  InvoiceEdit,
+  InvoiceMatch,
+  InvoiceNew,
+  InvoicePage,
+  InvoiceSettingsPage,
+  Invoices,
+} from "./pages/Invoices";
+import {
+  MoneyEntries,
+  MoneyFees,
+  MoneyLeaks,
+  MoneyOverview,
+  MoneyStatements,
+} from "./pages/Money";
+import {
+  SchoolClasses,
+  SchoolFamilies,
+  SchoolImport,
+  SchoolPromotionPage,
+  SchoolSettingsPage,
+  SchoolStudentNew,
+  SchoolStudentPage,
+  Schools,
+} from "./pages/Schools";
 import { SchoolTermFees, SchoolTermInvoices } from "./pages/SchoolFees";
 import { SchoolAccountsPage } from "./pages/SchoolAccounts";
 import { SchoolPaymentsPage } from "./pages/SchoolPayments";
 import { SchoolReceiptsPage } from "./pages/SchoolReceipts";
 import { SchoolDebtorsPage } from "./pages/SchoolDebtors";
-import { GateHome, SchoolClearancePage, SchoolGatePage } from "./pages/SchoolClearance";
+import {
+  GateHome,
+  SchoolClearancePage,
+  SchoolGatePage,
+} from "./pages/SchoolClearance";
 import { SchoolOverviewPage } from "./pages/SchoolOverview";
 import { showSchools } from "./lib/schools";
 import { FormSubmissions, Forms } from "./pages/Forms";
-import { FormRequestPage, FormRequests, MemberForm, type FormRequest } from "./pages/FormFill";
+import {
+  FormRequestPage,
+  FormRequests,
+  MemberForm,
+  type FormRequest,
+} from "./pages/FormFill";
 import { get } from "./api";
 import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
 import { Home } from "./pages/Home";
@@ -82,12 +129,19 @@ function EnrolPasskey() {
   return (
     <div className="login card" style={{ maxWidth: 640 }}>
       <h1>Add a passkey</h1>
-      <p>Administrators sign in to Taskiem with a passkey: your device's fingerprint, face or PIN. Add one to continue.</p>
+      <p>
+        Administrators sign in to Taskiem with a passkey: your device's
+        fingerprint, face or PIN. Add one to continue.
+      </p>
       {added ? (
         <>
           <p>Passkey added. Sign in with it now.</p>
           <ErrorBox error={act.error} />
-          <button className="primary" disabled={act.busy} onClick={() => void act.run(loginWithPasskey, false)}>
+          <button
+            className="primary"
+            disabled={act.busy}
+            onClick={() => void act.run(loginWithPasskey, false)}
+          >
             Sign in with your passkey
           </button>
         </>
@@ -108,7 +162,10 @@ function InviteeHome() {
   return (
     <div className="login card" style={{ maxWidth: 720 }}>
       <h1>Welcome back{me?.user?.name ? `, ${me.user.name}` : ""}</h1>
-      <p>You do not belong to an organisation on Taskiem yet. Accept an invitation to join one.</p>
+      <p>
+        You do not belong to an organisation on Taskiem yet. Accept an
+        invitation to join one.
+      </p>
       <Invitations always onJoined={() => void refresh()} />
       <p>
         <button onClick={() => void logout()}>Sign out</button>
@@ -128,9 +185,16 @@ function Shell() {
       <aside className="auth-side">
         <div className="auth-brand">
           <img src={brandFile("mark.svg")} alt="" width={40} height={40} />
-          <img className="auth-wordmark" src={brandFile("wordmark-reversed.svg")} alt="Taskiem" height={22} />
+          <img
+            className="auth-wordmark"
+            src={brandFile("wordmark-reversed.svg")}
+            alt="Taskiem"
+            height={22}
+          />
         </div>
-        <p className="auth-line">Orders, payments and approvals for your business, in one place.</p>
+        <p className="auth-line">
+          Orders, payments and approvals for your business, in one place.
+        </p>
         <ul className="auth-points">
           <li>Send invoices and see when they are paid</li>
           <li>Take orders and bookings on your own page</li>
@@ -148,19 +212,43 @@ function Shell() {
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
-    return loc.pathname === "/login" ? alone(<Login />) : <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`} replace />;
+    return loc.pathname === "/login" ? (
+      alone(<Login />)
+    ) : (
+      <Navigate
+        to={`/login?next=${encodeURIComponent(loc.pathname + loc.search + loc.hash)}`}
+        replace
+      />
+    );
   }
   if (me.invitations_only) return alone(<InviteeHome />);
   if (me.enrol_passkey) return alone(<EnrolPasskey />);
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
-  if (loc.pathname === "/login") return <Navigate to={new URLSearchParams(loc.search).get("next") || (me.field_agent ? "/agent" : "/home")} replace />;
+  if (loc.pathname === "/login")
+    return (
+      <Navigate
+        to={
+          new URLSearchParams(loc.search).get("next") ||
+          (me.field_agent ? "/agent" : "/home")
+        }
+        replace
+      />
+    );
   // A field agent's home is the agent app, not the workspace's workflows (N6).
-  if (me.field_agent && !agentSession && (loc.pathname === "/" || loc.pathname === "/home" || loc.pathname === "/workflows")) return <Navigate to="/agent" replace />;
+  if (
+    me.field_agent &&
+    !agentSession &&
+    (loc.pathname === "/" ||
+      loc.pathname === "/home" ||
+      loc.pathname === "/workflows")
+  )
+    return <Navigate to="/agent" replace />;
   if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.
-  if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/")) return <AgentApp />;
+  if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/"))
+    return <AgentApp />;
   if (agentSession) return <AgentWorkspace session={agentSession} />;
   return (
     <OnboardingProvider>
@@ -183,8 +271,12 @@ function SignedIn() {
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      for (const tabs of Array.from(mainRef.current?.querySelectorAll<HTMLElement>(".tabs") ?? [])) {
-        const on = tabs.querySelector<HTMLElement>('.active, [aria-current="page"], [aria-selected="true"], [aria-checked="true"]');
+      for (const tabs of Array.from(
+        mainRef.current?.querySelectorAll<HTMLElement>(".tabs") ?? [],
+      )) {
+        const on = tabs.querySelector<HTMLElement>(
+          '.active, [aria-current="page"], [aria-selected="true"], [aria-checked="true"]',
+        );
         if (!on || tabs.scrollWidth <= tabs.clientWidth) continue;
         const box = tabs.getBoundingClientRect();
         const at = on.getBoundingClientRect();
@@ -243,7 +335,12 @@ function SignedIn() {
   const daily: Item[] = [
     // For organisations that signed themselves up, until the checklist is
     // done or hidden (it stays at /start).
-    ["/start", `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`, "start", !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed],
+    [
+      "/start",
+      `Get started (${onboarding?.done ?? 0}/${onboarding?.total ?? 0})`,
+      "start",
+      !!onboarding?.self_serve && !onboarding.complete && !onboarding.dismissed,
+    ],
     ["/home", "Home", "home", true],
     ["/workflows", "Workflows", "workflows", can("workflow.read")],
     ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
@@ -255,7 +352,13 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
-    ["/approvals", "Approvals", "approvals", can("approval.decide") || can("workflow.publish"), bell.approvals > 0 ? String(bell.approvals) : undefined],
+    [
+      "/approvals",
+      "Approvals",
+      "approvals",
+      can("approval.decide") || can("workflow.publish"),
+      bell.approvals > 0 ? String(bell.approvals) : undefined,
+    ],
     ["/connections", "Connections", "connections", can("connection.manage")],
   ];
   const more: Item[] = [
@@ -263,9 +366,24 @@ function SignedIn() {
     ["/templates", "Templates", "templates", true],
     ["/members", "Members & keys", "members", can("member.manage")],
     ["/settings/billing", "Billing", "billing", can("billing.manage")],
-    ["/settings/payments", "Payments", "money", can("invoice.read") || me.roles.includes("owner")],
-    ["/catalogue", "Connector catalogue", "catalogue", can("connector.manage") || can("workflow.read")],
-    ["/settings", "Secrets & settings", "settings", can("secret.manage") || can("workflow.read")],
+    [
+      "/settings/payments",
+      "Payments",
+      "money",
+      can("invoice.read") || me.roles.includes("owner"),
+    ],
+    [
+      "/catalogue",
+      "Connector catalogue",
+      "catalogue",
+      can("connector.manage") || can("workflow.read"),
+    ],
+    [
+      "/settings",
+      "Secrets & settings",
+      "settings",
+      can("secret.manage") || can("workflow.read"),
+    ],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
     ["/settings/notifications", "Notifications", "bell", !!me.user],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
@@ -273,9 +391,16 @@ function SignedIn() {
     ["/reports", "Reports", "reports", can("audit.read")],
     ["/settings/keys", "Encryption keys", "keys", can("key.manage")],
   ].filter(([, , , ok]) => ok) as Item[];
-  const inMore = more.some(([to]) => pathname === to || (to !== "/settings" && pathname.startsWith(to + "/")));
+  const inMore = more.some(
+    ([to]) =>
+      pathname === to || (to !== "/settings" && pathname.startsWith(to + "/")),
+  );
   const link = ([to, label, icon, , count]: Item) => (
-    <NavLink key={to} to={to} end={to === "/settings" || to === "/forms" || to === "/storefront"}>
+    <NavLink
+      key={to}
+      to={to}
+      end={to === "/settings" || to === "/forms" || to === "/storefront"}
+    >
       <Icon name={icon} />
       {label}
       {count && <span className="count alert">{count}</span>}
@@ -295,7 +420,8 @@ function SignedIn() {
   const business = me.tenant_name || "Taskiem";
   // The workflow builder fills the window: the menu shrinks to a rail of
   // icons on a computer, and the top and tab bars give way on a phone.
-  const building = /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
+  const building =
+    /^\/workflows\/[^/]+$/.test(pathname) && pathname !== "/workflows/new";
   return (
     <div className={building ? "shell builder-mode" : "shell"}>
       <a className="skip-link" href="#main">
@@ -304,15 +430,39 @@ function SignedIn() {
       {/* Narrow screens: a top bar, a tab bar, and the sidebar as a drawer. */}
       <header className="topbar" inert={drawer || undefined}>
         <span className="brand">
-          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
+          <img
+            className="brand-mark"
+            src={brandFile("mark.svg")}
+            alt=""
+            width={26}
+            height={26}
+          />
           <span>{business}</span>
         </span>
         {me.user && <Bell count={bell} onChange={bell.reload} />}
       </header>
-      {drawer && <div className="nav-scrim" aria-hidden="true" onClick={() => setDrawer(false)} />}
-      <nav id="main-nav" ref={navRef} className={`nav drawer${drawer ? " open" : ""}`} aria-label="Main" tabIndex={-1}>
+      {drawer && (
+        <div
+          className="nav-scrim"
+          aria-hidden="true"
+          onClick={() => setDrawer(false)}
+        />
+      )}
+      <nav
+        id="main-nav"
+        ref={navRef}
+        className={`nav drawer${drawer ? " open" : ""}`}
+        aria-label="Main"
+        tabIndex={-1}
+      >
         <div className="brand">
-          <img className="brand-mark" src={brandFile("mark.svg")} alt="" width={26} height={26} />
+          <img
+            className="brand-mark"
+            src={brandFile("mark.svg")}
+            alt=""
+            width={26}
+            height={26}
+          />
           <span className="brand-name">
             <strong>{business}</strong>
             <span>Taskiem</span>
@@ -322,27 +472,54 @@ function SignedIn() {
               <Bell count={bell} onChange={bell.reload} />
             </span>
           )}
-          <button className="icon-button nav-close" aria-label="Close menu" onClick={() => setDrawer(false)}>
+          <button
+            className="icon-button nav-close"
+            aria-label="Close menu"
+            onClick={() => setDrawer(false)}
+          >
             <Icon name="close" />
           </button>
         </div>
         {daily.filter(([, , , ok]) => ok).map(link)}
         {more.length > 0 && (
           <>
-            <button type="button" className="nav-toggle" aria-expanded={moreOpen || inMore} aria-controls="nav-more" onClick={() => setMoreOpen(!(moreOpen || inMore))}>
+            <button
+              type="button"
+              className="nav-toggle"
+              aria-expanded={moreOpen || inMore}
+              aria-controls="nav-more"
+              onClick={() => setMoreOpen(!(moreOpen || inMore))}
+            >
               <Icon name="more" />
               More
-              <svg className="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg
+                className="chev"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
                 <path d="M9 6l6 6-6 6" />
               </svg>
             </button>
-            <div id="nav-more" hidden={!(moreOpen || inMore)} style={{ display: moreOpen || inMore ? "contents" : undefined }}>
+            <div
+              id="nav-more"
+              hidden={!(moreOpen || inMore)}
+              style={{ display: moreOpen || inMore ? "contents" : undefined }}
+            >
               {more.map(link)}
             </div>
           </>
         )}
         {install && (
-          <button type="button" className="nav-toggle nav-install" onClick={() => void install()}>
+          <button
+            type="button"
+            className="nav-toggle nav-install"
+            onClick={() => void install()}
+          >
             <Icon name="plus" />
             Install the app
           </button>
@@ -361,84 +538,156 @@ function SignedIn() {
           </button>
         </div>
       </nav>
-      <main className={building ? "main wide" : "main"} id="main" tabIndex={-1} ref={mainRef} inert={drawer || undefined}>
+      <main
+        className={building ? "main wide" : "main"}
+        id="main"
+        tabIndex={-1}
+        ref={mainRef}
+        inert={drawer || undefined}
+      >
         <BillingBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
-        <PageBoundary>
-        <Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/workflows" element={<Workflows />} />
-          <Route path="/workflows/new" element={<NewWorkflow />} />
-          <Route path="/workflows/:id" element={<Editor />} />
-          <Route path="/templates" element={<Templates />} />
-          <Route path="/tables" element={<Tables />} />
-          <Route path="/tables/:id" element={<TablePage />} />
-          <Route path="/storefront" element={<Storefront />} />
-          <Route path="/storefront/look" element={<Look />} />
-          <Route path="/storefront/orders" element={<StorefrontOrders />} />
-          <Route path="/storefront/orders/:reference" element={<StorefrontOrder />} />
-          <Route path="/storefront/bookings" element={<StorefrontBookings />} />
-          <Route path="/storefront/riders" element={<StorefrontRiders />} />
-          <Route path="/storefront/riders/pay" element={<RidersPayPage />} />
-          <Route path="/storefront/deliveries" element={<StorefrontDeliveries />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/invoices/new" element={<InvoiceNew />} />
-          <Route path="/invoices/settings" element={<InvoiceSettingsPage />} />
-          <Route path="/invoices/match" element={<InvoiceMatch />} />
-          <Route path="/invoices/:id" element={<InvoicePage />} />
-          <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
-          <Route path="/money" element={<MoneyOverview />} />
-          <Route path="/money/leaks" element={<MoneyLeaks />} />
-          <Route path="/money/statements" element={<MoneyStatements />} />
-          <Route path="/money/entries" element={<MoneyEntries />} />
-          <Route path="/money/fees" element={<MoneyFees />} />
-          <Route path="/schools" element={<Schools />} />
-          <Route path="/schools/import" element={<SchoolImport />} />
-          <Route path="/schools/students/new" element={<SchoolStudentNew />} />
-          <Route path="/schools/students/:id" element={<SchoolStudentPage />} />
-          <Route path="/schools/families" element={<SchoolFamilies />} />
-          <Route path="/schools/classes" element={<SchoolClasses />} />
-          <Route path="/schools/sessions/:id/promotion" element={<SchoolPromotionPage />} />
-          <Route path="/schools/terms/:id/fees" element={<SchoolTermFees />} />
-          <Route path="/schools/terms/:id/invoices" element={<SchoolTermInvoices />} />
-          <Route path="/schools/accounts" element={<SchoolAccountsPage />} />
-          <Route path="/schools/payments" element={<SchoolPaymentsPage />} />
-          <Route path="/schools/receipts" element={<SchoolReceiptsPage />} />
-          <Route path="/schools/debtors" element={<SchoolDebtorsPage />} />
-          <Route path="/schools/clearance" element={<SchoolClearancePage />} />
-          <Route path="/schools/overview" element={<SchoolOverviewPage />} />
-          <Route path="/schools/gate" element={<SchoolGatePage />} />
-          <Route path="/settings/schools" element={<SchoolSettingsPage />} />
-          <Route path="/forms" element={<Forms />} />
-          <Route path="/forms/requests" element={<FormRequests />} />
-          <Route path="/forms/requests/:id" element={<FormRequestPage />} />
-          <Route path="/forms/:id" element={<MemberForm />} />
-          <Route path="/forms/:id/submissions" element={<FormSubmissions />} />
-          <Route path="/start" element={<Start />} />
-          <Route path="/start/guide" element={<Guide />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/runs" element={<Runs />} />
-          <Route path="/runs/:id" element={<RunPage />} />
-          <Route path="/approvals" element={<Approvals />} />
-          <Route path="/connections" element={<Connections />} />
-          <Route path="/catalogue" element={<Catalogue />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/settings/billing" element={<Billing />} />
-          <Route path="/settings/payments" element={<PaymentsSettings />} />
-          <Route path="/settings/keys" element={<Keys />} />
-          <Route path="/settings/notifications" element={<NotificationSettings />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/audit" element={<Audit />} />
-          <Route path="/members" element={<Members />} />
-          <Route path="/policies" element={<Policies />} />
-          <Route path="/account" element={<Account />} />
-          <Route path="/handoff" element={<Handoff />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="*" element={<EmptyState icon="search">There is no page at this address.</EmptyState>} />
-        </Routes>
-        </PageBoundary>
+          <PageBoundary>
+            <Routes>
+              <Route path="/" element={<Navigate to="/home" replace />} />
+              <Route path="/home" element={<Home />} />
+              <Route path="/workflows" element={<Workflows />} />
+              <Route path="/workflows/new" element={<NewWorkflow />} />
+              <Route path="/workflows/:id" element={<Editor />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/tables" element={<Tables />} />
+              <Route path="/tables/:id" element={<TablePage />} />
+              <Route path="/storefront" element={<Storefront />} />
+              <Route path="/storefront/look" element={<Look />} />
+              <Route path="/storefront/orders" element={<StorefrontOrders />} />
+              <Route
+                path="/storefront/orders/:reference"
+                element={<StorefrontOrder />}
+              />
+              <Route
+                path="/storefront/bookings"
+                element={<StorefrontBookings />}
+              />
+              <Route path="/storefront/riders" element={<StorefrontRiders />} />
+              <Route
+                path="/storefront/riders/pay"
+                element={<RidersPayPage />}
+              />
+              <Route
+                path="/storefront/deliveries"
+                element={<StorefrontDeliveries />}
+              />
+              <Route path="/storefront/stock" element={<StorefrontStock />} />
+              <Route
+                path="/storefront/suppliers"
+                element={<StorefrontSuppliers />}
+              />
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/invoices/new" element={<InvoiceNew />} />
+              <Route
+                path="/invoices/settings"
+                element={<InvoiceSettingsPage />}
+              />
+              <Route path="/invoices/match" element={<InvoiceMatch />} />
+              <Route path="/invoices/:id" element={<InvoicePage />} />
+              <Route path="/invoices/:id/edit" element={<InvoiceEdit />} />
+              <Route path="/money" element={<MoneyOverview />} />
+              <Route path="/money/leaks" element={<MoneyLeaks />} />
+              <Route path="/money/statements" element={<MoneyStatements />} />
+              <Route path="/money/entries" element={<MoneyEntries />} />
+              <Route path="/money/fees" element={<MoneyFees />} />
+              <Route path="/schools" element={<Schools />} />
+              <Route path="/schools/import" element={<SchoolImport />} />
+              <Route
+                path="/schools/students/new"
+                element={<SchoolStudentNew />}
+              />
+              <Route
+                path="/schools/students/:id"
+                element={<SchoolStudentPage />}
+              />
+              <Route path="/schools/families" element={<SchoolFamilies />} />
+              <Route path="/schools/classes" element={<SchoolClasses />} />
+              <Route
+                path="/schools/sessions/:id/promotion"
+                element={<SchoolPromotionPage />}
+              />
+              <Route
+                path="/schools/terms/:id/fees"
+                element={<SchoolTermFees />}
+              />
+              <Route
+                path="/schools/terms/:id/invoices"
+                element={<SchoolTermInvoices />}
+              />
+              <Route
+                path="/schools/accounts"
+                element={<SchoolAccountsPage />}
+              />
+              <Route
+                path="/schools/payments"
+                element={<SchoolPaymentsPage />}
+              />
+              <Route
+                path="/schools/receipts"
+                element={<SchoolReceiptsPage />}
+              />
+              <Route path="/schools/debtors" element={<SchoolDebtorsPage />} />
+              <Route
+                path="/schools/clearance"
+                element={<SchoolClearancePage />}
+              />
+              <Route
+                path="/schools/overview"
+                element={<SchoolOverviewPage />}
+              />
+              <Route path="/schools/gate" element={<SchoolGatePage />} />
+              <Route
+                path="/settings/schools"
+                element={<SchoolSettingsPage />}
+              />
+              <Route path="/forms" element={<Forms />} />
+              <Route path="/forms/requests" element={<FormRequests />} />
+              <Route path="/forms/requests/:id" element={<FormRequestPage />} />
+              <Route path="/forms/:id" element={<MemberForm />} />
+              <Route
+                path="/forms/:id/submissions"
+                element={<FormSubmissions />}
+              />
+              <Route path="/start" element={<Start />} />
+              <Route path="/start/guide" element={<Guide />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/runs" element={<Runs />} />
+              <Route path="/runs/:id" element={<RunPage />} />
+              <Route path="/approvals" element={<Approvals />} />
+              <Route path="/connections" element={<Connections />} />
+              <Route path="/catalogue" element={<Catalogue />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/settings/billing" element={<Billing />} />
+              <Route path="/settings/payments" element={<PaymentsSettings />} />
+              <Route path="/settings/keys" element={<Keys />} />
+              <Route
+                path="/settings/notifications"
+                element={<NotificationSettings />}
+              />
+              <Route path="/alerts" element={<Alerts />} />
+              <Route path="/audit" element={<Audit />} />
+              <Route path="/members" element={<Members />} />
+              <Route path="/policies" element={<Policies />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/handoff" element={<Handoff />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route
+                path="*"
+                element={
+                  <EmptyState icon="search">
+                    There is no page at this address.
+                  </EmptyState>
+                }
+              />
+            </Routes>
+          </PageBoundary>
         </div>
       </main>
       <PullToRefresh
@@ -456,7 +705,13 @@ function SignedIn() {
             {label}
           </NavLink>
         ))}
-        <button type="button" aria-label="Open menu" aria-expanded={drawer} aria-controls="main-nav" onClick={() => setDrawer(true)}>
+        <button
+          type="button"
+          aria-label="Open menu"
+          aria-expanded={drawer}
+          aria-controls="main-nav"
+          onClick={() => setDrawer(true)}
+        >
           <span className="tab-icon">
             <Icon name="menu" />
           </span>
@@ -469,7 +724,9 @@ function SignedIn() {
 
 /** Up to two initials for an avatar: "Ada Obi" is AO, "ada@x.ng" is AD. */
 export function initials(name: string): string {
-  const [a = "", b = ""] = name.includes("@") ? [] : name.split(/\s+/).filter(Boolean);
+  const [a = "", b = ""] = name.includes("@")
+    ? []
+    : name.split(/\s+/).filter(Boolean);
   return (a && b ? a.charAt(0) + b.charAt(0) : name.slice(0, 2)).toUpperCase();
 }
 
@@ -483,14 +740,24 @@ function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
   const refresh = useRef(onRefresh);
   refresh.current = onRefresh;
   useEffect(() => {
-    if (!standalone() || typeof window.matchMedia !== "function" || !window.matchMedia("(pointer: coarse)").matches) return;
+    if (
+      !standalone() ||
+      typeof window.matchMedia !== "function" ||
+      !window.matchMedia("(pointer: coarse)").matches
+    )
+      return;
     setOn(true);
     let start: number | null = null;
     let dy = 0;
     const down = (e: TouchEvent) => {
       // Only from the very top, one finger, and not over a dialog or the canvas.
       const t = e.target instanceof Element ? e.target : null;
-      start = window.scrollY <= 0 && e.touches.length === 1 && !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel") ? (e.touches[0]?.clientY ?? null) : null;
+      start =
+        window.scrollY <= 0 &&
+        e.touches.length === 1 &&
+        !t?.closest(".modal, .nav.drawer, .canvas, .bell-panel")
+          ? (e.touches[0]?.clientY ?? null)
+          : null;
       dy = 0;
     };
     const move = (e: TouchEvent) => {
@@ -530,8 +797,24 @@ function PullToRefresh({ onRefresh }: { onRefresh: () => void }) {
   const at = busy ? PULL_AT : shown;
   return (
     <>
-      <div className={`pull${busy ? " busy" : at >= PULL_AT ? " ready" : ""}`} aria-hidden="true" style={{ transform: `translateY(${at - 40}px)`, opacity: Math.min(1, at / PULL_AT) }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" style={{ transform: busy ? undefined : `rotate(${(at / PULL_AT) * 270}deg)` }}>
+      <div
+        className={`pull${busy ? " busy" : at >= PULL_AT ? " ready" : ""}`}
+        aria-hidden="true"
+        style={{
+          transform: `translateY(${at - 40}px)`,
+          opacity: Math.min(1, at / PULL_AT),
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          style={{
+            transform: busy ? undefined : `rotate(${(at / PULL_AT) * 270}deg)`,
+          }}
+        >
           <path d="M20 12a8 8 0 11-2.3-5.6M20 4v4h-4" />
         </svg>
       </div>

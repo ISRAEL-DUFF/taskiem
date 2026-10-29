@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -127,5 +128,54 @@ func TestAcceptLowersStock(t *testing.T) {
 	w.decide(ref3, "decide", "rejected")
 	if st.n["1"] != 9 {
 		t.Fatalf("a declined order took stock: %d", st.n["1"])
+	}
+}
+
+// With stock movements (docs/spec/stock.md §4), accepting records an
+// order movement per row before the change is sent, and the count is the
+// sum of the movements: the first count seen in the table, then the order.
+func TestAcceptRecordsMovements(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	st := &fakeStock{n: map[string]int64{"1": 6}, keys: map[string]bool{}}
+	w.orders.Stock = st
+	w.orders.Moves = &stock.Stock{Pool: w.env.DB.App, Table: st}
+	six := int64(6)
+	w.in(func(tx pgx.Tx) error {
+		return storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{{ID: "1", Name: "Jollof rice", Available: true, Stock: &six}})
+	})
+	ref := w.submit("order", "after_accept", 300000)
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Drain(t)
+	w.decide(ref, "decide", "approved")
+	if st.n["1"] != 4 || st.changes != 1 || w.copiedStock("1") != 4 {
+		t.Fatalf("stock %d after %d changes, copy %d", st.n["1"], st.changes, w.copiedStock("1"))
+	}
+	// Retried: nothing moves twice.
+	if out, err := w.orders.Decide(ctx, w.env.Tenant, ref, "accept", "", "test"); err != nil || st.changes != 1 || len(out["short"].([]string)) != 0 {
+		t.Fatalf("retry: %v %v", out, err)
+	}
+	var list []stock.Movement
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		list, err = stock.ListTx(ctx, tx, w.env.Tenant, stock.Filter{ItemID: "1"})
+		return err
+	})
+	if len(list) != 2 || list[0].Reason != stock.Order || list[0].Reference != ref || *list[0].Change != -2 || list[1].Reason != stock.Outside {
+		t.Fatalf("movements: %+v", list)
+	}
+
+	// More than is left: lowered to zero, short, as before.
+	st.n["1"] = 1
+	ref2 := w.submit("order", "after_accept", 300000)
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.env.Drain(t)
+	w.decide(ref2, "decide", "approved")
+	if o := w.order(ref2); st.n["1"] != 0 || o.Note != "Accepted with too little stock of Jollof rice" {
+		t.Fatalf("short: stock %d, note %q", st.n["1"], o.Note)
 	}
 }

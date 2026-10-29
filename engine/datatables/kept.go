@@ -39,7 +39,7 @@ const KeptMessage = "This table is kept by Taskiem: rows are added by Taskiem an
 // KeptNames are the names of the tables Taskiem's own features keep. No
 // one else may make a table of one of these names, so a business cannot
 // make an ordinary table that a feature would later find in its way.
-var KeptNames = []string{"money_log", "money_matches", "school_students", "school_classes", "school_term_fees"}
+var KeptNames = []string{"money_log", "money_matches", "school_students", "school_classes", "school_term_fees", "stock_movements"}
 
 // IsKeptName reports whether name is one Taskiem keeps for itself.
 func IsKeptName(name string) bool { return slices.Contains(KeptNames, name) }

@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -259,7 +260,21 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return s.syncServices(ctx, tenant, sf)
 	}
+	// A catalogue keeping stock: counts changed in the table by hand are
+	// recorded as outside movements, against the database's clock read
+	// before the rows (docs/spec/stock.md §4).
+	var mark *time.Time
+	if s.Stock.Ready() && sf.CatalogueColumns.Stock != "" {
+		if t, err := s.Stock.ReadMark(ctx); err == nil {
+			mark = &t
+		}
+	}
 	rows, rerr := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
+	if rerr == nil && mark != nil {
+		if _, err := s.Stock.Outside(ctx, tenant, stock.SeenRows(rows, sf.CatalogueColumns), *mark); err != nil {
+			s.Logger.Warn("stock: recording changes made in the table", "tenant", tenant, "err", err)
+		}
+	}
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if rerr != nil {
 			if err := storefront.CatalogueFailed(ctx, tx, tenant, rerr); err != nil {

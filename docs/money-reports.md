@@ -14,6 +14,9 @@ Every morning from 08:00 Lagos, everyone who [gets it](#who-gets-them) and has l
 
 - **In** is money in that settled, by channel, the largest first (at most five named); **pending** is money in still on its way. **Out** is money out that settled. Invoices paid are those paid in full that day, with what was paid on them; leaks are those [opened](leaks.md) that day.
 - **Riders.** A business with [riders](dispatch.md#money) gets a line for each rider who delivered, took cash, handed cash in or was rated that day: "Musa: 4 delivered, ₦8,500 paid at the door, ₦3,000 cash, owes ₦3,000, rated 4.5 of 5".
+- **Sales.** A business [keeping stock](stock.md#sales) gets a line for the sales it recorded that day: "Sales you recorded: ₦310,000 from 3 sales (Cash ₦30,000 · Transfer ₦280,000)." Its evening total of the day's sales is sent after closing, through the same outbox (kind `sales_evening`).
+- **Stock lost.** What counts and adjustments took off that day, at cost, and the item lost most.
+- **Low stock.** A business keeping stock gets the items at or below their reorder level, each with how many to order (at most five named).
 - **Nothing to say, nothing sent.** A day with no movement, no invoice paid and no leak opened sends no message.
 - **Once.** Each business's summary for a day is taken once (`money_digests`, migration 00205) in the transaction that queues it, so a restart or a second scheduler never sends it twice. Who gets it is decided then: someone who turns the daily summary on later that day gets the next day's, not that day's. It goes through the chat [outbox](whatsapp.md#delivery-and-retries) (kind `money_daily`, naming the summary and the person) and is worded when sent, in the person's language, from the log as it then stands.
 - **WhatsApp's 24-hour window.** Inside it the summary is a text message; outside it, it goes as the `taskiem_daily_summary` [template](whatsapp.md#templates), "[Ada Foods] Yesterday's money, 23 Oct 2026: ₦300,000 in … Tap Open for the Money page." with an **Open** button, once Meta has approved it in the number's account; until then as the alert template (`taskiem_alert`): "[Ada Foods] Yesterday: ₦300,000 in … Details: <link>", the line cut at 200 characters. Either is counted against the business's template allowance like other alerts. Telegram has no window. A summary that could not go out within a day is dropped, as is one for a person who has since turned it off or can no longer read invoices.
@@ -24,6 +27,7 @@ On the 1st of each month from 09:00 Lagos (or on the 2nd or 3rd, if Taskiem's sc
 
 - Subject: **[Ada Foods] money in October 2026**.
 - Money in and out, settled and pending; the fees and the effective fee rate; each channel's money in, out and fees; invoices paid; leaks opened, leaks open now and the total recovered.
+- For a business keeping [stock](stock.md#counts-shrinkage-and-leaks): what came in, was sold and was lost to counts and adjustments, at cost, and the item lost most.
 - A link to the Money page, where the month's log, invoices and journal download as spreadsheets (CSV). The email carries no attachments.
 
 A month with no movement, no invoice paid and no leak opened sends no email. The email is sent once per business and month in the same way as the daily summary, to those who get it when the month is taken; when no one's email could be sent, it is tried again at the next look. It needs the deployment's email (`TASKIEM_SMTP_URL` and `TASKIEM_ALERT_FROM`, as for alerts); without it no monthly email is sent and the scheduler says so when it starts.

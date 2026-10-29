@@ -358,6 +358,10 @@ func TestMatch(t *testing.T) {
 		"chase an unpaid invoice":                                            "chase-overdue-invoices",
 		"remind customers about overdue invoices":                            "chase-overdue-invoices",
 		"send a receipt when an invoice is paid":                             "invoice-paid-receipt",
+		"every morning tell me which items in my stock are running low":      "low-stock-alert",
+		"order from my supplier when rice is low, after I approve":           "reorder-from-supplier",
+		"remind me every Saturday to count the shelf":                        "stock-count-reminder",
+		"send me the takings from the sales I record in chat each night":     "sales-day-total",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {

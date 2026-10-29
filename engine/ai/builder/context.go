@@ -175,6 +175,9 @@ var synonyms = map[string][]string{
 	"fees": {"schools", "invoices"}, "pupil": {"schools"}, "pupils": {"schools"}, "students": {"schools"}, "student": {"schools"},
 	"parents": {"schools"}, "guardians": {"schools"}, "bursar": {"schools"}, "term": {"schools"}, "clearance": {"schools"},
 	"gate": {"schools"}, "resumption": {"schools"}, "proprietor": {"schools"}, "class": {"schools"}, "classes": {"schools"},
+	// A shop's stock is the stock record's (rule 24); "stock" itself
+	// already names it.
+	"inventory": {"stock"}, "shelf": {"stock"}, "restock": {"stock"}, "reorder": {"stock"}, "stocktake": {"stock"}, "sold": {"stock"},
 }
 
 var stop = map[string]bool{"the": true, "and": true, "for": true, "with": true, "when": true, "then": true, "that": true,

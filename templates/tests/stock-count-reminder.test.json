@@ -1,0 +1,37 @@
+{
+  "schema": "wd-test/v1",
+  "template": "stock-count-reminder",
+  "params": {},
+  "cases": [
+    {
+      "name": "reminds the owner to count the shelf",
+      "trigger": {
+        "scheduled_time": "2026-10-31T17:00:00Z"
+      },
+      "mocks": {
+        "items": {
+          "output": {
+            "count": 12,
+            "items": []
+          }
+        },
+        "remind": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "remind": "completed"
+        },
+        "inputs": {
+          "remind": {
+            "message": "Time to count your shelf: 12 items. Send count on WhatsApp and Taskiem asks you item by item, or use Count the shelf on the Stock page."
+          }
+        }
+      }
+    }
+  ]
+}

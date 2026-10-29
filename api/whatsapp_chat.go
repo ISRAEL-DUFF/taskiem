@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -270,6 +271,10 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		if done, err := s.riderPress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
 			return err
 		}
+		// A supplier's Confirm and Change (whatsapp_purchases.go).
+		if done, err := s.supplierPress(ctx, wa, reach.WhatsApp, number, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	// An owner agreeing to a field agent, or ending their sessions (agents.go).
 	if done, err := s.waAgentMessage(ctx, wa, number, in); done || err != nil {
@@ -396,6 +401,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		return err
 	}
 	if done, err := s.riderDeliveryWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
+		return err
+	}
+	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
 	if wa.Own() {
@@ -585,11 +593,47 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 				if done, err := s.waMoneyWords(ctx, c, m); done || err != nil {
 					return err
 				}
+			case lang.IntentSold:
+				// A sale in the person's language: what follows the sale
+				// word is read as English's is (stock K2).
+				if s.Stock.Ready() && m.Arg != "" {
+					return s.waStockSale(ctx, c, m.Arg)
+				}
+			case lang.IntentCount:
+				// A count, read as English's "count ..." (K4).
+				if s.Stock.Ready() && m.Arg != "" {
+					return s.waStockCount(ctx, c, m.Arg)
+				}
+			case lang.IntentStock:
+				// An item's stock, or what is low (K5), read as English's
+				// "how many …" and "stock".
+				if s.Stock.Ready() {
+					if m.Arg == "" {
+						return s.waStockLow(ctx, c)
+					}
+					name, ok := stock.ParseHowMany("how many " + m.Arg)
+					if !ok {
+						name = m.Arg
+					}
+					return s.waStockShow(ctx, c, name)
+				}
+			case lang.IntentTakeOff:
+				// Stock taken off with why (K5): an adjustment down.
+				if s.Stock.Ready() && m.Arg != "" {
+					return s.waStockAdjust(ctx, c, takeOff(m.Arg))
+				}
+			case lang.IntentReceived:
+				// Goods received, read as English's "received ..." (K3).
+				if s.Stock.Ready() && m.Arg != "" {
+					if done, err := s.waReceived(ctx, c, m.Arg); done || err != nil {
+						return err
+					}
+				}
 			}
 		}
 		// Words that only looked like one ("I spend the whole day…") are
 		// ordinary chat, which the model may still route.
-		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut}, m.Intent) {
+		if matched && slices.Contains([]lang.Intent{lang.IntentInvoice, lang.IntentExpense, lang.IntentCashIn, lang.IntentCashOut, lang.IntentSold, lang.IntentReceived, lang.IntentCount, lang.IntentStock, lang.IntentTakeOff}, m.Intent) {
 			matched = false
 		}
 		// A way into the web app for someone with no password (N6).
@@ -706,6 +750,15 @@ func (s *Server) waHelp(c *chat) string {
 		}
 		if s.Riders.Ready() {
 			lines = append(lines, c.t("wa.help.riders"))
+		}
+	}
+	if c.p.Can(PermTableRead) && s.Stock.Ready() {
+		lines = append(lines, c.t("wa.help.stock"))
+		if c.p.Can(PermTableEdit) {
+			lines = append(lines, c.t("wa.help.sales"), c.t("wa.help.counts"))
+		}
+		if c.p.Can(PermStorefrontManage) && s.Purchases.Ready() {
+			lines = append(lines, c.t("wa.help.purchases"))
 		}
 	}
 	if c.p.Can(PermStorefrontManage) && s.Orders != nil {

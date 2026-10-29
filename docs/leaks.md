@@ -13,6 +13,11 @@ A leak is money a business may be losing: money that came in and belongs to noth
 | **Paid after it was voided** | Money paid into an account number Taskiem gave for an invoice that was then voided | The payment |
 | **Fee above the agreed rate** | A payment whose fee is above the rate the owner set for its connection | The difference |
 | **Cash a rider owes** | Cash a rider took at the door and has not handed in, above the business's limit ([dispatch](dispatch.md#paying-at-the-door)) | What they owe |
+| **Sold more than the stock** | A sale of more of an item than the stock held ([stock](stock.md#counts-shrinkage-and-leaks)) | What was sold beyond it, at cost |
+| **Stock below zero** | An item's count went below zero in the catalogue table (a hand edit) | The count below zero, at cost |
+| **Missing at a count** | A count found fewer than recorded, worth more than the business's limit at cost (₦5,000 unless set; always, for an item with no cost price) | What was missing, at cost |
+
+Stock leaks are valued at the item's cost price when it moved (else its last known one; ₦0, in units only, when it never had one), and stay open until closed: they are about something that happened, not a balance that can come right.
 
 POS sales and cash are takings, not money owed, so they are never "money in with nothing to match". Statement lines are not checked for duplicates: the same line uploaded twice is kept once, and lines without a reference (bank charges) repeat by nature.
 

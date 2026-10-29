@@ -1,0 +1,29 @@
+{
+  "id": "stock-count-reminder",
+  "title": "Weekly reminder to count your shelf",
+  "summary": "Once a week, remind the owner to count what is on the shelf, so missing stock is found early.",
+  "description": "On the day and at the time you choose, reminds the owner to count the shelf: send *count* on WhatsApp and Taskiem asks item by item, or use Count the shelf on the Stock page. Each difference is kept with its reason, and what went missing is valued at what you paid.",
+  "category": "operations",
+  "tags": ["inventory", "stock", "count", "reminder", "weekly"],
+  "keywords": ["count", "stock count", "stocktake", "stock take", "inventory count", "shelf", "weekly", "reminder", "missing stock"],
+  "connectors": ["stock@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "count_day", "type": "integer", "title": "Day", "description": "The day of the week: 1 is Monday, 6 Saturday, 0 Sunday.", "required": false, "default": 6, "example": 6, "minimum": 0, "maximum": 6},
+    {"name": "count_time", "type": "time", "title": "Time", "description": "When the reminder is sent, Lagos time.", "required": false, "default": "18:00", "example": "18:00"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_stockCountReminder",
+    "version": 1,
+    "name": "Count the shelf",
+    "trigger": {"type": "schedule", "config": {"cron": "{{count_time:minute}} {{count_time:hour}} * * {{count_day}}", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "items", "type": "connector", "name": "Read how many items you keep", "connector": "stock@1", "action": "list_items", "input": {}},
+      {"id": "remind", "type": "connector", "name": "Remind the owner to count", "connector": "notify@1", "action": "tell", "needs": ["items"],
+       "when": "=steps.items.output.count > 0",
+       "input": {"message": "='Time to count your shelf: ' + string(steps.items.output.count) + ' items. Send count on WhatsApp and Taskiem asks you item by item, or use Count the shelf on the Stock page.'"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

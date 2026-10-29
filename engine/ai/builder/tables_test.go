@@ -221,3 +221,49 @@ func TestInstructionsTeachSchools(t *testing.T) {
 		t.Error("the synonyms do not reach the schools connector")
 	}
 }
+
+// A proposed table of stock with a quantity is flagged: a shop's stock is
+// stock@1's (rule 24).
+func TestStockTableWarned(t *testing.T) {
+	doc := func(name string) []byte {
+		return []byte(`{"steps": [{"id": "w", "type": "connector", "connector": "xenibase@1", "connection": "data_tables", "action": "insert_rows", "input": {"table": "` + name + `"}}]}`)
+	}
+	cols := func(names ...string) []ColumnSpec {
+		var out []ColumnSpec
+		for _, n := range names {
+			out = append(out, ColumnSpec{Name: n, Title: n, Type: "text"})
+		}
+		return out
+	}
+	for _, c := range []struct {
+		table TableSpec
+		flag  bool
+	}{
+		{TableSpec{Name: "stock", Columns: cols("item", "quantity")}, true},
+		{TableSpec{Name: "shop_inventory", Columns: cols("product", "qty", "reorder_level")}, true},
+		{TableSpec{Name: "stock_requests", Columns: cols("item", "requested_by")}, false},
+		{TableSpec{Name: "orders", Columns: cols("item", "quantity")}, false},
+	} {
+		keep, warns := reviewTables([]TableSpec{c.table}, nil, doc(c.table.Name), nil)
+		flagged := false
+		for _, w := range warns {
+			flagged = flagged || (w.Rule == RuleStockTable && strings.Contains(w.Message, "stock@1"))
+		}
+		if flagged != c.flag || len(keep) != 1 {
+			t.Errorf("%s %v: flagged %v, kept %d (%+v)", c.table.Name, c.table.Columns, flagged, len(keep), warns)
+		}
+	}
+}
+
+// The instructions teach the stock record (rule 24).
+func TestInstructionsTeachStock(t *testing.T) {
+	text := Instructions()
+	for _, want := range []string{"stock@1", "low_items", "draft_purchase", "send_purchase", "record_sale", "sales_day", "reorder-from-supplier", "never notify@1 a supplier"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the instructions lack %q", want)
+		}
+	}
+	if !slices.Contains(synonyms["inventory"], "stock") {
+		t.Error("the synonyms do not reach the stock connector")
+	}
+}

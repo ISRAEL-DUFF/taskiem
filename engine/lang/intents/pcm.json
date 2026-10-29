@@ -30,7 +30,12 @@
     "invoice": ["send invoice give", "send bill give"],
     "expense": ["i spend", "i don spend"],
     "cash_in": ["cash enter", "money enter"],
-    "cash_out": ["cash comot", "money comot"]
+    "cash_out": ["cash comot", "money comot"],
+    "sold": ["i don sell", "i sell", "don sell"],
+    "received": ["i don receive", "e don land", "don receive"],
+    "count": ["i don count", "count am"],
+    "stock": ["check stock", "how many", "how much remain"],
+    "take_off": ["comot", "remove", "don spoil"]
   },
   "fillers": ["abeg", "abeg o", "please"],
   "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat", "i spend", "i don spend"],

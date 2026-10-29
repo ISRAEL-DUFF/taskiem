@@ -1,0 +1,281 @@
+# The stock platform connector (docs/stock.md, decision 0057): a shop's
+# items and their stock, as its catalogue table holds them, and the
+# movements that explain each count. It acts on Taskiem's own records and
+# the business's catalogue, for the run's tenant only, and needs no
+# connection. Sales and orders move stock themselves; adjust, receive and
+# count are the changes a workflow makes.
+manifest: connector/v1
+id: stock
+version: 1.0.0
+name: Stock
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  list_items:
+    title: List items and their stock
+    description: The business's items with their stock, unit, prices, reorder and target levels and supplier, read from the catalogue table itself. low lists only those at or below their reorder level (each with suggest, how many to order); supplier and name narrow the list (name matches part of it, any case).
+    class: read
+    input:
+      type: object
+      properties:
+        low:      { type: boolean, description: Only items at or below their reorder level }
+        supplier: { type: string, description: Only this supplier's items }
+        name:     { type: string, description: Items whose name holds these words }
+    output:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/actions/get_item/output' } }
+        count: { type: integer }
+  get_item:
+    title: Read an item's stock
+    description: One item by its catalogue row id.
+    class: read
+    input:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+    output:
+      type: object
+      properties:
+        id:            { type: string }
+        name:          { type: string }
+        stock:         { type: integer, description: Absent when the row holds no count }
+        unit:          { type: string }
+        price_kobo:    { type: integer }
+        cost_kobo:     { type: integer, description: The last price paid for one }
+        reorder_level: { type: integer }
+        target_level:  { type: integer }
+        supplier:      { type: string }
+        low:           { type: boolean }
+        suggest:       { type: integer, description: How many to order when low }
+  adjust:
+    title: Adjust an item's stock
+    description: Changes an item's stock by change (never below zero), with a note saying why (spoilt, found, a gift). Recorded as a movement before it reaches the catalogue table; status is done, or pending while the table is out of reach (it is sent again).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id, change]
+      properties:
+        id:     { type: string }
+        change: { type: integer, minimum: -1000000, maximum: 1000000 }
+        note:   { type: string, maxLength: 200 }
+    output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  receive:
+    title: Record goods received
+    description: Adds goods received to an item's stock, naming where they came from (reference, such as a purchase order).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id, quantity]
+      properties:
+        id:        { type: string }
+        quantity:  { type: integer, minimum: 1, maximum: 1000000 }
+        reference: { type: string, maxLength: 100 }
+        purchase:  { type: string, description: "A purchase order's reference (P-7QX4KD): received on it, naming it" }
+        note:      { type: string, maxLength: 200 }
+    output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  count:
+    title: Record a count
+    description: Sets an item's stock to what was counted on the shelf; the difference is the movement.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [id, count]
+      properties:
+        id:    { type: string }
+        count: { type: integer, minimum: 0, maximum: 1000000 }
+        note:  { type: string, maxLength: 200 }
+    output: { $ref: '#/actions/movements/output/properties/movements/items' }
+  record_sale:
+    title: Record a sale
+    description: A sale at the counter, as chat records one. Each line is an item by its row id and how many, at its price unless one is given; amount_kobo is the sale's total (the lines' prices added up when absent). paid_how is cash (its takings go into the money log), transfer or pos (the money the rail reports is matched to it; status waiting until then). The items' stock goes down, never below zero; short names the items sold beyond the stock there was.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [lines, paid_how]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [id, quantity]
+            properties:
+              id:         { type: string }
+              quantity:   { type: integer, minimum: 1, maximum: 1000000 }
+              price_kobo: { type: integer, minimum: 0 }
+        amount_kobo: { type: integer, minimum: 1 }
+        paid_how:    { type: string, enum: [cash, transfer, pos] }
+        note:        { type: string, maxLength: 200 }
+    output:
+      type: object
+      properties:
+        id:          { type: string }
+        reference:   { type: string, description: "S-7QX4KD" }
+        amount_kobo: { type: integer }
+        paid_how:    { type: string }
+        status:      { type: string, enum: [recorded, waiting, matched] }
+        short:       { type: array, items: { type: string } }
+  low_items:
+    title: List low items
+    description: The items at or below their reorder level, each with suggest (how many to order, up to its target level) and its supplier; supplier narrows the list.
+    class: read
+    input:
+      type: object
+      properties:
+        supplier: { type: string }
+    output: { $ref: '#/actions/list_items/output' }
+  draft_purchase:
+    title: Draft purchase orders
+    description: Drafts orders to the business's suppliers. With no lines, one order per supplier for the low items naming them and on no open order, each for its suggested quantity at its last cost (no_supplier names the low items with no supplier Taskiem knows); supplier narrows it to one. With lines (item ids and how many), one order to the supplier named. A drafted order is sent by send_purchase, or approved on the Stock page.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      properties:
+        supplier: { type: string, description: A supplier's name }
+        lines:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            required: [id, quantity]
+            properties:
+              id:        { type: string }
+              quantity:  { type: integer, minimum: 1, maximum: 1000000 }
+              cost_kobo: { type: integer, minimum: 0, description: The price of one; the item's last cost when absent }
+        note: { type: string, maxLength: 500 }
+    output:
+      type: object
+      properties:
+        purchases:   { type: array, items: { $ref: '#/actions/send_purchase/output' } }
+        count:       { type: integer }
+        no_supplier: { type: array, items: { type: string } }
+  send_purchase:
+    title: Send a purchase order
+    description: Approves a drafted order and sends it to its supplier on the chat app they tapped in on, with Confirm and Change, else by SMS with the link to tap in. An order above the business's approval limit is refused here; a person approves it on the Stock page. Sending one already sent answers it as it is.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string, description: "P-7QX4KD" }
+    output:
+      type: object
+      properties:
+        id:            { type: string }
+        reference:     { type: string }
+        supplier:      { type: string }
+        status:        { type: string, enum: [drafted, sent, confirmed, part_received, received, cancelled] }
+        items:         { type: string, description: "50 cartons Indomie, 20 bags Rice" }
+        lines:         { type: array, items: { type: object } }
+        total_kobo:    { type: integer }
+        received_kobo: { type: integer }
+        paid_kobo:     { type: integer }
+        owed_kobo:     { type: integer }
+  list_purchases:
+    title: List purchase orders
+    description: The business's purchase orders, the newest first; open lists those not yet received or cancelled.
+    class: read
+    input:
+      type: object
+      properties:
+        open:     { type: boolean }
+        supplier: { type: string }
+        limit:    { type: integer, minimum: 1, maximum: 200 }
+    output:
+      type: object
+      properties:
+        purchases: { type: array, items: { $ref: '#/actions/send_purchase/output' } }
+        count:     { type: integer }
+  sales_day:
+    title: Add up a day's sales
+    description: "The sales recorded on a Lagos day (today when day is absent), by chat, on the Stock page or by record_sale: the total, by cash, transfer and terminal, how many, how many still wait for their money, what sold most, and how many terminal sales have no items."
+    class: read
+    input:
+      type: object
+      properties:
+        day: { type: string, description: "A date like 2026-10-29" }
+    output:
+      type: object
+      properties:
+        day:           { type: string }
+        total_kobo:    { type: integer }
+        count:         { type: integer }
+        waiting:       { type: integer }
+        cash_kobo:     { type: integer }
+        transfer_kobo: { type: integer }
+        pos_kobo:      { type: integer }
+        top:           { type: string, description: "2 bags Rice, 1 carton Indomie" }
+        unsold:        { type: integer, description: Terminal sales with no items recorded }
+  movements:
+    title: List stock movements
+    description: An item's movements (or every item's), the latest first, since a time.
+    class: read
+    input:
+      type: object
+      properties:
+        id:     { type: string, description: An item's row id; empty for every item }
+        reason: { type: string, enum: [order, sale, received, adjustment, count, outside] }
+        since:  { type: string, description: RFC 3339 }
+        limit:  { type: integer, minimum: 1, maximum: 500 }
+    output:
+      type: object
+      properties:
+        movements:
+          type: array
+          items:
+            type: object
+            properties:
+              id:        { type: string }
+              item_id:   { type: string }
+              item:      { type: string }
+              reason:    { type: string }
+              status:    { type: string, enum: [pending, done, void] }
+              change:    { type: integer, description: What landed, once done }
+              before:    { type: integer }
+              after:     { type: integer }
+              short:     { type: integer, description: What a decrease asked for beyond the stock }
+              note:      { type: string }
+              reference: { type: string }
+              at:        { type: string, description: RFC 3339 }
+        count: { type: integer }

@@ -81,10 +81,13 @@ type Digester struct {
 	PublicURL string
 	// Schools reads the schools section (SchoolSummarise) for businesses
 	// with the area on; nil leaves it out.
-	Schools  *schools.Schools
-	Interval time.Duration // between looks; default 5 minutes
-	Logger   *slog.Logger
-	Now      func() time.Time
+	Schools *schools.Schools
+	// MonthlyMore adds a section to the monthly email (stock's received,
+	// sold and lost); nil adds none, and "" from it none that month.
+	MonthlyMore func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Time) (string, error)
+	Interval    time.Duration // between looks; default 5 minutes
+	Logger      *slog.Logger
+	Now         func() time.Time
 }
 
 func (d *Digester) now() time.Time {
@@ -393,6 +396,15 @@ func (d *Digester) monthly(ctx context.Context, tenant uuid.UUID, month time.Tim
 			return err
 		}
 		subject, body = MonthlyEmailWith(name, s, school, d.Link())
+		if d.MonthlyMore != nil {
+			more, err := d.MonthlyMore(ctx, tx, tenant, month, month.AddDate(0, 1, 0))
+			if err != nil {
+				return err
+			}
+			if more != "" {
+				body += "\n" + more
+			}
+		}
 		return nil
 	})
 	if err != nil || len(to) == 0 {

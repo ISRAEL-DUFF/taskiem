@@ -245,6 +245,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 			if done, err := s.riderPress(ctx, tg, reach.Telegram, addr, payload); done || err != nil {
 				return err
 			}
+			if done, err := s.supplierPress(ctx, tg, reach.Telegram, addr, payload); done || err != nil {
+				return err
+			}
 		}
 	}
 	if user == uuid.Nil {
@@ -265,6 +268,9 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 			return err
 		}
 		if done, err := s.riderDeliveryWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
+			return err
+		}
+		if done, err := s.supplierWord(ctx, tg, reach.Telegram, addr, in.Text); done || err != nil {
 			return err
 		}
 		if done, err := s.reachAbout(ctx, tg, reach.Telegram, addr); done || err != nil {

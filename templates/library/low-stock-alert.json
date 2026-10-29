@@ -1,0 +1,28 @@
+{
+  "id": "low-stock-alert",
+  "title": "Low stock alert from your stock",
+  "summary": "Every morning, tell the owner which items are at or below their reorder level, with how many to order.",
+  "description": "Every day at the time you choose, reads the stock Taskiem keeps for your shop, picks the items at or below their reorder level, and, if there are any, tells the owner each one with how many are left and how many to order to reach its order-up-to level. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email. Give your items a reorder level on the Stock page first.",
+  "category": "operations",
+  "tags": ["inventory", "stock", "alerts", "reorder", "daily"],
+  "keywords": ["stock", "low stock", "running low", "what is low", "reorder level", "shelf", "items"],
+  "connectors": ["stock@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the check runs, Lagos time.", "required": false, "default": "07:30", "example": "07:30"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_lowStockAlert",
+    "version": 1,
+    "name": "Low stock alert",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+    "steps": [
+      {"id": "low", "type": "connector", "name": "Find the items that are low", "connector": "stock@1", "action": "low_items", "input": {}},
+      {"id": "text_owner", "type": "connector", "name": "Tell the owner what to order", "connector": "notify@1", "action": "tell", "needs": ["low"],
+       "when": "=steps.low.output.count > 0",
+       "input": {"message": "='Low on stock: ' + steps.low.output.items.map(i, i.name + (has(i.stock) ? ' (' + string(i.stock) + ' left' + (has(i.suggest) ? ', order ' + string(i.suggest) : '') + ')' : '')).join('; ')"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

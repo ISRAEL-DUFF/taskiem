@@ -148,6 +148,12 @@ type Template struct {
 	// longer offered, but workflows made from it keep working and are
 	// offered the upgrade.
 	SupersededBy string `json:"superseded_by,omitempty"`
+	// ReplacedWhere names the template that replaces this one for a
+	// business where When holds (stock K5: the sheet-based stock and
+	// sales templates, for a business keeping stock in a table or
+	// recording sales by chat). It is not offered to that business;
+	// everyone else is offered it as before.
+	ReplacedWhere *Replacement `json:"replaced_where,omitempty"`
 	// Product is the product the template works around (payrolla:
 	// decision 0044). Retrieval offers the template only for a goal that
 	// names the product, and then above the rest, so "salaries calculated
@@ -243,6 +249,11 @@ func Load(fsys fs.FS) (*Library, error) {
 	for _, t := range lib.list {
 		if s := t.SupersededBy; s != "" && (lib.byID[s] == nil || lib.byID[s].SupersededBy != "") {
 			return nil, fmt.Errorf("%s: superseded_by %q is not a template that is offered", t.ID, s)
+		}
+		if r := t.ReplacedWhere; r != nil {
+			if lib.byID[r.By] == nil || lib.byID[r.By].SupersededBy != "" || !slices.Contains(ReplaceWhen, r.When) {
+				return nil, fmt.Errorf("%s: replaced_where %+v names no template offered, or no condition known", t.ID, *r)
+			}
 		}
 		for _, req := range t.Requires {
 			if len(Words(req)) == 0 {
@@ -972,4 +983,32 @@ func celLiteral(v any) string {
 		return b.String()
 	}
 	return "null"
+}
+
+// Replacement is a template that replaces another for some businesses.
+type Replacement struct {
+	By   string `json:"by"`
+	When string `json:"when"`
+}
+
+// The conditions a Replacement holds on.
+const (
+	WhenKeepsStock   = "keeps_stock"   // the catalogue keeps stock in a table
+	WhenRecordsSales = "records_sales" // sales are recorded by chat or the web
+)
+
+// ReplaceWhen are the conditions known.
+var ReplaceWhen = []string{WhenKeepsStock, WhenRecordsSales}
+
+// For is the templates offered to a business for which the conditions in
+// holds: those replaced there are left out.
+func For(list []*Template, holds map[string]bool) []*Template {
+	out := make([]*Template, 0, len(list))
+	for _, t := range list {
+		if r := t.ReplacedWhere; r != nil && holds[r.When] {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }

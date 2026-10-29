@@ -2924,6 +2924,546 @@
       "reviewed": true,
       "context": "After the set-up: a logo was sent"
     },
+    "wa.stock.off": {
+      "text": "{org} keeps no stock in Taskiem yet. Send *add 50 cartons of Indomie at 8,500* to start, or press Keep my stock on the Stock page.",
+      "reviewed": true,
+      "context": "A stock question when nothing keeps stock yet"
+    },
+    "wa.stock.off_denied": {
+      "text": "{org} keeps no stock yet, and starting it needs storefront.manage, which your role does not include.",
+      "reviewed": true,
+      "context": "Starting to keep stock needs storefront.manage"
+    },
+    "wa.stock.denied": {
+      "text": "Changing {org}'s stock needs table.edit, which your role does not include.",
+      "reviewed": true,
+      "context": "Changing stock needs table.edit"
+    },
+    "wa.stock.denied_read": {
+      "text": "Seeing {org}'s stock needs table.read, which your role does not include.",
+      "reviewed": true,
+      "context": "Seeing stock needs table.read"
+    },
+    "wa.stock.no_count": {
+      "text": "*{name}* has no count yet. Send *stock {name} 12* to set it.",
+      "reviewed": true,
+      "context": "stock <item> for an item with no count in the table"
+    },
+    "wa.stock.count": {
+      "text": "*{name}*: {count}.",
+      "reviewed": true,
+      "context": "stock <item> or how many <item>: the count"
+    },
+    "wa.stock.is_low": {
+      "text": "Low: you reorder at {level}.",
+      "reviewed": true,
+      "context": "After the count, when the item is at or below its reorder level"
+    },
+    "wa.stock.last": {
+      "text": "Last: {what}, {when}.",
+      "reviewed": true,
+      "context": "After the count: the item's last movement and when"
+    },
+    "wa.stock.reason_order": {
+      "text": "order {reference} took {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: an order took some"
+    },
+    "wa.stock.reason_sale": {
+      "text": "sold {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: sold"
+    },
+    "wa.stock.reason_received": {
+      "text": "received {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: goods received"
+    },
+    "wa.stock.reason_adjustment": {
+      "text": "adjusted by {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: an adjustment"
+    },
+    "wa.stock.reason_count": {
+      "text": "counted {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: counted"
+    },
+    "wa.stock.reason_outside": {
+      "text": "changed in the table by {qty}",
+      "reviewed": true,
+      "context": "A movement in a few words: changed in the table by hand"
+    },
+    "wa.stock.no_levels": {
+      "text": "{items} items keep stock, and none has a reorder level yet. Set them on the Stock page, and Taskiem tells you each morning what is low.",
+      "reviewed": true,
+      "context": "stock alone, when no item has a reorder level"
+    },
+    "wa.stock.none_low": {
+      "text": "Nothing is at or below its reorder level. {items} items keep stock.",
+      "reviewed": true,
+      "context": "stock alone, when nothing is low"
+    },
+    "wa.stock.low_title": {
+      "text": "Low on stock:",
+      "reviewed": true,
+      "context": "stock alone: the heading of the low list"
+    },
+    "wa.stock.low_line": {
+      "text": "• {name}: {count} (reorder at {level}); order {suggest}",
+      "reviewed": true,
+      "context": "One low item: its count, reorder level and what to order"
+    },
+    "wa.stock.low_more": {
+      "text": "…and {count} more on the Stock page.",
+      "reviewed": true,
+      "context": "The low list was cut: how many more"
+    },
+    "wa.stock.at_cost": {
+      "text": " at {price} each",
+      "reviewed": true,
+      "context": "In an add's confirmation: the price paid for one"
+    },
+    "wa.stock.confirm_new": {
+      "text": "Add *{name}* with {qty}{cost}?",
+      "reviewed": true,
+      "context": "Confirming add <n> <item> for a new item"
+    },
+    "wa.stock.confirm_first": {
+      "text": "Start keeping stock with *{name}*: {qty}{cost}? Taskiem makes a products table for your items.",
+      "reviewed": true,
+      "context": "Confirming the first add, which starts keeping stock"
+    },
+    "wa.stock.confirm_topup": {
+      "text": "Add {qty} to *{name}* ({from} → {to}){cost}?",
+      "reviewed": true,
+      "context": "Confirming add <n> <item> for an item there: goods received"
+    },
+    "wa.stock.adjust_how": {
+      "text": "Write it like *adjust rice -2 spoilt*: the item, the change, and why.",
+      "reviewed": true,
+      "context": "adjust with words that could not be read"
+    },
+    "wa.stock.no_reason": {
+      "text": "no reason given",
+      "reviewed": true,
+      "context": "In an adjustment's confirmation when no reason was given"
+    },
+    "wa.stock.confirm_adjust": {
+      "text": "Change *{name}* by {change} ({from} → {to}): {note}?",
+      "reviewed": true,
+      "context": "Confirming adjust <item> <change> <reason>"
+    },
+    "wa.stock.exists": {
+      "text": "*{name}* is there already. Send the add again to add to it.",
+      "reviewed": true,
+      "context": "An add for a new item found one of that name meanwhile"
+    },
+    "wa.stock.added": {
+      "text": "Added *{name}*: {count}.",
+      "reviewed": true,
+      "context": "A new item added, with its count"
+    },
+    "wa.stock.no_price": {
+      "text": "It shows on your page once it has a price: send *price {name} 9500*.",
+      "reviewed": true,
+      "context": "After adding an item with no selling price"
+    },
+    "wa.stock.waiting": {
+      "text": "Recorded for *{name}*. It reaches your products table shortly.",
+      "reviewed": true,
+      "context": "A stock change recorded that has not reached the table yet"
+    },
+    "wa.stock.now": {
+      "text": "Done: *{name}* is {count} now.",
+      "reviewed": true,
+      "context": "A stock change done: the count now"
+    },
+    "wa.help.stock": {
+      "text": "• *add 50 cartons of Indomie at 8,500*: add stock; *stock* and an item, or *how many bags of rice*: its count; *stock* alone: what is low; *adjust rice -2 spoilt*: correct a count",
+      "reviewed": true,
+      "context": "Help: the stock commands"
+    },
+    "sales.how_cash": {
+      "text": "in cash",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence: Sold … for ₦45,000, in cash?"
+    },
+    "sales.how_transfer": {
+      "text": "by transfer",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence"
+    },
+    "sales.how_pos": {
+      "text": "on the terminal",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence: on the POS terminal"
+    },
+    "sales.by_cash": {
+      "text": "Cash",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid: Cash ₦45,000"
+    },
+    "sales.by_transfer": {
+      "text": "Transfer",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid"
+    },
+    "sales.by_pos": {
+      "text": "Terminal",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid"
+    },
+    "sales.evening.title": {
+      "text": "*Today's sales*: {total} from {count} sales.",
+      "reviewed": true,
+      "context": "The evening total's first line"
+    },
+    "sales.evening.top": {
+      "text": "Sold most: {list}.",
+      "reviewed": true,
+      "context": "The evening total: what sold most"
+    },
+    "sales.evening.waiting": {
+      "text": "{count} sales by transfer or on the terminal are waiting for their money.",
+      "reviewed": true,
+      "context": "The evening total: sales still waiting for their money"
+    },
+    "sales.evening.unsold": {
+      "text": "{count} terminal sales, {amount}, have no items: send *sold* with the items, the amount and *pos* to say what was sold.",
+      "reviewed": true,
+      "context": "The evening total: terminal sales with no items recorded"
+    },
+    "sales.evening.low": {
+      "text": "Low now: {list}.",
+      "reviewed": true,
+      "context": "The evening total: what is low now"
+    },
+    "money.daily.sales": {
+      "text": "Sales you recorded: {total} from {count} sales ({by}).",
+      "reviewed": true,
+      "context": "The morning summary: the sales recorded by chat or the web that day"
+    },
+    "money.daily.low": {
+      "text": "Low on stock: {list}.",
+      "reviewed": true,
+      "context": "The morning summary: the items at or below their reorder level"
+    },
+    "money.daily.low_item": {
+      "text": "{name} ({count}, order {order})",
+      "reviewed": true,
+      "context": "One low item in the morning summary: Rice (3 bags, order 17 bags)"
+    },
+    "money.daily.low_more": {
+      "text": "{count} more on the Stock page",
+      "reviewed": true,
+      "context": "The morning summary: how many more low items are not named"
+    },
+    "wa.sale.how": {
+      "text": "Write it like *sold 3 bags of rice 45,000 cash*: how many, the item, the amount, and cash, transfer or pos.",
+      "reviewed": true,
+      "context": "sold with words that could not be read"
+    },
+    "wa.sale.which": {
+      "text": "More than one item matches *{name}*: {list}. Send the sale again with the name in full.",
+      "reviewed": true,
+      "context": "A sale naming an item several items match"
+    },
+    "wa.sale.no_price": {
+      "text": "*{name}* has no price. Send the sale again with the amount, like *sold 2 {name} 4,500 cash*.",
+      "reviewed": true,
+      "context": "A sale with no amount, of an item with no price"
+    },
+    "wa.sale.confirm": {
+      "text": "Sold {items} for {amount}, {how}?",
+      "reviewed": true,
+      "context": "Confirming a sale"
+    },
+    "wa.sale.beyond": {
+      "text": "That is more {names} than Taskiem counts on your shelf: the count goes to 0, and the sale is kept.",
+      "reviewed": true,
+      "context": "A sale of more than the stock there is: recorded, never refused"
+    },
+    "wa.sale.recorded": {
+      "text": "Recorded {reference}: {items}, {amount} {how}.",
+      "reviewed": true,
+      "context": "A sale recorded"
+    },
+    "wa.sale.waiting_transfer": {
+      "text": "Waiting for the transfer: it is matched when it comes.",
+      "reviewed": true,
+      "context": "A sale by transfer whose money has not come yet"
+    },
+    "wa.sale.waiting_pos": {
+      "text": "Waiting for the terminal's sale: it is matched when the money is reported.",
+      "reviewed": true,
+      "context": "A sale on the terminal whose money has not come yet"
+    },
+    "wa.sale.matched": {
+      "text": "Matched to the money that came in.",
+      "reviewed": true,
+      "context": "A sale whose money was found at once"
+    },
+    "wa.sale.short": {
+      "text": "You sold more {names} than Taskiem counted: count your shelf when you can (*stock {name} 12*).",
+      "reviewed": true,
+      "context": "After a sale of more than the stock there was"
+    },
+    "wa.help.sales": {
+      "text": "• *sold 3 bags of rice 45,000 cash* (or *transfer*, *pos*): record a sale; it takes the items off your stock",
+      "reviewed": true,
+      "context": "Help: recording a sale"
+    },
+    "supplier.order": {
+      "text": "Order {reference}: {items}. Total {total}. Can you supply it?",
+      "reviewed": true,
+      "context": "A purchase order sent to a supplier in chat, with Confirm and Change buttons"
+    },
+    "supplier.reply_words": {
+      "text": "Reply CONFIRM, or CHANGE {reference} and what you can supply.",
+      "reviewed": true,
+      "context": "Added to an order sent outside WhatsApp's window, where it has no buttons"
+    },
+    "supplier.btn.confirm": {
+      "text": "Confirm",
+      "reviewed": true,
+      "context": "A supplier's button on an order (at most 20 characters)"
+    },
+    "supplier.btn.change": {
+      "text": "Change",
+      "reviewed": true,
+      "context": "A supplier's button on an order (at most 20 characters)"
+    },
+    "supplier.button_invalid": {
+      "text": "That order can no longer be answered here.",
+      "reviewed": true,
+      "context": "A supplier's button or word that no longer fits an order"
+    },
+    "supplier.change_ask": {
+      "text": "Send *change {reference}* and what you can supply, like *change {reference} only 10 bags of rice this week*.",
+      "reviewed": true,
+      "context": "A supplier tapped Change"
+    },
+    "supplier.changed": {
+      "text": "Sent to {business}: they will answer you about {reference}.",
+      "reviewed": true,
+      "context": "A supplier's change was passed on"
+    },
+    "supplier.confirmed": {
+      "text": "Thank you. {business} is told you confirmed {reference}.",
+      "reviewed": true,
+      "context": "A supplier confirmed an order"
+    },
+    "supplier.which": {
+      "text": "Which order? Send the word with its number: {list}.",
+      "reviewed": true,
+      "context": "A supplier's word fits several orders"
+    },
+    "purchase.status_drafted": {
+      "text": "a draft",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_sent": {
+      "text": "sent",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_confirmed": {
+      "text": "confirmed",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_part_received": {
+      "text": "part received",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_received": {
+      "text": "all received",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "purchase.status_cancelled": {
+      "text": "cancelled",
+      "reviewed": true,
+      "context": "A purchase order's status"
+    },
+    "wa.supplier.denied": {
+      "text": "Suppliers and orders at {org} are kept by its owners and admins.",
+      "reviewed": true,
+      "context": "Suppliers and purchase orders need storefront.manage"
+    },
+    "wa.supplier.how": {
+      "text": "Write it like *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": true,
+      "context": "add supplier with words that could not be read"
+    },
+    "wa.supplier.for": {
+      "text": " for {list}",
+      "reviewed": true,
+      "context": "Part of confirming a new supplier: the items they supply"
+    },
+    "wa.supplier.add_confirm": {
+      "text": "Add *{name}* as a supplier{items}? They get a link by SMS to receive your orders on WhatsApp.",
+      "reviewed": true,
+      "context": "Confirming a new supplier; items is wa.supplier.for or empty"
+    },
+    "wa.supplier.added": {
+      "text": "Added {name}. Send *order from {name}* when their items are low.",
+      "reviewed": true,
+      "context": "A supplier added"
+    },
+    "wa.suppliers.none": {
+      "text": "No suppliers yet. Send *add supplier Dangote Depot 0803 123 4567 for rice, indomie*.",
+      "reviewed": true,
+      "context": "suppliers with none kept"
+    },
+    "wa.suppliers.title": {
+      "text": "*Your suppliers*:",
+      "reviewed": true,
+      "context": "The suppliers list's first line"
+    },
+    "wa.suppliers.line": {
+      "text": "• {name}: {open} open orders, owed {owed}",
+      "reviewed": true,
+      "context": "A supplier in the list"
+    },
+    "wa.order.which": {
+      "text": "More than one supplier matches *{name}*: {list}.",
+      "reviewed": true,
+      "context": "order from naming several suppliers"
+    },
+    "wa.order.no_supplier": {
+      "text": "No supplier is called *{name}*. Send *suppliers* for the list.",
+      "reviewed": true,
+      "context": "order from naming no supplier"
+    },
+    "wa.order.none": {
+      "text": "Nothing from *{name}* is low and waiting to be ordered.",
+      "reviewed": true,
+      "context": "order from with nothing low to order"
+    },
+    "wa.order.confirm": {
+      "text": "Order {reference} from *{supplier}*: {items}, {total}. Send it to them?",
+      "reviewed": true,
+      "context": "Confirming a drafted purchase order before it is sent"
+    },
+    "wa.order.sent": {
+      "text": "Sent {reference} to {supplier}. You are told when they confirm.",
+      "reviewed": true,
+      "context": "A purchase order sent"
+    },
+    "wa.order.second": {
+      "text": "{reference} is drafted. It is above your limit of {limit}, so another owner or admin sends it: *send {reference}*, or Approve and send on the Stock page.",
+      "reviewed": true,
+      "context": "A purchase order above the business's limit waits for a second person"
+    },
+    "wa.order.marked_confirmed": {
+      "text": "Marked {reference} confirmed.",
+      "reviewed": true,
+      "context": "The owner marked an order confirmed (the supplier said yes by phone or SMS)"
+    },
+    "wa.order.unknown": {
+      "text": "No order has that number. The Stock page lists them.",
+      "reviewed": true,
+      "context": "A purchase order reference that is not the business's"
+    },
+    "wa.received.confirm": {
+      "text": "Received {count} {item} on order {reference} from {supplier}?",
+      "reviewed": true,
+      "context": "Confirming goods received on an open purchase order"
+    },
+    "wa.received.done": {
+      "text": "Received on {reference}; the order is {status}. Your stock and cost price are updated.",
+      "reviewed": true,
+      "context": "Goods received on a purchase order; status is purchase.status_*"
+    },
+    "wa.paid.how": {
+      "text": "Write it like *paid Dangote 425,000 transfer*.",
+      "reviewed": true,
+      "context": "paid a supplier with an amount that could not be read"
+    },
+    "wa.paid.none": {
+      "text": "No order to *{name}* is waiting to be paid.",
+      "reviewed": true,
+      "context": "paid a supplier with no order"
+    },
+    "wa.paid.confirm": {
+      "text": "Paid *{supplier}* {amount} {how}, for {reference}?",
+      "reviewed": true,
+      "context": "Confirming a payment to a supplier"
+    },
+    "wa.paid.done": {
+      "text": "Recorded {amount} paid to {supplier} for {reference}. Still owed on it: {owed}.",
+      "reviewed": true,
+      "context": "A payment to a supplier recorded as an expense"
+    },
+    "wa.help.purchases": {
+      "text": "• *add supplier Dangote Depot 0803 123 4567 for rice*, *suppliers*, *order from Dangote*, *received 50 cartons of indomie*, *paid Dangote 425,000 transfer*: suppliers and their orders",
+      "reviewed": true,
+      "context": "Help: suppliers and purchase orders"
+    },
+    "wa.count.how": {
+      "text": "Write it like *count rice 12, indomie 40*, with a reason after a colon if you like (*count rice 12: rats*). Or send *count* and I ask item by item.",
+      "reviewed": true,
+      "context": "count with words that could not be read"
+    },
+    "wa.count.none": {
+      "text": "There is nothing to count yet. Add your items first.",
+      "reviewed": true,
+      "context": "count with no items"
+    },
+    "wa.count.start": {
+      "text": "Counting {count} items. Send how many are on the shelf, *skip* to leave one, or *done* to stop.",
+      "reviewed": true,
+      "context": "count: asking item by item"
+    },
+    "wa.count.ask": {
+      "text": "How many *{item}*? (Taskiem has {had}.)",
+      "reviewed": true,
+      "context": "count: one item asked for; had is what Taskiem counts"
+    },
+    "wa.count.number": {
+      "text": "Send a whole number, like 12, or *skip*.",
+      "reviewed": true,
+      "context": "count: the answer was not a number"
+    },
+    "wa.count.confirm": {
+      "text": "Count of {count} items:",
+      "reviewed": true,
+      "context": "Confirming a count: the first line"
+    },
+    "wa.count.line": {
+      "text": "• {item}: {had} → {counted}",
+      "reviewed": true,
+      "context": "Confirming a count: an item whose count changes"
+    },
+    "wa.count.same": {
+      "text": "{count} as Taskiem has them.",
+      "reviewed": true,
+      "context": "Confirming a count: how many items match what Taskiem has"
+    },
+    "wa.count.done": {
+      "text": "Counted {reference}: {changed} items changed.",
+      "reviewed": true,
+      "context": "A count recorded"
+    },
+    "wa.count.lost": {
+      "text": "Missing: {amount} at cost.",
+      "reviewed": true,
+      "context": "After a count: what was missing, at cost"
+    },
+    "money.daily.shrink": {
+      "text": "Stock lost: {count} items, {amount} at cost; most {item} ({lost}).",
+      "reviewed": true,
+      "context": "The morning summary: stock lost to counts and adjustments that day"
+    },
+    "wa.help.counts": {
+      "text": "• *count rice 12, indomie 40* (or *count* to be asked item by item): count what is on the shelf",
+      "reviewed": true,
+      "context": "Help: counting the shelf"
+    },
     "wa.shop.with_photo": {
       "text": " (with the photo)",
       "reviewed": true,

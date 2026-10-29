@@ -40,6 +40,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/slack"
+	"github.com/israel-duff/taskiem/connectors/stock"
 	"github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/connectors/telegram"
 	"github.com/israel-duff/taskiem/connectors/termii"
@@ -106,6 +107,9 @@ type Options struct {
 	// Riders binds the riders platform connector (docs/dispatch.md); nil:
 	// its actions fail plainly.
 	Riders riders.Ops
+	// Stock binds the stock platform connector (docs/stock.md); nil: its
+	// actions fail plainly.
+	Stock stock.Ops
 	// Forms binds the forms platform connector (docs/forms.md); nil: its
 	// actions fail plainly.
 	Forms form.Ops
@@ -168,6 +172,7 @@ func Register(r *connector.Registry, o Options) error {
 		sftp.New(),
 		storefront.New(o.Storefront),
 		riders.New(o.Riders),
+		stock.New(o.Stock),
 		invoices.New(o.Invoices),
 		schools.New(o.Schools),
 		form.New(o.Forms),
