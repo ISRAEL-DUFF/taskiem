@@ -119,7 +119,7 @@
   </tbody>
 </table></div>
 <x-code path="engine/slo/slo.go" start="var Burns = []BurnRule{" caption="the four burn-rate conditions every SLO gets"/>
-<p>Next to the burn rates are six symptom alerts: the canary failing or stopped, the scheduler stalled, any worker pool's queue with a task over 10 minutes old, leases expiring, and a target that cannot be scraped (<x-ref path="engine/slo/slo.go" symbol="var Alerts = []Alert{"><code>slo.Alerts</code></x-ref>). Every metric the rules read exists, with the labels they use.</p>
+<p>Next to the burn rates are seven symptom alerts: the canary failing or stopped, the scheduler stalled, any worker pool's queue with a task over 10 minutes old, leases expiring, a run past retention waiting over 6 hours to be purged, and a target that cannot be scraped (<x-ref path="engine/slo/slo.go" symbol="var Alerts = []Alert{"><code>slo.Alerts</code></x-ref>). Every metric the rules read exists, with the labels they use.</p>
 <div class="callout"><span class="callout-label">Resolved</span>
   <p>The 30-day SLI and the error budget left used to go blank for a month after any hour with no events: they were <code>avg_over_time</code> of the hourly ratio, and an empty hour's ratio is <code>0/0</code>, <code>NaN</code>. They are now bad events over all events from the counters across the 30 days (<code>taskiem:slo_errors:ratio_rate30d</code>, evaluated every five minutes), with a promtool test of a quiet hour. Found while writing this page.</p>
 </div>
