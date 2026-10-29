@@ -144,7 +144,7 @@ func TestPublicReadinessPingsTheDatabase(t *testing.T) {
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- servePublic(ctx, cfg, slog.New(slog.DiscardHandler)) }()
-	t.Cleanup(func() { stop(); <-done })
+	t.Cleanup(func() { stop(); _ = <-done })
 
 	waitFor := func(want int) {
 		t.Helper()

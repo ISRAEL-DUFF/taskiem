@@ -73,7 +73,7 @@ func EnsureAppLogin(ctx context.Context, ownerDSN, appDSN string) (string, error
 	if _, err := conn.Exec(ctx, stmt); err != nil {
 		return "", fmt.Errorf("%s ROLE %s (the owner needs CREATEROLE): %w", verb, login, err)
 	}
-	if _, err := conn.Exec(ctx, "GRANT taskiem_app TO "+pgx.Identifier{login}.Sanitize()); err != nil {
+	if _, err := conn.Exec(ctx, "GRANT taskiem_app TO "+pgx.Identifier{login}.Sanitize()); err != nil { //nolint:misspell // pgx API
 		return "", err
 	}
 	return login, nil
