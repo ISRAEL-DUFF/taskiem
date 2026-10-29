@@ -100,6 +100,7 @@ func query(ctx context.Context, req connector.Request) (connector.Response, erro
 	var out []any
 	truncated := false
 	err = pgx.BeginTxFunc(ctx, conn, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		//sqlcheck:built the tenant's own SQL from their workflow, run on purpose against their own database
 		rows, err := tx.Query(ctx, sql, params(req.Input)...)
 		if err != nil {
 			return err
@@ -139,6 +140,7 @@ func execute(ctx context.Context, req connector.Request) (connector.Response, er
 		return connector.Response{}, err
 	}
 	defer func() { _ = conn.Close(context.Background()) }()
+	//sqlcheck:built the tenant's own SQL from their workflow, run on purpose against their own database
 	tag, err := conn.Exec(ctx, sql, params(req.Input)...)
 	if err != nil {
 		return connector.Response{}, classify(err, false)

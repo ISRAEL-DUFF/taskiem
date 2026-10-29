@@ -137,6 +137,7 @@ func connect(ctx context.Context, req connector.Request) (*wire.Conn, error) {
 	if err != nil {
 		return nil, classifyConnect(err)
 	}
+	//sqlcheck:built setupSQL is a literal with the timeouts from the StatementTimeout const
 	if _, err := conn.Exec(cctx, setupSQL(conn.MariaDB())); err != nil {
 		_ = conn.Abort()
 		return nil, classifyConnect(err)
@@ -193,6 +194,7 @@ func query(ctx context.Context, req connector.Request) (connector.Response, erro
 	// Both: the session default covers anything the statement does after
 	// an implicit commit; the transaction is what the statement runs in.
 	for _, s := range []string{"SET SESSION TRANSACTION READ ONLY", "START TRANSACTION READ ONLY"} {
+		//sqlcheck:built the statements are literals in this function
 		if _, err := conn.Exec(ctx, s); err != nil {
 			return connector.Response{}, classify(err, true)
 		}

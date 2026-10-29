@@ -92,6 +92,7 @@ func subscribe(ctx context.Context, pool *pgxpool.Pool, channel string) (*pgxpoo
 	if err != nil {
 		return nil, err
 	}
+	//sqlcheck:built channel is a literal at listen's only caller (worker.go)
 	if _, err := conn.Exec(ctx, "LISTEN "+channel); err != nil {
 		conn.Release()
 		return nil, err

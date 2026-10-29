@@ -1,7 +1,8 @@
 // Package ops is the operator identity behind the operator console
 // (decision 0027, docs/operator-console.md): Taskiem's own staff, a
 // platform-level identity apart from every tenant. Accounts are managed
-// from the CLI only (taskiem operators); the API signs operators in with a
+// from the CLI only (taskiem operators), through a login the API server
+// does not have (taskiem_ops_admin); the API signs operators in with a
 // passkey or single sign-on and keeps their sessions apart from tenants'.
 // Every operator action is appended to the platform audit chain.
 package ops
@@ -116,7 +117,7 @@ func Reset(ctx context.Context, pool *pgxpool.Pool, email, by string) (int64, er
 	return n, err
 }
 
-// List returns every operator.
+// List returns every operator (the CLI's login, as for admin).
 func List(ctx context.Context, pool *pgxpool.Pool) ([]Operator, error) {
 	rows, err := pool.Query(ctx, `SELECT id, email, name, status, passkeys, sso, created_by, created_at, last_sign_in FROM taskiem_ops_operators()`)
 	if err != nil {
@@ -167,7 +168,10 @@ func Audit(ctx context.Context, pool *pgxpool.Pool, actor, action, target string
 }
 
 // inChain runs an operator change and its audit entry in one transaction
-// scoped to the platform chain: no change is left unrecorded.
+// scoped to the platform chain: no change is left unrecorded. For account
+// changes the pool is the CLI's own login as taskiem_ops_admin
+// (TASKIEM_OPS_DATABASE_URL): the API server's role may not call the
+// account functions (migration 00266).
 func inChain(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, pool, []uuid.UUID{PlatformChain}, fn)
 }

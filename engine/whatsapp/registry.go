@@ -138,12 +138,14 @@ type pgconnCommandTag = interface{ RowsAffected() int64 }
 type poolQuerier struct{ *pgxpool.Pool }
 
 func (q poolQuerier) Exec(ctx context.Context, sql string, args ...any) (pgconnCommandTag, error) {
+	//sqlcheck:built passes on a querier's SQL; the querier calls are checked where they are made
 	return q.Pool.Exec(ctx, sql, args...)
 }
 
 type txQuerier struct{ pgx.Tx }
 
 func (q txQuerier) Exec(ctx context.Context, sql string, args ...any) (pgconnCommandTag, error) {
+	//sqlcheck:built passes on a querier's SQL; the querier calls are checked where they are made
 	return q.Tx.Exec(ctx, sql, args...)
 }
 

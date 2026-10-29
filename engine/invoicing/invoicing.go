@@ -389,6 +389,7 @@ func (s *Invoices) Get(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, idOrNum
 	if id, err := uuid.Parse(idOrNumber); err == nil {
 		q, arg = `SELECT `+cols+` FROM customer_invoices WHERE tenant_id = $1 AND id = $2`, id
 	}
+	//sqlcheck:built q is one of two literals around the const cols
 	x, err := scan(tx.QueryRow(ctx, q, tenant, arg))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Invoice{}, ErrNotFound
@@ -1180,6 +1181,7 @@ func ReopenPart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, parts moneylog
 	if part.Entry == nil {
 		return nil
 	}
+	//sqlcheck:built parts.Suggestion is a column name from moneylog.InvoiceParts or OrderParts, package-level literals
 	if _, err := tx.Exec(ctx, `UPDATE money_suggestions SET status = 'rejected', decided_at = now() WHERE tenant_id = $1 AND `+parts.Suggestion+` = $2`, tenant, part.ID); err != nil {
 		return err
 	}
@@ -1364,6 +1366,7 @@ func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, w
 	}
 	var out []Listed
 	err := s.in(ctx, tenant, func(tx pgx.Tx) error {
+		//sqlcheck:built q is one of the literals the switch on status picks
 		rows, err := tx.Query(ctx, q, args...)
 		if err != nil {
 			return err

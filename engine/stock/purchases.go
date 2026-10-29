@@ -532,6 +532,7 @@ func PurchaseTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, lock bool)
 	if lock {
 		q += ` FOR UPDATE OF o`
 	}
+	//sqlcheck:built purchaseCols is a const and FOR UPDATE OF o a literal
 	return scanPurchase(tx.QueryRow(ctx, q, tenant, id))
 }
 

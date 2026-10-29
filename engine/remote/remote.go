@@ -106,6 +106,7 @@ func Release(ctx context.Context, tx pgx.Tx, wf uuid.UUID, envs []string) error 
 }
 
 func release(ctx context.Context, tx pgx.Tx, where string, args ...any) error {
+	//sqlcheck:built where is a literal at every caller (Declare, Release, ReleaseConnection)
 	_, err := tx.Exec(ctx, `UPDATE remote_subscriptions SET desired = 'absent', next_attempt_at = now(), attempts = 0, updated_at = now()
 		WHERE desired = 'present' AND `+where, args...)
 	return err
@@ -205,6 +206,7 @@ func List(ctx context.Context, tx pgx.Tx, where string, args ...any) ([]Status, 
 	if where != "" {
 		q += ` WHERE ` + where
 	}
+	//sqlcheck:built statusCols is a const and where a literal at every caller (api/workflows.go, api/admin.go, api/remote.go)
 	rows, err := tx.Query(ctx, q+` ORDER BY environment, created_at`, args...)
 	if err != nil {
 		return nil, err

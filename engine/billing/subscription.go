@@ -188,6 +188,7 @@ func loadSub(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, lock bool) (*Subs
 	if lock {
 		q += ` FOR UPDATE`
 	}
+	//sqlcheck:built subCols is a const and FOR UPDATE a literal
 	return scanSub(tx.QueryRow(ctx, q, tenant))
 }
 

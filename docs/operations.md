@@ -46,6 +46,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_MIGRATE_LOCK_TIMEOUT` | `10s` | `taskiem migrate` only: how long a statement waits for a lock before the migration fails (`0`: for ever). |
 | `TASKIEM_APP_DATABASE_URL` | — | `taskiem migrate` only: the engine's login, which it creates or updates and grants `taskiem_app` after migrating ([database roles](#database-roles)). |
 | `TASKIEM_DATABASE_READ_URL`, `TASKIEM_DATABASE_READ_MAX_LAG` | —, `10s` | A read replica for the run list and dashboard (`api` role), set aside while it lags beyond the bound or fails ([cloud](cloud.md#read-replica)) |
+| `TASKIEM_OPS_DATABASE_URL`, `TASKIEM_OPS_DATABASE_ROLE` | `TASKIEM_DATABASE_URL`, `taskiem_ops_admin` | `taskiem operators` only: its own login (a member of `taskiem_ops_admin`, which the server's login is not) and the role it sets ([operator console](operator-console.md#accounts)) |
 | `TASKIEM_PUBLIC_DATABASE_URL`, `TASKIEM_PUBLIC_DATABASE_ROLE`, `TASKIEM_PUBLIC_DATABASE_POOL` | `TASKIEM_DATABASE_URL`, `taskiem_public`, `5` | The [public host](public-host.md)'s own login (a member of `taskiem_public` only), the role it sets, and its pool's size |
 | `TASKIEM_SMS_*`, `TASKIEM_MESSAGE_FROM`, `TASKIEM_MESSAGE_HASH_KEY` | — | The platform's own SMS providers and no-reply address for [messages to people outside an organisation](messages.md); the hash key also turns on [updates on WhatsApp and Telegram](updates.md) for them |
 | `TASKIEM_PUBLIC_KEY` | — | 32 bytes, base64 (`openssl rand -base64 32`), the same on the `public` and `api` roles. It signs the [storefront](storefronts.md)'s forms and [hosted forms](forms.md), and encrypts submissions on their way from the public host to the `api` role. Without it, no order or form can arrive, and workflows with forms cannot be deployed |
@@ -141,7 +142,7 @@ An error the API did not expect answers 500 with `{"error": "Something went wron
 
 ## Database roles
 
-Migrations create `taskiem_app` (the application, under forced row-level security) and `taskiem_dispatch` (owner of the cross-tenant claim and authentication functions). Neither can log in. In production create a login user for the engine and grant it the app role only:
+Migrations create `taskiem_app` (the application, under forced row-level security), `taskiem_dispatch` (owner of the cross-tenant claim and authentication functions) and `taskiem_ops_admin` (operator accounts, for `taskiem operators`; see the [operator console](operator-console.md#accounts)). None can log in. In production create a login user for the engine and grant it the app role only:
 
 ```sql
 CREATE ROLE taskiem LOGIN PASSWORD '...';

@@ -216,6 +216,7 @@ func (e *Evening) recipients(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (
 		if !e.runs(ch.name) {
 			continue
 		}
+		//sqlcheck:built ch.q is one of the two literals above
 		rows, err := tx.Query(ctx, ch.q, us)
 		if err != nil {
 			return nil, err

@@ -320,7 +320,7 @@ func (s *Server) agentNewBusiness(w http.ResponseWriter, r *http.Request) {
 	newOwner := false
 	if owner == uuid.Nil {
 		// Perhaps an earlier sign-up the owner never agreed to.
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, ownerPlaceholderEmail(number)).Scan(&owner)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, ownerPlaceholderEmail(number)).Scan(&owner)
 		if errors.Is(err, pgx.ErrNoRows) {
 			owner, newOwner = uuid.Must(uuid.NewV7()), true
 		} else if err != nil {
@@ -349,6 +349,7 @@ func (s *Server) agentNewBusiness(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, st := range stmts {
+			//sqlcheck:built the statements are literals in this function
 			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 				return err
 			}
@@ -942,9 +943,8 @@ func (s *Server) opsAddAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	var user uuid.UUID
-	var hash *string
 	var status string
-	err = s.Store.Pool.QueryRow(ctx, `SELECT user_id, password_hash, status FROM taskiem_auth_find_user($1)`, email).Scan(&user, &hash, &status)
+	err = s.Store.Pool.QueryRow(ctx, `SELECT user_id, status FROM taskiem_auth_user_of($1)`, email).Scan(&user, &status)
 	newUser := errors.Is(err, pgx.ErrNoRows)
 	switch {
 	case newUser:
@@ -1001,6 +1001,7 @@ func (s *Server) opsAddAgent(w http.ResponseWriter, r *http.Request) {
 				{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{workspace}},
 				{`SELECT taskiem_ops_agent_add($1, $2, $3, $4, $5, $6, $7, $8, $9)`, []any{id, user, workspace, code, name, phone, region, checks, o.Actor()}},
 			} {
+				//sqlcheck:built the statements are literals in this function
 				if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 					return err
 				}

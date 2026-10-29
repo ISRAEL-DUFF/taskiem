@@ -245,6 +245,7 @@ func (s *Service) blockers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p P
 			return nil
 		}
 		var n int64
+		//sqlcheck:built q is one of the literals in checks below, count's only caller
 		if err := tx.QueryRow(ctx, q, tenant).Scan(&n); err != nil {
 			return err
 		}
@@ -287,6 +288,7 @@ func (s *Service) blockers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p P
 			continue
 		}
 		var n int64
+		//sqlcheck:built f.q is one of the literals in features above
 		if err := tx.QueryRow(ctx, f.q, tenant).Scan(&n); err != nil {
 			return nil, err
 		}

@@ -737,7 +737,7 @@ func checkPartnerQuota(ctx context.Context, tx pgx.Tx, l Limits) error {
 		return nil
 	}
 	var today, month int64
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(runs_today), 0)::bigint, COALESCE(sum(runs_month), 0)::bigint FROM taskiem_partner_usage($1)`, l.partner).
+	if err := tx.QueryRow(ctx, `SELECT runs_today, runs_month FROM taskiem_partner_run_totals($1)`, l.partner).
 		Scan(&today, &month); err != nil {
 		return err
 	}
@@ -760,6 +760,7 @@ func countUpTo(ctx context.Context, tx pgx.Tx, from string, max int, args ...any
 	}
 	var n int
 	args = append(args, max)
+	//sqlcheck:built from is a literal at every caller (api/limits.go, admission.go, store.go, checkBacklog); $n from a count
 	err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM (SELECT 1 FROM %s LIMIT $%d) c`, from, len(args)), args...).Scan(&n)
 	return n, err
 }

@@ -121,6 +121,7 @@ func (t Parts) Count(ctx context.Context, tx pgx.Tx, c Counting) (Counted, error
 	if c.Entry != nil {
 		var here bool
 		if !c.Add {
+			//sqlcheck:built table and column names from InvoiceParts or OrderParts, package-level literals
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+t.Table+` p WHERE p.`+t.Target+` = $1 AND p.entry_id = $2 AND p.undoes IS NULL
 				AND NOT EXISTS (SELECT 1 FROM `+t.Table+` u WHERE u.undoes = p.id))`, id, *c.Entry).Scan(&here); err != nil {
 				return out, err
@@ -161,6 +162,7 @@ func (t Parts) Count(ctx context.Context, tx pgx.Tx, c Counting) (Counted, error
 // Paid reports whether the target has a part not undone, of any money.
 func (t Parts) Paid(ctx context.Context, tx pgx.Tx, target uuid.UUID) (bool, error) {
 	var paid bool
+	//sqlcheck:built table and column names from InvoiceParts or OrderParts, package-level literals
 	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+t.Table+` p WHERE p.`+t.Target+` = $1 AND p.undoes IS NULL
 		AND NOT EXISTS (SELECT 1 FROM `+t.Table+` u WHERE u.undoes = p.id))`, target).Scan(&paid)
 	return paid, err
@@ -196,6 +198,7 @@ type Undoing struct {
 // such part.
 func (t Parts) Undo(ctx context.Context, tx pgx.Tx, u Undoing) (p Part, undone bool, err error) {
 	var undoes *uuid.UUID
+	//sqlcheck:built table and column names from InvoiceParts or OrderParts, package-level literals
 	err = tx.QueryRow(ctx, `SELECT id, `+t.Target+`, entry_id, amount_kobo, undoes FROM `+t.Table+` WHERE tenant_id = $1 AND id = $2`, u.Tenant, u.Part).
 		Scan(&p.ID, &p.Target, &p.Entry, &p.AmountKobo, &undoes)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && undoes != nil {
@@ -215,6 +218,7 @@ func (t Parts) Undo(ctx context.Context, tx pgx.Tx, u Undoing) (p Part, undone b
 		}
 	}
 	var already bool
+	//sqlcheck:built the table name from InvoiceParts or OrderParts, package-level literals
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+t.Table+` WHERE undoes = $1)`, p.ID).Scan(&already); err != nil || already {
 		return p, false, err
 	}
@@ -247,6 +251,7 @@ func (t Parts) insert(ctx context.Context, tx pgx.Tx, row Cols) error {
 	for i, k := range names {
 		marks[i], args[i] = fmt.Sprintf("$%d", i+1), row[k]
 	}
+	//sqlcheck:built the table from InvoiceParts or OrderParts; column names are literal keys in Count, Undo and their callers' Decide; $n from a count
 	_, err := tx.Exec(ctx, `INSERT INTO `+t.Table+` (`+strings.Join(names, ", ")+`) VALUES (`+strings.Join(marks, ", ")+`)`, args...)
 	return err
 }

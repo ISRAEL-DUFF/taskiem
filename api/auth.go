@@ -593,7 +593,7 @@ func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 	tenant, user = uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7())
 	err = db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var exists bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_find_user($1))`, email).Scan(&exists); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_user_of($1))`, email).Scan(&exists); err != nil {
 			return err
 		}
 		if exists {
@@ -610,6 +610,7 @@ func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
 		}
 		for _, st := range stmts {
+			//sqlcheck:built the statements are literals in this function
 			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
 				return err
 			}
@@ -641,7 +642,7 @@ func CreateMember(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, ema
 	hash := hashPassword(password)
 	err := db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var exists bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_find_user($1))`, email).Scan(&exists); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_auth_user_of($1))`, email).Scan(&exists); err != nil {
 			return err
 		}
 		if exists {
@@ -738,7 +739,7 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 	var user uuid.UUID
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, req.Email).Scan(&user)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, req.Email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
 			user = uuid.Must(uuid.NewV7())
 			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, req.Email, req.Name, hash); err != nil {

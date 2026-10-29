@@ -277,6 +277,7 @@ func (r *Riders) ListTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f Filt
 		q += ` AND EXISTS (SELECT 1 FROM unnest(r.zones) z WHERE lower(z) = lower($3))`
 		args = append(args, f.Zone)
 	}
+	//sqlcheck:built riderCols is a const and the conditions literals
 	rows, err := tx.Query(ctx, q+` ORDER BY r.created_at LIMIT 500`, args...)
 	if err != nil {
 		return nil, err

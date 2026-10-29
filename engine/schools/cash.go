@@ -476,6 +476,7 @@ func (s *Schools) RequestDiscountAmendment(ctx context.Context, tx pgx.Tx, tenan
 // (matching.SchoolWindowSQL). Either may be nil.
 func ReducedUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, student, invoice *uuid.UUID) (int64, error) {
 	var n int64
+	//sqlcheck:built SchoolWindowSQL is a const and StudentInvoicesSQL is given the literal "$3"
 	err := tx.QueryRow(ctx, `SELECT ((SELECT COALESCE(-sum(a.amount_kobo), 0) FROM customer_invoice_amendments a
 		WHERE a.tenant_id = $1 AND a.amount_kobo < 0
 		  AND (a.invoice_id = $2::uuid OR $3::uuid IS NOT NULL AND a.created_at >= `+matching.SchoolWindowSQL+` AND a.invoice_id IN (`+matching.StudentInvoicesSQL("$3")+`))

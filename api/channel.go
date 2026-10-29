@@ -88,6 +88,7 @@ func chatAddrsTx(ctx context.Context, tx pgx.Tx, channel string, users []uuid.UU
 	if channel == "telegram" {
 		q = `SELECT user_id, 'tg:' || telegram_id FROM taskiem_tg_accounts($1)`
 	}
+	//sqlcheck:built q is one of two literals above
 	rows, err := tx.Query(ctx, q, users)
 	if err != nil {
 		return nil, err

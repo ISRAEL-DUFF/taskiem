@@ -348,6 +348,7 @@ func (s *Invoices) setAccount(ctx context.Context, tenant, id uuid.UUID, set map
 			args = append(args, v)
 			q += fmt.Sprintf(", %s = $%d", k, len(args))
 		}
+		//sqlcheck:built column names are checked against accountColumns; values go in as $n
 		_, err := tx.Exec(ctx, q+` WHERE tenant_id = $1 AND id = $2`, args...)
 		return err
 	})

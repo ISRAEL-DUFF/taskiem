@@ -83,6 +83,8 @@ Migrations are goose SQL files in `engine/db/migrations`, applied in order by `t
 - Every dependency, and every licence file of code copied into the repository, must pass the licence gate (`make licences`, `tools/licencecheck/policy.json`).
 - Migrations are forward-only (above).
 - Every tenant-owned table has `tenant_id` and an RLS policy; the database tests check this.
+- SQL is never built from values: every `Exec`, `Query`, `QueryRow` and `Batch.Queue` call is given constant SQL, with values as `$n` arguments. A query assembled from fixed pieces (a column list, a choice of literal `WHERE` clauses) carries `//sqlcheck:built <why every piece is fixed>` on its line or the line above. `tools/sqlcheck` checks this (`go test ./tools/sqlcheck/`).
+- A `SECURITY DEFINER` function the app role may call is listed in `engine/db/definers.tsv` with an owner and a reason, and a column the dispatch role may read in `engine/db/dispatch_columns.txt`; `engine/db` tests fail until they are.
 
 ## Rules that review enforces
 

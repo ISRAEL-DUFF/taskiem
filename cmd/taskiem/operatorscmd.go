@@ -28,7 +28,8 @@ const operatorsUsage = `usage:
       remove an operator's passkeys and end their sessions (a lost device); then enrol again
   taskiem operators disable EMAIL
       stop an operator: their sessions and unused links end at once
-Accounts are made here only, never through the API. Every change is recorded in the platform audit chain`
+Accounts are made here only, never through the API, as a login of their own (TASKIEM_OPS_DATABASE_URL, a member of
+taskiem_ops_admin). Every change is recorded in the platform audit chain, in the same transaction`
 
 // operatorsCmd manages operator accounts (decision 0027).
 func operatorsCmd(ctx context.Context, args []string, stdout io.Writer) error {
@@ -36,7 +37,7 @@ func operatorsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("operators: %w", err)
 	}
-	pool, err := openPool(ctx, cfg)
+	pool, err := openOpsPool(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("operators: %w", err)
 	}
@@ -96,6 +97,22 @@ func operatorsCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		return nil
 	}
 	return errors.New(operatorsUsage)
+}
+
+// openOpsPool connects as the CLI's own login (TASKIEM_OPS_DATABASE_URL,
+// default TASKIEM_DATABASE_URL) in taskiem_ops_admin
+// (TASKIEM_OPS_DATABASE_ROLE), the only role that may manage operator
+// accounts (migration 00266). The API server's login is not a member, so
+// nothing that runs in the server can make an operator.
+func openOpsPool(ctx context.Context, cfg config) (*pgxpool.Pool, error) {
+	cfg.DSN = env("TASKIEM_OPS_DATABASE_URL", cfg.DSN)
+	cfg.DBRole = env("TASKIEM_OPS_DATABASE_ROLE", "taskiem_ops_admin")
+	cfg.PoolSize = 2
+	pool, err := openPool(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("%w (TASKIEM_OPS_DATABASE_URL must name a login that is a member of %s, which the server's login is not; docs/operator-console.md)", err, cfg.DBRole)
+	}
+	return pool, nil
 }
 
 func printEnrol(ctx context.Context, stdout io.Writer, email, publicURL string, ttl time.Duration, by string, pool *pgxpool.Pool) error {

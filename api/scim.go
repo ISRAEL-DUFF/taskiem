@@ -331,18 +331,21 @@ func (s *Server) scimListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start, count := scimPage(r)
-	where, args := "true", []any{}
+	// The page goes in as arguments after the filter's value.
+	where, args, page := "true", []any{}, ` ORDER BY created_at, user_id OFFSET $1 LIMIT $2`
 	if col != "" {
-		where, args = col, []any{val}
+		where, args, page = col, []any{val}, ` ORDER BY created_at, user_id OFFSET $2 LIMIT $3`
 	}
 	var total int
 	var list []any
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
+		//sqlcheck:built where is "true" or a literal from the filter map above
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM scim_users WHERE `+where, args...).Scan(&total); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT user_id FROM scim_users WHERE `+where+fmt.Sprintf(` ORDER BY created_at, user_id OFFSET %d LIMIT %d`, start-1, count), args...)
+		//sqlcheck:built where and page are literals above
+		rows, err := tx.Query(ctx, `SELECT user_id FROM scim_users WHERE `+where+page, append(append([]any{}, args...), start-1, count)...)
 		if err != nil {
 			return err
 		}
@@ -432,7 +435,7 @@ func (s *Server) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		var user uuid.UUID
 		invited := false
-		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, email).Scan(&user)
+		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_user_of($1)`, email).Scan(&user)
 		if errors.Is(err, pgx.ErrNoRows) {
 			user = uuid.Must(uuid.NewV7())
 			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)`, user, email, displayName(&in)); err != nil {
@@ -877,18 +880,21 @@ func (s *Server) scimListGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	start, count := scimPage(r)
-	where, args := "true", []any{}
+	// The page goes in as arguments after the filter's value.
+	where, args, page := "true", []any{}, ` ORDER BY created_at, id OFFSET $1 LIMIT $2`
 	if col != "" {
-		where, args = col, []any{val}
+		where, args, page = col, []any{val}, ` ORDER BY created_at, id OFFSET $2 LIMIT $3`
 	}
 	var total int
 	list := []any{}
 	err = s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
+		//sqlcheck:built where is "true" or a literal from the filter map above
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM scim_groups WHERE `+where, args...).Scan(&total); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id FROM scim_groups WHERE `+where+fmt.Sprintf(` ORDER BY created_at, id OFFSET %d LIMIT %d`, start-1, count), args...)
+		//sqlcheck:built where and page are literals above
+		rows, err := tx.Query(ctx, `SELECT id FROM scim_groups WHERE `+where+page, append(append([]any{}, args...), start-1, count)...)
 		if err != nil {
 			return err
 		}
@@ -1022,6 +1028,7 @@ func (s *Server) setGroupMembers(ctx context.Context, tx pgx.Tx, tenant, group u
 		if op == "remove" {
 			q, args = `DELETE FROM scim_group_members WHERE group_id = $1 AND user_id = $2`, []any{group, id}
 		}
+		//sqlcheck:built q is one of two literals above
 		if _, err := tx.Exec(ctx, q, args...); err != nil {
 			return nil, err
 		}
