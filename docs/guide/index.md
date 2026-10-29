@@ -2,6 +2,7 @@
 
 Plain how-tos for running your business on Taskiem: no code and no technical steps. The developer documentation is elsewhere in these docs; you do not need it.
 
+- [Start from WhatsApp](start-from-chat.md): open your business from WhatsApp, Telegram or Slack, connect services, bring your people in and pay, all in the chat.
 - [Your first workflow](start.md): pick a template or describe what you want.
 - [Templates](templates.md): filling in a template's details.
 - [Connecting your apps](connections.md): Paystack, Google Sheets, WhatsApp and the rest.

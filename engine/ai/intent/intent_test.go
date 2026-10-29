@@ -68,6 +68,27 @@ func TestParseRefusesWhatTheModelMayNotDo(t *testing.T) {
 	}
 }
 
+// A stranger's message is routed to sign-up or nothing: no command of a
+// business they are not in.
+func TestStrangerIntents(t *testing.T) {
+	if r, err := intent.ParseFor(&ai.Response{Text: `{"intent":"signup","argument":""}`, StopReason: "end_turn"}, intent.Stranger); err != nil || r.Intent != lang.IntentSignup {
+		t.Fatalf("signup: %+v %v", r, err)
+	}
+	for _, answer := range []string{`{"intent":"status","argument":""}`, `{"intent":"run","argument":"payroll"}`} {
+		if _, err := intent.ParseFor(&ai.Response{Text: answer, StopReason: "end_turn"}, intent.Stranger); !errors.Is(err, intent.ErrUnusable) {
+			t.Errorf("a stranger routed to %s", answer)
+		}
+	}
+	req := intent.RequestFor("abeg I wan use am for my shop", lang.Info{Tag: lang.PCM, English: "Nigerian Pidgin"}, 0, intent.Stranger)
+	if sys := req.System[0].Text; !strings.Contains(sys, `"signup"`) || strings.Contains(sys, `"run"`) {
+		t.Errorf("stranger prompt: %s", sys)
+	}
+	// A person in a business is not offered sign-up by the model.
+	if _, err := intent.Parse(&ai.Response{Text: `{"intent":"signup","argument":""}`, StopReason: "end_turn"}); !errors.Is(err, intent.ErrUnusable) {
+		t.Error("sign-up routed for a member")
+	}
+}
+
 func TestClassifyWithoutProvider(t *testing.T) {
 	var c *intent.Classifier
 	if _, _, err := c.Classify(context.Background(), "x", lang.Info{}); !errors.Is(err, ai.ErrNotConfigured) {

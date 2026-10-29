@@ -1,6 +1,6 @@
 # 0058 — Chat as a way in: signing up and connecting from WhatsApp, Telegram and Slack, beside the web
 
-Date: 2026-10-29 · Status: **Proposed** · Plan: [chat as the way in](../spec/chat-way-in.md)
+Date: 2026-10-29 · Status: **Accepted** (built 29 October 2026) · Plan: [chat as the way in](../spec/chat-way-in.md)
 
 ## Context
 
@@ -44,6 +44,17 @@ The founder asked for this way in on WhatsApp, the same on Telegram, the web's w
 - New surfaces: the `taskiem_connect` Flow and the `taskiem_invite` template (WhatsApp); a Mini App page served by Taskiem (Telegram), which also gives Telegram forms for inputs and rows; `/channels/slack/events` for Taskiem's Slack app; the connect page `/c/<token>`.
 - Configuration: `TASKIEM_CHAT_SIGNUP` (channels), `TASKIEM_CHAT_SIGNUP_PER_HOUR`, `TASKIEM_CHAT_SIGNUP_COUNTRIES`, `TASKIEM_BINDING_DORMANT_DAYS`, `TASKIEM_TERMS_VERSION`, `TASKIEM_PRIVACY_VERSION`.
 - People: the terms and privacy texts, publishing the Flow and approving the template, the Slack app's events URL, Messages tab and `files:read` ([plan §13](../spec/chat-way-in.md#13-c0-people-and-decisions)).
+
+## As built
+
+Built in six milestones on one branch (the plan's §6.7, §7.5, §8.1, §9.1, §10.6 and §11.1 say what each became). Where the build differs from the decision above:
+
+- **A key sent as a message is dropped, not masked and kept**: the guard reads it before anything stores the message, so there is nothing to mask, and the person is told to replace it (decision point 4).
+- **Telegram's Mini App is the connect form only.** A run's inputs and a table's row are still asked one at a time on Telegram, and the chat PIN is set in WhatsApp's form; on Telegram a resting chat is woken from the web.
+- **A Telegram sign-up with the number of an account that has an email** gets the email link; the separate Telegram-only account the plan allowed there is not offered, so every chat-born owner keeps a proven number.
+- **Slack.** Add to Slack with no business seals the bot token with the platform's KMS key (`Vault.SealPlatform`) for its day; a workspace already a business's has every connection renewed with the new token, and a separate business is made only on the installer's choice. Members join by an owner's invitation or by asking (approved as Viewer or Operator from chat; other roles from the web). Slack modals for forms and files in the DM are not built.
+- **The model** routes a stranger's free text to sign-up and nothing else, on the platform's account; members' routing gained connect and plan.
+- **Not built:** the account a sign-in connected as, in the chat's "connected" message.
 
 ## Provenance
 

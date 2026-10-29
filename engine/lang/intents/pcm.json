@@ -14,7 +14,9 @@
     "my_page": ["my page", "my shop"],
     "orders": ["my orders", "wetin people order"],
     "open_shop": ["open my shop", "open shop"],
-    "qr": ["my qr"]
+    "qr": ["my qr"],
+    "signup": ["i wan open account", "abeg open account for me", "i wan start business", "make i open account", "i wan register"],
+    "plan": ["my plan", "how much i go pay", "wetin i go pay"]
   },
   "prefixes": {
     "switch": ["change go", "switch go"],
@@ -35,7 +37,9 @@
     "received": ["i don receive", "e don land", "don receive"],
     "count": ["i don count", "count am"],
     "stock": ["check stock", "how many", "how much remain"],
-    "take_off": ["comot", "remove", "don spoil"]
+    "take_off": ["comot", "remove", "don spoil"],
+    "connect": ["connect am", "join am to", "connect"],
+    "invite": ["invite", "bring", "add person"]
   },
   "fillers": ["abeg", "abeg o", "please"],
   "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat", "i spend", "i don spend"],

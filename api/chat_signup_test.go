@@ -10,6 +10,8 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
@@ -423,5 +425,35 @@ func TestTermsOnTheWeb(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM terms_acceptances a JOIN users u ON u.id = a.user_id
 		WHERE u.email = 'older@shop.test' AND a.accepted_at IS NOT NULL`).Scan(&accepted); err != nil || accepted != 2 {
 		t.Fatalf("accepted: %d %v", accepted, err)
+	}
+}
+
+// The ways in in a person's own words (docs/spec/chat-way-in.md 11): the
+// word lists' signup phrases, and free text the model says means "sign
+// me up", for that intent only.
+func TestSignupInOwnWords(t *testing.T) {
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	answer := `{"intent":"signup","argument":""}`
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.PCM}, Model: &ai.Fake{Respond: func(ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: answer, StopReason: "end_turn"}, nil
+	}}}
+	// The word list.
+	if got := w.say(t, "+2348031239501", "I wan open account"); !strings.Contains(got, testTerms.URL) {
+		t.Fatalf("pidgin words: %q", got)
+	}
+	// Free text the model routes.
+	if got := w.say(t, "+2348031239502", "abeg I need this thing for my provisions shop"); !strings.Contains(got, testTerms.URL) {
+		t.Fatalf("routed: %q", got)
+	}
+	// Anything else: the offer, as before.
+	answer = `{"intent":"unknown","argument":""}`
+	if got := w.send(t, "+2348031239503", whatsapptest.Text("abeg who una be")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:no]" {
+		t.Fatalf("not routed: %+v", got)
+	}
+	// What the model may not answer for a stranger is not acted on.
+	answer = `{"intent":"status","argument":""}`
+	if got := w.send(t, "+2348031239504", whatsapptest.Text("wetin don fail today o")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:no]" {
+		t.Fatalf("a command for a stranger: %+v", got)
 	}
 }

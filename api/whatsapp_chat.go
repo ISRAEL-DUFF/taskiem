@@ -791,6 +791,20 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		return true, s.waSwitch(ctx, c, strings.ToLower(arg))
 	case lang.IntentLanguage:
 		return true, s.waLanguage(ctx, c, arg)
+	// The ways in, in the person's language (chat_doors.go,
+	// chat_invites.go, connect_links.go).
+	case lang.IntentPlan:
+		return true, s.waPlan(ctx, c)
+	case lang.IntentConnect:
+		if arg == "" {
+			return false, nil
+		}
+		return true, s.waConnect(ctx, c, strings.ToLower(arg))
+	case lang.IntentInvite:
+		if arg == "" {
+			return false, nil
+		}
+		return true, s.waInvite(ctx, c, "invite "+arg)
 	case lang.IntentRun:
 		if arg == "" {
 			return false, nil

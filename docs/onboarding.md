@@ -2,6 +2,19 @@
 
 Self-serve signup, the getting-started checklist, the guided first workflow, in-product help, and how gate G4's "signup to first successful run in under 15 minutes" is measured (Phase 4, P4-2; [decision 0022](decisions/0022-self-serve-onboarding.md)).
 
+**The ways in, side by side** ([decision 0058](decisions/0058-chat-as-a-way-in.md)): every one makes the same kind of account and business, and a person can use them all at once.
+
+| Way in | Proves who it is | Turned on by | Below |
+| --- | --- | --- | --- |
+| The web form | An email, confirmed by its link | `TASKIEM_ALLOW_SIGNUP` | [Signup](#signup) |
+| WhatsApp | The number writing | `TASKIEM_CHAT_SIGNUP` with `whatsapp` | [Signing up from chat](#signing-up-from-chat) |
+| Telegram | The person's own shared contact | `TASKIEM_CHAT_SIGNUP` with `telegram` | [Signing up from chat](#signing-up-from-chat) |
+| Slack | The Slack user who installed Taskiem's app | `TASKIEM_CHAT_SIGNUP` with `slack` | [Signing up from Slack](#signing-up-from-slack) |
+| A field agent | The owner's WhatsApp number or Telegram contact, with their consent | Field agents ([agents](agents.md)) | |
+| An invitation | The chat it was sent to, or the email | An owner, on the web or in chat | [One person, many doors](#one-person-many-doors) |
+
+The owners' guide tells it plainly: [Start from WhatsApp](guide/start-from-chat.md).
+
 ## Turning it on
 
 Signup is off by default. Before turning it on for the public:

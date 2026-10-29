@@ -15,7 +15,9 @@
     "my_page": ["my page", "my shop", "my storefront"],
     "orders": ["orders", "my orders", "open orders"],
     "open_shop": ["open shop", "open my shop", "reopen shop", "reopen"],
-    "qr": ["qr", "qr code", "my qr", "my qr code"]
+    "qr": ["qr", "qr code", "my qr", "my qr code"],
+    "signup": ["sign up", "signup", "register", "open account", "open an account", "i want to open account", "i want to open an account", "new business", "start my business", "start a business"],
+    "plan": ["plan", "my plan", "subscription", "trial", "pay for taskiem"]
   },
   "prefixes": {
     "switch": ["switch"],
@@ -27,7 +29,9 @@
     "publish": ["publish"],
     "close_shop": ["close my shop", "close shop"],
     "order_ready": ["ready"],
-    "order_delivered": ["delivered", "collected"]
+    "order_delivered": ["delivered", "collected"],
+    "connect": ["connect"],
+    "invite": ["invite", "add member"]
   },
   "fillers": ["please", "pls", "kindly"],
   "markers": []

@@ -1,6 +1,6 @@
 # Chat as the way in: signing up and connecting from WhatsApp, Telegram and Slack
 
-Status: **Draft** 29 October 2026, for review · Decision: [0058](../decisions/0058-chat-as-a-way-in.md) (proposed) · Builds on: [WhatsApp](../whatsapp.md), [Telegram](../telegram.md) ([0035](../decisions/0035-telegram-channel.md)), [Slack](../integrations/slack.md) ([0051](../decisions/0051-platform-apps.md)), [onboarding](../onboarding.md) ([0022](../decisions/0022-self-serve-onboarding.md)), [field agents](../agents.md), [OAuth connections](../decisions/0034-oauth-connections.md), [no technical steps](no-technical-steps.md) (N2, N6) · Strategy: [chat-first](../strategy/chat-first-nigeria.md#32-three-product-gaps-that-keep-the-chat-from-being-chat-first) gaps 1 and 2 · Stories: [user stories](../strategy/user-stories.md) 1 to 7, 11 to 14
+Status: **Built** 29 October 2026 (C1 to C6; each milestone's as-built notes follow it) · Decision: [0058](../decisions/0058-chat-as-a-way-in.md) (accepted) · Builds on: [WhatsApp](../whatsapp.md), [Telegram](../telegram.md) ([0035](../decisions/0035-telegram-channel.md)), [Slack](../integrations/slack.md) ([0051](../decisions/0051-platform-apps.md)), [onboarding](../onboarding.md) ([0022](../decisions/0022-self-serve-onboarding.md)), [field agents](../agents.md), [OAuth connections](../decisions/0034-oauth-connections.md), [no technical steps](no-technical-steps.md) (N2, N6) · Strategy: [chat-first](../strategy/chat-first-nigeria.md#32-three-product-gaps-that-keep-the-chat-from-being-chat-first) gaps 1 and 2 · Stories: [user stories](../strategy/user-stories.md) 1 to 7, 11 to 14
 
 ## 1. Summary
 
@@ -275,6 +275,13 @@ Built as above ([onboarding](../onboarding.md#one-person-many-doors), [WhatsApp]
 - The WhatsApp template `taskiem_invite` and the `taskiem_connect` Flow in the registry and `docs/whatsapp-flows/`.
 - Docs: [WhatsApp](../whatsapp.md), [Telegram](../telegram.md), [Slack](../integrations/slack.md), [onboarding](../onboarding.md) (the three ways in, side by side), the owners' guide (`docs/guide/`: "Start from WhatsApp"), [phase 4 status](../phase-4-status.md) (the open item closed), the [chat-first strategy](../strategy/chat-first-nigeria.md) (gaps 1 and 2 closed).
 - The decision accepted with what was built.
+
+### 11.1 As built (C6)
+
+- **Words.** The word lists gained `signup` (whole messages: "I wan open account", "open account", "new business"), `plan`, and the prefixes `connect` and `invite`, in the five languages (drafts for review outside English, as the rest). A stranger's signup phrase in their language starts the sign-up; a linked person's English stays the existing words, so "register" does not start a second business by accident. Every message added in C1 to C5 is in the five catalogues.
+- **The model** routes a stranger's free text to sign-up only (`intent.Stranger`), in any language, at most five times an hour per chat, on the platform's account: there is no business to charge or record against. Members' routing gained `connect` and `plan`; `invite` is left to the words, since its number and role must be typed.
+- **Templates and Flows.** `taskiem_invite` is in the library and the registry (C5); the `taskiem_connect` Flow is in `docs/whatsapp-flows/` (C2).
+- **Docs.** The owners' guide's [Start from WhatsApp](../guide/start-from-chat.md); the ways in side by side in [onboarding](../onboarding.md); [phase 4 status](../phase-4-status.md) and the [chat-first strategy](../strategy/chat-first-nigeria.md#32-three-product-gaps-that-keep-the-chat-from-being-chat-first) updated.
 
 ## 12. Security model
 

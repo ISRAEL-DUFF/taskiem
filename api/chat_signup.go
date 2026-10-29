@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/ai/intent"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -178,6 +179,38 @@ func signupWord(text string, linked bool) bool {
 	return false
 }
 
+// signupPhrase reports whether a message asks to start a business in the
+// person's language ("I wan open account"): the word lists' signup
+// intent. A linked person's English is signupWord's alone.
+func signupPhrase(text string, l lang.Tag, linked bool) bool {
+	m, ok := lang.MatchIntent(text, []lang.Tag{l, lang.EN})
+	return ok && m.Intent == lang.IntentSignup && (!linked || m.Language != lang.EN)
+}
+
+// signupModelRoute asks the model whether a stranger's free text means
+// "sign me up" (docs/spec/chat-way-in.md 11): that intent only, a few
+// times an hour per chat, on the platform's account (there is no
+// business yet to charge).
+func (s *Server) signupModelRoute(ctx context.Context, sc *signupChat, text string) bool {
+	text = strings.TrimSpace(text)
+	if s.Languages == nil || s.Languages.Model == nil || sc.user != uuid.Nil || len(strings.Fields(text)) < 2 {
+		return false
+	}
+	if !s.limiter("su-model:"+sc.addr, time.Hour, 5).Allow() {
+		return false
+	}
+	info, _ := lang.Lookup(sc.lang)
+	cl := &intent.Classifier{Provider: s.Languages.Model, Intents: intent.Stranger}
+	res, _, err := cl.Classify(ctx, text, info)
+	if err != nil {
+		if !errors.Is(err, intent.ErrUnusable) {
+			s.Logger.Warn("chat sign-up: routing a message through the model", "err", err)
+		}
+		return false
+	}
+	return res.Intent == lang.IntentSignup
+}
+
 // chatSignupMessage handles a message from an address in a sign-up, a word
 // or button that starts one, or the offer's other buttons; false leaves
 // the message to what comes next.
@@ -193,7 +226,7 @@ func (s *Server) chatSignupMessage(ctx context.Context, sc *signupChat, text, re
 		return true, s.signupStep(ctx, sc, st, text, reply)
 	}
 	switch {
-	case reply == "su:start" || signupWord(text, sc.user != uuid.Nil):
+	case reply == "su:start" || signupWord(text, sc.user != uuid.Nil) || signupPhrase(text, sc.lang, sc.user != uuid.Nil):
 		return true, s.signupBegin(ctx, sc)
 	case reply == "su:have" && sc.user == uuid.Nil:
 		// Linking an account made on the web, by a link to its email
@@ -206,13 +239,16 @@ func (s *Server) chatSignupMessage(ctx context.Context, sc *signupChat, text, re
 }
 
 // signupOffer answers a stranger nothing else claimed: what Taskiem is,
-// and whether they want to start. A language's name typed chooses it.
+// and whether they want to start. A language's name typed chooses it;
+// free text that means "sign me up" starts at once.
 func (s *Server) signupOffer(ctx context.Context, sc *signupChat, text string) error {
 	if info, ok := lang.Find(strings.TrimSpace(text)); ok && slices.Contains(s.operatorLangs(), info.Tag) {
 		if err := s.setNumberLang(ctx, sc.addr, info.Tag, "command"); err != nil {
 			return err
 		}
 		sc.lang = info.Tag
+	} else if s.signupModelRoute(ctx, sc, text) {
+		return s.signupBegin(ctx, sc)
 	}
 	return s.suSay(ctx, sc, sc.t("signup.offer", "languages", langNames(s.operatorLangs())),
 		whatsapp.Button{ID: "su:start", Title: sc.t("signup.button_start")},
