@@ -446,6 +446,9 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
+          # The atlas needs no packages; without this, setup-node sees
+          # package.json's packageManager and looks for pnpm to cache.
+          package-manager-cache: false
       - name: Every atlas reference resolves
         run: node docs/atlas/atlas.mjs check
       - name: Changed pages come with the rebuilt site
