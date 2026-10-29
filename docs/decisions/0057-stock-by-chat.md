@@ -1,4 +1,4 @@
-# 0056 — Stock by chat: the catalogue table is the stock, every change is a kept movement, sales and purchases move it, suppliers are people outside the business
+# 0057 — Stock by chat: the catalogue table is the stock, every change is a kept movement, sales and purchases move it, suppliers are people outside the business
 
 Date: 2026-10-28 · Status: **Proposed** · Plan: [stock by chat](../spec/stock.md)
 

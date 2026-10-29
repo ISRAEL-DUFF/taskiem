@@ -305,7 +305,7 @@ func TestRidersPay(t *testing.T) {
 	if e := ada.must(403, "PUT", bankPath, gtb); e["operation"] != "rider.bank" || e["target"] != m["id"] || fmt.Sprint(e["methods"]) != "[totp]" {
 		t.Fatalf("step-up asked: %v", e)
 	}
-	ada.must(403, "PUT", bankPath, map[string]any{"bank_code": "058", "account_number": "0123456789", "totp": "000000"})
+	ada.must(403, "PUT", bankPath, map[string]any{"bank_code": "058", "account_number": "0123456789", "totp": wrongCode(secret)})
 	// A wrong account is refused before anyone is asked to confirm.
 	ada.must(400, "PUT", bankPath, map[string]any{"bank_code": "058", "account_number": "12"})
 	gtb["totp"] = codeAfter(secret, 1)

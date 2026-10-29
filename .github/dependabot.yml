@@ -1,0 +1,33 @@
+# Dependency updates (https://docs.github.com/code-security/dependabot).
+# Every third-party action in .github/workflows is pinned to a commit SHA with
+# its version in a trailing comment; Dependabot moves both together. Each
+# update is an ordinary pull request, so it passes the same CI, including
+# the licence gate, as any other change.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The Dockerfile's base images, pinned by digest with the tag kept.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directories: [/, /third_party/qjs]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # The pnpm workspace (package.json, sdk, web) and its lockfile.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

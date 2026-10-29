@@ -1,5 +1,6 @@
 {{- $root := . -}}
 {{- range $role := splitList " " (include "taskiem.roles" .) }}
+{{- $public := or (eq $role "api") (eq $role "edge") (eq $role "all") }}
 ---
 apiVersion: v1
 kind: Service
@@ -9,7 +10,7 @@ metadata:
     {{- include "taskiem.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $role }}
 spec:
-  type: {{ if or (eq $role "api") (eq $role "edge") (eq $role "all") }}{{ $root.Values.service.type }}{{ else }}ClusterIP{{ end }}
+  type: {{ if $public }}{{ $root.Values.service.type }}{{ else }}ClusterIP{{ end }}
   selector:
     {{- include "taskiem.selectorLabels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $role }}
@@ -20,5 +21,26 @@ spec:
     {{- if eq $role "edge" }}
     - { name: edge, port: 80, targetPort: edge }
     {{- end }}
+    {{- if not $public }}
     - { name: metrics, port: 9090, targetPort: metrics }
+    {{- end }}
+{{- if $public }}
+---
+# Metrics (and the profiler, with TASKIEM_PPROF) on a Service of their own
+# that is always ClusterIP: service.type may make the one above public.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "taskiem.fullname" $root }}-{{ $role }}-metrics
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "taskiem.selectorLabels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+  ports:
+    - { name: metrics, port: 9090, targetPort: metrics }
+{{- end }}
 {{- end }}

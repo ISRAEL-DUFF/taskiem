@@ -146,7 +146,7 @@ taskiem_ops_sso_take(bytea)	@ISRAEL-DUFF (operator-console)	part of: Operator id
 taskiem_ops_storefront_reviews(text)	@ISRAEL-DUFF (operator-console)	Operators (00186)
 taskiem_ops_tenants(text,integer)	@ISRAEL-DUFF (operator-console)	Reads for the operator console (decision 0027), and the review checklist enforced where four eyes already is (00143)
 taskiem_parent_limits(uuid)	@ISRAEL-DUFF (partners)	A sub-tenant's inheritance (spec 13.1) (00045)
-taskiem_partner_create_subtenant(uuid,text,text,text,text,jsonb)	@ISRAEL-DUFF (partners)	Create a sub-tenant of the partner in scope, within its max_subtenants, and enter it (as taskiem_partner_enter) (00045)
+taskiem_partner_create_subtenant(uuid,text,text,text,text,jsonb)	@ISRAEL-DUFF (partners)	Create a sub-tenant of the partner in scope, within its max_subtenants or else its plan's, and enter it (as taskiem_partner_enter) (00045, 00255)
 taskiem_partner_enter(uuid,text,text,text,jsonb)	@ISRAEL-DUFF (partners)	Enter one sub-tenant (00045)
 taskiem_partner_route_event(text,text,text,text,text,text,text)	@ISRAEL-DUFF (partners)	Route one event received by the partner in scope (00170)
 taskiem_partner_self()	@ISRAEL-DUFF (partners)	The partner a transaction acts for (00045)

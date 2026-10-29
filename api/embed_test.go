@@ -659,3 +659,17 @@ func TestPartnerWebhooks(t *testing.T) {
 	}
 	p.key.must(404, "POST", "/v1/partner/webhook-deliveries/"+done+"/retry", nil)
 }
+
+// A partner the operator set no cap for reports its plan's: what creating
+// a sub-tenant enforces (migration 00255).
+func TestPartnerReportsThePlansSubtenantCap(t *testing.T) {
+	w := billingWorld(t)
+	p := w.partner(t, "Wagely", "owner@wagely.test")
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE subscriptions SET plan_id = 'business' WHERE tenant_id = $1`, p.id); err != nil {
+		t.Fatal(err)
+	}
+	info := p.key.must(200, "GET", "/v1/partner", nil)
+	if toJSON(info["caps"].(map[string]any)["max_subtenants"]) != "50" {
+		t.Errorf("partner info: %v", info)
+	}
+}

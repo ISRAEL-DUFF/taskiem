@@ -1,6 +1,6 @@
 # Stock by chat: the shop's stock from a phone, sales that move it, suppliers and purchase orders
 
-Status: **Draft** 28 October 2026, for review · Decision: [0056](../decisions/0056-stock-by-chat.md) · Builds on: [storefronts](../storefronts.md) (the catalogue and its stock), [data tables](../data-tables.md) (kept tables), [money log](../money-log.md) (cash, POS sales, expenses), [reaching people outside](../decisions/0039-reaching-people-outside.md), [languages and voice notes](../decisions/0029-languages-and-voice-notes.md), [leaks](../leaks.md), [money reports](../money-reports.md) · Stories: [user stories](../strategy/user-stories.md) 45–48, 56
+Status: **Draft** 28 October 2026, for review · Decision: [0057](../decisions/0057-stock-by-chat.md) · Builds on: [storefronts](../storefronts.md) (the catalogue and its stock), [data tables](../data-tables.md) (kept tables), [money log](../money-log.md) (cash, POS sales, expenses), [reaching people outside](../decisions/0039-reaching-people-outside.md), [languages and voice notes](../decisions/0029-languages-and-voice-notes.md), [leaks](../leaks.md), [money reports](../money-reports.md) · Stories: [user stories](../strategy/user-stories.md) 45–48, 56
 
 ## 1. Summary
 
