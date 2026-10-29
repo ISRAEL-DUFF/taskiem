@@ -176,6 +176,21 @@ func Dashboard() ([]byte, error) {
 		}, nil)
 	add("timeseries", "Scheduler lateness (p99)", "How late timers and schedules fire.", "s", gridPos{8, 8, 16, y},
 		[]target{{Expr: "histogram_quantile(0.99, sum by (le, kind) (rate(taskiem_scheduler_lateness_seconds_bucket[5m])))", LegendFormat: "{{kind}}", RefID: "A"}}, nil)
+	y += 8
+	row("Retention", y)
+	y++
+	add("timeseries", "Purge backlog", "Runs past their retention date not yet archived and deleted, and those whose purge has failed (retried after a backoff).", "short", gridPos{8, 8, 0, y},
+		[]target{
+			{Expr: "max(taskiem_retention_purge_backlog_runs)", LegendFormat: "waiting", RefID: "A"},
+			{Expr: "max(taskiem_retention_purge_failing_runs)", LegendFormat: "failing", RefID: "B"},
+		}, nil)
+	add("timeseries", "Oldest overdue run", "How long the oldest run past retention has waited; over 6 hours opens a ticket.", "s", gridPos{8, 8, 8, y},
+		[]target{{Expr: "max(taskiem_retention_purge_oldest_overdue_seconds)", LegendFormat: "oldest", RefID: "A"}}, nil)
+	add("timeseries", "Runs purged and failed", "Runs archived and deleted, and purge failures, per 10 minutes.", "short", gridPos{8, 8, 16, y},
+		[]target{
+			{Expr: "sum(increase(taskiem_runs_purged_total[10m]))", LegendFormat: "purged", RefID: "A"},
+			{Expr: "sum(increase(taskiem_retention_purge_failures_total[10m]))", LegendFormat: "failed", RefID: "B"},
+		}, nil)
 
 	d := map[string]any{
 		"title": "Taskiem SLOs", "uid": "taskiem-slo", "schemaVersion": 39, "version": 1, "editable": true,

@@ -177,6 +177,20 @@ func RulesTestYAML() ([]byte, error) {
 					expect("TaskiemQueueBacklog", map[string]string{"severity": "page", "pool": "shared", "queue": "sandbox"}),
 				}}},
 			},
+			{
+				Name:     "the retention purge falls behind on one scheduler",
+				Interval: "1m",
+				InputSeries: []promSeries{
+					// Overdue from 5h50m, growing; the other scheduler last
+					// measured an empty backlog.
+					{Series: `taskiem_retention_purge_oldest_overdue_seconds{instance="a"}`, Values: "21000+60x60"},
+					{Series: `taskiem_retention_purge_oldest_overdue_seconds{instance="b"}`, Values: "0x60"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "20m", Alertname: "TaskiemRetentionPurgeBehind", ExpAlerts: []promAlert{}},
+					{EvalTime: "50m", Alertname: "TaskiemRetentionPurgeBehind", ExpAlerts: []promAlert{expect("TaskiemRetentionPurgeBehind", map[string]string{"severity": "ticket"})}},
+				},
+			},
 		},
 	}
 	b, err := yaml.Marshal(f)

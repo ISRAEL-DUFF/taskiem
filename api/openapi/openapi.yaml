@@ -9464,6 +9464,11 @@ paths:
         schema:
           type: string
         description: Only runs in this environment
+      - name: correlation_key
+        in: query
+        schema:
+          type: string
+        description: Only runs with this correlation key (exact match), the correlation of the signal the run last waited on
       - name: before
         in: query
         schema:
@@ -14737,7 +14742,7 @@ paths:
       tags:
       - Runs
       summary: List runs
-      description: Newest first. Filter by workflow, status and environment; page with `before` and `limit`.
+      description: Newest first. Filter by workflow, status, environment and correlation key; page with `before` and `limit`.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -14760,6 +14765,11 @@ paths:
         schema:
           type: string
         description: Only runs in this environment
+      - name: correlation_key
+        in: query
+        schema:
+          type: string
+        description: Only runs with this correlation key (exact match), the correlation of the signal the run last waited on
       - name: before
         in: query
         schema:

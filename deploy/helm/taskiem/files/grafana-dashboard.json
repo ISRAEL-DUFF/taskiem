@@ -1059,6 +1059,116 @@
       ],
       "title": "Scheduler lateness (p99)",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 59
+      },
+      "id": 32,
+      "panels": [],
+      "title": "Retention",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Runs past their retention date not yet archived and deleted, and those whose purge has failed (retried after a backoff).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 60
+      },
+      "id": 33,
+      "targets": [
+        {
+          "expr": "max(taskiem_retention_purge_backlog_runs)",
+          "legendFormat": "waiting",
+          "refId": "A"
+        },
+        {
+          "expr": "max(taskiem_retention_purge_failing_runs)",
+          "legendFormat": "failing",
+          "refId": "B"
+        }
+      ],
+      "title": "Purge backlog",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "How long the oldest run past retention has waited; over 6 hours opens a ticket.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 60
+      },
+      "id": 34,
+      "targets": [
+        {
+          "expr": "max(taskiem_retention_purge_oldest_overdue_seconds)",
+          "legendFormat": "oldest",
+          "refId": "A"
+        }
+      ],
+      "title": "Oldest overdue run",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Runs archived and deleted, and purge failures, per 10 minutes.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 60
+      },
+      "id": 35,
+      "targets": [
+        {
+          "expr": "sum(increase(taskiem_runs_purged_total[10m]))",
+          "legendFormat": "purged",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(taskiem_retention_purge_failures_total[10m]))",
+          "legendFormat": "failed",
+          "refId": "B"
+        }
+      ],
+      "title": "Runs purged and failed",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",

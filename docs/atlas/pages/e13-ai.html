@@ -56,7 +56,7 @@
   <p>Saving from WhatsApp or Telegram sends no resolutions, and a merge conflict there used to fall through as an error, so the person got no reply. The chat now answers that someone changed the workflow since the build started, with a link to make the change on the web; nothing is written, and the build stays a proposal (<x-ref path="api/whatsapp_build.go" symbol="if mc := (*mergeConflict)(nil); errors.As(err, &amp;mc) {">waBuildSave</x-ref>).</p>
 </div>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>Spec 12.1 starts from "the canvas, CLI, or WhatsApp" (<x-ref path="docs/spec/architecture.md" symbol="The user describes the goal in the canvas, CLI, or WhatsApp.">spec 12.1</x-ref>). The <code>taskiem</code> command has no build command. Telegram, which the spec does not name, has one.</p>
+  <p>Spec 12.1 starts from "the canvas, CLI, or WhatsApp" (<x-ref path="docs/spec/architecture.md" symbol="The user describes the goal in the canvas, CLI, or WhatsApp.">spec 12.1</x-ref>). The <code>taskiem</code> command has no AI build command (its <code>build</code> compiles flow code). Telegram, which the spec does not name, has one.</p>
 </div>
 
 <h2 id="ai--repair">Self-repair: rules, then the model, then the shadow</h2>
@@ -104,7 +104,7 @@
   <p>A call whose record cannot be written is still a call the provider bills. Its reservation used to be released with the failed attempt, so the call's tokens were never counted and a database that kept refusing the insert let a step spend tokens on every retry. The reservation is now kept until it lapses, and other steps count it meanwhile (<x-ref path="engine/runtime/aistep.go" symbol="unrecorded = true">aistep.go</x-ref>).</p>
 </div>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>Spec 12.3: "hitting the cap degrades to manual building, never to blocking runs" (<x-ref path="docs/spec/architecture.md" symbol="hitting the cap degrades to manual building, never to blocking runs">spec 12.3</x-ref>), and decision 0014: "Hitting it refuses AI building only." Since decision 0050, a run whose ai step meets a spent budget fails. The decision chose this, but neither the spec nor the budget section of <x-ref path="docs/ai.md" symbol="Only AI building and repair stop: runs, triggers and manual editing are never affected.">docs/ai.md</x-ref> was updated, and that section still promises runs are never affected.</p>
+  <p>Spec 12.3: "hitting the cap degrades to manual building, never to blocking runs" (<x-ref path="docs/spec/architecture.md" symbol="hitting the cap degrades to manual building, never to blocking runs">spec 12.3</x-ref>), and decision 0014: "Hitting it refuses AI building only." Since decision 0050, a run whose ai step meets a spent budget fails. The decision chose this, and the budget section of <x-ref path="docs/ai.md" symbol="so do runs that reach an ai step">docs/ai.md</x-ref> says so, but the spec was not updated.</p>
 </div>
 
 <h2 id="ai--chat">Chat routing and moderation</h2>
@@ -158,5 +158,5 @@
   <p>The CI filter used to cover only <code>engine/ai</code>, <code>evals</code>, <code>templates</code> and <code>tools/aieval</code>, so a change to the context, repair, the checks, masking, shadow runs or a manifest moved what the suites measure without running them. Found while writing this page.</p>
 </div>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
-  <p>Spec 12.4 asks for "at least 200 real-world automation requests (seeded from dogfooding)" (<x-ref path="docs/spec/architecture.md" symbol="An evaluation suite of at least 200 real-world automation requests">spec 12.4</x-ref>), and says a model or prompt change ships only if it does not regress. The 308 requests are synthetic, written by engineering and marked as pending review by people. The only gate a change must pass is the offline heuristic, which does not run the model being changed. <x-ref path="docs/ai.md">docs/ai.md</x-ref> still counts 282 builder requests.</p>
+  <p>Spec 12.4 asks for "at least 200 real-world automation requests (seeded from dogfooding)" (<x-ref path="docs/spec/architecture.md" symbol="An evaluation suite of at least 200 real-world automation requests">spec 12.4</x-ref>), and says a model or prompt change ships only if it does not regress. The 308 requests are synthetic, written by engineering and marked as pending review by people. The only gate a change must pass is the offline heuristic, which does not run the model being changed.</p>
 </div>
