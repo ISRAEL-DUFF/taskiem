@@ -268,6 +268,10 @@
       "text": "Invoice {number} sitere n'aka {business}: {amount} ka a ga-akwụ. Pịa Kwụọ na transfer maka nọmba akaụntụ ị ga-akwụ ego na ya, ma ọ bụ Mepee invoice ka ị hụ ya.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "Ị ji {business} {amount} n'akwụkwọ ụgwọ {count}. Lee ha ma kwụọ niile ma ọ bụ akụkụ: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Nọmba akaụntụ gị maka invoice {number} na-abịa. Ọ bụrụ na ọ bịaghị n'ime otu nkeji, pịa Nọmba akaụntụ ọhụrụ.",
       "reviewed": false

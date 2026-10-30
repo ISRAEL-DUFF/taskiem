@@ -268,6 +268,10 @@
       "text": "Invoice {number} láti ọ̀dọ̀ {business}: {amount} ni ẹ ó san. Tẹ San nípa transfer fún nọ́mbà àkáǹtì tí ẹ ó sanwó sí, tàbí Ṣí invoice láti rí i.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "O jẹ {business} {amount} lórí ìwé owó {count}. Wo wọn kí o san gbogbo rẹ̀ tàbí apá kan: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
       "reviewed": false

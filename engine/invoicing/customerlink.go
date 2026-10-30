@@ -288,6 +288,14 @@ func (s *Invoices) SendBalance(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	if out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, to, business, text, "What you owe "+business, "balance:"+customer+":"+key); err != nil {
 		return out, err
 	}
+	// And on the chat app they asked the business for updates on.
+	ch, err := s.queueChatKind(ctx, tx, tenant, to, OutboxBalance, "balance:"+customer+":"+key)
+	if err != nil {
+		return out, err
+	}
+	if ch != "" {
+		out.Queued = append(out.Queued, ch)
+	}
 	err = audit(ctx, tx, tenant, by, "invoice.balance_sent", open[0].Number, map[string]any{"invoices": out.Numbers, "sent": out.Sent,
 		"due_kobo": out.DueKobo, "channels": out.Queued})
 	return out, err

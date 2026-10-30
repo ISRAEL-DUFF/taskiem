@@ -1045,6 +1045,17 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		if err != nil {
 			return err
 		}
+		// A message about all the customer owes (a reminder per customer)
+		// also goes on the chat app they asked for updates on.
+		if customerLink != "" {
+			ch, err := s.queueChatKind(ctx, tx, tenant, x, OutboxBalance, "notice:"+key)
+			if err != nil {
+				return err
+			}
+			if ch != "" {
+				queued = append(queued, ch)
+			}
+		}
 		out["number"], out["queued"], out["sent"] = x.Number, queued, len(queued) > 0
 		if over {
 			out["sms_over_allowance"] = true

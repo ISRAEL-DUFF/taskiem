@@ -33576,6 +33576,10 @@ components:
                 - money_daily
                 - school_approval
                 - school_family
+                - rider
+                - sales_evening
+                - supplier
+                - balance
               status:
                 type: string
                 enum:

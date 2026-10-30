@@ -334,6 +334,11 @@
       "reviewed": true,
       "context": "An invoice sent to a customer outside the business on the chat app they asked for updates on; {amount} is what is still due, in naira"
     },
+    "invoice.chat.balance": {
+      "text": "You owe {business} {amount} on {count} bill(s). See them and pay all or part: {link}",
+      "reviewed": true,
+      "context": "What a customer owes a business in all, on the chat app they asked for updates on; {count} is how many bills, {link} their page to pay all or part"
+    },
     "invoice.chat.wait": {
       "text": "Your account number for invoice {number} is on its way. If it has not come in a minute, tap New account number.",
       "reviewed": true,

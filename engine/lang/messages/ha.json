@@ -268,6 +268,10 @@
       "text": "Invoice {number} daga {business}: {amount} za a biya. Danna Biya ta transfer don samun lambar asusu da za ku biya ciki, ko Buɗe invoice don ganin ta.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "Kana bin {business} {amount} a kan takardun kuɗi {count}. Duba su ka biya duka ko wani bangare: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Lambar asusunku na invoice {number} tana kan hanya. Idan ba ta zo cikin minti ɗaya ba, danna Sabuwar lambar asusu.",
       "reviewed": false
