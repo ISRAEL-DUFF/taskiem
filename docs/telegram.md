@@ -21,6 +21,10 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 ## For people: using Taskiem on Telegram
 
+**No account yet?** Where the operator turned it on, open the bot (or the website's `t.me/<bot>?start=signup` link) and choose **Start my business**: the same questions as on WhatsApp, then **Share my number**, which must be your own. The business and your account are made from the chat ([signing up from chat](onboarding.md#signing-up-from-chat)). A number that already uses Taskiem on WhatsApp makes no second account: an account made in chat gets this Telegram account too, and any other gets a link by email ([one person, many doors](onboarding.md#one-person-many-doors)).
+
+**Invited.** An owner's `invite +234… as viewer` on Telegram gives them a `t.me/<bot>?start=inv_…` link to forward, since a bot cannot write first. Opening it shows the invitation with **Join**; after the terms, Taskiem asks you to share your own number, which must be the one invited: the link alone, which anyone could be forwarded, joins no one.
+
 **Link your account.** Under Account > Telegram, choose **Link Telegram** and confirm it is you (passkey, authenticator code or password, as when adding a passkey). Open the link it shows on the device where you use Telegram, and press **Start**: the Telegram account that opens the link is linked to you. A link works once, for 10 minutes; at most five are made an hour. An account can be linked to one Taskiem account, and you have one Telegram account at a time (linking another replaces it). Unlink it on the same page.
 
 **What you can send** is what you can send on WhatsApp ([the table](whatsapp.md#for-people-using-taskiem-on-whatsapp)): `help`, `status`, `run <workflow>`, `approvals`, `build <what to automate>`, `tables`, `add to <table>`, `find <table> <text>`, `switch <organisation>`, `cancel`, `language`, and voice notes where they are on. Telegram's `/help`, `/approvals` and so on work too. Every message from Taskiem starts with the organisation's name in brackets.
@@ -34,6 +38,10 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 **What messages never show** is as on WhatsApp: no secrets, and personal data masked.
 
 **People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START.
+
+## Connecting a service
+
+`connect <service>` works as on WhatsApp ([connecting a service from the chat](whatsapp.md#connecting-a-service-from-the-chat)), with a connect link on a button. For a key-based service the button opens the connect page as a Mini App inside Telegram: Telegram hands the page its signed `initData`, and the key is taken only when that is signed for Taskiem's bot (HMAC-SHA-256 under the key derived from the bot token), at most ten minutes old, and for the account the link was sent to. A service that signs in (Google) opens in the browser instead, since Google refuses sign-in inside apps' own browsers. Telegram's web client shows Mini Apps in a frame, which the console's frame policy refuses: on the web, open the link in the browser.
 
 ## Alerts to Telegram
 

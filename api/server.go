@@ -74,6 +74,17 @@ type Server struct {
 	// may not sign up, besides the built-in throwaway services
 	// (TASKIEM_SIGNUP_BLOCKED_DOMAINS).
 	SignupBlockedDomains []string
+	// ChatSignup is signing up from chat (chat_signup.go); Terms the terms
+	// and privacy notice every way in asks people to agree to.
+	ChatSignup ChatSignupConfig
+	Terms      TermsConfig
+	// BindingDormantDays is how long a chat binding may be silent before it
+	// is dormant: sent nothing, acting on nothing until proven again, and
+	// removed after as long again (TASKIEM_BINDING_DORMANT_DAYS); 0 is off.
+	BindingDormantDays int
+	// termsAsked are the people asked about, or agreed to, the current
+	// terms since start: chat does not look them up again.
+	termsAsked sync.Map
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -279,6 +290,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		if s.Slack != nil {
 			r.Post("/channels/slack/interactions", s.slackInteractions)
+			r.Post("/channels/slack/events", s.slackEvents) // DMs to the bot (slack_chat.go)
 		}
 		r.Mount("/channels/ussd", s.USSDHooks())
 	}
@@ -295,6 +307,18 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/auth/sso/{id}/start", s.ssoStart)
 		r.Get("/auth/sso/oidc/callback", s.oidcCallback)
 		r.Get("/connections/oauth/callback", s.oauthConnectionCallback) // providers send the browser back here (oauthconnections.go)
+		// Connect links sent from chat: the token is the authority, for one
+		// connection (connect_links.go).
+		r.Get("/connect/{token}", s.getConnectLink)
+		r.Post("/connect/{token}", s.connectWithKey)
+		r.Post("/connect/{token}/oauth", s.connectWithOAuth)
+		// Add to Slack from the website: a business made in Slack
+		// (slack_install.go).
+		r.Get("/slack/install", s.slackInstallStart)
+		r.Get("/slack/install/callback", s.slackInstallCallback)
+		// An email added to an account, confirmed from its link signed in
+		// or not (chat_doors.go).
+		r.Post("/auth/email/confirm", s.confirmEmailChange)
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
@@ -313,9 +337,12 @@ func (s *Server) Handler() http.Handler {
 			r.Route("/keys", s.keyRoutes)                            // encryption keys and BYOK (keys.go)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/me", s.me)
+			r.Post("/me/terms", s.answerTerms) // agreeing to the terms (onboarding.go)
 			r.Post("/me/password", s.changePassword)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
+			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
+			r.Post("/me/chat-link", s.linkChat)   // a chat linked by an emailed link (chat_doors.go)
 			r.Get("/onboarding", s.getOnboarding) // the getting-started checklist (onboarding.go)
 			r.With(s.need(PermWorkflowEdit)).Post("/onboarding/dismiss", s.dismissOnboarding)
 			r.Route("/agent", s.agentRoutes) // field agents' own work (agents.go)
@@ -812,6 +839,8 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeErr(w, http.StatusForbidden, strings.TrimPrefix(err.Error(), "forbidden: "))
 	case errors.Is(err, errConflict):
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
+	case errors.Is(err, errGone):
+		writeErr(w, http.StatusGone, strings.TrimPrefix(err.Error(), "gone: "))
 	case errors.As(err, new(*runtime.CapabilityError)):
 		// A capability step its environment's connections cannot run.
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "capability"})
@@ -845,6 +874,9 @@ var (
 	errBadRequest = errors.New("bad request")
 	errForbidden  = errors.New("forbidden")
 	errConflict   = errors.New("conflict")
+	// errGone: something that was there and is used up or expired (a
+	// connect link): 410 with the message.
+	errGone = errors.New("gone")
 )
 
 func decodeBody(r *http.Request, v any) error {

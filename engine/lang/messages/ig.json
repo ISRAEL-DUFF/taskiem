@@ -664,6 +664,234 @@
       "text": "Ejikọtaghị akaụntụ Slack a na gị na Taskiem, ya mere ọ pụghị ikpebi nke a. Jikọọ ya site na profaịlụ Taskiem gị.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "Daalụ maka itinye Taskiem na {workspace}. Ka anyị hazie azụmahịa gị ebe a na Slack: ajụjụ ole na ole, ihe dịka otu nkeji.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem adịlarị na {workspace}, maka {businesses}. Iji rụọ ọrụ ebe ahụ, rịọ onye nwe ya ka o tinye gị na Taskiem. Iji nwee azụmahịa nke gị iche, pịa bọtịnụ dị n'okpuru.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem alọghachila na {workspace}. Dee m ozi ebe a dịka mbụ; zipu new business iji malite ọzọ.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} enweelarị akaụntụ Taskiem. Iji jiri ya ebe a, banye na {where} ma jikọọ Slack site na profaịlụ gị. Ma ọ bụ pịa bọtịnụ dị n'okpuru iji mepụta azụmahịa ebe a na Slack, n'okpuru akaụntụ ọzọ.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Malite azụmahịa nke m iche",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Malite azụmahịa ọhụrụ",
+      "reviewed": false
+    },
+    "door.ask_email": {
+      "text": "Kedu email ị ji abanye na Taskiem? Zipu ya ebe a, anyị ga-ezitere gị njikọ na email ahụ iji jikọọ mkparịta ụka a na akaụntụ gị.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "Nke ahụ adịghị ka adreesị email. Zipu ya otu a: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "A rịọla njikọ ọtụtụ ugboro. Lelee igbe ozi gị na spam, ma ọ bụ nwaa ọzọ mgbe otu awa gachara.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "Ọ bụrụ na {email} nwere akaụntụ Taskiem, njikọ na-aga ebe ahụ. Mepee ya na ngwaọrụ ebe ị banyere na Taskiem; ọ na-arụ ọrụ otu ugboro, maka otu awa. Mgbe ahụ mkparịta ụka a bụ nke gị.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "Emechala: ejikọọla mkparịta ụka a na akaụntụ Taskiem gị. Zipu help ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "Nọmba ahụ bụbu akaụntụ Taskiem gị, site na WhatsApp. Ejikọọla Telegram a na ya ugbu a: azụmahịa gị dị ebe a. Zipu help, ma ọ bụ new business iji malite ọzọ.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "Nọmba ahụ dịlarị na akaụntụ Taskiem. Anyị ezigaara akaụntụ ahụ njikọ na email ya: mepee ya mgbe ị banyere na Taskiem, Telegram a ga-ejikọ na ya.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Email akaụntụ gị bụ {email}. Iji gbanwee ya, jiri profaịlụ gị na weebụ.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Tinye email gị ka ị na-enweta nnata ego na invoice site na Taskiem. Zipu email, wee adreesị ya, otu a: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem enweghị ike iziga email ebe a ka, ya mere enweghị ike itinye email ugbu a.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Njikọ na-aga {email}. Mepee ya iji kwado; ọ na-arụ ọrụ otu ugboro, maka awa 24. Ruo mgbe ahụ, ọ dịghị ihe na-agbanwe.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Ọ dịghị ihe a ga-akwụ na Taskiem a.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "Azụmahịa a nọ na {plan} site na ụlọ ọrụ hiwere ya; ha na-ahụ maka ịkwụ ụgwọ.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "Ị nọ na {plan}, n'efu maka ụbọchị {days} ọzọ. Mgbe ahụ ọ bụ {price} kwa ọnwa.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Ịkwụ ụgwọ maka {plan} agafeela oge. Kwụọ ugbu a ka ihe niile na-aga n'ihu.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "Ị nọ na {plan}, {price} kwa ọnwa. Ọ ga-emeghari na {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Kwụọ ụgwọ",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Naanị onye na-ahụ maka ịkwụ ụgwọ maka {org} nwere ike ịkwụ.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "A na-ezipu nnata ego site na email. Zipu pay, wee email gị, otu a: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Ịkwụ ụgwọ enweghị ike ịmalite: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Ọ dịghị ụgwọ a na-akwụ ugbu a.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "Kwụọ {amount} ebe a, site na kaadị ma ọ bụ mbufe ego n'ụlọ akụ:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Naanị onye na-elekọta ndị {org} nwere ike ịkpọ òkù ma ọ bụ ịkwado.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "Iji kpọọ mmadụ òkù, zipu: invite +2348012345678 as viewer. Na Slack, kpọọ ha aha: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Naanị onye nwe nwere ike ime onye ọzọ onye nwe.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "Enweghị ọrụ a na-akpọ {role}. Ọrụ: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "Ị nweghị ike inye ọrụ {role}: ọ nwere ike ime ihe ị na-enweghị ike ime.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "Ka anyị kpọọ {who} òkù na {org} dịka {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "Ezighị òkù ọ bụla.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "Enweghị ike iziga òkù ahụ ugbu a. Nwaa ọzọ ma emechaa, ma ọ bụ kpọọ ha òkù na weebụ.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "Ezigala òkù na {who}. Ha ga-abanye mgbe ha pịara Join; ọ na-arụ ọrụ maka ụbọchị 7.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Zigara {who} njikọ a: {link}\nMgbe ha mepere ya, Taskiem ga-arịọ ha ka ha kesaa nọmba nke ha, nke ga-abụrịrị {who}. Ọ na-arụ ọrụ maka ụbọchị 7.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} kpọrọ gị òkù ka gị na {org} rụkọọ ọrụ na Taskiem, dịka {role}. Ị ga-abanye?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Banye",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "Òkù ahụ agwụla ma ọ bụ a zaala ya.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "Ọ dị mma, ị banyeghị. Agaghị eziga ihe ọ bụla ọzọ gbasara ya.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "Iji banye {org}, kwenye na usoro Taskiem na ọkwa nzuzo: {link}\nZaa Yes iji kwenye ma banye.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "Iji banye, kesaa nọmba gị site na bọtịnụ dị n'okpuru. Ọ ga-abụrịrị nọmba e ji kpọọ gị òkù.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "Nke ahụ abụghị nọmba òkù a dị maka ya. Kesaa nọmba gị, nke e ji kpọọ gị òkù.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "Ejikọọla mkparịta ụka a na akaụntụ Taskiem ọzọ, ya mere ọ nweghị ike ịbanye ebe a.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "Ị nọ na {org}. Zipu help ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Rịọ ịbanye {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "{businesses} na-eji Taskiem na workspace a. Ịnọ na workspace ezughị iji hụ azụmahịa ha: rịọ ịbanye, onye nwe ga-ekpebi.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Arịrịọ gị erutela ndị nwe {org}. Ị ga-anụ ebe a mgbe ha kpebiri.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} nọ na workspace Slack gị na-arịọ ịbanye {org}. Hapụ ha banye dịka?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Onye nlele",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Onye ọrụ",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Jụ",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "Ndị nwe {org} ekweghị ka ị banye oge a.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "Ajụla: a gwala {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "A kpọọla {who} òkù dịka {role}. Ha ga-abanye mgbe ha pịara Join.",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "Ana-enyocha aririo gi {reference}. Anyi ga-agwa gi.",
       "reviewed": false
@@ -2994,6 +3222,238 @@
     },
     "wa.unbound": {
       "text": "Ejikọghị nọmba a na akaụntụ Taskiem ọ bụla. Iji Taskiem ebe a, banye, mepee {where}, tinye nọmba a n'okpuru WhatsApp, wee pịnye ma ọ bụ zighachi koodu anyị zitere gị.",
+      "reviewed": false
+    },
+    "signup.offer": {
+      "text": "Ndewo! Taskiem na-arụ ọrụ azụmahịa gị site na nkata a: ịkwụ ụgwọ, akwụkwọ ụgwọ, ngwaahịa, ncheta, ibe ụlọ ahịa gị. Ị chọrọ ịmalite, n'efu?\n\nỊ ga-akparịta ụka n'asụsụ ọzọ, dee aha ya: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_start": {
+      "text": "Malite azụmahịa m",
+      "reviewed": false
+    },
+    "signup.button_have": {
+      "text": "M na-eji Taskiem",
+      "reviewed": false
+    },
+    "signup.button_no": {
+      "text": "Ọ bụghị ugbu a",
+      "reviewed": false
+    },
+    "signup.later": {
+      "text": "Ọ dịghị nsogbu. Zipu *start* oge ọ bụla ịmalite.",
+      "reviewed": false
+    },
+    "signup.no_org": {
+      "text": "Akaụntụ Taskiem gị enweghị azụmahịa ugbu a. Ị chọrọ ịmalite otu?",
+      "reviewed": false
+    },
+    "signup.country": {
+      "text": "Ịdebanye aha site na nkata emepebeghị na mba gị. Ị nwere ike ịdebanye aha na weebụsaịtị Taskiem kama.",
+      "reviewed": false
+    },
+    "signup.too_many": {
+      "text": "Nọmba a emeela azụmahịa {count} taa, nke kachasị maka otu ụbọchị. Nwaa ọzọ echi.",
+      "reviewed": false
+    },
+    "signup.busy": {
+      "text": "Anyị nọ n'ọrụ ịdebanye ndị mmadụ aha ugbu a. Biko nwaa ọzọ n'otu awa.",
+      "reviewed": false
+    },
+    "signup.terms": {
+      "text": "Taskiem na-edebe ndekọ azụmahịa gị na nkọwa ị nyere ya. Gụọ otu o si eme ya, na usoro ya: {link}\n\nZaa *Yes* ka ị kwenye ma malite. (Ka ị kparịta ụka n'asụsụ ọzọ, dee aha ya: {languages}.)",
+      "reviewed": false
+    },
+    "signup.declined": {
+      "text": "Emeghị ihe ọ bụla. Zipu *start* ma ọ bụrụ na ị gbanwere obi.",
+      "reviewed": false
+    },
+    "signup.cancelled": {
+      "text": "Akwụsịla: emeghị ihe ọ bụla. Zipu *start* ịmalite ọzọ.",
+      "reviewed": false
+    },
+    "signup.ask_business": {
+      "text": "Kedu aha azụmahịa gị? (Zipu *cancel* ịkwụsị oge ọ bụla.)",
+      "reviewed": false
+    },
+    "signup.ask_name": {
+      "text": "Na aha gị?",
+      "reviewed": false
+    },
+    "signup.ask_sells": {
+      "text": "Gịnị ka ị na-ere ma ọ bụ na-eme? Zaa na nọmba:\n1. Nri\n2. Ngwa ụlọ\n3. Ejiji\n4. Ekwentị na ngwaọrụ\n5. Ụlọ akwụkwọ\n6. Ụlọ ntutu\n7. Ọrụ\n8. Ihe ọzọ",
+      "reviewed": false
+    },
+    "signup.ask_pays": {
+      "text": "Kedu ka ndị ahịa si akwụ gị ụgwọ? Zaa na nọmba ndị dabara, dịka 1 2 3:\n1. Ego n'aka\n2. Nyefe ego n'ụlọ akụ\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": false
+    },
+    "signup.ask_contact": {
+      "text": "Nzọụkwụ ikpeazụ: pịa *Share my number* ka anyị mara na ọ bụ gị, ma nwee ike izitere gị ozi mgbe Telegram anaghị arụ ọrụ. Zipu *cancel* ịkwụsị.",
+      "reviewed": false
+    },
+    "signup.contact_own": {
+      "text": "Nke ahụ abụghị nọmba nke gị. Pịa *Share my number* iji kekọrịta nke gị.",
+      "reviewed": false
+    },
+    "signup.number_taken": {
+      "text": "Nọmba a na-eji Taskiem ugbu a. Iji Taskiem ebe a kwa, banye, mepee {where}, ma jikọọ nkata a.",
+      "reviewed": false
+    },
+    "signup.business_bad": {
+      "text": "Aha azụmahịa chọrọ mkpụrụedemede 2 ruo 80, na-enweghị njikọ ma ọ bụ adreesị email. Kedu aha azụmahịa gị?",
+      "reviewed": false
+    },
+    "signup.name_bad": {
+      "text": "Aha chọrọ mkpụrụedemede 80 ma ọ bụ obere, na-enweghị njikọ ma ọ bụ adreesị email. Kedu aha gị?",
+      "reviewed": false
+    },
+    "signup.done": {
+      "text": "Emechaala: *{business}* nọ na Taskiem.",
+      "reviewed": false
+    },
+    "signup.done_trial": {
+      "text": "Emechaala: *{business}* nọ na Taskiem, n'efu ruo ụbọchị {days}.",
+      "reviewed": false
+    },
+    "signup.starters": {
+      "text": "Nke a bụ ihe atọ azụmahịa dị ka nke gị na-eji amalite:",
+      "reviewed": false
+    },
+    "signup.own_words": {
+      "text": "Pịa otu, ma ọ bụ kwuo ihe ị chọrọ n'okwu nke gị.",
+      "reviewed": false
+    },
+    "signup.pin_hint": {
+      "text": "Nkata a bụ akaụntụ gị. Zipu *pin* ịtọ PIN nwere ọnụọgụ isii ga-echekwa ya maka gị.",
+      "reviewed": false
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Ncheta kwa ụbọchị",
+      "reviewed": false
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Ngụkọta ahịa ụbọchị",
+      "reviewed": false
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "Ncheta ụgwọ akwụkwọ",
+      "reviewed": false
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Zipu akwụkwọ ụgwọ",
+      "reviewed": false
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "Nchịkọta POS",
+      "reviewed": false
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Akwụkwọ nnata ego",
+      "reviewed": false
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Ọkwa ngwaahịa dị ala",
+      "reviewed": false
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Gụọ ngwaahịa m",
+      "reviewed": false
+    },
+    "dormant.form_title": {
+      "text": "Gosi na ọ bụ gị",
+      "reviewed": false
+    },
+    "dormant.prove": {
+      "text": "Nkata a dara jụụ ụbọchị {days}, ya mere Taskiem kwụsịrị iji ya ruo mgbe ị gosiri na ọ ka bụ gị. Tinye PIN nkata gị n'ime fọm ahụ.",
+      "reviewed": false
+    },
+    "dormant.relink": {
+      "text": "Nkata a dara jụụ ụbọchị {days}, ya mere Taskiem kwụsịrị iji ya ruo mgbe ị gosiri na ọ ka bụ gị. Banye, mepee {where} ma jikọọ ya ọzọ, ma ọ bụ jiri Taskiem site na nkata gị ọzọ. Ọ bụrụ na egosighị ya, a ga-akwụsị njikọ ya mgbe ụbọchị {days} ọzọ gachara.",
+      "reviewed": false
+    },
+    "chatpin.web": {
+      "text": "Tọọ PIN gị na ngwa weebụ, na {where}: ọ ga-ebu ụzọ jụọ passkey, authenticator ma ọ bụ okwuntughe gị.",
+      "reviewed": false
+    },
+    "chatpin.set_already": {
+      "text": "Ị nweelarị PIN mkparịta ụka. Iji gbanwee ya, banye na weebụ (zipu sign in maka njikọ), tinye passkey ma ọ bụ authenticator, wee gbanwee ya na peeji Account gị na {where}.",
+      "reviewed": false
+    },
+    "chatpin.not_here": {
+      "text": "Enweghị ike ịtọ PIN nkata site ebe a ugbu a: tọọ ya site na WhatsApp, ebe Taskiem na-ezipu fọm echekwara.",
+      "reviewed": false
+    },
+    "chatpin.form_title": {
+      "text": "PIN nkata gị",
+      "reviewed": false
+    },
+    "chatpin.form": {
+      "text": "Họrọ PIN nwere ọnụọgụ isii n'ime fọm ahụ. Debe ya n'onwe gị: ọ na-egosi na nkata a bụ nke gị, ma na-akwado ihe chọrọ ya.",
+      "reviewed": false
+    },
+    "chatpin.summary": {
+      "text": "Ọnụọgụ isii na-echekwa nkata a maka gị",
+      "reviewed": false
+    },
+    "connect.hint": {
+      "text": "Zipu *connect {service}* iji jikọọ ya site ebe a.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Jikọọ {service} ebe a: {link}\n\nNjikọ ahụ na-arụ ọrụ otu ugboro, ruo nkeji {minutes}, naanị maka gị. Ezitela igodo na nkata a: dee ya na ibe ahụ.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Pịa bọtịnụ dị n'okpuru iji jikọọ {service}. Ọ na-arụ ọrụ otu ugboro, ruo nkeji {minutes}, naanị maka gị. Ezitela igodo na nkata a: dee ya n'ime fọm ahụ.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Jikọọ {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Naanị onye na-ahụ maka njikọ na {org} nwere ike ijikọ ọrụ. Jụọ onye nwe ya.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem enweghị ọrụ a na-akpọ {service}. Lelee aha ya, dịka *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "Ejikọọla {service} na *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "Anyị na-aga n'ihu na *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "Nke ahụ dị ka igodo nzuzo, ya mere Taskiem edebeghị ya ma ọ bụ jiri ya. Igodo na-aba naanị n'ime fọm echekwara: zipu *connect* na aha ọrụ ahụ. Ngwa nkata nwere igodo ahụ ugbu a, ya mere gbanwee ya n'ọrụ ahụ ma jiri nke ọhụrụ.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Pịa bọtịnụ ahụ iji jikọọ {service}. Dee igodo ahụ n'ime fọm, ọ bụghị na nkata a: Taskiem ga-elele ya na {service} tupu ọ chekwaa ya.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Detuo uru ọ bụla site na {service} ma tinye ya ebe a. Taskiem ga-elele ya na {service} tupu ọ chekwaa ya.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Jikọọ",
+      "reviewed": false
+    },
+    "terms.ask": {
+      "text": "Taskiem nwere usoro na ọkwa nzuzo ị kwenyebeghị: {link}\n\nPịa *I agree*, ma ọ bụ zaa *I agree*. Taskiem ga-aga n'ihu n'ụzọ ọ bụla.",
+      "reviewed": false
+    },
+    "terms.button": {
+      "text": "Ekwenyere m",
+      "reviewed": false
+    },
+    "terms.thanks": {
+      "text": "Daalụ: e dekọọla nkwenye gị.",
       "reviewed": false
     },
     "wd.ai": {

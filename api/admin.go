@@ -19,6 +19,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/lang"
@@ -203,65 +204,83 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: %q is kept for the account Taskiem holds for you: choose another name", errBadRequest, req.Name))
 		return
 	}
-	p := principalFrom(r.Context())
-	if err := checkKeys(c, req.Credentials, req.Mode); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	mode, err := connectionMode(c, req.Credentials, req.Mode)
+	id, name, err := s.saveKeyConnection(r.Context(), principalFrom(r.Context()), env, c, req.Name, req.Credentials, req.Mode, req.Check)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if req.Check {
-		if err := s.testCredentials(r.Context(), p.TenantID, c, withMode(req.Credentials, mode)); err != nil {
-			s.fail(w, r, err)
-			return
+	req.Name = name
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
+}
+
+// saveKeyConnection checks a connection's keys (their starts, the mode
+// chosen, and with check the service itself) and saves it as p, within
+// the plan's limit: the web's form, a connect link and the WhatsApp key
+// form all save this way. An empty name is the first free one (main).
+func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string, c *connector.Connector, name string, creds map[string]string, chosen string, check bool) (uuid.UUID, string, error) {
+	if err := checkCredentials(c, creds); err != nil {
+		return uuid.Nil, "", err
+	}
+	if err := checkKeys(c, creds, chosen); err != nil {
+		return uuid.Nil, "", err
+	}
+	mode, err := connectionMode(c, creds, chosen)
+	if err != nil {
+		return uuid.Nil, "", err
+	}
+	if check {
+		if err := s.testCredentials(ctx, p.TenantID, c, withMode(creds, mode)); err != nil {
+			return uuid.Nil, "", err
 		}
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error { return s.checkCount(r.Context(), tx, p.TenantID, "max_connections") }); err != nil {
-		s.fail(w, r, err)
-		return
+	inTx := func(fn func(pgx.Tx) error) error {
+		return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, fn)
+	}
+	if err := inTx(func(tx pgx.Tx) error { return s.checkCount(ctx, tx, p.TenantID, "max_connections") }); err != nil {
+		return uuid.Nil, "", err
 	}
 	var id uuid.UUID
 	subscribes := false
-	err = s.tx(r, func(tx pgx.Tx) error {
+	err = inTx(func(tx pgx.Tx) error {
 		var err error
-		if req.Name == "" {
-			if req.Name, err = freeConnectionName(r.Context(), tx, env, c.Manifest.ID); err != nil {
+		if name == "" {
+			if name, err = freeConnectionName(ctx, tx, env, c.Manifest.ID); err != nil {
 				return err
 			}
 		}
-		if id, err = s.Vault.CreateConnectionTx(r.Context(), tx, p.TenantID, env, c.Manifest.ID, req.Name, c.Manifest.Auth.Type, req.Credentials, p.Actor(), ""); err != nil {
+		if id, err = s.Vault.CreateConnectionTx(ctx, tx, p.TenantID, env, c.Manifest.ID, name, c.Manifest.Auth.Type, creds, p.Actor(), ""); err != nil {
 			return err
 		}
-		if err := setConnectionMode(r.Context(), tx, id, mode); err != nil {
+		if err := setConnectionMode(ctx, tx, id, mode); err != nil {
 			return err
 		}
-		if subscribes, err = declareConnectionSubscriptions(r.Context(), tx, p.TenantID, env, c, req.Name, req.Credentials); err != nil {
+		if subscribes, err = declareConnectionSubscriptions(ctx, tx, p.TenantID, env, c, name, creds); err != nil {
 			return err
 		}
-		return secrets.SetRouteKeysTx(r.Context(), tx, p.TenantID, id, c.Manifest.RouteKeys(req.Credentials))
+		return secrets.SetRouteKeysTx(ctx, tx, p.TenantID, id, c.Manifest.RouteKeys(creds))
 	})
 	if err != nil {
 		var pgErr interface{ SQLState() string }
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
-			err = fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, req.Name, env)
+			err = fmt.Errorf("%w: a %s connection named %q already exists in %s", errConflict, c.Manifest.ID, name, env)
 		}
-		s.fail(w, r, err)
-		return
+		return uuid.Nil, "", err
 	}
 	// Remote subscriptions that waited for a connection in this
 	// environment are tried again now (decision 0021).
-	if err := s.tx(r, func(tx pgx.Tx) error { return remote.Retry(r.Context(), tx, env, c.Ref()) }); err != nil {
+	if err := inTx(func(tx pgx.Tx) error { return remote.Retry(ctx, tx, env, c.Ref()) }); err != nil {
 		s.Logger.Warn("remote subscriptions: retrying after a new connection", "err", err)
 	}
 	// A provider whose webhooks Taskiem subscribes per connection is
 	// subscribed now: nothing to paste.
-	if subscribes {
-		s.applyConnectionSubscriptions(r)
+	if subscribes && s.Remote != nil {
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), remoteWait)
+		defer cancel()
+		if err := s.Remote.ReconcileTenant(rctx, p.TenantID); err != nil {
+			s.Logger.Warn("remote subscriptions: applying a connection's", "err", err)
+		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name})
+	return id, name, nil
 }
 
 // --- secrets (names only; values are write-only) ---

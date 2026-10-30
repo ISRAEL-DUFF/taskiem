@@ -14,7 +14,9 @@
     "my_page": ["ojú-ìwé mi", "ṣọ́ọ̀bù mi"],
     "orders": ["àwọn àṣẹ mi", "àwọn ọjà tí wọ́n bèèrè"],
     "open_shop": ["ṣí ṣọ́ọ̀bù mi", "ṣí ṣọ́ọ̀bù"],
-    "qr": ["kóòdù qr mi"]
+    "qr": ["kóòdù qr mi"],
+    "signup": ["mo fẹ́ ṣí àkọọ́lẹ̀", "ṣí àkọọ́lẹ̀ fún mi", "mo fẹ́ bẹ̀rẹ̀ iṣẹ́", "forúkọsílẹ̀"],
+    "plan": ["ètò mi", "elo ni màá san", "ìsanwó taskiem"]
   },
   "prefixes": {
     "switch": ["yí padà sí", "lọ sí"],
@@ -35,7 +37,9 @@
     "received": ["mo ti gba", "a ti gba"],
     "count": ["mo ka", "mo ti ka"],
     "stock": ["mélòó ni", "melo ni", "ọjà mélòó"],
-    "take_off": ["yọ kúrò", "yo kuro", "bàjẹ́"]
+    "take_off": ["yọ kúrò", "yo kuro", "bàjẹ́"],
+    "connect": ["so pọ̀ mọ́", "connect"],
+    "invite": ["pe", "invite"]
   },
   "fillers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "ẹ jọ̀ọ́"],
   "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà", "ìwé owó", "mo ná", "owó wọlé", "owó jáde"],

@@ -800,12 +800,12 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 	audit func(action, target string, detail map[string]any) error) (uuid.UUID, int, []byte, error) {
 	var wf uuid.UUID
 	var version int
-	var status, model string
+	var status, model, provider string
 	var target *uuid.UUID
 	var templateID *string
 	var prop, base []byte
-	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
-		Scan(&status, &target, &prop, &model, &templateID, &base); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, provider, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
+		Scan(&status, &target, &prop, &model, &provider, &templateID, &base); err != nil {
 		return wf, 0, nil, err
 	}
 	if status != "proposed" {
@@ -885,6 +885,11 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 		return wf, 0, nil, err
 	}
 	detail := map[string]any{"build": id.String(), "ai_assisted": true, "co_author": "ai:" + model, "state": "draft"}
+	if provider == "template" {
+		// A template picked in chat, filled in without the model
+		// (chatTemplateBuild).
+		detail = map[string]any{"build": id.String(), "ai_assisted": false, "state": "draft"}
+	}
 	if templateID != nil {
 		detail["template"] = *templateID
 	}

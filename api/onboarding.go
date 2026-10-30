@@ -44,6 +44,7 @@ const (
 	verifyLinkBadMsg    = "this confirmation link is not valid: it may have expired, been used, or belong to another account. Ask for a new one from Get started."
 	defaultSignupPerDay = 5
 	unverifiedMsg       = "confirm your email address first: open the link we sent you, or ask for a new one from Get started"
+	chatUnverifiedMsg   = "this sends email for the business, which needs a confirmed email address of the owner's own: this business was made from chat, and its owner has none yet"
 )
 
 // disposableDomains are throwaway mailbox services. Signups from them, and
@@ -145,11 +146,27 @@ type signupReq struct {
 	// Bearer asks for the session token in the answer instead of a cookie
 	// (API and CLI clients; S35).
 	Bearer bool `json:"bearer,omitempty"`
+	// AcceptTerms is the person agreeing to the terms and privacy notice,
+	// needed when the deployment has them (TASKIEM_TERMS_VERSION).
+	AcceptTerms bool `json:"accept_terms,omitempty"`
 }
 
 // signupOptions tells the web app whether to offer signup.
 func (s *Server) signupOptions(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": s.AllowSignup})
+	out := map[string]any{"enabled": s.AllowSignup}
+	if s.Terms.On() {
+		out["terms"] = s.termsOut()
+	}
+	if s.slackInstallOn() {
+		// Starting in Slack instead (slack_install.go).
+		out["slack"] = "/v1/slack/install"
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// termsOut is the terms people are asked to agree to.
+func (s *Server) termsOut() map[string]any {
+	return map[string]any{"url": s.termsLink(), "terms_version": s.Terms.Version, "privacy_version": s.Terms.PrivacyVersion}
 }
 
 // signup creates a tenant with its owner, a default workspace, and the dev
@@ -159,7 +176,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refuse := func(outcome string, status int, msg string) {
-		telemetry.Signups.WithLabelValues(outcome).Inc()
+		telemetry.Signups.WithLabelValues("signup", outcome).Inc()
 		writeErr(w, status, msg)
 	}
 	ip := clientIP(r)
@@ -201,6 +218,10 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		refuse("invalid", http.StatusBadRequest, "a password needs 12 to 1024 characters and must not be your email")
 		return
 	}
+	if s.Terms.On() && !req.AcceptTerms {
+		refuse("invalid", http.StatusBadRequest, "agree to the terms and privacy notice to sign up (accept_terms)")
+		return
+	}
 	if limit := s.SignupPerAddress; limit >= 0 {
 		if limit == 0 {
 			limit = defaultSignupPerDay
@@ -222,6 +243,9 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by) VALUES ($1, 'signup', $2)`, tenant, user); err != nil {
 			return err
 		}
+		if err := s.termsAcceptTx(r.Context(), tx, tenant, user, "web", nil); err != nil {
+			return err
+		}
 		if !mailOn {
 			return nil
 		}
@@ -237,7 +261,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	telemetry.Signups.WithLabelValues("created").Inc()
+	telemetry.Signups.WithLabelValues("signup", "created").Inc()
 	// With billing on, a new tenant starts its trial (docs/billing.md).
 	if err := s.Billing.Ensure(r.Context(), tenant, "user:"+user.String()); err != nil {
 		s.fail(w, r, err)
@@ -261,12 +285,18 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 // issueVerification stores a new confirmation link for user's email in
 // tenant, replacing their unused ones, and returns its token.
 func issueVerification(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, email string) (string, error) {
+	return issueVerificationFor(ctx, tx, tenant, user, email, false)
+}
+
+// issueVerificationFor is issueVerification for an email that, with
+// change, becomes the person's when confirmed (chat_doors.go).
+func issueVerificationFor(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, email string, change bool) (string, error) {
 	token, selector, secretHash := newResetToken()
 	if _, err := tx.Exec(ctx, `DELETE FROM email_verifications WHERE user_id = $1 AND used_at IS NULL`, user); err != nil {
 		return "", err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO email_verifications (selector, secret_hash, tenant_id, user_id, email, expires_at)
-		VALUES ($1, $2, $3, $4, $5, now() + $6::interval)`, selector, secretHash, tenant, user, email, verifyTTL.String())
+	_, err := tx.Exec(ctx, `INSERT INTO email_verifications (selector, secret_hash, tenant_id, user_id, email, expires_at, change)
+		VALUES ($1, $2, $3, $4, $5, now() + $6::interval, $7)`, selector, secretHash, tenant, user, email, verifyTTL.String(), change)
 	return token, err
 }
 
@@ -405,23 +435,34 @@ func (s *Server) resendVerification(w http.ResponseWriter, r *http.Request) {
 
 // needVerified refuses, in a tenant that signed itself up, what reaches
 // people or automation beyond the browser (inviting members, API keys)
-// until the person who signed up has confirmed their email. Deployments
-// that cannot send email cannot confirm one, so nothing is held back there.
-func (s *Server) needVerified(r *http.Request) error {
+// until the person who signed up has confirmed their email. An owner who
+// signed up from chat proved their channel instead, which counts for API
+// keys; what sends email for the business (sendsEmail: invitations by
+// email, email alert channels) still waits for an email of their own
+// (docs/spec/chat-way-in.md 6.3). Deployments that cannot send email
+// cannot confirm one, so nothing is held back there.
+func (s *Server) needVerified(r *http.Request, sendsEmail bool) error {
 	if !s.mailOn() {
 		return nil
 	}
-	var pending bool
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM tenant_onboarding o JOIN users u ON u.id = o.signed_up_by
-			WHERE o.source = 'signup' AND u.email_verified_at IS NULL)`).Scan(&pending)
-	}); err != nil {
+	sources := []string{"signup"}
+	if sendsEmail {
+		sources = append(sources, "whatsapp", "telegram", "slack")
+	}
+	var source string
+	err := s.tx(r, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT o.source FROM tenant_onboarding o JOIN users u ON u.id = o.signed_up_by
+			WHERE o.source = ANY ($1) AND u.email_verified_at IS NULL`, sources).Scan(&source)
+	})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil
+	case err != nil:
 		return err
+	case source != "signup":
+		return fmt.Errorf("%w: %s", errForbidden, chatUnverifiedMsg)
 	}
-	if pending {
-		return fmt.Errorf("%w: %s", errForbidden, unverifiedMsg)
-	}
-	return nil
+	return fmt.Errorf("%w: %s", errForbidden, unverifiedMsg)
 }
 
 // checklistItem is one step of getting started; the web app words it.
@@ -522,4 +563,54 @@ func (s *Server) dismissOnboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// meTerms is the terms on GET /v1/me: asked of a person who has not
+// agreed to the current versions, until they answer once, on the web or
+// in chat; nil otherwise.
+func (s *Server) meTerms(ctx context.Context, user uuid.UUID) map[string]any {
+	if !s.Terms.On() || user == uuid.Nil {
+		return nil
+	}
+	var accepted, asked bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT accepted, asked FROM taskiem_terms_state($1, $2, $3)`, user, s.Terms.Version, s.Terms.PrivacyVersion).
+		Scan(&accepted, &asked); err != nil || accepted || asked {
+		return nil
+	}
+	return s.termsOut()
+}
+
+// answerTerms records the signed-in person's answer to the current terms:
+// agreed, or not now (asked once: not asked again for these versions).
+func (s *Server) answerTerms(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.EndUser != nil || p.KeyID != uuid.Nil {
+		writeErr(w, http.StatusForbidden, "the terms are agreed to by a person, not an API key")
+		return
+	}
+	if !s.Terms.On() {
+		s.fail(w, r, fmt.Errorf("%w: this deployment asks no terms", errConflict))
+		return
+	}
+	var req struct {
+		Accept bool `json:"accept"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var err error
+	switch {
+	case req.Accept && p.TenantID == uuid.Nil:
+		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_terms_accept($1, $2, $3, 'web')`, p.UserID, s.Terms.Version, s.Terms.PrivacyVersion)
+	case req.Accept:
+		err = s.tx(r, func(tx pgx.Tx) error { return s.termsAcceptTx(r.Context(), tx, p.TenantID, p.UserID, "web", nil) })
+	default:
+		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_terms_asked($1, $2, $3, 'web')`, p.UserID, s.Terms.Version, s.Terms.PrivacyVersion)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"accepted": req.Accept})
 }

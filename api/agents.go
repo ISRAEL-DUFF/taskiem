@@ -32,6 +32,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ops"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -322,51 +323,29 @@ func (s *Server) agentNewBusiness(w http.ResponseWriter, r *http.Request) {
 		// Perhaps an earlier sign-up the owner never agreed to.
 		err := s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_find_user($1)`, ownerPlaceholderEmail(number)).Scan(&owner)
 		if errors.Is(err, pgx.ErrNoRows) {
-			owner, newOwner = uuid.Must(uuid.NewV7()), true
+			newOwner = true
 		} else if err != nil {
 			s.fail(w, r, err)
 			return
 		}
 	}
-	tenant, code, actor := uuid.Must(uuid.NewV7()), otpCode(), "agent:"+a.Code
+	code, actor := otpCode(), "agent:"+a.Code
 	var session uuid.UUID
 	expires := time.Now().Add(agentConsentTTL)
-	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		stmts := []struct {
-			q    string
-			args []any
-		}{
-			{`INSERT INTO tenants (id, name, plan_id) VALUES ($1, $2, $3)`, []any{tenant, req.Name, uuid.Nil}},
-			{`INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'owner')`, []any{tenant, owner}},
-			{`INSERT INTO workspaces (id, tenant_id, name) VALUES ($1, $2, 'Default')`, []any{uuid.Must(uuid.NewV7()), tenant}},
-			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
-			{`INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by) VALUES ($1, 'agent', $2)`, []any{tenant, owner}},
-		}
-		if newOwner {
-			// No password: the owner works through WhatsApp.
-			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)`, owner, ownerPlaceholderEmail(number), req.OwnerName); err != nil {
-				return err
-			}
-		}
-		for _, st := range stmts {
-			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
-				return err
-			}
-		}
-		detail, _ := json.Marshal(map[string]any{"agent": a.Code, "owner": whatsapp.MaskNumber(number), "new_owner": newOwner, "ip": clientIP(r)})
-		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'agent', $2, 'tenant.create', $3, $4)`, tenant, actor, tenant.String(), detail); err != nil {
-			return err
-		}
-		return tx.QueryRow(ctx, `SELECT taskiem_agent_session_open($1, $2, 'onboarding', $3, $4, $5, $6)`, a.ID, tenant, owner, expires, number, consentHash(number, code)).Scan(&session)
-	})
+	if newOwner {
+		owner = uuid.Nil // made with the business
+	}
+	tenant, _, err := s.makeBusiness(ctx, newBusiness{Name: req.Name, OwnerName: req.OwnerName, Owner: owner, OwnerEmail: ownerPlaceholderEmail(number),
+		Source: "agent", ActorType: "agent", Actor: actor,
+		Detail: map[string]any{"agent": a.Code, "owner": whatsapp.MaskNumber(number), "new_owner": newOwner, "ip": clientIP(r)},
+		Then: func(tx pgx.Tx, tenant, owner uuid.UUID) error {
+			return tx.QueryRow(ctx, `SELECT taskiem_agent_session_open($1, $2, 'onboarding', $3, $4, $5, $6)`, a.ID, tenant, owner, expires, number, consentHash(number, code)).Scan(&session)
+		}})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.Billing.Ensure(ctx, tenant, actor); err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	telemetry.Signups.WithLabelValues("agent", "created").Inc()
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"session": agentSessionRow{ID: session, TenantID: tenant, Business: req.Name, Kind: "onboarding", Status: "pending", ExpiresAt: expires}.out(),
 		"consent": s.consentOut(code, expires)})

@@ -66,9 +66,13 @@ func (e *APIError) Error() string {
 }
 
 // InlineButton is an inline keyboard button: Data comes back as the
-// callback query's data when tapped (1-64 bytes).
+// callback query's data when tapped (1-64 bytes). A button with URL opens
+// it instead: in the person's browser, or with WebApp as a Mini App inside
+// Telegram, which hands the page Telegram's signed initData.
 type InlineButton struct {
 	Text, Data string
+	URL        string
+	WebApp     bool
 }
 
 // Client calls the Bot API as the platform bot.
@@ -279,14 +283,22 @@ func (c *Client) SendPhoto(ctx context.Context, chatID int64, photoURL, caption 
 
 // keyboard is an inline keyboard's reply_markup.
 func keyboard(rows [][]InlineButton) (map[string]any, error) {
-	kb := make([][]map[string]string, 0, len(rows))
+	kb := make([][]map[string]any, 0, len(rows))
 	for _, r := range rows {
-		row := make([]map[string]string, 0, len(r))
+		row := make([]map[string]any, 0, len(r))
 		for _, b := range r {
-			if b.Data == "" || len(b.Data) > 64 || b.Text == "" {
-				return nil, errors.New("a button needs text and 1-64 bytes of data")
+			switch {
+			case b.URL != "" && b.Text != "" && strings.HasPrefix(b.URL, "https://"):
+				if b.WebApp {
+					row = append(row, map[string]any{"text": b.Text, "web_app": map[string]string{"url": b.URL}})
+				} else {
+					row = append(row, map[string]any{"text": b.Text, "url": b.URL})
+				}
+				continue
+			case b.Data == "" || len(b.Data) > 64 || b.Text == "":
+				return nil, errors.New("a button needs text and 1-64 bytes of data, or an https link")
 			}
-			row = append(row, map[string]string{"text": b.Text, "callback_data": b.Data})
+			row = append(row, map[string]any{"text": b.Text, "callback_data": b.Data})
 		}
 		kb = append(kb, row)
 	}

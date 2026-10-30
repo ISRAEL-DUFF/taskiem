@@ -194,6 +194,9 @@ type chat struct {
 	lang langChoice
 	// note goes before the next reply (a voice note's transcript).
 	note string
+	// blocked is the draft waiting for a connection, while this message is
+	// read (connect_links.go).
+	blocked uuid.UUID
 }
 
 // t is a message in the conversation's language.
@@ -232,6 +235,8 @@ type chatData struct {
 	Invoice *chatInvoice `json:"invoice,omitempty"`
 	// Money is cash or an expense being recorded (whatsapp_money.go).
 	Money *chatMoney `json:"money,omitempty"`
+	// Invite is an invitation the owner is confirming (chat_invites.go).
+	Invite *chatInvite `json:"invite,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -300,6 +305,47 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if c.tenants, err = s.tenantsOf(ctx, user); err != nil {
 		return err
 	}
+	// A Slack DM reaches only the businesses that linked the person in
+	// that workspace (slack_chat.go).
+	if l, ok := ch.(interface{ linkedTenants() []uuid.UUID }); ok {
+		linked := l.linkedTenants()
+		c.tenants = slices.DeleteFunc(c.tenants, func(t tenantRef) bool { return !slices.Contains(linked, t.ID) })
+	}
+	// A dormant binding acts on nothing until it is proven again
+	// (chat_dormant.go).
+	if dormant, err := s.bindingGate(ctx, c, user); dormant || err != nil {
+		return err
+	}
+	text := ""
+	if in.Type == "text" {
+		text = in.Text
+	}
+	// A key typed into the chat is never acted on or kept: the form is the
+	// way (connect_links.go).
+	if done, err := s.keyGuard(ctx, c, text); done || err != nil {
+		return err
+	}
+	// An invitation's Join or No, and an owner's answer to a request to
+	// join (chat_invites.go).
+	if strings.HasPrefix(in.Reply, invPrefix) || normalizeCommand(text) == "join" {
+		if done, err := s.chatInviteMessage(ctx, &inviteChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}, text, in.Reply); done || err != nil {
+			return err
+		}
+	}
+	// Another business, or one when none is left (chat_signup.go).
+	// Only words and its own buttons: an approval tapped or a form sent
+	// meanwhile goes where it always went.
+	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
+		if dm, ok := ch.(*slackDMChannel); ok {
+			// Another business from Slack has the workspace's Slack too.
+			team, slackUser, _ := parseSlackAddr(number)
+			sc.slack = &slackSignup{team: team, user: slackUser, linked: dm.linked}
+		}
+		if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
+			return err
+		}
+	}
 	if wa := c.wa; wa != nil && wa.Own() {
 		// A tenant's own number speaks for that tenant only.
 		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
@@ -309,6 +355,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 		c.tenant, c.tenants = c.tenants[i], c.tenants[i:i+1]
 	} else {
 		if len(c.tenants) == 0 {
+			if s.signupOn(ch) {
+				return s.waSay(ctx, ch, number, "", c.t("signup.no_org"), whatsapp.Button{ID: "su:start", Title: c.t("signup.button_start")},
+					whatsapp.Button{ID: "su:no", Title: c.t("signup.button_no")})
+			}
 			return s.waSay(ctx, ch, number, "", c.t("wa.no_org"))
 		}
 		contact, err := ch.Contact(ctx, number)
@@ -332,13 +382,14 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	// The language of this tenant's conversation: chosen, detected from
 	// what is written, or the tenant's default (languages.go).
-	text := ""
-	if in.Type == "text" {
-		text = in.Text
-	}
 	c.lang = s.chooseLang(ctx, c.tenant.ID, number, text)
 	if c.lang.Detected {
 		c.note = c.t("lang.detected", "language", langName(c.lang.Tag))
+	}
+	// The terms, asked once of an account from before them; agreed to by
+	// the button or "I agree" (chat_dormant.go).
+	if done, err := s.termsInChat(ctx, c, text); done || err != nil {
+		return err
 	}
 	// A tapped approval button carries a signed decision token.
 	if strings.HasPrefix(in.Reply, "tk1.") {
@@ -350,6 +401,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
+	}
+	// A template a new business was offered (chat_signup.go).
+	if id, ok := strings.CutPrefix(in.Reply, signupTplPrefix); ok {
+		return s.chatTemplateBuild(ctx, c, id)
 	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
@@ -406,6 +461,22 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
+	// A key typed into the chat is never acted on or kept (connect_links.go).
+	if done, err := s.keyGuard(ctx, &chat{ch: wa, wa: wa, addr: number, lang: langChoice{Tag: l}}, text); done || err != nil {
+		return err
+	}
+	// An invitation to this number (chat_invites.go), before sign-up.
+	if !wa.Own() {
+		if done, err := s.chatInviteMessage(ctx, &inviteChat{ch: wa, addr: number, lang: l}, text, in.Reply); done || err != nil {
+			return err
+		}
+	}
+	// Signing up from chat (chat_signup.go): a sign-up under way, a word
+	// or button that starts one.
+	sc := &signupChat{ch: wa, addr: number, lang: l}
+	if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
+		return err
+	}
 	if wa.Own() {
 		if done, err := s.waPublic(ctx, wa, number, in); done || err != nil {
 			return err
@@ -420,6 +491,9 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	}
 	if !s.limiter("wa-unbound:"+number, 10*time.Minute, 2).Allow() {
 		return nil
+	}
+	if s.signupOn(wa) {
+		return s.signupOffer(ctx, sc, text)
 	}
 	where := "Account"
 	if s.PublicURL != "" {
@@ -522,6 +596,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.Money != nil && c.state != stateIdle {
 		return s.waMoneyReply(ctx, c, cmd)
+	}
+	if c.data.Invite != nil && c.state != stateIdle {
+		return s.waInviteReply(ctx, c, cmd)
 	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
@@ -640,6 +717,34 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		switch cmd {
 		case "sign in", "signin", "log in", "login", "web link", "sign in link", "web app":
 			return s.waSignInLink(ctx, c)
+		case "pin", "chat pin", "set pin", "set my pin", "change pin":
+			// The chat PIN, set from the chat by a person with no other
+			// credential (chat_dormant.go).
+			return s.waChatPin(ctx, c)
+		case "plan", "my plan", "subscription", "trial":
+			// The plan and paying for it (chat_doors.go).
+			return s.waPlan(ctx, c)
+		case "pay", "plan:pay", "pay now", "pay for taskiem":
+			return s.waPay(ctx, c, "")
+		case "email", "my email", "add email", "add my email":
+			return s.waEmail(ctx, c, "")
+		}
+		// Bringing someone in (chat_invites.go).
+		if strings.HasPrefix(cmd, "invite ") {
+			return s.waInvite(ctx, c, text)
+		}
+		// An email of one's own, and paying with one (chat_doors.go).
+		if f := strings.Fields(text); len(f) == 2 && strings.Contains(f[1], "@") {
+			switch strings.ToLower(f[0]) {
+			case "email":
+				return s.waEmail(ctx, c, f[1])
+			case "pay":
+				return s.waPay(ctx, c, f[1])
+			}
+		}
+		// A service connected from the chat (connect_links.go).
+		if name, ok := strings.CutPrefix(cmd, "connect "); ok {
+			return s.waConnect(ctx, c, name)
 		}
 		// "publish <workflow>": a draft published from chat (N6).
 		if name, ok := strings.CutPrefix(cmd, "publish "); ok && name != "" {
@@ -686,6 +791,20 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		return true, s.waSwitch(ctx, c, strings.ToLower(arg))
 	case lang.IntentLanguage:
 		return true, s.waLanguage(ctx, c, arg)
+	// The ways in, in the person's language (chat_doors.go,
+	// chat_invites.go, connect_links.go).
+	case lang.IntentPlan:
+		return true, s.waPlan(ctx, c)
+	case lang.IntentConnect:
+		if arg == "" {
+			return false, nil
+		}
+		return true, s.waConnect(ctx, c, strings.ToLower(arg))
+	case lang.IntentInvite:
+		if arg == "" {
+			return false, nil
+		}
+		return true, s.waInvite(ctx, c, "invite "+arg)
 	case lang.IntentRun:
 		if arg == "" {
 			return false, nil

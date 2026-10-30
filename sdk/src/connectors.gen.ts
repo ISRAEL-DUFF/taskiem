@@ -2752,6 +2752,10 @@ export interface SlackGetConversationInput {
   channel: Val<string>;
   include_num_members?: Val<boolean>;
 }
+export interface SlackGetUserInput {
+  /** The user's id (U…) */
+  user: Val<string>;
+}
 export interface SlackListConversationsInput {
   /** next_cursor from the previous page */
   cursor?: Val<string>;
@@ -2848,6 +2852,8 @@ export const slack = {
   auth_test: (input?: SlackAuthTestInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "auth_test", input, extra),
   /** Get a channel (read) */
   get_conversation: (input: SlackGetConversationInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_conversation", input, extra),
+  /** Get a user (read) */
+  get_user: (input: SlackGetUserInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "get_user", input, extra),
   /** List channels (read) */
   list_conversations: (input?: SlackListConversationsInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "list_conversations", input, extra),
   /** List the workspace's people (read) */
@@ -3814,7 +3820,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
-  "slack@1": ["add_reaction", "auth_test", "get_conversation", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
+  "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
   "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],

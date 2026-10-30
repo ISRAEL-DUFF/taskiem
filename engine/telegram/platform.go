@@ -100,6 +100,9 @@ func (p *Platform) Send(ctx context.Context, addr string, m whatsapp.Message) (s
 		}
 		rows = append(rows, []InlineButton{{Text: title, Data: "c:" + id}})
 	}
+	if l := m.Link; l != nil {
+		rows = append(rows, []InlineButton{{Text: l.Title, URL: l.URL, WebApp: l.WebApp}})
+	}
 	var id int64
 	var err error
 	if m.Image != "" {

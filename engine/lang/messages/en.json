@@ -829,6 +829,291 @@
       "reviewed": true,
       "context": "An approval button pressed from a Slack account not linked in that business"
     },
+    "slack.install.welcome": {
+      "text": "Thanks for adding Taskiem to {workspace}. Let's set up your business here in Slack: a few questions, about a minute.",
+      "reviewed": true,
+      "context": "The bot's first message to the person who added Taskiem to a Slack workspace from the website; the sign-up's terms follow. {workspace} is the workspace's name"
+    },
+    "slack.install.known": {
+      "text": "Taskiem is already in {workspace}, for {businesses}. To work there, ask its owner to add you on Taskiem. To keep a separate business of your own, press the button below.",
+      "reviewed": true,
+      "context": "The bot's first message to someone who added Taskiem to a Slack workspace that is already a business's on Taskiem; a 'Start a separate business' button follows. {businesses} are those businesses' names"
+    },
+    "slack.install.back": {
+      "text": "Taskiem is back in {workspace}. Write to me here as before; send new business to start another.",
+      "reviewed": true,
+      "context": "The bot's message to someone who added Taskiem to a Slack workspace where they are already linked in a business"
+    },
+    "slack.install.email_taken": {
+      "text": "{email} already has a Taskiem account. To use it here, sign in at {where} and link Slack from your profile. Or press the button below to make a business here in Slack, under a separate account.",
+      "reviewed": true,
+      "context": "The bot's first message to someone who added Taskiem to Slack whose Slack email ({email}) is already a Taskiem account; nothing is merged. A 'Start a new business' button follows. {where} is where the web Account page is"
+    },
+    "slack.install.button_separate": {
+      "text": "Start a separate business",
+      "reviewed": true,
+      "context": "Button under slack.install.known (75 characters at most)"
+    },
+    "slack.install.button_new": {
+      "text": "Start a new business",
+      "reviewed": true,
+      "context": "Button under slack.install.email_taken (75 characters at most)"
+    },
+    "door.ask_email": {
+      "text": "What email do you sign in to Taskiem with? Send it here and we will email you a link to connect this chat to your account.",
+      "reviewed": true,
+      "context": "After 'I already use Taskiem' in a chat no one is linked to: the person types the email they sign in to Taskiem with"
+    },
+    "door.email_bad": {
+      "text": "That does not look like an email address. Send it like this: ada@example.com",
+      "reviewed": true,
+      "context": "The text sent as an email is not one Taskiem can use"
+    },
+    "door.too_many": {
+      "text": "A link was asked for a few times already. Check your inbox and spam folder, or try again in an hour.",
+      "reviewed": true,
+      "context": "Too many link emails asked for from this chat or for this email in an hour"
+    },
+    "door.email_sent": {
+      "text": "If {email} has a Taskiem account, a link is on its way there. Open it on a device where you are signed in to Taskiem; it works once, for an hour. Then this chat is yours.",
+      "reviewed": true,
+      "context": "Sent whether or not the email has an account, so nobody learns who is on Taskiem. {email} is what they typed"
+    },
+    "door.linked": {
+      "text": "Done: this chat is linked to your Taskiem account. Send help to see what you can do here.",
+      "reviewed": true,
+      "context": "Sent to the chat after its emailed link was opened and the chat is linked to the account"
+    },
+    "door.tg_joined": {
+      "text": "That number is your Taskiem account already, from WhatsApp. This Telegram is now linked to it too: your businesses are here. Send help, or new business to start another.",
+      "reviewed": true,
+      "context": "A Telegram sign-up shared a number that is already a chat-born WhatsApp account's: the Telegram account is now linked to that same account"
+    },
+    "door.tg_number_email": {
+      "text": "That number is on a Taskiem account already. We emailed that account a link: open it while signed in to Taskiem and this Telegram will be linked to it.",
+      "reviewed": true,
+      "context": "A Telegram sign-up shared a number that is an account with an email or password: a link to link this Telegram went to that account's email"
+    },
+    "door.email_is": {
+      "text": "Your account's email is {email}. To change it, use your profile on the web.",
+      "reviewed": true,
+      "context": "'email' in chat from someone whose account's email is confirmed already. {email} is it"
+    },
+    "door.email_ask": {
+      "text": "Add your email to get receipts and invoices from Taskiem by mail. Send email, then the address, like this: email ada@example.com",
+      "reviewed": true,
+      "context": "'email' in chat from someone with no email of their own yet: how to add one"
+    },
+    "door.email_off": {
+      "text": "Taskiem cannot send email here yet, so an email cannot be added now.",
+      "reviewed": true,
+      "context": "'email' in chat on a deployment that cannot send email"
+    },
+    "door.email_confirm": {
+      "text": "A link is on its way to {email}. Open it to confirm; it works once, for 24 hours. Until then nothing changes.",
+      "reviewed": true,
+      "context": "After 'email ada@example.com' in chat: a confirmation link went to {email}"
+    },
+    "door.plan_off": {
+      "text": "There is nothing to pay on this Taskiem.",
+      "reviewed": true,
+      "context": "'plan' in chat on a deployment without billing"
+    },
+    "door.plan_partner": {
+      "text": "This business is on {plan} through the company that set it up; they handle paying.",
+      "reviewed": true,
+      "context": "'plan' in chat for a business on its partner's plan. {plan} is the plan's name"
+    },
+    "door.plan_trial": {
+      "text": "You are on {plan}, free for {days} more days. After that it is {price} a month.",
+      "reviewed": true,
+      "context": "'plan' in chat during the free trial; a Pay button may follow. {plan} the plan, {days} days left, {price} a month after"
+    },
+    "door.plan_due": {
+      "text": "Payment for {plan} is overdue. Pay now to keep everything running.",
+      "reviewed": true,
+      "context": "'plan' in chat when a payment is overdue; a Pay button may follow. {plan} is the plan"
+    },
+    "door.plan_active": {
+      "text": "You are on {plan}, {price} a month. It renews on {date}.",
+      "reviewed": true,
+      "context": "'plan' in chat for a paid plan. {plan} the plan, {price} a month, {date} when it renews"
+    },
+    "door.button_pay": {
+      "text": "Pay",
+      "reviewed": true,
+      "context": "Button to pay for Taskiem (20 characters at most)"
+    },
+    "door.pay_denied": {
+      "text": "Only someone who manages billing for {org} can pay.",
+      "reviewed": true,
+      "context": "Pay from someone who may not pay for the business. {org} is the business"
+    },
+    "door.pay_email": {
+      "text": "Receipts are sent by email. Send pay, then your email, like this: pay ada@example.com",
+      "reviewed": true,
+      "context": "Pay from an account with no email: the payment provider sends receipts by email, so one is asked for first"
+    },
+    "door.pay_failed": {
+      "text": "Paying could not start: {reason}",
+      "reviewed": true,
+      "context": "A checkout could not start. {reason} is why"
+    },
+    "door.pay_nothing": {
+      "text": "Nothing is owed right now.",
+      "reviewed": true,
+      "context": "Pay when nothing is owed"
+    },
+    "door.pay_link": {
+      "text": "Pay {amount} here, by card or bank transfer:",
+      "reviewed": true,
+      "context": "A checkout link follows (on its own line, or as a button on Slack). {amount} is what is paid"
+    },
+    "invite.denied": {
+      "text": "Only someone who manages the people of {org} can invite or approve.",
+      "reviewed": true,
+      "context": "invite from someone who may not manage members. {org} is the business"
+    },
+    "invite.how": {
+      "text": "To invite someone, send: invite +2348012345678 as viewer. In Slack, mention them: invite @ada as viewer.",
+      "reviewed": true,
+      "context": "How to invite from chat; the role names stay in English"
+    },
+    "invite.owner_only": {
+      "text": "Only an owner can make someone an owner.",
+      "reviewed": true,
+      "context": "Only an owner may make someone an owner"
+    },
+    "invite.role_unknown": {
+      "text": "There is no role called {role}. Roles: {roles}.",
+      "reviewed": true,
+      "context": "The role named in invite does not exist. {role} what was typed, {roles} the usual ones"
+    },
+    "invite.cannot_grant": {
+      "text": "You cannot give the {role} role: it can do things you cannot.",
+      "reviewed": true,
+      "context": "The inviter may not give that role. {role} is it"
+    },
+    "invite.confirm": {
+      "text": "Invite {who} to {org} as {role}?",
+      "reviewed": true,
+      "context": "The owner confirms an invitation; Yes and No follow. {who} the person, {org} the business, {role} the role"
+    },
+    "invite.cancelled": {
+      "text": "No invitation sent.",
+      "reviewed": true,
+      "context": "No to an invitation being confirmed"
+    },
+    "invite.send_failed": {
+      "text": "The invitation could not be sent just now. Try again later, or invite them on the web.",
+      "reviewed": true,
+      "context": "The invitation could not be delivered"
+    },
+    "invite.sent": {
+      "text": "Invitation sent to {who}. They join when they tap Join; it works for 7 days.",
+      "reviewed": true,
+      "context": "The invitation went to the person. {who} is them"
+    },
+    "invite.sent_telegram": {
+      "text": "Forward this link to {who}: {link}\nWhen they open it, Taskiem asks them to share their own number, which must be {who}. It works for 7 days.",
+      "reviewed": true,
+      "context": "On Telegram the owner forwards the link. {who} the number invited, {link} the link"
+    },
+    "invite.offer": {
+      "text": "{inviter} invited you to work with {org} on Taskiem, as {role}. Join?",
+      "reviewed": true,
+      "context": "The invitation as the person invited reads it; Join and No follow. {inviter} who invited, {org} the business, {role} the role"
+    },
+    "invite.button_join": {
+      "text": "Join",
+      "reviewed": true,
+      "context": "Button to accept an invitation (20 characters at most)"
+    },
+    "invite.gone": {
+      "text": "That invitation has ended or was answered already.",
+      "reviewed": true,
+      "context": "An invitation or request that was answered, expired, or is not for this chat"
+    },
+    "invite.declined": {
+      "text": "OK, you did not join. Nothing more will be sent about it.",
+      "reviewed": true,
+      "context": "The person said No (or Stop) to an invitation"
+    },
+    "invite.terms": {
+      "text": "To join {org}, agree to Taskiem's terms and privacy notice: {link}\nReply Yes to agree and join.",
+      "reviewed": true,
+      "context": "Before joining, someone with no account agrees to the terms; Yes and No follow. {org} the business, {link} the terms"
+    },
+    "invite.ask_contact": {
+      "text": "To join, share your own number with the button below. It must be the number you were invited on.",
+      "reviewed": true,
+      "context": "Telegram: to join, the person shares their own number; a Share my number button follows"
+    },
+    "invite.contact_wrong": {
+      "text": "That is not the number this invitation was for. Share your own number, the one you were invited on.",
+      "reviewed": true,
+      "context": "Telegram: the contact shared is not the person's own, or not the number invited"
+    },
+    "invite.chat_taken": {
+      "text": "This chat is linked to another Taskiem account, so it cannot join here.",
+      "reviewed": true,
+      "context": "Joining could not link this chat: it belongs to another account"
+    },
+    "invite.joined": {
+      "text": "You are in {org}. Send help to see what you can do here.",
+      "reviewed": true,
+      "context": "The person joined the business. {org} is it"
+    },
+    "invite.button_ask": {
+      "text": "Ask to join {org}",
+      "reviewed": true,
+      "context": "Slack: button to ask to join a business (75 characters at most). {org} is it"
+    },
+    "invite.ask_offer": {
+      "text": "Taskiem in this workspace is run by {businesses}. Being in the workspace is not enough to see their business: ask to join, and an owner decides.",
+      "reviewed": true,
+      "context": "Slack: a member of a workspace whose businesses on Taskiem they are not in; Ask to join buttons follow. {businesses} their names"
+    },
+    "invite.asked": {
+      "text": "Your request went to the owners of {org}. You will hear here when they decide.",
+      "reviewed": true,
+      "context": "Slack: the request to join went to the owners. {org} is the business"
+    },
+    "invite.ask_owner": {
+      "text": "{who} in your Slack workspace asks to join {org}. Let them in as?",
+      "reviewed": true,
+      "context": "To an owner: someone in their Slack workspace asks to join; buttons approve as a role, or decline. {who} the person, {org} the business"
+    },
+    "invite.button_viewer": {
+      "text": "Viewer",
+      "reviewed": true,
+      "context": "Approve a request as viewer (20 characters at most)"
+    },
+    "invite.button_operator": {
+      "text": "Operator",
+      "reviewed": true,
+      "context": "Approve a request as operator (20 characters at most)"
+    },
+    "invite.button_decline": {
+      "text": "Decline",
+      "reviewed": true,
+      "context": "Decline a request to join (20 characters at most)"
+    },
+    "invite.ask_declined": {
+      "text": "The owners of {org} did not let you in this time.",
+      "reviewed": true,
+      "context": "Slack: to the person whose request to join was declined. {org} is the business"
+    },
+    "invite.decided_no": {
+      "text": "Declined: {who} was told.",
+      "reviewed": true,
+      "context": "To the owner who declined a request. {who} is the person"
+    },
+    "invite.decided_yes": {
+      "text": "{who} was invited as {role}. They join when they tap Join.",
+      "reviewed": true,
+      "context": "To the owner who approved a request. {who} the person, {role} the role"
+    },
     "sms.reconcile": {
       "text": "Your request {reference} is being checked. We will let you know.",
       "reviewed": true,
@@ -3743,6 +4028,296 @@
       "text": "This number is not linked to a Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code we send you.",
       "reviewed": true,
       "context": "A number linked to no one wrote"
+    },
+    "signup.offer": {
+      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free?\n\nTo chat in another language, type its name: {languages}.",
+      "reviewed": true,
+      "context": "A stranger wrote to Taskiem's shared number or bot; three buttons follow. {languages} lists the languages on"
+    },
+    "signup.button_start": {
+      "text": "Start my business",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: start signing up"
+    },
+    "signup.button_have": {
+      "text": "I use Taskiem",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the person already has a Taskiem account"
+    },
+    "signup.button_no": {
+      "text": "Not now",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: not now"
+    },
+    "signup.later": {
+      "text": "No problem. Send *start* any time to begin.",
+      "reviewed": true,
+      "context": "The person said not now to signing up"
+    },
+    "signup.no_org": {
+      "text": "Your Taskiem account has no business at the moment. Do you want to start one?",
+      "reviewed": true,
+      "context": "A linked person belongs to no business; buttons to start one follow"
+    },
+    "signup.country": {
+      "text": "Signing up from chat is not open in your country yet. You can sign up on Taskiem's website instead.",
+      "reviewed": true,
+      "context": "Sign-up is not open in the number's country"
+    },
+    "signup.too_many": {
+      "text": "This number has made {count} businesses today, the most for one day. Try again tomorrow.",
+      "reviewed": true,
+      "context": "Daily limit of businesses per number; {count} is the limit"
+    },
+    "signup.busy": {
+      "text": "We are busy signing people up right now. Please try again in an hour.",
+      "reviewed": true,
+      "context": "The deployment's hourly sign-up limit is reached"
+    },
+    "signup.terms": {
+      "text": "Taskiem keeps your business's records and the details you give it. Read how, and the terms: {link}\n\nReply *Yes* to agree and start. (To chat in another language, type its name: {languages}.)",
+      "reviewed": true,
+      "context": "Before anything is made: the terms and privacy notice, Yes and No buttons follow. {link} is where to read them; {languages} the languages on"
+    },
+    "signup.declined": {
+      "text": "Nothing was made. Send *start* if you change your mind.",
+      "reviewed": true,
+      "context": "The person said No to the terms: nothing was made"
+    },
+    "signup.cancelled": {
+      "text": "Stopped: nothing was made. Send *start* to begin again.",
+      "reviewed": true,
+      "context": "The person cancelled signing up: nothing was made"
+    },
+    "signup.ask_business": {
+      "text": "What is your business called? (Send *cancel* to stop at any point.)",
+      "reviewed": true,
+      "context": "Sign-up question 1"
+    },
+    "signup.ask_name": {
+      "text": "And your name?",
+      "reviewed": true,
+      "context": "Sign-up question 2"
+    },
+    "signup.ask_sells": {
+      "text": "What do you sell or do? Reply with a number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phones and gadgets\n5. School\n6. Salon\n7. Services\n8. Something else",
+      "reviewed": true,
+      "context": "Sign-up question 3, a numbered list"
+    },
+    "signup.ask_pays": {
+      "text": "How do customers pay you? Reply with the numbers that fit, like 1 2 3:\n1. Cash\n2. Bank transfer\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": true,
+      "context": "Sign-up question 4, a numbered list, several may be picked"
+    },
+    "signup.ask_contact": {
+      "text": "Last step: tap *Share my number* so we know it is you and can text you when Telegram can't. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "Telegram: the person must share their own number with the keyboard button"
+    },
+    "signup.contact_own": {
+      "text": "That is not your own number. Tap *Share my number* to share yours.",
+      "reviewed": true,
+      "context": "Telegram: the contact shared is not the person's own"
+    },
+    "signup.number_taken": {
+      "text": "This number already uses Taskiem. To use Taskiem here too, sign in, open {where}, and link this chat.",
+      "reviewed": true,
+      "context": "The number already belongs to a Taskiem account; nothing was made. {where} is the account page"
+    },
+    "signup.business_bad": {
+      "text": "A business name needs 2 to 80 characters, and no links or email addresses. What is your business called?",
+      "reviewed": true,
+      "context": "The business name was refused"
+    },
+    "signup.name_bad": {
+      "text": "A name needs at most 80 characters, and no links or email addresses. What is your name?",
+      "reviewed": true,
+      "context": "The person's name was refused"
+    },
+    "signup.done": {
+      "text": "Done: *{business}* is on Taskiem.",
+      "reviewed": true,
+      "context": "The business is made (no trial). {business} is its name"
+    },
+    "signup.done_trial": {
+      "text": "Done: *{business}* is on Taskiem, free for {days} days.",
+      "reviewed": true,
+      "context": "The business is made, with a free trial of {days} days. {business} is its name"
+    },
+    "signup.starters": {
+      "text": "Here are three things businesses like yours start with:",
+      "reviewed": true,
+      "context": "Before the three templates offered to a new business"
+    },
+    "signup.own_words": {
+      "text": "Tap one, or say what you want in your own words.",
+      "reviewed": true,
+      "context": "After the templates offered"
+    },
+    "signup.pin_hint": {
+      "text": "This chat is your account. Send *pin* to set a six-digit PIN that keeps it yours.",
+      "reviewed": true,
+      "context": "After signing up on WhatsApp: the chat PIN"
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Daily reminder",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the daily-reminder template"
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Day's sales total",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the sales-day-total template"
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "Fee reminders",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the school-fee-reminders template"
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Send an invoice",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the send-invoice template"
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "POS evening summary",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the pos-daily-summary template"
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Payment receipts",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the payment-receipt-whatsapp template"
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Low stock alert",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the low-stock-alert template"
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Count my shelf",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the stock-count-reminder template"
+    },
+    "dormant.form_title": {
+      "text": "Prove it is you",
+      "reviewed": true,
+      "context": "Title of the PIN form that wakes a dormant chat"
+    },
+    "dormant.prove": {
+      "text": "This chat was quiet for {days} days, so Taskiem stopped using it until you prove it is still you. Enter your chat PIN in the form.",
+      "reviewed": true,
+      "context": "A dormant binding wrote and has a PIN: the PIN form follows. {days} is the dormancy period"
+    },
+    "dormant.relink": {
+      "text": "This chat was quiet for {days} days, so Taskiem stopped using it until you prove it is still you. Sign in, open {where} and link it again, or use Taskiem from your other chat. If it stays unproven, it is unlinked after another {days} days.",
+      "reviewed": true,
+      "context": "A dormant binding wrote, with no PIN to prove it. {days} is the dormancy period, {where} the account page"
+    },
+    "chatpin.web": {
+      "text": "Set your PIN in the web app, at {where}: it asks for your passkey, authenticator or password first.",
+      "reviewed": true,
+      "context": "pin: the person has a password, passkey or authenticator, so sets the PIN on the web. {where} is the account page"
+    },
+    "chatpin.set_already": {
+      "text": "You have a chat PIN already. To change it, sign in on the web (send sign in for a link), add a passkey or an authenticator, then change it on your Account page at {where}.",
+      "reviewed": true,
+      "context": "'pin' in chat from someone who has a chat PIN already: changing it is not done from the chat. {where} is the web app's Account page"
+    },
+    "chatpin.not_here": {
+      "text": "The chat PIN cannot be set from here yet: set it from WhatsApp, where Taskiem sends a secure form.",
+      "reviewed": true,
+      "context": "pin: the PIN form cannot be sent on this channel"
+    },
+    "chatpin.form_title": {
+      "text": "Your chat PIN",
+      "reviewed": true,
+      "context": "Title of the PIN form that sets the chat PIN"
+    },
+    "chatpin.form": {
+      "text": "Choose a six-digit PIN in the form. Keep it to yourself: it proves this chat is yours, and approves what asks for it.",
+      "reviewed": true,
+      "context": "Message with the PIN form that sets the chat PIN"
+    },
+    "chatpin.summary": {
+      "text": "Six digits that keep this chat yours",
+      "reviewed": true,
+      "context": "Summary line in the PIN form"
+    },
+    "connect.hint": {
+      "text": "Send *connect {service}* to connect it from here.",
+      "reviewed": true,
+      "context": "After something a draft needs: how to connect the service from the chat. {service} is its id, typed as is"
+    },
+    "connect.link": {
+      "text": "Connect {service} here: {link}\n\nThe link works once, for {minutes} minutes, and only for you. Never send a key in this chat: type it on that page.",
+      "reviewed": true,
+      "context": "A one-time connect link. {service} is the service, {link} the link, {minutes} how long it works"
+    },
+    "connect.link_button": {
+      "text": "Tap the button below to connect {service}. It works once, for {minutes} minutes, and only for you. Never send a key in this chat: type it in the form.",
+      "reviewed": true,
+      "context": "Telegram: the connect page is on the button below. {service} is the service, {minutes} how long it works"
+    },
+    "connect.button": {
+      "text": "Connect {service}",
+      "reviewed": true,
+      "context": "Telegram button that opens the connect page. {service} is the service"
+    },
+    "connect.denied": {
+      "text": "Only someone who manages connections in {org} can connect services. Ask the owner.",
+      "reviewed": true,
+      "context": "The person may not connect services. {org} is the business"
+    },
+    "connect.unknown": {
+      "text": "Taskiem has no service called {service}. Check the name, like *connect paystack*.",
+      "reviewed": true,
+      "context": "connect named a service Taskiem does not have. {service} is what was typed"
+    },
+    "connect.done": {
+      "text": "{service} is connected to *{org}*.",
+      "reviewed": true,
+      "context": "A service was connected from a connect link. {service} is the service, {org} the business"
+    },
+    "connect.carry_on": {
+      "text": "Carrying on with *{name}*:",
+      "reviewed": true,
+      "context": "After a connection, carrying on with the draft it was for. {name} is the workflow"
+    },
+    "connect.key_in_chat": {
+      "text": "That looks like a secret key, so Taskiem did not keep or use it. Keys go only in the secure form: send *connect* and the service. The chat app has the key now, so replace it at the service and use the new one.",
+      "reviewed": true,
+      "context": "A key was sent as a chat message: it was not kept or used"
+    },
+    "connect.form": {
+      "text": "Tap the button to connect {service}. Type the key in the form, never in this chat: Taskiem checks it with {service} before saving it.",
+      "reviewed": true,
+      "context": "With the WhatsApp key form. {service} is the service"
+    },
+    "connect.form_intro": {
+      "text": "Copy each value from {service} and paste it here. Taskiem checks it with {service} before saving it.",
+      "reviewed": true,
+      "context": "The first line of the WhatsApp key form. {service} is the service"
+    },
+    "connect.form_cta": {
+      "text": "Connect",
+      "reviewed": true,
+      "context": "Button that opens the WhatsApp key form, at most 30 characters"
+    },
+    "terms.ask": {
+      "text": "Taskiem has terms and a privacy notice you have not agreed to yet: {link}\n\nTap *I agree*, or reply *I agree*. Taskiem carries on either way.",
+      "reviewed": true,
+      "context": "An account from before the terms is asked once; an I agree button follows. {link} is where to read them"
+    },
+    "terms.button": {
+      "text": "I agree",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: agree to the terms"
+    },
+    "terms.thanks": {
+      "text": "Thank you: your agreement is recorded.",
+      "reviewed": true,
+      "context": "The person agreed to the terms"
     },
     "wd.ai": {
       "text": "Ask the AI model, with personal data hidden from it",

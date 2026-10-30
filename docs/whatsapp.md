@@ -47,6 +47,8 @@ Outbound messages go to `graph.facebook.com` through the egress guard. Sends are
 
 ## For people: using Taskiem on WhatsApp
 
+**No account yet?** Where the operator turned it on, write to Taskiem's number and choose **Start my business**: the business and your account are made from the chat ([signing up from chat](onboarding.md#signing-up-from-chat)).
+
 **Link your number.** Under Account > WhatsApp, enter your number with its country code and confirm it is you (passkey, authenticator code or password, as when adding a passkey). Taskiem sends a 6-digit code to that number on WhatsApp: type it on the page, or send it back to Taskiem's number. The code works for 10 minutes; five wrong codes spend it, and at most three codes are sent an hour. A number can be linked to one account, and an account has one number. Unlink it on the same page.
 
 **What you can send:**
@@ -146,6 +148,8 @@ If the draft cannot pass Taskiem's checks, Taskiem says so and suggests describi
 
 `sign in` (or `web link`) sends a one-time link, good for an hour, to choose a password and sign in to the web app: the owner of a business a [field agent](agents.md) made has none yet, and the chat is already bound to them. It is audited (`auth.signin_link`); an organisation held to single sign-on gets its sign-in page instead.
 
+**An email, the plan and paying** ([onboarding](onboarding.md#one-person-many-doors), the same on Telegram and Slack). `email` says the account's email, or, for an account made in chat, how to add one: `email ada@example.com` sends a confirmation link there, and opening it (no sign-in needed) makes it the account's email, confirmed. `plan` says the business's plan, the trial's days left or when it renews, and the price, with **Pay** for someone who manages billing; **Pay** sends a checkout link (card or bank transfer), asking first for an email to send receipts to when the account has none (`pay ada@example.com`).
+
 ## Templates
 
 WhatsApp only delivers free-form messages within 24 hours of the person's last message. Outside that window Taskiem sends a template, so every notification type has one. They are defined in code (`engine/whatsapp/templates.go`) and submitted to Meta under these names, in the language of `TASKIEM_WHATSAPP_TEMPLATE_LANGUAGE`, with these bodies and buttons (the [registry](#the-template-registry) below submits them and follows their approval):
@@ -162,6 +166,7 @@ WhatsApp only delivers free-form messages within 24 hours of the person's last m
 | `taskiem_alert` | Utility | `[{{1}}] {{2}} Details: {{3}}` | — | Every other alert rule; a `notify@1` **Tell me** message (its title and message on the one line); the daily money summary and the school's daily close until their own templates are approved |
 | `taskiem_update` | Utility | `[{{1}}] Update on {{2}}: {{3}}` | — | A workflow's message to someone outside the business who asked for its updates ([updates](updates.md)); {{2}} is what they asked about. Also a school family message with no template of its own |
 | `taskiem_invoice` | Utility | `[{{1}}] Invoice {{2}}: {{3}} to pay. Tap Pay by transfer for an account number to pay into, or Open invoice to see the invoice and pay.` | Quick reply **Pay by transfer** (the payload is the signed invoice button, as inside the window); URL **Open invoice** → `https://<form host>/i/{{1}}` (the invoice page's token) | An invoice to a customer who gets the business's updates on WhatsApp ([invoices](invoices.md#on-whatsapp-and-telegram)); {{2}} the number, {{3}} what is due |
+| `taskiem_invite` | Utility | `[{{1}}] {{2}} invited you to work with {{1}} on Taskiem, as {{3}}. Tap Join to accept. If you do not want this, tap Stop and nothing more is sent.` | Quick replies **Join** and **Stop** (payloads name the invitation) | An owner's `invite +234… as <role>` from chat, to a number that may never have written to Taskiem ([onboarding](onboarding.md#one-person-many-doors)); the owner's invitation is the opt-in |
 | `taskiem_delivery_offer` | Utility | `[{{1}}] A delivery for you: {{2}}. Tap Accept to take it or Can't to pass it on.` | Quick replies **Accept** and **Can't** (the payloads are the signed buttons, as inside the window) | An order offered to one of the business's riders outside the window ([dispatch](dispatch.md)); {{2}} the order, the area, the items and the fee |
 | `taskiem_match_question` | Utility | `[{{1}}] {{2}} came in on {{3}} through {{4}}. Is this for {{5}}, {{6}} due? {{7}} Tap Yes, match or No, or decide in Taskiem.` | Quick replies **Yes, match**, **No** (the payloads are the signed match buttons) | A payment to [match](#matching-payments), to a member with `invoice.manage`; {{2}} the amount, {{3}} when (Lagos), {{4}} the channel, {{5}} the invoice or order, {{6}} what is due, {{7}} the matcher's reasons (and the split, for more than is due) |
 | `taskiem_fee_reminder` | Utility | `[{{1}}] School fees, {{2}}: {{3}} is outstanding on {{4}}'s fees, due {{5}}. Pay by transfer to the account number {{6}}. Your fees page has the details and lets you ask for a payment plan.` | URL **Open fees page** → `https://<form host>/s/{{1}}` (the family page's token) | A school [reminder](schools.md#the-ladder) to a family; {{2}} is `reminder 1 of 3`, `reminder 2 of 3` or `final notice`, {{3}} the balance, {{4}} the children, {{5}} the due date, {{6}} the account number. Meta approves fixed wording, so the school's own rung wording goes inside the window and by SMS only |
@@ -195,12 +200,13 @@ Each WhatsApp Business Account Taskiem sends from, the platform number's (`TASKI
 
 ## Flows
 
-WhatsApp Flows are forms inside WhatsApp. Taskiem uses two, published once in each WhatsApp Business Account that sends them (Taskiem's, and each own number's) under these names, with the Flow JSON in [`docs/whatsapp-flows/`](whatsapp-flows/) (generated by `engine/whatsapp`, and checked by `TestFlowJSONDocumented`; regenerate with `go test ./engine/whatsapp -run TestFlowJSONDocumented -update`):
+WhatsApp Flows are forms inside WhatsApp. Taskiem uses three, published once in each WhatsApp Business Account that sends them (Taskiem's, and each own number's) under these names, with the Flow JSON in [`docs/whatsapp-flows/`](whatsapp-flows/) (generated by `engine/whatsapp`, and checked by `TestFlowJSONDocumented`; regenerate with `go test ./engine/whatsapp -run TestFlowJSONDocumented -update`):
 
 | Flow | Screen | What it is | Used for |
 | --- | --- | --- | --- |
 | `taskiem_inputs` | `INPUTS` | A generic form of 10 slots, each a text box, a number box and a list, shown, labelled and required by the screen's data; **Continue** sends the form to the data endpoint | A workflow's inputs (`run <workflow>`), a data table's row (`add to <table>`), public menus |
 | `taskiem_pin` | `PIN` | One six-digit passcode box under the decision's title and summary; **Confirm** sends it to the data endpoint | Step-up by the WhatsApp PIN |
+| `taskiem_connect` | `CONNECT` | Up to five fields, each a password box (a secret) or a text box, labelled with the service's own help; **Connect** sends them to the data endpoint, which checks them with the service before saving | Connecting a key-based service from the chat ([below](#connecting-a-service-from-the-chat)) |
 
 Flow JSON version 7.3, data API 3.0, one terminal screen each. In WhatsApp Manager create each Flow with these names, paste the JSON, set the endpoint URL (below), pass the health check and publish.
 
@@ -229,6 +235,21 @@ A policy rule's `step_up` names the weakest second factor it takes ([policies](g
 | `passkey` | A passkey only |
 
 `runtime.StepUpSatisfies` decides, inside `VoteApproval`, for every channel. A tap on **Approve** or **Reject** under a `whatsapp_pin` policy, by someone with a PIN that is not locked, gets a PIN form bound to that decision (its run, step, level, decision and the decision token tapped, in the flow row; 10 minutes; once). The endpoint checks the person can still decide approvals, the PIN (Argon2id, like passwords), that the request is still open at that level, and then records the vote with step-up `whatsapp_pin`. Wrong PINs are counted (`whatsapp.pin.fail`); the fifth in 15 minutes locks the PIN for 15 minutes (`whatsapp.pin.locked`). Under `totp` or `passkey` policies, without a PIN, or with it locked, the web link is sent as before. The PIN is a person's, like the binding (`whatsapp_pins`, reached only through functions); setting it needs a bound number, an enrolled passkey or authenticator, and a fresh assertion or code (`PUT /v1/me/whatsapp/pin`); `DELETE` removes it; `GET /v1/me/whatsapp` shows whether it is set or locked.
+
+## Connecting a service from the chat
+
+Where chat used to send a link to the web's Connections page (a draft's blockers when publishing, `make my page` without Paystack), it now says `connect <service>`, and that works on its own: `connect paystack`, `connect google sheets` (the service's id or name). It needs `connection.manage`, which owners hold. The connection is the business's `main` one in `prod` ([docs/spec/chat-way-in.md §7](spec/chat-way-in.md#7-c2-connecting-from-chat), decision 0058).
+
+- **A key-based service that fits the form** (Paystack, Moniepoint, OPay, Termii and the rest: five fields at most, none spanning lines, no mode to choose by address) gets the `taskiem_connect` form, where Flows are set up. Each value is checked by its start (a public key is refused with the service's own words) and then with the service, before anything is saved; a refusal comes back in the form.
+- **Anything else** gets a **connect link**: `https://<public url>/c/<token>`, one-time, for 15 minutes, for that service, business and person. It needs no web sign-in: the token is the authority, and the person must still manage connections when it is used. The page is the web's guided form for a key, or **Continue to Google** (or the service) for one that signs in, with the state, browser cookie and PKCE of [decision 0034](decisions/0034-oauth-connections.md); the provider's callback then ends on the connect page instead of Connections, with the way back to the chat. A refused key or a consent not finished leaves the link usable until its time is up; it is spent when the connection is made.
+- **Afterwards** the chat says so ("Paystack is connected to Ada Foods"), audited as `connection.from_chat` with `via` (`connect_link` or `form`) and the channel. When the draft that was waiting is known (the one whose publishing listed the connection), the chat carries on with it: what it still needs, or **Publish it now?**
+- **A key never travels as a message.** A message with a word starting the way a connector's secret does (`sk_live_`, `sk_test_` and the rest), or, while a connect link is waiting for that chat, any token-shaped message (one word of 20 or more letters, digits, `-` and `_`), is dropped before anything reads or keeps it, and the person is told to use the form and to replace the key at the service, since the chat app has it now.
+
+## The chat PIN and dormant chats
+
+**The chat PIN.** A person whose chat is their only credential (no password, passkey or authenticator: someone who [signed up from chat](onboarding.md#signing-up-from-chat)) sends `pin` and sets their six-digit PIN in the PIN form (`pin_set`; encrypted to Taskiem, never a message; weak PINs refused). It is set once from the chat: holding the chat neither replaces it nor undoes its lock, so changing it takes the web, behind a passkey or an authenticator. Anyone else sets it on the web, behind their passkey or authenticator, as above. It is the same PIN (`whatsapp_pins`), so it also approves under `whatsapp_pin` policies. On Telegram it comes with the Mini App (C2).
+
+**Dormant chats.** Operators reissue numbers that fall silent, so every chat binding, however it was made, silent for `TASKIEM_BINDING_DORMANT_DAYS` (90; `0` is off) is dormant: `taskiem_wa_numbers` and `taskiem_tg_accounts` leave it out, so it is sent nothing that carries a business's data (approvals go to the person's other channels or the web, as when no chat is linked), and its messages act on nothing. The next message gets the PIN form (`pin_wake`) when the person has a PIN, else how to link it again from the web; linking again, or the right PIN (wrong ones count toward the lock), wakes it (`binding.wake`). A binding dormant as long again is removed, and the address is a stranger again. The sweep runs with the notifier, at most hourly.
 
 ## Own numbers
 

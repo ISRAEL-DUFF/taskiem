@@ -2,6 +2,19 @@
 
 Self-serve signup, the getting-started checklist, the guided first workflow, in-product help, and how gate G4's "signup to first successful run in under 15 minutes" is measured (Phase 4, P4-2; [decision 0022](decisions/0022-self-serve-onboarding.md)).
 
+**The ways in, side by side** ([decision 0058](decisions/0058-chat-as-a-way-in.md)): every one makes the same kind of account and business, and a person can use them all at once.
+
+| Way in | Proves who it is | Turned on by | Below |
+| --- | --- | --- | --- |
+| The web form | An email, confirmed by its link | `TASKIEM_ALLOW_SIGNUP` | [Signup](#signup) |
+| WhatsApp | The number writing | `TASKIEM_CHAT_SIGNUP` with `whatsapp` | [Signing up from chat](#signing-up-from-chat) |
+| Telegram | The person's own shared contact | `TASKIEM_CHAT_SIGNUP` with `telegram` | [Signing up from chat](#signing-up-from-chat) |
+| Slack | The Slack user who installed Taskiem's app | `TASKIEM_CHAT_SIGNUP` with `slack` | [Signing up from Slack](#signing-up-from-slack) |
+| A field agent | The owner's WhatsApp number or Telegram contact, with their consent | Field agents ([agents](agents.md)) | |
+| An invitation | The chat it was sent to, or the email | An owner, on the web or in chat | [One person, many doors](#one-person-many-doors) |
+
+The owners' guide tells it plainly: [Start from WhatsApp](guide/start-from-chat.md).
+
 ## Turning it on
 
 Signup is off by default. Before turning it on for the public:
@@ -35,7 +48,58 @@ What signup refuses, all without a third-party service:
 | Over `TASKIEM_SIGNUP_PER_ADDRESS` from one address today (every replica) | `429` |
 | An email that already has an account | `409` |
 
-Every outcome is counted in `taskiem_signups_total{outcome}`.
+When the deployment has terms (`TASKIEM_TERMS_VERSION` and `TASKIEM_PRIVACY_VERSION`, [below](#the-terms)), the form also asks the person to agree to them, and signup without `accept_terms: true` is `400`.
+
+Every outcome is counted in `taskiem_signups_total{source, outcome}`, with `source` `signup` for this form (as `tenant_onboarding.source` names it), `agent` for [field agents](agents.md), and `whatsapp`, `telegram` or `slack` for [signing up from chat](#signing-up-from-chat).
+
+## Signing up from chat
+
+Beside the web form, a person can sign up from Taskiem's shared WhatsApp number or its Telegram bot, without a laptop, an email or a password ([the plan](spec/chat-way-in.md), [decision 0058](decisions/0058-chat-as-a-way-in.md)). The web form, linking a chat after it and field agents stay as they are.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TASKIEM_CHAT_SIGNUP` | — (off) | The channels that offer sign-up to strangers: `whatsapp`, `telegram`, `slack`, comma-separated. Off, a stranger is told how to link a chat, as before. Needs the terms' versions; `slack` also needs Taskiem's Slack app ([below](#signing-up-from-slack)) |
+| `TASKIEM_CHAT_SIGNUP_PER_HOUR` | `60` | Businesses chat may make an hour, every channel and replica together; over it, "try again in an hour" and a warning in the logs |
+| `TASKIEM_CHAT_SIGNUP_COUNTRIES` | `234` | Calling codes sign-up is open to, comma-separated; a number elsewhere is told sign-up is not open there yet |
+| `TASKIEM_TERMS_URL` | `<public url>/terms` | Where the terms and privacy notice are read |
+| `TASKIEM_TERMS_VERSION`, `TASKIEM_PRIVACY_VERSION` | — | The versions people agree to (at most 32 characters each). Set both or neither |
+
+**The conversation.** A message from a number (or Telegram account) linked to no one, that nothing else claims (a business's updates, invoices, riders and suppliers are handled first), gets what Taskiem is and three buttons: **Start my business**, **I already use Taskiem** (how to link a chat to a web account) and **Not now**. Typing a language's name chooses it, as `language` does. **Start my business** (or `start`, `sign up`) shows the terms and privacy notice with **Yes** and **No**: nothing is made before **Yes**. Then, one at a time, with `cancel` at any point: the business's name and the person's (the web form's checks), what they sell (a numbered list) and how customers pay (several numbers). On Telegram one more step: **Share my number**, which must be the person's own contact (Telegram tells), in a country sign-up is open to, and not a number a WhatsApp-linked person already has. Then the business is made and the chat says so, with the trial's days when billing is on, and three templates that fit what was answered, as buttons; the first, **Remind me every day**, needs nothing connected. A template tapped goes into the build conversation without the AI: what it still needs, one detail at a time, its steps, and **yes** to save the draft ([WhatsApp: build](whatsapp.md#build)). Or the person says what they want in their own words.
+
+**What is made**, in one transaction shared with the field agent's sign-up: the person, with a sign-in name that receives no mail (`owner+…@phone.taskiem.invalid` by number, `…@telegram.taskiem.invalid` by Telegram account) and no password; the business, its workspace and environments; `tenant_onboarding` with `source` `whatsapp` or `telegram`; the channel bound to the person (only an address that wrote in the last hour and is bound to no one); the acceptance of the terms; `tenant.create` and `terms.accept` in the audit log. Then the trial starts, as for every way in. A person an agent signed up who never agreed is found by their number and is the same person.
+
+**Limits.** One sign-up in progress per address (its answers wait in `chat_signups`, a person's record reached only through narrow functions, for 30 minutes); three businesses a day per number or Telegram account; `TASKIEM_CHAT_SIGNUP_PER_HOUR` across everyone; the countries. Every outcome is counted in `taskiem_signups_total` (`created`, `declined` for No to the terms, `cancelled`, `rate_limited`, `country`, `exists`).
+
+**Another business.** A linked person sends `new business` (the same questions, without the terms and their name); one with no business left is offered **Start my business**.
+
+**The holds.** A web signup is held back until its email is confirmed ([below](#confirming-the-email)). A chat-born owner proved their channel instead, which counts for API keys; what sends email for the business (inviting by email, email alert channels) waits for a confirmed email of their own.
+
+**The chat PIN and dormant chats.** Until an email is added, the chat is the account's only credential: a chat-born person sets a six-digit PIN from the chat with `pin`, in the PIN form ([WhatsApp](whatsapp.md#the-chat-pin-and-dormant-chats)). Every chat binding silent for `TASKIEM_BINDING_DORMANT_DAYS` (90) is dormant until it is proven again. A resting number proves nothing (a Telegram sign-up sharing it is not joined to its account), and when the sweep removes a binding, an account made in chat loses the sign-in name derived from that number, so the number's next holder signs up as a new person.
+
+## One person, many doors
+
+A person reaches Taskiem by several doors and stays one person ([the plan §10](spec/chat-way-in.md#10-c5-one-person-many-doors)).
+
+- **I already use Taskiem.** From a chat linked to no one, the offer's **I already use Taskiem** asks for the email the person signs in with, and emails that account a one-time link (an hour, once). The chat's answer is the same whether or not the email has an account, so nobody learns who is on Taskiem. Opening the link while signed in to that account (`/link-chat`, `POST /v1/me/chat-link`) links the chat (the WhatsApp number, the Telegram account, or the Slack user, in the signed-in business's workspace) and the chat says so; another account cannot use it. Audited as `auth.link` with `via: email_link`. Where Taskiem cannot send email, the chat says how to link from the web, as before.
+- **A Telegram sign-up with a WhatsApp person's number.** When the number shared at the end of a Telegram sign-up is already bound to someone on WhatsApp, no second account is made. If that account was made in chat (no password, a sign-in name that receives no mail), the number was all that proved it, and Telegram's own-contact check is the same proof: the Telegram account is linked to it, and the person carries on as themselves (`new business` makes another). Otherwise a number alone is not enough, as on the web: the account's email gets the link above.
+- **A resting chat** (silent `TASKIEM_BINDING_DORMANT_DAYS`) shows as such on Account, with **Link again**: a new code for the number, or a new Telegram link.
+- **Add your email.** An account made in chat adds an email on Account (`POST /v1/me/email`) or with `email ada@example.com` in chat. The link it sends (24 hours, once) is opened without signing in (`/confirm-email`, `POST /v1/auth/email/confirm`): the address becomes the account's email, confirmed, so Taskiem can send receipts and invoices, and the placeholder is gone. An address that is another account's is refused when the link is opened. An account whose email is confirmed changes it on the web, not here.
+- **Paying from chat.** `plan` says the plan, the trial's days left or when it renews, and the price, with **Pay** (`POST /v1/billing/checkout` behind it), which asks for an email first when there is none.
+- **Bringing people in from chat.** Someone who manages the business's people sends `invite +2348012345678 as viewer` (on WhatsApp or Telegram) or `invite @ada as viewer` (in Slack, a mention) and confirms with **Yes**; the role must be one they could grant on the web. The person gets the `taskiem_invite` template on WhatsApp (with **Join** and **Stop**: the owner's invitation is the opt-in, and Stop ends it), a link the owner forwards on Telegram, or a DM in Slack. Joining shows the terms with **Yes** before anything is made, then the person (made if new, with a sign-in name by their chat, or Slack's email kept unconfirmed), their chat bound, and the membership with the role. On Telegram the person must also share their own contact, and its number must be the one invited. An invitation lasts seven days and works once; a stranger who writes while one waits is offered it instead of sign-up. Audited as `member.invite` and `member.join` with the channel. The web's invitations by email stay.
+- **Asking to join in Slack.** A member of a workspace that a business connected through Taskiem's app, who is in no business there, is told who runs Taskiem there and offered **Ask to join**; being in the workspace is never enough on its own. The business's owners get the request on the chat they linked, with **Viewer**, **Operator** or **Decline**; approving sends the person the invitation above.
+
+## Signing up from Slack
+
+With `slack` in `TASKIEM_CHAT_SIGNUP` and Taskiem's Slack app registered ([Slack](integrations/slack.md#signing-up-from-slack)), the web's sign-up page also offers **Start in Slack** (`GET /v1/slack/install`). Slack asks the person to add Taskiem's app to their workspace; the bot then writes to them there with the same steps as the chat sign-up above: the terms with **Yes**, the business's name (the workspace's offered as a button), what they sell and how customers pay. Their name comes from Slack. The business is made with the workspace's Slack connected (`main`, through Taskiem's app) and its owner linked there, so they build and run from the DM at once; `tenant_onboarding.source` is `slack`.
+
+- **The email** Slack holds for them becomes the account's, **unconfirmed** (a workspace's administrators set members' emails), so nothing is emailed for the business until they confirm it. When that email is already someone's account, nothing is merged: they are told so before any question, and may start a new business under a Slack-only account instead.
+- **A workspace already on Taskiem**: its businesses' Slack connections take the new install's token and work again; the installer is told whose workspace it is and offered **Start a separate business**. Nothing is made unless they choose it.
+- **An install nobody finishes** waits a day; then its token is given back to Slack. Removing the app forgets it at once.
+- The request works once, for ten minutes, only in the browser that started it.
+
+## The terms
+
+With `TASKIEM_TERMS_VERSION` and `TASKIEM_PRIVACY_VERSION` set, every way in records which versions a person agreed to, when and where (`terms_acceptances`: `web`, `whatsapp`, `telegram`, `slack`): the web form's checkbox, **Yes** in a chat sign-up. An account from before them is asked once: on the web, a banner with **I agree** and **Not now** (`terms` on `GET /v1/me`, answered with `POST /v1/me/terms`); in chat, one message with **I agree**. Nothing is held back meanwhile, and a new version is asked for once in whichever door the person uses next.
 
 ## Confirming the email
 

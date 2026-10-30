@@ -169,6 +169,18 @@ var (
 		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Accept"}, {Type: "quick_reply", Text: "Can't"}},
 		Purpose:  "An order offered to one of the business's riders outside the window; the quick replies carry the signed Accept and Can't.",
 	}
+	// One person, many doors (docs/spec/chat-way-in.md 10.2): an owner
+	// invited a number that may never have written to Taskiem. The
+	// owner's invitation is the opt-in; the quick replies carry Join and
+	// Stop for this invitation.
+	TplInvite = Template{
+		Name: "taskiem_invite", Category: "UTILITY",
+		Body:     "[{{1}}] {{2}} invited you to work with {{1}} on Taskiem, as {{3}}. Tap Join to accept. If you do not want this, tap Stop and nothing more is sent.",
+		Vars:     []string{"tenant", "inviter", "role"},
+		Examples: []string{"Ada Stores", "Ada Obi", "viewer"},
+		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Join"}, {Type: "quick_reply", Text: "Stop"}},
+		Purpose:  "An invitation from an owner to join their business, to a number that may never have written to Taskiem; the quick replies carry Join and Stop.",
+	}
 	TplMatchQuestion = Template{
 		Name: "taskiem_match_question", Category: "UTILITY",
 		Body:     "[{{1}}] {{2}} came in on {{3}} through {{4}}. Is this for {{5}}, {{6}} due? {{7}} Tap Yes, match or No, or decide in Taskiem.",
@@ -239,7 +251,7 @@ var (
 
 // AllTemplates lists the library, for documentation, submission and tests.
 var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate,
-	TplInvoice, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose}
+	TplInvoice, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

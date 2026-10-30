@@ -44,6 +44,9 @@ type waBindingInfo struct {
 	Pin waPinInfo `json:"pin"`
 	// Flows: WhatsApp forms are set up (inputs and the PIN).
 	Flows bool `json:"flows"`
+	// Dormant: the number has been silent too long and acts for no one
+	// until it is proven again (chat_dormant.go): Link again sends a code.
+	Dormant bool `json:"dormant"`
 }
 
 // getWhatsApp is the caller's binding.
@@ -73,6 +76,12 @@ func (s *Server) getWhatsApp(w http.ResponseWriter, r *http.Request) {
 		Scan(&out.Number, &out.VerifiedAt, &pn, &pe); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if out.Number != nil {
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_binding_dormant('whatsapp', $1)`, p.UserID).Scan(&out.Dormant); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	if pn != nil && pe != nil {
 		out.Pending = &struct {

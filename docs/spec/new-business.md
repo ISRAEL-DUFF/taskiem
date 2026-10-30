@@ -1,6 +1,6 @@
 # A second business: New business on the web and in chat, and switching between them
 
-Status: **Parked** 30 October 2026. The case that led to this plan turned out to be one business selling more than one thing, which [fronts](fronts.md) answers; this plan stands for the day an owner really has two businesses. Draft, not for building yet · Builds on: [onboarding](../onboarding.md) ([0022](../decisions/0022-self-serve-onboarding.md)), [field agents](../agents.md), [governance: members and invitations](../governance.md#members-and-invitations), [WhatsApp](../whatsapp.md) (`switch`), [billing](../billing.md), the chat way in plan (`chat-way-in.md`, in review on PR 134) (C1's `new business`, which this piece gives the function to)
+Status: **Parked** 30 October 2026. The case that led to this plan turned out to be one business selling more than one thing, which [fronts](fronts.md) answers; this plan stands for the day an owner really has two businesses. Draft, not for building yet · Builds on: [onboarding](../onboarding.md) ([0022](../decisions/0022-self-serve-onboarding.md)), [field agents](../agents.md), [governance: members and invitations](../governance.md#members-and-invitations), [WhatsApp](../whatsapp.md) (`switch`), [billing](../billing.md), [chat as the way in](chat-way-in.md) (C1's `new business`, which this piece gives the function to)
 
 ## 1. Summary
 
@@ -8,7 +8,7 @@ An owner with a shop on Taskiem opens a restaurant and wants it on Taskiem too. 
 
 This piece adds three things, each small:
 
-1. **One function that makes a business** for a person who already exists, lifted from the field agent's sign-up, used by the agent, by the web and by chat, and later by the chat way in plan (`chat-way-in.md`, in review on PR 134) for strangers.
+1. **One function that makes a business** for a person who already exists, lifted from the field agent's sign-up, used by the agent, by the web and by chat, and later by [chat as the way in](chat-way-in.md) for strangers.
 2. **On the web**: the business's name in the header becomes a menu of the person's businesses with **New business** at the end; choosing one switches the session; a new one is made from a two-field form and opens on **Get started**.
 3. **In chat**: `new business` on WhatsApp and Telegram makes one after a **Yes**, and the conversation moves to it, as `switch` already moves between businesses.
 
@@ -95,7 +95,7 @@ What a new business does not copy from the old one: nothing. Connections, member
 
 ## 8. What the chat way in reuses
 
-The chat way in plan (`chat-way-in.md`, in review on PR 134) C1 makes a business for a stranger: the person first, then this function with `source` the channel; its `new business` for a linked person is §7 here, with the terms step C1 adds in front. Building this first makes C1 smaller and gives the founder's case (a second business for an owner who already has one) now, without waiting for terms texts or the Meta items.
+[Chat as the way in](chat-way-in.md) C1 makes a business for a stranger: the person first, then this function with `source` the channel; its `new business` for a linked person is §7 here, with the terms step C1 adds in front. Building this first makes C1 smaller and gives the founder's case (a second business for an owner who already has one) now, without waiting for terms texts or the Meta items.
 
 ## 9. Security
 
@@ -134,4 +134,4 @@ One branch and one PR for O1 to O4, as the smaller pieces were.
 
 ## 13. Out of scope
 
-Merging two businesses or moving a workflow, table or storefront between them; a shared plan across businesses (§11); one storefront for two businesses (a business has one); signing up strangers from chat (the chat way in plan (`chat-way-in.md`, in review on PR 134)); a group or holding view across businesses (totals for all of an owner's shops) which the daily summary could grow later.
+Merging two businesses or moving a workflow, table or storefront between them; a shared plan across businesses (§11); one storefront for two businesses (a business has one); signing up strangers from chat ([chat as the way in](chat-way-in.md)); a group or holding view across businesses (totals for all of an owner's shops) which the daily summary could grow later.
