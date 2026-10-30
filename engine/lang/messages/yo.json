@@ -1321,7 +1321,139 @@
       "reviewed": false
     },
     "wa.build.table_lacks": {
-      "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù ({link}), bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
+      "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù{link}, bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "O kò lè ṣe tàbí yí tábìlì padà ní {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Àkọsílẹ̀ wo ni o fẹ́ máa tọ́jú?\n{list}\nFi nọ́mbà rẹ̀ dáhùn.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Nǹkan míràn",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Kí ni orúkọ àkọsílẹ̀ náà? Fún àpẹẹrẹ: Àwọn tó jẹ gbèsè, Àwọn olùpèsè, Àwọn ọmọ ẹgbẹ́.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Fún un ní orúkọ kúkúrú, tí kò ju lẹ́tà 60 lọ.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Fún un ní orúkọ tó ní lẹ́tà, bí Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "O ti ní tábìlì tí a ń pè ní {table}. Fi *add to {table}* ránṣẹ́ láti fi kún un.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Kí ni o máa ń kọ fún ẹnì kọ̀ọ̀kan nínú {table}? Ya wọ́n sọ́tọ̀ pẹ̀lú àmì kọ́mà, fún àpẹẹrẹ: name, phone, ohun tí wọ́n rà, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "Mi ò lè ka ọ̀wọ̀n kankan nínú ìyẹn. Fi wọ́n ránṣẹ́ pẹ̀lú kọ́mà, fún àpẹẹrẹ: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* yóò máa tọ́jú, fún ẹnì kọ̀ọ̀kan:\n{columns}\n\nFi *yes* dáhùn láti ṣe é, tàbí fi àkọsílẹ̀ náà ránṣẹ́ lẹ́ẹ̀kan sí i láti yí i padà.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Kò sí ohun tí a yí padà.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "Mo ti ṣe *{table}*. Fi kún un pẹ̀lú *add to {name}*, tàbí wò ó nínú áàpù{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "Mi ò lè ṣètò àkọsílẹ̀ rẹ nísinsìnyí, nítorí náà a kò tíì ṣe {table}. Fi *try again* dáhùn lẹ́yìn ìṣẹ́jú díẹ̀ (màá tọ́jú rẹ̀ fún ọjọ́ kan), tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Fi *try again* dáhùn láti ṣe {table}, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "A kò ṣe é: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "{old} ti di *{table}* báyìí.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Yíyọ ọ̀wọ̀n tàbí tábìlì kúrò máa pa gbogbo ohun tó wà nínú rẹ̀ rẹ́, nítorí náà inú áàpù ni a ti ń ṣe é, níbi tí o ti máa tẹ orúkọ rẹ̀ láti fìdí rẹ̀ múlẹ̀{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Èwo?\n{list}\nFi ránṣẹ́ lẹ́ẹ̀kan sí i pẹ̀lú orúkọ tábìlì náà ní kíkún.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "ọ̀rọ̀",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "nọ́mbà (iye owó, iye)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "nọ́mbà odidi (iye)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "bẹ́ẹ̀ni tàbí bẹ́ẹ̀kọ́",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "ọjọ́",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "ọjọ́ àti àkókò",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "nọ́mbà fóònù",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "àdírẹ́sì ímeèlì",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "ọ̀pọ̀ iye papọ̀",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Kí ni yóò wà nínú *{column}*?\n{list}\nFi nọ́mbà rẹ̀ dáhùn.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Ṣé kí n fi ọ̀wọ̀n *{column}* ({type}) kún *{table}*? Fi *yes* tàbí *cancel* dáhùn.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Fún ọ̀wọ̀n náà ní orúkọ tó ní lẹ́tà, bí phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} ti ní ọ̀wọ̀n {column} tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "Mo ti fi *{column}* kún *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Tún gbìyànjú",
       "reviewed": false
     },
     "wa.build.too_long": {
@@ -3193,7 +3325,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} kò tíì ní tábìlì dátà kankan. Ẹ ṣẹ̀dá ọ̀kan nínú Taskiem, lábẹ́ Tables{link}.",
+      "text": "{org} kò tíì ní tábìlì dátà kankan. Fi *new table* ránṣẹ́ láti ṣe ọ̀kan níbí, tàbí ṣẹ̀dá ọ̀kan nínú Taskiem, lábẹ́ Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

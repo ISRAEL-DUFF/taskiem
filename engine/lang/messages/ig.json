@@ -1321,7 +1321,139 @@
       "reviewed": false
     },
     "wa.build.table_lacks": {
-      "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ ({link}), ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
+      "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "Ị nweghị ike ịme ma ọ bụ ịgbanwe tebụl na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Kedu ndepụta ị chọrọ idobe?\n{list}\nZaghachi na nọmba ya.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Ihe ọzọ",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Gịnị bụ aha ndepụta ahụ? Dịka: Ndị ji ụgwọ, Ndị na-ebubata ngwa, Ndị otu.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Nye ya aha dị mkpụmkpụ, n'okpuru mkpụrụedemede 60.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Nye ya aha nwere mkpụrụedemede, dịka Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "Ị nweelarị tebụl a na-akpọ {table}. Zipu *add to {table}* iji tinye na ya.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Gịnị ka ị na-ede maka onye ọ bụla na {table}? Kewaa ha na kọma, dịka: name, phone, ihe ha zụrụ, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "Enweghị m ike ịgụ kọlụm ọ bụla na nke ahụ. Zipu ha na kọma, dịka: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* ga-edebe, maka onye ọ bụla:\n{columns}\n\nZaghachi *yes* ka e mee ya, ma ọ bụ zipu ndepụta ahụ ọzọ iji gbanwee ya.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Ọ dịghị ihe a gbanwere.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "Emeela m *{table}*. Tinye na ya site na *add to {name}*, ma ọ bụ hụ ya na ngwa ahụ{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "Enweghị m ike idozi ndekọ gị ugbu a, ya mere e meghị {table} ma. Zaghachi *try again* mgbe nkeji ole na ole gasịrị (m ga-edobe ya otu ụbọchị), ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Zaghachi *try again* ka e mee {table}, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "E meghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "A na-akpọ {old} ugbu a *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Iwepụ kọlụm ma ọ bụ tebụl na-ehichapụ ihe niile dị n'ime ya, ya mere a na-eme ya na ngwa ahụ, ebe ị ga-ede aha ya iji kwado{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Kedu nke?\n{list}\nZipu ya ọzọ na aha tebụl ahụ zuru ezu.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "okwu",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "nọmba (ego, ọnụahịa)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "nọmba zuru oke (ọnụ ọgụgụ)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "ee ma ọ bụ mba",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "ụbọchị",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "ụbọchị na oge",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "nọmba ekwentị",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "adreesị email",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "ọtụtụ uru ọnụ",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Gịnị ga-abanye na *{column}*?\n{list}\nZaghachi na nọmba ya.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Tinye kọlụm *{column}* ({type}) na *{table}*? Zaghachi *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Nye kọlụm ahụ aha nwere mkpụrụedemede, dịka phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} nweelarị kọlụm {column}.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "Etinyela m *{column}* na *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Nwaa ọzọ",
       "reviewed": false
     },
     "wa.build.too_long": {
@@ -3193,7 +3325,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} enwebeghị tebụl data. Mepụta otu na Taskiem, n'okpuru Tables{link}.",
+      "text": "{org} enwebeghị tebụl data. Zipu *new table* ka e mee otu ebe a, ma ọ bụ mepụta otu na Taskiem, n'okpuru Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

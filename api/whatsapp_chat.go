@@ -237,6 +237,9 @@ type chatData struct {
 	Money *chatMoney `json:"money,omitempty"`
 	// Invite is an invitation the owner is confirming (chat_invites.go).
 	Invite *chatInvite `json:"invite,omitempty"`
+	// TableMake is a data table being made, or a column added
+	// (chat_tables_make.go).
+	TableMake *chatTableMake `json:"table_make,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -600,6 +603,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Invite != nil && c.state != stateIdle {
 		return s.waInviteReply(ctx, c, cmd)
 	}
+	if c.data.TableMake != nil && c.state != stateIdle {
+		return s.waTableMakeReply(ctx, c, text, cmd)
+	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
@@ -657,6 +663,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		if done, err := s.waReceiveCommand(ctx, c, cmd); done || err != nil {
+			return err
+		}
+		// Tables made and changed in chat (chat_tables_make.go).
+		if done, err := s.waTableEditCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 		// The same in the person's language (English's are read above).
@@ -838,6 +848,8 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		return true, s.waTableAdd(ctx, c, arg)
 	case lang.IntentFind:
 		return true, s.waTableFind(ctx, c, arg)
+	case lang.IntentNewTable:
+		return true, s.waNewTable(ctx, c, arg)
 	}
 	return false, nil
 }

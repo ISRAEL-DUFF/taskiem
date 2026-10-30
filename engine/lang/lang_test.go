@@ -294,6 +294,11 @@ func TestMatchIntent(t *testing.T) {
 		{"owo wole 20000", []lang.Tag{lang.YO, lang.EN}, lang.IntentCashIn, "20000"},
 		{"invoice Ada 25000", []lang.Tag{lang.YO, lang.EN}, lang.IntentNone, ""},
 		{"ìwé owó Ada 25000", all, lang.IntentNone, ""},
+		// A table made in chat (decision 0060, R3).
+		{"new table", all, lang.IntentNewTable, ""},
+		{"new table Debtors", all, lang.IntentNewTable, "Debtors"},
+		{"tábìlì tuntun Àwọn olùpèsè", []lang.Tag{lang.YO, lang.EN}, lang.IntentNewTable, "Àwọn olùpèsè"},
+		{"sabon tebur", []lang.Tag{lang.HA, lang.EN}, lang.IntentNewTable, ""},
 		// Another language's words mean nothing unless it is that person's.
 		{"fagilé", all, lang.IntentNone, ""},
 		{"please pay salaries every friday", all, lang.IntentNone, ""},

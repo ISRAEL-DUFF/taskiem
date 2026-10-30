@@ -1650,9 +1650,174 @@
       "context": "Before the first data table of a business is made from chat: its records project is being set up, which takes a minute or two"
     },
     "wa.build.table_lacks": {
-      "text": "Your table {table} has no {columns} column yet, which it uses. Add it in the app ({link}), or those steps will fail.",
+      "text": "Your table {table} has no {columns} column yet, which it uses. Add it in the app{link}, or those steps will fail.",
       "reviewed": true,
       "context": "A table a chat draft uses exists already but lacks columns the draft reads; the owner adds them in the web app"
+    },
+    "wa.tablemake.denied": {
+      "text": "You cannot make or change tables in {org} (it takes table.edit).",
+      "reviewed": true,
+      "context": "A person without table.edit asks to make or change a table in chat"
+    },
+    "wa.tablemake.pick": {
+      "text": "Which list do you want to keep?\n{list}\nReply with its number.",
+      "reviewed": true,
+      "context": "new table: the known tables not made yet, then Something else"
+    },
+    "wa.tablemake.something_else": {
+      "text": "Something else",
+      "reviewed": true,
+      "context": "The last choice of new table: a list of the owner's own"
+    },
+    "wa.tablemake.ask_name": {
+      "text": "What is the list called? For example: Debtors, Suppliers, Members.",
+      "reviewed": true,
+      "context": "new table, own words: the list's name"
+    },
+    "wa.tablemake.name_long": {
+      "text": "Give it a shorter name, under 60 letters.",
+      "reviewed": true,
+      "context": "A table name or title that is too long or empty"
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Give it a name with letters, such as Debtors.",
+      "reviewed": true,
+      "context": "A table name with no letters to make a name from"
+    },
+    "wa.tablemake.exists": {
+      "text": "You already have a table called {table}. Send *add to {table}* to add to it.",
+      "reviewed": true,
+      "context": "new table: a table of that name exists already"
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "What do you write down for each one in {table}? Separate them with commas, for example: name, phone, what they bought, date.",
+      "reviewed": true,
+      "context": "new table, own words: what is written down for each one"
+    },
+    "wa.tablemake.no_columns": {
+      "text": "I could not read any columns from that. Send them separated by commas, for example: name, phone, amount.",
+      "reviewed": true,
+      "context": "new table: no columns could be read from the message"
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* will keep, for each one:\n{columns}\n\nReply *yes* to make it, or send the list again to change it.",
+      "reviewed": true,
+      "context": "new table: the table as it will be made, waiting for yes"
+    },
+    "wa.tablemake.not_made": {
+      "text": "Nothing was changed.",
+      "reviewed": true,
+      "context": "A table or column was not made (no, or cancel)"
+    },
+    "wa.tablemake.made": {
+      "text": "Made *{table}*. Add to it with *add to {name}*, or see it in the app{link}.",
+      "reviewed": true,
+      "context": "A table was made from chat"
+    },
+    "wa.tablemake.failed": {
+      "text": "I could not set up your records just now, so {table} is not made yet. Reply *try again* in a few minutes (I keep it for a day), or *cancel*.",
+      "reviewed": true,
+      "context": "The records project could not be set up; the table agreed waits a day for Try again"
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Reply *try again* to make {table}, or *cancel*.",
+      "reviewed": true,
+      "context": "A table waiting for its records project: what to reply"
+    },
+    "wa.tablemake.refused": {
+      "text": "That was not done: {reason}",
+      "reviewed": true,
+      "context": "A table or column change refused (a limit, a name)"
+    },
+    "wa.tablemake.renamed": {
+      "text": "{old} is now called *{table}*.",
+      "reviewed": true,
+      "context": "A table's title changed from chat"
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Removing a column or a table deletes everything in it, so it is done in the app, where you type its name to confirm{link}.",
+      "reviewed": true,
+      "context": "Dropping a column or deleting a table: done in the web app, where its name is typed"
+    },
+    "wa.tablemake.which": {
+      "text": "Which one?\n{list}\nSend it again with the table's full name.",
+      "reviewed": true,
+      "context": "Several tables match the words: send the full name"
+    },
+    "wa.tablemake.type.text": {
+      "text": "words",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.number": {
+      "text": "a number (an amount, a price)",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.integer": {
+      "text": "a whole number (a count)",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "yes or no",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.date": {
+      "text": "a date",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "a date and time",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.phone": {
+      "text": "a phone number",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.email": {
+      "text": "an email address",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablemake.type.json": {
+      "text": "several values together",
+      "reviewed": true,
+      "context": "A column type in plain words"
+    },
+    "wa.tablecol.ask_type": {
+      "text": "What goes in *{column}*?\n{list}\nReply with its number.",
+      "reviewed": true,
+      "context": "add column: what goes in it"
+    },
+    "wa.tablecol.readback": {
+      "text": "Add the column *{column}* ({type}) to *{table}*? Reply *yes* or *cancel*.",
+      "reviewed": true,
+      "context": "add column: the column as it will be added, waiting for yes"
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Give the column a name with letters, such as phone.",
+      "reviewed": true,
+      "context": "add column: a name with no letters"
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} already has a column {column}.",
+      "reviewed": true,
+      "context": "add column: the table has it already"
+    },
+    "wa.tablecol.added": {
+      "text": "Added *{column}* to *{table}*.",
+      "reviewed": true,
+      "context": "A column was added from chat"
+    },
+    "button.try_again": {
+      "text": "Try again",
+      "reviewed": true,
+      "context": "Button: try making the table again"
     },
     "wa.build.too_long": {
       "text": "That is too long for me; describe it in under {max} characters.",
@@ -3990,7 +4155,7 @@
       "context": "add or find: no table matches; {name} is quoted"
     },
     "wa.table.none": {
-      "text": "{org} has no data tables yet. Create one in Taskiem, under Tables{link}.",
+      "text": "{org} has no data tables yet. Send *new table* to make one here, or create one in Taskiem, under Tables{link}.",
       "reviewed": true,
       "context": "tables: none; {link} is wa.link_at or empty"
     },

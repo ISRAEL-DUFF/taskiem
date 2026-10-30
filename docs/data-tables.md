@@ -97,7 +97,7 @@ A workflow can start when a row of a table is added, changed or deleted: the `xe
 
 ## On WhatsApp
 
-A person whose number is linked can send `tables` for the list, `add to <table>` to add one row (a form where Flows are set up, else column by column; the row is shown with personal values masked and added only after **yes**) and `find <table> <text>` for up to five matching rows. The same permissions apply, the values are checked by the same code, the connection reads are recorded under the purpose `tables.chat`, and the insert carries an idempotency key from the conversation. Creating or changing tables, and editing or deleting rows, stay here. See [WhatsApp: data tables](whatsapp.md#data-tables).
+A person whose number is linked can send `tables` for the list, `add to <table>` to add one row (a form where Flows are set up, else column by column; the row is shown with personal values masked and added only after **yes**) and `find <table> <text>` for up to five matching rows. The same permissions apply, the values are checked by the same code, the connection reads are recorded under the purpose `tables.chat`, and the insert carries an idempotency key from the conversation. `new table` makes a table (a known shape, or one from the owner's words), `add column … to …` adds a column and `rename … to …` changes a title ([WhatsApp: data tables](whatsapp.md#data-tables)); dropping a column, deleting a table, and editing or deleting rows stay here. See [WhatsApp: data tables](whatsapp.md#data-tables).
 
 ## Personal data
 

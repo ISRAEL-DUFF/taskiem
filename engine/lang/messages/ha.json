@@ -1321,7 +1321,139 @@
       "reviewed": false
     },
     "wa.build.table_lacks": {
-      "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar ({link}), ko waɗannan matakan za su gaza.",
+      "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar{link}, ko waɗannan matakan za su gaza.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "Ba za ka iya yin tebur ko canza shi a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Wane jeri kake so ka ajiye?\n{list}\nAmsa da lambarsa.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Wani abu dabam",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Menene sunan jerin? Misali: Masu bashi, Masu kawo kaya, Membobi.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Ba shi gajeren suna, ƙasa da haruffa 60.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Ba shi suna mai haruffa, kamar Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "Kana da tebur mai suna {table} tuni. Aika *add to {table}* don ƙara masa.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Me kake rubutawa ga kowanne a {table}? Raba su da waƙafi, misali: name, phone, abin da suka saya, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "Ban iya karanta wani ginshiƙi daga wannan ba. Aika su da waƙafi, misali: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* zai ajiye, ga kowanne:\n{columns}\n\nAmsa *yes* don a yi shi, ko aika jerin kuma don canza shi.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Ba a canza komai ba.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "An yi *{table}*. Ƙara masa da *add to {name}*, ko ka gan shi a manhajar{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "Ban iya shirya bayananka yanzu ba, don haka ba a yi {table} ba tukuna. Amsa *try again* bayan 'yan mintoci (zan ajiye shi kwana ɗaya), ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Amsa *try again* don a yi {table}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "Ba a yi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "Yanzu ana kiran {old} da *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Cire ginshiƙi ko tebur yana goge duk abin da ke ciki, don haka a manhajar ake yi, inda za ka rubuta sunansa don tabbatarwa{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Wanne?\n{list}\nSake aikawa da cikakken sunan teburin.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "kalmomi",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "lamba (adadi, farashi)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "cikakken lamba (ƙidaya)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "eh ko a'a",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "kwanan wata",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "kwanan wata da lokaci",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "lambar waya",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "adireshin imel",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "dabi'u da yawa tare",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Me zai shiga *{column}*?\n{list}\nAmsa da lambarsa.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "A ƙara ginshiƙin *{column}* ({type}) ga *{table}*? Amsa *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Ba ginshiƙin suna mai haruffa, kamar phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} yana da ginshiƙin {column} tuni.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "An ƙara *{column}* ga *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Sake gwadawa",
       "reviewed": false
     },
     "wa.build.too_long": {
@@ -3193,7 +3325,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} ba ta da teburin bayanai tukuna. Ƙirƙiri ɗaya a Taskiem, ƙarƙashin Tables{link}.",
+      "text": "{org} ba ta da teburin bayanai tukuna. Aika *new table* don yin ɗaya a nan, ko ƙirƙiri ɗaya a Taskiem, ƙarƙashin Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

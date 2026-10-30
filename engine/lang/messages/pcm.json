@@ -1321,7 +1321,139 @@
       "reviewed": false
     },
     "wa.build.table_lacks": {
-      "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app ({link}), or those steps go fail.",
+      "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "You no fit make or change tables for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Which list you wan keep?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Another thing",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Wetin be the name of the list? Like: Debtors, Suppliers, Members.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Give am shorter name, wey no pass 60 letters.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Give am name wey get letters, like Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "You don get table wey dem call {table} before. Send *add to {table}* to add to am.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Wetin you dey write for each one for {table}? Separate dem with comma, like: name, phone, wetin dem buy, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "I no fit read any column from that one. Send dem with comma, like: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* go keep, for each one:\n{columns}\n\nReply *yes* make I create am, or send the list again to change am.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Nothing change.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "I don make *{table}*. Add to am with *add to {name}*, or see am for the app{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "I no fit set up your records now, so {table} never make. Reply *try again* after small time (I go keep am for one day), or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Reply *try again* make I create {table}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "E no work: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "{old} don change name to *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "To remove column or table go delete everything wey dey inside, so e dey happen for the app, where you go type the name to confirm{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Which one?\n{list}\nSend am again with the full name of the table.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "words",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "number (amount, price)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "whole number (count)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "yes or no",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "date",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "date and time",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "phone number",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "email address",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "plenty values together",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Wetin go dey inside *{column}*?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Make I add column *{column}* ({type}) to *{table}*? Reply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Give the column name wey get letters, like phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} don get column {column} before.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "I don add *{column}* to *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Try again",
       "reviewed": false
     },
     "wa.build.too_long": {
@@ -3193,7 +3325,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} never get any data table. Create one for Taskiem, under Tables{link}.",
+      "text": "{org} never get any data table. Send *new table* make I create one here, or create one for Taskiem, under Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {
