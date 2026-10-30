@@ -75,7 +75,7 @@ A **purchase order** is a supplier, lines (an item, how many, the price of one: 
 4. **Received**, in part or in full (**Goods came in**, `received 10 bags of rice` in chat, `receive` with `purchase` in a workflow): a `received` movement per item naming the order, the item's cost price set to the order's, and the value received owed to the supplier until paid. Once every line has come, the order is received.
 5. **Paid**, in cash or by transfer (**Record a payment**, `paid Dangote 425,000 transfer`): an `expense` in the [money log](money-log.md) with the supplier as its vendor and the order in its description. What is received and not yet paid is owed to the supplier, shown on **Suppliers** and in chat (`suppliers`).
 
-An order can be cancelled until anything is received on it. The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+An order can be cancelled until anything is received on it. A purchase order to a supplier that is also a business on Taskiem, and linked to yours, arrives as an order in their business rather than a message: planned in [business links](spec/business-links.md). The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
 
 ## Counts, shrinkage and leaks
 
