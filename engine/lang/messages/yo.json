@@ -4035,6 +4035,10 @@
     "link.they_asked": {
       "text": "*{name}* ti béèrè lọ́wọ́ yín tẹ́lẹ̀. Fi *links* ránṣẹ́ láti dáhùn.",
       "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} wà lórí Taskiem náà. Ẹ so mọ́ wa: {url}",
+      "reviewed": false
     }
   }
 }

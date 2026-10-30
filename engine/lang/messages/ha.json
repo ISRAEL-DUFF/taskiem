@@ -4035,6 +4035,10 @@
     "link.they_asked": {
       "text": "*{name}* ya riga ya tambaye ku. Aika *links* don amsawa.",
       "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} ma yana Taskiem. Haɗa da mu: {url}",
+      "reviewed": false
     }
   }
 }

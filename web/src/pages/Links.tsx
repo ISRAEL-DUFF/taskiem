@@ -123,6 +123,7 @@ export function ChatPage() {
   const { can } = useAuth();
   const manage = can("link.manage");
   const { view, act, answer } = useLinks();
+  const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkSearch>();
   const [searchError, setSearchError] = useState<unknown>();
@@ -169,6 +170,15 @@ export function ChatPage() {
         </label>
       </div>
       <ErrorBox error={view.error ?? act.error ?? searchError} />
+      {manage && settings.data && !settings.data.asked_at && !searching && (
+        <FindableQuestion
+          settings={settings.data}
+          busy={act.busy}
+          answer={(findable) =>
+            void act.run(async () => (await put("/v1/link-settings", { findable }), settings.reload()), findable ? "Other businesses can find you" : false)
+          }
+        />
+      )}
       {searching ? (
         <section aria-label="Search results" data-testid="link-results">
           {chats.length > 0 && (
@@ -507,5 +517,27 @@ export function LinkCodeSignedOut() {
         Not on Taskiem yet? <Link to="/signup">Sign up your business</Link>, then open the link again.
       </p>
     </div>
+  );
+}
+
+/** Asked once, of whoever may answer for the business's links: whether
+ * other businesses find it by search. Not now keeps the default (on with a
+ * published storefront). */
+function FindableQuestion({ settings, busy, answer }: { settings: LinkSettings; busy: boolean; answer: (findable: boolean | null) => void }) {
+  return (
+    <section className="card" aria-labelledby="link-findable-ask" data-testid="link-findable-ask">
+      <h2 id="link-findable-ask">Let other businesses on Taskiem find you?</h2>
+      <p className="hint">
+        They would find you by your name, what you sell and your area, from what your storefront already shows. {findableLine(settings)}
+      </p>
+      <div className="row-actions">
+        <button type="button" className="primary" disabled={busy} onClick={() => answer(true)}>
+          Yes, let them find us
+        </button>
+        <button type="button" disabled={busy} onClick={() => answer(null)}>
+          Not now
+        </button>
+      </div>
+    </section>
   );
 }

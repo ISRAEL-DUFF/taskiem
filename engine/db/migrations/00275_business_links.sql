@@ -94,6 +94,20 @@ CREATE POLICY tenant_isolation ON link_blind_requests TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON link_blind_requests TO taskiem_app;
 
+-- The phones a business's documents offered a link to (§5.1, at the first
+-- document): each once, kept as a keyed hash only.
+CREATE TABLE link_offers (
+  tenant_id     uuid NOT NULL REFERENCES tenants(id),
+  address_hash  bytea NOT NULL CHECK (length(address_hash) = 32),
+  offered_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, address_hash)
+);
+ALTER TABLE link_offers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE link_offers FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON link_offers TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT ON link_offers TO taskiem_app;
+
 -- What the definers read of a business's public card.
 GRANT SELECT (slug, published_slug) ON storefronts TO taskiem_dispatch;
 
@@ -519,6 +533,7 @@ DROP FUNCTION taskiem_link_role(business_links, uuid);
 DROP FUNCTION taskiem_link_view(business_links, uuid);
 DROP FUNCTION taskiem_link_audit_other(uuid, uuid, uuid, text, text, text, jsonb);
 DROP FUNCTION taskiem_link_self();
+DROP TABLE link_offers;
 DROP TABLE link_blind_requests;
 DROP TABLE link_settings;
 DROP TABLE business_links;

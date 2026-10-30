@@ -4035,6 +4035,10 @@
     "link.they_asked": {
       "text": "*{name}* ajụọla gị. Ziga *links* iji zaa.",
       "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} nọkwa na Taskiem. Jikọọ anyị: {url}",
+      "reviewed": false
     }
   }
 }

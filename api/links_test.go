@@ -1,9 +1,20 @@
 package api_test
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 // Business links, L0 (docs/spec/business-links.md §5): a business that
@@ -221,4 +232,75 @@ func TestLinkCodes(t *testing.T) {
 	}
 	ada.must(400, "POST", "/v1/links", map[string]any{"code": code, "phone": "0803 123 4567", "role": "supplier"})
 	ada.must(404, "POST", "/v1/links", map[string]any{"code": "zzzzzzzz", "role": "supplier"})
+}
+
+// The offer at the first document (§5.1): an invoice to a phone that is
+// another business's owner's number carries one more line, with the
+// sender's link code, the first time only; an invoice to anyone else never
+// does. A line that would take the SMS past its three parts is left out
+// and not counted as offered: the invoice goes all the same.
+func TestLinkOfferAtFirstInvoice(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce,
+		LinkOffer: w.srv.LinkOfferLine}
+	ada := w.tenant(t, "Ada", "ada@offer.test")
+	long := w.tenant(t, "Ada's Kitchen", "long@offer.test")
+	dangote := w.tenant(t, "Dangote Stores", "d@offer.test")
+	const dangoteOn = "+2348010000321"
+	w.bind(t, dangote, dangoteOn)
+	n := 0
+	send := func(from *client, phone string) string {
+		t.Helper()
+		tenant := uuid.MustParse(tenantOf(t, from))
+		ada := from
+		n++
+		x := ada.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Buyer", "phone": phone},
+			"lines": []map[string]any{{"description": "Rice", "quantity": 1, "unit_kobo": 100000}}}, "Idempotency-Key", fmt.Sprintf("o-%d", n))
+		ada.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", fmt.Sprintf("s-%d", n))
+		var text string
+		if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var raw []byte
+			if err := tx.QueryRow(ctx, `SELECT body FROM platform_messages WHERE channel = 'sms' ORDER BY created_at DESC LIMIT 1`).Scan(&raw); err != nil {
+				return err
+			}
+			var env map[string]any
+			if err := json.Unmarshal(raw, &env); err != nil {
+				return err
+			}
+			v, err := w.env.Vault.OpenTx(ctx, tx, tenant, env)
+			if err != nil {
+				return err
+			}
+			text, _ = v.(map[string]any)["text"].(string)
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return text
+	}
+	const offer = "Ada is on Taskiem too. Link with us: "
+	if got := send(ada, "+2348039999999"); strings.Contains(got, offer) {
+		t.Errorf("offered to a stranger: %q", got)
+	}
+	// Too long for the SMS: left out, and not counted.
+	if got := send(long, dangoteOn); strings.Contains(got, "is on Taskiem too") {
+		t.Errorf("a line past three parts: %q", got)
+	}
+	var offered int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM link_offers`).Scan(&offered); err != nil || offered != 0 {
+		t.Errorf("offers recorded: %d %v", offered, err)
+	}
+	got := send(ada, dangoteOn)
+	if !strings.Contains(got, offer) || !strings.Contains(got, "/l/") {
+		t.Fatalf("the first invoice to Dangote: %q", got)
+	}
+	code := ada.must(200, "GET", "/v1/link-settings", nil)["code"].(string)
+	if !strings.HasSuffix(got, "/l/"+code) {
+		t.Errorf("the offer's link: %q, code %s", got, code)
+	}
+	if got := send(ada, dangoteOn); strings.Contains(got, offer) {
+		t.Errorf("offered twice: %q", got)
+	}
 }

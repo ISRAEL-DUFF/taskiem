@@ -478,3 +478,24 @@ func OfferToTx(ctx context.Context, tx pgx.Tx, phone string) (bool, error) {
 	}
 	return ok != nil && *ok, nil
 }
+
+// OfferedTx reports whether a document of the business in scope already
+// offered a link to a phone number: only the first one does.
+func OfferedTx(ctx context.Context, tx pgx.Tx, phone string, hashKey []byte) (bool, error) {
+	var done bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_offers WHERE address_hash = $1)`, offerHash(phone, hashKey)).Scan(&done)
+	return done, err
+}
+
+// RecordOfferTx records that a document offered a link to a phone number,
+// once it carries the offer.
+func RecordOfferTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, hashKey []byte) error {
+	_, err := tx.Exec(ctx, `INSERT INTO link_offers (tenant_id, address_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, tenant, offerHash(phone, hashKey))
+	return err
+}
+
+func offerHash(phone string, key []byte) []byte {
+	m := hmac.New(sha256.New, key)
+	m.Write([]byte("offer:" + phone))
+	return m.Sum(nil)
+}

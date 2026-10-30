@@ -4035,6 +4035,10 @@
     "link.they_asked": {
       "text": "*{name}* don ask you before. Send *links* to answer.",
       "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} dey Taskiem too. Link with us: {url}",
+      "reviewed": false
     }
   }
 }

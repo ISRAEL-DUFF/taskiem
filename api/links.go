@@ -528,3 +528,35 @@ func (s *Server) tellLinkAnswered(ctx context.Context, other, id uuid.UUID, answ
 		}, nil)
 	})
 }
+
+// LinkOfferLine is the line a document to a phone carries when the phone
+// is another business's own on Taskiem and the two are not linked
+// (§5.1, the offer at the first document): once per phone, in the
+// recipient's language, with the sender's link code. "" otherwise. It
+// runs in the sender's transaction; the sender's people never see it.
+func (s *Server) LinkOfferLine(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, fits func(string) bool) (string, error) {
+	return s.linkOfferLineIn(ctx, tx, tenant, phone, lang.EN, fits)
+}
+
+func (s *Server) linkOfferLineIn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, l lang.Tag, fits func(string) bool) (string, error) {
+	key := s.linkKey(tenant)
+	if done, err := links.OfferedTx(ctx, tx, phone, key); err != nil || done {
+		return "", err
+	}
+	if offer, err := links.OfferToTx(ctx, tx, phone); err != nil || !offer {
+		return "", err
+	}
+	code, err := links.EnsureCodeTx(ctx, tx, tenant, "system:link-offer")
+	if err != nil {
+		return "", err
+	}
+	var business string
+	if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
+		return "", err
+	}
+	line := tr(l, "link.offer_line", "org", business, "url", s.linkCodeURL(code))
+	if fits != nil && !fits(line) {
+		return "", nil
+	}
+	return line, links.RecordOfferTx(ctx, tx, tenant, phone, key)
+}

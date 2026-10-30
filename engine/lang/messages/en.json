@@ -5043,6 +5043,11 @@
       "text": "*{name}* has asked you already. Send *links* to answer.",
       "reviewed": true,
       "context": "A business we tried to ask had asked us first"
+    },
+    "link.offer_line": {
+      "text": "{org} is on Taskiem too. Link with us: {url}",
+      "reviewed": true,
+      "context": "Added to the first invoice or order a business sends to another business on Taskiem; {url} opens the link request"
     }
   }
 }

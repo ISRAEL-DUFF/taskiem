@@ -215,3 +215,42 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 		t.Errorf("help: %q", r)
 	}
 }
+
+// A supplier whose number is a business's own on Taskiem gets, with the
+// first order, the offer to link (business links §5.1), in the order's
+// message.
+func TestPurchaseOrderOffersALink(t *testing.T) {
+	ctx := context.Background()
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	owner := w.tenant(t, "Mama Put Stores", "ada@mamaput.test")
+	dangote := w.tenant(t, "Dangote Depot", "d@depot.test")
+	const on, supplier = "+2348010000331", "+2348010000332"
+	w.bind(t, owner, on)
+	w.bind(t, dangote, supplier)
+	tenant := uuid.MustParse(tenantOf(t, owner))
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000, "reorder_level": 5,
+		"target_level": 20}, "Idempotency-Key", "r")
+	if r := w.say(t, on, "add supplier Dangote Depot "+supplier+" for rice"); !strings.Contains(r, "Add *Dangote Depot* as a supplier") {
+		t.Fatalf("add: %q", r)
+	}
+	w.yes(t, on)
+	// Dangote's owner writes, so the order reaches them in the window.
+	w.say(t, supplier, "links")
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := w.srv.Reach.LinkTx(ctx, tx, tenant, supplier, "whatsapp", supplier)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w.say(t, on, "order from dangote")
+	before := len(w.graph.Sent(supplier))
+	w.yes(t, on)
+	got := w.lastTo(t, supplier, before)
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Order P-") || !strings.Contains(got[0].Text, "Mama Put Stores is on Taskiem too. Link with us: ") ||
+		!strings.Contains(got[0].Text, "/l/") || len(got[0].Buttons) != 2 {
+		t.Fatalf("to the supplier: %+v", got)
+	}
+}

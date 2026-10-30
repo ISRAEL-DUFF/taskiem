@@ -1232,6 +1232,9 @@ func serve(ctx context.Context, args []string) error {
 		// Account numbers asked for with an invoice's chat buttons are
 		// answered in the chat.
 		e.invoices.Answered = srv.InvoiceAnswered
+		// An invoice to another business's own number offers it a link
+		// the first time (business links).
+		e.invoices.LinkOffer = srv.LinkOfferLine
 		srv.MailDomain = cfg.Mail.Domain
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })
