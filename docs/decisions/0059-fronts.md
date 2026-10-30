@@ -33,8 +33,11 @@ Forms ([forms](../forms.md)) already put any page of questions in front of any w
 9. **Fronts are published, never live.** Fronts, blocks and actions are part of the storefront's draft and reach customers through the published snapshot. Turning a front on is a publish, with the verified-phone rule, moderation, the item limit and the first-publish hold.
 10. **What is taken is claimed, not moved.**
     - A list's count is what the owner has.
-    - Hires, tickets and places are claims against it, expiring while unpaid, checked with the item locked in the public host's submitting function.
+    - Hires, tickets, places and booking slots are claims against it, expiring while unpaid, checked with the item locked in the public host's submitting function. Slot holds become claims, so there is one reservation model.
     - Stock (0057) stays on the catalogue table and is not moved by hires.
+11. **A submission can be paid in parts.** It carries an amount due and its payments, as an invoice does; a payment link may be for a deposit or an instalment and may be made again until the balance is paid; the money log and matching record each payment against the one reference. The order templates that exist keep paying in one step.
+12. **The form has one owner, the action.** It is published with the storefront; a template copies its form into the action once; the workflow's checks report a question the workflow reads that the form no longer asks.
+13. **A kind's table is a known table** in the registry decision 0060 sets up, so templates, chat, the builder and fronts read one definition.
 
 ## Alternatives considered
 
@@ -51,8 +54,9 @@ Forms ([forms](../forms.md)) already put any page of questions in front of any w
 
 - **New tables.** `storefront_fronts`, `storefront_blocks` and `storefront_claims`, each under forced row-level security, with the public host's reads granted column by column and listed in `dispatch_columns.txt`.
 - **Changed tables.**
-  - `storefront_actions` is keyed by id, with a front, a slug and `builtin`, and `(storefront_id, kind)` stays unique for the built-in four.
-  - `storefront_orders` gains `front_id` and `action_id`.
+  - `storefront_actions` is keyed by id, with a front, a slug, `builtin` and the action's `form`, and `(storefront_id, kind)` stays unique for the built-in four.
+  - `storefront_orders` gains `front_id`, `action_id`, `amount_due_kobo` and `paid_kobo`; `storefront_holds` folds into `storefront_claims` in F5.
+  - `payment_link` takes an amount and may be repeated; the `storefront.payment` signal carries the amount and the balance; `get_submission` and `mark_returned` are new.
   - `storefront_catalogue` is copied per table.
   - Triggers gain `storefront_action_id`.
 - **No rename and no views.** A real Down migration, tested up, down, up.

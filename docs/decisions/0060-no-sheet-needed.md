@@ -18,7 +18,7 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
    - The gallery, the Start page, the AI builder's retrieval and the sign-up's starters all apply the conditions, and the builder ranks a twin above its sheet template.
    - Sheet templates stay for businesses that connect Google, and workflows made from them keep working.
 2. **Known tables.**
-   - `debtors`, `customers` and `staff` are defined once and used by templates, chat words and the AI builder.
+   - `debtors`, `customers` and `staff` are defined once and used by templates, chat words and the AI builder; the storefront's `products` and `services`, and the tables fronts' kinds make ([0059](0059-fronts.md)), live in the same registry.
    - They are the business's own ordinary tables, never kept. One that exists is never changed.
 3. **Templates make their tables wherever they are used.**
    - A chat template build makes the tables it declares, and so does an AI draft made from a template.
@@ -34,6 +34,7 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
    - Kept tables stay closed to every change, in chat too.
 6. **The debtor book.**
    - `<name> owes <amount>`, `<name> paid <amount>` and `who owes me?` act on the `debtors` table, or the table the owner names as the book.
+   - It is the notebook, not a second ledger: money a customer should be sent something to pay is an invoice, the book offers to raise one, and `who owes me?` answers with both.
    - A payment said with *cash* is also recorded once in the money log, for a person allowed to record money (`invoice.manage`).
    - A *transfer* is not, because the rail records it already.
 7. **Questions over rows become a checked query spec, never free reading.**

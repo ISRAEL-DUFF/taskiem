@@ -1,6 +1,6 @@
 # Fronts: a storefront with any number of pages, each with its own things and its own actions
 
-Status: **Draft** 30 October 2026, for review (revised the same day after a review against the code: §3, §5, §9, §10, §13 and §14) · Decision: [0059](../decisions/0059-fronts.md) (proposed) · Builds on: [storefronts](../storefronts.md) ([0036](../decisions/0036-storefronts.md)), [forms](../forms.md) ([spec](forms.md)), [data tables](../data-tables.md), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [dispatch](dispatch.md), [invoices and the money log](invoices-and-money-log.md), [public page themes](../decisions/0042-public-page-themes.md)
+Status: **Draft** 30 October 2026, for review (revised the same day after a review against the code: §3, §5, §9, §10, §13 and §14; and again for the review's gaps: part payments, Food's options, the Spaces calendar, one reservation model, the form's one owner, known tables shared with 0060) · Decision: [0059](../decisions/0059-fronts.md) (proposed) · Builds on: [storefronts](../storefronts.md) ([0036](../decisions/0036-storefronts.md)), [forms](../forms.md) ([spec](forms.md)), [data tables](../data-tables.md), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [dispatch](dispatch.md), [invoices and the money log](invoices-and-money-log.md), [public page themes](../decisions/0042-public-page-themes.md)
 
 ## 1. Summary
 
@@ -111,7 +111,9 @@ An action has:
 - the transfer-account read (00237);
 - `engine/storefront` `orders.go` (three queries), `bookings.go` (two), `transfers.go` (two) and `actions.go` (the zones read, the list and the insert).
 
-**Where the form lives.** The action's page is rendered by the hosted-forms renderer from the action's form, under the storefront's look, at `/<front>/a/<action slug>`, with the storefront's honeypot, limits, language and status pages. The built-in four keep `/a/<kind>`. An action made from a template (§7) starts with the template's form, and the owner edits it where forms are edited today.
+**Where the form lives, and who owns it.** The form has one owner: the action. It is a column on `storefront_actions` (`form`, the questions' schema with its `x-form` hints), edited on the action's page, part of the storefront's draft, and published with the storefront's snapshot. A template that makes an action (§8) copies its form into the action once, at creation; after that the workflow and the form are edited and published separately, and nothing in a workflow version carries the form. A question change goes live with the storefront's publish; a workflow change with the workflow's. The two meet at the trigger: a workflow's `storefront` trigger names the action, and the action's form decides what `trigger.answers` holds, so a field the workflow reads that the form no longer asks is reported by the workflow's checks as a missing input, the way a removed table column is.
+
+The action's page is rendered by the hosted-forms code (`engine/publicweb/hostedforms.go`), which already lives in the public host's package, as a route of the **storefront's host and domains**, not of the forms host (`forms.<domain>`), under the storefront's look and chrome, at `/<front>/a/<action slug>`, with the storefront's honeypot, limits, language and status pages. The forms' own `verify`, `once_per` and rate limits apply per storefront, as the storefront's submission limits do (§10). The built-in four keep `/a/<kind>`.
 
 ### 5.4 Fields that draw on the front
 
@@ -119,8 +121,8 @@ Four field types, each declared in the action's form with `x-form.widget` and a 
 
 | Field | Schema | What the customer sees | What the run gets |
 | --- | --- | --- | --- |
-| **basket** | `{"type": "array", "x-form": {"widget": "basket", "list": "<block>", "min": 1}}` | The list with quantities, a running total in naira, the price check as today | `[{row_id, name, unit_price_kobo, qty}]`, `total_kobo`, and `trigger.submission` (§5.5) |
-| **time** | `{"type": "object", "x-form": {"widget": "time", "list": "<services block>"}}` | A service from the list, then a day and a slot from the calendar, with the booking rules (hours, days off, how far ahead, buffers, capacity) | `{row_id, service, starts_at, ends_at, price_kobo}` |
+| **basket** | `{"type": "array", "x-form": {"widget": "basket", "list": "<block>", "min": 1}}` | The list with quantities, a running total in naira, the price check as today. Where the list block maps an **options** column (Food: size, extras, each with its price), a line also takes the chosen options | `[{row_id, name, unit_price_kobo, qty, options: [{name, choice, price_kobo}]}]`, `total_kobo`, and `trigger.submission` (§5.5). The server prices a line as the unit price plus its chosen options' prices from the copy, and the price check compares that, never the form's numbers |
+| **time** | `{"type": "object", "x-form": {"widget": "time", "list": "<services block>"}}` | A service from the list, then a day and a slot from the calendar, with the booking rules (hours, days off, how far ahead, buffers, capacity). The calendar's **grain** is the list block's: `minutes` (today's services, a duration per item), `hours` (a from and to hour on one day, a rate per hour) or `days` (whole days, a from and to date, a rate per day); Spaces use hours or days | `{row_id, service, starts_at, ends_at, units, unit_price_kobo, price_kobo}` |
 | **dates and quantity** | `{"type": "object", "x-form": {"widget": "hire", "list": "<block>"}}` | An item, a from and to date, a quantity; refused beyond what is free for those dates | `{row_id, item, from, to, qty, unit_price_kobo, days, total_kobo}` |
 | **quantity against a count** | `{"type": "object", "x-form": {"widget": "count", "list": "<block>"}}` | An item (an event, a class) and how many; refused beyond what is free | `{row_id, item, qty, unit_price_kobo, total_kobo, left}` |
 
@@ -132,21 +134,23 @@ A form may use any of them, or none:
 
 The basket is today's order form, and the time field is today's booking form. Both are rebuilt on the forms renderer in F1, the first two of the four.
 
-**Counting, one model for hire and counted sales.** The item's count column is what the owner has (canopies owned, seats in the hall, places on the course), and nothing Taskiem does changes it. What is taken is held:
-- `storefront_claims` holds the submission, the list item, the quantity, and for a hire the from and to dates.
-- While a submission waits for payment or approval, its claim has an `expires_at`, the way `storefront_holds` holds a booking's slot today. A confirmed or paid submission's claim has none. A cancelled, declined, refunded or expired one is released.
-- **What is free.** For a count field it is the count less every live claim on the item. For a hire it is the count less the live claims whose dates overlap.
-- **The check.** It runs in the public host's submitting definer (a new `taskiem_public_claim`, beside `taskiem_public_book`), in one transaction with the item's copy row locked, so two customers cannot both take the last seat.
+**Counting, one model for every reservation.** The item's count column is what the owner has (canopies owned, seats in the hall, places on the course, a barber's one chair as capacity), and nothing Taskiem does changes it. What is taken is a **claim**, and a booking's slot hold is a claim too:
+- `storefront_claims` holds the submission, the list item, the quantity, and a from and to: dates for a hire, times for a slot, nothing for a count.
+- While a submission waits for payment or approval, its claim has an `expires_at`, as `storefront_holds` holds a booking's slot today. A confirmed or paid submission's claim has none. A cancelled, declined, refunded or expired one is released, which is the one place the booking change and cancel flow, a refund and **Returned** all release from.
+- **What is free.** For a count field it is the count less every live claim on the item. For a hire or a slot it is the count (or the service's capacity) less the live claims that overlap in time.
+- **The check.** It runs in the public host's submitting definer (`taskiem_public_claim`, which `taskiem_public_book` becomes a caller of), in one transaction with the item's copy row locked, so two customers cannot both take the last seat.
 - **No double counting.** Hires make no stock movements: a hire that is out is a claim, and **Returned** ends it. The canopies are never counted out twice, and a hire for other dates is never refused because one is out now.
+- **Migration.** `storefront_holds` rows become claims with times; the table goes in F5 once the booking flow reads claims, so F1 touches no booking behaviour.
 
-Calendars: one per **time field's list block**, not one per business, so a salon's chairs and the hall can be booked separately. The booking rules (hours, days off, lead time, cut-off, confirm automatically) move from the storefront to the list block's options, defaulting to the storefront's. `storefront_holds` and the slot check in `taskiem_public_book` gain the block, so a hold on one calendar never blocks another.
+Calendars: one per **time field's list block**, not one per business, so a salon's chairs and the hall can be booked separately. The booking rules (hours, days off, lead time, cut-off, confirm automatically, the grain, setup time between bookings) move from the storefront to the list block's options, defaulting to the storefront's. A claim names its block, so a hold on one calendar never blocks another.
 
-### 5.6 Limits
-
-- **`storefront_items`** counts the rows of every copied table, each table once (§5.2), against the plan's limit. Publishing refuses past it, as today.
-- **Monthly limits.** `storefront_orders_monthly` counts submissions with a basket, a hire or a count. `storefront_bookings_monthly` counts those with a time. Questions, call-backs and quotes count against neither, as enquiries and call-backs do today.
-- **The unverified business's daily cap** counts every submission, whatever its action.
-- **New kinds** add no limit of their own until a plan needs one.
+**Part payments.** Four kinds take money in more than one step: Hire and Spaces a deposit then the balance, Classes instalments, Quotes a deposit then the rest. Today a submission takes one payment (`payment_link` is made once, and `storefront.payment` is paid or expired), while an [invoice](../invoices.md) already takes part payments against a balance with an **Amount to pay** box. So a submission gains what an invoice has:
+- `amount_due_kobo` and `paid_kobo` on the submission, with `payment` (`unpaid`, `part_paid`, `paid`) derived;
+- `payment_link` takes an optional `amount_kobo` (a deposit, an instalment) and may be called again until the balance is paid; each link is one payment, keyed by the submission and the amount sequence, so a retried step makes no second link;
+- the `storefront.payment` signal's payload gains `amount_kobo` and `balance_kobo`, so a workflow waits for a deposit, then later for the balance;
+- the money log and matching record each payment against the one reference, as they do for a part-paid invoice; a refund refunds what was paid;
+- the status page shows what is paid and what is due, with **Pay the balance**.
+This is F5's first item, since Hire is the first kind to need it, and `storefront-classes` and `storefront-quote` build on it.
 
 ### 5.5 Submissions
 
@@ -164,7 +168,14 @@ There is no rename and no view, so reports, exports, definers and the money log 
 - An action that is not built-in has the same `trigger.submission` and `trigger.answers`, and a `trigger.body` equal to `trigger.submission`.
 - **Answers cannot shadow Taskiem's fields.** A form field whose name is one of them is refused at deploy, among the refused-field rules.
 
-The `storefront@1` actions (`decide`, `payment_link`, `notify_customer`, `get_booking`, `refund`) work by reference as today, for every submission; `get_booking` answers for any submission with a time; a new `get_submission` returns the whole thing. `notify_customer`'s `say` messages gain the hire ones (`hire_confirmed`, `hire_due_back`, `hire_returned`).
+The `storefront@1` actions (`decide`, `payment_link`, `notify_customer`, `get_booking`, `refund`) work by reference as today, for every submission; `get_booking` answers for any submission with a time; a new `get_submission` returns the whole thing, and a new `mark_returned` ends a hire's claim and, where the owner set a late fee per day and the return is late, adds the fee to the amount due and sends a payment link for it. `notify_customer`'s `say` messages gain one set per kind: hire (`hire_confirmed`, `hire_due_back`, `hire_returned`, `hire_late`), tickets (`ticket_issued`, `event_reminder`), classes (`enrolled`, `instalment_due`, `session_reminder`, `waiting_list`), quotes (`quote_sent`, `quote_accepted`, `quote_expired`), and the part-payment ones (`deposit_received`, `balance_due`), each in the five languages.
+
+### 5.6 Limits
+
+- **`storefront_items`** counts the rows of every copied table, each table once (§5.2), against the plan's limit. Publishing refuses past it, as today.
+- **Monthly limits.** `storefront_orders_monthly` counts submissions with a basket, a hire or a count. `storefront_bookings_monthly` counts those with a time. Questions, call-backs and quotes count against neither, as enquiries and call-backs do today.
+- **The unverified business's daily cap** counts every submission, whatever its action.
+- **New kinds** add no limit of their own until a plan needs one.
 
 ## 6. Kinds of front: the presets
 
@@ -184,7 +195,7 @@ A kind is a row in a catalogue Taskiem ships (`storefront/kinds/*.json`, like th
 | **Call-backs** | "Call me" | none | **Request a call-back**: phone and a time · `storefront-callback` (today's) | — | today's |
 | **Custom** | What no kind covers | the owner's choice | blocks and actions by hand; any template or a blank form | per action | `add front … custom` |
 
-**What the kinds share.** Every submission, whatever the kind, is one `storefront_orders` row with a reference, a status, the customer sealed, lines and money, so the Orders page, the daily summary, matching and refunds treat a ticket, a hire and a dish alike. Every kind's workflow is an ordinary workflow the owner can open. Every kind's table is an ordinary data table. Its count column is what the owner has, and claims say what is taken (§5.4). Only the catalogue keeps stock (§5.2).
+**What the kinds share.** Every submission, whatever the kind, is one `storefront_orders` row with a reference, a status, the customer sealed, lines and money, so the Orders page, the daily summary (which gains a line per front when there is more than one), matching and refunds treat a ticket, a hire and a dish alike. Every kind's workflow is an ordinary workflow the owner can open. Every kind's table is an ordinary data table, defined as a **known table** in the one registry [no sheet needed](no-sheet-needed.md) §5.4 sets up (`templates/tables/`): `products` and `services` move there, and `menu`, `hire_items`, `spaces`, `events` and `classes` join them, so a kind's preset names a known table rather than carrying its own columns, and templates, chat words, the builder and fronts read one definition. Its count column is what the owner has, and claims say what is taken (§5.4). Only the catalogue keeps stock (§5.2); stock on a kind's other tables (a Food menu first) is the one follow-up both plans defer to a change to 0057.
 
 **Adding a kind later** is a preset file, a template, the chat words in five languages, and code where the kind's workflow needs a step that does not exist. The four field types cover how every kind above takes a submission: Tickets and Classes share one field, and Hire and Spaces share the calendar and the claims. They are not the only code. Food's options, Tickets' check-in, Classes' instalments and waiting list, Hire's **Returned** and Quotes' acceptance are each new code, sized in §13.
 
@@ -269,7 +280,9 @@ The public paths of today (`/`, `/a/order`, `/a/booking`, `/o/<ref>`) keep servi
 - **Kinds**: each kind made from chat and from the web app gives a front with its table, actions and settings; an item added through the kind's words shows on the page; the preset files are checked against the schema and every template they name exists.
 - **Fronts**: a second front with its own table and order action, and the first front's order workflow untouched; a delivery workflow on the second front's order action while the first keeps the plain one (the case that started this); a hire action refusing an overbooked quantity for overlapping dates and accepting it for other dates; a time field with its own calendar.
 - **Forms**: the four field types through the forms harness (schema, render, submit, and the `trigger.submission` and `trigger.answers` shapes); a field named `total` refused at deploy; two customers racing for the last seat or canopy, with one refused.
-- **Contract**: a published workflow with `action: "order"` runs unchanged after the migration; `action_id` round-trips through the SDK, the schema test and `wdtext`.
+- **Contract**: a published workflow with `action: "order"` runs unchanged after the migration; `action_id` round-trips through the SDK, the schema test and `wdtext`; `get_submission`, `mark_returned` and `payment_link`'s `amount_kobo` are in the connector's manifest, fixtures and the generated SDK helpers.
+- **Part payments**: a deposit then the balance on one reference, each in the money log and matched, the status page's balance, a refund of what was paid; a retried `payment_link` step makes no second link.
+- **Food**: a basket line with options priced on the server; a form's option prices ignored.
 - **Migration**: up, down, up on a database with orders, bookings, holds and refunds, with the public pages' HTML identical before and after.
 - **Editor**: the replace and the new-action choices on a held action; four-eyes refusal.
 - **Chat**: `add front`, `add product … to`, `turn on orders for`, `turn on deliveries for`, `orders <front>`.
@@ -294,7 +307,7 @@ The public paths of today (`/`, `/a/order`, `/a/booking`, `/o/<ref>`) keep servi
 | F2 | **Make a new action for this workflow**, on the action ids F1 adds | S |
 | F3 | Fronts in the web app and on the public page, with the kinds that exist today as presets (**Shop**, **Services**, **Questions**, **Call-backs**) plus **Food** (options with prices, ready-in, delivery by default); fronts in the snapshot and publishing (§5.1); the per-table copy and the limits (§5.2, §5.6); the Fronts tab, Add a front by kind, blocks, actions from templates, the home page's front cards, Orders by front; the action templates with the `front` parameter | L |
 | F4 | Chat: `add front` with the kind, the kinds' words, `… to <front>`, `turn on … for <front>`, `front … on` as a publish, `orders <front>`, the five languages | M |
-| F5 | **Hire** and **Spaces**: claims (§5.4) and `taskiem_public_claim`; the dates-and-quantity field; `storefront-hire` with deposit, due back and **Returned**; calendars per list with whole-day and hour slots | L |
+| F5 | **Part payments** (§5.4) first; then **Hire** and **Spaces**: claims as the one reservation model, `taskiem_public_claim`, holds folded in; the dates-and-quantity field; `storefront-hire` with deposit, due back, **Returned** and the late fee; calendars per list with the hours and days grains | L |
 | F6 | **Tickets** and **Classes**: the count field over claims; `storefront-tickets` with check-in; `storefront-classes` with instalments and the waiting list | L |
 | F7 | **Quotes** and **Custom**: `storefront-quote` with the customer's acceptance on the status page, blank forms | M |
 | F8 | The builder's kinds and one eval per kind; docs ([storefronts](../storefronts.md) rewritten around fronts and kinds, [forms](../forms.md) with the four fields, [stock](stock.md) on what fronts do and do not move, the owners' guide "Sell more than one thing"); the decision accepted with what was built; the atlas's business modules page | M |
@@ -313,6 +326,8 @@ F0 ships first and alone: it is the owner's case, today. Then come F1, then F2 a
 | A hire's or a ticket's count under concurrent submissions | Claims are checked and written in the submitting definer with the item's row locked; unpaid claims expire (§5.4) |
 | Stock on more than one table | Not in this plan: stock stays on the catalogue (§5.2). Owners who want stock counted on a Food menu wait for a change to 0057 |
 | Calendars per block break the "one calendar" assumption in reminders and the owner's bookings page | The bookings page groups by calendar; reminders key by submission already |
+| A form and its workflow drift apart (a question removed that the workflow reads) | The form has one owner, the action; the workflow's checks report a missing input at publish, and the editor shows the action's questions beside the trigger |
+| Part payments change what "paid" means for the money log and matching | A submission's payments are recorded as an invoice's part payments are, one reference, several payments; `payment` is derived and never written by a form; the order templates that exist keep paying in one step |
 
 ## 15. Out of scope
 

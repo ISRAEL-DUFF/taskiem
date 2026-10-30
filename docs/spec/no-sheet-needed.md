@@ -137,7 +137,8 @@ Known tables are defined once in `templates/tables/` as JSON, so the definition 
 - templates (`tables: [{"known": "debtors"}]`, a new `known` field on `templates.Table`, or a parameter with the table picker defaulting to it);
 - the chat words (§6.4);
 - the AI builder's context, which lists them as tables it may propose by name;
-- making a table in chat (§6.1).
+- making a table in chat (§6.1);
+- the storefront's kinds ([fronts](fronts.md) §6): `products` and `services`, which the storefront makes today in its own code, move into the registry, and the kinds' new tables (`menu`, `hire_items`, `spaces`, `events`, `classes`) are defined here when fronts build them, so there is one registry, not one for templates and one for the storefront.
 
 | Known table | Columns |
 | --- | --- |
@@ -234,6 +235,12 @@ Everything here works on WhatsApp, Telegram and Slack DMs through the one conver
   - A personal column's new value is asked in a form where there is one. Its value is sealed in the session until the write, as for `add to`.
 
 ### 6.4 The debtor book: R5
+
+**The book and invoices.** Taskiem already keeps money owed as [invoices](../invoices.md): a balance, part payments, an account number to pay into, receipts and chasing. The debtor book is not a second ledger beside that. It is for what traders write in a notebook: credit given over the counter with no invoice, often to the same few people, settled in cash. The rule:
+- an amount a customer should be sent something to pay is an invoice (`invoice Ada 25,000`), as today;
+- `Ada owes 5,000` is a notebook line, and the reply offers **Send Ada an invoice for it?** when the business has a payment rail connected, which raises an invoice for the balance and clears the book's line when it is paid;
+- `who owes me?` lists both, the book's balances and the open invoices, in two groups, so one question answers the whole debt;
+- a credit sale from the stock words (Q3) goes into the book, never an invoice, unless the owner asks for one.
 
 | Words | Does |
 | --- | --- |
