@@ -15,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/notices"
@@ -175,7 +176,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 			told, err = links.RequestBlindTx(r.Context(), tx, p.TenantID, *blind, req.Role, by, s.linkKey(p.TenantID))
 			return err
 		}
-		target := uuid.Nil
+		var target uuid.UUID
 		if req.Code != "" {
 			c, err := links.ByCodeTx(r.Context(), tx, req.Code)
 			if err != nil {
@@ -522,6 +523,9 @@ func (s *Server) tellLinkAnswered(ctx context.Context, other, id uuid.UUID, answ
 	if answer != links.Accept && answer != links.End {
 		return
 	}
+	if answer == links.Accept {
+		s.background(ctx, "link accounts", func(ctx context.Context) { s.issueLinkAccounts(ctx, id, other) })
+	}
 	s.background(ctx, "link answered", func(ctx context.Context) {
 		s.tellLink(ctx, other, func(l links.Link) bool { return l.ID == id }, func(l lang.Tag, link links.Link, org string) (string, string) {
 			return tr(l, "link."+answer+"ed_title", "name", link.Name), tr(l, "link."+answer+"ed_body", "name", link.Name, "org", org)
@@ -559,4 +563,79 @@ func (s *Server) linkOfferLineIn(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 		return "", nil
 	}
 	return line, links.RecordOfferTx(ctx, tx, tenant, phone, key)
+}
+
+// issueLinkAccounts gives, when a link is accepted, each side that sells
+// to the other a customer account number for it (§6.3): issued on one of
+// the seller's connections that needs nothing a business cannot give
+// (no email, BVN or wallet to choose), the invoice settings' connection
+// first, and registered to the customer key link:<buyer>, so every
+// payment the buyer makes into it is matched exactly. Where the seller has
+// no such connection nothing is issued, and its invoices are paid as any
+// customer's. Each side's account is issued in its own scope, from its
+// own view of the link.
+func (s *Server) issueLinkAccounts(ctx context.Context, id, other uuid.UUID) {
+	if s.Invoices == nil {
+		return
+	}
+	inv := s.invoicesSvc().Invoices
+	var sides []uuid.UUID
+	// The side that answered is the other's other: found from the other's view.
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{other}, func(tx pgx.Tx) error {
+		l, err := links.GetTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		sides = []uuid.UUID{other, l.Business}
+		return nil
+	})
+	if err != nil {
+		s.Logger.Warn("links: the sides of an accepted link", "link", id, "err", err)
+		return
+	}
+	for _, seller := range sides {
+		var l links.Link
+		var connection string
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+			var err error
+			if l, err = links.GetTx(ctx, tx, id); err != nil {
+				return err
+			}
+			st, err := invoicing.GetSettings(ctx, tx, seller)
+			connection = st.Connection
+			return err
+		})
+		if err != nil {
+			s.Logger.Warn("links: reading an accepted link", "link", id, "err", err)
+			continue
+		}
+		// Only a side the other buys from.
+		if l.State != links.Active || (l.Role != links.RoleCustomer && l.Role != links.RoleBoth) {
+			continue
+		}
+		issuers, err := inv.Issuers(ctx, seller)
+		if err != nil {
+			s.Logger.Warn("links: the connections that issue accounts", "tenant", seller, "err", err)
+			continue
+		}
+		issuers = slices.DeleteFunc(issuers, func(i invoicing.Issuer) bool { return i.NeedsEmail || i.NeedsBVN || i.NeedsAccount })
+		if len(issuers) == 0 {
+			continue
+		}
+		slices.SortStableFunc(issuers, func(a, b invoicing.Issuer) int {
+			return boolOrder(strings.HasSuffix(a.Connection, "/"+connection)) - boolOrder(strings.HasSuffix(b.Connection, "/"+connection))
+		})
+		customer := invoicing.Customer{Name: l.Name, Key: "link:" + l.Business.String()}
+		if _, err := inv.IssueAccount(ctx, seller, invoicing.AccountRequest{Customer: customer, Channel: issuers[0].Connection, Issue: true}, "system:link"); err != nil {
+			s.Logger.Warn("links: issuing a linked customer's account", "tenant", seller, "link", id, "err", err)
+		}
+	}
+}
+
+// boolOrder sorts true first.
+func boolOrder(b bool) int {
+	if b {
+		return 0
+	}
+	return 1
 }

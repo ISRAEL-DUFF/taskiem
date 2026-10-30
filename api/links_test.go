@@ -12,7 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
@@ -302,5 +304,61 @@ func TestLinkOfferAtFirstInvoice(t *testing.T) {
 	}
 	if got := send(ada, dangoteOn); strings.Contains(got, offer) {
 		t.Errorf("offered twice: %q", got)
+	}
+}
+
+// linkRails issue account numbers on a connection that needs nothing
+// from the customer (as Taskiem's own wallet does for a business).
+type linkRails struct{ asked int }
+
+var linkRail = invoicing.Rail{Connector: "iswallet", Connection: "main", Name: "iswallet", Events: map[string]bool{},
+	Caps: map[string]connector.CapabilityMap{"virtual_account": {Ignores: []string{"customer.email", "customer.phone", "customer.bvn", "customer.nin"}}}}
+
+func (f *linkRails) Capable(context.Context, uuid.UUID, string) ([]invoicing.Rail, error) {
+	return []invoicing.Rail{linkRail}, nil
+}
+
+func (f *linkRails) ResolveChannel(_ context.Context, _ uuid.UUID, channel, _ string) (invoicing.Rail, error) {
+	if channel == linkRail.Channel() {
+		return linkRail, nil
+	}
+	return invoicing.Rail{}, invoicing.ErrNoRail
+}
+
+func (f *linkRails) Call(_ context.Context, _ uuid.UUID, _ invoicing.Rail, _ string, in map[string]any, _ effects.KeyInput) (map[string]any, error) {
+	f.asked++
+	return map[string]any{"account_number": fmt.Sprintf("88%08d", f.asked), "bank_name": "Wema Bank", "reference": fmt.Sprintf("lnk_%d", f.asked)}, nil
+}
+
+// At acceptance the seller issues the buyer a customer account number
+// (§6.3), registered to link:<buyer>; a side that only buys issues none.
+func TestLinkAccountAtAcceptance(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	rails := &linkRails{}
+	w.srv.AccountRails = rails
+	ada := w.tenant(t, "Ada's Kitchen", "ada@accounts.test")
+	dangote := w.tenant(t, "Dangote Stores", "d@accounts.test")
+	adaID, dangoteID := tenantOf(t, ada), tenantOf(t, dangote)
+	dangote.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	// Ada asks Dangote as a supplier: Dangote sells to Ada.
+	ada.must(201, "POST", "/v1/links", map[string]any{"business": dangoteID, "role": "supplier"})
+	l := dangote.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
+	dangote.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+	w.srv.WaitBackground()
+	count := func(tenant, customer string) int {
+		var n int
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM customer_accounts WHERE tenant_id = $1 AND customer_id = $2`, tenant, "key:link:"+customer).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := count(dangoteID, adaID); n != 1 || rails.asked != 1 {
+		t.Errorf("Dangote's account for Ada: %d (rail asked %d)", n, rails.asked)
+	}
+	if n := count(adaID, dangoteID); n != 0 {
+		t.Errorf("Ada, who only buys, issued %d", n)
 	}
 }

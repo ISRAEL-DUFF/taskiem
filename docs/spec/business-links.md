@@ -313,11 +313,25 @@ The link itself, its search and its words in chat; migration 00275, `engine/link
   - **Linked businesses** (`/settings/links`, under More for `link.manage`) holds the **Let other businesses find us** switch and every link and request with what can be done to it: End link, Withdraw request, Unblock, Take off the list.
   - Tests: `web/src/lib/links.test.ts`; `web/e2e/links.spec.ts`, two businesses that find each other, link and end it, at 390 px, with axe in both themes; and both pages in `accessibility.spec.ts` and `plainwords.test.ts`.
 
+- **Link codes.**
+  - Every business has a link code (`link_settings.code`, eight letters and digits), made the first time its settings are read.
+  - `/l/<code>` in the web app names the business and asks with **Request link**. Signed out, it offers to sign in or sign up first.
+  - A request by code (`how` `code`) needs no findability, because the business chose to hand the code out. To its requester it reads as a search request does: after 30 days, "not accepted".
+  - **Linked businesses** shows the link, **Copy the link** and the QR code (`/v1/link-settings/qr`, SVG or PNG).
+- **The offer at the first document.**
+  - An invoice sent to a phone that is another business's own (`taskiem_link_offer_to`: its owner's linked number or its own WhatsApp number, never a member's, the two neither linked nor asked) carries "<business> is on Taskiem too. Link with us: <link code>". So does a purchase order sent to such a supplier on WhatsApp, in the supplier's language.
+  - Each phone is offered once (`link_offers`, a keyed hash on the sender's side).
+  - On an invoice, the line is left out, and not counted as offered, when it would take the SMS past its three parts. With a naira amount the SMS is Unicode, so a longer business name often leaves no room, and the line then goes with a later document that has it.
+  - Not built: the offer on an order update, and as a WhatsApp button rather than a line.
+- **Findability, asked once.** The Chat page asks owners and admins once. **Not now** keeps the default; asking in the sign-up chat is not built.
+- **The buyer's account number at acceptance (§6.3).**
+  - When a link is accepted, each side the other buys from issues it a customer account number (`IssueAccount`, the key `link:<buyer>`), after the answer and in its own scope.
+  - It uses a connection that needs nothing a business cannot give (no email, BVN or wallet to choose), the invoice settings' connection first. Where there is none, nothing is issued.
+  - The bill that carries the number is L1's.
+
 **Not built in L0 yet:**
+- the link code printed on the storefront's QR card, invoices and receipts (it is on Linked businesses and in the offer);
 - a business's card with its documents (from L1), and messages in the search (L3);
-- the link code on the QR card, invoices and receipts;
-- the offer at the first document;
-- the buyer's customer account number issued at acceptance;
 - the query-log isolation harness of §14. The database tests assert each function's refusals instead.
 
 ## 17. Risks and open questions
