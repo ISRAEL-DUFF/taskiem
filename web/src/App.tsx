@@ -54,7 +54,7 @@ import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
-import { ChatPage, LinkedBusinessesPage } from "./pages/Links";
+import { ChatPage, LinkCodePage, LinkCodeSignedOut, LinkedBusinessesPage } from "./pages/Links";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -227,6 +227,8 @@ function Shell() {
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
+    // A business's link code (business links): sign in, or sign up first.
+    if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname)) return alone(<LinkCodeSignedOut />);
     return loc.pathname === "/login" ? (
       alone(<Login />)
     ) : (
@@ -599,6 +601,7 @@ function SignedIn() {
               <Route path="/storefront/stock" element={<StorefrontStock />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/settings/links" element={<LinkedBusinessesPage />} />
+              <Route path="/l/:code" element={<LinkCodePage />} />
               <Route
                 path="/storefront/suppliers"
                 element={<StorefrontSuppliers />}

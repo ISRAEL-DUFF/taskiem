@@ -14,6 +14,7 @@ package links
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -120,6 +121,9 @@ type Settings struct {
 	// FindableNow is what applies: Findable, or the default.
 	FindableNow bool       `json:"findable_now"`
 	AskedAt     *time.Time `json:"asked_at,omitempty"`
+	// Code is the link code the business prints (taskiem.ng/l/<code>);
+	// empty until made (EnsureCodeTx).
+	Code string `json:"code,omitempty"`
 }
 
 // Actor is who acts, for the audit chains.
@@ -233,7 +237,7 @@ func RequestTx(ctx context.Context, tx pgx.Tx, target uuid.UUID, role string, by
 		return uuid.Nil, fmt.Errorf("%w: the role is supplier, customer or both", ErrInvalid)
 	}
 	var told *uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT taskiem_link_request($1, NULL, NULL, $2, $3, $4)`, target, role, by.Type, by.ID).Scan(&told); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT taskiem_link_request($1, NULL, NULL, NULL, $2, $3, $4)`, target, role, by.Type, by.ID).Scan(&told); err != nil {
 		return uuid.Nil, pgErr(err)
 	}
 	if told == nil {
@@ -300,7 +304,7 @@ func RequestBlindTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, b Blind, r
 		slug = &addr
 	}
 	var told *uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT taskiem_link_request(NULL, $1, $2, $3, $4, $5)`, phone, slug, role, by.Type, by.ID).Scan(&told); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT taskiem_link_request(NULL, NULL, $1, $2, $3, $4, $5)`, phone, slug, role, by.Type, by.ID).Scan(&told); err != nil {
 		return uuid.Nil, pgErr(err)
 	}
 	if told == nil {
@@ -366,7 +370,8 @@ func EnterTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, action string, detail
 func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
 	var st Settings
 	err := tx.QueryRow(ctx, `SELECT (SELECT findable FROM link_settings WHERE tenant_id = $1), (SELECT asked_at FROM link_settings WHERE tenant_id = $1),
-		EXISTS (SELECT 1 FROM storefronts WHERE tenant_id = $1 AND status = 'published')`, tenant).Scan(&st.Findable, &st.AskedAt, &st.FindableNow)
+		COALESCE((SELECT code FROM link_settings WHERE tenant_id = $1), ''),
+		EXISTS (SELECT 1 FROM storefronts WHERE tenant_id = $1 AND status = 'published')`, tenant).Scan(&st.Findable, &st.AskedAt, &st.Code, &st.FindableNow)
 	if st.Findable != nil {
 		st.FindableNow = *st.Findable
 	}
@@ -382,4 +387,94 @@ func SetFindableTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, findable *b
 		return Settings{}, err
 	}
 	return SettingsTx(ctx, tx, tenant)
+}
+
+// codeAlphabet is what a link code is made of: lower-case letters and
+// digits a person reads without mistaking one for another.
+const codeAlphabet = "abcdefghjkmnpqrstuvwxyz23456789"
+
+func newCode() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	for i := range b {
+		b[i] = codeAlphabet[int(b[i])%len(codeAlphabet)]
+	}
+	return string(b)
+}
+
+// EnsureCodeTx is the business in scope's link code, made the first time
+// it is asked for.
+func EnsureCodeTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, by string) (string, error) {
+	for range 5 {
+		var code string
+		err := tx.QueryRow(ctx, `INSERT INTO link_settings (tenant_id, code, updated_by) VALUES ($1, $2, $3)
+			ON CONFLICT (tenant_id) DO UPDATE SET code = COALESCE(link_settings.code, EXCLUDED.code)
+			RETURNING code`, tenant, newCode(), by).Scan(&code)
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && pe.Code == "23505" {
+			continue // another business has that code: draw again
+		}
+		return code, err
+	}
+	return "", errors.New("links: no free link code")
+}
+
+// CodeCard is the business behind a link code, as we see it.
+type CodeCard struct {
+	Business uuid.UUID `json:"business"`
+	Name     string    `json:"name"`
+	Slug     string    `json:"slug,omitempty"`
+	State    string    `json:"state"`
+}
+
+var codeRe = regexp.MustCompile(`^[a-z2-9]{8}$`)
+
+// ValidCode reports whether code is shaped like a link code.
+func ValidCode(code string) bool { return codeRe.MatchString(strings.ToLower(code)) }
+
+// ByCodeTx is the business behind a link code; ErrNotFound for an unknown
+// code or our own.
+func ByCodeTx(ctx context.Context, tx pgx.Tx, code string) (CodeCard, error) {
+	var c CodeCard
+	if !ValidCode(code) {
+		return c, ErrNotFound
+	}
+	err := tx.QueryRow(ctx, `SELECT business, name, COALESCE(slug, ''), state FROM taskiem_link_by_code($1)`, code).Scan(&c.Business, &c.Name, &c.Slug, &c.State)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	return c, pgErr(err)
+}
+
+// RequestByCodeTx asks the business behind a link code to link. It
+// returns the business to tell, or uuid.Nil.
+func RequestByCodeTx(ctx context.Context, tx pgx.Tx, code, role string, by Actor) (uuid.UUID, error) {
+	if !ValidRole(role) {
+		return uuid.Nil, fmt.Errorf("%w: the role is supplier, customer or both", ErrInvalid)
+	}
+	if !ValidCode(code) {
+		return uuid.Nil, ErrNotFound
+	}
+	var told *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT taskiem_link_request(NULL, $1, NULL, NULL, $2, $3, $4)`, code, role, by.Type, by.ID).Scan(&told); err != nil {
+		return uuid.Nil, pgErr(err)
+	}
+	if told == nil {
+		return uuid.Nil, nil
+	}
+	return *told, nil
+}
+
+// OfferToTx reports whether a document the business in scope sends to a
+// phone number (E.164) should offer its recipient a link: the number is
+// another business's own, and the two are neither linked nor asked. Only
+// the recipient's message changes with the answer.
+func OfferToTx(ctx context.Context, tx pgx.Tx, phone string) (bool, error) {
+	var ok *bool
+	if err := tx.QueryRow(ctx, `SELECT taskiem_link_offer_to($1)`, phone).Scan(&ok); err != nil {
+		return false, pgErr(err)
+	}
+	return ok != nil && *ok, nil
 }

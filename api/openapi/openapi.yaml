@@ -5181,6 +5181,9 @@ paths:
                   type: [string, 'null']
                   format: uuid
                   description: A business from a search
+                code:
+                  type: string
+                  description: A link code a business prints (its link settings' code); the business need not be findable
                 phone:
                   type: string
                 address:
@@ -5249,6 +5252,45 @@ paths:
                         type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/links/code/{code}:
+    get:
+      operationId: linkByCode
+      tags:
+      - Links
+      summary: The business behind a link code
+      description: What the page a link code opens shows before asking to link. 404 for an unknown code, or our own.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The business
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [business, name, state]
+                properties:
+                  business:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  slug:
+                    type: string
+                  state:
+                    type: string
+                    enum: [none, active, ended, requested, not_accepted, asked_us, blocked]
+        default:
+          $ref: '#/components/responses/Error'
   /v1/links/{id}/{answer}:
     post:
       operationId: answerLink
@@ -5309,6 +5351,37 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-settings/qr:
+    get:
+      operationId: linkQR
+      tags:
+      - Links
+      summary: The link code as a QR code
+      description: To print or show across the counter. SVG by default.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [svg, png]
+      responses:
+        '200':
+          description: The QR code
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+            image/png:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/link-settings:
@@ -27401,6 +27474,12 @@ components:
         asked_at:
           type: string
           format: date-time
+        code:
+          type: string
+          description: The link code the business prints; made the first time the settings are read
+        url:
+          type: string
+          description: Where the code opens a link request, for a signed-in business
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]

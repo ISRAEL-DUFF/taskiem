@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/notices"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -37,8 +38,10 @@ func (s *Server) linkRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/links", s.requestLink)
 	r.With(manage, s.tenantWide).Post("/links/{id}/{answer}", s.answerLink)
 	r.With(manage, s.tenantWide).Delete("/links/sent/{id}", s.cancelBlindLink)
+	r.Get("/links/code/{code}", s.linkByCode)
 	r.Get("/link-settings", s.getLinkSettings)
 	r.With(manage, s.tenantWide).Put("/link-settings", s.putLinkSettings)
+	r.Get("/link-settings/qr", s.linkQR)
 }
 
 func linkErr(err error) error {
@@ -111,8 +114,10 @@ func (s *Server) searchLinks(w http.ResponseWriter, r *http.Request) {
 // blind, whoever uses a phone number or a storefront address.
 type linkRequest struct {
 	Business *uuid.UUID `json:"business"`
-	Phone    string     `json:"phone"`
-	Address  string     `json:"address"`
+	// Code is a link code the business prints (taskiem.ng/l/<code>).
+	Code    string `json:"code"`
+	Phone   string `json:"phone"`
+	Address string `json:"address"`
 	// Role is how we trade with them: supplier (they supply us),
 	// customer (they buy from us) or both.
 	Role string `json:"role"`
@@ -136,10 +141,19 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	by := links.Actor{Type: p.ActorType(), ID: p.Actor()}
 	var blind *links.Blind
+	named := 0
+	for _, ok := range []bool{req.Business != nil, req.Code != "", req.Phone != "", req.Address != ""} {
+		if ok {
+			named++
+		}
+	}
 	switch {
-	case req.Business != nil && (req.Phone != "" || req.Address != ""), req.Business == nil && req.Phone != "" && req.Address != "":
-		s.fail(w, r, fmt.Errorf("%w: name one of business, phone or address", errBadRequest))
+	case named > 1:
+		s.fail(w, r, fmt.Errorf("%w: name one of business, code, phone or address", errBadRequest))
 		return
+	case req.Code != "":
+		// A business that printed its code: found by it, whether or not it
+		// lets itself be found by search.
 	case req.Phone != "":
 		phone, err := whatsapp.Normalise(req.Phone, s.defaultCountry())
 		if err != nil {
@@ -150,7 +164,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 	case req.Address != "":
 		blind = &links.Blind{Slug: strings.Trim(strings.TrimSpace(req.Address), "/")}
 	case req.Business == nil:
-		s.fail(w, r, fmt.Errorf("%w: name a business, a phone number or a storefront address", errBadRequest))
+		s.fail(w, r, fmt.Errorf("%w: name a business, a link code, a phone number or a storefront address", errBadRequest))
 		return
 	}
 	var told uuid.UUID
@@ -161,14 +175,28 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 			told, err = links.RequestBlindTx(r.Context(), tx, p.TenantID, *blind, req.Role, by, s.linkKey(p.TenantID))
 			return err
 		}
-		if told, err = links.RequestTx(r.Context(), tx, *req.Business, req.Role, by); err != nil {
-			return err
+		target := uuid.Nil
+		if req.Code != "" {
+			c, err := links.ByCodeTx(r.Context(), tx, req.Code)
+			if err != nil {
+				return err
+			}
+			target = c.Business
+			told, err = links.RequestByCodeTx(r.Context(), tx, req.Code, req.Role, by)
+			if err != nil {
+				return err
+			}
+		} else {
+			target = *req.Business
+			if told, err = links.RequestTx(r.Context(), tx, target, req.Role, by); err != nil {
+				return err
+			}
 		}
 		list, _, err := links.ListTx(r.Context(), tx)
 		if err != nil {
 			return err
 		}
-		if i := slices.IndexFunc(list, func(l links.Link) bool { return l.Business == *req.Business }); i >= 0 {
+		if i := slices.IndexFunc(list, func(l links.Link) bool { return l.Business == target }); i >= 0 {
 			out.Link = &list[i]
 		}
 		return nil
@@ -251,17 +279,91 @@ func (s *Server) cancelBlindLink(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) getLinkSettings(w http.ResponseWriter, r *http.Request) {
-	var st links.Settings
-	if err := s.tx(r, func(tx pgx.Tx) error {
+// linkSettingsOut is the settings with the link code's address.
+type linkSettingsOut struct {
+	links.Settings
+	// URL opens a link request to this business, for a signed-in business.
+	URL string `json:"url,omitempty"`
+}
+
+// linkSettings reads the business's link settings, its link code made the
+// first time it is asked for.
+func (s *Server) linkSettings(r *http.Request) (linkSettingsOut, error) {
+	p := principalFrom(r.Context())
+	var out linkSettingsOut
+	err := s.tx(r, func(tx pgx.Tx) error {
+		if _, err := links.EnsureCodeTx(r.Context(), tx, p.TenantID, "system:link-code"); err != nil {
+			return err
+		}
 		var err error
-		st, err = links.SettingsTx(r.Context(), tx, principalFrom(r.Context()).TenantID)
+		out.Settings, err = links.SettingsTx(r.Context(), tx, p.TenantID)
 		return err
-	}); err != nil {
+	})
+	if err == nil && out.Code != "" {
+		out.URL = s.linkCodeURL(out.Code)
+	}
+	return out, err
+}
+
+// linkCodeURL is where a link code opens: the web app's /l/<code>.
+func (s *Server) linkCodeURL(code string) string {
+	base := strings.TrimRight(s.PublicURL, "/")
+	if base == "" {
+		return "/l/" + code
+	}
+	return base + "/l/" + code
+}
+
+func (s *Server) getLinkSettings(w http.ResponseWriter, r *http.Request) {
+	out, err := s.linkSettings(r)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// linkQR is the link code's address as a QR code, to print or show
+// across the counter: SVG, or PNG with ?format=png.
+func (s *Server) linkQR(w http.ResponseWriter, r *http.Request) {
+	out, err := s.linkSettings(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if r.URL.Query().Get("format") == "png" {
+		png, err := storefront.QRPNG(out.URL)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(png)
+		return
+	}
+	svg, err := storefront.QRSVG(out.URL)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	_, _ = w.Write([]byte(svg))
+}
+
+// linkByCode is the business behind a link code, as we see it: what the
+// page a code opens shows before asking.
+func (s *Server) linkByCode(w http.ResponseWriter, r *http.Request) {
+	var c links.CodeCard
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		c, err = links.ByCodeTx(r.Context(), tx, chi.URLParam(r, "code"))
+		return err
+	}); err != nil {
+		s.fail(w, r, linkErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
 }
 
 type linkSettingsReq struct {
@@ -277,10 +379,8 @@ func (s *Server) putLinkSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	var st links.Settings
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		if st, err = links.SetFindableTx(r.Context(), tx, p.TenantID, req.Findable, p.ActorType()+":"+p.Actor()); err != nil {
+		if _, err := links.SetFindableTx(r.Context(), tx, p.TenantID, req.Findable, p.ActorType()+":"+p.Actor()); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "link.settings", "links", map[string]any{"findable": req.Findable})
@@ -288,7 +388,7 @@ func (s *Server) putLinkSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	s.getLinkSettings(w, r)
 }
 
 // linkKey keys the hashes of the addresses a business sent blind

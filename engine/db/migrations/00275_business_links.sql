@@ -23,7 +23,9 @@ CREATE TABLE business_links (
   -- The side that asked, how it asked, and how it sees the other.
   requested_by    uuid NOT NULL REFERENCES tenants(id),
   requester_actor text NOT NULL,
-  how             text NOT NULL CHECK (how IN ('search', 'blind')),
+  -- search: the business was listed; code: by the link code it prints
+  -- (its name was shown); blind: by a phone number or an address.
+  how             text NOT NULL CHECK (how IN ('search', 'code', 'blind')),
   role            text NOT NULL CHECK (role IN ('supplier', 'customer', 'both')),
   requested_at    timestamptz NOT NULL DEFAULT now(),
   expires_at      timestamptz NOT NULL,
@@ -56,6 +58,9 @@ CREATE TABLE link_settings (
   tenant_id   uuid PRIMARY KEY REFERENCES tenants(id),
   findable    boolean,
   asked_at    timestamptz,
+  -- The code it prints (taskiem.ng/l/<code>, §5.1): a request by it needs
+  -- no findability, since the business chose to hand it out.
+  code        text UNIQUE CHECK (code ~ '^[a-z2-9]{8}$'),
   updated_by  text NOT NULL,
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
@@ -65,7 +70,7 @@ CREATE POLICY tenant_isolation ON link_settings TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 CREATE POLICY dispatch ON link_settings FOR SELECT TO taskiem_dispatch USING (true);
 GRANT SELECT, INSERT, UPDATE ON link_settings TO taskiem_app;
-GRANT SELECT (tenant_id, findable) ON link_settings TO taskiem_dispatch;
+GRANT SELECT (tenant_id, findable, code) ON link_settings TO taskiem_dispatch;
 
 -- A request sent blind, kept in the requester's own business: what it
 -- sees of it whether or not a business is behind the address. Only the
@@ -248,6 +253,53 @@ END
 $$;
 -- +goose StatementEnd
 
+-- The one business a phone number belongs to: its owner's linked
+-- WhatsApp number or its own active WhatsApp number, when that names
+-- exactly one active business; else NULL.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_phone_business(p_phone text) RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT CASE WHEN count(DISTINCT x.t) = 1 THEN min(x.t::text)::uuid END FROM (
+    SELECT m.tenant_id AS t FROM whatsapp_bindings b JOIN memberships m ON m.user_id = b.user_id AND m.role = 'owner'
+     WHERE b.number = p_phone
+    UNION
+    SELECT n.tenant_id FROM whatsapp_numbers n WHERE n.display_number = p_phone AND n.status = 'active') x
+    JOIN tenants t ON t.id = x.t AND t.status = 'active'
+$$;
+-- +goose StatementEnd
+
+-- The business behind a link code, as the business in scope sees it: its
+-- name and address and our link with it. Nothing for an unknown code or
+-- our own.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_by_code(p_code text)
+RETURNS TABLE (business uuid, name text, slug text, state text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH me AS (SELECT taskiem_link_self() AS id)
+  SELECT t.id, t.name, (SELECT s.published_slug FROM storefronts s WHERE s.tenant_id = t.id AND s.status = 'published'),
+         COALESCE((SELECT taskiem_link_view(l, me.id) FROM business_links l
+                    WHERE l.a_tenant = LEAST(me.id, t.id) AND l.b_tenant = GREATEST(me.id, t.id)), 'none')
+    FROM me, link_settings ls JOIN tenants t ON t.id = ls.tenant_id AND t.status = 'active'
+   WHERE ls.code = lower(p_code) AND ls.tenant_id <> me.id
+$$;
+-- +goose StatementEnd
+
+-- Whether a document sent to a phone may offer its recipient a link
+-- (§5.1, at the first document): the number is a business's own (never a
+-- member's), not the sender's, not linked or asked either way, and not
+-- one that blocked the sender. The sender's people never see the answer:
+-- it only adds a line to what the recipient gets.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_offer_to(p_phone text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH me AS (SELECT taskiem_link_self() AS id), them AS (SELECT taskiem_link_phone_business(p_phone) AS id)
+  SELECT them.id IS NOT NULL AND them.id <> me.id
+     AND NOT EXISTS (SELECT 1 FROM business_links l WHERE l.a_tenant = LEAST(me.id, them.id) AND l.b_tenant = GREATEST(me.id, them.id)
+                        AND (l.status IN ('active', 'blocked') OR (l.status = 'requested' AND l.expires_at > now())))
+    FROM me, them
+$$;
+-- +goose StatementEnd
+
 -- Request a link (or ask again). By search, p_target is a business the
 -- search listed: refused unless it lets itself be found. Blind, the
 -- target is resolved here from a phone number (the owner's linked number
@@ -259,7 +311,7 @@ $$;
 -- its clock starts again for the requester and no one is told. At most
 -- 20 requests a day per business.
 -- +goose StatementBegin
-CREATE FUNCTION taskiem_link_request(p_target uuid, p_phone text, p_slug text, p_role text, p_actor_type text, p_actor_id text)
+CREATE FUNCTION taskiem_link_request(p_target uuid, p_code text, p_phone text, p_slug text, p_role text, p_actor_type text, p_actor_id text)
 RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -268,7 +320,6 @@ DECLARE
   v_how text := 'search';
   v_link business_links%ROWTYPE;
   v_id uuid;
-  v_n int;
 BEGIN
   IF p_role NOT IN ('supplier', 'customer', 'both') THEN
     RAISE EXCEPTION 'a link''s role is supplier, customer or both' USING ERRCODE = '22023';
@@ -276,18 +327,17 @@ BEGIN
   IF (SELECT count(*) FROM business_links WHERE requested_by = v_me AND requested_at > now() - interval '1 day') >= 20 THEN
     RAISE EXCEPTION 'too many link requests today' USING ERRCODE = '53400';
   END IF;
-  IF p_target IS NULL THEN
+  IF p_code IS NOT NULL THEN
+    v_how := 'code';
+    SELECT ls.tenant_id INTO v_target FROM link_settings ls JOIN tenants t ON t.id = ls.tenant_id AND t.status = 'active'
+     WHERE ls.code = lower(p_code);
+    IF v_target IS NULL OR v_target = v_me THEN
+      RAISE EXCEPTION 'no such business' USING ERRCODE = 'P0002';
+    END IF;
+  ELSIF p_target IS NULL THEN
     v_how := 'blind';
     IF p_phone IS NOT NULL THEN
-      SELECT min(x.t::text)::uuid, count(DISTINCT x.t) INTO v_target, v_n FROM (
-        SELECT m.tenant_id AS t FROM whatsapp_bindings b JOIN memberships m ON m.user_id = b.user_id AND m.role = 'owner'
-         WHERE b.number = p_phone
-        UNION
-        SELECT n.tenant_id FROM whatsapp_numbers n WHERE n.display_number = p_phone AND n.status = 'active') x
-        JOIN tenants t ON t.id = x.t AND t.status = 'active';
-      IF v_n <> 1 THEN
-        v_target := NULL;
-      END IF;
+      v_target := taskiem_link_phone_business(p_phone);
     ELSIF p_slug IS NOT NULL THEN
       SELECT s.tenant_id INTO v_target FROM storefronts s JOIN tenants t ON t.id = s.tenant_id AND t.status = 'active'
        WHERE s.published_slug = lower(p_slug) AND s.status = 'published';
@@ -440,13 +490,15 @@ DECLARE f text;
 BEGIN
   FOREACH f IN ARRAY ARRAY['taskiem_link_self()', 'taskiem_link_audit_other(uuid, uuid, uuid, text, text, text, jsonb)',
       'taskiem_link_view(business_links, uuid)', 'taskiem_link_role(business_links, uuid)', 'taskiem_links_of()',
-      'taskiem_link_findable(uuid)', 'taskiem_link_search(text, int)', 'taskiem_link_request(uuid, text, text, text, text, text)',
+      'taskiem_link_findable(uuid)', 'taskiem_link_search(text, int)', 'taskiem_link_request(uuid, text, text, text, text, text, text)',
+      'taskiem_link_phone_business(text)', 'taskiem_link_by_code(text)', 'taskiem_link_offer_to(text)',
       'taskiem_link_answer(uuid, text, text, text)', 'taskiem_link_enter(uuid, text, text, text, jsonb)'] LOOP
     EXECUTE format('ALTER FUNCTION %s OWNER TO taskiem_dispatch', f);
     EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC', f);
   END LOOP;
   -- What the application calls; the helpers stay the definers' own.
-  FOREACH f IN ARRAY ARRAY['taskiem_links_of()', 'taskiem_link_search(text, int)', 'taskiem_link_request(uuid, text, text, text, text, text)',
+  FOREACH f IN ARRAY ARRAY['taskiem_links_of()', 'taskiem_link_search(text, int)', 'taskiem_link_request(uuid, text, text, text, text, text, text)',
+      'taskiem_link_by_code(text)', 'taskiem_link_offer_to(text)',
       'taskiem_link_answer(uuid, text, text, text)', 'taskiem_link_enter(uuid, text, text, text, jsonb)'] LOOP
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO taskiem_app', f);
   END LOOP;
@@ -456,7 +508,10 @@ END $$;
 -- +goose Down
 DROP FUNCTION taskiem_link_enter(uuid, text, text, text, jsonb);
 DROP FUNCTION taskiem_link_answer(uuid, text, text, text);
-DROP FUNCTION taskiem_link_request(uuid, text, text, text, text, text);
+DROP FUNCTION taskiem_link_request(uuid, text, text, text, text, text, text);
+DROP FUNCTION taskiem_link_offer_to(text);
+DROP FUNCTION taskiem_link_by_code(text);
+DROP FUNCTION taskiem_link_phone_business(text);
 DROP FUNCTION taskiem_link_search(text, int);
 DROP FUNCTION taskiem_link_findable(uuid);
 DROP FUNCTION taskiem_links_of();

@@ -171,3 +171,54 @@ func TestBusinessLinksByChat(t *testing.T) {
 		t.Errorf("Ada told: %+v", told)
 	}
 }
+
+// A link code (§5.1, across the counter): every business has one, made
+// the first time its settings are read; a business that is not found by
+// search is still asked by its code, and told. Our own code, or one that
+// does not exist, finds nothing.
+func TestLinkCodes(t *testing.T) {
+	w := newWAWorld(t)
+	ada := w.tenant(t, "Ada's Kitchen", "ada@codes.test")
+	cherry := w.tenant(t, "Cherry Blocks", "c@codes.test")
+	const cherryOn = "+2348010000313"
+	w.bind(t, cherry, cherryOn)
+	if r := w.say(t, cherryOn, "links"); !strings.Contains(r, "No linked businesses yet") {
+		t.Fatalf("links: %q", r)
+	}
+
+	st := cherry.must(200, "GET", "/v1/link-settings", nil)
+	code, _ := st["code"].(string)
+	if len(code) != 8 || st["findable_now"] != false || !strings.HasSuffix(st["url"].(string), "/l/"+code) {
+		t.Fatalf("settings: %v", st)
+	}
+	if again := cherry.must(200, "GET", "/v1/link-settings", nil); again["code"] != code {
+		t.Errorf("the code changed: %v", again)
+	}
+	if st, _, body := cherry.rawGet(t, "/v1/link-settings/qr"); st != 200 || !strings.Contains(body, "<svg") {
+		t.Errorf("QR: %d %.60q", st, body)
+	}
+	cherry.must(404, "GET", "/v1/links/code/"+code, nil)
+	ada.must(404, "GET", "/v1/links/code/zzzzzzzz", nil)
+
+	// Not findable, but found by the code it handed out.
+	if got := ada.must(200, "GET", "/v1/links/search?q=cherry", nil)["results"].([]any); len(got) != 0 {
+		t.Fatalf("found by search: %v", got)
+	}
+	card := ada.must(200, "GET", "/v1/links/code/"+strings.ToUpper(code), nil)
+	if card["name"] != "Cherry Blocks" || card["state"] != "none" {
+		t.Fatalf("by code: %v", card)
+	}
+	before := len(w.graph.Sent(cherryOn))
+	out := ada.must(201, "POST", "/v1/links", map[string]any{"code": code, "role": "supplier"})
+	if out["sent"] != true || out["link"].(map[string]any)["state"] != "requested" {
+		t.Fatalf("asked by code: %v", out)
+	}
+	if told := w.lastTo(t, cherryOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* asks to link with Cherry Blocks") {
+		t.Errorf("Cherry told: %+v", told)
+	}
+	if card := ada.must(200, "GET", "/v1/links/code/"+code, nil); card["state"] != "requested" {
+		t.Errorf("by code after asking: %v", card)
+	}
+	ada.must(400, "POST", "/v1/links", map[string]any{"code": code, "phone": "0803 123 4567", "role": "supplier"})
+	ada.must(404, "POST", "/v1/links", map[string]any{"code": "zzzzzzzz", "role": "supplier"})
+}

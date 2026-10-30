@@ -61,7 +61,7 @@ func TestBusinessLinks(t *testing.T) {
 	request := func(from, to uuid.UUID) (*uuid.UUID, error) {
 		var told *uuid.UUID
 		err := as(from, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT taskiem_link_request($1, NULL, NULL, 'supplier', 'user', 'u1')`, to).Scan(&told)
+			return tx.QueryRow(ctx, `SELECT taskiem_link_request($1, NULL, NULL, NULL, 'supplier', 'user', 'u1')`, to).Scan(&told)
 		})
 		return told, err
 	}
@@ -287,7 +287,7 @@ func TestBlindLinkRequest(t *testing.T) {
 	blind := func(p string) (*uuid.UUID, error) {
 		var told *uuid.UUID
 		err := scoped(t, d, []uuid.UUID{ada.ID}, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT taskiem_link_request(NULL, $1, NULL, 'supplier', 'user', 'u1')`, p).Scan(&told)
+			return tx.QueryRow(ctx, `SELECT taskiem_link_request(NULL, NULL, $1, NULL, 'supplier', 'user', 'u1')`, p).Scan(&told)
 		})
 		return told, err
 	}

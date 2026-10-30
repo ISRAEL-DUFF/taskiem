@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { del, get, post, put } from "../api";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { del, get, getBlob, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import {
@@ -33,8 +33,9 @@ function StateBadge({ state }: { state: Parameters<typeof stateWords>[0] }) {
   return w ? <span className={`badge sf-status ${w.tone}`}>{w.label}</span> : null;
 }
 
-/** Who a request goes to: a business a search listed, or whoever uses a phone number. */
-type Asking = { business: string; name: string } | { phone: string; shown: string };
+/** Who a request goes to: a business a search listed, one by the link
+ * code it printed, or whoever uses a phone number. */
+type Asking = { business: string; name: string } | { code: string; name: string } | { phone: string; shown: string };
 
 /** The sheet that asks a business to link: how we trade with them, then Send. */
 function RequestSheet({ asking, onClose, onSent }: { asking: Asking; onClose: () => void; onSent: () => void }) {
@@ -43,7 +44,7 @@ function RequestSheet({ asking, onClose, onSent }: { asking: Asking; onClose: ()
   const blind = "phone" in asking;
   const send = () =>
     void act.run(async () => {
-      const body = blind ? { phone: asking.phone, role } : { business: asking.business, role };
+      const body = blind ? { phone: asking.phone, role } : "code" in asking ? { code: asking.code, role } : { business: asking.business, role };
       const out = await post<{ message: string }>("/v1/links", body);
       onSent();
       return out;
@@ -276,7 +277,7 @@ export function LinkedBusinessesPage() {
   const { can } = useAuth();
   const manage = can("link.manage");
   const { view, act, answer } = useLinks();
-  const settings = useLoad(() => get<LinkSettings>("/v1/link-settings"), []);
+  const settings = useLoad(() => get<LinkSettings & { url?: string }>("/v1/link-settings"), []);
   const g = groupLinks(view.data);
   const setFindable = (on: boolean) => void act.run(async () => (await put("/v1/link-settings", { findable: on }), settings.reload()), "Saved");
   const all = [...g.asked, ...g.linked, ...g.waiting, ...g.past];
@@ -303,6 +304,7 @@ export function LinkedBusinessesPage() {
           <Skeleton rows={1} label="Loading the setting…" />
         )}
       </section>
+      {settings.data?.url && <CodeCard url={settings.data.url} />}
       <section aria-label="Links">
         {!view.data ? (
           <Skeleton rows={3} label="Loading your linked businesses…" />
@@ -380,4 +382,130 @@ function LinkActions({ link, answer, busy }: { link: BusinessLink; answer: (l: B
     default:
       return null;
   }
+}
+
+// A data: URL, not a blob: one: the console's Content Security Policy allows only data: images besides its own.
+function dataURL(b: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error ?? new Error("could not read the QR code"));
+    r.readAsDataURL(b);
+  });
+}
+
+/** The business's link code: the address that opens a request to it, and
+ * its QR code, to print on a counter card or share. */
+function CodeCard({ url }: { url: string }) {
+  const [qr, setQr] = useState<string>();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let live = true;
+    getBlob("/v1/link-settings/qr")
+      .then(dataURL)
+      .then(
+        (u) => live && setQr(u),
+        () => undefined,
+      );
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  return (
+    <section className="card" aria-labelledby="link-code" data-testid="link-code">
+      <h2 id="link-code">Link with us on Taskiem</h2>
+      <p className="hint">A business on Taskiem that opens this or scans the code can ask to link with you, whether or not others find you by search.</p>
+      <div className="sf-share">
+        {qr ? <img className="sf-qr" src={qr} alt={`QR code for ${url}`} width={160} height={160} /> : <Skeleton rows={1} label="Loading the QR code…" />}
+        <div>
+          <p className="mono" data-testid="link-code-url">
+            {url}
+          </p>
+          <div className="toolbar">
+            <button type="button" onClick={() => void navigator.clipboard?.writeText(url).then(() => setCopied(true))}>
+              {copied ? "Copied" : "Copy the link"}
+            </button>
+            <a className="button" href="/v1/link-settings/qr?format=png" download="link-with-us-qr.png">
+              Download the QR code
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The page a link code opens (/l/<code>): the business behind it, our
+ * link with it, and Request link. A code printed on an invoice or a
+ * counter card reaches a business whether or not it lets search find it.
+ */
+export function LinkCodePage() {
+  const { code = "" } = useParams();
+  const { can } = useAuth();
+  const navigate = useNavigate();
+  const card = useLoad(() => get<{ business: string; name: string; state: LinkCard["state"] }>(`/v1/links/code/${encodeURIComponent(code)}`), [code]);
+  const [asking, setAsking] = useState(false);
+  const c = card.data;
+  return (
+    <>
+      <p className="crumbs">
+        <Link to="/chat" aria-label="Back to Chat">
+          Chat
+        </Link>
+      </p>
+      <PageHeader title={c ? c.name : "Link with a business"} />
+      {card.error ? (
+        <EmptyState icon="chat" action={<Link className="button" to="/chat">Find a business</Link>}>
+          This link does not open a business you can link with. It may be your own, or mistyped.
+        </EmptyState>
+      ) : !c ? (
+        <Skeleton rows={2} label="Loading the business…" />
+      ) : (
+        <section className="card" data-testid="link-code-card">
+          <h2>
+            {c.name} <StateBadge state={c.state} />
+          </h2>
+          {cardAction({ ...c, items: [] }) === "request" ? (
+            can("link.manage") ? (
+              <>
+                <p className="hint">Linked, your invoices and orders reach each other by themselves. Nothing is shared until they accept.</p>
+                <button type="button" className="primary" onClick={() => setAsking(true)}>
+                  Request link
+                </button>
+              </>
+            ) : (
+              <p className="hint">An owner or admin can link with this business.</p>
+            )
+          ) : c.state === "asked_us" ? (
+            <p className="hint">
+              They asked you already: answer under <Link to="/chat">Chat</Link>.
+            </p>
+          ) : (
+            <p className="hint">Nothing to do here. Your linked businesses are under <Link to="/settings/links">Linked businesses</Link>.</p>
+          )}
+        </section>
+      )}
+      {asking && c && <RequestSheet asking={{ code, name: c.name }} onClose={() => setAsking(false)} onSent={() => navigate("/chat")} />}
+    </>
+  );
+}
+
+/** A link code opened signed out: sign in, or sign the business up first. */
+export function LinkCodeSignedOut() {
+  const next = encodeURIComponent(window.location.pathname);
+  return (
+    <div className="login card">
+      <h1>Link with a business on Taskiem</h1>
+      <p>A business on Taskiem shared this so you can link: your invoices and orders then reach each other by themselves. Sign in to your business to ask.</p>
+      <p>
+        <Link className="button primary" to={`/login?next=${next}`}>
+          Sign in
+        </Link>
+      </p>
+      <p className="hint">
+        Not on Taskiem yet? <Link to="/signup">Sign up your business</Link>, then open the link again.
+      </p>
+    </div>
+  );
 }

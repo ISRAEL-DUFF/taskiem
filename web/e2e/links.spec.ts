@@ -13,7 +13,7 @@ const H = { "X-Taskiem-Request": "1" };
 async function signUp(page: Page, tenant: string) {
   const r = await page.request.post("/v1/signup", {
     headers: H,
-    data: { tenant, email: `${tenant.split(" ")[0].toLowerCase()}-${Date.now()}@links.test`, name: tenant, password: "correct horse battery" },
+    data: { tenant, email: `${(tenant.split(" ")[0] ?? "x").toLowerCase()}-${Date.now()}@links.test`, name: tenant, password: "correct horse battery" },
   });
   expect(r.status(), await r.text()).toBe(201);
 }
@@ -32,7 +32,7 @@ async function narrow(page: Page) {
 
 test("two businesses find each other and link", async ({ browser }) => {
   // Letters, not digits: a search with six digits in a row is never run.
-  const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij"[Number(d)]);
+  const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
   const dangoteName = `Dangote Depot ${stamp}`;
   const dangote = await (await browser.newContext()).newPage();
   await signUp(dangote, dangoteName);
@@ -90,4 +90,37 @@ test("two businesses find each other and link", async ({ browser }) => {
   await row.getByRole("button", { name: `End link ${dangoteName}` }).click();
   await expect(row).toHaveAttribute("data-state", "ended");
   await axeBoth(ada, "/settings/links, a link ended");
+});
+
+test("a link code opens a request to a business that is not found by search", async ({ browser }) => {
+  const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+  const cherryName = `Cherry Blocks ${stamp}`;
+  const cherry = await (await browser.newContext()).newPage();
+  await signUp(cherry, cherryName);
+  await cherry.goto("/settings/links");
+  const url = (await cherry.getByTestId("link-code-url").textContent())?.trim() ?? "";
+  expect(url).toMatch(/\/l\/[a-z2-9]{8}$/);
+  await expect(cherry.getByTestId("link-code").getByRole("img")).toBeVisible();
+  const path = new URL(url).pathname;
+
+  // Signed out, the code offers to sign in or sign up.
+  const stranger = await (await browser.newContext()).newPage();
+  await stranger.goto(path);
+  await expect(stranger.getByRole("heading", { name: "Link with a business on Taskiem" })).toBeVisible();
+  await expect(stranger.getByRole("link", { name: "Sign up your business" })).toBeVisible();
+  await axeBoth(stranger, "a link code, signed out");
+
+  // Signed in, it names the business and asks.
+  const ada = await (await browser.newContext()).newPage();
+  await signUp(ada, `Ada Kitchen ${stamp}`);
+  await ada.goto(path);
+  await expect(ada.getByRole("heading", { level: 1, name: cherryName })).toBeVisible();
+  await axeBoth(ada, "a link code, signed in");
+  await narrow(ada);
+  await ada.getByRole("button", { name: "Request link" }).click();
+  const sheet = ada.getByRole("dialog");
+  await sheet.getByLabel("They supply us").check();
+  await sheet.getByRole("button", { name: "Send request" }).click();
+  await expect(ada).toHaveURL(/\/chat$/);
+  await expect(ada.getByTestId("link-waiting").filter({ hasText: cherryName })).toContainText("Asked");
 });
