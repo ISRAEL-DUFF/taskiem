@@ -2151,8 +2151,93 @@ paths:
                     type: integer
                   skipped:
                     type: integer
+                  paired:
+                    type: integer
+                    description: Lines recorded as the bank's confirmation of a transfer entered by hand (same account, amount and within three days)
+                  waiting:
+                    type: integer
+                    description: Lines that wait for a person to say whether each is a transfer entered by hand (GET /v1/money/statement-waiting)
                   columns:
                     $ref: '#/components/schemas/MoneyStatementFormat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statement-waiting:
+    get:
+      operationId: listStatementWaiting
+      tags:
+      - Invoices
+      summary: Statement lines waiting to be paired
+      description: "Money-in lines of an uploaded statement that may be a transfer someone entered by hand (in chat, \"Ada paid 2,000 transfer\"): several such transfers fit, or one of another amount. They are not in the money log until a person decides."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The lines, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lines]
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyStatementWaiting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statement-waiting/{id}:
+    post:
+      operationId: decideStatementLine
+      tags:
+      - Invoices
+      summary: Say whether a statement line is a transfer entered by hand
+      description: "same with entry_id records the line as the bank's confirmation of that transfer (counted once, never matched again); different records it as money of its own, which matching then looks at."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [same, different]
+                entry_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, decision, entry_id]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  decision:
+                    type: string
+                  entry_id:
+                    type: string
+                    format: uuid
         default:
           $ref: '#/components/responses/Error'
   /v1/money/entries:
@@ -26909,6 +26994,43 @@ components:
         cap_kobo:
           type: integer
           minimum: 0
+    MoneyStatementWaiting:
+      type: object
+      required: [id, channel, occurred_at, amount_kobo, candidates, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        amount_kobo:
+          type: integer
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [entry_id, amount_kobo, occurred_at]
+            properties:
+              entry_id:
+                type: string
+                format: uuid
+              amount_kobo:
+                type: integer
+              occurred_at:
+                type: string
+                format: date-time
+              description:
+                type: string
+              entered_by:
+                type: string
     MoneyStatementFormat:
       type: object
       properties:

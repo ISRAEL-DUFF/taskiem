@@ -48,6 +48,35 @@ func TestMoneyAPI(t *testing.T) {
 		t.Errorf("broken %v", broken)
 	}
 
+	// Transfers entered by hand on gtbank/shop: two of 5,000 the same day,
+	// so the bank's line of 5,000 waits for a person.
+	for _, ref := range []string{"chat:x1", "chat:x2"} {
+		kobo, when := int64(500000), time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+		if _, _, err := log.Record(ctx, tenant, moneylog.Entry{Direction: "in", Kind: "statement", Status: "settled", Channel: "gtbank/shop", Reference: ref,
+			Source: "entered", AmountKobo: &kobo, OccurredAt: &when, Description: "Paid by Bola"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shop := owner.must(200, "POST", "/v1/money/statements", map[string]any{"channel": "gtbank/shop", "csv": "date,description,amount,reference\n21/10/2026,TRF BOLA,5000,FT9\n"})
+	if shop["waiting"] != float64(1) || shop["added"] != float64(0) {
+		t.Fatalf("shop upload %v", shop)
+	}
+	lines := viewer.must(200, "GET", "/v1/money/statement-waiting", nil)["lines"].([]any)
+	if len(lines) != 1 || len(lines[0].(map[string]any)["candidates"].([]any)) != 2 {
+		t.Fatalf("waiting %v", lines)
+	}
+	line := lines[0].(map[string]any)
+	pick := line["candidates"].([]any)[1].(map[string]any)["entry_id"]
+	viewer.must(403, "POST", "/v1/money/statement-waiting/"+line["id"].(string), map[string]any{"decision": "same", "entry_id": pick})
+	owner.must(400, "POST", "/v1/money/statement-waiting/"+line["id"].(string), map[string]any{"decision": "maybe"})
+	if d := owner.must(200, "POST", "/v1/money/statement-waiting/"+line["id"].(string), map[string]any{"decision": "same", "entry_id": pick}); d["entry_id"] == nil {
+		t.Errorf("decided %v", d)
+	}
+	owner.must(404, "POST", "/v1/money/statement-waiting/"+line["id"].(string), map[string]any{"decision": "different"})
+	if lines := viewer.must(200, "GET", "/v1/money/statement-waiting", nil)["lines"].([]any); len(lines) != 0 {
+		t.Errorf("still waiting %v", lines)
+	}
+
 	// Cash and expenses, once per key.
 	exp := map[string]any{"kind": "expense", "amount_kobo": 1200000, "description": "Diesel", "vendor": "Total", "category": "fuel", "occurred_at": "2026-10-21"}
 	first := owner.must(201, "POST", "/v1/money/entries", exp, "Idempotency-Key", "e-1")
