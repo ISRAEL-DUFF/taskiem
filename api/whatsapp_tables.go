@@ -596,7 +596,12 @@ func (s *Server) waTableFind(ctx context.Context, c *chat, arg string) error {
 	if err != nil {
 		return err
 	}
+	// Words that name no table may be a search for businesses on Taskiem
+	// ("find cement in Ikeja", chat_links.go).
 	if len(tables) == 0 {
+		if done, err := s.waLinkFindSome(ctx, c, arg); done || err != nil {
+			return err
+		}
 		return c.say(ctx, s, c.t("wa.table.none", "org", c.tenant.Name, "link", s.waLink(c, "/tables")))
 	}
 	var match []datatables.Table
@@ -612,6 +617,9 @@ func (s *Server) waTableFind(ctx context.Context, c *chat, arg string) error {
 	}
 	switch {
 	case len(match) == 0:
+		if done, err := s.waLinkFindSome(ctx, c, arg); done || err != nil {
+			return err
+		}
 		return c.say(ctx, s, c.t("wa.table.no_match", "name", fmt.Sprintf("%q", whatsapp.SafeText(arg))))
 	case len(match) > 1:
 		return c.say(ctx, s, c.t("wa.table.which_find", "list", numberedTables(match)))

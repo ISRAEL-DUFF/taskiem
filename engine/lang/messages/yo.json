@@ -3851,6 +3851,190 @@
     "wd.workflow.does": {
       "text": "Lo iṣẹ́ rẹ: {template}, tó {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "Láti so mọ́ ilé-iṣẹ́ míràn lórí Taskiem, fi *link Dangote*, *who sells cement*, tàbí *link 0803 123 4567* ránṣẹ́.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "Kò sí ilé-iṣẹ́ tí ẹ so mọ́ síbẹ̀. Fi *who sells cement* tàbí *link Dangote* ránṣẹ́ láti wá ọ̀kan.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Àwọn ilé-iṣẹ́ lórí Taskiem tí ẹ ń bá ṣòwò:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: ti so pọ̀, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* ń béèrè láti so pọ̀",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: ẹ ti béèrè, ẹ ń dúró dè wọ́n",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: wọn kò gbà",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: ẹ ti dí wọn",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: ìsopọ̀ ti parí",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: a ti fi ìbéèrè ránṣẹ́",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "wọ́n ń pèsè fún yín",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "wọ́n ń rà lọ́wọ́ yín",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "wọ́n ń pèsè fún yín, wọ́n sì ń rà lọ́wọ́ yín",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} ń béèrè láti so pọ̀",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* ń béèrè láti so mọ́ {org} lórí Taskiem ({role}). Tí ẹ bá so pọ̀, ìwé owó àti àṣẹ yín yóò máa dé ọ̀dọ̀ ara yín fúnra wọn. Kò sí ohun tí a ó pín títí ẹ ó fi gbà.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Gbà á",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "Kọ̀ ọ́",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Dí i",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Wọ́n ń pèsè fún wa",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Wọ́n ń rà lọ́wọ́ wa",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Méjèèjì",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Àwọn ilé-iṣẹ́ lórí Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(ti so pọ̀)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(ẹ ti béèrè)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(wọ́n ti béèrè lọ́wọ́ yín)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Fi nọ́mbà èyí tí ẹ fẹ́ bá so pọ̀ ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Ẹni tó ni ilé-iṣẹ́ tàbí alábòójútó ló lè béèrè láti so mọ́ wọn.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "Kò sí ilé-iṣẹ́ lórí Taskiem tí a lè rí tó bá {query} mu.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Fi nọ́mbà kan láti inú àkójọ ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "Báwo ni ẹ ṣe ń bá *{name}* ṣòwò?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Béèrè lọ́wọ́ ẹnikẹ́ni tó ń lo {shown} lórí Taskiem láti so pọ̀. Báwo ni ẹ ṣe ń bá wọn ṣòwò?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "A ti béèrè lọ́wọ́ *{name}* láti so pọ̀. Ẹ ó gbọ́ nígbà tí wọ́n bá gbà.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "Tí ilé-iṣẹ́ kan lórí Taskiem bá ń lo {shown}, ó ti gba ìbéèrè yín. Ẹ ó gbọ́ kìkì tí wọ́n bá gbà.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "Ẹ ti so mọ́ *{name}* tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "Ẹ ti béèrè lọ́wọ́ *{name}* tẹ́lẹ̀. Ó ń dúró de ìdáhùn wọn.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Ẹni tó ni {org} tàbí alábòójútó nìkan ló lè so mọ́ àwọn ilé-iṣẹ́ míràn.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Ìbéèrè ìsopọ̀ ti tó fún òní. Ẹ gbìyànjú lọ́la.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "Ìbéèrè yẹn kò dúró mọ́.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "Ẹ ti so mọ́ *{name}*. Fi *links* ránṣẹ́ láti rí àwọn ilé-iṣẹ́ tí ẹ so mọ́.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "Ẹ ti kọ̀ ọ́. A kò ní sọ fún *{name}*.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "Ẹ ti dí i. Ìbéèrè láti ọ̀dọ̀ *{name}* kò ní dé ọ̀dọ̀ yín mọ́.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} ti gba ìsopọ̀ yín",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* ti gba ìsopọ̀ pẹ̀lú {org}. Àwọn ilé-iṣẹ́ yín ti so pọ̀ lórí Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} ti parí ìsopọ̀",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* ti parí ìsopọ̀ pẹ̀lú {org}. Ohun tó ti kọjá láàárín yín yóò wà ní ẹ̀gbẹ́ méjèèjì.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* ti béèrè lọ́wọ́ yín tẹ́lẹ̀. Fi *links* ránṣẹ́ láti dáhùn.",
+      "reviewed": false
     }
   }
 }

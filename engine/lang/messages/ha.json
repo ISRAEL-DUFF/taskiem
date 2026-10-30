@@ -3851,6 +3851,190 @@
     "wd.workflow.does": {
       "text": "Yi amfani da aikinka: {template}, wanda {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "Don haɗa da wani kasuwanci a Taskiem, aika *link Dangote*, *who sells cement*, ko *link 0803 123 4567*.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "Babu kasuwancin da aka haɗa tukuna. Aika *who sells cement* ko *link Dangote* don nemo ɗaya.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Kasuwancin da kuke ciniki da su a Taskiem:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: an haɗa, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* na neman haɗawa",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: an tambaya, ana jiran su",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: ba a karɓa ba",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: an toshe",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: haɗin ya ƙare",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: an aika buƙata",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "suna kawo muku kaya",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "suna saya daga gare ku",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "suna kawo muku kaya kuma suna saya daga gare ku",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} na neman haɗawa",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* na neman haɗawa da {org} a Taskiem ({role}). Idan aka haɗa, takardun kuɗi da odarku za su riƙa isa juna da kansu. Babu abin da za a raba har sai kun karɓa.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Karɓa",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Toshe",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Suna kawo mana",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Suna saya a wurinmu",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Duka biyun",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Kasuwanci a Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(an haɗa)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(an tambaya)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(sun tambaye ku)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Aika lambar wanda kake son haɗawa da shi, ko *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Mai shi ko mai gudanarwa ne kawai zai iya neman haɗawa da su.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "Babu kasuwanci a Taskiem da ake iya samu da ya dace da {query}.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Aika lamba daga jerin, ko *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "Yaya kuke ciniki da *{name}*?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Nemi duk wanda ke amfani da {shown} a Taskiem ya haɗa. Yaya kuke ciniki da su?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "An nemi *{name}* ya haɗa. Za ka ji idan sun karɓa.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "Idan wani kasuwanci a Taskiem yana amfani da {shown}, ya sami buƙatarka. Za ka ji ne kawai idan ya karɓa.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "Kun riga kun haɗa da *{name}*.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "Ka riga ka tambayi *{name}*. Yana jiran amsarsu.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Mai {org} ko mai gudanarwa ne kawai zai iya haɗawa da wasu kasuwanci.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Buƙatun haɗawa sun isa na yau. Sake gwadawa gobe.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "Wannan buƙatar ba ta jira kuma.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "An haɗa da *{name}*. Aika *links* don ganin kasuwancin da aka haɗa.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "An ƙi. Ba za a gaya wa *{name}* ba.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "An toshe. Buƙatun *{name}* ba za su riske ku ba.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} ya karɓi haɗinku",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* ya karɓi haɗin da {org}. An haɗa kasuwancinku a Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} ya kawo ƙarshen haɗin",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* ya kawo ƙarshen haɗin da {org}. Abin da ya wuce tsakaninku zai zauna a ɓangarorin biyu.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* ya riga ya tambaye ku. Aika *links* don amsawa.",
+      "reviewed": false
     }
   }
 }

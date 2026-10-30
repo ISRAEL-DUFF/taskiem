@@ -237,6 +237,8 @@ type chatData struct {
 	Money *chatMoney `json:"money,omitempty"`
 	// Invite is an invitation the owner is confirming (chat_invites.go).
 	Invite *chatInvite `json:"invite,omitempty"`
+	// Link is a link to another business being asked for (chat_links.go).
+	Link *chatLink `json:"link,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -585,6 +587,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		return c.say(ctx, s, c.t("wa.cancelled"))
 	}
+	// Accept, Decline or Block on a link request (chat_links.go), whatever
+	// else the conversation is in the middle of.
+	if strings.HasPrefix(text, linkPrefix) && !strings.HasPrefix(text, linkPrefix+"role:") {
+		return s.waLinkPress(ctx, c, text)
+	}
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}
@@ -599,6 +606,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.Invite != nil && c.state != stateIdle {
 		return s.waInviteReply(ctx, c, cmd)
+	}
+	if c.data.Link != nil && c.state != stateIdle {
+		return s.waLinkReply(ctx, c, text, cmd)
 	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
@@ -732,6 +742,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// Bringing someone in (chat_invites.go).
 		if strings.HasPrefix(cmd, "invite ") {
 			return s.waInvite(ctx, c, text)
+		}
+		// Other businesses on Taskiem (chat_links.go).
+		if done, err := s.waLinkCommand(ctx, c, text, cmd); done || err != nil {
+			return err
 		}
 		// An email of one's own, and paying with one (chat_doors.go).
 		if f := strings.Fields(text); len(f) == 2 && strings.Contains(f[1], "@") {

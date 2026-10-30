@@ -1,6 +1,6 @@
 # Business links: two businesses on Taskiem trading with each other as records, not messages
 
-Status: **Draft** 30 October 2026, for review · Decision: [0061](../decisions/0061-business-links.md) (proposed) · Builds on: [invoices](../invoices.md) ([0045](../decisions/0045-tally-in-taskiem.md)), [matching](../matching.md) and customers' own account numbers ([0046](../decisions/0046-balans-in-taskiem.md)), [stock: suppliers and purchase orders](../stock.md#suppliers-and-purchase-orders) ([0057](../decisions/0057-stock-by-chat.md)), [storefronts](../storefronts.md) (and the fronts plan, in review on PR 135), [reaching people outside](../decisions/0039-reaching-people-outside.md), [dispatch](dispatch.md), [the money log](../money-log.md), [embedding: partners and sub-tenants](../embedding.md) ([0015](../decisions/0015-embedding-tenancy.md), for the pattern of entering another tenant), [governance](../governance.md) (approvals)
+Status: **In progress**: L0's first slice built (§16.1) · Decision: [0061](../decisions/0061-business-links.md) (proposed) · Builds on: [invoices](../invoices.md) ([0045](../decisions/0045-tally-in-taskiem.md)), [matching](../matching.md) and customers' own account numbers ([0046](../decisions/0046-balans-in-taskiem.md)), [stock: suppliers and purchase orders](../stock.md#suppliers-and-purchase-orders) ([0057](../decisions/0057-stock-by-chat.md)), [storefronts](../storefronts.md) (and the fronts plan, in review on PR 135), [reaching people outside](../decisions/0039-reaching-people-outside.md), [dispatch](dispatch.md), [the money log](../money-log.md), [embedding: partners and sub-tenants](../embedding.md) ([0015](../decisions/0015-embedding-tenancy.md), for the pattern of entering another tenant), [governance](../governance.md) (approvals)
 
 ## 1. Summary
 
@@ -253,6 +253,64 @@ Things a link makes possible that this plan does not build, so they are not desi
 | L7 | **Docs and the decision**: invoices, stock, storefronts, matching, the owners' guide ("Trade with businesses on Taskiem"), the atlas's business modules and identity pages, the threat model; decision 0061 accepted with As built | S |
 
 In order, one PR each; L0 and L1 together if the first linked pair is waiting. L3 can come before L2 if the first linked pair wants to talk before it orders.
+
+### 16.1 As built (L0, first slice)
+
+The link itself, its search and its words in chat; migration 00275, `engine/links`, `api/links.go`, `api/chat_links.go`.
+
+- **The link record.** `business_links` is a platform table that no business reads: its policy for `taskiem_app` admits nothing, and each side reads it through `taskiem_links_of`. Its statuses are `requested`, `active`, `declined`, `blocked`, `cancelled` and `ended`; `paused` waits for a setting that needs it.
+- **What each side sees.** `taskiem_link_view` decides it, in one place:
+  - the side asked sees `asked_us` while the request waits;
+  - the side that asked sees `requested` until the 30 days pass, whatever the answer, then `not_accepted`;
+  - a request sent blind never shows from `business_links` to the side that asked: its own `link_blind_requests` row stands for it, with the address masked, until it is accepted;
+  - a link that was made and then blocked reads `ended` to the other side.
+- **The functions** (`definers.tsv`), all owned by `taskiem_dispatch` and granted to `taskiem_app` only:
+  - `taskiem_links_of`;
+  - `taskiem_link_search(q, limit)`;
+  - `taskiem_link_request(target, phone, slug, role, actor)`;
+  - `taskiem_link_answer(link, answer, actor)` for accept, decline, block, unblock, cancel and end;
+  - `taskiem_link_enter`.
+  The helpers they call (`taskiem_link_self`, `taskiem_link_view`, `taskiem_link_role`, `taskiem_link_findable`, `taskiem_link_audit_other`) are not granted to the application.
+- **Search** (§5.1).
+  - Every word must match the business's published card (name, tagline, area) or one of its published, available items (name or category). Up to three matching items come back with their public prices.
+  - Linked businesses rank first, then those in the searcher's own storefront area, then by name.
+  - A query holding a phone number finds nothing; the API answers it with the one `blind` row instead.
+  - Not built in this slice: the business's kind from sign-up, and the area of a findable business with no storefront. Such a business is found by name only.
+- **Findability.** `link_settings.findable` holds the business's choice. Left empty, it is on with a published storefront. The once-asked question in the sign-up chat is not built yet; `GET` and `PUT /v1/link-settings` set it.
+- **Requests.**
+  - **By search,** the target must be findable, or the request is refused as not found.
+  - **Blind,** by phone, the number must be an owner's linked WhatsApp number or a business's own active WhatsApp number, and name exactly one business; by address, the business's published storefront address. Either way the caller gets back only whom to tell, never anything to show.
+  - **Limits:** at most 20 requests a day through `business_links`, and 20 blind ones counted in the requester's own table.
+  - **Asking again** within the 30 days tells no one. Asking a business that blocked us restarts our own clock and tells no one. Asking a business we blocked lifts our block.
+  - **Unblocking** a link that was made returns it to ended. Unblocking a request makes it declined, so its requester, who saw it waiting while it was blocked, still sees it waiting until its 30 days pass.
+- **Telling people.**
+  - The other side's owners and admins are told after the request has been answered (`s.background`), in the app's bell and in chat with **Accept**, **Decline** and **Block** (`lk:<answer>:<link>`).
+  - They are told in their own business's scope, from that business's own view of the link, so nothing the requester's transaction reads crosses.
+  - An acceptance and the end of a link are told to the other side. A decline, a block and a cancel are never told.
+- **Chat words.**
+  - `links` lists the business's links.
+  - `link Dangote` and `who sells cement` answer a numbered list; the number picks one, and three buttons give the role.
+  - `link 0803…`, or `link <address>` when it names no business found, asks blind.
+  - `find …` keeps its data-table meaning. Words that name no table search businesses, and a search that finds none gives the old table answer.
+  - In this slice the words are English only; routing them in the other four languages is still to do.
+- **Audit.** `link.request`, `link.accept`, `link.decline`, `link.block`, `link.unblock`, `link.cancel` and `link.end` go in the actor's chain. Each goes in the other side's chain too where that side may know of it (`link.requested` for a request). `taskiem_link_enter` writes both chains, with the other side's entry naming `link:<business>/<actor>`.
+- **Tests.**
+  - `engine/db/links_test.go`:
+    - search and findability;
+    - a decline and a block that read the same to the requester, during the 30 days and after;
+    - a blind request reaching only an owner's number;
+    - the one door's narrowing and refusals.
+  - `api/links_test.go`: the chat and API path end to end, including:
+    - the same words for a blind request to a business and to no one;
+    - silence on a decline;
+    - a viewer refused.
+
+**Not built in L0 yet:**
+- the Chat page's left pane and the Linked businesses page on the web;
+- the link code on the QR card, invoices and receipts;
+- the offer at the first document;
+- the buyer's customer account number issued at acceptance;
+- the query-log isolation harness of §14. The database tests assert each function's refusals instead.
 
 ## 17. Risks and open questions
 

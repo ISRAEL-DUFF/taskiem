@@ -4813,6 +4813,236 @@
       "text": "Use your workflow: {template}, which {does}",
       "reviewed": true,
       "context": "Read-back: as wd.workflow, with what it does (wd.effect.*)"
+    },
+    "link.how": {
+      "text": "To link with another business on Taskiem, send *link Dangote*, *who sells cement*, or *link 0803 123 4567*.",
+      "reviewed": true,
+      "context": "How to ask another business to link, in chat"
+    },
+    "link.none": {
+      "text": "No linked businesses yet. Send *who sells cement* or *link Dangote* to find one.",
+      "reviewed": true,
+      "context": "The business has no links or requests"
+    },
+    "link.list_title": {
+      "text": "Businesses on Taskiem you trade with:",
+      "reviewed": true,
+      "context": "Heading of the list of links"
+    },
+    "link.list_active": {
+      "text": "• *{name}*: linked, {role}",
+      "reviewed": true,
+      "context": "A linked business; {role} is a phrase such as 'they supply you'"
+    },
+    "link.list_asked": {
+      "text": "• *{name}* asks to link",
+      "reviewed": true,
+      "context": "A request waiting for this business's answer"
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: asked, waiting for them",
+      "reviewed": true,
+      "context": "A request this business sent, still waiting"
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: not accepted",
+      "reviewed": true,
+      "context": "A request this business sent that was not accepted within 30 days"
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: blocked",
+      "reviewed": true,
+      "context": "A business this business blocked"
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: link ended",
+      "reviewed": true,
+      "context": "A link that was ended"
+    },
+    "link.list_sent": {
+      "text": "• {shown}: request sent",
+      "reviewed": true,
+      "context": "A request sent by phone number or address; {shown} is the masked number"
+    },
+    "link.role.supplier": {
+      "text": "they supply you",
+      "reviewed": true,
+      "context": "How the other business trades with this one"
+    },
+    "link.role.customer": {
+      "text": "they buy from you",
+      "reviewed": true,
+      "context": "How the other business trades with this one"
+    },
+    "link.role.both": {
+      "text": "they supply you and buy from you",
+      "reviewed": true,
+      "context": "How the other business trades with this one"
+    },
+    "link.asked_title": {
+      "text": "{name} asks to link",
+      "reviewed": true,
+      "context": "Notification title: another business asks to link"
+    },
+    "link.asked_body": {
+      "text": "*{name}* asks to link with {org} on Taskiem ({role}). Linked, your invoices and orders reach each other by themselves. Nothing is shared until you accept.",
+      "reviewed": true,
+      "context": "To the owners and admins: another business asks to link; buttons Accept, Decline, Block"
+    },
+    "link.button_accept": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "Button: accept a link request (20 characters at most)"
+    },
+    "link.button_decline": {
+      "text": "Decline",
+      "reviewed": true,
+      "context": "Button: decline a link request (20 characters at most)"
+    },
+    "link.button_block": {
+      "text": "Block",
+      "reviewed": true,
+      "context": "Button: block the business's requests (20 characters at most)"
+    },
+    "link.button_role_supplier": {
+      "text": "They supply us",
+      "reviewed": true,
+      "context": "Button: the other business supplies us (20 characters at most)"
+    },
+    "link.button_role_customer": {
+      "text": "They buy from us",
+      "reviewed": true,
+      "context": "Button: the other business buys from us (20 characters at most)"
+    },
+    "link.button_role_both": {
+      "text": "Both",
+      "reviewed": true,
+      "context": "Button: both ways (20 characters at most)"
+    },
+    "link.found_title": {
+      "text": "Businesses on Taskiem:",
+      "reviewed": true,
+      "context": "Heading of a numbered list of businesses found"
+    },
+    "link.found_linked": {
+      "text": "(linked)",
+      "reviewed": true,
+      "context": "After a business already linked"
+    },
+    "link.found_requested": {
+      "text": "(asked)",
+      "reviewed": true,
+      "context": "After a business asked already"
+    },
+    "link.found_asked_us": {
+      "text": "(asks you)",
+      "reviewed": true,
+      "context": "After a business that asked this one"
+    },
+    "link.found_pick": {
+      "text": "Send the number of the one to ask to link, or *cancel*.",
+      "reviewed": true,
+      "context": "After the list: pick one by its number"
+    },
+    "link.found_owner_only": {
+      "text": "An owner or admin can ask to link with these.",
+      "reviewed": true,
+      "context": "After the list, to someone who may not ask to link"
+    },
+    "link.found_none": {
+      "text": "No business on Taskiem that lets others find it matched {query}.",
+      "reviewed": true,
+      "context": "A search found no business; {query} is what was searched"
+    },
+    "link.pick_number": {
+      "text": "Send a number from the list, or *cancel*.",
+      "reviewed": true,
+      "context": "The reply was not a number from the list"
+    },
+    "link.which_role": {
+      "text": "How do you trade with *{name}*?",
+      "reviewed": true,
+      "context": "Asks the role; buttons They supply us, They buy from us, Both"
+    },
+    "link.which_role_blind": {
+      "text": "Ask whoever uses {shown} on Taskiem to link. How do you trade with them?",
+      "reviewed": true,
+      "context": "A request by phone number or address; asks the role"
+    },
+    "link.sent": {
+      "text": "Asked *{name}* to link. You will hear when they accept.",
+      "reviewed": true,
+      "context": "A request was sent to a business a search listed"
+    },
+    "link.blind_sent": {
+      "text": "If a business on Taskiem uses {shown}, it has your request. You will hear only if it accepts.",
+      "reviewed": true,
+      "context": "A request by phone or address: the same words whether or not a business is behind it"
+    },
+    "link.already": {
+      "text": "You are already linked with *{name}*.",
+      "reviewed": true,
+      "context": "Picked a business already linked"
+    },
+    "link.waiting": {
+      "text": "You asked *{name}* already. It waits for their answer.",
+      "reviewed": true,
+      "context": "Picked a business asked already"
+    },
+    "link.denied": {
+      "text": "Only an owner or admin of {org} can link with other businesses.",
+      "reviewed": true,
+      "context": "The person may not ask or answer for links"
+    },
+    "link.too_many": {
+      "text": "That is enough link requests for today. Try again tomorrow.",
+      "reviewed": true,
+      "context": "The daily limit of link requests"
+    },
+    "link.gone": {
+      "text": "That request is no longer waiting.",
+      "reviewed": true,
+      "context": "A button pressed on a request already answered or gone"
+    },
+    "link.done_accept": {
+      "text": "Linked with *{name}*. Send *links* to see your linked businesses.",
+      "reviewed": true,
+      "context": "Accepted a link request"
+    },
+    "link.done_decline": {
+      "text": "Declined. *{name}* is not told.",
+      "reviewed": true,
+      "context": "Declined a link request; the requester is never told"
+    },
+    "link.done_block": {
+      "text": "Blocked. Requests from *{name}* will not reach you.",
+      "reviewed": true,
+      "context": "Blocked a business's requests"
+    },
+    "link.accepted_title": {
+      "text": "{name} accepted your link",
+      "reviewed": true,
+      "context": "Notification title: the other business accepted"
+    },
+    "link.accepted_body": {
+      "text": "*{name}* accepted the link with {org}. Your businesses are linked on Taskiem.",
+      "reviewed": true,
+      "context": "To the requester's owners and admins: accepted"
+    },
+    "link.ended_title": {
+      "text": "{name} ended the link",
+      "reviewed": true,
+      "context": "Notification title: the other business ended the link"
+    },
+    "link.ended_body": {
+      "text": "*{name}* ended the link with {org}. What passed between you stays on both sides.",
+      "reviewed": true,
+      "context": "To the other side's owners and admins: the link ended"
+    },
+    "link.they_asked": {
+      "text": "*{name}* has asked you already. Send *links* to answer.",
+      "reviewed": true,
+      "context": "A business we tried to ask had asked us first"
     }
   }
 }

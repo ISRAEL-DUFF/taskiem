@@ -121,6 +121,9 @@ tags:
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
+- name: Links
+  description: Links with other businesses on Taskiem, made with both sides' consent (decision 0061).
+  x-taskiem-guide: spec/business-links
 - name: Schools
   description: "The Schools area: classes, sessions and terms, students, families, enrollments, importing students and promotion."
   x-taskiem-guide: schools
@@ -5120,6 +5123,242 @@ paths:
                     $ref: '#/components/schemas/SchoolDiscount'
                   drafts_updated:
                     type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links:
+    get:
+      operationId: listLinks
+      tags:
+      - Links
+      summary: The business's links and link requests
+      description: Linked businesses and requests as this business may see them (docs/spec/business-links.md), requests waiting for its answer first. A request it sent is shown as waiting until accepted, whatever the other side did; one sent blind, by phone number or address, is listed under sent until it is accepted.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The links and the requests sent blind
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [links, sent]
+                properties:
+                  links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BusinessLink'
+                  sent:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BlindLinkRequest'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: requestLink
+      tags:
+      - Links
+      summary: Ask a business to link
+      description: 'Name a business a search listed, or send blind to whoever uses a phone number (an owner''s linked number or a business''s own WhatsApp number) or a storefront address. A blind request answers 202 with the same words whether or not a business is behind it. At most 20 requests a day (409).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                business:
+                  type: [string, 'null']
+                  format: uuid
+                  description: A business from a search
+                phone:
+                  type: string
+                address:
+                  type: string
+                  description: A storefront's address (its slug)
+                role:
+                  type: string
+                  enum: [supplier, customer, both]
+                  description: 'How we trade with them: supplier (they supply us), customer (they buy from us), or both'
+      responses:
+        '201':
+          description: 'The request, to a business a search listed; sent is false when nothing was sent: already linked, or they asked us first (answer theirs)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkRequestResult'
+        '202':
+          description: A request sent blind
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkRequestResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/search:
+    get:
+      operationId: searchLinks
+      tags:
+      - Links
+      summary: Search businesses on Taskiem
+      description: 'By name, by what they sell or do, and by area, among businesses that let themselves be found, from their published storefront card and catalogue only. A phone number is never searched: it answers one row (blind) that sends a request on a tap and looks the same whether or not a business is behind it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: The businesses found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkCard'
+                  blind:
+                    type: object
+                    additionalProperties: false
+                    required: [kind, shown]
+                    properties:
+                      kind:
+                        type: string
+                        enum: [phone]
+                      shown:
+                        type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/{id}/{answer}:
+    post:
+      operationId: answerLink
+      tags:
+      - Links
+      summary: Accept, decline, block, unblock, cancel or end a link
+      description: 'As the side allowed to: accept and decline a request made to us; block a request or a link (a block is never told); unblock; cancel a request we made; end a link. Audited in both businesses where the other side may know of it. 409 when the link is not in a state for that answer.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: answer
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [accept, decline, block, unblock, cancel, end]
+      responses:
+        '200':
+          description: The link as we now see it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessLink'
+        '204':
+          description: Done, and the link is no longer shown to us (declined, cancelled or unblocked)
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/sent/{id}:
+    delete:
+      operationId: cancelBlindLink
+      tags:
+      - Links
+      summary: Take a request sent blind off the list
+      description: A request that reached a business stays with it until answered or expired; we cannot know whether it did.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-settings:
+    get:
+      operationId: getLinkSettings
+      tags:
+      - Links
+      summary: Whether other businesses find this one
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLinkSettings
+      tags:
+      - Links
+      summary: Choose whether other businesses find this one
+      description: findable null goes back to the default, on with a published storefront.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                findable:
+                  type: [boolean, 'null']
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkSettings'
         default:
           $ref: '#/components/responses/Error'
   /v1/invoice-settings:
@@ -27044,6 +27283,124 @@ components:
                 type: [number, 'null']
               ratings:
                 type: integer
+    BusinessLink:
+      type: object
+      additionalProperties: false
+      required: [id, business, name, state, role, asked_by_us, requested_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        business:
+          type: string
+          format: uuid
+          description: The other business
+        name:
+          type: string
+        slug:
+          type: string
+          description: The other business's storefront address, when it has one
+        state:
+          type: string
+          enum: [active, ended, requested, not_accepted, asked_us, blocked]
+          description: 'As we see it: requested (we asked, waiting as far as we know), not_accepted (we asked after a search, 30 days and no acceptance), asked_us (ours to answer), blocked (by us)'
+        role:
+          type: string
+          enum: [supplier, customer, both]
+          description: How we trade with them
+        asked_by_us:
+          type: boolean
+        requested_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        answered_at:
+          type: string
+          format: date-time
+    BlindLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [id, kind, shown, role, state, created_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [phone, address]
+        shown:
+          type: string
+          description: The address, a phone number masked
+        role:
+          type: string
+          enum: [supplier, customer, both]
+        state:
+          type: string
+          enum: [sent]
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    LinkCard:
+      type: object
+      additionalProperties: false
+      required: [business, name, items, state]
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        area:
+          type: string
+        tagline:
+          type: string
+        items:
+          type: array
+          description: Up to three published items that matched, with the prices their page shows
+          items:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name:
+                type: string
+              price_kobo:
+                type: [integer, 'null']
+        state:
+          type: string
+          enum: [none, active, ended, requested, not_accepted, asked_us, blocked]
+    LinkRequestResult:
+      type: object
+      additionalProperties: false
+      required: [sent, message]
+      properties:
+        link:
+          $ref: '#/components/schemas/BusinessLink'
+        sent:
+          type: boolean
+        message:
+          type: string
+    LinkSettings:
+      type: object
+      additionalProperties: false
+      required: [findable, findable_now]
+      properties:
+        findable:
+          type: [boolean, 'null']
+          description: Our choice; null is the default
+        findable_now:
+          type: boolean
+          description: What applies (the default is on with a published storefront)
+        asked_at:
+          type: string
+          format: date-time
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]

@@ -3851,6 +3851,190 @@
     "wd.workflow.does": {
       "text": "Use your own workflow: {template}, wey {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "To link with another business for Taskiem, send *link Dangote*, *who sells cement*, or *link 0803 123 4567*.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "No business don link with you yet. Send *who sells cement* or *link Dangote* to find one.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Businesses for Taskiem wey una dey do business:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: don link, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* wan link with you",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: you don ask, dey wait for dem",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: dem no accept",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: you don block dem",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: link don end",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: request don go",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "dem dey supply you",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "dem dey buy from you",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "dem dey supply you and buy from you",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} wan link with you",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* wan link with {org} for Taskiem ({role}). If una link, una invoice and order go reach each other by demself. Nothing go share until you accept.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "No",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Block",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Dem dey supply us",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Dem dey buy from us",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Both",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Businesses for Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(don link)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(you don ask)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(dem don ask you)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Send the number of the one wey you wan link with, or *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Na owner or admin fit ask to link with dem.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "No business for Taskiem wey others fit find match {query}.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Send one number from the list, or *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "How you dey do business with *{name}*?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Ask anybody wey dey use {shown} for Taskiem to link. How you dey do business with dem?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "We don ask *{name}* to link. You go hear when dem accept.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "If any business for Taskiem dey use {shown}, e don get your request. You go hear only if dem accept.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "You don already link with *{name}*.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "You don ask *{name}* before. E dey wait for dia answer.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Na only owner or admin of {org} fit link with other businesses.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Link request don reach for today. Try again tomorrow.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "That request no dey wait again.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "Una don link with *{name}*. Send *links* to see una linked businesses.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "You don say no. Nobody go tell *{name}*.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "You don block am. Request from *{name}* no go reach you again.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} don accept your link",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* don accept the link with {org}. Una businesses don link for Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} don end the link",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* don end the link with {org}. Wetin don pass between una go still dey both sides.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* don ask you before. Send *links* to answer.",
+      "reviewed": false
     }
   }
 }
