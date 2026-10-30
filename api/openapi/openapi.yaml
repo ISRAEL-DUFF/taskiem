@@ -25198,6 +25198,11 @@ components:
                 enum: [created, exists, skipped, failed]
               error:
                 type: string
+              missing:
+                type: array
+                description: The columns a table that exists already lacks, which the workflow uses.
+                items:
+                  type: string
     AlertChannelKind:
       type: string
       enum:
@@ -29614,6 +29619,11 @@ components:
                 enum: [created, exists, skipped, failed]
               error:
                 type: string
+              missing:
+                type: array
+                description: The columns a table that exists already lacks, which the workflow uses.
+                items:
+                  type: string
             additionalProperties: false
       additionalProperties: false
     TryDraftRequest:

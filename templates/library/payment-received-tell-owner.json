@@ -1,0 +1,26 @@
+{
+  "id": "payment-received-tell-owner",
+  "title": "Tell the owner about each payment received",
+  "summary": "When a customer pays, by a payment page or a transfer to their account number, tell the owner who paid and how much, with no spreadsheet.",
+  "description": "Whenever your payments account reports money received (a customer paying a payment page, or a bank transfer from a customer), tells the owner who paid and how much, on the WhatsApp or Telegram they linked to Taskiem, or by email. Every payment is already kept in your money log, so there is nothing to copy into a sheet: see it in Money on the web app. Works with Paystack, Moniepoint or Flutterwave.",
+  "category": "collections",
+  "tags": ["collections", "payments", "owner", "money log"],
+  "keywords": ["received", "receive", "transfer", "inflow", "credit", "credited", "deposit", "account", "money", "moniepoint", "monnify", "paystack", "flutterwave", "paid", "payment received", "record", "ledger"],
+  "connectors": ["notify@1", "capability:payment.received", "capability:virtual_account.credited"],
+  "variables": [],
+  "params": [
+    {"name": "rail_connection", "type": "connection", "capability": ["payment.received"], "title": "Payments account", "description": "Whose payments to report; every connected payments account when left blank.", "required": false, "default": "", "example": ""}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_paymentReceivedTellOwner",
+    "version": 1,
+    "name": "Tell the owner about payments received",
+    "trigger": {"type": "capability_event", "config": {"events": ["payment.received", "virtual_account.credited"], "connection": "{{rail_connection}}"}},
+    "steps": [
+      {"id": "tell_owner", "type": "connector", "name": "Tell the owner who paid", "connector": "notify@1", "action": "tell",
+       "input": {"message": "='Received NGN ' + string(double(trigger.fields.amount_kobo) / 100.0) + ' from ' + (has(trigger.fields.payer_name) ? trigger.fields.payer_name : 'a customer') + ' (ref ' + (has(trigger.fields.payment_id) ? trigger.fields.payment_id : trigger.fields.reference) + ')'"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

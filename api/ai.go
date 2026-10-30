@@ -212,6 +212,9 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 	if err != nil {
 		return uuid.Nil, err
 	}
+	// Which templates the business is offered: a sheet template's twin
+	// where it has no Google Sheets (decision 0060).
+	breq.Context.Holds = s.templateHolds(ctx, who.tenant)
 	s.bg.Add(1)
 	go func() {
 		defer s.bg.Done()
@@ -741,6 +744,7 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 			res.Status, res.Error = "failed", errorText(s, r, err)
 			if errors.Is(err, errConflict) && strings.Contains(err.Error(), "already exists") {
 				res.Status = "exists"
+				res.Missing = s.tableMissing(r.Context(), p.TenantID, t.Name, t.Columns)
 			}
 		}
 		tables = append(tables, res)
@@ -754,13 +758,15 @@ type aiTableResult struct {
 	Name   string `json:"name"`
 	Status string `json:"status"` // created, exists, skipped or failed
 	Error  string `json:"error,omitempty"`
+	// Missing are the columns a table that exists already lacks.
+	Missing []string `json:"missing,omitempty"`
 }
 
 // tableReqOf is a proposed table as the Tables page would send it.
 func tableReqOf(t builder.TableSpec) tableReq {
 	out := tableReq{Name: t.Name, Title: t.Title}
 	for _, c := range t.Columns {
-		out.Columns = append(out.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required})
+		out.Columns = append(out.Columns, columnReq{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required, Personal: c.Personal})
 	}
 	return out
 }

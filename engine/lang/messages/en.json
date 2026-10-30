@@ -1644,6 +1644,16 @@
       "reviewed": true,
       "context": "After an AI draft is saved from chat: the new data tables it uses, to create in the web app"
     },
+    "wa.build.tables_setting_up": {
+      "text": "Setting up your records. This takes a minute or two.",
+      "reviewed": true,
+      "context": "Before the first data table of a business is made from chat: its records project is being set up, which takes a minute or two"
+    },
+    "wa.build.table_lacks": {
+      "text": "Your table {table} has no {columns} column yet, which it uses. Add it in the app ({link}), or those steps will fail.",
+      "reviewed": true,
+      "context": "A table a chat draft uses exists already but lacks columns the draft reads; the owner adds them in the web app"
+    },
     "wa.build.too_long": {
       "text": "That is too long for me; describe it in under {max} characters.",
       "reviewed": true,

@@ -1316,6 +1316,14 @@
       "text": "Kí o tó tẹ̀ ẹ́ jáde, ṣẹ̀dá àwọn tábìlì tí ó nílò nínú àpù náà: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "Mo ń ṣètò àkọsílẹ̀ rẹ. Ó máa gba ìṣẹ́jú kan tàbí méjì.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù ({link}), bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Ìyẹn ti gùn jù fún mi; ẹ ṣàlàyé rẹ̀ ní ìsàlẹ̀ ohun kikọ {max}.",
       "reviewed": false

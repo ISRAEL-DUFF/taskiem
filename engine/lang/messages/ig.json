@@ -1316,6 +1316,14 @@
       "text": "Tupu ị bipụta ya, mepụta tebụl ndị ọ chọrọ n'ime ngwa ahụ: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "Ana m edozi ndekọ gị. Ọ ga-ewe otu nkeji ma ọ bụ abụọ.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ ({link}), ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Nke ahụ dị ogologo nke ukwuu; kọwaa ya n'ihe na-erughị mkpụrụedemede {max}.",
       "reviewed": false

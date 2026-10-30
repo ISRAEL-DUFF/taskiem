@@ -200,3 +200,49 @@ func (l *Library) Match(goal string, n int) []Match {
 	}
 	return out
 }
+
+// MatchFor is Match for a business where the conditions in holds hold
+// (decision 0060): a template replaced there is never offered, and the
+// template replacing it takes its place when the goal met it, so a goal
+// that names a sheet template's job still gets its twin. Where a template
+// and its twin are both offered (a business with Google Sheets connected),
+// the twin ranks first unless the goal names a sheet or a spreadsheet.
+func (l *Library) MatchFor(goal string, n int, holds map[string]bool) []Match {
+	var out []Match
+	at := map[string]int{}
+	for _, m := range l.Match(goal, 0) {
+		if by := m.Template.ReplacedWhere.By(holds); by != "" {
+			if t, ok := l.Get(by); ok {
+				if _, seen := at[by]; !seen {
+					at[by] = len(out)
+					out = append(out, Match{Template: t, Score: m.Score, Matched: m.Matched})
+				}
+			}
+			continue
+		}
+		if _, seen := at[m.Template.ID]; seen {
+			continue
+		}
+		at[m.Template.ID] = len(out)
+		out = append(out, m)
+	}
+	if !strings.Contains(strings.ToLower(goal), "sheet") {
+		for i := 0; i < len(out); i++ {
+			for _, r := range out[i].Template.ReplacedWhere {
+				if j, ok := at[r.By]; ok && j > i {
+					twin := out[j]
+					copy(out[i+1:j+1], out[i:j])
+					out[i] = twin
+					for k := i; k <= j; k++ {
+						at[out[k].Template.ID] = k
+					}
+					break
+				}
+			}
+		}
+	}
+	if n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}

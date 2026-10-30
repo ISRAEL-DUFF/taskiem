@@ -748,7 +748,7 @@ func (s *Server) chatTemplateBuild(ctx context.Context, c *chat, id string) erro
 	}
 	use := &builder.TemplateUse{ID: tpl.ID, Title: tpl.Title, Instantiated: true, Params: params, Missing: missing}
 	prop := &builder.Proposal{Definition: doc, Summary: tpl.Summary, Template: use, Assumptions: []string{}, Problems: []builder.Problem{},
-		Warnings: []builder.Warning{}, Results: []builder.TestResult{}, Connectors: tpl.Connectors, Tables: []builder.TableSpec{}, Needs: []builder.Need{}}
+		Warnings: []builder.Warning{}, Results: []builder.TestResult{}, Connectors: tpl.Connectors, Tables: builder.TemplateTableSpecs(tpl, values), Needs: []builder.Need{}}
 	raw, err := json.Marshal(prop)
 	if err != nil {
 		return err

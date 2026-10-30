@@ -114,6 +114,15 @@ func TestStockTemplatesReplaceSheets(t *testing.T) {
 		}
 		return out
 	}
+	// No Google Sheets and stock on: the stock twins only (decision 0060).
+	if got := offered(); got["stock-reorder-alert"] || got["daily-sales-summary"] || !got["low-stock-alert"] || !got["sales-day-total"] {
+		t.Fatalf("without Google Sheets: %v", got)
+	}
+	// With Google Sheets the sheet templates are offered until stock and
+	// sales are kept here.
+	registerSME(t, w.env.Registry)
+	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "googlesheets@1",
+		"credentials": map[string]string{"client_id": "app.apps.googleusercontent.com", "client_secret": "s", "refresh_token": "1//r"}})
 	if got := offered(); !got["stock-reorder-alert"] || !got["daily-sales-summary"] || !got["low-stock-alert"] || !got["sales-day-total"] {
 		t.Fatalf("before: %v", got)
 	}

@@ -1316,6 +1316,14 @@
       "text": "Before you publish am, create the tables wey e need for the app: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "I dey set up your records. E go take one or two minutes.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app ({link}), or those steps go fail.",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "E too long for me; talk am for less than {max} characters.",
       "reviewed": false

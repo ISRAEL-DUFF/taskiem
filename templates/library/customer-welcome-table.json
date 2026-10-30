@@ -1,0 +1,36 @@
+{
+  "id": "customer-welcome-table",
+  "title": "Welcome new customers from your customers table",
+  "summary": "When a customer is added to your customers table, text them a welcome message, with no spreadsheet.",
+  "description": "Whenever a customer is added to your customers table in Taskiem (in chat with \"add to customers\", on the Tables page, by an import, or by your website through Taskiem's API), they get a welcome SMS from your business. Taskiem makes the customers table for you if it does not exist. A customer with no phone number is not texted.",
+  "category": "customers",
+  "tags": ["customers", "onboarding", "welcome", "sms", "data table"],
+  "keywords": ["welcome", "new", "customer", "signup", "sign", "register", "registration", "onboard", "onboarding", "joins", "added", "table"],
+  "connectors": ["xenibase@1", "notify@1"],
+  "params": [
+    {"name": "business_name", "type": "string", "title": "Business name", "description": "Signs the welcome message.", "required": true, "example": "Femi Fitness", "max_length": 60},
+    {"name": "welcome_line", "type": "string", "title": "Welcome line", "description": "A line after the greeting, e.g. what to do next.", "required": false, "default": "Reply to this number any time you need help.", "example": "Your first class is free this week!", "max_length": 140},
+    {"name": "customers_table", "type": "string", "title": "Customers table", "description": "Your customers: a name and a phone number at least. Taskiem makes it for you if it does not exist.", "required": false, "default": "customers", "example": "customers", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"}
+  ],
+  "tables": [
+    {"known": "customers", "name": "{{customers_table}}"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_customerWelcomeTable",
+    "version": 1,
+    "name": "Welcome new customers from the customers table",
+    "trigger": {"type": "connector_event", "config": {"connector": "xenibase@1", "trigger": "row_changed", "connection": "data_tables", "events": ["INSERT"], "options": {"tables": ["{{customers_table}}"]}}},
+    "inputs": {"schema": {"type": "object", "properties": {
+      "type": {"type": "string"},
+      "record": {"type": "object", "properties": {"name": {"type": "string", "x-pii": "name"}, "phone": {"type": "string", "x-pii": "phone"}}}}}},
+    "steps": [
+      {"id": "settings", "type": "transform", "name": "Use your business name and welcome line",
+       "config": {"output": {"business_name": "{{business_name}}", "welcome_line": "{{welcome_line}}"}}},
+      {"id": "text_customer", "type": "connector", "name": "Text the customer a welcome", "connector": "notify@1", "action": "text", "needs": ["settings"],
+       "when": "=has(trigger.body.record.phone) && trigger.body.record.phone != ''",
+       "input": {"to": "=trigger.body.record.phone", "message": "='Welcome to ' + steps.settings.output.business_name + (has(trigger.body.record.name) && trigger.body.record.name != '' ? ', ' + trigger.body.record.name : '') + '! ' + steps.settings.output.welcome_line"}}
+    ],
+    "settings": {"timeout": "15m"}
+  }
+}

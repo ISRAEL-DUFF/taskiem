@@ -398,7 +398,16 @@ func (b *Builder) Build(ctx context.Context, req Request) (*Proposal, error) {
 	}
 	p.Warnings = append(p.Warnings, findings...)
 	var tableWarnings []Warning
-	p.Tables, tableWarnings = reviewTables(env.Tables, req.Context.Tables, doc, b.CheckTable)
+	// A draft made from a template makes the tables the template declares
+	// (decision 0060), as well as any the model describes: the template's
+	// first, so its columns win over a description of the same table.
+	proposed := env.Tables
+	if use != nil && b.Templates != nil {
+		if tpl, ok := b.Templates.Get(use.ID); ok {
+			proposed = append(TemplateTableSpecs(tpl, use.Params), env.Tables...)
+		}
+	}
+	p.Tables, tableWarnings = reviewTables(proposed, req.Context.Tables, doc, b.CheckTable)
 	p.Warnings = append(p.Warnings, tableWarnings...)
 
 	// Dry run, when the definition loads.
@@ -576,7 +585,7 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	offered := []string{}
 	var tpls []map[string]any
 	if b.Templates != nil && len(req.Base) == 0 {
-		for i, m := range b.Templates.Match(req.Goal, 2) {
+		for i, m := range b.Templates.MatchFor(req.Goal, 2, req.Context.Holds) {
 			tc := TemplateContext(m.Template)
 			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
 			tpls = append(tpls, tc)

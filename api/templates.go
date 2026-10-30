@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtext"
@@ -243,6 +244,7 @@ func (s *Server) templateTables(r *http.Request, p *Principal, t *templates.Temp
 		case err == nil:
 		case errors.Is(err, errConflict) && strings.Contains(err.Error(), "already exists"):
 			res.Status = "exists"
+			res.Missing = s.tableMissing(r.Context(), p.TenantID, tb.Name, req.Columns)
 		case !p.Can(PermTableEdit):
 			res.Status, res.Error = "skipped", "making tables needs table.edit: ask an owner or admin to create it on the Tables page"
 		default:
@@ -429,9 +431,21 @@ func addService(list [][]string, by []string) [][]string {
 // for a business.
 func (s *Server) templateHolds(ctx context.Context, tenant uuid.UUID) map[string]bool {
 	holds := map[string]bool{}
+	// No Google Sheets connection in any environment: the sheet templates'
+	// twins are offered instead (decision 0060). Worked out before stock,
+	// which a deployment may not have.
+	var sheets bool
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connections WHERE tenant_id = $1 AND connector = 'googlesheets' AND status = 'active')`, tenant).Scan(&sheets)
+	}); err != nil {
+		s.Logger.Warn("templates: reading the Google Sheets connections", "tenant", tenant, "err", err)
+		return holds
+	}
+	holds[templates.WhenNoSheets] = !sheets
 	if !s.Stock.Ready() {
 		return holds
 	}
+	holds[templates.WhenNoSheetsStock] = !sheets
 	if _, err := s.stockShopOf(ctx, tenant); err == nil {
 		holds[templates.WhenKeepsStock] = true
 	}
@@ -442,4 +456,38 @@ func (s *Server) templateHolds(ctx context.Context, tenant uuid.UUID) map[string
 		holds[templates.WhenRecordsSales] = true
 	}
 	return holds
+}
+
+// tableMissing is the columns of want that the business's table of that
+// name lacks (decision 0060: a table a template needs that exists already
+// is left as it is, and what it lacks is said). Nothing is said when the
+// tables cannot be read.
+func (s *Server) tableMissing(ctx context.Context, tenant uuid.UUID, name string, want []columnReq) []string {
+	var missing []string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		tables, err := datatables.ListTables(ctx, tx)
+		if err != nil {
+			return err
+		}
+		for _, t := range tables {
+			if t.Name != name {
+				continue
+			}
+			have := map[string]bool{}
+			for _, c := range t.Columns {
+				have[c.Name] = true
+			}
+			for _, c := range want {
+				if !have[c.Name] {
+					missing = append(missing, c.Name)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		s.Logger.Warn("templates: reading a table's columns", "tenant", tenant, "table", name, "err", err)
+		return nil
+	}
+	return missing
 }
