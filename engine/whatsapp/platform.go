@@ -194,6 +194,16 @@ type Message struct {
 	// Tenant is whom a template is counted against (spec 16); uuid.Nil
 	// counts nothing (replies to unbound numbers are text only).
 	Tenant uuid.UUID
+	// Link is a button that opens a page, where a channel has one
+	// (Telegram); elsewhere the link is in Text.
+	Link *LinkButton
+}
+
+// LinkButton is a button that opens an https page; WebApp opens it as a
+// Telegram Mini App.
+type LinkButton struct {
+	Title, URL string
+	WebApp     bool
 }
 
 // Send delivers m to a number: as text when the number wrote in the last

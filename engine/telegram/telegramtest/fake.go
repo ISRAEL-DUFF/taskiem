@@ -190,6 +190,10 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 			InlineKeyboard [][]struct {
 				Text         string `json:"text"`
 				CallbackData string `json:"callback_data"`
+				URL          string `json:"url"`
+				WebApp       *struct {
+					URL string `json:"url"`
+				} `json:"web_app"`
 			} `json:"inline_keyboard"`
 			Keyboard [][]struct {
 				Text           string `json:"text"`
@@ -218,6 +222,14 @@ func (b *Bot) serve(w http.ResponseWriter, r *http.Request) {
 		for _, row := range in.ReplyMarkup.InlineKeyboard {
 			var bs []telegram.InlineButton
 			for _, k := range row {
+				if k.WebApp != nil && k.Text != "" && strings.HasPrefix(k.WebApp.URL, "https://") {
+					bs = append(bs, telegram.InlineButton{Text: k.Text, URL: k.WebApp.URL, WebApp: true})
+					continue
+				}
+				if k.URL != "" && k.Text != "" && strings.HasPrefix(k.URL, "https://") {
+					bs = append(bs, telegram.InlineButton{Text: k.Text, URL: k.URL})
+					continue
+				}
 				if k.Text == "" || len(k.CallbackData) == 0 || len(k.CallbackData) > 64 {
 					refuse(w, http.StatusBadRequest, "Bad Request: BUTTON_DATA_INVALID", 0)
 					return

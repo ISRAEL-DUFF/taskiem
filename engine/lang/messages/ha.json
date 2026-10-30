@@ -664,6 +664,234 @@
       "text": "Wannan asusun Slack ba a haɗa shi da ku a Taskiem ba, don haka ba zai iya yanke wannan ba. Ku haɗa shi daga shafin bayanan ku na Taskiem.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "Na gode da ka ƙara Taskiem a {workspace}. Mu kafa kasuwancinka a nan cikin Slack: 'yan tambayoyi, kamar minti ɗaya.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem yana cikin {workspace} tuni, don {businesses}. Don yin aiki a can, ka roƙi mai shi ya ƙara ka a Taskiem. Don samun kasuwancinka na daban, danna maɓallin da ke ƙasa.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem ya dawo cikin {workspace}. Ka rubuto mini a nan kamar da; aika new business don fara wani.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} yana da asusun Taskiem tuni. Don amfani da shi a nan, shiga a {where} ka haɗa Slack daga bayananka. Ko danna maɓallin da ke ƙasa don yin kasuwanci a nan cikin Slack, ƙarƙashin wani asusu daban.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Fara kasuwanci na daban",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Fara sabon kasuwanci",
+      "reviewed": false
+    },
+    "door.ask_email": {
+      "text": "Wane imel kake shiga Taskiem da shi? Aiko shi nan, za mu aika mahaɗa zuwa imel ɗin don haɗa wannan hira da asusunka.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "Wannan bai yi kama da adireshin imel ba. Aiko shi kamar haka: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "An nemi mahaɗa sau da yawa. Duba akwatin imel ɗinka da spam, ko ka sake gwadawa bayan awa ɗaya.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "Idan {email} yana da asusun Taskiem, mahaɗa tana kan hanyar zuwa can. Buɗe ta a na'urar da ka shiga Taskiem; tana aiki sau ɗaya, na awa ɗaya. Sannan wannan hira taka ce.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "An gama: wannan hira ta haɗu da asusunka na Taskiem. Aika help don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "Wannan lambar asusunka na Taskiem ce tuni, daga WhatsApp. Wannan Telegram ma ta haɗu da shi yanzu: kasuwancinka suna nan. Aika help, ko new business don fara wani.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "Wannan lambar tana kan wani asusun Taskiem tuni. Mun aika mahaɗa zuwa imel ɗin asusun: buɗe ta lokacin da ka shiga Taskiem, wannan Telegram za ta haɗu da shi.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Imel ɗin asusunka shine {email}. Don canza shi, yi amfani da bayananka a yanar gizo.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Ƙara imel ɗinka don karɓar rasidai da invoice daga Taskiem. Aika email, sannan adireshin, kamar haka: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem ba za ta iya aika imel a nan ba tukuna, don haka ba za a iya ƙara imel yanzu ba.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Mahaɗa tana kan hanyar zuwa {email}. Buɗe ta don tabbatarwa; tana aiki sau ɗaya, na awa 24. Har zuwa lokacin, babu abin da zai canza.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Babu abin da za a biya a wannan Taskiem.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "Wannan kasuwancin yana kan {plan} ta kamfanin da ya kafa shi; su ke kula da biyan kuɗi.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "Kana kan {plan}, kyauta na ƙarin kwanaki {days}. Bayan haka {price} ne a wata.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Biyan kuɗin {plan} ya wuce lokaci. Biya yanzu don komai ya ci gaba da aiki.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "Kana kan {plan}, {price} a wata. Zai sabunta a {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Biya",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Wanda ke kula da biyan kuɗi na {org} ne kaɗai zai iya biya.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "Ana aika rasidai ta imel. Aika pay, sannan imel ɗinka, kamar haka: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Biyan kuɗi bai iya farawa ba: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Babu bashin da ake bi yanzu.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "Biya {amount} a nan, da kati ko canja wurin banki:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Wanda ke kula da mutanen {org} ne kaɗai zai iya gayyata ko amincewa.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "Don gayyatar wani, aika: invite +2348012345678 as viewer. A Slack, ambace su: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Mai shi ne kaɗai zai iya mai da wani mai shi.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "Babu matsayi da ake kira {role}. Matsayi: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "Ba za ka iya ba da matsayin {role} ba: yana iya yin abin da kai ba za ka iya ba.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "A gayyaci {who} zuwa {org} a matsayin {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "Ba a aika gayyata ba.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "Ba a iya aika gayyatar yanzu ba. Sake gwadawa daga baya, ko ka gayyace su a yanar gizo.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "An aika gayyata zuwa {who}. Za su shiga idan sun danna Join; tana aiki na kwanaki 7.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Tura wannan mahaɗar zuwa {who}: {link}\nIdan suka buɗe ta, Taskiem za ta nemi su raba lambar su, wadda dole ta zama {who}. Tana aiki na kwanaki 7.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} ya gayyace ka don yin aiki tare da {org} a Taskiem, a matsayin {role}. Za ka shiga?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Shiga",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "Wannan gayyatar ta ƙare ko an amsa ta tuni.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "To, ba ka shiga ba. Ba za a sake aika komai game da shi ba.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "Don shiga {org}, amince da sharuɗɗan Taskiem da sanarwar sirri: {link}\nAmsa Yes don amincewa da shiga.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "Don shiga, raba lambarka da maɓallin da ke ƙasa. Dole ta zama lambar da aka gayyace ka da ita.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "Wannan ba lambar da gayyatar take ba ce. Raba lambarka, wadda aka gayyace ka da ita.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "Wannan hira ta haɗu da wani asusun Taskiem, don haka ba za ta iya shiga nan ba.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "Kana cikin {org}. Aika help don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Nemi shiga {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "{businesses} ne ke tafiyar da Taskiem a wannan workspace. Kasancewa a workspace bai isa ganin kasuwancinsu ba: nemi shiga, mai shi zai yanke shawara.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Buƙatarka ta je wurin masu {org}. Za ka ji a nan idan sun yanke shawara.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} a workspace ɗinka na Slack yana neman shiga {org}. A shigar da su a matsayin?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Mai kallo",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Mai aiki",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "Masu {org} ba su bar ka ka shiga a wannan karon ba.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "An ƙi: an gaya wa {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "An gayyaci {who} a matsayin {role}. Za su shiga idan sun danna Join.",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "Ana duba bukatarka {reference}. Za mu sanar da kai.",
       "reviewed": false
@@ -2994,6 +3222,238 @@
     },
     "wa.unbound": {
       "text": "Ba a haɗa wannan lamba da wani asusun Taskiem ba. Don amfani da Taskiem a nan, ka shiga, ka buɗe {where}, ka ƙara wannan lamba a ƙarƙashin WhatsApp, sannan ka rubuta ko ka mayar da lambar sirrin da muka aiko maka.",
+      "reviewed": false
+    },
+    "signup.offer": {
+      "text": "Sannu! Taskiem yana gudanar da ayyukan kasuwancinka daga wannan hira: biyan kuɗi, takardun kuɗi, kaya, tunatarwa, shafin shagonka. Kana so ka fara, kyauta?\n\nDon yin hira da wani harshe, rubuta sunansa: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_start": {
+      "text": "Fara kasuwancina",
+      "reviewed": false
+    },
+    "signup.button_have": {
+      "text": "Ina amfani da shi",
+      "reviewed": false
+    },
+    "signup.button_no": {
+      "text": "Ba yanzu ba",
+      "reviewed": false
+    },
+    "signup.later": {
+      "text": "Ba damuwa. Aika *start* a kowane lokaci don farawa.",
+      "reviewed": false
+    },
+    "signup.no_org": {
+      "text": "Asusun Taskiem ɗinka ba shi da kasuwanci a yanzu. Kana so ka fara ɗaya?",
+      "reviewed": false
+    },
+    "signup.country": {
+      "text": "Yin rajista daga hira bai buɗe a ƙasarka ba tukuna. Za ka iya yin rajista a shafin yanar gizon Taskiem maimakon haka.",
+      "reviewed": false
+    },
+    "signup.too_many": {
+      "text": "Wannan lambar ta yi kasuwanci {count} a yau, mafi yawa na rana ɗaya. Sake gwadawa gobe.",
+      "reviewed": false
+    },
+    "signup.busy": {
+      "text": "Muna cikin aiki da yin rajistar mutane yanzu. Don Allah sake gwadawa bayan awa ɗaya.",
+      "reviewed": false
+    },
+    "signup.terms": {
+      "text": "Taskiem yana adana bayanan kasuwancinka da bayanan da ka ba shi. Karanta yadda, da sharuɗɗan: {link}\n\nAmsa *Yes* don amincewa ka fara. (Don hira da wani harshe, rubuta sunansa: {languages}.)",
+      "reviewed": false
+    },
+    "signup.declined": {
+      "text": "Ba a yi komai ba. Aika *start* idan ka canza ra'ayi.",
+      "reviewed": false
+    },
+    "signup.cancelled": {
+      "text": "An tsaya: ba a yi komai ba. Aika *start* don sake farawa.",
+      "reviewed": false
+    },
+    "signup.ask_business": {
+      "text": "Me ake kiran kasuwancinka? (Aika *cancel* don tsayawa a kowane lokaci.)",
+      "reviewed": false
+    },
+    "signup.ask_name": {
+      "text": "Kuma sunanka?",
+      "reviewed": false
+    },
+    "signup.ask_sells": {
+      "text": "Me kake sayarwa ko yi? Amsa da lamba:\n1. Abinci\n2. Kayan masarufi\n3. Kayan ado\n4. Waya da na'urori\n5. Makaranta\n6. Gidan gyaran gashi\n7. Ayyuka\n8. Wani abu daban",
+      "reviewed": false
+    },
+    "signup.ask_pays": {
+      "text": "Yaya abokan ciniki ke biyan ka? Amsa da lambobin da suka dace, kamar 1 2 3:\n1. Kuɗi a hannu\n2. Tura kuɗi ta banki\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": false
+    },
+    "signup.ask_contact": {
+      "text": "Mataki na ƙarshe: matsa *Share my number* don mu san kai ne, mu kuma iya aika maka saƙo idan Telegram bai yi aiki ba. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "signup.contact_own": {
+      "text": "Wannan ba lambarka ba ce. Matsa *Share my number* don raba taka.",
+      "reviewed": false
+    },
+    "signup.number_taken": {
+      "text": "Wannan lambar tana amfani da Taskiem tuni. Don amfani da Taskiem a nan ma, shiga, buɗe {where}, ka haɗa wannan hira.",
+      "reviewed": false
+    },
+    "signup.business_bad": {
+      "text": "Sunan kasuwanci yana buƙatar haruffa 2 zuwa 80, ba tare da hanyar haɗi ko adireshin imel ba. Me ake kiran kasuwancinka?",
+      "reviewed": false
+    },
+    "signup.name_bad": {
+      "text": "Suna yana buƙatar haruffa 80 ko ƙasa da haka, ba tare da hanyar haɗi ko adireshin imel ba. Menene sunanka?",
+      "reviewed": false
+    },
+    "signup.done": {
+      "text": "An gama: *{business}* yana kan Taskiem.",
+      "reviewed": false
+    },
+    "signup.done_trial": {
+      "text": "An gama: *{business}* yana kan Taskiem, kyauta na kwanaki {days}.",
+      "reviewed": false
+    },
+    "signup.starters": {
+      "text": "Ga abubuwa uku da kasuwanci kamar naka ke farawa da su:",
+      "reviewed": false
+    },
+    "signup.own_words": {
+      "text": "Matsa ɗaya, ko faɗi abin da kake so da kalmominka.",
+      "reviewed": false
+    },
+    "signup.pin_hint": {
+      "text": "Wannan hira ita ce asusunka. Aika *pin* don saita PIN mai lambobi shida da zai kiyaye shi naka.",
+      "reviewed": false
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Tunatarwa kullum",
+      "reviewed": false
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Jimillar sayarwa",
+      "reviewed": false
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "Tunatar da kuɗin",
+      "reviewed": false
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Aika takardar kuɗi",
+      "reviewed": false
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "Taƙaitaccen POS",
+      "reviewed": false
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Rasidin biya",
+      "reviewed": false
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Faɗakarwar kaya",
+      "reviewed": false
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Ƙidaya kayana",
+      "reviewed": false
+    },
+    "dormant.form_title": {
+      "text": "Tabbatar kai ne",
+      "reviewed": false
+    },
+    "dormant.prove": {
+      "text": "Wannan hira ta yi shiru na kwanaki {days}, don haka Taskiem ya daina amfani da ita har sai ka tabbatar har yanzu kai ne. Shigar da PIN ɗin hirarka a cikin fom ɗin.",
+      "reviewed": false
+    },
+    "dormant.relink": {
+      "text": "Wannan hira ta yi shiru na kwanaki {days}, don haka Taskiem ya daina amfani da ita har sai ka tabbatar har yanzu kai ne. Shiga, buɗe {where} ka sake haɗa ta, ko ka yi amfani da Taskiem daga ɗayar hirarka. Idan ba a tabbatar ba, za a cire haɗin bayan wasu kwanaki {days}.",
+      "reviewed": false
+    },
+    "chatpin.web": {
+      "text": "Saita PIN ɗinka a manhajar yanar gizo, a {where}: zai fara tambayar passkey, authenticator ko kalmar sirrinka.",
+      "reviewed": false
+    },
+    "chatpin.set_already": {
+      "text": "Kana da PIN na hira tuni. Don canza shi, shiga a yanar gizo (aika sign in don mahaɗa), ƙara passkey ko authenticator, sannan ka canza shi a shafin Account ɗinka a {where}.",
+      "reviewed": false
+    },
+    "chatpin.not_here": {
+      "text": "Ba za a iya saita PIN na hira daga nan ba tukuna: saita shi daga WhatsApp, inda Taskiem ke aika fom mai tsaro.",
+      "reviewed": false
+    },
+    "chatpin.form_title": {
+      "text": "PIN na hirarka",
+      "reviewed": false
+    },
+    "chatpin.form": {
+      "text": "Zaɓi PIN mai lambobi shida a cikin fom ɗin. Ka ajiye shi a wurinka: yana tabbatar da cewa wannan hira taka ce, kuma yana amince wa abin da ya nemi shi.",
+      "reviewed": false
+    },
+    "chatpin.summary": {
+      "text": "Lambobi shida da ke kiyaye wannan hira taka",
+      "reviewed": false
+    },
+    "connect.hint": {
+      "text": "Aika *connect {service}* don haɗa shi daga nan.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Haɗa {service} a nan: {link}\n\nHanyar haɗin tana aiki sau ɗaya, na mintuna {minutes}, kuma kai kaɗai. Kada ka taɓa aika maɓalli a wannan hira: rubuta shi a wancan shafin.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Matsa maɓallin da ke ƙasa don haɗa {service}. Yana aiki sau ɗaya, na mintuna {minutes}, kuma kai kaɗai. Kada ka taɓa aika maɓalli a wannan hira: rubuta shi a cikin fom.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Haɗa {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Wanda ke kula da haɗe-haɗe a {org} ne kaɗai zai iya haɗa ayyuka. Tambayi mai shi.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem ba shi da sabis mai suna {service}. Duba sunan, kamar *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "An haɗa {service} da *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "Muna ci gaba da *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "Wannan yana kama da maɓallin sirri, don haka Taskiem bai ajiye shi ko amfani da shi ba. Maɓallai suna shiga fom mai tsaro ne kaɗai: aika *connect* da sunan sabis ɗin. Manhajar hira tana da maɓallin yanzu, don haka canza shi a wurin sabis ɗin ka yi amfani da sabon.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Matsa maɓallin don haɗa {service}. Rubuta maɓallin a cikin fom, ba a wannan hira ba: Taskiem zai duba shi da {service} kafin ya ajiye shi.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Kwafi kowace ƙima daga {service} ka liƙa ta nan. Taskiem zai duba ta da {service} kafin ya ajiye ta.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Haɗa",
+      "reviewed": false
+    },
+    "terms.ask": {
+      "text": "Taskiem yana da sharuɗɗa da sanarwar sirri da ba ka amince da su ba tukuna: {link}\n\nMatsa *I agree*, ko ka amsa *I agree*. Taskiem zai ci gaba ko ta yaya.",
+      "reviewed": false
+    },
+    "terms.button": {
+      "text": "Na amince",
+      "reviewed": false
+    },
+    "terms.thanks": {
+      "text": "Na gode: an rubuta amincewarka.",
       "reviewed": false
     },
     "wd.ai": {

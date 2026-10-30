@@ -664,6 +664,234 @@
       "text": "Dis Slack account never link to you for Taskiem, so e no fit decide dis one. Link am from your Taskiem profile.",
       "reviewed": false
     },
+    "slack.install.welcome": {
+      "text": "Thank you as you add Taskiem to {workspace}. Make we set your business up here for Slack: small questions, like one minute.",
+      "reviewed": false
+    },
+    "slack.install.known": {
+      "text": "Taskiem don already dey {workspace}, for {businesses}. If you wan work there, tell the owner make e add you for Taskiem. If you wan your own separate business, press the button wey dey below.",
+      "reviewed": false
+    },
+    "slack.install.back": {
+      "text": "Taskiem don come back for {workspace}. Dey write me here like before; send new business if you wan start another one.",
+      "reviewed": false
+    },
+    "slack.install.email_taken": {
+      "text": "{email} don get Taskiem account already. If you wan use am here, sign in for {where} come link Slack from your profile. Or press the button wey dey below make you start business here for Slack, under another account.",
+      "reviewed": false
+    },
+    "slack.install.button_separate": {
+      "text": "Start my own business",
+      "reviewed": false
+    },
+    "slack.install.button_new": {
+      "text": "Start new business",
+      "reviewed": false
+    },
+    "door.ask_email": {
+      "text": "Which email you dey take sign in for Taskiem? Send am here, we go send link to that email so you fit join this chat to your account.",
+      "reviewed": false
+    },
+    "door.email_bad": {
+      "text": "That one no be email address. Send am like this: ada@example.com",
+      "reviewed": false
+    },
+    "door.too_many": {
+      "text": "Dem don ask for link many times already. Check your inbox and spam, or try again after one hour.",
+      "reviewed": false
+    },
+    "door.email_sent": {
+      "text": "If {email} get Taskiem account, link dey go there now. Open am for phone or computer wey you don sign in to Taskiem; e go work once, for one hour. After that, this chat na your own.",
+      "reviewed": false
+    },
+    "door.linked": {
+      "text": "E don do: this chat don join your Taskiem account. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "door.tg_joined": {
+      "text": "That number don already be your Taskiem account from WhatsApp. This Telegram don join am too: your business dem dey here. Send help, or new business if you wan start another one.",
+      "reviewed": false
+    },
+    "door.tg_number_email": {
+      "text": "That number don dey for Taskiem account already. We don send link to that account email: open am when you don sign in to Taskiem, this Telegram go join am.",
+      "reviewed": false
+    },
+    "door.email_is": {
+      "text": "Your account email na {email}. If you wan change am, use your profile for web.",
+      "reviewed": false
+    },
+    "door.email_ask": {
+      "text": "Add your email so Taskiem go dey send receipt and invoice to your mail. Send email, then the address, like this: email ada@example.com",
+      "reviewed": false
+    },
+    "door.email_off": {
+      "text": "Taskiem no fit send email for here yet, so you no fit add email now.",
+      "reviewed": false
+    },
+    "door.email_confirm": {
+      "text": "Link dey go {email} now. Open am to confirm; e go work once, for 24 hours. Till then, nothing go change.",
+      "reviewed": false
+    },
+    "door.plan_off": {
+      "text": "Nothing dey to pay for this Taskiem.",
+      "reviewed": false
+    },
+    "door.plan_partner": {
+      "text": "This business dey on {plan} through the company wey set am up; na dem dey handle payment.",
+      "reviewed": false
+    },
+    "door.plan_trial": {
+      "text": "You dey on {plan}, free for {days} more days. After that na {price} every month.",
+      "reviewed": false
+    },
+    "door.plan_due": {
+      "text": "Payment for {plan} don pass time. Pay now make everything continue to run.",
+      "reviewed": false
+    },
+    "door.plan_active": {
+      "text": "You dey on {plan}, {price} every month. E go renew on {date}.",
+      "reviewed": false
+    },
+    "door.button_pay": {
+      "text": "Pay",
+      "reviewed": false
+    },
+    "door.pay_denied": {
+      "text": "Na only person wey dey manage billing for {org} fit pay.",
+      "reviewed": false
+    },
+    "door.pay_email": {
+      "text": "Dem dey send receipt by email. Send pay, then your email, like this: pay ada@example.com",
+      "reviewed": false
+    },
+    "door.pay_failed": {
+      "text": "Payment no fit start: {reason}",
+      "reviewed": false
+    },
+    "door.pay_nothing": {
+      "text": "Nothing dey owe now.",
+      "reviewed": false
+    },
+    "door.pay_link": {
+      "text": "Pay {amount} here, by card or bank transfer:",
+      "reviewed": false
+    },
+    "invite.denied": {
+      "text": "Na only person wey dey manage people for {org} fit invite or approve.",
+      "reviewed": false
+    },
+    "invite.how": {
+      "text": "To invite person, send: invite +2348012345678 as viewer. For Slack, mention dem: invite @ada as viewer.",
+      "reviewed": false
+    },
+    "invite.owner_only": {
+      "text": "Na only owner fit make another person owner.",
+      "reviewed": false
+    },
+    "invite.role_unknown": {
+      "text": "No role wey dem call {role}. Roles: {roles}.",
+      "reviewed": false
+    },
+    "invite.cannot_grant": {
+      "text": "You no fit give {role} role: e fit do things wey you no fit do.",
+      "reviewed": false
+    },
+    "invite.confirm": {
+      "text": "Make we invite {who} join {org} as {role}?",
+      "reviewed": false
+    },
+    "invite.cancelled": {
+      "text": "We no send any invitation.",
+      "reviewed": false
+    },
+    "invite.send_failed": {
+      "text": "The invitation no fit go now. Try again later, or invite dem for web.",
+      "reviewed": false
+    },
+    "invite.sent": {
+      "text": "Invitation don go to {who}. Dem go join when dem tap Join; e go work for 7 days.",
+      "reviewed": false
+    },
+    "invite.sent_telegram": {
+      "text": "Forward this link give {who}: {link}\nWhen dem open am, Taskiem go ask dem to share dem own number, wey must be {who}. E go work for 7 days.",
+      "reviewed": false
+    },
+    "invite.offer": {
+      "text": "{inviter} don invite you to work with {org} for Taskiem, as {role}. You go join?",
+      "reviewed": false
+    },
+    "invite.button_join": {
+      "text": "Join",
+      "reviewed": false
+    },
+    "invite.gone": {
+      "text": "That invitation don end or dem don answer am already.",
+      "reviewed": false
+    },
+    "invite.declined": {
+      "text": "OK, you no join. We no go send anything again about am.",
+      "reviewed": false
+    },
+    "invite.terms": {
+      "text": "To join {org}, agree to Taskiem terms and privacy notice: {link}\nReply Yes to agree and join.",
+      "reviewed": false
+    },
+    "invite.ask_contact": {
+      "text": "To join, share your own number with the button wey dey below. E must be the number wey dem invite.",
+      "reviewed": false
+    },
+    "invite.contact_wrong": {
+      "text": "That no be the number wey this invitation dey for. Share your own number, the one wey dem invite.",
+      "reviewed": false
+    },
+    "invite.chat_taken": {
+      "text": "This chat don join another Taskiem account, so e no fit join here.",
+      "reviewed": false
+    },
+    "invite.joined": {
+      "text": "You don join {org}. Send help make you see wetin you fit do here.",
+      "reviewed": false
+    },
+    "invite.button_ask": {
+      "text": "Ask to join {org}",
+      "reviewed": false
+    },
+    "invite.ask_offer": {
+      "text": "Na {businesses} dey run Taskiem for this workspace. To dey the workspace no reach to see dem business: ask to join, and the owner go decide.",
+      "reviewed": false
+    },
+    "invite.asked": {
+      "text": "Your request don reach the owners of {org}. You go hear here when dem decide.",
+      "reviewed": false
+    },
+    "invite.ask_owner": {
+      "text": "{who} for your Slack workspace dey ask to join {org}. Make dem enter as?",
+      "reviewed": false
+    },
+    "invite.button_viewer": {
+      "text": "Viewer",
+      "reviewed": false
+    },
+    "invite.button_operator": {
+      "text": "Operator",
+      "reviewed": false
+    },
+    "invite.button_decline": {
+      "text": "Decline",
+      "reviewed": false
+    },
+    "invite.ask_declined": {
+      "text": "The owners of {org} no let you enter this time.",
+      "reviewed": false
+    },
+    "invite.decided_no": {
+      "text": "E don decline: dem don tell {who}.",
+      "reviewed": false
+    },
+    "invite.decided_yes": {
+      "text": "Dem don invite {who} as {role}. Dem go join when dem tap Join.",
+      "reviewed": false
+    },
     "sms.reconcile": {
       "text": "We dey check your request {reference}. We go let you know.",
       "reviewed": false
@@ -2994,6 +3222,238 @@
     },
     "wa.unbound": {
       "text": "This number never join any Taskiem account. To use Taskiem here, sign in, open {where}, add this number under WhatsApp, then type or send back the code wey we go send you.",
+      "reviewed": false
+    },
+    "signup.offer": {
+      "text": "Hello! Taskiem dey run your business work from this chat: payment, invoice, stock, reminder, your shop page. You wan start am, free?\n\nTo yarn for another language, type im name: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_start": {
+      "text": "Start my business",
+      "reviewed": false
+    },
+    "signup.button_have": {
+      "text": "I dey use Taskiem",
+      "reviewed": false
+    },
+    "signup.button_no": {
+      "text": "No be now",
+      "reviewed": false
+    },
+    "signup.later": {
+      "text": "No wahala. Send *start* any time wey you ready.",
+      "reviewed": false
+    },
+    "signup.no_org": {
+      "text": "Your Taskiem account no get business now. You wan start one?",
+      "reviewed": false
+    },
+    "signup.country": {
+      "text": "Sign up from chat never open for your country. You fit sign up for Taskiem website instead.",
+      "reviewed": false
+    },
+    "signup.too_many": {
+      "text": "This number don make {count} business today, na the most for one day. Try again tomorrow.",
+      "reviewed": false
+    },
+    "signup.busy": {
+      "text": "We dey busy dey sign people up now. Abeg try again after one hour.",
+      "reviewed": false
+    },
+    "signup.terms": {
+      "text": "Taskiem dey keep your business record and the details wey you give am. Read how, plus the terms: {link}\n\nReply *Yes* to agree and start. (To yarn for another language, type im name: {languages}.)",
+      "reviewed": false
+    },
+    "signup.declined": {
+      "text": "We no make anything. Send *start* if you change your mind.",
+      "reviewed": false
+    },
+    "signup.cancelled": {
+      "text": "E don stop: we no make anything. Send *start* to begin again.",
+      "reviewed": false
+    },
+    "signup.ask_business": {
+      "text": "Wetin be your business name? (Send *cancel* to stop any time.)",
+      "reviewed": false
+    },
+    "signup.ask_name": {
+      "text": "And your own name?",
+      "reviewed": false
+    },
+    "signup.ask_sells": {
+      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Another thing",
+      "reviewed": false
+    },
+    "signup.ask_pays": {
+      "text": "How customers dey pay you? Reply with the numbers wey fit, like 1 2 3:\n1. Cash\n2. Bank transfer\n3. POS\n4. Paystack\n5. Moniepoint\n6. OPay",
+      "reviewed": false
+    },
+    "signup.ask_contact": {
+      "text": "Last step: tap *Share my number* make we know say na you, so we fit text you when Telegram no work. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "signup.contact_own": {
+      "text": "That one no be your own number. Tap *Share my number* to share your own.",
+      "reviewed": false
+    },
+    "signup.number_taken": {
+      "text": "This number don dey use Taskiem before. To use Taskiem here too, sign in, open {where}, and link this chat.",
+      "reviewed": false
+    },
+    "signup.business_bad": {
+      "text": "Business name need 2 to 80 letters, and no link or email. Wetin be your business name?",
+      "reviewed": false
+    },
+    "signup.name_bad": {
+      "text": "Name need at most 80 letters, and no link or email. Wetin be your name?",
+      "reviewed": false
+    },
+    "signup.done": {
+      "text": "E don do: *{business}* don dey Taskiem.",
+      "reviewed": false
+    },
+    "signup.done_trial": {
+      "text": "E don do: *{business}* don dey Taskiem, free for {days} days.",
+      "reviewed": false
+    },
+    "signup.starters": {
+      "text": "See three things wey businesses like your own dey start with:",
+      "reviewed": false
+    },
+    "signup.own_words": {
+      "text": "Tap one, or talk wetin you want for your own words.",
+      "reviewed": false
+    },
+    "signup.pin_hint": {
+      "text": "This chat na your account. Send *pin* to set six-number PIN wey go keep am for you.",
+      "reviewed": false
+    },
+    "signup.tpl.daily-reminder": {
+      "text": "Daily reminder",
+      "reviewed": false
+    },
+    "signup.tpl.sales-day-total": {
+      "text": "Today sales total",
+      "reviewed": false
+    },
+    "signup.tpl.school-fee-reminders": {
+      "text": "School fee reminder",
+      "reviewed": false
+    },
+    "signup.tpl.send-invoice": {
+      "text": "Send invoice",
+      "reviewed": false
+    },
+    "signup.tpl.pos-daily-summary": {
+      "text": "POS evening summary",
+      "reviewed": false
+    },
+    "signup.tpl.payment-receipt-whatsapp": {
+      "text": "Payment receipt",
+      "reviewed": false
+    },
+    "signup.tpl.low-stock-alert": {
+      "text": "Low stock alert",
+      "reviewed": false
+    },
+    "signup.tpl.stock-count-reminder": {
+      "text": "Count my shelf",
+      "reviewed": false
+    },
+    "dormant.form_title": {
+      "text": "Show say na you",
+      "reviewed": false
+    },
+    "dormant.prove": {
+      "text": "This chat don quiet for {days} days, so Taskiem stop to use am until you show say na still you. Enter your chat PIN for the form.",
+      "reviewed": false
+    },
+    "dormant.relink": {
+      "text": "This chat don quiet for {days} days, so Taskiem stop to use am until you show say na still you. Sign in, open {where} and link am again, or use Taskiem from your other chat. If you no prove am, we go unlink am after another {days} days.",
+      "reviewed": false
+    },
+    "chatpin.web": {
+      "text": "Set your PIN for the web app, for {where}: e go first ask for your passkey, authenticator or password.",
+      "reviewed": false
+    },
+    "chatpin.set_already": {
+      "text": "You don get chat PIN already. If you wan change am, sign in for web (send sign in make we give you link), add passkey or authenticator, then change am for your Account page for {where}.",
+      "reviewed": false
+    },
+    "chatpin.not_here": {
+      "text": "You no fit set chat PIN from here yet: set am from WhatsApp, where Taskiem dey send secure form.",
+      "reviewed": false
+    },
+    "chatpin.form_title": {
+      "text": "Your chat PIN",
+      "reviewed": false
+    },
+    "chatpin.form": {
+      "text": "Choose six-number PIN for the form. Keep am for yourself: e dey show say this chat na your own, and e dey approve wetin ask for am.",
+      "reviewed": false
+    },
+    "chatpin.summary": {
+      "text": "Six numbers wey keep this chat for you",
+      "reviewed": false
+    },
+    "connect.hint": {
+      "text": "Send *connect {service}* to connect am from here.",
+      "reviewed": false
+    },
+    "connect.link": {
+      "text": "Connect {service} for here: {link}\n\nThe link go work once, for {minutes} minutes, and na only you fit use am. No ever send key for this chat: type am for that page.",
+      "reviewed": false
+    },
+    "connect.link_button": {
+      "text": "Tap the button wey dey below to connect {service}. E go work once, for {minutes} minutes, and na only you fit use am. No ever send key for this chat: type am for the form.",
+      "reviewed": false
+    },
+    "connect.button": {
+      "text": "Connect {service}",
+      "reviewed": false
+    },
+    "connect.denied": {
+      "text": "Na only person wey dey manage connections for {org} fit connect services. Ask the owner.",
+      "reviewed": false
+    },
+    "connect.unknown": {
+      "text": "Taskiem no get service wey dem call {service}. Check the name, like *connect paystack*.",
+      "reviewed": false
+    },
+    "connect.done": {
+      "text": "{service} don connect to *{org}*.",
+      "reviewed": false
+    },
+    "connect.carry_on": {
+      "text": "We dey continue with *{name}*:",
+      "reviewed": false
+    },
+    "connect.key_in_chat": {
+      "text": "That one be like secret key, so Taskiem no keep am or use am. Na only for the secure form key dey go: send *connect* and the service. The chat app don get the key now, so change am for the service and use the new one.",
+      "reviewed": false
+    },
+    "connect.form": {
+      "text": "Tap the button to connect {service}. Type the key for the form, no type am for this chat: Taskiem go check am with {service} before e save am.",
+      "reviewed": false
+    },
+    "connect.form_intro": {
+      "text": "Copy each value from {service} and paste am here. Taskiem go check am with {service} before e save am.",
+      "reviewed": false
+    },
+    "connect.form_cta": {
+      "text": "Connect",
+      "reviewed": false
+    },
+    "terms.ask": {
+      "text": "Taskiem get terms and privacy notice wey you never agree to: {link}\n\nTap *I agree*, or reply *I agree*. Taskiem go still dey work anyhow.",
+      "reviewed": false
+    },
+    "terms.button": {
+      "text": "I agree",
+      "reviewed": false
+    },
+    "terms.thanks": {
+      "text": "Thank you: we don record say you agree.",
       "reviewed": false
     },
     "wd.ai": {

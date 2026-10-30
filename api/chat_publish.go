@@ -147,18 +147,21 @@ func (s *Server) needLines(c *chat, needs []readyNeed) string {
 	var lines []string
 	for _, n := range needsShown(needs) {
 		if n.Capability != "" {
-			// Any rail that can: named, and connected on the Connections page.
+			// Any rail that can: named, and connected from the chat.
 			line := "• " + n.Message
 			if len(n.Rails) > 0 {
-				line += " (" + strings.Join(s.railNames(c, n.Rails), ", ") + ")"
+				line += " (" + strings.Join(s.railNames(c, n.Rails), ", ") + "). " + c.t("connect.hint", "service", n.Rails[0])
+			} else {
+				line += " " + s.waLink(c, "/connections")
 			}
-			lines = append(lines, line+" "+s.waLink(c, "/connections"))
+			lines = append(lines, line)
 			continue
 		}
 		line := "• " + needMessage(c.lang.Tag, n.Kind, n.Problem, n.Service, n.Name)
 		switch n.Kind {
 		case "connection":
-			line += " " + s.waLink(c, "/connections?connect="+n.Connector)
+			// Connected from the chat (connect_links.go).
+			line += " " + c.t("connect.hint", "service", n.Connector)
 		case "secret":
 			line += " " + s.waLink(c, "/settings")
 		}
@@ -279,7 +282,9 @@ func (s *Server) waBuildNext(ctx context.Context, c *chat, b *waBuild) (string, 
 		return "", err
 	}
 	if blocking := blockingNeeds(needs); len(blocking) > 0 {
-		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		// What it waits for may be connected from here: "connect ..." then
+		// carries on with it.
+		if err := s.connectWaiting(ctx, c, b); err != nil {
 			return "", err
 		}
 		return c.t("wa.build.before_publish") + "\n" + s.needLines(c, blocking) + "\n\n" + c.t("wa.build.publish_later", "name", whatsapp.SafeText(b.Name)), nil
@@ -366,6 +371,12 @@ func (s *Server) waPublishWorkflow(ctx context.Context, c *chat, name string) (b
 	state, needs, err := s.publishFromChat(ctx, c, wf, v)
 	if err != nil {
 		return true, c.say(ctx, s, c.t("wa.publish.failed", "reason", whatsapp.SafeText(plainError(err))))
+	}
+	if state == publishNotReady {
+		// What it waits for may be connected from here (connect_links.go).
+		if err := s.connectWaiting(ctx, c, &waBuild{Workflow: wf, Version: v, Name: real}); err != nil {
+			return true, err
+		}
 	}
 	return true, c.say(ctx, s, s.publishReply(ctx, c, state, real, needs, wf))
 }
@@ -493,7 +504,7 @@ func (s *Server) shopTurnOnOrders(ctx context.Context, c *chat) error {
 		msg += " " + c.t("wa.shop.bookings_on")
 	}
 	if !paystack {
-		msg += "\n" + c.t("wa.shop.orders_no_paystack", "link", s.waLink(c, "/connections?connect=paystack"))
+		msg += "\n" + c.t("wa.shop.orders_no_paystack", "link", c.t("connect.hint", "service", "paystack"))
 	}
 	return c.say(ctx, s, msg)
 }

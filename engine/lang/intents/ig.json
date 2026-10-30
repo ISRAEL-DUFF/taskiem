@@ -14,7 +14,9 @@
     "my_page": ["peeji m", "ụlọ ahịa m"],
     "orders": ["iwu m", "ihe e nyere m iwu"],
     "open_shop": ["mepee ụlọ ahịa m", "mepee ụlọ ahịa"],
-    "qr": ["qr m"]
+    "qr": ["qr m"],
+    "signup": ["achọrọ m imepe akaụntụ", "mepere m akaụntụ", "achọrọ m ịmalite azụmahịa", "debanye aha"],
+    "plan": ["atụmatụ m", "ego ole ka m ga-akwụ", "ịkwụ ụgwọ taskiem"]
   },
   "prefixes": {
     "switch": ["gbanwee gaa", "gaa na"],
@@ -35,7 +37,9 @@
     "received": ["anatara m", "m natara", "anatala"],
     "count": ["agụrụ m", "m gụrụ"],
     "stock": ["ole ka", "ole"],
-    "take_off": ["wepụ", "wepu", "mebiri"]
+    "take_off": ["wepụ", "wepu", "mebiri"],
+    "connect": ["jikọọ", "connect"],
+    "invite": ["kpọọ", "invite"]
   },
   "fillers": ["biko"],
   "markers": ["biko", "kedu", "ndewo", "ego", "ziga", "enyemaka", "taa", "gịnị", "achọrọ m", "m chọrọ", "nke", "ndị", "kagbuo", "mba", "daalụ", "ụbọchị", "ndị ahịa", "akwụkwọ ụgwọ", "emefuru m", "ego batara", "ego pụrụ", "maka"],

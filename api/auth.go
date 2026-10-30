@@ -541,7 +541,9 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			return tx.QueryRow(r.Context(), `SELECT email, name, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &name, &verified)
 		})
-		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified}
+		// A sign-in name that receives no mail (an account made in chat):
+		// the web app offers Add your email (chat_doors.go).
+		out["user"] = map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email)}
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			out["totp"] = s.totpEnrolled(r.Context(), tx, p.UserID)
 			return nil
@@ -549,6 +551,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		// What the member proves themselves with to change their factors.
 		if f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID); err == nil {
 			out["factors"] = f
+		}
+		// Terms the person has not answered yet (onboarding.go).
+		if t := s.meTerms(r.Context(), p.UserID); t != nil && p.KeyID == uuid.Nil {
+			out["terms"] = t
 		}
 	}
 	// What the web app shows: the technical parts only with Advanced on,
@@ -708,7 +714,7 @@ func (s *Server) addMember(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.needVerified(r); err != nil {
+	if err := s.needVerified(r, true); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -895,7 +901,7 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.needVerified(r); err != nil {
+	if err := s.needVerified(r, false); err != nil {
 		s.fail(w, r, err)
 		return
 	}

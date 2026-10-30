@@ -94,8 +94,8 @@ var (
 		Buckets: []float64{60, 120, 300, 600, 900, 1800, 3600, 4 * 3600, 24 * 3600, 7 * 24 * 3600},
 	})
 	Signups = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "taskiem_signups_total", Help: "Self-serve signups by outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot).",
-	}, []string{"outcome"})
+		Name: "taskiem_signups_total", Help: "Self-serve signups by way in (signup: the web form, agent, whatsapp, telegram, slack) and outcome (created, rate_limited, blocked_domain, invalid, exists, honeypot, declined, cancelled, country).",
+	}, []string{"source", "outcome"})
 	// KeyChecksFailed counts key job checks where a tenant's key did not
 	// work, by whether a customer key (BYOK) is involved; which tenant is in
 	// the logs, the tenant's audit log and its key_health alerts.

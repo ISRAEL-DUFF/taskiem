@@ -23,7 +23,7 @@ type section struct {
 }
 
 var nav = []section{
-	{"For business owners", []string{"guide/index", "guide/start", "guide/templates", "guide/connections", "guide/paying-people", "guide/receiving-money", "guide/your-riders", "guide/your-stock", "guide/schools", "guide/tables", "guide/changing-a-workflow", "guide/settings", "guide/own-domain", "guide/your-website", "guide/own-whatsapp-number", "guide/on-your-phone"}},
+	{"For business owners", []string{"guide/index", "guide/start-from-chat", "guide/start", "guide/templates", "guide/connections", "guide/paying-people", "guide/receiving-money", "guide/your-riders", "guide/your-stock", "guide/schools", "guide/tables", "guide/changing-a-workflow", "guide/settings", "guide/own-domain", "guide/your-website", "guide/own-whatsapp-number", "guide/on-your-phone"}},
 	{"Get started", []string{"onboarding", "templates", "schools", "data-tables", "dashboard", "environments", "cli"}},
 	{"Money", []string{"invoices", "money-log", "matching", "leaks", "money-reports"}},
 	{"Build workflows", []string{"workflow-builder", "sdk", "readiness", "code-steps", "container-steps", "ai", "alerts"}},

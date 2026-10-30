@@ -54,6 +54,8 @@ const OWNER_FILES = [
   "pages/AIBuild.tsx",
   "pages/Run.tsx",
   "pages/Account.tsx",
+  "pages/Connect.tsx",
+  "pages/ChatDoors.tsx",
   "forms/ConnectionPicker.tsx",
   "forms/RolePicker.tsx",
   "forms/SheetChooser.tsx",

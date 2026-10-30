@@ -73,7 +73,7 @@ What is left in onboarding:
 
 - **People**: the sending domain for signup email, the abuse policy, the docs site, and timed sessions with real new users (P4-O1–P4-O4 in [what needs people](needs-people.md#phase-4)).
 - **Cleanup of unconfirmed tenants** (suspend or delete after N days) waits for the abuse policy.
-- **WhatsApp as the entry point** (go-to-market step 2): signing up from WhatsApp, rather than linking a number after a web signup, is not built.
+- **WhatsApp as the entry point** (go-to-market step 2): built, with Telegram and Slack, beside the web form ([chat as the way in](spec/chat-way-in.md), [decision 0058](decisions/0058-chat-as-a-way-in.md), [onboarding](onboarding.md#signing-up-from-chat)). Off until the operator turns it on, with the terms set.
 - A connection test before the first run (`auth.test` in manifests) is not called by the guide yet; a wrong key shows as a failed step on the test run.
 
 ## P4-3: cloud

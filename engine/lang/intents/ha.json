@@ -14,7 +14,9 @@
     "my_page": ["shafina", "shagona"],
     "orders": ["odar dina", "odar"],
     "open_shop": ["bude shagona", "bude shago"],
-    "qr": ["qr dina"]
+    "qr": ["qr dina"],
+    "signup": ["ina son buɗe asusu", "buɗe mini asusu", "ina son fara kasuwanci", "yi rajista"],
+    "plan": ["tsarina", "nawa zan biya", "biyan taskiem"]
   },
   "prefixes": {
     "switch": ["koma", "sauya zuwa"],
@@ -35,7 +37,9 @@
     "received": ["na karɓi", "an karɓi", "na karbi"],
     "count": ["na ƙirga", "na kirga"],
     "stock": ["guda nawa", "nawa ne"],
-    "take_off": ["cire", "ya lalace"]
+    "take_off": ["cire", "ya lalace"],
+    "connect": ["haɗa", "connect"],
+    "invite": ["gayyaci", "invite"]
   },
   "fillers": ["don allah", "dan allah"],
   "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana", "takardar kuɗi", "na kashe", "kuɗi ya shigo", "kuɗi ya fita"],

@@ -40,7 +40,9 @@ import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { Handoff } from "./pages/Handoff";
 import { Templates } from "./pages/Templates";
 import { Billing, BillingBanner } from "./pages/Billing";
-import { Signup, VerifyEmail } from "./pages/Signup";
+import { ConnectDone, ConnectPage, SlackAdded } from "./pages/Connect";
+import { ConfirmEmail, LinkChat } from "./pages/ChatDoors";
+import { Signup, TermsBanner, VerifyEmail } from "./pages/Signup";
 import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
@@ -209,6 +211,18 @@ function Shell() {
   if (loc.pathname === "/reset-password") return alone(<ResetPassword />);
   // An emailed invitation link, for someone with no account yet.
   if (loc.pathname === "/accept-invitation") return alone(<AcceptInvitation />);
+  // A connect link sent from chat: no sign-in, the link is the authority.
+  if (loc.pathname === "/c/done") return alone(<ConnectDone />);
+  // Add to Slack's outcome, when Slack could not open the bot.
+  if (loc.pathname === "/slack/added") return alone(<SlackAdded />);
+  // An email added from chat, confirmed signed in or not.
+  if (loc.pathname === "/confirm-email") return alone(<ConfirmEmail />);
+  if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
+    return alone(
+      <Routes>
+        <Route path="/c/:token" element={<ConnectPage />} />
+      </Routes>,
+    );
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
@@ -546,6 +560,7 @@ function SignedIn() {
         inert={drawer || undefined}
       >
         <BillingBanner />
+        <TermsBanner />
         <div className="page" key={`${pathname}#${fresh}`}>
           <PageBoundary>
             <Routes>
@@ -657,6 +672,7 @@ function SignedIn() {
               <Route path="/start" element={<Start />} />
               <Route path="/start/guide" element={<Guide />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/link-chat" element={<LinkChat />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/runs" element={<Runs />} />
               <Route path="/runs/:id" element={<RunPage />} />
