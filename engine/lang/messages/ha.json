@@ -1685,7 +1685,7 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, sunan tebur da kalma: nemo layuka",
+      "text": "• *find*, sunan tebur da kalma: nemo layuka, sannan *change 1* ko *delete 1*",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -3245,7 +3245,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… da wasu {count}. Rage binciken, ko buɗe Tables a Taskiem.",
+      "text": "… da wasu {count}. Aika *more* don na gaba guda biyar.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3258,6 +3258,86 @@
     },
     "wa.table.find_what": {
       "text": "Aika *find*, sunan tebur da abin da kake nema.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Aika *change 1* don gyara layi na 1, ko *delete 1* don cire shi.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Wannan ke nan duka a {table} don wannan binciken.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "Babu layi na {n} a jerin. Aika lamba daga 1 zuwa {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "Ba za ka iya canza layuka a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} ba ya nan kuma. Aika *tables* don ganin abin da ke akwai.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Layi na {id} ba ya cikin {table} kuma.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Layi na {id} a {table}:\n{row}\n\nWane bayani kake son canzawa? Aika lambarsa.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Aika lamba daga 1 zuwa {max}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "Sabon bayanin:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: danna *{cta}* don shigar da sabon bayanin; za ka tabbatar kafin a ajiye shi. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "A ajiye wannan canjin a layi na {id} a {table}?\n{changes}\n\nAmsa da *yes* don ajiyewa, lambar wani bayani don canza shi ma, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "A cire layi na {id} daga {table}? Ba za a iya dawo da shi ba.\n{row}\n\nAmsa da *yes* don cire shi ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Amsa da *yes* don ci gaba ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Ba a canza komai ba. Layukan da aka samo suna nan da lambobinsu.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "Ka canza layuka da yawa yanzu. Jira minti ɗaya, sannan ka sake gwadawa.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "Ba a ajiye shi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "Bai yiwu ba: {reason}\n\nAmsa da *yes* don sake gwadawa ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Layi na {id} ya canza bayan ka gan shi, don haka ba a rubuta komai ba. Ga shi yanzu.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "An ajiye layi na {id} a {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "An cire layi na {id} daga {table}.",
       "reviewed": false
     },
     "wa.table.form": {

@@ -240,6 +240,9 @@ type chatData struct {
 	// TableMake is a data table being made, or a column added
 	// (chat_tables_make.go).
 	TableMake *chatTableMake `json:"table_make,omitempty"`
+	// Found is the rows a find showed, and a change or removal being
+	// prepared on one of them (chat_tables_rows.go).
+	Found *chatFound `json:"found,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -605,6 +608,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.TableMake != nil && c.state != stateIdle {
 		return s.waTableMakeReply(ctx, c, text, cmd)
+	}
+	if c.data.Found != nil && c.state != stateIdle {
+		// A message that is not about the rows found lets them go and is
+		// read as a new one.
+		if done, err := s.waFoundReply(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {

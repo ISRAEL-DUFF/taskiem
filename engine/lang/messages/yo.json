@@ -1685,7 +1685,7 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà",
+      "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà, lẹ́yìn náà *change 1* tàbí *delete 1*",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -3245,7 +3245,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… àti {count} mìíràn. Ẹ wá pẹ̀lú ọ̀rọ̀ tó pọ̀ sí i, tàbí ẹ ṣí Tables nínú Taskiem.",
+      "text": "… àti {count} mìíràn. Ẹ fi *more* ránṣẹ́ fún márùn-ún tó kàn.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3258,6 +3258,86 @@
     },
     "wa.table.find_what": {
       "text": "Ẹ fi *find*, orúkọ tábìlì àti ohun tí ẹ ń wá ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Ẹ fi *change 1* ránṣẹ́ láti ṣàtúnṣe ìlà 1, tàbí *delete 1* láti yọ ọ́ kúrò.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Gbogbo rẹ̀ nìyẹn nínú {table} fún ìwádìí yẹn.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "Kò sí ìlà {n} nínú àkójọ náà. Ẹ fi nọ́ńbà láti 1 sí {max} ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "Ẹ kò lè yí àwọn ìlà padà nínú {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} kò sí mọ́. Ẹ fi *tables* ránṣẹ́ láti rí èyí tó wà.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Ìlà {id} kò sí nínú {table} mọ́.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Ìlà {id} nínú {table}:\n{row}\n\nÈwo lẹ fẹ́ yí padà? Ẹ fi nọ́ńbà rẹ̀ ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Ẹ fi nọ́ńbà láti 1 sí {max} ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "Èyí tuntun:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: ẹ tẹ *{cta}* láti kọ èyí tuntun; ẹ ó fìdí rẹ̀ múlẹ̀ kí a tó fi pamọ́. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Ṣé kí a fi àyípadà yìí pamọ́ sí ìlà {id} nínú {table}?\n{changes}\n\nẸ dáhùn *yes* láti fi pamọ́, nọ́ńbà àlàyé mìíràn láti yí òun náà padà, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Ṣé kí a yọ ìlà {id} kúrò nínú {table}? A kò ní lè rí i padà.\n{row}\n\nẸ dáhùn *yes* láti yọ ọ́ tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Ẹ dáhùn *yes* láti tẹ̀síwájú tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Kò sí ohun tí a yí padà. Àwọn ìlà tí a rí ṣì ní nọ́ńbà wọn.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "Ẹ ti yí ọ̀pọ̀ ìlà padà báyìí. Ẹ dúró fún ìṣẹ́jú kan, lẹ́yìn náà ẹ tún gbìyànjú.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "A kò fi í pamọ́: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "Kò ṣeé ṣe: {reason}\n\nẸ dáhùn *yes* láti tún gbìyànjú tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Ìlà {id} yí padà lẹ́yìn tí ẹ rí i, nítorí náà a kò kọ nǹkan kan. Òun nìyí báyìí.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "A ti fi ìlà {id} pamọ́ nínú {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "A ti yọ ìlà {id} kúrò nínú {table}.",
       "reviewed": false
     },
     "wa.table.form": {

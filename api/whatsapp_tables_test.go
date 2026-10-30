@@ -186,7 +186,7 @@ func TestWhatsAppTables(t *testing.T) {
 
 	// Find: short lines, personal values masked, how many more.
 	r = w.say(t, bn, "find debtors ada")
-	if !strings.Contains(r, `In Debtors, matching "ada":`) || !strings.Contains(r, "• #2 · Name: Ada · phone: +234") || !strings.Contains(r, "•5678") ||
+	if !strings.Contains(r, `In Debtors, matching "ada":`) || !strings.Contains(r, "1. #2 · Name: Ada · phone: +234") || !strings.Contains(r, "•5678") ||
 		!strings.Contains(r, "balance_kobo: 5000") || strings.Contains(r, "8012345678") || strings.Contains(r, "more") {
 		t.Errorf("find: %q", r)
 	}
@@ -208,7 +208,7 @@ func TestWhatsAppTables(t *testing.T) {
 	for i := range 7 {
 		owner.must(201, "POST", "/v1/tables/"+id+"/rows", map[string]any{"row": map[string]any{"name": fmt.Sprintf("Bulk %d", i)}})
 	}
-	if r := w.say(t, bn, "find debtors bulk"); strings.Count(r, "• #") != 5 || !strings.Contains(r, "and 2 more") {
+	if r := w.say(t, bn, "find debtors bulk"); strings.Count(r, ". #") != 5 || !strings.Contains(r, "and 2 more") {
 		t.Errorf("find more: %q", r)
 	}
 

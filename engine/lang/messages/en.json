@@ -2105,9 +2105,9 @@
       "context": "Help line, with storefront.manage; keep the command words in English"
     },
     "wa.help.find": {
-      "text": "• *find*, a table's name and a word: look up rows",
+      "text": "• *find*, a table's name and a word: look up rows, then *change 1* or *delete 1*",
       "reviewed": true,
-      "context": "Help line"
+      "context": "help line for find, change and delete"
     },
     "wa.help.intro": {
       "text": "You can send:",
@@ -4055,9 +4055,9 @@
       "context": "find: first line, before up to five rows"
     },
     "wa.table.find_more": {
-      "text": "… and {count} more. Narrow the search, or open Tables in Taskiem.",
+      "text": "… and {count} more. Send *more* for the next five.",
       "reviewed": true,
-      "context": "find: more rows than shown"
+      "context": "find: more rows than shown; *more* shows the next five"
     },
     "wa.table.find_no_column": {
       "text": "{table} has no text column to search. Send *find*, the table and column:text.",
@@ -4073,6 +4073,106 @@
       "text": "Send *find*, a table's name and what to look for.",
       "reviewed": true,
       "context": "find without a table or a text"
+    },
+    "wa.rows.find_tail": {
+      "text": "Send *change 1* to correct row 1, or *delete 1* to remove it.",
+      "reviewed": true,
+      "context": "find: last line, for a person who may change rows"
+    },
+    "wa.rows.no_more": {
+      "text": "That is all in {table} for that search.",
+      "reviewed": true,
+      "context": "more: no further rows"
+    },
+    "wa.rows.no_number": {
+      "text": "There is no row {n} in the list. Send a number from 1 to {max}.",
+      "reviewed": true,
+      "context": "change or delete with a number not in the list"
+    },
+    "wa.rows.denied": {
+      "text": "You cannot change rows in {org} (it takes table.edit).",
+      "reviewed": true,
+      "context": "change or delete without table.edit"
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} is no longer there. Send *tables* to see what is.",
+      "reviewed": true,
+      "context": "the table of the rows found was deleted"
+    },
+    "wa.rows.gone": {
+      "text": "Row {id} is no longer in {table}.",
+      "reviewed": true,
+      "context": "the row was removed since it was found"
+    },
+    "wa.rows.pick_column": {
+      "text": "Row {id} in {table}:\n{row}\n\nWhich detail do you want to change? Send its number.",
+      "reviewed": true,
+      "context": "change: the row, numbered by detail; {row} is one detail a line"
+    },
+    "wa.rows.pick_again": {
+      "text": "Send a number from 1 to {max}, or *cancel*.",
+      "reviewed": true,
+      "context": "change: a detail's number was expected"
+    },
+    "wa.rows.ask_value": {
+      "text": "The new value:\n{prompt}",
+      "reviewed": true,
+      "context": "change: asks the new value; {prompt} is the detail's question"
+    },
+    "wa.rows.form": {
+      "text": "{table}: tap *{cta}* to enter the new value; you confirm before it is saved. Send *cancel* to stop.",
+      "reviewed": true,
+      "context": "The message carrying a found row's new value form; {cta} is button.fill_in"
+    },
+    "wa.rows.confirm_change": {
+      "text": "Save this change to row {id} in {table}?\n{changes}\n\nReply *yes* to save it, another detail's number to change that too, or *cancel*.",
+      "reviewed": true,
+      "context": "change: read back, each detail as it was → as it will be"
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Remove row {id} from {table}? It cannot be got back.\n{row}\n\nReply *yes* to remove it or *cancel*.",
+      "reviewed": true,
+      "context": "delete: the row read back for yes"
+    },
+    "wa.rows.reminder": {
+      "text": "Reply *yes* to go ahead or *cancel*.",
+      "reviewed": true,
+      "context": "a change or removal waits for yes"
+    },
+    "wa.rows.left": {
+      "text": "Nothing was changed. The rows found are still numbered.",
+      "reviewed": true,
+      "context": "a change or removal declined; the rows found stay"
+    },
+    "wa.rows.too_many": {
+      "text": "You have changed several rows just now. Wait a minute, then try again.",
+      "reviewed": true,
+      "context": "rate limit on changes and removals"
+    },
+    "wa.rows.not_saved": {
+      "text": "That was not saved: {reason}",
+      "reviewed": true,
+      "context": "a change the table's columns no longer accept"
+    },
+    "wa.rows.failed": {
+      "text": "That did not go through: {reason}\n\nReply *yes* to try again or *cancel*.",
+      "reviewed": true,
+      "context": "Xenibase refused or failed a change or removal"
+    },
+    "wa.rows.changed_since": {
+      "text": "Row {id} changed after you saw it, so nothing was written. Here it is now.",
+      "reviewed": true,
+      "context": "the row changed after it was shown; it is shown again"
+    },
+    "wa.rows.saved": {
+      "text": "Saved row {id} in {table}.",
+      "reviewed": true,
+      "context": "a change written"
+    },
+    "wa.rows.deleted": {
+      "text": "Removed row {id} from {table}.",
+      "reviewed": true,
+      "context": "a row removed"
     },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the row's {count} detail(s); you confirm before it is added. Send *cancel* to stop.",

@@ -1685,7 +1685,7 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị",
+      "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị, mgbe ahụ *change 1* ma ọ bụ *delete 1*",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -3245,7 +3245,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… na {count} ọzọ. Mee ka ọchụchọ dị nso, ma ọ bụ mepee Tables na Taskiem.",
+      "text": "… na {count} ọzọ. Ziga *more* maka ise ndị ọzọ.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3258,6 +3258,86 @@
     },
     "wa.table.find_what": {
       "text": "Ziga *find*, aha tebụl na ihe ị na-achọ.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Ziga *change 1* ka idozi ahịrị 1, ma ọ bụ *delete 1* ka iwepụ ya.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Nke ahụ bụ ihe niile dị na {table} maka ọchụchọ ahụ.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "Enweghị ahịrị {n} na ndepụta ahụ. Ziga nọmba site na 1 ruo {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "Ị nweghị ike ịgbanwe ahịrị na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} adịghịzi. Ziga *tables* ka ịhụ ndị dị.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Ahịrị {id} adịghịzi na {table}.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Ahịrị {id} na {table}:\n{row}\n\nKedu nkọwa ị chọrọ ịgbanwe? Ziga nọmba ya.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Ziga nọmba site na 1 ruo {max}, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "Nke ọhụrụ:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: pịa *{cta}* ka itinye nke ọhụrụ; ị ga-akwado tupu echekwa ya. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Echekwa mgbanwe a na ahịrị {id} na {table}?\n{changes}\n\nZaa *yes* ka echekwa ya, nọmba nkọwa ọzọ ka ịgbanwekwa ya, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Wepụ ahịrị {id} na {table}? A gaghị enwe ike inweta ya ọzọ.\n{row}\n\nZaa *yes* ka iwepụ ya ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Zaa *yes* ka ị gaa n'ihu ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Ọ dịghị ihe a gbanwere. Ahịrị ndị a chọtara ka nwere nọmba ha.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "Ị gbanweela ọtụtụ ahịrị ugbu a. Chere otu nkeji, mgbe ahụ nwaa ọzọ.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "Echekwaghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "O megheke: {reason}\n\nZaa *yes* ka ịnwaa ọzọ ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Ahịrị {id} gbanwere mgbe ị hụchara ya, ya mere e deghị ihe ọ bụla. Lee ya ugbu a.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "Echekwala ahịrị {id} na {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "Ewepụla ahịrị {id} na {table}.",
       "reviewed": false
     },
     "wa.table.form": {

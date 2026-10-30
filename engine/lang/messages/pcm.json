@@ -1685,7 +1685,7 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, the table name and one word: look for rows",
+      "text": "• *find*, the table name and one word: look for rows, then *change 1* or *delete 1*",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -3245,7 +3245,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… and {count} more. Find with more words, or open Tables for Taskiem.",
+      "text": "… and {count} more. Send *more* to see the next five.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3258,6 +3258,86 @@
     },
     "wa.table.find_what": {
       "text": "Send *find*, the table name and wetin you dey find.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Send *change 1* to correct row 1, or *delete 1* to comot am.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Na everything wey dey {table} for that search be dat.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "No row {n} dey the list. Send number from 1 reach {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "You no fit change rows for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} no dey again. Send *tables* to see wetin dey.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Row {id} no dey {table} again.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Row {id} for {table}:\n{row}\n\nWhich one you wan change? Send im number.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Send number from 1 reach {max}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "The new one:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: tap *{cta}* to enter the new one; you go confirm before I save am. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Make I save this change for row {id} for {table}?\n{changes}\n\nReply *yes* to save am, another detail number to change am too, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Make I comot row {id} from {table}? You no go fit get am back.\n{row}\n\nReply *yes* to comot am or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Reply *yes* to continue or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Nothing change. The rows wey I find still get dia numbers.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "You don change plenty rows just now. Wait small, then try again.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "I no save am: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "E no go: {reason}\n\nReply *yes* to try again or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Row {id} don change after you see am, so I no write anything. See am as e be now.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "I don save row {id} for {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "I don comot row {id} from {table}.",
       "reviewed": false
     },
     "wa.table.form": {
