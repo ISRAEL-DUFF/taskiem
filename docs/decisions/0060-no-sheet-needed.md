@@ -18,7 +18,7 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
    - The gallery, the Start page, the AI builder's retrieval and the sign-up's starters all apply the conditions, and the builder ranks a twin above its sheet template.
    - Sheet templates stay for businesses that connect Google, and workflows made from them keep working.
 2. **Known tables.**
-   - `debtors`, `customers` and `staff` are defined once and used by templates, chat words and the AI builder; the storefront's `products` and `services`, and the tables fronts' kinds make ([0059](0059-fronts.md)), live in the same registry.
+   - `customers` and `staff` are defined once and used by templates, chat words and the AI builder; the storefront's `products` and `services`, and the tables fronts' kinds make ([0059](0059-fronts.md)), live in the same registry. There is no `debtors` table (point 6).
    - They are the business's own ordinary tables, never kept. One that exists is never changed.
 3. **Templates make their tables wherever they are used.**
    - A chat template build makes the tables it declares, and so does an AI draft made from a template.
@@ -32,11 +32,12 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
    - A write names the row's id and the values the person was shown, so a change made elsewhere since then is never overwritten. `updated_at` cannot do this, because nothing changes it after a row is made.
    - Dropping a column or deleting a table needs the name typed back and the chat PIN where one is set, which today means WhatsApp. Otherwise it goes to the web.
    - Kept tables stay closed to every change, in chat too.
-6. **The debtor book.**
-   - `<name> owes <amount>`, `<name> paid <amount>` and `who owes me?` act on the `debtors` table, or the table the owner names as the book.
-   - It is the notebook, not a second ledger: money a customer should be sent something to pay is an invoice, the book offers to raise one, and `who owes me?` answers with both.
-   - A payment said with *cash* is also recorded once in the money log, for a person allowed to record money (`invoice.manage`).
-   - A *transfer* is not, because the rail records it already.
+6. **The debtor book is invoices.**
+   - Money owed is kept in one place, invoices, which already have a balance, part payments, matching, receipts, chasing and oldest-first attribution. A debtors table would be a second ledger with a second "paid", so there is none.
+   - `<name> owes <amount>` makes an invoice of a new kind, `credit`: unsent, no due date unless given, the phone optional, the customer found by name when there is no phone.
+   - `<name> paid <amount>` is a payment counted towards that customer's open invoices oldest first, any extra held as credit; *cash* posts cash to the money log, *transfer* waits for the rail's report, so nothing is counted twice.
+   - `who owes me?` answers from open invoices, credit lines and sent invoices as one balance per customer. Reminders are `chase-overdue-invoices`, grouped per customer. A credit sale from the stock words makes a credit invoice.
+   - The two debtor-reminder sheet templates are replaced by `chase-overdue-invoices`, and `debtor-reminder-table` is retired.
 7. **Questions over rows become a checked query spec, never free reading.**
    - The model, where used, gets the question and the table and column names and types. It never gets a row.
    - It returns a spec that is checked against the person's tables and columns, with types, operators, values, a limit of 20 and at most one count or sum, before one read-only query runs.
@@ -45,7 +46,7 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
 
 ## Consequences
 
-- "Remind my customers who owe me" works for a phone-only trader with no sheet and no database in sight. This is the strategy's [§3.3](../strategy/chat-first-nigeria.md#33-xenibase-under-the-agent) goal.
+- "Remind my customers who owe me" works for a phone-only trader with no sheet and no database in sight, through invoices, with nothing new to make. This is the strategy's [§3.3](../strategy/chat-first-nigeria.md#33-xenibase-under-the-agent) goal.
 - Records live in one place, the business's Xenibase project, whether they arrive from chat, a file, the web or a workflow.
 - More of chat writes data. Each write path has a **yes**, an idempotency key and the guard on the values shown, and destructive changes need the PIN.
 - The model sees more kinds of request but no more data. Its output is a routing or a spec that code checks, and it runs with the person's permissions.
