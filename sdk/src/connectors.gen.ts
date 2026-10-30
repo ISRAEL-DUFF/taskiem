@@ -691,6 +691,8 @@ export interface InvoicesGetInput {
   number: Val<string>;
 }
 export interface InvoicesListInput {
+  /** customer: one row per customer with something overdue (status overdue only) */
+  group?: Val<"customer">;
   /** At most this many (default 50) */
   limit?: Val<number>;
   /** For paid */
