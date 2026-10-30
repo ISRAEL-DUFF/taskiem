@@ -20,6 +20,9 @@ Tenancy already has a pattern for touching another tenant with consent: a partne
 6. **Counterparties not on Taskiem are unchanged.** Invoices, purchase orders and updates reach them as today. A link changes only the documents between two linked businesses.
 7. **Price lists, threads, statements, credit terms and reminders ride on the same link**, each a mirror or a setting, never a shared record. Workflow triggers and actions for links (`link@1`) carry references and amounts, never the other side's contact details.
 8. **"Partner" keeps its meaning.** A platform partner ([0015](0015-embedding-tenancy.md)) serves sub-tenants through the partner API; a linked business is a peer. The owner-facing word is "linked business".
+9. **Linked businesses talk in a conversation that belongs to the pair.** On the web it is a messenger like WhatsApp, one conversation per linked business with its whole history, every document a card in the stream; on the phone it is the WhatsApp or Telegram the owner uses, the same messages with the business's name. The web app becomes a channel on the one conversation engine, with the owner's own Taskiem conversation in the same list. Writing to a linked business needs `chat.trade`; a conversation is muted or archived, never deleted by one side.
+10. **A mention is a structured reference.** `@` resolves a linked business and `#` an item on its price list at the moment of typing, so one message can read back as one draft per business and one **Yes** sends them all; a mention of an unlinked business offers the link.
+11. **One global search, under the lookup's privacy.** The web app's search finds the business's own records and the businesses it may link with; a name search shows only businesses that chose to be found, and a phone or address query reveals nothing.
 
 ## Alternatives considered
 
@@ -30,13 +33,16 @@ Tenancy already has a pattern for touching another tenant with consent: a partne
 | Links through the partner API, one business as the other's partner | A partner holds its sub-tenants' plans and limits and enters them at will; peers trade as equals and each keeps its own plan, people and consent |
 | Settlement through Taskiem (Taskiem takes the money and pays it on) | Taskiem is not a licensed intermediary for that; the rails are. An internal transfer on Taskiem's own rail is named for later, through the rail, not through Taskiem |
 | Discovery by phone that says whether a business exists | Lets anyone learn who is on Taskiem by typing numbers; the lookup answers the same words either way and only acceptance reveals |
+| Threads on documents instead of a conversation | A trade is a relationship, not a set of tickets; owners already run it in WhatsApp threads with whole histories, and a messenger with documents as cards is what they would recognise |
+| A separate chat product beside the conversation engine | Two engines for the same words; the web channel on `converse` gives the web every command chat has, and the phone every message the web has |
 
 ## Consequences
 
 - New tables: `business_links` (platform-level, read through `taskiem_links_of`), `bills`, `item_links`, `link_threads` and their messages, each tenant-owned under forced row-level security; `storefront_orders` gains the kind `trade`; invoices and customer records gain the key `link:<tenant>`.
 - New definer `taskiem_link_enter`, modelled on `taskiem_partner_enter`, with the dual audit actions `link.*`; a reconciler job; a test harness over two tenants asserting no other cross-tenant query.
 - New permission `link.manage` (owners and admins); plan limits for links, requests and mirrored documents.
-- New pages: Linked businesses, Bills; new chat words: `link`, `bills`, `pay`, `prices from`, `ask … about`, `bills due`.
+- New pages: Linked businesses, Bills, and **Chat** (the web channel on `converse`: conversations, document cards, mentions, files and voice notes); a global search in the header; a link code on the QR card, invoices and receipts; new chat words: `link`, `links`, `bills`, `pay`, `prices from`, `ask …`, `bills due`.
+- New permission `chat.trade` (owners, admins, operators); new tables `link_conversations` and `link_messages` (mirrored both sides), with files under each business's private storage.
 - `link@1` connector with triggers and actions; four templates; the builder's rules.
 - The money log pairs a payout and a credit across businesses by reference; matching's exact match on a link account closes the buyer's bill.
 - Docs: invoices, stock, storefronts, matching, the owners' guide, the atlas's business modules and identity pages, the threat model (a new actor: a linked business).

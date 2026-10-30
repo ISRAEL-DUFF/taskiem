@@ -11,13 +11,15 @@ A **link** is a relationship between two businesses on Taskiem, made with both s
 - Dangote's invoice to Ada becomes a **bill** in Ada's business, owed and payable there, with part payments.
 - Ada's purchase order becomes an **order** in Dangote's business, and its acceptance, dispatch and delivery flow back to her purchase order.
 - Ada's payment, from Taskiem or from her bank, is matched on both sides at once: her bill paid, his invoice paid, one transfer, nothing in To match on either side.
-- A question about a line is a **thread** both can see, in the web app and in chat.
+- The two businesses have a **conversation**: a chat in the web app that looks and works like WhatsApp, one per linked business with its whole history, where every order, bill, delivery and payment is a card in the stream, and the same messages reach the owners' phones.
 - Dangote can share a **price list**; Ada's reorders from her low list go straight into his orders at his prices.
 - Each side keeps its own records under its own tenancy. Nothing is shared in one place; the link carries copies, and each copy says which side's is the truth for what.
 
 And everyone who is not on Taskiem keeps getting what they get today, by WhatsApp, SMS and email, because Dangote cannot know which of his forty customers will ever sign up.
 
-Two ways to link: look a business up and ask, like a connection request, or be offered the link the first time one business sends the other a document. Both sides must say yes.
+Three ways to link: find a business and ask, like a connection request, through a **global search** on the web or `link` in chat; be offered the link the first time one business sends the other a document; or scan the other business's code across the counter. Both sides must say yes.
+
+In the web app's conversations, `@` suggests linked businesses as you type and `#` suggests items from their price lists, so one message, "Buy 400 bags of cement from @Dangote and 20 pieces of blocks from @Cherry", reads back as two orders and one **Yes** sends both.
 
 Eight milestones, L0 to L7. L0 and L1 give Dangote and Ada a bill that is paid once and matched twice.
 
@@ -61,12 +63,17 @@ Not built: any notion that a counterparty is itself a business on Taskiem; a bil
 
 ### 5.1 Finding each other
 
-Two ways, both ending in a request that the other side accepts:
+Three ways, each ending in a request that the other side accepts:
 
-- **Look up and ask.** Under **Linked businesses** (a new page under Secrets & settings, and `link` in chat), a business searches by **business name**, by **phone number** (the number on a supplier's record, a customer's invoice, or typed), or by **storefront address** (`adas-kitchen.taskiem.ng`). The request carries the requester's business name and what it says they are to each other (**They supply us**, **They buy from us**, **Both**), and nothing else.
-- **At the first document.** When a business sends an invoice, a purchase order or an order update to a phone that is a Taskiem business's (its owner's linked number, its own WhatsApp number, or a member's linked number), the message the outsider gets carries one more line: "Ada's Kitchen is on Taskiem too. Link the two businesses so your invoices and orders meet by themselves: **Link**." Tapping it is the request; the sender's side is asked to accept as the other side would be.
+**On the web: global search.** One search box in the app's header, on every page, finds everything the business can reach: its own invoices, orders, bills, customers, suppliers, items, tables and workflows by reference or name, its linked businesses, and businesses on Taskiem to link with. Results come in groups; a business you are linked to opens its conversation (§5.5), and one you are not shows **Request link** with the role chooser (**They supply us**, **They buy from us**, **Both**). A business's card is its storefront's card where it has one (name, area, what it sells), else its name. The same **Request link** sits where the counterparty already is: on a supplier's row, on a customer's invoice under The customer's money, and on a repeat customer's order. Pending requests, in and out, sit at the top of **Linked businesses** (under Secrets & settings) with **Accept**, **Decline** and **Block**.
 
-**What a lookup reveals: nothing until acceptance.** A search by name lists only businesses that turned on **Let other businesses find us by name** (off by default; on by default for a business with a published storefront, since its name is already public). A search by phone or storefront address lists nothing: it sends the request to the business behind it if there is one, and the requester is told "If a business on Taskiem uses that number, it has your request" either way, so a phone cannot be used to find out who is on Taskiem. The business asked sees the requester's name and what they claim to be, and may **Accept**, **Decline** (the requester is told only that there was no acceptance) or **Block** (no further requests from that business). Requests expire after 30 days. Accepting is an owner's or admin's act (`link.manage`, held by owners and admins), audited on both sides.
+**In chat.** `link Dangote` answers a numbered list of matches; the number picks one, three buttons pick the role, and the request goes. `link 0803…` and `link adas-kitchen` send blind (below). `links` lists linked businesses and pending requests. A request arrives as a message with **Accept**, **Decline** and **Block**, signed as approvals are, so only that business's `link.manage` holders can answer. The same words and buttons on WhatsApp, Telegram and a Slack DM.
+
+**At the first document.** When a business sends an invoice, a purchase order or an order update to a phone that is a Taskiem business's (its owner's linked number, its own WhatsApp number, or a member's linked number), the message the outsider gets carries one more line: "Ada's Kitchen is on Taskiem too. Link the two businesses so your invoices and orders meet by themselves: **Link**." On WhatsApp it is a button; in an SMS it is a link to the business's standing page, which already serves tap-in links. Tapping it is the request.
+
+**Across the counter.** Lagos trade is done face to face. The storefront's QR card gains a second code, **Link with us on Taskiem**, and invoices, receipts and purchase orders print a short link code (`taskiem.ng/l/<code>`, like a rider's tap-in link). Scanning or opening it from a signed-in business opens the request pre-filled; from a phone that is not signed in it offers to sign up first.
+
+**What a lookup reveals: nothing until acceptance.** A search by name lists only businesses that turned on **Let other businesses find us by name** (off by default; on by default for a business with a published storefront, since its name is already public). A search by phone or storefront address lists nothing: it sends the request to the business behind it if there is one, and the requester is told "If a business on Taskiem uses that, it has your request" either way, so a phone cannot be used to find out who is on Taskiem. The business asked sees the requester's name and what they claim to be, and may **Accept**, **Decline** (the requester is told only that there was no acceptance) or **Block** (no further requests from that business). Requests expire after 30 days. Accepting is an owner's or admin's act (`link.manage`, held by owners and admins), audited on both sides.
 
 ### 5.2 The link record
 
@@ -88,6 +95,22 @@ Each side keeps its own settings for a link, changed on the Linked businesses pa
 | Pay their bills automatically up to an amount, after my approval policy; else ask me | buyer | ask |
 | Where to take delivery, and who may collect | buyer | the storefront's address |
 | Tell me when: an order comes from them, a bill arrives, a payment lands, a thread has a new message | both | all on, in chat and the bell |
+
+### 5.5 The conversation: chat between linked businesses
+
+Once linked, two businesses have a **conversation**, and it is where their trade starts and is talked about. On the web it looks, feels and works like WhatsApp; on the phone it is the WhatsApp or Telegram the owner already uses.
+
+**The Chat page in the web app.** A list of conversations down the left, one per linked business, with the business's name, its last message and when, and an unread count; the open conversation on the right as a stream of bubbles, theirs on the left and yours on the right, grouped by day, with the composer at the bottom. A conversation holds the whole history with that business from the link request onward and is searchable. One more conversation sits in the list: **Taskiem**, the owner's own conversation with Taskiem that they have on WhatsApp today (`status`, `orders`, building by chat), now on the web with the same words and the same history, so the web app is a fourth channel on the one conversation engine (`converse`), beside WhatsApp, Telegram and Slack.
+
+**What is in a conversation.** Everything that passed between the two businesses: typed messages, photos, files and voice notes, and every document as a **card** in the stream at the moment it happened. An order arrives as a card with **Accept**, **Change** and **Decline**; a bill as a card with **Pay** and **Query**; a delivery as a card with the rider's photo; a payment as a receipt card; a price list change as a card. Tapping a card opens the document. A quoted reply to a card is a reply about that document, which is what a thread is (§9): the document's page shows the replies to its card, and the conversation shows them in place.
+
+**Who is talking.** A conversation is between the two businesses. Any member who holds `chat.trade` (a new permission, held by owners, admins and operators) can write; each message shows the business's name with the sender's first name under it, so Dangote's sales rep and Ada's manager can run the trade without either owner. Read marks are the business's, set when any member of the other side opens the conversation. A conversation can be muted or archived by either side, and never deleted by one side: it is the record of the trade, and its messages are mirrors like any other (§5.3), kept on both sides.
+
+**Mentions.** In the composer, `@` suggests linked businesses as you type, and picking one puts a structured reference in the message, not a name to be matched later. In a conversation with a business that shares a price list, `#` suggests its items with the unit and the price, so a quantity is never guessed. A message in the Taskiem conversation that mentions businesses is read back as one draft per business, "Buy 400 bags of cement from @Dangote and 20 pieces of blocks from @Cherry" as two purchase orders at each one's prices and terms, and one **Yes** sends each into its own conversation as an order card; the purchase-order approval limit applies per draft. A mention of a business you have not linked offers the link instead of guessing. The model may route a free-form sentence to the order words and read quantities and items from it, as it routes today, and every order still waits for **Yes**.
+
+**Starting a transaction.** On the web, the composer in a business's conversation, and **New order**, **New invoice** and **Pay** at the top of it; the ordinary pages work too (New invoice's customer picker lists linked businesses first, and the Suppliers page's **Order** sends as an order when the supplier is linked). In chat, the words the owner knows gain a linked name: `order 20 bags of rice from Dangote` drafts from his price list and sends as an order; `invoice Ada's Kitchen 25,000 for 5 cartons` makes the invoice with the linked business as the customer, no phone asked, and it lands as her bill; `pay Dangote 50,000` pays his open bills oldest first; `prices from Dangote`, `bills`, `bills due`, and `ask Dangote …` for a message with no document behind it. A name is looked up among linked businesses first, then suppliers and customers, with a numbered pick when two match.
+
+**The same conversation on the phone.** On WhatsApp and Telegram the owner sees the conversation's messages prefixed with the business's name, as every shared-number message is: "[Dangote Stores] New order P-7QX4KD from Ada's Kitchen: 20 bags of rice, ₦1,000,000. **Accept** · **Change** · **Decline**." A quoted reply there goes into the same conversation and shows on the web; a mention typed by hand on the phone (`@Dangote`) resolves by name as today. A business with its own WhatsApp number carries its linked conversations on that number too. Who hears what follows each person's Tell me settings and the link's per-link switches (§5.4), so a sales rep can be the one who hears about orders and the owner the one who hears about bills.
 
 ## 6. L1: invoices become bills, paid once, matched twice
 
@@ -128,18 +151,20 @@ A seller with no connection that issues account numbers falls back to its paymen
 - **Orders the seller places for the buyer.** A sales rep who takes orders by phone drafts an order in the seller's business for a linked buyer; it mirrors to the buyer as a purchase order awaiting the buyer's **Confirm**, and goes no further until then.
 - **Accept:** Ada's low list drafts an order to Dangote; it arrives as an order in Dangote's business, his rider delivers it, Ada's stock rises by what came, his invoice is her bill, she pays it, both are paid; a seller's change and a buyer's cancellation before acceptance; an order to an unlinked supplier goes by chat exactly as today.
 
-## 8. L3: price lists and item links
+## 8. L4: price lists, item links and mentions
 
 - A seller shares a **price list** with a linked buyer: a front's list block (the catalogue, or a wholesale front's list under the fronts plan, in review on PR 135) with, per item, the buyer's price, a minimum quantity, and availability; one list may be shared with many links, and a link may override prices. The buyer sees it as **Dangote's prices** on the Suppliers page and in chat (`prices from Dangote`), and may order from it directly (`order 20 bags of rice from Dangote`), which drafts a purchase order at those prices.
 - **Item links.** The buyer's stock items are linked to the seller's items (`item_links`: the buyer's item, the seller's item, the link), made when the buyer orders an item from the price list the first time, or from the Suppliers page. A linked item's purchase orders carry the seller's item id, so the seller's order needs no name matching, and the buyer's cost price follows the seller's price.
 - **Price changes** mirror to the buyer's view at once; an open purchase order keeps the price it was placed at, and the seller may not change it after acceptance except through a change the buyer accepts.
+- **Mentions** (§5.5): `@` suggests linked businesses and `#` suggests a linked business's items with unit and price; a message naming several businesses reads back as one draft per business.
 - **Accept:** a price list shared and withdrawn; an order from it at the buyer's prices; an item linked once and reordered without matching; a price change that does not touch an open order.
 
-## 9. L4: threads
+## 9. L3: the conversation on the web, and disputes
 
-- Every mirrored document (a bill, a linked order and its purchase order, a price list) has one **thread** between the two businesses: messages from either side's members, with the document's reference, visible on the document's page in both web apps and in both businesses' chat (`ask Dangote about INV-0042`, and replies in the same conversation, with the business's name in brackets as every shared-number message has). A thread message is a mirror too: written on the sender's side and copied through the definer; the sender is named as the business and the person's first name.
-- **Disputes.** **Query this bill** on a bill marks it `disputed` on both sides with the thread opened; a disputed bill is not paid automatically and is not reminded; the seller's **Resolve** (an amendment, a credit note, or "as it stands") clears it.
-- **Accept:** a message from Ada's chat appears on Dangote's bill page and in his chat within seconds; a disputed bill is skipped by auto-pay and reminders until resolved.
+- **The web channel.** The Chat page (§5.5) is a channel on `converse`: a conversation list, the message stream, the composer with mentions, document cards with their buttons, photos, files and voice notes, read marks, search, mute and archive, and the Taskiem conversation. Messages between linked businesses are mirrors written through the definer, so both sides keep the whole history under their own tenancy.
+- **Threads are quoted replies.** A reply to a document's card is the document's thread: it shows on the document's page in both web apps and in both businesses' chat, and `ask Dangote about INV-0042` from the phone lands as a quoted reply too.
+- **Disputes.** **Query this bill** on a bill's card marks it `disputed` on both sides with the reply opened; a disputed bill is not paid automatically and is not reminded; the seller's **Resolve** (an amendment, a credit note, or "as it stands") clears it.
+- **Accept:** a message from Ada's web conversation appears in Dangote's web conversation and his WhatsApp within seconds, with his reply shown in both; a quoted reply to a bill's card shows on the bill's page; `@Dangote` and `@Cherry` in one message read back as two orders and one **Yes** sends both; a mention of an unlinked business offers the link; a disputed bill is skipped by auto-pay and reminders until resolved; a member without `chat.trade` can read but not write.
 
 ## 10. L5: statements, credit and reminders between linked businesses
 
@@ -177,7 +202,10 @@ Things a link makes possible that this plan does not build, so they are not desi
 | A seller changing an accepted order's price | Refused after acceptance; a change is a counter the buyer accepts, and the purchase order keeps the price it was placed at |
 | Personal data across the link | A link carries business names, references, lines and amounts; never a member's phone, email or name beyond the first name on a thread message; a linked buyer's customer record on the seller's side is keyed `link:<tenant>`, with no sealed phone |
 | A business that ends or blocks a link | Mirrors stay, nothing new crosses, open bills stay payable by the account number, and threads close; a blocked business cannot re-request |
-| Plan abuse | Links per business, requests per day and mirrored documents per month are plan limits, counted as other limits are |
+| Plan abuse | Links per business, requests per day, mirrored documents per month and messages per day are plan limits, counted as other limits are |
+| Files and voice notes in a conversation | Fetched through the channel's media download or uploaded on the web, size-capped, scanned where the deployment has a scanner (as hosted forms' files are), stripped of metadata, and kept under the business's private storage on each side |
+| Global search leaking across tenants | Search reads only the business's own rows and the opted-in business names; a phone or address query sends a request and returns nothing, as the lookup does |
+| A mention that reaches a third business | A mention resolves only among the writer's own links; a business mentioned in a conversation with another is a reference the other side sees as a name, never a door into the third business |
 
 ## 14. Testing
 
@@ -198,21 +226,23 @@ Things a link makes possible that this plan does not build, so they are not desi
 | Which plans include links, and the limits per plan | Founder | L0 |
 | Whether an invoice to a linked buyer is raised at acceptance or at delivery by default | Founder | L2 |
 | Settlement on Taskiem's own rail for linked businesses (§12), and whether it is free of fees | Founder, iswallet | later |
+| The Chat page's look: how far it follows WhatsApp's layout against the app's own screens ([screens](../brand/screens.md)) | Founder, with the brand | L3 |
+| Whether people on the other side are addressable (`@Dangote/Musa`) in the first cut, or businesses only | Founder | L4 (recommendation: businesses only) |
 
 ## 16. Milestones
 
 | Id | Milestone | Size |
 | --- | --- | --- |
-| L0 | **Links**: `business_links`, `taskiem_links_of`, `taskiem_link_enter` with dual audit, `link.manage`; lookup by name (opt-in), phone and address; the offer at the first document; accept, decline, block, end; the Linked businesses page and `link` in chat; the customer account number for the buyer issued at acceptance; the isolation test harness | M |
+| L0 | **Links and search**: `business_links`, `taskiem_links_of`, `taskiem_link_enter` with dual audit, `link.manage`; global search in the header (own records, linked businesses, opt-in business names); lookup by phone and address; the offer at the first document; the link code on the QR card, invoices and receipts; accept, decline, block, end; the Linked businesses page and `link` in chat; the buyer's customer account number issued at acceptance; the isolation test harness | M |
 | L1 | **Bills**: `bills`, the mirror from a linked invoice (and amendments and voids), the Bills page and chat words, **Pay** through the payout path with approval and first-payment, paying outside Taskiem, exact matching on the seller's side with the mirror back, pairing of payout and credit by reference, the Suppliers page's owed figure from bills, the reconciler | L |
 | L2 | **Orders**: a purchase order to a linked supplier as a `trade` order, the status flow back (confirmed, cancelled, received with the correction window), the seller's change and the buyer's acceptance, the invoice raised at acceptance or delivery, orders placed by the seller for the buyer | L |
-| L3 | **Price lists and item links**: sharing a list per link, overrides, `prices from`, ordering from the list, `item_links`, cost prices that follow | M |
-| L4 | **Threads and disputes**: thread messages mirrored, on both pages and in both chats, `ask … about`, Query this bill and Resolve | M |
+| L3 | **The conversation**: the web channel on `converse`; the Chat page with the conversation list, the stream, document cards with their buttons, photos, files and voice notes, read marks, search, mute and archive; the Taskiem conversation on the web; `chat.trade`; messages mirrored both sides and shown on the phone with the business's name; quoted replies as threads; disputes | L |
+| L4 | **Mentions, price lists and item links**: `@` businesses and `#` items in the composer, one message read back as a draft per business, the unlinked-mention offer; sharing a price list per link, overrides, `prices from`, ordering from the list, `item_links`, cost prices that follow | M |
 | L5 | **Statements, credit and reminders**: the link's statement each side, terms and limits per link, the hold on orders over the limit, reminders as notices with Pay, bills due in the summary | M |
 | L6 | **Automation**: `link@1` triggers and actions, the four templates, the builder's rules and evals | M |
 | L7 | **Docs and the decision**: invoices, stock, storefronts, matching, the owners' guide ("Trade with businesses on Taskiem"), the atlas's business modules and identity pages, the threat model; decision 0061 accepted with As built | S |
 
-In order, one PR each; L0 and L1 together if the first linked pair is waiting.
+In order, one PR each; L0 and L1 together if the first linked pair is waiting. L3 can come before L2 if the first linked pair wants to talk before it orders.
 
 ## 17. Risks and open questions
 
@@ -227,4 +257,4 @@ In order, one PR each; L0 and L1 together if the first linked pair is waiting.
 
 ## 18. Out of scope
 
-A shared document that both businesses edit (each keeps its copy); a marketplace or directory of businesses; settlement on Taskiem's rail (§12, named for later); invoice financing, escrow and ratings; links across deployments of Taskiem; a business linking with a partner's sub-tenant (a sub-tenant is a business and may link like any other, but the partner is not told); consumer customers, who are outsiders as today.
+A shared document that both businesses edit (each keeps its copy); a marketplace or directory of businesses; settlement on Taskiem's rail (§12, named for later); invoice financing, escrow and ratings; links across deployments of Taskiem; a business linking with a partner's sub-tenant (a sub-tenant is a business and may link like any other, but the partner is not told); consumer customers, who are outsiders as today; mentioning a person on the other side rather than the business (later); group conversations of more than two businesses.
