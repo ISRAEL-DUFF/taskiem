@@ -32,7 +32,7 @@ Over the API a line can also say who it is collected for (`pass_through_for`, su
 | Overdue | Past its due date and not paid in full |
 | Void | Cancelled, with the reason; it takes no new payment |
 
-Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time).
+Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time). The list's **Show** filter has each status and **Notebook debts** (`GET /v1/invoices?kind=credit`); a notebook debt's own page says it was recorded in chat, and **Send** sends it like a draft.
 
 ## The debtor book
 
@@ -133,7 +133,7 @@ A match from here can be undone on the invoice like any payment. People with `in
 
 A payment that is more than is due on the invoice suggested can be **split** across the same customer's open invoices, oldest first, with the amounts editable; each part is a match of its own, and what is left over is the customer's credit or waits to be matched ([split payments](matching.md#split-payments)). A credit held for a person (paid into a customer's account number with a reference that disagrees) says why on its card.
 
-Each sent invoice shows **The customer's money**: the customer's credit (paid and not yet counted towards an invoice), their own account numbers (each with its reference), and the payers remembered for them, each with **Forget this payer** for people with `invoice.manage` ([payer memory](matching.md#payer-memory)). A customer's credit counts towards the next invoice sent to them: Send says how much of it did, and the message to the customer says what is left to pay.
+Each sent invoice shows **The customer's money**: **What they owe**, the customer's statement (every open invoice and notebook debt of theirs, oldest first, as their money pays them, with what is due on each and the total; `open` and `owed_kobo` in `GET /v1/invoices/{id}/customer`), the customer's credit (paid and not yet counted towards an invoice), their own account numbers (each with its reference), and the payers remembered for them, each with **Forget this payer** for people with `invoice.manage` ([payer memory](matching.md#payer-memory)). A customer's credit counts towards the next invoice sent to them: Send says how much of it did, and the message to the customer says what is left to pay.
 
 **Give this customer an account number** (`invoice.manage`) gives the invoice's customer a permanent account number of their own, so every transfer into it is matched to their open invoices, oldest first, and the rest kept as their credit ([customers' own account numbers](matching.md#customers-own-account-numbers)). Choose one of the business's connections that can issue account numbers (the form says what each needs: the customer's email, their BVN or NIN typed in and never kept, or the wallet the number pays into), or **Enter one by hand**: the connection, the account number and the reference a payments provider already gave the business for this customer. The same customer and connection again shows the account already issued. One per customer, never one per invoice: an invoice's page offers its own.
 
@@ -151,7 +151,7 @@ Under **Invoices > Settings**:
 | Who pays the transfer fee | The business | Or the customer, where the payments provider takes only the exact amount ([0045](decisions/0045-tally-in-taskiem.md)) |
 | Customers may pay part | Off | When on, a customer can pay part of an invoice |
 | Match strong suggestions automatically | Off | See [Matching](#matching) |
-| Credit terms | Not set | How long customers have to pay a notebook debt, in days, or no fixed time; until set, notebook debts have no due date and are never reminded ([the debtor book](#the-debtor-book)) |
+| Credit terms | Not set | How long customers have to pay a notebook debt, in days, or no fixed time; until set, notebook debts have no due date and are never reminded ([the debtor book](#the-debtor-book)). Its own card, **Save credit terms** (`PUT /v1/invoice-settings/credit-terms`), with **Also date the open debts by these terms** to date the open ones from the day each was recorded |
 
 Each invoice can override the connection, the fee and part payments.
 

@@ -44,6 +44,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Post("/invoices/{id}/payments/{payment}/undo", s.undoInvoicePayment)
 	r.With(read).Get("/invoice-settings", s.getInvoiceSettings)
 	r.With(manage, s.tenantWide).Put("/invoice-settings", s.putInvoiceSettings)
+	r.With(manage, s.tenantWide).Put("/invoice-settings/credit-terms", s.putCreditTerms)
 	s.matchingRoutes(r)
 	s.moneyRoutes(r)
 	s.moneyReportRoutes(r)
@@ -82,17 +83,21 @@ func (s *Server) listInvoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	status := r.URL.Query().Get("status")
+	status, kind := r.URL.Query().Get("status"), r.URL.Query().Get("kind")
 	switch status {
-	case "", "draft", "sent", "part_paid", "paid", "overdue", "void":
+	case "", "draft", "recorded", "sent", "part_paid", "paid", "overdue", "void":
 	default:
 		s.fail(w, r, fmt.Errorf("%w: unknown status %q", errBadRequest, status))
+		return
+	}
+	if kind != "" && kind != "invoice" && kind != "credit" {
+		s.fail(w, r, fmt.Errorf("%w: kind is invoice or credit", errBadRequest))
 		return
 	}
 	var list []invoicing.Invoice
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		list, err = s.Invoices.List(r.Context(), tx, principalFrom(r.Context()).TenantID, status, limit)
+		list, err = s.Invoices.ListOf(r.Context(), tx, principalFrom(r.Context()).TenantID, status, kind, limit)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -296,6 +301,43 @@ func (s *Server) putInvoiceSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+// putCreditTerms serves PUT /v1/invoice-settings/credit-terms: how long
+// customers have to pay a notebook debt ({"credit_days": 14}, or null for
+// no fixed time), for lines recorded from now on; with "apply_open": true,
+// the open notebook debts are dated by it too, each from the day it was
+// recorded (decision 0060, R5).
+func (s *Server) putCreditTerms(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		CreditDays *int `json:"credit_days"`
+		ApplyOpen  bool `json:"apply_open"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var st invoicing.Settings
+	applied := 0
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := invoicing.SetCreditTerms(r.Context(), tx, p.TenantID, req.CreditDays, p.Actor()); err != nil {
+			return invoiceErr(err)
+		}
+		if req.ApplyOpen {
+			var err error
+			if applied, err = invoicing.ApplyCreditTerms(r.Context(), tx, p.TenantID, p.Actor()); err != nil {
+				return err
+			}
+		}
+		var err error
+		st, err = invoicing.GetSettings(r.Context(), tx, p.TenantID)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"settings": st, "applied": applied})
 }
 
 // RunInvoices moves invoices past their due date to overdue, hourly (the

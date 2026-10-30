@@ -454,11 +454,17 @@ func payments(ctx context.Context, tx pgx.Tx, invoice uuid.UUID) ([]Payment, err
 
 // List reads the newest invoices, optionally of one status.
 func (s *Invoices) List(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status string, limit int) ([]Invoice, error) {
+	return s.ListOf(ctx, tx, tenant, status, "", limit)
+}
+
+// ListOf is List, optionally of one kind too (invoice, or credit: the
+// debtor book's notebook debts).
+func (s *Invoices) ListOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status, kind string, limit int) ([]Invoice, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := tx.Query(ctx, `SELECT `+cols+` FROM customer_invoices WHERE tenant_id = $1 AND ($2 = '' OR status = $2)
-		ORDER BY created_at DESC, id LIMIT $3`, tenant, status, limit)
+	rows, err := tx.Query(ctx, `SELECT `+cols+` FROM customer_invoices WHERE tenant_id = $1 AND ($2 = '' OR status = $2) AND ($4 = '' OR kind = $4)
+		ORDER BY created_at DESC, id LIMIT $3`, tenant, status, limit, kind)
 	if err != nil {
 		return nil, err
 	}

@@ -1144,6 +1144,12 @@ paths:
         schema:
           type: string
           enum: [draft, recorded, sent, part_paid, paid, overdue, void]
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [invoice, credit]
+        description: credit for the debtor book's notebook debts only
       - name: limit
         in: query
         schema:
@@ -1749,8 +1755,33 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [credit_kobo, accounts, payers, revealed]
+                required: [open, owed_kobo, credit_kobo, accounts, payers, revealed]
                 properties:
+                  open:
+                    type: array
+                    description: The customer's statement, their open invoices and notebook debts oldest first (what their money pays first)
+                    items:
+                      type: object
+                      required: [id, number, kind, status, due_kobo]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        number:
+                          type: string
+                        kind:
+                          type: string
+                          enum: [invoice, credit]
+                        status:
+                          type: string
+                        due_kobo:
+                          type: integer
+                        due_on:
+                          type: string
+                          format: date
+                  owed_kobo:
+                    type: integer
+                    description: What is due on them in all
                   credit_kobo:
                     type: integer
                   accounts:
@@ -5252,6 +5283,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvoiceSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoice-settings/credit-terms:
+    put:
+      operationId: putCreditTerms
+      tags:
+      - Invoices
+      summary: Set how long customers have to pay a notebook debt
+      description: "credit_days for lines recorded from now on (null: no fixed time, so notebook debts are never overdue or reminded); apply_open dates the open notebook debts by it too, each from the day it was recorded."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                credit_days:
+                  type: [integer, "null"]
+                  minimum: 1
+                  maximum: 365
+                apply_open:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings, and how many open debts were dated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [settings, applied]
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/InvoiceSettings'
+                  applied:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/orders:

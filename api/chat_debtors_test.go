@@ -29,7 +29,8 @@ func TestChatDebtorBook(t *testing.T) {
 	w.bind(t, owner, on)
 	w.bind(t, w.member(t, owner, "bisi@mamaput.test", "admin"), bn)
 	w.bind(t, w.member(t, owner, "chidi@mamaput.test", "admin"), cn)
-	w.bind(t, w.member(t, owner, "vic@mamaput.test", "viewer"), vn)
+	vic := w.member(t, owner, "vic@mamaput.test", "viewer")
+	w.bind(t, vic, vn)
 	all := func(from, text string) string {
 		t.Helper()
 		var out []string
@@ -163,6 +164,24 @@ func TestChatDebtorBook(t *testing.T) {
 	if r := w.say(t, vn, "who owes me?"); !strings.Contains(r, "owe you ₦1,000") {
 		t.Errorf("viewer reads: %q", r)
 	}
+
+	// On the web: the notebook debts listed apart, a customer's statement,
+	// and the credit terms.
+	if l := owner.must(200, "GET", "/v1/invoices?kind=credit", nil)["invoices"].([]any); len(l) != 4 {
+		t.Errorf("credit list: %d", len(l))
+	}
+	owner.must(200, "GET", "/v1/invoices?status=recorded", nil)
+	owner.must(400, "GET", "/v1/invoices?kind=loan", nil)
+	st := owner.must(200, "GET", "/v1/invoices/INV-0003/customer", nil)
+	if st["owed_kobo"] != float64(100000) || len(st["open"].([]any)) != 2 || st["open"].([]any)[0].(map[string]any)["kind"] != "credit" {
+		t.Errorf("statement: %v", st)
+	}
+	vic.must(403, "PUT", "/v1/invoice-settings/credit-terms", map[string]any{"credit_days": 7})
+	if r := owner.must(200, "PUT", "/v1/invoice-settings/credit-terms", map[string]any{"credit_days": 21, "apply_open": true}); r["applied"] != float64(2) ||
+		r["settings"].(map[string]any)["credit_days"] != float64(21) {
+		t.Errorf("credit terms: %v", r)
+	}
+	owner.must(400, "PUT", "/v1/invoice-settings/credit-terms", map[string]any{"credit_days": 400})
 
 	// Her balance in one message: read back, sent once, her lines sent
 	// with it, her payment link in it.
