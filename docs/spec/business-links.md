@@ -305,8 +305,16 @@ The link itself, its search and its words in chat; migration 00275, `engine/link
     - silence on a decline;
     - a viewer refused.
 
+- **The web** (`web/src/pages/Links.tsx`, `web/src/lib/links.ts`).
+  - **Chat** (`/chat`, in the menu for every member) is the Chat page's left pane until L3 adds the conversation. It lists requests to answer, with **Accept**, **Decline** and **Block**, then linked businesses, then requests waiting.
+  - Its search box gives **Chats** (linked businesses whose name matches) and **Businesses on Taskiem**, each with **Request link** and the three role choices.
+  - A phone number typed shows the one row **Send a link request to 0803…4567**.
+  - Members without `link.manage` see the rows and the line "An owner or admin can link with this business", with no button.
+  - **Linked businesses** (`/settings/links`, under More for `link.manage`) holds the **Let other businesses find us** switch and every link and request with what can be done to it: End link, Withdraw request, Unblock, Take off the list.
+  - Tests: `web/src/lib/links.test.ts`; `web/e2e/links.spec.ts`, two businesses that find each other, link and end it, at 390 px, with axe in both themes; and both pages in `accessibility.spec.ts` and `plainwords.test.ts`.
+
 **Not built in L0 yet:**
-- the Chat page's left pane and the Linked businesses page on the web;
+- a business's card with its documents (from L1), and messages in the search (L3);
 - the link code on the QR card, invoices and receipts;
 - the offer at the first document;
 - the buyer's customer account number issued at acceptance;

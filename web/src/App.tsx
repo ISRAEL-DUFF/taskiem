@@ -54,6 +54,7 @@ import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
+import { ChatPage, LinkedBusinessesPage } from "./pages/Links";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -366,6 +367,8 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
+    // Other businesses on Taskiem (business links, pages/Links.tsx).
+    ["/chat", "Chat", "chat", true],
     [
       "/approvals",
       "Approvals",
@@ -399,6 +402,7 @@ function SignedIn() {
       can("secret.manage") || can("workflow.read"),
     ],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
+    ["/settings/links", "Linked businesses", "connections", can("link.manage")],
     ["/settings/notifications", "Notifications", "bell", !!me.user],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
     ["/audit", "Audit log", "audit", can("audit.read")],
@@ -593,6 +597,8 @@ function SignedIn() {
                 element={<StorefrontDeliveries />}
               />
               <Route path="/storefront/stock" element={<StorefrontStock />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/settings/links" element={<LinkedBusinessesPage />} />
               <Route
                 path="/storefront/suppliers"
                 element={<StorefrontSuppliers />}

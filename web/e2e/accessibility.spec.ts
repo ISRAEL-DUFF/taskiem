@@ -38,6 +38,8 @@ const PAGES = [
   "/storefront/deliveries",
   "/storefront/stock",
   "/storefront/suppliers",
+  "/chat",
+  "/settings/links",
   "/invoices",
   "/invoices/match",
   "/invoices/settings",
@@ -410,6 +412,8 @@ test.describe("on a phone-sized screen", () => {
       "/storefront/deliveries",
       "/storefront/stock",
       "/storefront/suppliers",
+      "/chat",
+      "/settings/links",
       "/schools",
       "/schools/classes",
     ]) {
