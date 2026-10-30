@@ -116,6 +116,12 @@ func TestDebtorBook(t *testing.T) {
 	if err != nil || len(listed) != 1 || listed[0].Number != late.Number {
 		t.Fatalf("overdue list: %v %v", listed, err)
 	}
+	// One row per customer with something overdue; Ada's lines are not due.
+	customers, err := invoicing.Service{Invoices: w.inv}.ListCustomersOverdue(ctx, tenant, 10)
+	if err != nil || len(customers) != 1 || customers[0].Number != late.Number || customers[0].Customer != "key:"+ada2.Key ||
+		customers[0].Lines != 1 || customers[0].DueKobo != 100000 || customers[0].DaysOverdue < 1 {
+		t.Fatalf("customers overdue: %+v %v", customers, err)
+	}
 
 	// The terms applied to the open lines date each from when it was
 	// recorded; no fixed time takes the dates away.

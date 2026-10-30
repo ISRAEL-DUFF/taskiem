@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/mail"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1003,7 +1004,16 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 					"sent", Naira(sent), "received", Naira(sent-fee), "business", business, "fee", Naira(fee))
 			}
 		}
-		text = strings.NewReplacer("{number}", x.Number, "{due}", Naira(x.DueKobo), "{fee_line}", feeLine).Replace(text)
+		customerDue, customerLines := "", ""
+		if strings.Contains(text, "{customer_due}") || strings.Contains(text, "{customer_lines}") {
+			due, n, err := customerOverdue(ctx, tx, tenant, x.CustomerID())
+			if err != nil {
+				return err
+			}
+			customerDue, customerLines = Naira(due), strconv.Itoa(n)
+		}
+		text = strings.NewReplacer("{number}", x.Number, "{due}", Naira(x.DueKobo), "{fee_line}", feeLine,
+			"{customer_due}", customerDue, "{customer_lines}", customerLines).Replace(text)
 		if subject == "" {
 			subject = "Invoice " + x.Number + " from " + business
 		}
@@ -1344,6 +1354,61 @@ type Listed struct {
 	// DaysOverdue counts whole days past the due date, Lagos time (1 the
 	// day after it); 0 for an invoice not overdue.
 	DaysOverdue int `json:"days_overdue"`
+}
+
+// ListedCustomer is one customer with something overdue, for a workflow
+// that reminds each customer once rather than once per invoice: an
+// opaque id for the customer (never their details), the number of their
+// oldest overdue invoice or debt (notify_customer reaches them through
+// it), how many are overdue and what they owe on them, the oldest due
+// date and the whole days since it, Lagos time.
+type ListedCustomer struct {
+	Customer    string `json:"customer"`
+	Number      string `json:"number"`
+	Lines       int    `json:"lines"`
+	DueKobo     int64  `json:"due_kobo"`
+	DueOn       string `json:"due_on"`
+	DaysOverdue int    `json:"days_overdue"`
+}
+
+// ListCustomersOverdue lists the customers with overdue invoices or
+// notebook debts, oldest due first: what one message per customer needs.
+// A debt with no due date is never overdue, so never listed.
+func (s Service) ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, limit int) ([]ListedCustomer, error) {
+	if limit <= 0 || limit > MaxListed {
+		limit = 50
+	}
+	var out []ListedCustomer
+	err := s.in(ctx, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT customer_id, (array_agg(number ORDER BY due_on, number))[1], count(*), sum(total_kobo - paid_kobo),
+			to_char(min(due_on), 'YYYY-MM-DD'), ((now() AT TIME ZONE 'Africa/Lagos')::date - min(due_on))
+			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
+			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
+			GROUP BY customer_id ORDER BY min(due_on), customer_id LIMIT $2`, tenant, limit)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (ListedCustomer, error) {
+			var l ListedCustomer
+			return l, r.Scan(&l.Customer, &l.Number, &l.Lines, &l.DueKobo, &l.DueOn, &l.DaysOverdue)
+		})
+		return err
+	})
+	if out == nil {
+		out = []ListedCustomer{}
+	}
+	return out, err
+}
+
+// customerOverdue is what a customer owes on their overdue invoices and
+// debts, and how many there are.
+func customerOverdue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customer string) (int64, int, error) {
+	var due int64
+	var n int
+	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_kobo - paid_kobo), 0), count(*) FROM customer_invoices
+		WHERE tenant_id = $1 AND customer_id = $2 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
+		AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date`, tenant, customer).Scan(&due, &n)
+	return due, n, err
 }
 
 // MaxListed is the most invoices one list returns.

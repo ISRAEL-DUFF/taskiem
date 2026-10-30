@@ -35,6 +35,7 @@ type Ops interface {
 	Cancel(ctx context.Context, tenant uuid.UUID, number, reason, by string) (invoicing.Invoice, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, number, text, subject, key string) (map[string]any, error)
 	ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]invoicing.Listed, error)
+	ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, limit int) ([]invoicing.ListedCustomer, error)
 	GiveAccount(ctx context.Context, tenant uuid.UUID, in invoicing.AccountRequest, by string) (invoicing.CustomerAccount, error)
 }
 
@@ -202,6 +203,23 @@ func (a *actions) list(ctx context.Context, req connector.Request) (connector.Re
 	if limit < 1 || limit > invoicing.MaxListed {
 		return connector.Response{}, fmt.Errorf("limit is 1 to %d: %w", invoicing.MaxListed, effects.ErrFatal)
 	}
+	if group, _ := req.Input["group"].(string); group == "customer" {
+		// One row per customer with something overdue (decision 0060):
+		// a reminder per customer, not per invoice.
+		if status != "overdue" {
+			return connector.Response{}, fmt.Errorf("group customer lists overdue invoices only: %w", effects.ErrFatal)
+		}
+		got, err := a.ops.ListCustomersOverdue(ctx, c.Tenant, limit)
+		if err != nil {
+			return connector.Response{}, classify(err)
+		}
+		list := make([]any, 0, len(got))
+		for _, l := range got {
+			list = append(list, map[string]any{"customer": l.Customer, "number": l.Number, "lines": l.Lines, "due_kobo": l.DueKobo,
+				"due": invoicing.Naira(l.DueKobo), "due_on": l.DueOn, "days_overdue": l.DaysOverdue})
+		}
+		return connector.Response{Output: map[string]any{"customers": list, "count": len(list)}}, nil
+	}
 	got, err := a.ops.ListFor(ctx, c.Tenant, status, time.Duration(hours)*time.Hour, limit)
 	if err != nil {
 		return connector.Response{}, classify(err)
@@ -344,6 +362,15 @@ func (l *Late) ListFor(ctx context.Context, t uuid.UUID, status string, within t
 		return nil, err
 	}
 	return o.ListFor(ctx, t, status, within, limit)
+}
+
+// ListCustomersOverdue implements Ops.
+func (l *Late) ListCustomersOverdue(ctx context.Context, t uuid.UUID, limit int) ([]invoicing.ListedCustomer, error) {
+	o, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return o.ListCustomersOverdue(ctx, t, limit)
 }
 
 // NotifyCustomer implements Ops.

@@ -36,14 +36,14 @@ func TestReplacementsJSON(t *testing.T) {
 	}
 }
 
-// Every sheet template has a twin for a business without Google Sheets,
-// except the debtor reminders (R5) and the one already superseded.
+// Every sheet template has a twin for a business without Google Sheets;
+// the debtor reminders' is the invoices' reminder, one message per
+// customer (R5).
 func TestEverySheetTemplateHasATwin(t *testing.T) {
 	lib := templates.Default()
 	noSheets := map[string]bool{templates.WhenNoSheets: true, templates.WhenNoSheetsStock: true}
-	waiting := []string{"debtor-reminder-sms", "debtor-reminder-whatsapp"}
 	for _, tpl := range lib.Offered() {
-		if !slices.Contains(tpl.Connectors, "googlesheets@1") || slices.Contains(waiting, tpl.ID) {
+		if !slices.Contains(tpl.Connectors, "googlesheets@1") {
 			continue
 		}
 		by := tpl.ReplacedWhere.By(noSheets)
