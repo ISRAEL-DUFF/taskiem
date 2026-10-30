@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -82,6 +84,93 @@ var (
 	notACustomer = map[string]bool{"i": true, "we": true, "me": true, "you": true, "he": true, "she": true, "they": true, "who": true}
 )
 
+// debtWords are the debtor book's words in Yoruba, Hausa and Igbo, as they
+// read once folded (lang.Fold: lower case, no accents or tone marks): the
+// name comes first, as in English. Drafts written without a speaker, like
+// the other words in these languages (docs/languages.md): unreviewed.
+var debtWords = map[lang.Tag]struct{ owes, paid, who, notName []string }{
+	lang.YO: {owes: []string{"je mi", "ti je mi"}, paid: []string{"ti san", "san"}, who: []string{"ta lo je mi", "awon ti o je mi", "tani o je mi"},
+		notName: []string{"mo", "a", "emi", "awa", "o", "won"}},
+	lang.HA: {owes: []string{"na bina", "yana bina", "tana bina"}, paid: []string{"ya biya", "ta biya"}, who: []string{"wa ke bina", "wadanda ke bina", "wa yake bina"},
+		notName: []string{"na", "mun", "ni", "mu", "ka", "ki", "sun"}},
+	lang.IG: {owes: []string{"ji m", "ji m ugwo"}, paid: []string{"akwuola", "kwuru", "kwuola"}, who: []string{"onye ji m ugwo", "ndi ji m ugwo"},
+		notName: []string{"m", "a", "anyi", "ha", "o", "mu"}},
+}
+
+// debtRes are debtWords as patterns over folded text.
+var debtRes = func() map[lang.Tag][3]*regexp.Regexp {
+	alt := func(ws []string) string {
+		q := make([]string, len(ws))
+		for i, w := range ws {
+			q[i] = regexp.QuoteMeta(w)
+		}
+		return strings.Join(q, "|")
+	}
+	out := map[lang.Tag][3]*regexp.Regexp{}
+	for t, w := range debtWords {
+		out[t] = [3]*regexp.Regexp{
+			regexp.MustCompile(`^(.{1,60}?)\s+(?:` + alt(w.owes) + `)\s+(\S+)(?:\s+(?:fun|don|maka|for)\s+(.{1,100}))?$`),
+			regexp.MustCompile(`^(.{1,60}?)\s+(?:` + alt(w.paid) + `)\s+(\S+)(?:\s+(cash|transfer|bank))?$`),
+			regexp.MustCompile(`^(?:` + alt(w.who) + `)$`),
+		}
+	}
+	return out
+}()
+
+// firstWords is the first n words of s, as written.
+func firstWords(s string, n int) string {
+	f := strings.Fields(s)
+	return strings.Join(f[:min(n, len(f))], " ")
+}
+
+// lastWords is s after its first n words, as written.
+func lastWords(s string, n int) string {
+	f := strings.Fields(s)
+	return strings.Join(f[min(n, len(f)):], " ")
+}
+
+// waDebtLanguage reads the debtor book's words in the person's language
+// when it is Yoruba, Hausa or Igbo; false for text that is none of them.
+// The customer's name and what it was for are taken as written.
+func (s *Server) waDebtLanguage(ctx context.Context, c *chat, text string) (bool, error) {
+	re, ok := debtRes[c.lang.Tag]
+	if !ok {
+		return false, nil
+	}
+	f := lang.Fold(text)
+	if re[2].MatchString(f) {
+		return true, s.waWhoOwes(ctx, c)
+	}
+	// "mo ti san 2,000" is the business paying, not a customer called mo.
+	if fw := strings.Fields(f); len(fw) > 0 && slices.Contains(debtWords[c.lang.Tag].notName, fw[0]) {
+		return false, nil
+	}
+	if m := re[0].FindStringSubmatch(f); m != nil {
+		kobo, ok := parseKobo(m[2])
+		if !ok {
+			return false, nil
+		}
+		n := len(strings.Fields(m[1]))
+		desc := ""
+		if m[3] != "" {
+			desc = lastWords(text, len(strings.Fields(f))-len(strings.Fields(m[3])))
+		}
+		return true, s.waOwes(ctx, c, firstWords(text, n), kobo, desc)
+	}
+	if m := re[1].FindStringSubmatch(f); m != nil {
+		kobo, ok := parseKobo(m[2])
+		if !ok {
+			return false, nil
+		}
+		how := m[3]
+		if how == "bank" {
+			how = "transfer"
+		}
+		return true, s.waCustomerPaid(ctx, c, firstWords(text, len(strings.Fields(m[1]))), kobo, how)
+	}
+	return false, nil
+}
+
 // creditChoices are the credit terms offered, in days (0: no fixed time).
 var creditChoices = []int{7, 14, 30, 0}
 
@@ -129,7 +218,7 @@ func (s *Server) waDebtCommand(ctx context.Context, c *chat, text, cmd string) (
 		}
 		return true, s.waCustomerPaid(ctx, c, m[1], kobo, how)
 	}
-	return false, nil
+	return s.waDebtLanguage(ctx, c, t)
 }
 
 // waBookIn runs fn in the tenant's transaction.

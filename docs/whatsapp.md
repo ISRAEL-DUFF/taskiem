@@ -119,7 +119,15 @@ Money customers owe is kept as [invoices](invoices.md#the-debtor-book) ([decisio
 - **`send Ada her balance`** (also `send balance to Ada`, `send Ada's balance`): one message to Ada with her open debts and invoices, what is due on each, the total and one way to pay, her own account number or else her [payment link](invoices.md#a-customers-payment-link), read back first with where it goes (her number masked) and sent after **yes**; her notebook debts show as sent from then. Without a phone or email for her, Taskiem says to give one first.
 - **`Ada's number is 0803…`** keeps her phone, on her record and on her debts not yet sent. **`credit terms 14 days`** (or `credit terms none`) changes the terms for new debts, and offers to apply them to the open ones too, each from the day it was recorded.
 
-Each change is read back and written after **yes**, under a key from the conversation, so a **yes** delivered twice writes once; two debts sent at once are two debts. The words are English and Pidgin for now.
+Each change is read back and written after **yes**, under a key from the conversation, so a **yes** delivered twice writes once; two debts sent at once are two debts. The words are English and Pidgin, and in Yoruba, Hausa and Igbo for a person who uses that language, with the name first as in English and matched without accents or tone marks; names are found the same way (`ade` finds Adé). The English words work in every language. These words are unreviewed drafts, like the rest of each language's list ([reviewing a language](languages.md#reviewing-a-language)), kept in `api/chat_debtors.go` (`debtWords`):
+
+| | Owes | Paid | Who owes me |
+| --- | --- | --- | --- |
+| Yoruba | `Adé jẹ mí 5,000` | `Adé ti san 2,000` | `ta ló jẹ mí` |
+| Hausa | `Adé yana bina 5,000` (`na bina`, `tana bina`) | `Adé ya biya 2,000` (`ta biya`) | `wa ke bina` |
+| Igbo | `Adé ji m 5,000` | `Adé akwụọla 2,000` (`kwụrụ`) | `onye ji m ụgwọ` |
+
+A sentence that starts with a word for I or we (`mo ti san 2,000`, `na biya`) is the business's own, never a customer's.
 
 ## Invoices and money in other languages
 

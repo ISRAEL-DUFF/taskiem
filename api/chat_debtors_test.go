@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
@@ -191,5 +193,63 @@ func TestChatDebtorBook(t *testing.T) {
 	w.say(t, on, "yes")
 	if r := w.say(t, on, "send balance to Bola"); !strings.Contains(r, "Bola has no phone number yet") {
 		t.Errorf("no phone: %q", r)
+	}
+}
+
+// The debtor book in Yoruba, Hausa and Igbo (R5f): the name first, then
+// the language's words, matched without accents; a sentence about the
+// business itself ("mo ti san …") is not a customer's.
+func TestChatDebtorBookLanguages(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.YO, lang.HA, lang.IG}}
+	owner := w.tenant(t, "Ada Foods", "ada@adafoods.test")
+	const yn, hn, in = "+2348010000061", "+2348010000062", "+2348010000063"
+	w.bind(t, owner, yn)
+	w.bind(t, w.member(t, owner, "musa@adafoods.test", "admin"), hn)
+	w.bind(t, w.member(t, owner, "nkem@adafoods.test", "admin"), in)
+	w.say(t, yn, "language yoruba")
+	w.say(t, hn, "language hausa")
+	w.say(t, in, "language igbo")
+	tr := func(l lang.Tag, id string, kv ...string) string { return lang.Default().Text(l, id, kv...) }
+
+	// Yoruba: "Adé jẹ mí 5,000", the name as written.
+	if r := w.say(t, yn, "Adé jẹ mí 5,000"); !strings.Contains(r, tr(lang.YO, "wa.debt.ask_phone", "name", "Adé")) {
+		t.Fatalf("yo owes: %q", r)
+	}
+	w.say(t, yn, "skip")
+	w.send(t, yn, whatsapptest.Text("2"))
+	if r := w.say(t, yn, "bẹ́ẹ̀ni"); !strings.Contains(r, "INV-0001") {
+		t.Fatalf("yo recorded: %q", r)
+	}
+	// Without accents, and paid in cash.
+	if r := w.say(t, yn, "ade ti san 2,000 cash"); !strings.Contains(r, "₦2,000") || !strings.Contains(r, "Adé") {
+		t.Fatalf("yo paid: %q", r)
+	}
+	w.say(t, yn, "beeni")
+	if r := w.say(t, yn, "ta ló jẹ mí?"); !strings.Contains(r, "₦3,000") {
+		t.Errorf("yo who: %q", r)
+	}
+	if r := w.say(t, yn, "mo ti san 2,000"); strings.Contains(r, tr(lang.YO, "wa.debt.no_one", "name", "mo")) {
+		t.Errorf("the business taken for a customer: %q", r)
+	}
+	// Hausa and Igbo.
+	if r := w.say(t, hn, "Adé yana bina 1,000"); !strings.Contains(r, "₦1,000") || !strings.Contains(r, "Adé") {
+		t.Fatalf("ha owes: %q", r)
+	}
+	w.say(t, hn, "na'am")
+	if r := w.say(t, hn, "wa ke bina"); !strings.Contains(r, "₦4,000") {
+		t.Errorf("ha who: %q", r)
+	}
+	if r := w.say(t, in, "onye ji m ugwo"); !strings.Contains(r, "₦4,000") {
+		t.Errorf("ig who: %q", r)
+	}
+	if r := w.say(t, in, "Adé akwụọla 4,000 cash"); !strings.Contains(r, "₦4,000") {
+		t.Fatalf("ig paid: %q", r)
+	}
+	w.say(t, in, "ee")
+	if r := w.say(t, in, "onye ji m ugwo"); strings.Contains(r, "₦4,000") {
+		t.Errorf("ig after paying: %q", r)
 	}
 }

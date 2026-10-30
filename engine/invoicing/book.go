@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/pii"
 )
 
@@ -44,9 +45,10 @@ type BookCustomer struct {
 }
 
 // SearchForm is a name as the lookup keeps and compares it: trimmed, its
-// spaces collapsed, lower case.
+// spaces collapsed, lower case, without accents or tone marks (lang.Fold),
+// so "ade" finds Adé.
 func SearchForm(name string) string {
-	return strings.ToLower(strings.Join(strings.Fields(name), " "))
+	return lang.Fold(name)
 }
 
 // NewBookCustomer records a customer of the book: the name sealed under a
