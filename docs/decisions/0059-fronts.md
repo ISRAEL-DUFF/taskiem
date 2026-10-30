@@ -13,13 +13,28 @@ Forms ([forms](../forms.md)) already put any page of questions in front of any w
 ## Decision
 
 1. **A front is a page under the storefront with blocks and actions, and nothing more specific.** Blocks are text, photos, or any of the business's data tables shown as a list. Actions are forms, any number, each starting its own workflow. A storefront has one or more fronts; the first is what the storefront shows today.
-2. **Forms are the only mechanism for an action.** An action's page is the hosted form of its workflow, with the forms work's checks, verification, limits and refusals, rendered under the storefront's look at the front's address.
+2. **Forms are the only mechanism for an action.**
+   - An action's page is a hosted form, with the forms work's checks, verification, limits and refusals, rendered under the storefront's look at the front's address.
+   - The form is the action's own questions, not the workflow's inputs.
+   - The run gets Taskiem's record of the submission (`trigger.submission`, and `trigger.body` as today for the built-in four) apart from the customer's answers (`trigger.answers`), so no answer can set a total or a reference.
 3. **Ordering, booking and hiring are fields, not code paths.** A basket from a list, a time from a calendar, dates and a quantity against counts, a quantity against a count. A form uses any, or none. A new way of selling is a new field type, never a new kind of storefront.
 4. **Kinds are presets over the model, and what owners see.** Shop, Food, Services, Hire, Spaces, Tickets, Classes, Quotes, Questions, Call-backs and Custom: each a table shape, a form with its fields, a workflow template, settings and chat words, kept as data checked against one schema. Picking a kind makes an ordinary front that can be opened up and changed; a new kind is a new preset, with a new field type only when none of the four fits. Custom is the escape hatch, never the default.
-5. **One workflow per action**, not per storefront form. The `storefront` trigger names the action. The editor offers to replace the action's workflow or to make a new action for the new workflow, instead of refusing.
+5. **One workflow per action**, not per storefront form.
+   - The `storefront` trigger keeps `action` and its four values, meaning the first front's built-in action of that kind, and gains an optional `action_id`.
+   - This is an additive change to the frozen wd/v1 contract, recorded here: no existing definition changes meaning.
+   - The editor offers to replace the action's workflow (first, alone, on today's model) or to make a new action for the new workflow, instead of refusing.
 6. **The storefront stays the business.** Its card, look, hours, domains, number, delivery areas, riders, payment connection and money log serve every front. There is one money log and one set of submissions, each naming its front and action.
-7. **Existing storefronts migrate in place.** A Shop front takes the catalogue and the enabled forms, a Services front the services table; the public paths keep serving; owners who never add a front never meet the word.
+7. **Existing storefronts migrate in place.**
+   - One Shop front takes everything the page has: the catalogue, the services and all four forms, so nothing moves on the public page.
+   - The public paths keep serving.
+   - Owners who never add a front never meet the word.
+   - Tables keep their names: `storefront_orders` already holds every kind of submission and gains `front_id` and `action_id`.
 8. **A calendar belongs to a list, not to the business**, so a time field on one front books independently of another's.
+9. **Fronts are published, never live.** Fronts, blocks and actions are part of the storefront's draft and reach customers through the published snapshot. Turning a front on is a publish, with the verified-phone rule, moderation, the item limit and the first-publish hold.
+10. **What is taken is claimed, not moved.**
+    - A list's count is what the owner has.
+    - Hires, tickets and places are claims against it, expiring while unpaid, checked with the item locked in the public host's submitting function.
+    - Stock (0057) stays on the catalogue table and is not moved by hires.
 
 ## Alternatives considered
 
@@ -34,12 +49,23 @@ Forms ([forms](../forms.md)) already put any page of questions in front of any w
 
 ## Consequences
 
-- New tables `storefront_fronts`, `storefront_blocks`, `storefront_lists`; `storefront_actions` keyed by id with a front; `storefront_orders` and `storefront_bookings` become `storefront_submissions` (views under the old names for a release); `triggers.storefront_action` becomes an action id.
-- Four form field types (`basket`, `time`, `hire`, `count`) in the forms schema and renderer; the storefront's order and booking pages move onto the forms renderer.
-- A kind catalogue (`storefront/kinds/*.json`) with its schema; the storefront templates become action templates with a `front` parameter; `storefront-hire`, `storefront-tickets`, `storefront-classes` and `storefront-quote` are new; `dispatch-orders` is an action template.
-- Chat gains `add front`, `… to <front>`, `turn on … for <front>`, `orders <front>`.
-- Stock: a confirmed hire moves stock out and, on return, back in.
-- Docs: storefronts rewritten around fronts; forms, stock and the owners' guide updated; the atlas's business modules page.
+- **New tables.** `storefront_fronts`, `storefront_blocks` and `storefront_claims`, each under forced row-level security, with the public host's reads granted column by column and listed in `dispatch_columns.txt`.
+- **Changed tables.**
+  - `storefront_actions` is keyed by id, with a front, a slug and `builtin`, and `(storefront_id, kind)` stays unique for the built-in four.
+  - `storefront_orders` gains `front_id` and `action_id`.
+  - `storefront_catalogue` is copied per table.
+  - Triggers gain `storefront_action_id`.
+- **No rename and no views.** A real Down migration, tested up, down, up.
+- **Every definer and query that finds an action by kind is moved to the action's id.** These are `taskiem_public_submit`, `taskiem_public_book`, the booking change function, the transfer-account read, and the `engine/storefront` queries. The old signatures stay as wrappers for a release.
+- **wd/v1 gains the optional `action_id`**, with the SDK's types, the schema test and `wdtext`.
+- **Forms.** Four form field types (`basket`, `time`, `hire`, `count`) in the forms schema and renderer. The order and booking pages move onto the forms renderer first, in F1.
+- **Kinds and templates.**
+  - A kind catalogue (`storefront/kinds/*.json`) with its schema.
+  - The storefront templates become action templates with a `front` parameter, and `dispatch-orders` is an action template.
+  - `storefront-hire`, `storefront-tickets`, `storefront-classes` and `storefront-quote` are new.
+- **Chat** gains `add front`, `… to <front>`, `turn on … for <front>`, `front … on` (a publish) and `orders <front>`.
+- **Limits.** `storefront_items` counts each copied table once. The monthly order and booking limits count submissions by what their form takes.
+- **Docs.** Storefronts is rewritten around fronts. Forms, stock (what fronts do not move) and the owners' guide are updated, along with the atlas's business modules page.
 
 ## Provenance
 
