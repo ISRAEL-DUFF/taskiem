@@ -35,8 +35,8 @@ Forms ([forms](../forms.md)) already put any page of questions in front of any w
     - A list's count is what the owner has.
     - Hires, tickets, places and booking slots are claims against it, expiring while unpaid, checked with the item locked in the public host's submitting function. Slot holds become claims, so there is one reservation model.
     - Stock (0057) stays on the catalogue table and is not moved by hires.
-11. **A submission can be paid in parts.** It carries an amount due and its payments, as an invoice does; a payment link may be for a deposit or an instalment and may be made again until the balance is paid; the money log and matching record each payment against the one reference. The order templates that exist keep paying in one step.
-12. **The form has one owner, the action.** It is published with the storefront; a template copies its form into the action once; the workflow's checks report a question the workflow reads that the form no longer asks.
+11. **A submission can be paid in parts.** It carries an amount due and its payments, as an invoice does; a payment link may be for a deposit or an instalment and may be made again until the balance is paid; the money log records each payment against the one reference, and matching's order path learns parts as the invoice path has them, so a deposit is a part, never a wrong amount. The order templates that exist keep paying in one step.
+12. **The form has one owner, the action.** It is published with the storefront; a template copies its form into the action once; the workflow's checks report a question the workflow reads that the form no longer asks, and the storefront's publish refuses to remove a question a live workflow reads.
 13. **A kind's table is a known table** in the registry decision 0060 sets up, so templates, chat, the builder and fronts read one definition.
 
 ## Alternatives considered

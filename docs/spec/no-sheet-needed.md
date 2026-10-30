@@ -19,11 +19,11 @@ This plan closes both gaps:
   - Make a table, from a known shape (customers, staff) or from the owner's own words.
   - Add a column.
   - Change or remove a row.
-  - Keep a debtor book in plain words: `Ada owes 5,000`, `Ada paid 2,000`, `who owes me?`. The book is invoices underneath, not a table: a notebook line is a credit invoice, and what Taskiem already does for invoices (balances, part payments, matching, receipts, chasing) does the book's work.
+  - Keep a debtor book in plain words: `Ada owes 5,000`, `Ada paid 2,000`, `who owes me?`. The book is invoices underneath, not a table: a notebook line is a credit invoice, and what Taskiem already does for invoices (balances, part payments, matching, receipts) does the book's work, with a new status, customer records and a reminder per customer added to invoices (§6.4).
   - Ask questions over any table.
   - The model routes all of these in every language, but only to the same commands, and it never sees a row.
 
-Seven milestones, R1 to R7. R1 alone makes "remind my customers who owe me" work with no sheet from a first chat.
+Seven milestones, R1 to R7. R1 takes every sheet template off the table for a business with no sheet; R5 makes "remind my customers who owe me" work from a first chat, over invoices.
 
 ## 2. Words used here
 
@@ -32,7 +32,7 @@ Seven milestones, R1 to R7. R1 alone makes "remind my customers who owe me" work
 | Sheet template | A template whose connectors include `googlesheets@1` |
 | Twin | The template a business with no sheet is offered instead: the same job over a data table, or over a record Taskiem already keeps (the money log, stock) |
 | Known table | A table shape Taskiem knows by name and purpose (`customers`, `staff`, and the storefront's tables), defined once and used by templates, chat words and the AI builder. The table is the business's own, an ordinary data table, not a [kept](../data-tables.md#kept-tables) one |
-| Debtor book | The chat words `owes`, `paid` and `who owes me?` over [invoices](../invoices.md): a notebook line is an invoice of kind `credit`, unsent, with the phone optional. There is no debtors table |
+| Debtor book | The chat words `owes`, `paid` and `who owes me?` over [invoices](../invoices.md): a notebook line is an invoice of kind `credit` in a new status, **recorded** (open and owed, never messaged), with the phone optional. There is no debtors table |
 | Query spec | What a question over rows becomes before anything is read: a table, filters, an order, a limit and at most one count or sum of a column, every name checked against the table's columns |
 
 ## 3. Where we are
@@ -44,7 +44,7 @@ Seven milestones, R1 to R7. R1 alone makes "remind my customers who owe me" work
 | Templates that declare their tables (`tables`), made after the draft is saved when missing (`created`, `exists`, `skipped`, `failed`) | [templates: tables a template makes](../templates.md#tables-a-template-makes), `api/templates.go` `templateTables` |
 | Eight sheet templates: `daily-sales-summary`, `debtor-reminder-sms`, `debtor-reminder-whatsapp`, `new-customer-welcome`, `salary-payout-approval`, `sales-ledger-sheet`, `stock-reorder-alert`, `transfer-received-notify` | `templates/library/` |
 | Replacements: `salary-payout-approval` is `superseded_by` `run-payroll` (a staff table); `stock-reorder-alert` is `replaced_where` `keeps_stock` by `low-stock-alert`; `daily-sales-summary` is `replaced_where` `records_sales` by `sales-day-total` | `templates/templates.go` (`ReplacedWhere`, `For`), `api/templates.go` `templateHolds` |
-| One table twin: `debtor-reminder-table` (SMS over a `debtors` table with `name`, `phone`, `balance`); it declares no `tables`, so the table must already exist. Invoices already do its job: `chase-overdue-invoices` reminds customers with overdue invoices by SMS and WhatsApp | `templates/library/debtor-reminder-table.json`, `chase-overdue-invoices.json` |
+| One table twin: `debtor-reminder-table` (SMS over a `debtors` table with `name`, `phone`, `balance`); it declares no `tables`, so the table must already exist. Invoices nearly do its job: `chase-overdue-invoices` reminds customers with overdue invoices, one message per invoice, by SMS and email, and is offered only for goals that say "invoice" | `templates/library/debtor-reminder-table.json`, `chase-overdue-invoices.json` |
 | The AI builder is told to prefer data tables over sheets, and proposes a missing table to be made on save | `engine/ai/builder/prompt.go` rule 12 |
 | Building from chat: a picked template or a goal becomes a draft, the tables it proposes are made after **yes** (N6), then its settings, then **Publish it now?** | `api/whatsapp_build.go`, `api/chat_publish.go` `waBuildFinish` |
 | Voice notes and photos reach the conversation. WhatsApp document messages are dropped by the webhook. Telegram turns only an image sent as a document into a photo and drops other documents, and its file type has no file name. The Slack app has no `files:read` scope | `engine/whatsapp/webhook.go`, `engine/telegram/update.go`, `connectors/slack/manifest.yaml` |
@@ -91,8 +91,8 @@ Seven milestones, R1 to R7. R1 alone makes "remind my customers who owe me" work
 
 | Sheet template | Without a sheet | New? |
 | --- | --- | --- |
-| `debtor-reminder-sms` | `chase-overdue-invoices`: the debts are invoices, credit lines included (§6.4); `debtor-reminder-table` is retired (`superseded_by` it) | Existing |
-| `debtor-reminder-whatsapp` | `chase-overdue-invoices`, which already sends by WhatsApp where the customer has it | Existing |
+| `debtor-reminder-sms` | `remind-who-owes-me`: one message per customer for what they owe over invoices, credit lines included (§6.4); `debtor-reminder-table` is retired (`superseded_by` it) | New |
+| `debtor-reminder-whatsapp` | `remind-who-owes-me`, which sends on WhatsApp where the customer asked the business for updates, as invoices do, and by SMS otherwise | New |
 | `new-customer-welcome` | `customer-welcome-table`, started by a new row in `customers` (§5.3) | New |
 | `daily-sales-summary` | `sales-day-total` (sales recorded by chat or on the Stock page) | Existing |
 | `stock-reorder-alert` | `low-stock-alert` (Taskiem's stock) | Existing |
@@ -235,26 +235,42 @@ Everything here works on WhatsApp, Telegram and Slack DMs through the one conver
 
 ### 6.4 The debtor book: R5
 
-**The book is invoices, not a table.** Taskiem already keeps money owed as [invoices](../invoices.md): a customer sealed, an amount and a balance, a draft that is saved but not sent, part payments with cash posted and matched, a receipt, overdue after a due date, a list by status, a trigger on every payment counted, chasing by SMS and WhatsApp (`chase-overdue-invoices`), and, from the schools work, attribution of a payment to a customer's open invoices oldest first with any extra held as credit ([matching: customers' own account numbers](../matching.md#customers-own-account-numbers)). A `debtors` table with a balance column would build all of that again, in a second place, with a second notion of "paid" that matching cannot see; the two ledgers would disagree the first time a customer paid through an account number. So there is no `debtors` table. The debtor book is a set of chat words over invoices, and the only new thing in invoices is a **credit** kind: an invoice made for a notebook line.
+**The book is invoices, not a table.** Taskiem already keeps money owed as [invoices](../invoices.md): a customer sealed, an amount and a balance, a draft that is saved but not sent, part payments with cash posted and matched, a receipt, overdue after a due date, a list by status, a trigger on every payment counted, chasing by SMS and email (`chase-overdue-invoices`, one message per invoice), and, from the schools work, attribution of a payment to a customer's open invoices oldest first with any extra held as credit ([matching: customers' own account numbers](../matching.md#customers-own-account-numbers)). A `debtors` table with a balance column would build all of that again, in a second place, with a second notion of "paid" that matching cannot see; the two ledgers would disagree the first time a customer paid through an account number. So there is no `debtors` table. The debtor book is a set of chat words over invoices. What it needs from invoices is new, and listed here so none of it is taken for granted:
+
+- **A kind and a status.** A notebook line is an invoice of kind `credit` in a new status, **recorded**: open and owed, but never messaged.
+  - Drafts are not open: matching counts a payment only towards sent, part-paid or overdue invoices (`docs/matching.md`), and a draft takes no payment. A credit line saved as a draft would be skipped by `Ada paid` and by `who owes me?`.
+  - So **recorded** is open in every place that asks: oldest-first attribution, splitting, suggestions, credit held and taken, the statement, `who owes me?` and the `list` action.
+  - **Recorded** moves to part-paid and paid by payments, as sent does. It moves to sent only when the owner sends it (`send`, below). It becomes overdue only with a due date.
+  - A credit invoice always takes part payments, whatever **Customers may pay part** says, since a notebook debt is paid in bits.
+- **A customer without a phone or email.** Invoices require one or the other today, and group a customer by `customer.key`, else phone, else email (`docs/invoices.md`).
+  - A credit line's customer gets a key on their first line, `book:<id>`, from a new `invoice_customers` record holding the name (sealed, plus a lower-case search form of it, see Q8), and the phone and email once known.
+  - Every invoice to that customer carries the key, so attribution, credit and statements group by it as they do for a school's `student:42`.
+  - A phone given later (`Ada's number is 0803…`) is set on the record and on the customer's open invoices, so receipts and reminders can reach her.
+  - Two Adas are two records, picked by number when the name is ambiguous.
+- **A reminder per customer.** `chase-overdue-invoices` sends by SMS and email, one message per overdue invoice, and is retrieved only for goals that say "invoice" (`requires`). So the book's reminder is a new template, `remind-who-owes-me`:
+  - It is retrieved for "remind my customers who owe me" and its kin in the five languages.
+  - It reads a new `invoices@1` `list` option, `group: customer` (one row per customer with what they owe and their oldest due date).
+  - It sends one message per customer, on WhatsApp where the customer asked the business for updates (as invoices do) and by SMS otherwise, with a pay link where a rail is connected.
+- **When a credit line is due.** A credit line has no due date unless given, and there is no default-terms setting today. Invoices > Settings gains **Credit lines are due after** (days; empty means never overdue, and reminders go to every customer who owes), and a line said `by Friday` takes that date.
 
 | Words | Does |
 | --- | --- |
-| `Ada owes 5,000` (`Ada go pay 5k`, and the other languages) | A new invoice of kind `credit` to the customer Ada for ₦5,000, saved as a draft and not sent: no number is sent, no due date is needed, and the phone is asked once and may be skipped. The read-back shows Ada's balance after it (*Ada: owes 5,000, total 8,000*) and waits for **yes**. If there is more than one Ada, a numbered pick |
-| `Ada paid 2,000` (`Ada don pay 2k`) | A payment of ₦2,000 counted towards Ada's open invoices, oldest first, as a school's payment is counted towards a student's; what is left over is held as Ada's credit and taken by her next invoice. With *cash* it is a cash posting into the money log, matched to those invoices; with *transfer* it is a transfer the owner expects, matched when the rail reports it (the posting is made and waits unmatched, as a typed `cash in` does). Without either word the owner is asked *How did Ada pay?* |
+| `Ada owes 5,000` (`Ada go pay 5k`, and the other languages) | A new invoice of kind `credit` to the customer Ada for ₦5,000, **recorded** and not sent: nothing is sent, the due date is the credit terms' (or none), and the phone is asked once and may be skipped. The read-back shows Ada's balance after it (*Ada: owes 5,000, total 8,000*) and waits for **yes**. If there is more than one Ada, a numbered pick |
+| `Ada paid 2,000` (`Ada don pay 2k`) | A payment of ₦2,000 counted towards Ada's open invoices, oldest first, as a school's payment is counted towards a student's; what is left over is held as Ada's credit and taken by her next invoice. With *cash* it is a cash posting into the money log, matched to those invoices. With *transfer*, nothing is posted, since the payment service records the transfer itself and a typed entry beside it would count the money twice: Ada's balance changes when the transfer arrives and is matched (her payer memory and her account number, where she has one, make it a strong match), and chat says so. A business with no connected payment service has nothing that will report the transfer, so there it is posted as an entered transfer (channel `transfer`) and matched at once. Without either word the owner is asked *How did Ada pay?* |
 | `who owes me?` (`who dey owe me`) | Customers with open invoices, grouped, largest balance first, with the total: credit lines and sent invoices alike, so one question answers the whole debt. Ten at a time, phones masked |
 | `Ada` alone, while the book is open | Ada's statement: her balance, her open invoices and the last payment |
-| `send Ada an invoice` | Sends one invoice for Ada's whole credit balance (the credit lines folded into it, each named) by SMS, email and WhatsApp, with an account number or payment link where a rail is connected, so a notebook debt becomes something she can pay from her phone |
-| `remind Ada`, and the chasing template | `chase-overdue-invoices` is the reminder, grouped per customer so Ada gets one message for her balance, not one per line; a credit line is overdue after the business's default terms (Settings > Invoices), which the owner can change for credit lines alone |
+| `send Ada her balance` | New work: moves Ada's recorded lines to sent together and sends **one** message listing them with their total and one way to pay it: her own account number where she has one, else a payment link for the total, whose payment is split across the lines oldest first by the existing split. No invoice is folded into another or voided, so each line keeps its history. Needs a phone or an email for Ada |
+| `remind Ada`, and the reminder template | `remind-who-owes-me` (above): one message per customer for what they owe. `remind Ada` sends hers now, once a day at most |
 
 Rules:
 - **Shown before written.** Each change is shown and written after **yes**, through the invoice functions, which already take an idempotency key; two messages at once make two invoices, or two payments, and never lose one.
-- **A credit invoice differs from a sent one in three ways only**: it has no due date unless given (`Ada owes 5,000 by Friday`), it is not sent until the owner asks, and its customer may have no phone or email. Everything else, the balance, the payments, the receipt once a phone is known, the money log and the audit, is the invoice's as today.
-- **Who is Ada.** Invoices find a customer by the sealed phone today. A credit line with no phone is found by name: the exact name, else the one the words start, else one containing them, with a numbered pick when several match, as items are found in chat. A phone given later (`Ada's number is 0803…`) joins the name to the phone, and the customer's lines follow.
+- **A credit invoice differs from a sent one** in its status (recorded), its due date (the credit terms', or given), its part payments (always allowed) and its customer (a `book:` key, possibly with no phone or email). Everything else, the balance, the payments, the receipt once a phone is known, the money log and the audit, is the invoice's as today.
+- **Who is Ada.** A name is looked up among the `invoice_customers` records: the exact name, else the one the words start, else one containing them, with a numbered pick when several match, as items are found in chat. A customer of a sent invoice with a phone is offered too, and choosing them puts the key on their record.
 - **Who may use the words.** `who owes me?` and a statement need `invoice.read`; `owes`, `paid` and `send` need `invoice.manage`, as `invoice` and `cash in` do. Without it, the reply names the role.
 - **No clash with supplier payments.** In English the word order decides. A supplier payment starts with *paid* (`paid Dangote 425,000 transfer`, [stock](../stock.md#suppliers-and-purchase-orders), matched by `paidRe`). A customer's payment starts with the name (`Ada paid 2,000`). In a language whose word order does not decide, a name that is both a supplier and a customer is asked about.
 - **Credit sales** (Q3): `sold 3 bags of rice 45,000 credit to Ada` lowers stock and makes a credit invoice with the sale's lines, in the sale's one transaction, with no money until she pays. A sale on credit is a bill.
 - **Amounts** are parsed by the money words' parser (`parseKobo`, `api/whatsapp_money.go`: `5k`, `5,000`, `₦5000`), in kobo, as invoices keep them.
-- **The web app.** Invoices gains a **Credit** filter and the customer statement (a customer's open invoices, payments and balance), which the schools family page is already a form of; nothing else changes there.
+- **The web app.** Invoices gains a **Credit** filter, the **Recorded** status, the credit terms setting, and the customer statement (a customer's open invoices, payments and balance), which the schools family page is already a form of.
 
 ### 6.5 Questions over rows: R6
 
@@ -310,11 +326,11 @@ Rules:
 
 | Id | Milestone | Size | Done when |
 | --- | --- | --- | --- |
-| R1 | **Templates without a sheet**: `no_sheets` (before the stock check) and `replaced_where` lists; the builder's retrieval honours conditions and ranks twins; known tables; the column check on existing tables; the two new twins and the three retargeted at what exists; `debtor-reminder-table` retired; `bank-alert-email` declares its table; chat template builds and the builder's template drafts make their tables; provisioning from chat (§9.1); the prompt's sentence; eval goals | M | A business with no Google connection, from a first chat, says "remind my customers who owe me", gets `debtor-reminder-table`, and has its `debtors` table made on **yes**; no surface offers a sheet template to it |
+| R1 | **Templates without a sheet**: `no_sheets` (before the stock check) and `replaced_where` lists; the builder's retrieval honours conditions and ranks twins; known tables; the column check on existing tables; `customer-welcome-table` and `payment-received-tell-owner`; the three twins that already exist wired in; `bank-alert-email` declares its table; chat template builds and the builder's template drafts make their tables; provisioning from chat (§9.1); the prompt's sentence; eval goals. The two debtor sheet templates stay offered until R5's twin exists | M | A business with no Google connection, from a first chat, says "welcome my new customers", gets `customer-welcome-table`, and has its `customers` table made on **yes**; no surface offers it a sheet template that has a twin |
 | R2 | **Bring your sheet**: files on WhatsApp and Telegram (documents newly read on both); the import moved out of its handler; the file typing ported to Go; Make a new table or Add to; the Google Sheet copied once | M | A CSV and an `.xlsx` sent on WhatsApp become a table; the same file sent twice writes once; a 6,000-row file is refused with the reason |
 | R3 | **Tables made and changed in chat**: `new table` (known or own words), add column, rename; drop column and delete table per Q1 | M | A first table made in chat on a business with no project is ready and announced; the Tables page shows what chat made |
 | R4 | **Rows changed in chat**: change and delete from `find`, the guard on the values shown, forms for personal columns, audit | M | A change made on the web between the show and the **yes** is not overwritten |
-| R5 | **The debtor book over invoices**: the `credit` invoice kind (unsent, phone optional, found by name), owes, paid (attributed oldest first, cash posted or a transfer awaited), who owes me, the statement, send and remind, credit sales (Q3), the Credit filter and the statement in the web app, in five languages | M | `Ada owes 5,000`, `Ada paid 2,000 cash`, `who owes me?` give one credit invoice, one cash payment matched to it, a balance of 3,000 and a list of one; `Ada paid 1,000 transfer` waits unmatched until a transfer arrives; two `owes` at once make two lines; `send Ada an invoice` sends one for 3,000 that an account number pays and matching clears |
+| R5 | **The debtor book over invoices**: the `credit` kind and the **recorded** status counted as open everywhere; `invoice_customers` and `book:` keys; part payments always on for credit; the credit terms setting; owes, paid (oldest first; cash posted; a transfer counted when it arrives, or entered where no rail is connected), who owes me, the statement, `send … her balance`; `invoices@1` `list` grouped by customer and `remind-who-owes-me`, replacing the two debtor sheet templates and retiring `debtor-reminder-table`; credit sales (Q3); the web app's filter, status, setting and statement; five languages | L | `Ada owes 5,000`, `Ada paid 2,000 cash`, `who owes me?` give one credit invoice, one cash payment matched to it, a balance of 3,000 and a list of one; `Ada paid 1,000 transfer` changes nothing until a transfer arrives and is matched, then lowers the balance once; with no rail connected it is entered and matched at once; two `owes` at once make two lines; `send Ada her balance` sends one message for 3,000 that an account number pays and matching clears line by line; "remind my customers who owe me" from a first chat gets `remind-who-owes-me`, which sends Ada one message |
 | R6 | **Questions and the model's routing**: word patterns, query specs, checks, answers, rate limit; table intents in `intent.Allowed`; eval cases | M | "how many customers in Ikeja?" in Pidgin answers with a count and its reading; a spec naming a column the table lacks reads nothing |
 | R7 | **Docs and the decision**: data tables, WhatsApp, Telegram, templates, the owners' guide (*Keep your records in chat*), the strategy, decision 0060 accepted with As built | S | The docs-site check passes; the strategy's "Xenibase underneath" row says what is built |
 
@@ -353,11 +369,12 @@ Each is a line with the web link, which opens with the chat's sign-in link where
 | # | Question | Recommendation |
 | --- | --- | --- |
 | Q1 | May chat drop a column or delete a table? | Yes, with the name typed back and the chat PIN where set; else the web link. The owner of a chat-born business may have no web sign-in at all, and a refusal there is a dead end |
-| Q2 | Does `Ada paid 2,000 cash` record cash in the money log? | Yes: it is a cash posting matched to Ada's open invoices, as a school's cash is, for a person with `invoice.manage`. A *transfer* is a posting that waits for the rail's report, so nothing is counted twice. Without either word the owner is asked *How did Ada pay?* |
+| Q2 | Does `Ada paid 2,000 cash` record cash in the money log? | Yes: it is a cash posting matched to Ada's open invoices, as a school's cash is, for a person with `invoice.manage`. A *transfer* posts nothing where a payment service is connected (it reports the transfer itself) and is entered as a transfer only where none is. Without either word the owner is asked *How did Ada pay?* |
 | Q3 | Credit sales: should `sold 3 bags of rice 45,000 credit to Ada` lower stock and make a credit invoice, with no money until she pays? | Yes, in R5: the sale's one transaction ([stock K2](stock.md)) gains the invoice, and a sale on credit is a bill |
 | Q4 | Should storefront orders add their customer to `customers`? | Not in this plan: orders keep their customer sealed in Taskiem. A later twin can copy them with consent |
 | Q5 | Excel: is a parsing dependency allowed? | Use one with a permissive licence (the `licences` CI check decides), or read `.xlsx` with the standard library's `archive/zip` and `encoding/xml` for the first sheet's values only. The second needs no review |
 | Q6 | Slack files: ask every workspace to reinstall the app for `files:read`? | Not now. Add the scope with the next reason to reinstall, and read files from then on |
+| Q8 | May a debtor's name be kept in a searchable form (lower-case, in Taskiem's database under row-level security) so `Ada owes` finds her without unsealing every customer? | Yes: stock items and suppliers are found by name the same way. The sealed name stays the one shown; the search form is never logged, exported or sent to the model |
 | Q7 | Ask Xenibase for a trigger that keeps `updated_at` on every write (or a row version)? | Yes, as a nice-to-have. The guard on the values shown works without it, and a version would make the guard cover every column |
 
 ## 11. Testing
@@ -366,7 +383,8 @@ Each is a line with the web link, which opens with the chat's sign-in link where
 - **Chat.** Conversation tests on WhatsApp and Telegram for every command above, including:
   - a change written after a web edit to the same column (refused and shown again), and after an edit to another column (written, the other edit kept);
   - two `owes` for the same customer at once (two credit invoices, one balance);
-  - `who owes me?` listing a credit line and a sent invoice of the same customer as one balance;
+  - `who owes me?` listing a credit line and a sent invoice of the same customer as one balance, and a recorded line counted as open by matching, splitting and the statement;
+  - two customers named Ada kept apart by their `book:` keys;
   - `Ada paid` attributed oldest first with the extra held as credit, and a credit invoice retired by a payment into an account number;
   - a replayed delivery (written once);
   - a kept table (refused);

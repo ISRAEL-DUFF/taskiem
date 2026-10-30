@@ -113,6 +113,8 @@ An action has:
 
 **Where the form lives, and who owns it.** The form has one owner: the action. It is a column on `storefront_actions` (`form`, the questions' schema with its `x-form` hints), edited on the action's page, part of the storefront's draft, and published with the storefront's snapshot. A template that makes an action (§8) copies its form into the action once, at creation; after that the workflow and the form are edited and published separately, and nothing in a workflow version carries the form. A question change goes live with the storefront's publish; a workflow change with the workflow's. The two meet at the trigger: a workflow's `storefront` trigger names the action, and the action's form decides what `trigger.answers` holds, so a field the workflow reads that the form no longer asks is reported by the workflow's checks as a missing input, the way a removed table column is.
 
+That check runs when the workflow is published. **The storefront's publish checks the other way round.** For each enabled action it reads the live workflows that name it (in every environment) and refuses a publish whose form no longer asks a question one of them reads. The refusal names the question and the workflow, with **Keep the question** or **Open the workflow**. A form change can therefore never break a live workflow unseen, whichever is published second.
+
 The action's page is rendered by the hosted-forms code (`engine/publicweb/hostedforms.go`), which already lives in the public host's package, as a route of the **storefront's host and domains**, not of the forms host (`forms.<domain>`), under the storefront's look and chrome, at `/<front>/a/<action slug>`, with the storefront's honeypot, limits, language and status pages. The forms' own `verify`, `once_per` and rate limits apply per storefront, as the storefront's submission limits do (§10). The built-in four keep `/a/<kind>`.
 
 ### 5.4 Fields that draw on the front
@@ -148,7 +150,12 @@ Calendars: one per **time field's list block**, not one per business, so a salon
 - `amount_due_kobo` and `paid_kobo` on the submission, with `payment` (`unpaid`, `part_paid`, `paid`) derived;
 - `payment_link` takes an optional `amount_kobo` (a deposit, an instalment) and may be called again until the balance is paid; each link is one payment, keyed by the submission and the amount sequence, so a retried step makes no second link;
 - the `storefront.payment` signal's payload gains `amount_kobo` and `balance_kobo`, so a workflow waits for a deposit, then later for the balance;
-- the money log and matching record each payment against the one reference, as they do for a part-paid invoice; a refund refunds what was paid;
+- **Matching learns part-paid orders**, as new work. Today matching counts a payment towards an order as its whole payment: an order waits for money, then is paid. It gains the invoice path's parts:
+  - a payment smaller than the balance is a part, matched to the reference and added to `paid_kobo`, not taken as a wrong amount;
+  - the order is paid when `paid_kobo` reaches `amount_due_kobo`;
+  - a payment larger than the balance is split as an invoice's is, with the rest waiting in To match;
+  - the order's suggestions offer the balance, not the total;
+- the money log records each payment against the one reference; a refund refunds what was paid;
 - the status page shows what is paid and what is due, with **Pay the balance**.
 This is F5's first item, since Hire is the first kind to need it, and `storefront-classes` and `storefront-quote` build on it.
 
@@ -281,7 +288,7 @@ The public paths of today (`/`, `/a/order`, `/a/booking`, `/o/<ref>`) keep servi
 - **Fronts**: a second front with its own table and order action, and the first front's order workflow untouched; a delivery workflow on the second front's order action while the first keeps the plain one (the case that started this); a hire action refusing an overbooked quantity for overlapping dates and accepting it for other dates; a time field with its own calendar.
 - **Forms**: the four field types through the forms harness (schema, render, submit, and the `trigger.submission` and `trigger.answers` shapes); a field named `total` refused at deploy; two customers racing for the last seat or canopy, with one refused.
 - **Contract**: a published workflow with `action: "order"` runs unchanged after the migration; `action_id` round-trips through the SDK, the schema test and `wdtext`; `get_submission`, `mark_returned` and `payment_link`'s `amount_kobo` are in the connector's manifest, fixtures and the generated SDK helpers.
-- **Part payments**: a deposit then the balance on one reference, each in the money log and matched, the status page's balance, a refund of what was paid; a retried `payment_link` step makes no second link.
+- **Part payments**: a deposit then the balance on one reference, each in the money log and matched as a part (never as a wrong amount), the status page's balance, a refund of what was paid; a retried `payment_link` step makes no second link.
 - **Food**: a basket line with options priced on the server; a form's option prices ignored.
 - **Migration**: up, down, up on a database with orders, bookings, holds and refunds, with the public pages' HTML identical before and after.
 - **Editor**: the replace and the new-action choices on a held action; four-eyes refusal.
@@ -307,7 +314,7 @@ The public paths of today (`/`, `/a/order`, `/a/booking`, `/o/<ref>`) keep servi
 | F2 | **Make a new action for this workflow**, on the action ids F1 adds | S |
 | F3 | Fronts in the web app and on the public page, with the kinds that exist today as presets (**Shop**, **Services**, **Questions**, **Call-backs**) plus **Food** (options with prices, ready-in, delivery by default); fronts in the snapshot and publishing (§5.1); the per-table copy and the limits (§5.2, §5.6); the Fronts tab, Add a front by kind, blocks, actions from templates, the home page's front cards, Orders by front; the action templates with the `front` parameter | L |
 | F4 | Chat: `add front` with the kind, the kinds' words, `… to <front>`, `turn on … for <front>`, `front … on` as a publish, `orders <front>`, the five languages | M |
-| F5 | **Part payments** (§5.4) first; then **Hire** and **Spaces**: claims as the one reservation model, `taskiem_public_claim`, holds folded in; the dates-and-quantity field; `storefront-hire` with deposit, due back, **Returned** and the late fee; calendars per list with the hours and days grains | L |
+| F5 | **Part payments** (§5.4) first, matching's order path with parts included; then **Hire** and **Spaces**: claims as the one reservation model, `taskiem_public_claim`, holds folded in; the dates-and-quantity field; `storefront-hire` with deposit, due back, **Returned** and the late fee; calendars per list with the hours and days grains | L |
 | F6 | **Tickets** and **Classes**: the count field over claims; `storefront-tickets` with check-in; `storefront-classes` with instalments and the waiting list | L |
 | F7 | **Quotes** and **Custom**: `storefront-quote` with the customer's acceptance on the status page, blank forms | M |
 | F8 | The builder's kinds and one eval per kind; docs ([storefronts](../storefronts.md) rewritten around fronts and kinds, [forms](../forms.md) with the four fields, [stock](stock.md) on what fronts do and do not move, the owners' guide "Sell more than one thing"); the decision accepted with what was built; the atlas's business modules page | M |
@@ -326,8 +333,8 @@ F0 ships first and alone: it is the owner's case, today. Then come F1, then F2 a
 | A hire's or a ticket's count under concurrent submissions | Claims are checked and written in the submitting definer with the item's row locked; unpaid claims expire (§5.4) |
 | Stock on more than one table | Not in this plan: stock stays on the catalogue (§5.2). Owners who want stock counted on a Food menu wait for a change to 0057 |
 | Calendars per block break the "one calendar" assumption in reminders and the owner's bookings page | The bookings page groups by calendar; reminders key by submission already |
-| A form and its workflow drift apart (a question removed that the workflow reads) | The form has one owner, the action; the workflow's checks report a missing input at publish, and the editor shows the action's questions beside the trigger |
-| Part payments change what "paid" means for the money log and matching | A submission's payments are recorded as an invoice's part payments are, one reference, several payments; `payment` is derived and never written by a form; the order templates that exist keep paying in one step |
+| A form and its workflow drift apart (a question removed that the workflow reads) | The form has one owner, the action; the workflow's checks report a missing input at the workflow's publish, and the storefront's publish refuses to remove a question a live workflow reads (§5.3), and the editor shows the action's questions beside the trigger |
+| Part payments change what "paid" means for the money log and matching | Matching's order path gains parts as the invoice path has them (§5.4); a submission's payments are recorded as an invoice's part payments are, one reference, several payments; `payment` is derived and never written by a form; the order templates that exist keep paying in one step |
 
 ## 15. Out of scope
 

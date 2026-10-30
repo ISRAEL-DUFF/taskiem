@@ -33,11 +33,12 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
    - Dropping a column or deleting a table needs the name typed back and the chat PIN where one is set, which today means WhatsApp. Otherwise it goes to the web.
    - Kept tables stay closed to every change, in chat too.
 6. **The debtor book is invoices.**
-   - Money owed is kept in one place, invoices, which already have a balance, part payments, matching, receipts, chasing and oldest-first attribution. A debtors table would be a second ledger with a second "paid", so there is none.
-   - `<name> owes <amount>` makes an invoice of a new kind, `credit`: unsent, no due date unless given, the phone optional, the customer found by name when there is no phone.
-   - `<name> paid <amount>` is a payment counted towards that customer's open invoices oldest first, any extra held as credit; *cash* posts cash to the money log, *transfer* waits for the rail's report, so nothing is counted twice.
-   - `who owes me?` answers from open invoices, credit lines and sent invoices as one balance per customer. Reminders are `chase-overdue-invoices`, grouped per customer. A credit sale from the stock words makes a credit invoice.
-   - The two debtor-reminder sheet templates are replaced by `chase-overdue-invoices`, and `debtor-reminder-table` is retired.
+   - Money owed is kept in one place, invoices, which already have a balance, part payments, matching, receipts and oldest-first attribution. A debtors table would be a second ledger with a second "paid", so there is none.
+   - `<name> owes <amount>` makes an invoice of a new kind, `credit`, in a new status, **recorded**: open and owed everywhere (matching, splitting, credit, statements, lists), never messaged, due after the business's credit terms or a given date, always taking part payments.
+   - A customer with no phone or email is a record of their own (`invoice_customers`), keyed `book:<id>` on their invoices, so attribution and statements group by it; a phone given later is added to it.
+   - `<name> paid <amount>` is a payment counted towards that customer's open invoices oldest first, any extra held as credit. *Cash* posts cash to the money log. *Transfer* posts nothing where a payment service is connected, since its report is the record; it is entered as a transfer only where none is. Nothing is counted twice.
+   - `who owes me?` answers from open invoices, recorded and sent alike, as one balance per customer. `send <name> her balance` sends the recorded lines together in one message with one way to pay the total. A credit sale from the stock words makes a credit invoice.
+   - The reminder is a new template, `remind-who-owes-me`, one message per customer, which replaces the two debtor-reminder sheet templates; `debtor-reminder-table` is retired. `chase-overdue-invoices` stays as it is.
 7. **Questions over rows become a checked query spec, never free reading.**
    - The model, where used, gets the question and the table and column names and types. It never gets a row.
    - It returns a spec that is checked against the person's tables and columns, with types, operators, values, a limit of 20 and at most one count or sum, before one read-only query runs.
