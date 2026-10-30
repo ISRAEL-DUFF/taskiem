@@ -101,6 +101,26 @@ func TestCustomerLinkAndBalance(t *testing.T) {
 		}
 		return nil
 	})
+	// A reminder's {customer_link} is the same link; the connector's
+	// customer_link answers it with what she owes.
+	if r, err := w.inv.NotifyCustomer(ctx, tenant, third.Number, "Pay all of it: {customer_link}", "", "n1"); err != nil || r["sent"] != true {
+		t.Fatalf("notify: %v %v", r, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT body FROM platform_messages WHERE tenant_id = $1 AND dedup_key = 'notice:n1:sms'`, tenant).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(body, &env)
+	w.in(func(tx pgx.Tx) error {
+		v, err := w.env.Vault.OpenTx(ctx, tx, tenant, env)
+		if text, _ := v.(map[string]any)["text"].(string); err != nil || !strings.HasSuffix(text, "Pay all of it: "+out.Link) {
+			t.Errorf("reminder: %q %v", text, err)
+		}
+		return nil
+	})
+	if link, due, err := (invoicing.Service{Invoices: w.inv}).CustomerLinkFor(ctx, tenant, second.Number, "run:x"); err != nil || link != out.Link || due != 500000 {
+		t.Errorf("customer_link: %q %d %v", link, due, err)
+	}
+
 	// Again under the same key: the same link, no second message.
 	w.in(func(tx pgx.Tx) error {
 		again, err := w.inv.SendBalance(ctx, tx, tenant, second.CustomerID(), "user:owner", "k1")

@@ -102,7 +102,7 @@
           "overdue_customers": {"status": "overdue", "group": "customer", "limit": 200},
           "chase_customers[0].remind_customer": {
             "number": "INV-0004",
-            "text": "A reminder: {customer_due} is overdue on {customer_lines} item(s). See the oldest and pay: {link}",
+            "text": "A reminder: {customer_due} is overdue on {customer_lines} item(s). See what you owe and pay: {customer_link}",
             "subject": "Overdue: {customer_due}"
           },
           "chase_customers[1].tell_owner_customer": {

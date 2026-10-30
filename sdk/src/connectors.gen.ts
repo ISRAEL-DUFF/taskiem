@@ -687,6 +687,10 @@ export interface InvoicesCreateInput {
   lines?: Value;
   note?: Val<string>;
 }
+export interface InvoicesCustomerLinkInput {
+  /** Any open invoice or notebook debt of the customer's */
+  number: Val<string>;
+}
 export interface InvoicesGetInput {
   number: Val<string>;
 }
@@ -735,6 +739,8 @@ export interface InvoicesVoidInput {
 export const invoices = {
   /** Create an invoice (idempotent_write) */
   create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
+  /** The customer's payment link (read) */
+  customer_link: (input: InvoicesCustomerLinkInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "customer_link", input, extra),
   /** Read an invoice (read) */
   get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
   /** List overdue or paid invoices (read) */
@@ -3797,7 +3803,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "get", "list", "notify_customer", "register_account", "send", "void"],
+  "invoices@1": ["create", "customer_link", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],

@@ -1018,8 +1018,26 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 			}
 			customerDue, customerLines = Naira(due), strconv.Itoa(n)
 		}
+		// The customer's own payment link: one page of all they owe. Where
+		// there is none to make (no pages, or nothing open), the invoice's.
+		customerLink := ""
+		if strings.Contains(text, "{customer_link}") {
+			if customerLink, err = s.CustomerLink(ctx, tx, tenant, x.CustomerID(), "system:notify"); errors.Is(err, ErrState) || errors.Is(err, ErrInvalid) {
+				err = nil
+			}
+			if err != nil {
+				return err
+			}
+			if customerLink == "" && s.PageBase != "" {
+				t, err := s.token(ctx, tx, tenant, &x)
+				if err != nil {
+					return err
+				}
+				customerLink = strings.TrimRight(s.PageBase, "/") + "/i/" + t
+			}
+		}
 		text = strings.NewReplacer("{number}", x.Number, "{due}", Naira(x.DueKobo), "{fee_line}", feeLine,
-			"{customer_due}", customerDue, "{customer_lines}", customerLines).Replace(text)
+			"{customer_due}", customerDue, "{customer_lines}", customerLines, "{customer_link}", customerLink).Replace(text)
 		if subject == "" {
 			subject = "Invoice " + x.Number + " from " + business
 		}

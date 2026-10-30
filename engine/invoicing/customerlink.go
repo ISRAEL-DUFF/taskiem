@@ -313,3 +313,29 @@ func balanceText(business string, open []Invoice, due int64, pay string) string 
 	b.WriteString(" " + pay)
 	return b.String()
 }
+
+// CustomerLinkFor is the payment link of an invoice's customer
+// (CustomerLink) and what they owe on all their open invoices: the
+// invoices connector's customer_link.
+func (s Service) CustomerLinkFor(ctx context.Context, tenant uuid.UUID, number, by string) (string, int64, error) {
+	var link string
+	var due int64
+	err := s.in(ctx, tenant, func(tx pgx.Tx) error {
+		x, err := s.Get(ctx, tx, tenant, number)
+		if err != nil {
+			return err
+		}
+		if s.PageBase == "" {
+			return fmt.Errorf("%w: this server serves no customer pages", ErrState)
+		}
+		if link, err = s.CustomerLink(ctx, tx, tenant, x.CustomerID(), by); err != nil {
+			return err
+		}
+		open, err := s.OpenInvoicesOf(ctx, tx, tenant, x.CustomerID())
+		for _, o := range open {
+			due += o.DueKobo
+		}
+		return err
+	})
+	return link, due, err
+}

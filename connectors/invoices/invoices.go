@@ -37,6 +37,7 @@ type Ops interface {
 	ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]invoicing.Listed, error)
 	ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, limit int) ([]invoicing.ListedCustomer, error)
 	GiveAccount(ctx context.Context, tenant uuid.UUID, in invoicing.AccountRequest, by string) (invoicing.CustomerAccount, error)
+	CustomerLinkFor(ctx context.Context, tenant uuid.UUID, number, by string) (string, int64, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -51,6 +52,7 @@ func New(ops Ops) *connector.Connector {
 		"notify_customer":  connector.ActionFunc(a.notify),
 		"list":             connector.ActionFunc(a.list),
 		"register_account": connector.ActionFunc(a.registerAccount),
+		"customer_link":    connector.ActionFunc(a.customerLink),
 	}}
 }
 
@@ -273,6 +275,24 @@ func (a *actions) registerAccount(ctx context.Context, req connector.Request) (c
 	return connector.Response{Output: out}, nil
 }
 
+// customerLink answers the payment link of an invoice's customer, made
+// once (invoicing.Invoices.CustomerLink), and what they owe in all.
+func (a *actions) customerLink(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	n, err := number(req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	link, due, err := a.ops.CustomerLinkFor(ctx, c.Tenant, n, by(c))
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"link": link, "due_kobo": due, "due": invoicing.Naira(due)}}, nil
+}
+
 // intIn reads a whole number from a step's input (JSON numbers arrive as
 // float64).
 func intIn(v any) (int, bool) {
@@ -380,6 +400,15 @@ func (l *Late) NotifyCustomer(ctx context.Context, t uuid.UUID, number, text, su
 		return nil, err
 	}
 	return o.NotifyCustomer(ctx, t, number, text, subject, key)
+}
+
+// CustomerLinkFor implements Ops.
+func (l *Late) CustomerLinkFor(ctx context.Context, t uuid.UUID, number, by string) (string, int64, error) {
+	o, err := l.get()
+	if err != nil {
+		return "", 0, err
+	}
+	return o.CustomerLinkFor(ctx, t, number, by)
 }
 
 // GiveAccount implements Ops.

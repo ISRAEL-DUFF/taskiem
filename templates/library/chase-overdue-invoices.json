@@ -2,7 +2,7 @@
   "id": "chase-overdue-invoices",
   "title": "Chase overdue invoices every day",
   "summary": "Every morning, remind each customer who owes you money that is past its due date (invoices and debts written down in chat alike), every few days, in one message per customer, and tell you when one is still unpaid after the last reminder.",
-  "description": "Once a day at the time you choose, finds what customers owe you that is past its due date and not fully paid: invoices, and debts written down in chat (Ada owes 5,000) once their credit terms have passed. With One message per customer (on unless you turn it off), each customer gets one reminder for everything they owe that is overdue, by SMS, and by email when you have their address, with what they owe in all and the link to their oldest bill; off, they get one per invoice, with its number and its link. The first goes the day after the due date, then one every few days, up to the number you choose. After the last reminder you are told once that it is still unpaid. A customer never gets the same reminder twice, even if the workflow runs again the same day. Paid and voided invoices are left alone, and a debt with no due date is never reminded.",
+  "description": "Once a day at the time you choose, finds what customers owe you that is past its due date and not fully paid: invoices, and debts written down in chat (Ada owes 5,000) once their credit terms have passed. With One message per customer (on unless you turn it off), each customer gets one reminder for everything they owe that is overdue, by SMS, and by email when you have their address, with what they owe in all and a link to one page of all of it, where they pay the whole or a part; off, they get one per invoice, with its number and its link. The first goes the day after the due date, then one every few days, up to the number you choose. After the last reminder you are told once that it is still unpaid. A customer never gets the same reminder twice, even if the workflow runs again the same day. Paid and voided invoices are left alone, and a debt with no due date is never reminded.",
   "category": "collections",
   "tags": [
     "collections",
@@ -203,7 +203,7 @@
               "when": "=(int(item.days_overdue) - 1) / {{every_days}} < {{reminders}}",
               "input": {
                 "number": "=item.number",
-                "text": "A reminder: {customer_due} is overdue on {customer_lines} item(s). See the oldest and pay: {link}",
+                "text": "A reminder: {customer_due} is overdue on {customer_lines} item(s). See what you owe and pay: {customer_link}",
                 "subject": "Overdue: {customer_due}"
               },
               "effect": {
