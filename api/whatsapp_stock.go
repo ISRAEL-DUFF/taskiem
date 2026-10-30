@@ -3,12 +3,15 @@ package api
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -553,7 +556,15 @@ type saleChat struct {
 	PaidHow    string           `json:"paid_how"`
 	// Beyond names the items sold beyond the stock there is.
 	Beyond []string `json:"beyond,omitempty"`
+	// Customer is who owes for a sale on credit: their name as written,
+	// and their key in the debtor book ("" for someone new).
+	Customer    string `json:"customer,omitempty"`
+	CustomerKey string `json:"customer_key,omitempty"`
 }
+
+// creditSaleRe finds who a sale on credit is to: "… credit to Ada", "… on
+// credit to Ada", "… on credit for Ada", "… for Ada on credit".
+var creditSaleRe = regexp.MustCompile(`(?i)^(.+?)\s+(?:(?:on\s+)?credit\s+(?:to|for)\s+(.{1,60}?)|(?:to|for)\s+(.{1,60}?)\s+on\s+credit)$`)
 
 // waStockSale answers "sold 3 bags of rice 45,000 cash" (and the same in
 // the other languages, after their sale word): the sale shown, recorded on
@@ -563,15 +574,41 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !c.p.Can(PermTableEdit) {
 		return c.say(ctx, s, c.t("wa.stock.denied", "org", c.tenant.Name))
 	}
+	// On credit: who owes for it, from the debtor book (decision 0060).
+	var customer string
+	if m := creditSaleRe.FindStringSubmatch(strings.TrimRight(strings.TrimSpace(args), ".!")); m != nil {
+		args, customer = m[1], strings.Join(strings.Fields(m[2]+m[3]), " ")
+	}
 	said, ok := stock.ParseSale(args)
 	if !ok {
 		return c.say(ctx, s, c.t("wa.sale.how"))
+	}
+	var customerKey string
+	if customer != "" {
+		if s.Invoices == nil || !c.p.Can(PermInvoiceManage) {
+			return c.say(ctx, s, c.t("wa.debt.denied", "org", c.tenant.Name))
+		}
+		found, err := s.waFindDebtor(ctx, c, customer)
+		if err != nil {
+			return err
+		}
+		switch {
+		case len(found) == 1:
+			customerKey, customer = found[0].Key, found[0].Name
+		case len(found) > 1:
+			list, err := s.pickList(ctx, c, found, false)
+			if err != nil {
+				return err
+			}
+			return c.say(ctx, s, c.t("wa.debt.which_balance", "list", list))
+		}
+		said.PaidHow = stock.Credit
 	}
 	_, items, ok, err := s.stockChatItems(ctx, c)
 	if !ok || err != nil {
 		return err
 	}
-	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow}
+	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: customer, CustomerKey: customerKey}
 	if sale.PaidHow == "" {
 		sale.PaidHow = stock.Cash
 	}
@@ -622,6 +659,22 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	}
 	text := c.t("wa.sale.confirm", "items", whatsapp.SafeText(stock.SaleWords(sale.Lines)), "amount", storefront.FormatNaira(*sale.AmountKobo),
 		"how", c.t("sales.how_"+sale.PaidHow))
+	if sale.PaidHow == stock.Credit {
+		var before int64
+		if sale.CustomerKey != "" {
+			if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
+				var err error
+				before, _, err = owedBy(ctx, tx, c.tenant.ID, "key:"+sale.CustomerKey)
+				return err
+			}); err != nil {
+				return err
+			}
+		}
+		text += "\n" + c.t("wa.sale.credit_owes", "name", whatsapp.SafeText(sale.Customer), "total", invoicing.Naira(before+*sale.AmountKobo))
+		if sale.CustomerKey == "" {
+			text += " " + c.t("wa.sale.credit_new", "name", whatsapp.SafeText(sale.Customer))
+		}
+	}
 	if len(sale.Beyond) > 0 {
 		text += "\n" + c.t("wa.sale.beyond", "names", whatsapp.SafeText(strings.Join(sale.Beyond, ", ")))
 	}
@@ -632,8 +685,16 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 func (s *Server) waStockSaleApply(ctx context.Context, c *chat) error {
 	sh := c.data.Shop
 	sale := sh.StockChat.Sale
-	x, err := s.Stock.RecordSale(s.waTablesCtx(ctx, c), c.tenant.ID, stock.SaleIn{Lines: sale.Lines, AmountKobo: sale.AmountKobo, PaidHow: sale.PaidHow,
-		Actor: c.p.Actor(), Key: "wa-" + sh.Nonce}, s.moneyLog())
+	in := stock.SaleIn{Lines: sale.Lines, AmountKobo: sale.AmountKobo, PaidHow: sale.PaidHow, Actor: c.p.Actor(), Key: "wa-" + sh.Nonce}
+	var credit invoicing.Invoice
+	if sale.PaidHow == stock.Credit {
+		in.OnCredit = func(ctx context.Context, tx pgx.Tx, lines []stock.SaleLine, amount int64) (uuid.UUID, error) {
+			var err error
+			credit, err = s.creditSale(ctx, tx, c, sale, lines, amount, "sale:wa-"+sh.Nonce)
+			return credit.ID, err
+		}
+	}
+	x, err := s.Stock.RecordSale(s.waTablesCtx(ctx, c), c.tenant.ID, in, s.moneyLog())
 	if err != nil {
 		if errors.Is(err, stock.ErrSaleInvalid) {
 			if serr := s.saveSession(ctx, c, stateIdle, chatData{}, 0); serr != nil {
@@ -658,6 +719,23 @@ func (s *Server) waStockSaleApply(ctx context.Context, c *chat) error {
 		lines = append(lines, c.t("wa.sale.waiting_"+x.PaidHow))
 	case "matched":
 		lines = append(lines, c.t("wa.sale.matched"))
+	case stock.Credit:
+		if x.InvoiceID != nil {
+			var owed int64
+			var number string
+			if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
+				inv, err := s.Invoices.Get(ctx, tx, c.tenant.ID, x.InvoiceID.String())
+				if err != nil {
+					return err
+				}
+				number = inv.Number
+				owed, _, err = owedBy(ctx, tx, c.tenant.ID, inv.CustomerID())
+				return err
+			}); err != nil {
+				return err
+			}
+			lines = append(lines, c.t("wa.sale.credit_recorded", "name", whatsapp.SafeText(sale.Customer), "number", number, "total", invoicing.Naira(owed)))
+		}
 	}
 	if len(x.Short) > 0 {
 		lines = append(lines, c.t("wa.sale.short", "names", whatsapp.SafeText(strings.Join(x.Short, ", ")), "name", whatsapp.SafeText(x.Short[0])))
@@ -679,4 +757,36 @@ func takeOff(args string) string {
 		}
 	}
 	return strings.Join(f, " ")
+}
+
+// creditSale records what a customer owes for a sale on credit, in the
+// sale's transaction: a notebook debt with the sale's lines (a customer
+// of the book made first when the name is new), under the sale's key, so a
+// yes delivered twice records one.
+func (s *Server) creditSale(ctx context.Context, tx pgx.Tx, c *chat, sale *saleChat, lines []stock.SaleLine, amount int64, key string) (invoicing.Invoice, error) {
+	var cust invoicing.BookCustomer
+	var err error
+	if sale.CustomerKey == "" {
+		cust, err = s.Invoices.NewBookCustomer(ctx, tx, c.tenant.ID, sale.Customer, "", c.p.Actor())
+	} else {
+		cust, err = s.Invoices.BookCustomerByKey(ctx, tx, c.tenant.ID, sale.CustomerKey)
+	}
+	if err != nil {
+		return invoicing.Invoice{}, err
+	}
+	d := invoicing.CreditDraft{}
+	var sum int64
+	for _, l := range lines {
+		desc := l.Item
+		if l.Unit != "" {
+			desc = l.Unit + " of " + l.Item
+		}
+		d.Lines = append(d.Lines, invoicing.Line{Description: desc, Quantity: l.Quantity, UnitKobo: l.PriceKobo})
+		sum += l.PriceKobo * l.Quantity
+	}
+	if sum != amount {
+		// Sold for one price for all: one line of that amount.
+		d.Lines, d.AmountKobo, d.Description = nil, amount, stock.SaleWords(lines)
+	}
+	return s.Invoices.RecordCredit(ctx, tx, c.tenant.ID, key, cust, d, c.p.Actor())
 }

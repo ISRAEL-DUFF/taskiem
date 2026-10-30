@@ -2848,6 +2848,10 @@
       "text": "for POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "for credit",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Cash",
       "reviewed": false
@@ -2858,6 +2862,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Credit",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2930,6 +2938,18 @@
     },
     "wa.sale.matched": {
       "text": "E don match di money wey enter.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} go owe {total} in all.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} new for your debt book.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "I don write am as debt: {name} owe am ({number}), {total} in all now.",
       "reviewed": false
     },
     "wa.sale.short": {

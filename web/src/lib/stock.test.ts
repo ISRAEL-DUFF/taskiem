@@ -233,6 +233,7 @@ describe("sales", () => {
       by_how: { cash: 9000000, transfer: 0, pos: 450000 },
     } as SalesDay;
     expect(byHowLine(d)).toBe("Cash ₦90,000 · Terminal ₦4,500");
+    expect(byHowLine({ ...d, by_how: { cash: 100000, credit: 4500000 } })).toBe("Cash ₦1,000 · On credit ₦45,000");
   });
   it("titles a sale and says whether its money came", () => {
     const s: Sale = {

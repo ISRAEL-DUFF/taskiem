@@ -2848,6 +2848,10 @@
       "text": "lórí POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "lórí gbèsè",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Owó lọ́wọ́",
       "reviewed": false
@@ -2858,6 +2862,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Gbèsè",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2930,6 +2938,18 @@
     },
     "wa.sale.matched": {
       "text": "A ti so ó pọ̀ mọ́ owó tó wọlé.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} yóò jẹ {total} lápapọ̀.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} jẹ́ tuntun nínú ìwé gbèsè rẹ.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "A kọ ọ́ sílẹ̀ bí gbèsè: {name} jẹ ẹ́ ({number}), {total} lápapọ̀ báyìí.",
       "reviewed": false
     },
     "wa.sale.short": {

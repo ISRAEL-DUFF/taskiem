@@ -157,7 +157,7 @@ const salesStale = 12 * time.Hour
 // left out: "cash ₦45,000 · transfer ₦12,000".
 func salesBy(l lang.Tag, d stock.Day) string {
 	var parts []string
-	for _, how := range []string{stock.Cash, stock.Transfer, stock.POS} {
+	for _, how := range []string{stock.Cash, stock.Transfer, stock.POS, stock.Credit} {
 		if d.ByHow[how] > 0 {
 			parts = append(parts, tr(l, "sales.by_"+how)+" "+storefront.FormatNaira(d.ByHow[how]))
 		}

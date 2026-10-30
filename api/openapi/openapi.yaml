@@ -25965,11 +25965,16 @@ components:
           type: integer
         paid_how:
           type: string
-          enum: [cash, transfer, pos]
+          enum: [cash, transfer, pos, credit]
+          description: credit for a sale on credit recorded in chat ("sold 3 bags of rice 45,000 credit to Ada")
         status:
           type: string
-          enum: [recorded, waiting, matched]
-          description: recorded (cash), waiting for its money, or matched to it
+          enum: [recorded, waiting, matched, credit]
+          description: recorded (cash), waiting for its money, matched to it, or credit (what the customer owes is on invoice_id)
+        invoice_id:
+          type: string
+          format: uuid
+          description: A sale on credit's notebook debt
         entry_id:
           type: string
           format: uuid

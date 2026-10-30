@@ -2848,6 +2848,10 @@
       "text": "na POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "n'ụgwọ",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Ego aka",
       "reviewed": false
@@ -2858,6 +2862,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Ụgwọ",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2930,6 +2938,18 @@
     },
     "wa.sale.matched": {
       "text": "Ejikọọla ya na ego batara.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} ga-eji {total} n'ozuzu.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} bụ onye ọhụrụ n'akwụkwọ ụgwọ gị.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "Edere ya dị ka ụgwọ: {name} ji ya ({number}), {total} n'ozuzu ugbu a.",
       "reviewed": false
     },
     "wa.sale.short": {

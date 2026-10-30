@@ -2848,6 +2848,10 @@
       "text": "ta POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "bashi",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Kuɗi a hannu",
       "reviewed": false
@@ -2858,6 +2862,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Bashi",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2930,6 +2938,18 @@
     },
     "wa.sale.matched": {
       "text": "An haɗa shi da kuɗin da ya shigo.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} zai ci bashin {total} gaba ɗaya.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} sabo ne a littafin bashinka.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "An rubuta a matsayin bashi: {name} yana bin sa ({number}), {total} gaba ɗaya yanzu.",
       "reviewed": false
     },
     "wa.sale.short": {

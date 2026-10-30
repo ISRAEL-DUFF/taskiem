@@ -3559,6 +3559,11 @@
       "reviewed": true,
       "context": "How a sale was paid, in a sentence: on the POS terminal"
     },
+    "sales.how_credit": {
+      "text": "on credit",
+      "reviewed": true,
+      "context": "How a sale was paid, in a sentence: on credit, owed by a customer"
+    },
     "sales.by_cash": {
       "text": "Cash",
       "reviewed": true,
@@ -3573,6 +3578,11 @@
       "text": "Terminal",
       "reviewed": true,
       "context": "A day's takings by how they were paid"
+    },
+    "sales.by_credit": {
+      "text": "On credit",
+      "reviewed": true,
+      "context": "A day's takings by how they were paid: sold on credit, not yet paid"
     },
     "sales.evening.title": {
       "text": "*Today's sales*: {total} from {count} sales.",
@@ -3663,6 +3673,21 @@
       "text": "Matched to the money that came in.",
       "reviewed": true,
       "context": "A sale whose money was found at once"
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} will owe {total} in all.",
+      "reviewed": true,
+      "context": "A sale on credit read back: what the customer will owe"
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} is new to your debtor book.",
+      "reviewed": true,
+      "context": "A sale on credit to a name not in the debtor book"
+    },
+    "wa.sale.credit_recorded": {
+      "text": "Recorded as a debt: {name} owes it ({number}), {total} in all now.",
+      "reviewed": true,
+      "context": "A sale on credit recorded: the debt it made"
     },
     "wa.sale.short": {
       "text": "You sold more {names} than Taskiem counted: count your shelf when you can (*stock {name} 12*).",
