@@ -3340,6 +3340,146 @@
       "text": "Ewepụla ahịrị {id} na {table}.",
       "reviewed": false
     },
+    "button.file_new": {
+      "text": "Tebụl ọhụrụ",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Tinye na tebụl",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "Ọ bụghị ugbu a",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "Ị nweghị ike iweta ndepụta n'ime tebụl na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "Enwere m ike ịgụ faịlụ CSV na Excel (.xlsx). Chekwaa ndepụta ahụ dị ka otu n'ime ha ma zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "Ị zigala ọtụtụ faịlụ ugbu a. Chere otu nkeji, mgbe ahụ zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "Faịlụ ahụ karịrị 2 MB. Ziga nke dị obere, ma ọ bụ jiri Import na ibe Tables{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "Faịlụ ahụ nwere ihe karịrị ahịrị {limit}, karịa ihe otu mbubata na-ewe. Kewaa ya n'ime obere faịlụ ma ziga nke ọ bụla.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "Enweghị m ike ịgụ faịlụ ahụ: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "Enweghị m ike inweta faịlụ ahụ. Zigharịa ya n'otu nkeji.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: ahịrị {rows} nwere {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Tinye na tebụl* ga-etinye ha na {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*Tebụl ọhụrụ* ga-eme tebụl site na ya. Iji tinye ahịrị ndị ahụ na tebụl ọzọ, ziga *add to* na aha ya. *Ọ bụghị ugbu a* agaghị edebe ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Pịa *Tebụl ọhụrụ*, ma ọ bụ ziga *add to* na aha tebụl, ma ọ bụ *Ọ bụghị ugbu a*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Ọtụtụ tebụl kwekọrọ:\n{list}\n\nZiga *add to* na aha zuru ezu.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Etinyeghị ihe ọ bụla, edebekwaghị faịlụ ahụ.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "Tebụl ahụ adịghịzi. Zigharịa faịlụ ahụ.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Kọlụm ole nke *{table}* ka *{header}* ga-abanye?\n{list}\n0. Hapụ ya",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Ziga nọmba site na 0 ruo {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "Ọ dịghị nke ọ bụla n'isiokwu faịlụ ahụ bụ kọlụm nke *{table}*, ya mere etinyeghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Etinyeghị ihe ọ bụla: {reason}. Dozie faịlụ ahụ ma zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Mepụta *{table}* nwere kọlụm ndị a:\n{columns}\n\nma tinye ahịrị {rows} ya? Ndị mbụ:\n{first}\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Tinye ahịrị {rows} na *{table}*? Ndị mbụ:\n{first}\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "Enweghị m ike inweta faịlụ ahụ ọzọ dị ka ọ dị. Zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "O megheke: {reason}\n\nZaa *yes* ka ịnwaa ọzọ ma ọ bụ *cancel*. Ahịrị etinyelarị agaghị abanye ugboro abụọ.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "Emepụtala *{table}* ma tinye ahịrị {rows} site na {file}. Edebeghị faịlụ ahụ. Ziga *find {name}* na otu okwu ka ịchọ ahịrị.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "Etinyela ahịrị {rows} na *{table}* site na {file}. Edebeghị faịlụ ahụ.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "Etinyelarị ahịrị nke {file} na *{table}*, ya mere ọ dịghị ihe etinyere ugboro abụọ.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "Enwebeghị m ike imepe faịlụ e zitere na Slack. Bubata ya na ibe Tables{link}, ma ọ bụ zitere m ya na WhatsApp ma ọ bụ Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Ziga *copy my sheet* na njikọ sheet ahụ (mepee sheet ahụ na browser gị ma depụta adreesị ya).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Buru ụzọ jikọọ Google Sheets: ziga *connect Google Sheets*. Mgbe ahụ zigharịa *copy my sheet* na njikọ ahụ.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "Enweghị m ike ịgụ sheet ahụ: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem enweghị ike imepe sheet ahụ site na akaụntụ Google gị. Lelee njikọ ahụ, na na akaụntụ ị jikọrọ nwere ike imepe ya.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "Sheet ahụ agbanweela kemgbe m gụrụ ya, ya mere etinyeghị ihe ọ bụla. Zigharịa *copy my sheet* na njikọ ahụ.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Nke a bụ mbipụta: mgbanwe e mere na sheet ahụ ma emechaa agaghị abata. Debe ndepụta ahụ na tebụl site ugbu a.",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: pịa *{cta}* ka itinye nkọwa {count} nke ahịrị; ị ga-akwado tupu etinye ya. Ziga *cancel* ka ịkwụsị.",
       "reviewed": false

@@ -3340,6 +3340,146 @@
       "text": "A ti yọ ìlà {id} kúrò nínú {table}.",
       "reviewed": false
     },
+    "button.file_new": {
+      "text": "Tábìlì tuntun",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Fi kún tábìlì",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "Kì í ṣe báyìí",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "Ẹ kò lè mú àkójọ wọ inú tábìlì nínú {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "Mo lè ka fáìlì CSV àti Excel (.xlsx). Ẹ fi àkójọ náà pamọ́ bí ọ̀kan nínú wọn kí ẹ sì tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "Ẹ ti fi ọ̀pọ̀ fáìlì ránṣẹ́ báyìí. Ẹ dúró fún ìṣẹ́jú kan, lẹ́yìn náà ẹ tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "Fáìlì yẹn ju 2 MB lọ. Ẹ fi èyí tó kéré ránṣẹ́, tàbí ẹ lo Import ní ojú-ìwé Tables{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "Fáìlì yẹn ní ju ìlà {limit} lọ, ó ju ohun tí ìgbéwọlé kan lè gbà lọ. Ẹ pín in sí fáìlì kéékèèké kí ẹ sì fi ọ̀kọ̀ọ̀kan ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "Mi ò lè ka fáìlì yẹn: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "Mi ò lè gba fáìlì yẹn. Ẹ tún fi ránṣẹ́ ní ìṣẹ́jú kan.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: ìlà {rows} pẹ̀lú {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Fi kún tábìlì* yóò fi wọ́n kún {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*Tábìlì tuntun* yóò ṣe tábìlì láti inú rẹ̀. Láti fi àwọn ìlà kún tábìlì mìíràn, ẹ fi *add to* àti orúkọ rẹ̀ ránṣẹ́. *Kì í ṣe báyìí* kò ní tọ́jú nǹkan kan.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Ẹ tẹ *Tábìlì tuntun*, tàbí ẹ fi *add to* àti orúkọ tábìlì ránṣẹ́, tàbí *Kì í ṣe báyìí*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Ọ̀pọ̀ tábìlì ló bá a mu:\n{list}\n\nẸ fi *add to* àti orúkọ kíkún ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "A kò fi nǹkan kan kún un, a kò sì tọ́jú fáìlì náà.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "Tábìlì yẹn kò sí mọ́. Ẹ tún fi fáìlì náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Ọwọ̀n wo nínú *{table}* ni *{header}* yóò wọ̀?\n{list}\n0. Fi í sílẹ̀",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Ẹ fi nọ́ńbà láti 0 sí {max} ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "Kò sí èyíkéyìí nínú àwọn àkọlé fáìlì náà tó jẹ́ ọwọ̀n *{table}*, nítorí náà a kò fi nǹkan kan kún un.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "A kò fi nǹkan kan kún un: {reason}. Ẹ ṣàtúnṣe fáìlì náà kí ẹ sì tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Ṣé kí a ṣe *{table}* pẹ̀lú àwọn ọwọ̀n yìí:\n{columns}\n\nkí a sì fi ìlà {rows} rẹ̀ kún un? Àwọn àkọ́kọ́:\n{first}\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Ṣé kí a fi ìlà {rows} kún *{table}*? Àwọn àkọ́kọ́:\n{first}\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "Mi ò lè tún gba fáìlì náà bí ó ti rí. Ẹ tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "Kò ṣeé ṣe: {reason}\n\nẸ dáhùn *yes* láti tún gbìyànjú tàbí *cancel*. Àwọn ìlà tí a ti fi kún kò ní wọlé lẹ́ẹ̀mejì.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "A ti ṣe *{table}* a sì ti fi ìlà {rows} láti {file} kún un. A kò tọ́jú fáìlì náà. Ẹ fi *find {name}* àti ọ̀rọ̀ kan ránṣẹ́ láti wá àwọn ìlà.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "A ti fi ìlà {rows} láti {file} kún *{table}*. A kò tọ́jú fáìlì náà.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "A ti fi àwọn ìlà {file} kún *{table}* tẹ́lẹ̀, nítorí náà kò sí ohun tí a fi kún un lẹ́ẹ̀mejì.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "Mi ò tíì lè ṣí fáìlì tí a fi ránṣẹ́ lórí Slack. Ẹ gbé e wọlé ní ojú-ìwé Tables{link}, tàbí ẹ fi ránṣẹ́ sí mi lórí WhatsApp tàbí Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Ẹ fi *copy my sheet* àti ìjápọ̀ sheet náà ránṣẹ́ (ẹ ṣí sheet náà nínú browser yín kí ẹ sì da àdírẹ́sì rẹ̀ kọ).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Ẹ kọ́kọ́ so Google Sheets pọ̀: ẹ fi *connect Google Sheets* ránṣẹ́. Lẹ́yìn náà ẹ tún fi *copy my sheet* àti ìjápọ̀ náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "Mi ò lè ka sheet yẹn: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem kò lè ṣí sheet yẹn pẹ̀lú àkọọ́lẹ̀ Google yín. Ẹ ṣàyẹ̀wò ìjápọ̀ náà, àti pé àkọọ́lẹ̀ tí ẹ so pọ̀ lè ṣí i.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "Sheet náà ti yí padà láti ìgbà tí mo kà á, nítorí náà a kò fi nǹkan kan kún un. Ẹ tún fi *copy my sheet* àti ìjápọ̀ náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Ẹ̀dà ni èyí: àwọn àyípadà tí ẹ bá ṣe sí sheet náà lẹ́yìn náà kò ní wọlé. Ẹ máa tọ́jú àkójọ náà sínú tábìlì láti ìsinsìnyí.",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: ẹ tẹ *{cta}* láti kọ àlàyé {count} ti ìlà náà; ẹ ó fìdí rẹ̀ múlẹ̀ kí a tó fi kún un. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
       "reviewed": false

@@ -243,6 +243,9 @@ type chatData struct {
 	// Found is the rows a find showed, and a change or removal being
 	// prepared on one of them (chat_tables_rows.go).
 	Found *chatFound `json:"found,omitempty"`
+	// File is a file sent in chat being brought into a table
+	// (chat_tables_files.go).
+	File *chatFile `json:"file,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -341,7 +344,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
-	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+	if in.Flow == "" && in.Media == nil && in.Image == nil && in.Document == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
 		if dm, ok := ch.(*slackDMChannel); ok {
 			// Another business from Slack has the workspace's Slack too.
@@ -420,6 +423,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// (whatsapp_storefront.go).
 	if in.Image != nil {
 		return s.waPhoto(ctx, c)
+	}
+	// A file: a list brought into a table (chat_tables_files.go).
+	if in.Document != nil {
+		return s.waDocument(ctx, c)
 	}
 	// A voice note is transcribed (a beta) and then read as if typed.
 	if in.Media != nil {
@@ -608,6 +615,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.TableMake != nil && c.state != stateIdle {
 		return s.waTableMakeReply(ctx, c, text, cmd)
+	}
+	if c.data.File != nil && c.state != stateIdle {
+		return s.waFileReply(ctx, c, text, cmd)
 	}
 	if c.data.Found != nil && c.state != stateIdle {
 		// A message that is not about the rows found lets them go and is

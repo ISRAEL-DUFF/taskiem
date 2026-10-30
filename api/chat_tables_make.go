@@ -477,6 +477,10 @@ func (s *Server) waTableEditCommand(ctx context.Context, c *chat, text, cmd stri
 	if m := renameTableRe.FindStringSubmatch(strings.TrimSpace(text)); m != nil {
 		return true, s.waRenameTable(ctx, c, m[1], m[2])
 	}
+	// A Google Sheet copied into a table once (chat_tables_files.go).
+	if m := copySheetRe.FindStringSubmatch(strings.TrimSpace(text)); m != nil {
+		return true, s.waCopySheet(ctx, c, m[1])
+	}
 	for _, p := range []string{"drop column ", "delete column ", "remove column ", "delete table ", "remove table ", "drop table "} {
 		if strings.HasPrefix(cmd, p) {
 			return true, s.waTableDropToWeb(ctx, c)

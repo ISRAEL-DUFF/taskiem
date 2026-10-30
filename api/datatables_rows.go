@@ -13,6 +13,7 @@ import (
 	"mime"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -491,37 +492,58 @@ func (s *Server) importTableRows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	importID := importIDFor(tr.table.ID, given, data)
-	action := "insert_rows"
-	imported, replayed, batches := 0, 0, 0
-	for start := 0; start < len(rows); start += importBatch {
-		end := min(start+importBatch, len(rows))
-		in := map[string]any{"table": tr.table.Name, "rows": rows[start:end], "return": "minimal"}
-		if hasID {
-			action = "upsert_rows"
-			in["on_conflict"] = []any{"id"}
-		}
-		out, err := tr.call(r.Context(), s, action, in, "imp-"+importID+"-"+strconv.Itoa(batches))
-		if err != nil {
-			s.failTables(w, r, fmt.Errorf("batch %d (rows %d to %d): %w", batches+1, start+1, end, err))
-			return
-		}
-		batches++
-		if n, ok := out["affected"].(int); ok {
-			imported += n
-		} else {
-			imported += end - start
-		}
-		if out["replayed"] == true {
-			replayed++
-		}
+	res, err := s.importRows(r.Context(), tr, rows, hasID, importID)
+	if err != nil {
+		s.failTables(w, r, err)
+		return
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		return auditTx(r, tx, "table.import", tr.table.Name, map[string]any{"table_id": tr.table.ID, "import_id": importID, "rows": len(rows), "imported": imported, "batches": batches, "upsert": hasID})
+		return auditTx(r, tx, "table.import", tr.table.Name, map[string]any{"table_id": tr.table.ID, "import_id": importID, "rows": len(rows), "imported": res.Imported, "batches": res.Batches, "upsert": hasID})
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"import_id": importID, "rows": len(rows), "imported": imported, "batches": batches, "replayed_batches": replayed, "mode": action})
+	writeJSON(w, http.StatusOK, map[string]any{"import_id": importID, "rows": len(rows), "imported": res.Imported, "batches": res.Batches, "replayed_batches": res.Replayed, "mode": res.Mode})
+}
+
+// importResult is what an import wrote: rows, batches, the batches
+// answered from Xenibase's replay, and insert_rows or upsert_rows.
+type importResult struct {
+	Imported, Batches, Replayed int
+	Mode                        string
+}
+
+// importRows writes checked rows to the table in batches of 500, each under
+// its own key from the import id and the batch's index, upserted on id when
+// the rows carry one: a retried import sends the same keys, and the batches
+// that went in are answered from Xenibase's replay instead of written
+// again. The API's import and a file sent in chat both use it.
+func (s *Server) importRows(ctx context.Context, tr tableRows, rows []any, hasID bool, importID string) (importResult, error) {
+	res := importResult{Mode: "insert_rows"}
+	if hasID {
+		res.Mode = "upsert_rows"
+	}
+	for start := 0; start < len(rows); start += importBatch {
+		end := min(start+importBatch, len(rows))
+		in := map[string]any{"table": tr.table.Name, "rows": rows[start:end], "return": "minimal"}
+		if hasID {
+			in["on_conflict"] = []any{"id"}
+		}
+		out, err := tr.call(ctx, s, res.Mode, in, "imp-"+importID+"-"+strconv.Itoa(res.Batches))
+		if err != nil {
+			return res, fmt.Errorf("batch %d (rows %d to %d): %w", res.Batches+1, start+1, end, err)
+		}
+		res.Batches++
+		if n, ok := out["affected"].(int); ok {
+			res.Imported += n
+		} else {
+			res.Imported += end - start
+		}
+		if out["replayed"] == true {
+			res.Replayed++
+		}
+	}
+	return res, nil
 }
 
 // importIDFor is an import's id: from the caller's Idempotency-Key when
@@ -554,7 +576,7 @@ func headerKey(s string) string {
 // readCSV reads an import: each header is the column it names, by name or
 // title loosely (N5), or by mapping (header -> column, "" to leave it
 // out), for the headers that match none.
-func readCSV(rd io.Reader, cols []datatables.Column, mapping ...map[string]string) (rows []any, hasID bool, err error) {
+func readCSV(rd io.Reader, cols []datatables.Column, mapping ...map[string]string) ([]any, bool, error) {
 	cr := csv.NewReader(rd)
 	cr.TrimLeadingSpace = true
 	cr.FieldsPerRecord = -1
@@ -562,42 +584,8 @@ func readCSV(rd io.Reader, cols []datatables.Column, mapping ...map[string]strin
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: the file has no header row", errBadRequest)
 	}
-	known := map[string]bool{"id": true, "created_at": true, "updated_at": true}
-	byKey := map[string]string{"id": "id", "createdat": "created_at", "updatedat": "updated_at"}
-	types := map[string]string{}
-	for _, c := range cols {
-		known[c.Name] = true
-		types[c.Name] = c.Type
-		byKey[headerKey(c.Name)] = c.Name
-		if c.Title != "" {
-			if _, taken := byKey[headerKey(c.Title)]; !taken {
-				byKey[headerKey(c.Title)] = c.Name
-			}
-		}
-	}
-	var mapped map[string]string
-	if len(mapping) > 0 {
-		mapped = mapping[0]
-	}
-	names := make([]string, len(header))
-	var unmatched []string
-	for i, h := range header {
-		h = strings.TrimSpace(strings.TrimPrefix(h, "\uFEFF"))
-		if to, ok := mapped[h]; ok {
-			if to != "" && !known[to] {
-				return nil, false, fmt.Errorf("%w: the table has no column %q to put %q in", errBadRequest, to, h)
-			}
-			names[i] = to
-		} else if n, ok := byKey[headerKey(h)]; ok {
-			names[i] = n
-		} else {
-			unmatched = append(unmatched, h)
-		}
-		hasID = hasID || names[i] == "id"
-	}
-	if len(unmatched) > 0 {
-		return nil, false, fmt.Errorf("%w: the table has no column for %s: match each to a column, or leave it out", errBadRequest, strings.Join(quoteAll(unmatched), ", "))
-	}
+	var recs [][]string
+	rows := 0
 	for line := 2; ; line++ {
 		rec, err := cr.Read()
 		if errors.Is(err, io.EOF) {
@@ -606,9 +594,41 @@ func readCSV(rd io.Reader, cols []datatables.Column, mapping ...map[string]strin
 		if err != nil {
 			return nil, false, fmt.Errorf("%w: line %d: %w", errBadRequest, line, err)
 		}
-		if len(rows) >= importMaxRows {
+		if strings.TrimSpace(strings.Join(rec, "")) == "" {
+			recs = append(recs, nil) // kept, so lines keep their numbers
+			continue
+		}
+		if rows++; rows > importMaxRows {
 			return nil, false, fmt.Errorf("%w: at most %d rows per import; split the file", errBadRequest, importMaxRows)
 		}
+		recs = append(recs, rec)
+	}
+	var mapped map[string]string
+	if len(mapping) > 0 {
+		mapped = mapping[0]
+	}
+	return importRecords(header, recs, cols, mapped)
+}
+
+// importRecords checks a file's records as rows of the table: each header
+// the column it names (headerColumns), each cell checked as the API
+// checks a value; a record numbered as its line in the file (the header
+// is line 1). Blank records are left out.
+func importRecords(header []string, recs [][]string, cols []datatables.Column, mapped map[string]string) (rows []any, hasID bool, err error) {
+	names, unmatched, err := headerColumns(header, cols, mapped)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(unmatched) > 0 {
+		return nil, false, fmt.Errorf("%w: the table has no column for %s: match each to a column, or leave it out", errBadRequest, strings.Join(quoteAll(unmatched), ", "))
+	}
+	types := map[string]string{}
+	for _, c := range cols {
+		types[c.Name] = c.Type
+	}
+	hasID = slices.Contains(names, "id")
+	for i, rec := range recs {
+		line := i + 2
 		raw := map[string]any{}
 		empty := true
 		for i, v := range rec {
@@ -641,6 +661,38 @@ func readCSV(rd io.Reader, cols []datatables.Column, mapping ...map[string]strin
 		return nil, false, fmt.Errorf("%w: the file has no rows", errBadRequest)
 	}
 	return rows, hasID, nil
+}
+
+// headerColumns are the columns a file's headers name, by name or title
+// loosely (N5), or by mapped (header -> column, "" to leave it out), and
+// the headers that match none.
+func headerColumns(header []string, cols []datatables.Column, mapped map[string]string) (names, unmatched []string, err error) {
+	known := map[string]bool{"id": true, "created_at": true, "updated_at": true}
+	byKey := map[string]string{"id": "id", "createdat": "created_at", "updatedat": "updated_at"}
+	for _, c := range cols {
+		known[c.Name] = true
+		byKey[headerKey(c.Name)] = c.Name
+		if c.Title != "" {
+			if _, taken := byKey[headerKey(c.Title)]; !taken {
+				byKey[headerKey(c.Title)] = c.Name
+			}
+		}
+	}
+	names = make([]string, len(header))
+	for i, h := range header {
+		h = strings.TrimSpace(strings.TrimPrefix(h, "\uFEFF"))
+		if to, ok := mapped[h]; ok {
+			if to != "" && !known[to] {
+				return nil, nil, fmt.Errorf("%w: the table has no column %q to put %q in", errBadRequest, to, h)
+			}
+			names[i] = to
+		} else if n, ok := byKey[headerKey(h)]; ok {
+			names[i] = n
+		} else {
+			unmatched = append(unmatched, h)
+		}
+	}
+	return names, unmatched, nil
 }
 
 // exportTableRows writes the table as CSV: id, the columns, created_at

@@ -3340,6 +3340,146 @@
       "text": "I don comot row {id} from {table}.",
       "reviewed": false
     },
+    "button.file_new": {
+      "text": "New table",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Add am to table",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "No be now",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "You no fit bring list enter tables for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "I fit read CSV and Excel (.xlsx) files. Save the list as one of dem and send am again.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "You don send plenty files just now. Wait small, then send am again.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "That file pass 2 MB. Send smaller one, or use Import for the Tables page{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "That file get pass {limit} rows, pass wetin one import fit take. Divide am into small files and send each one.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "I no fit read that file: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "I no fit collect that file. Send am again small time.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: {rows} row(s) with {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Add am to table* go add dem to {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*New table* go make table from am. To add the rows to another table, send *add to* and im name. *No be now* no go keep anything.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Tap *New table*, or send *add to* and table name, or *No be now*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Plenty tables match:\n{list}\n\nSend *add to* and the full name.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Nothing enter, and I no keep the file.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "That table no dey again. Send the file again.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Which column for *{table}* *{header}* go enter?\n{list}\n0. Leave am out",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Send number from 0 reach {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "None of the file headings be column for *{table}*, so nothing enter.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Nothing enter: {reason}. Correct the file and send am again.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Make I create *{table}* with these columns:\n{columns}\n\nand add im {rows} row(s)? The first ones:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Make I add {rows} row(s) to *{table}*? The first ones:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "I no fit collect that file again as e be. Send am again.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "E no go: {reason}\n\nReply *yes* to try again or *cancel*. Rows wey don enter no go enter twice.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "I don make *{table}* and add {rows} row(s) from {file}. I no keep the file. Send *find {name}* and one word to look for rows.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "I don add {rows} row(s) to *{table}* from {file}. I no keep the file.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "The rows for {file} don already enter *{table}*, so nothing enter twice.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "I never fit open files wey dem send for Slack. Import am for the Tables page{link}, or send am give me for WhatsApp or Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Send *copy my sheet* and the sheet link (open the sheet for your browser and copy the address).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Connect Google Sheets first: send *connect Google Sheets*. Then send *copy my sheet* and the link again.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "I no fit read that sheet: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem no fit open that sheet with your Google account. Check the link, and make sure the account wey you connect fit open am.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "The sheet don change since I read am, so nothing enter. Send *copy my sheet* and the link again.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Na copy be this: anything wey you change for the sheet later no go enter. Dey keep the list for the table from now.",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the {count} detail(s) for the row; you go confirm before I add am. Send *cancel* to stop.",
       "reviewed": false

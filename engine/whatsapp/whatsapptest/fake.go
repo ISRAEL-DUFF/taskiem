@@ -597,6 +597,16 @@ func Image(mediaID, mime, caption string) map[string]any {
 	return map[string]any{"type": "image", "image": img}
 }
 
+// Document is an inbound file (mediaID, as AddMedia made it known) with
+// its file name and a caption.
+func Document(mediaID, mime, filename, caption string) map[string]any {
+	doc := map[string]any{"id": mediaID, "mime_type": mime, "filename": filename}
+	if caption != "" {
+		doc["caption"] = caption
+	}
+	return map[string]any{"type": "document", "document": doc}
+}
+
 // Text is an inbound text message.
 func Text(body string) map[string]any {
 	return map[string]any{"type": "text", "text": map[string]any{"body": body}}

@@ -4174,6 +4174,181 @@
       "reviewed": true,
       "context": "a row removed"
     },
+    "button.file_new": {
+      "text": "New table",
+      "reviewed": true,
+      "context": "button under a file sent in chat: make a new table from it (max 20 characters)"
+    },
+    "button.file_add": {
+      "text": "Add to table",
+      "reviewed": true,
+      "context": "button under a file sent in chat: add its rows to the table offered (max 20 characters)"
+    },
+    "button.not_now": {
+      "text": "Not now",
+      "reviewed": true,
+      "context": "button: not now (max 20 characters)"
+    },
+    "wa.file.denied": {
+      "text": "You cannot bring lists into tables in {org} (it takes table.edit).",
+      "reviewed": true,
+      "context": "a file sent by someone without table.edit"
+    },
+    "wa.file.unsupported": {
+      "text": "I can read CSV and Excel (.xlsx) files. Save the list as one of those and send it again.",
+      "reviewed": true,
+      "context": "a file that is not CSV or .xlsx"
+    },
+    "wa.file.too_many": {
+      "text": "You have sent several files just now. Wait a minute, then send it again.",
+      "reviewed": true,
+      "context": "rate limit on files"
+    },
+    "wa.file.too_big": {
+      "text": "That file is over 2 MB. Send a smaller one, or use Import on the Tables page{link}.",
+      "reviewed": true,
+      "context": "a file over 2 MB; {link} is ' at <url>'"
+    },
+    "wa.file.too_many_rows": {
+      "text": "That file has more than {limit} rows, more than one import takes. Split it into smaller files and send each.",
+      "reviewed": true,
+      "context": "a file over the row limit; {link} is ' at <url>'"
+    },
+    "wa.file.unreadable": {
+      "text": "I could not read that file: {reason}.",
+      "reviewed": true,
+      "context": "a file that could not be read; {reason} says why"
+    },
+    "wa.file.not_fetched": {
+      "text": "I could not fetch that file. Send it again in a minute.",
+      "reviewed": true,
+      "context": "the file could not be downloaded from the channel"
+    },
+    "wa.file.got": {
+      "text": "*{file}*: {rows} row(s) with {columns}.",
+      "reviewed": true,
+      "context": "a file read: its rows and headings"
+    },
+    "wa.file.offer": {
+      "text": "*Add to table* adds them to {table}.",
+      "reviewed": true,
+      "context": "which table Add to table means"
+    },
+    "wa.file.choose": {
+      "text": "*New table* makes a table from it. To add the rows to another table, send *add to* and its name. *Not now* keeps nothing.",
+      "reviewed": true,
+      "context": "the choices for a file"
+    },
+    "wa.file.pick_reminder": {
+      "text": "Tap *New table*, or send *add to* and a table's name, or *Not now*.",
+      "reviewed": true,
+      "context": "a file waits for a choice"
+    },
+    "wa.file.which": {
+      "text": "Several tables match:\n{list}\n\nSend *add to* and the full name.",
+      "reviewed": true,
+      "context": "add to matched several tables"
+    },
+    "wa.file.not_now": {
+      "text": "Nothing was added, and the file was not kept.",
+      "reviewed": true,
+      "context": "a file dropped"
+    },
+    "wa.file.table_gone": {
+      "text": "That table is no longer there. Send the file again.",
+      "reviewed": true,
+      "context": "the table chosen was deleted meanwhile"
+    },
+    "wa.file.ask_header": {
+      "text": "Which column of *{table}* does *{header}* go in?\n{list}\n0. Leave it out",
+      "reviewed": true,
+      "context": "a heading that matches no column; {list} numbers the columns"
+    },
+    "wa.file.map_again": {
+      "text": "Send a number from 0 to {max}.",
+      "reviewed": true,
+      "context": "a column's number was expected"
+    },
+    "wa.file.no_columns": {
+      "text": "None of the file's headings is a column of *{table}*, so nothing was added.",
+      "reviewed": true,
+      "context": "none of the file's headings is a column of the table"
+    },
+    "wa.file.row_bad": {
+      "text": "Nothing was added: {reason}. Fix the file and send it again.",
+      "reviewed": true,
+      "context": "a row of the file does not fit the table; {reason} names the line"
+    },
+    "wa.file.confirm_new": {
+      "text": "Make *{table}* with these columns:\n{columns}\n\nand add its {rows} row(s)? The first:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": true,
+      "context": "a new table from a file, read back"
+    },
+    "wa.file.confirm_add": {
+      "text": "Add {rows} row(s) to *{table}*? The first:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": true,
+      "context": "a file's rows to add, read back"
+    },
+    "wa.file.again": {
+      "text": "I could not fetch that file again as it was. Send it again.",
+      "reviewed": true,
+      "context": "the file could not be fetched again as it was read"
+    },
+    "wa.file.failed": {
+      "text": "That did not go through: {reason}\n\nReply *yes* to try again or *cancel*. Rows already added are not added twice.",
+      "reviewed": true,
+      "context": "the table or the rows could not be written"
+    },
+    "wa.file.made": {
+      "text": "Made *{table}* and added {rows} row(s) from {file}. The file was not kept. Send *find {name}* and a word to look rows up.",
+      "reviewed": true,
+      "context": "a table made from a file, with its rows"
+    },
+    "wa.file.added": {
+      "text": "Added {rows} row(s) to *{table}* from {file}. The file was not kept.",
+      "reviewed": true,
+      "context": "a file's rows added to a table"
+    },
+    "wa.file.already": {
+      "text": "The rows of {file} were already added to *{table}*, so nothing was added twice.",
+      "reviewed": true,
+      "context": "the same file sent again: nothing written twice"
+    },
+    "wa.file.slack": {
+      "text": "I cannot open files sent on Slack yet. Import it on the Tables page{link}, or send it to me on WhatsApp or Telegram.",
+      "reviewed": true,
+      "context": "a file sent in a Slack DM: not read there; {link} is ' at <url>'"
+    },
+    "wa.sheet.link": {
+      "text": "Send *copy my sheet* and the sheet's link (open the sheet in your browser and copy the address).",
+      "reviewed": true,
+      "context": "copy my sheet without a Google Sheets link"
+    },
+    "wa.sheet.connect_first": {
+      "text": "Connect Google Sheets first: send *connect Google Sheets*. Then send *copy my sheet* and the link again.",
+      "reviewed": true,
+      "context": "copy my sheet with no Google Sheets connection"
+    },
+    "wa.sheet.cannot": {
+      "text": "I could not read that sheet: {reason}.",
+      "reviewed": true,
+      "context": "the sheet could not be read; {reason} says why"
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem cannot open that sheet with your Google account. Check the link, and that the account you connected can open it.",
+      "reviewed": true,
+      "context": "Google refused the sheet"
+    },
+    "wa.sheet.changed": {
+      "text": "The sheet changed since I read it, so nothing was added. Send *copy my sheet* and the link again.",
+      "reviewed": true,
+      "context": "the sheet changed between the read-back and the yes"
+    },
+    "wa.sheet.no_sync": {
+      "text": "This was a copy: later changes to the sheet are not brought in. Keep the list in the table from now on.",
+      "reviewed": true,
+      "context": "after a sheet is copied: it is a copy, once"
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the row's {count} detail(s); you confirm before it is added. Send *cancel* to stop.",
       "reviewed": true,

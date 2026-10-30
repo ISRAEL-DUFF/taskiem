@@ -3340,6 +3340,146 @@
       "text": "An cire layi na {id} daga {table}.",
       "reviewed": false
     },
+    "button.file_new": {
+      "text": "Sabon tebur",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Ƙara a tebur",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "Ba yanzu ba",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "Ba za ka iya kawo jeri cikin tebura a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "Ina iya karanta fayilolin CSV da Excel (.xlsx). Ajiye jerin a matsayin ɗaya daga cikinsu ka sake aikawa.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "Ka aika fayiloli da yawa yanzu. Jira minti ɗaya, sannan ka sake aikawa.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "Wannan fayil ya wuce 2 MB. Aika ƙarami, ko yi amfani da Import a shafin Tables{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "Wannan fayil yana da layuka fiye da {limit}, fiye da abin da shigo da ɗaya ke ɗauka. Raba shi zuwa ƙananan fayiloli ka aika kowanne.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "Ban iya karanta wannan fayil ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "Ban iya ɗauko wannan fayil ba. Sake aika shi nan da minti ɗaya.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: layuka {rows} tare da {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Ƙara a tebur* zai ƙara su a {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*Sabon tebur* zai yi tebur daga gare shi. Don ƙara layukan a wani tebur, aika *add to* da sunansa. *Ba yanzu ba* ba zai ajiye komai ba.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Danna *Sabon tebur*, ko aika *add to* da sunan tebur, ko *Ba yanzu ba*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Tebura da yawa sun dace:\n{list}\n\nAika *add to* da cikakken suna.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Ba a ƙara komai ba, kuma ba a ajiye fayil ɗin ba.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "Wannan tebur ba ya nan kuma. Sake aika fayil ɗin.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Wane shafi na *{table}* ne *{header}* zai shiga?\n{list}\n0. Bar shi",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Aika lamba daga 0 zuwa {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "Babu ɗaya daga cikin kanun fayil ɗin da ke shafi na *{table}*, don haka ba a ƙara komai ba.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Ba a ƙara komai ba: {reason}. Gyara fayil ɗin ka sake aikawa.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "A yi *{table}* da waɗannan shafuka:\n{columns}\n\nkuma a ƙara layukansa {rows}? Na farko:\n{first}\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "A ƙara layuka {rows} a *{table}*? Na farko:\n{first}\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "Ban iya sake ɗauko fayil ɗin kamar yadda yake ba. Sake aika shi.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "Bai yiwu ba: {reason}\n\nAmsa da *yes* don sake gwadawa ko *cancel*. Layukan da aka riga aka ƙara ba za a ƙara su sau biyu ba.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "An yi *{table}* kuma an ƙara layuka {rows} daga {file}. Ba a ajiye fayil ɗin ba. Aika *find {name}* da kalma don nemo layuka.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "An ƙara layuka {rows} a *{table}* daga {file}. Ba a ajiye fayil ɗin ba.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "An riga an ƙara layukan {file} a *{table}*, don haka ba a ƙara komai sau biyu ba.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "Ba zan iya buɗe fayilolin da aka aika a Slack ba tukuna. Shigo da shi a shafin Tables{link}, ko aiko min da shi a WhatsApp ko Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Aika *copy my sheet* da mahaɗin sheet ɗin (buɗe sheet ɗin a browser ka kwafi adireshin).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Fara haɗa Google Sheets: aika *connect Google Sheets*. Sannan ka sake aika *copy my sheet* da mahaɗin.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "Ban iya karanta wannan sheet ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem ba zai iya buɗe wannan sheet da asusun Google ɗinka ba. Duba mahaɗin, da cewa asusun da ka haɗa zai iya buɗe shi.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "Sheet ɗin ya canza tun da na karanta shi, don haka ba a ƙara komai ba. Sake aika *copy my sheet* da mahaɗin.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Wannan kwafi ne: canje-canjen da aka yi a sheet ɗin daga baya ba za su shigo ba. Ajiye jerin a tebur daga yanzu.",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: danna *{cta}* don shigar da bayanai {count} na layin; za ka tabbatar kafin a ƙara shi. Aika *cancel* don tsayawa.",
       "reviewed": false

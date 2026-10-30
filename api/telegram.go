@@ -343,6 +343,10 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		// A photo, its caption as the text (a product to add, a logo).
 		in.Type = "image"
 		in.Image = &whatsapp.Media{ID: u.Photo.FileID, MimeType: u.Photo.MimeType}
+	case u.Document != nil:
+		// A file, its caption as the text (a list for a table).
+		in.Type = "document"
+		in.Document = &whatsapp.Media{ID: u.Document.FileID, MimeType: u.Document.MimeType, Name: u.Document.Name}
 	case in.Text == "":
 		return nil // a sticker, a location: nothing to act on
 	default:

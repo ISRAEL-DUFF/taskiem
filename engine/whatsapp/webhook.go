@@ -55,6 +55,10 @@ type Inbound struct {
 	// arrives; the file is fetched from the Graph API, as a recording is.
 	// Telegram's photos arrive here too.
 	Image *Media
+	// Document is a file (type document), its caption in Text: a list
+	// brought into a table (CSV or Excel). Only its id and name arrive;
+	// the file is fetched from the Graph API. Telegram's arrive here too.
+	Document *Media
 	// Location is a shared location (type location), as a maps link: a
 	// rider's at the door (dispatch). Telegram's arrive here too.
 	Location string
@@ -71,6 +75,7 @@ type Media struct {
 	MimeType string
 	SHA256   string // as Meta reports it (base64 or hex); checked on download when set
 	Voice    bool   // recorded in WhatsApp as a voice note
+	Name     string // a document's file name, as sent
 }
 
 // FlowToken is the flow token of a completed Flow's response.
@@ -136,6 +141,13 @@ func Parse(body []byte) ([]Inbound, error) {
 							SHA256   string `json:"sha256"`
 							Caption  string `json:"caption"`
 						} `json:"image"`
+						Document struct {
+							ID       string `json:"id"`
+							MimeType string `json:"mime_type"`
+							SHA256   string `json:"sha256"`
+							Filename string `json:"filename"`
+							Caption  string `json:"caption"`
+						} `json:"document"`
 						Location *struct {
 							Latitude  float64 `json:"latitude"`
 							Longitude float64 `json:"longitude"`
@@ -178,6 +190,11 @@ func Parse(body []byte) ([]Inbound, error) {
 					if m.Image.ID != "" {
 						in.Image = &Media{ID: m.Image.ID, MimeType: m.Image.MimeType, SHA256: m.Image.SHA256}
 						in.Text = m.Image.Caption
+					}
+				case "document":
+					if m.Document.ID != "" {
+						in.Document = &Media{ID: m.Document.ID, MimeType: m.Document.MimeType, SHA256: m.Document.SHA256, Name: m.Document.Filename}
+						in.Text = m.Document.Caption
 					}
 				case "location":
 					if m.Location != nil {
