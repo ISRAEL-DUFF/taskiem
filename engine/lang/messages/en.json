@@ -4574,13 +4574,63 @@
       "reviewed": true,
       "context": "a customer's last payment"
     },
+    "wa.debt.owes_nothing": {
+      "text": "{name} owes nothing.",
+      "reviewed": true,
+      "context": "a customer with nothing open"
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} has no phone number yet. Send *{name}'s number is 0803…* first.",
+      "reviewed": true,
+      "context": "send balance: the customer has no phone or email"
+    },
+    "wa.debt.send_pay_account": {
+      "text": "their own account number to pay into",
+      "reviewed": true,
+      "context": "send balance: how the customer pays (their own account number)"
+    },
+    "wa.debt.send_pay_link": {
+      "text": "a link to pay it, all or part",
+      "reviewed": true,
+      "context": "send balance: how the customer pays (a link)"
+    },
+    "wa.debt.send_pay_none": {
+      "text": "no way to pay online (they ask you how)",
+      "reviewed": true,
+      "context": "send balance: no way to pay online"
+    },
+    "wa.debt.send_confirm": {
+      "text": "Send {name} what they owe, {amount} ({lines}), to {to}, with {pay}?",
+      "reviewed": true,
+      "context": "send balance: read-back before yes"
+    },
+    "wa.debt.send_recorded": {
+      "text": "Their {count} notebook line(s) will show as sent.",
+      "reviewed": true,
+      "context": "send balance: notebook lines become sent"
+    },
+    "wa.debt.sent": {
+      "text": "Sent {name} their balance of {amount} by {channels}.",
+      "reviewed": true,
+      "context": "send balance: done"
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Nothing went to {name} just now: too many messages to them this hour, or past your plan's SMS allowance. Try again later.",
+      "reviewed": true,
+      "context": "send balance: no message could go"
+    },
+    "wa.debt.send_refused": {
+      "text": "That did not go: {reason}",
+      "reviewed": true,
+      "context": "send balance refused"
+    },
     "wa.debt.phone_set": {
       "text": "{name}'s number is {phone} now: receipts and reminders can reach them.",
       "reviewed": true,
       "context": "a customer's phone kept"
     },
     "wa.help.debts": {
-      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: the debts customers owe you",
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debts customers owe you",
       "reviewed": true,
       "context": "help line for the debtor book"
     },

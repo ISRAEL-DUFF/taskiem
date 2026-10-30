@@ -82,6 +82,8 @@ var invoiceWords = map[string]string{
 // invoiceData is the invoice template's input.
 type invoiceData struct {
 	pageData
+	// Heading: Invoice INV-0001, or What you owe on a customer's page.
+	Heading  string
 	Business string
 	Home     string // none: an invoice has no page behind it
 	Number   string
@@ -160,7 +162,7 @@ func (s *Server) serveInvoice(w http.ResponseWriter, r *http.Request, token, sub
 		business = "the business"
 	}
 	d := invoiceData{pageData: pageData{Title: "Invoice " + p.Number, Lang: "en", Look: s.lookFor(r.Context(), p.Tenant, business)},
-		Business: business, Number: p.Number, Status: words, Total: invoicing.Naira(p.TotalKobo), Note: p.Note}
+		Heading: "Invoice " + p.Number, Business: business, Number: p.Number, Status: words, Total: invoicing.Naira(p.TotalKobo), Note: p.Note}
 	for _, l := range p.Lines {
 		d.Lines = append(d.Lines, invoiceLineView(l))
 	}

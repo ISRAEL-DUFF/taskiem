@@ -265,7 +265,16 @@ func (s *Invoices) RecordCredit(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if err := audit(ctx, tx, tenant, by, "invoice.recorded", number, map[string]any{"total_kobo": total, "due_on": due}); err != nil {
 		return Invoice{}, err
 	}
-	return s.Get(ctx, tx, tenant, id.String())
+	x, err := s.Get(ctx, tx, tenant, id.String())
+	if err != nil {
+		return Invoice{}, err
+	}
+	// What the customer paid before and no line of theirs took is their
+	// credit: it counts towards this one, as towards an invoice sent. A
+	// line it pays in full is paid; tell its waiters with Paid once the
+	// transaction commits.
+	x, _, _, err = s.applyCredit(ctx, tx, tenant, x)
+	return x, err
 }
 
 // CreditDue is the due date a credit line recorded on day takes from the

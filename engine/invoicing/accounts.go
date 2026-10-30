@@ -354,12 +354,14 @@ func (s *Invoices) setAccount(ctx context.Context, tenant, id uuid.UUID, set map
 }
 
 // Request is a request for an account or link waiting to be issued:
-// for an invoice, or a storefront order's account number (Order set).
+// for an invoice, a storefront order's account number (Order set), or a
+// customer's payment link (Link set).
 type Request struct {
 	ID         uuid.UUID
 	Tenant     uuid.UUID
 	Invoice    uuid.UUID
 	Order      *uuid.UUID
+	Link       *uuid.UUID
 	Kind       string
 	AmountKobo int64
 	Channel    string // page, whatsapp or telegram
@@ -370,7 +372,7 @@ type Request struct {
 // second. A request that fails is dropped: the page shows the account's
 // state, and the customer can ask again.
 func (s *Invoices) Drain(ctx context.Context) error {
-	rows, err := s.Pool.Query(ctx, `SELECT id, tenant_id, invoice_id, order_id, kind, amount_kobo, channel, reply_to FROM taskiem_invoice_requests_claim(20)`)
+	rows, err := s.Pool.Query(ctx, `SELECT id, tenant_id, invoice_id, order_id, customer_link_id, kind, amount_kobo, channel, reply_to FROM taskiem_invoice_requests_claim(20)`)
 	if err != nil {
 		return err
 	}
@@ -378,7 +380,7 @@ func (s *Invoices) Drain(ctx context.Context) error {
 		var q Request
 		var invoice *uuid.UUID
 		var reply []byte
-		err := r.Scan(&q.ID, &q.Tenant, &invoice, &q.Order, &q.Kind, &q.AmountKobo, &q.Channel, &reply)
+		err := r.Scan(&q.ID, &q.Tenant, &invoice, &q.Order, &q.Link, &q.Kind, &q.AmountKobo, &q.Channel, &reply)
 		if invoice != nil {
 			q.Invoice = *invoice
 		}
@@ -397,6 +399,16 @@ func (s *Invoices) Drain(ctx context.Context) error {
 				if err := s.OrderRequested(ctx, q.Tenant, *q.Order); err != nil {
 					s.log().Warn("order account", "tenant", q.Tenant, "order", *q.Order, "err", err)
 				}
+			}
+			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_invoice_requests_done($1)`, q.ID); err != nil {
+				return err
+			}
+			continue
+		}
+		if q.Link != nil {
+			// A customer's page: what it asked for is on the page.
+			if _, err := s.IssueForCustomer(ctx, q.Tenant, *q.Link, q.Kind, q.AmountKobo); err != nil {
+				s.log().Warn("customer link account", "tenant", q.Tenant, "link", *q.Link, "kind", q.Kind, "err", err)
 			}
 			if _, err := s.Pool.Exec(ctx, `SELECT taskiem_invoice_requests_done($1)`, q.ID); err != nil {
 				return err
@@ -442,14 +454,14 @@ func (s *Invoices) CheckPayments(ctx context.Context) error {
 
 type watched struct {
 	Account
-	invoice, order *uuid.UUID
+	invoice, order, link *uuid.UUID
 }
 
 func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	now := s.now()
 	var list []watched
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id, order_id FROM customer_invoice_accounts
+		rows, err := tx.Query(ctx, `SELECT `+accountCols+`, invoice_id, order_id, customer_link_id FROM customer_invoice_accounts
 			WHERE tenant_id = $1 AND status IN ('requested', 'open') AND (checked_at IS NULL OR checked_at < $2)
 			ORDER BY checked_at NULLS FIRST LIMIT 50`, tenant, now.Add(-30*time.Second))
 		if err != nil {
@@ -459,7 +471,7 @@ func (s *Invoices) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 			var w watched
 			a := &w.Account
 			err := r.Scan(&a.ID, &a.Seq, &a.Kind, &a.Connector, &a.Connection, &a.PaymentID, &a.AmountKobo, &a.Status, &a.AccountNumber, &a.BankName,
-				&a.AccountName, &a.PaymentURL, &a.ExpiresAt, &a.OnLate, &a.OnWrongAmount, &a.Error, &a.CreatedAt, &w.invoice, &w.order)
+				&a.AccountName, &a.PaymentURL, &a.ExpiresAt, &a.OnLate, &a.OnWrongAmount, &a.Error, &a.CreatedAt, &w.invoice, &w.order, &w.link)
 			return w, err
 		})
 		return err
@@ -515,6 +527,8 @@ func (s *Invoices) check(ctx context.Context, tenant uuid.UUID, w watched) error
 	switch {
 	case w.order != nil && s.OrderReceived != nil:
 		return s.OrderReceived(ctx, tenant, *w.order, r)
+	case w.link != nil && s.LinkReceived != nil:
+		return s.LinkReceived(ctx, tenant, *w.link, r)
 	case w.invoice != nil:
 		return s.Received(ctx, tenant, *w.invoice, r)
 	}

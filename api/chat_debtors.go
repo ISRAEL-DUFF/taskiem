@@ -43,7 +43,7 @@ import (
 
 // chatDebt is a debt or a payment being recorded.
 type chatDebt struct {
-	// Op: owes, paid or terms.
+	// Op: owes, paid, terms or send.
 	Op string `json:"op"`
 	// Phase: pick (which customer), phone (a new customer's), terms (the
 	// owner's credit terms), apply (the terms to open lines), how (cash or
@@ -75,6 +75,7 @@ var (
 	whoOwesRe  = regexp.MustCompile(`(?i)^(?:who\s+(?:owes|owe|dey owe|don owe)\s+me|(?:my\s+)?debtors|people\s+who\s+owe\s+me|customers\s+who\s+owe(?:\s+me)?)$`)
 	balanceRe  = regexp.MustCompile(`(?i)^(?:balance|statement)\s+(?:for\s+|of\s+)?(.{1,60})$`)
 	termsRe    = regexp.MustCompile(`(?i)^credit\s+terms?\s+(?:(\d{1,3})\s*days?|(none|no fixed time|off))$`)
+	sendBalRe  = regexp.MustCompile(`(?i)^send\s+(?:(.{1,60}?)\s+(?:her|his|their)\s+balance|(.{1,60}?)'s\s+balance|(?:the\s+)?balance\s+to\s+(.{1,60}))$`)
 	custNumRe  = regexp.MustCompile(`(?i)^(.{1,60}?)(?:'s)?\s+(?:number|phone(?:\s+number)?)\s+(?:is\s+)?(\+?[\d][\d\s-]{6,20})$`)
 	// notACustomer are words a sentence about the business itself starts
 	// with: "I paid 5,000" is not a customer called I.
@@ -103,6 +104,9 @@ func (s *Server) waDebtCommand(ctx context.Context, c *chat, text, cmd string) (
 		return true, s.waCreditTerms(ctx, c, days)
 	case balanceRe.MatchString(t):
 		return true, s.waStatement(ctx, c, balanceRe.FindStringSubmatch(t)[1])
+	case sendBalRe.MatchString(t):
+		m := sendBalRe.FindStringSubmatch(t)
+		return true, s.waSendBalance(ctx, c, m[1]+m[2]+m[3])
 	}
 	if m := custNumRe.FindStringSubmatch(t); m != nil && !notACustomer[strings.ToLower(m[1])] {
 		return true, s.waCustomerPhone(ctx, c, m[1], m[2])
@@ -265,11 +269,15 @@ func termsWords(c *chat, days int) string {
 // due, and what they will owe in all.
 func (s *Server) waOwesConfirm(ctx context.Context, c *chat, d *chatDebt, st invoicing.Settings) error {
 	d.Phase, d.Nonce = "confirm", uuid.NewString()
-	var before int64
+	var before, credit int64
 	if d.Key != "" {
 		if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
 			var err error
-			before, _, err = owedBy(ctx, tx, c.tenant.ID, "key:"+d.Key)
+			if before, _, err = owedBy(ctx, tx, c.tenant.ID, "key:"+d.Key); err != nil {
+				return err
+			}
+			// Money they paid before and no line took counts towards it.
+			credit, err = invoicing.CreditOf(ctx, tx, c.tenant.ID, "key:"+d.Key)
 			return err
 		}); err != nil {
 			return err
@@ -285,7 +293,7 @@ func (s *Server) waOwesConfirm(ctx context.Context, c *chat, d *chatDebt, st inv
 		due = c.t("wa.debt.due_on", "date", humanDate(on))
 	}
 	return c.say(ctx, s, c.t("wa.debt.confirm_owes", "name", whatsapp.SafeText(d.Name), "amount", invoicing.Naira(d.AmountKobo), "due", due,
-		"total", invoicing.Naira(before+d.AmountKobo)), tableYesButtons(c)...)
+		"total", invoicing.Naira(before+d.AmountKobo-min(credit, d.AmountKobo))), tableYesButtons(c)...)
 }
 
 // humanDate is a date as a message shows it: 13 Nov 2026.
@@ -348,6 +356,12 @@ func (s *Server) waOwesNow(ctx context.Context, c *chat, d *chatDebt) error {
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
+	}
+	if x.Status == "paid" {
+		// Paid from their credit as it was recorded.
+		if err := s.Invoices.Paid(ctx, c.tenant.ID, x); err != nil {
+			return err
+		}
 	}
 	return c.say(ctx, s, c.t("wa.debt.recorded", "name", whatsapp.SafeText(d.Name), "amount", invoicing.Naira(d.AmountKobo), "number", x.Number,
 		"total", invoicing.Naira(total)))
@@ -550,8 +564,11 @@ func (s *Server) waDebtReply(ctx context.Context, c *chat, text, cmd string) err
 			}); err != nil {
 				return err
 			}
-			if d.Op == "paid" {
+			switch d.Op {
+			case "paid":
 				return s.waPaidHow(ctx, c, d)
+			case "send":
+				return s.waSendConfirm(ctx, c, d)
 			}
 			return s.waOwesTerms(ctx, c, d)
 		case ok && n == len(d.Pick)+1 && d.Op == "owes":
@@ -644,9 +661,12 @@ func (s *Server) waDebtReply(ctx context.Context, c *chat, text, cmd string) err
 		return s.waPaidConfirm(ctx, c, d)
 	case "confirm":
 		switch cmd {
-		case "yes", "y", "ok", "okay", "record":
-			if d.Op == "paid" {
+		case "yes", "y", "ok", "okay", "record", "send":
+			switch d.Op {
+			case "paid":
 				return s.waPaidNow(ctx, c, d)
+			case "send":
+				return s.waSendNow(ctx, c, d)
 			}
 			return s.waOwesNow(ctx, c, d)
 		case "no", "n":
@@ -896,4 +916,138 @@ func (s *Server) waCustomerPhone(ctx context.Context, c *chat, name, phone strin
 		return err
 	}
 	return c.say(ctx, s, c.t("wa.debt.phone_set", "name", whatsapp.SafeText(found[0].Name), "phone", whatsapp.MaskValue("phone", p)))
+}
+
+// --- send a customer their balance ---
+
+// waSendBalance answers "send Ada her balance": one message to Ada with
+// what she owes and one way to pay it (invoicing.SendBalance), read back
+// first.
+func (s *Server) waSendBalance(ctx context.Context, c *chat, name string) error {
+	if !c.p.Can(PermInvoiceManage) {
+		return c.say(ctx, s, c.t("wa.debt.denied", "org", c.tenant.Name))
+	}
+	d := &chatDebt{Op: "send", Name: strings.Join(strings.Fields(name), " ")}
+	found, err := s.waFindDebtor(ctx, c, d.Name)
+	if err != nil {
+		return err
+	}
+	switch len(found) {
+	case 0:
+		return c.say(ctx, s, c.t("wa.debt.no_one", "name", whatsapp.SafeText(d.Name)))
+	case 1:
+		d.Key, d.Name = found[0].Key, found[0].Name
+		return s.waSendConfirm(ctx, c, d)
+	}
+	return s.waDebtPick(ctx, c, d, found, false)
+}
+
+// waSendConfirm reads the message back: what the customer owes, where it
+// goes and how they can pay.
+func (s *Server) waSendConfirm(ctx context.Context, c *chat, d *chatDebt) error {
+	customer := "key:" + d.Key
+	var open []invoicing.Invoice
+	var own bool
+	if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
+		var err error
+		if open, err = s.Invoices.OpenInvoicesOf(ctx, tx, c.tenant.ID, customer); err != nil {
+			return err
+		}
+		accts, err := s.Invoices.AccountsOf(ctx, tx, c.tenant.ID, customer)
+		own = len(accts) > 0
+		return err
+	}); err != nil {
+		return err
+	}
+	name := whatsapp.SafeText(d.Name)
+	if len(open) == 0 {
+		_ = s.saveSession(ctx, c, stateIdle, chatData{}, 0)
+		return c.say(ctx, s, c.t("wa.debt.owes_nothing", "name", name))
+	}
+	last := open[len(open)-1].Customer
+	to := maskContact(last.Phone)
+	if to == "" {
+		to = maskContact(last.Email)
+	}
+	if to == "" {
+		_ = s.saveSession(ctx, c, stateIdle, chatData{}, 0)
+		return c.say(ctx, s, c.t("wa.debt.send_no_address", "name", name))
+	}
+	var due int64
+	var numbers []string
+	recorded := 0
+	for _, x := range open {
+		due += x.DueKobo
+		numbers = append(numbers, x.Number)
+		if x.SentAt == nil {
+			recorded++
+		}
+	}
+	if len(numbers) > 5 {
+		numbers = append(numbers[:5], "…")
+	}
+	pay := c.t("wa.debt.send_pay_none")
+	switch {
+	case own:
+		pay = c.t("wa.debt.send_pay_account")
+	case s.Invoices.PageBase != "":
+		pay = c.t("wa.debt.send_pay_link")
+	}
+	sent := ""
+	if recorded > 0 {
+		sent = "\n" + c.t("wa.debt.send_recorded", "count", strconv.Itoa(recorded))
+	}
+	d.Phase, d.Nonce = "confirm", uuid.NewString()
+	if err := s.saveDebt(ctx, c, d); err != nil {
+		return err
+	}
+	return c.say(ctx, s, c.t("wa.debt.send_confirm", "name", name, "amount", invoicing.Naira(due), "lines", strings.Join(numbers, ", "), "to", to,
+		"pay", pay)+sent, tableYesButtons(c)...)
+}
+
+// waSendNow sends it, once for the read-back's key.
+func (s *Server) waSendNow(ctx context.Context, c *chat, d *chatDebt) error {
+	var out invoicing.BalanceSent
+	err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.Invoices.SendBalance(ctx, tx, c.tenant.ID, "key:"+d.Key, c.p.Actor(), "chat:"+d.Nonce)
+		return err
+	})
+	if errors.Is(err, invoicing.ErrInvalid) || errors.Is(err, invoicing.ErrState) {
+		_ = s.saveSession(ctx, c, stateIdle, chatData{}, 0)
+		return c.say(ctx, s, c.t("wa.debt.send_refused", "reason", whatsapp.SafeText(strings.TrimPrefix(strings.TrimPrefix(err.Error(), "invoicing: invalid: "), "invoicing: "))))
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+		return err
+	}
+	name := whatsapp.SafeText(d.Name)
+	if len(out.Queued) == 0 {
+		return c.say(ctx, s, c.t("wa.debt.sent_nothing", "name", name))
+	}
+	channels := make([]string, len(out.Queued))
+	for i, ch := range out.Queued {
+		channels[i] = map[string]string{"sms": "SMS"}[ch]
+		if channels[i] == "" {
+			channels[i] = ch
+		}
+	}
+	return c.say(ctx, s, c.t("wa.debt.sent", "name", name, "amount", invoicing.Naira(out.DueKobo), "channels", strings.Join(channels, " + ")))
+}
+
+// maskContact shows a phone or email as a message may: its last three
+// digits, or the email's first letter and domain.
+func maskContact(v string) string {
+	if v == "" {
+		return ""
+	}
+	if user, domain, ok := strings.Cut(v, "@"); ok {
+		return maskName(user) + "@" + domain
+	}
+	if len(v) <= 3 {
+		return "•••"
+	}
+	return "•••" + v[len(v)-3:]
 }

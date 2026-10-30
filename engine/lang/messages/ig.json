@@ -3660,12 +3660,52 @@
       "text": "Ịkwụ ụgwọ ikpeazụ {amount} na {date}.",
       "reviewed": false
     },
+    "wa.debt.owes_nothing": {
+      "text": "{name} ejighị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} enweghị nọmba ekwentị ugbu a. Buru ụzọ zipu *{name}'s number is 0803…*.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "nọmba akaụntụ nke ha ka ha kwụọ ụgwọ",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "njikọ iji kwụọ ya, niile ma ọ bụ akụkụ",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "enweghị ụzọ ịkwụ ụgwọ n'ịntanetị (ha ga-ajụ gị)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Ka m zigara {name} ihe ha ji, {amount} ({lines}), na {to}, ya na {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Ahịrị akwụkwọ {count} ha ga-egosi dị ka ezigara.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "Ezigala {name} ego ha ji, {amount}, site na {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Ọ dịghị ihe rutere {name} ugbu a: ozi karịrị akarị n'elekere a, ma ọ bụ SMS atụmatụ gị agwụla. Nwaa ọzọ ma emechaa.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "O zighị: {reason}",
+      "reviewed": false
+    },
     "wa.debt.phone_set": {
       "text": "Nọmba {name} bụ {phone} ugbu a: nnata na ncheta nwere ike iru ha aka.",
       "reviewed": false
     },
     "wa.help.debts": {
-      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: ụgwọ ndị ahịa ji gị",
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: ụgwọ ndị ahịa ji gị",
       "reviewed": false
     },
     "wa.table.form": {

@@ -342,6 +342,12 @@ func (s *Server) runInvoicePayments(ctx context.Context) {
 	defer match.Stop()
 	defer leak.Stop()
 	detector := &leaks.Detector{Pool: s.Invoices.Pool, Logger: s.Logger}
+	if s.Invoices.LinkReceived == nil {
+		// A payment through a customer's link is the customer's money.
+		s.Invoices.LinkReceived = func(ctx context.Context, tenant, link uuid.UUID, r invoicing.Received) error {
+			return s.matcher().LinkPaid(ctx, tenant, link, r)
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():

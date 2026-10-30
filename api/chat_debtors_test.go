@@ -161,4 +161,35 @@ func TestChatDebtorBook(t *testing.T) {
 	if r := w.say(t, vn, "who owes me?"); !strings.Contains(r, "owe you ₦1,000") {
 		t.Errorf("viewer reads: %q", r)
 	}
+
+	// Her balance in one message: read back, sent once, her lines sent
+	// with it, her payment link in it.
+	if r := w.say(t, vn, "send Ada Obi her balance"); !strings.Contains(r, "invoice.manage") {
+		t.Errorf("viewer sends: %q", r)
+	}
+	if r := w.say(t, on, "send Ada her balance"); !strings.Contains(r, "Ada owes nothing") {
+		t.Errorf("nothing owed: %q", r)
+	}
+	r = w.say(t, on, "send Ada Obi her balance")
+	if !strings.Contains(r, "Send Ada Obi what they owe, ₦1,000 (INV-0003, INV-0004), to •••567, with a link to pay it, all or part?") ||
+		!strings.Contains(r, "2 notebook line(s) will show as sent") || strings.Contains(r, "1234567") {
+		t.Fatalf("send read back: %q", r)
+	}
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent Ada Obi their balance of ₦1,000 by SMS") {
+		t.Fatalf("sent: %q", r)
+	}
+	if x := invoice("INV-0003"); x["status"] != "sent" || x["sent_at"] == nil {
+		t.Errorf("sent with it: %v", x)
+	}
+	var links int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM invoice_customer_links`).Scan(&links); err != nil || links != 1 {
+		t.Errorf("her link: %d %v", links, err)
+	}
+	// Someone with no phone yet is asked for one first.
+	w.say(t, on, "Bola owes 200")
+	w.say(t, on, "skip")
+	w.say(t, on, "yes")
+	if r := w.say(t, on, "send balance to Bola"); !strings.Contains(r, "Bola has no phone number yet") {
+		t.Errorf("no phone: %q", r)
+	}
 }

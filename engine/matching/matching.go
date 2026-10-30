@@ -226,13 +226,19 @@ func (m *Matcher) exact(ctx context.Context, tenant uuid.UUID, e entry) (bool, e
 	// Exact: the reference is one Taskiem gave for an invoice, or for a
 	// storefront order's account number (N3).
 	var account uuid.UUID
-	var invoice *uuid.UUID
+	var invoice, link *uuid.UUID
 	var order string
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT a.id, a.invoice_id, COALESCE(o.reference, '') FROM customer_invoice_accounts a LEFT JOIN storefront_orders o ON o.id = a.order_id
-			WHERE a.tenant_id = $1 AND a.payment_id = $2 AND a.connector || '/' || a.connection = $3`, tenant, e.Reference, e.Channel).Scan(&account, &invoice, &order)
+		return tx.QueryRow(ctx, `SELECT a.id, a.invoice_id, a.customer_link_id, COALESCE(o.reference, '') FROM customer_invoice_accounts a LEFT JOIN storefront_orders o ON o.id = a.order_id
+			WHERE a.tenant_id = $1 AND a.payment_id = $2 AND a.connector || '/' || a.connection = $3`, tenant, e.Reference, e.Channel).Scan(&account, &invoice, &link, &order)
 	})
 	switch {
+	case err == nil && link != nil:
+		// Through a customer's payment link: their money (customers.go).
+		if e.AmountKobo <= 0 {
+			return true, m.mark(ctx, tenant, e.ID, "unmatched")
+		}
+		return true, m.linkEntry(ctx, tenant, e.ID, *link, account, e.Channel)
 	case err == nil && invoice == nil:
 		if order == "" || m.Orders == nil {
 			return true, m.mark(ctx, tenant, e.ID, "unmatched")

@@ -3660,12 +3660,52 @@
       "text": "Last pay {amount} on {date}.",
       "reviewed": false
     },
+    "wa.debt.owes_nothing": {
+      "text": "{name} no owe anything.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} no get phone number yet. Send *{name}'s number is 0803…* first.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "their own account number wey dem go pay enter",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "link to pay am, all or small small",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "no way to pay online (dem go ask you how)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Make I send {name} wetin dem owe, {amount} ({lines}), to {to}, with {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Their {count} notebook line(s) go show as sent.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "I don send {name} their balance of {amount} by {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Nothing reach {name} now: too many messages to dem this hour, or your plan SMS don finish. Try again later.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "E no go: {reason}",
+      "reviewed": false
+    },
     "wa.debt.phone_set": {
       "text": "{name} number na {phone} now: receipt and reminder fit reach dem.",
       "reviewed": false
     },
     "wa.help.debts": {
-      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: the debt wey customers dey owe you",
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debt wey customers dey owe you",
       "reviewed": false
     },
     "wa.table.form": {

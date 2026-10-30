@@ -41,6 +41,14 @@ Money customers owe is kept as invoices, whether it was invoiced or only written
 - **Customers without a phone.** A customer of the book is a record of their own, keyed `book:<id>` on every line of theirs, so their payments and credit group by it. Their name is kept sealed, with a lower-case copy for finding them by name, which is erased with them; two customers of the same name are two records. A phone given later is set on the record and on their lines not yet sent.
 - **When a line is due.** The owner chooses how long customers have to pay (**Credit terms**: a number of days, or no fixed time). Until they choose, and with no fixed time, a line has no due date and is never overdue. A line's due date is set when it is recorded; a change of terms moves the open lines only when the owner asks for that.
 - **Receipts.** `notify_customer` on a line with no phone or email sends nothing and answers `sent: false` (`reason: no_address`), which is not a failure.
+- **Credit.** Money a customer paid beyond what they owed is their credit, and it pays their next line as soon as the line is recorded, as it pays an invoice when it is sent.
+- **Their balance in one message.** `send Ada her balance` in chat sends the customer one SMS (and email, when they have one) naming their open invoices and debts with what is due on each, the total, and one way to pay it: their own account number when they have one, else their payment link (below). Their recorded lines are sent with it, together; nothing is folded into another invoice or voided, so each keeps its history. It needs a phone or an email; without one, chat asks for it first.
+
+### A customer's payment link
+
+A customer's payment link, `https://<form host>/c/<token>`, opens a page of what they owe the business across their open invoices and debts: each with its number, what it is for, its due date and what is still due on it, in the order their money pays them, and the total. It is made the first time it is sent and kept with the customer, so the same link works for every later balance; it shows nothing about the customer, and a customer who owes nothing, an unknown link and a mistyped one all answer "There is nothing to pay on this page".
+
+**Pay what you owe** works as an invoice's **Pay this invoice** does ([paying from the page](#paying-from-the-page)): a one-time account number or a card link from the business's payments connection (the one of the customer's oldest open line), for the total or any part of it from ₦1,000, with the same limits per link. Money paid through it is the customer's: [matching](matching.md#customers-payment-links) counts it towards their open invoices and debts oldest first, with no one asked, and keeps what is left as their credit.
 
 ## Amending a sent invoice
 

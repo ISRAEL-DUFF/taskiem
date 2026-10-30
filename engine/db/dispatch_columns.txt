@@ -193,6 +193,7 @@ customer_invoice_accounts.checked_at
 customer_invoice_accounts.connection
 customer_invoice_accounts.connector
 customer_invoice_accounts.created_at
+customer_invoice_accounts.customer_link_id
 customer_invoice_accounts.error
 customer_invoice_accounts.expires_at
 customer_invoice_accounts.id
@@ -234,6 +235,7 @@ customer_invoice_requests.amount_kobo
 customer_invoice_requests.channel
 customer_invoice_requests.claimed_until
 customer_invoice_requests.created_at
+customer_invoice_requests.customer_link_id
 customer_invoice_requests.id
 customer_invoice_requests.invoice_id
 customer_invoice_requests.kind
@@ -471,6 +473,10 @@ invitee_sessions.ip
 invitee_sessions.revoked_at
 invitee_sessions.token_hash
 invitee_sessions.user_id
+invoice_customer_links.customer_id
+invoice_customer_links.id
+invoice_customer_links.page_token_hash
+invoice_customer_links.tenant_id
 invoice_paid_starts.attempts
 invoice_paid_starts.claimed_until
 invoice_paid_starts.created_at

@@ -28,6 +28,7 @@ import (
 // Reasons the permanent-account rule gives. They name no one.
 const (
 	ReasonOwnAccount = "paid into the customer's own account number"
+	ReasonOwnLink    = "paid through the customer's own payment link"
 	ReasonOldest     = "the customer's oldest open invoice"
 	ReasonNext       = "what was left after the customer's older open invoices"
 	// ReasonSibling: what was left after the student's own invoices, where
@@ -173,4 +174,60 @@ func (m *Matcher) TellPaid(ctx context.Context, tenant uuid.UUID, parts []Counte
 		}
 	}
 	return nil
+}
+
+// LinkPaid counts a payment the invoices' checker found through a
+// customer's payment link (invoicing.Invoices.LinkReceived): the money is
+// recorded in the log as the rail's payment event would be (one entry
+// whichever is heard first) and counted as the customer's, exactly.
+func (m *Matcher) LinkPaid(ctx context.Context, tenant, link uuid.UUID, r invoicing.Received) error {
+	if m.Invoices.MoneyLog == nil {
+		// Counted when the rail's event is heard and matched (exact).
+		return nil
+	}
+	var entry uuid.UUID
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		amount := r.AmountKobo
+		var err error
+		entry, _, err = m.Invoices.MoneyLog.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "payment", Status: "settled", Channel: r.Connection,
+			Reference: r.PaymentID, Event: "payment.received", AmountKobo: &amount, Source: "lookup"})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.linkEntry(ctx, tenant, entry, link, r.Account, r.Connection)
+}
+
+// linkEntry counts an entry paid through a customer's payment link
+// towards the customer's open invoices, oldest first, the rest their
+// credit, with no one asked: the reference is one Taskiem gave for that
+// customer. Counting again finds nothing left of the entry.
+func (m *Matcher) linkEntry(ctx context.Context, tenant, entry, link, account uuid.UUID, channel string) error {
+	var done []CountedPart
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if err := moneylog.LockEntry(ctx, tx, entry); err != nil {
+			return err
+		}
+		customer, err := invoicing.LinkCustomer(ctx, tx, tenant, link)
+		if err != nil {
+			return err
+		}
+		if err := invoicing.MarkCustomers(ctx, tx, tenant, entry, customer, nil, "link", "system:"+channel); err != nil {
+			return err
+		}
+		if done, err = m.CountCustomer(ctx, tx, tenant, entry, customer, CustomerCounting{Connection: channel, How: "exact", By: "system:" + channel,
+			Reasons: []string{ReasonOwnLink}}); err != nil {
+			return err
+		}
+		if account != uuid.Nil {
+			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND customer_link_id = $3`,
+				tenant, account, link)
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.TellPaid(ctx, tenant, done)
 }

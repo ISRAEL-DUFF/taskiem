@@ -3660,12 +3660,52 @@
       "text": "Biyan ƙarshe {amount} a ranar {date}.",
       "reviewed": false
     },
+    "wa.debt.owes_nothing": {
+      "text": "{name} ba ya bin komai.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} ba shi da lambar waya tukuna. Aika *{name}'s number is 0803…* da farko.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "lambar asusun su ta kansu don biya",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "hanyar biya, duka ko wani bangare",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "babu hanyar biya ta yanar gizo (za su tambaye ka)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "In aika wa {name} abin da yake bin, {amount} ({lines}), zuwa {to}, tare da {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Layukan littafi {count} nasu za su nuna an aika.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "An aika wa {name} ragowar {amount} ta {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Babu abin da ya je wa {name} yanzu: saƙonni da yawa a wannan sa'a, ko SMS na shirinka ya ƙare. Sake gwadawa daga baya.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "Bai tafi ba: {reason}",
+      "reviewed": false
+    },
     "wa.debt.phone_set": {
       "text": "Lambar {name} ita ce {phone} yanzu: rasit da tunatarwa za su iya isa gare su.",
       "reviewed": false
     },
     "wa.help.debts": {
-      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: basussukan da abokan ciniki ke bin ka",
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: basussukan da abokan ciniki ke bin ka",
       "reviewed": false
     },
     "wa.table.form": {

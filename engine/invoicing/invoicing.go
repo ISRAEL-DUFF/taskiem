@@ -238,6 +238,12 @@ type Invoices struct {
 	// dropped and their accounts only checked.
 	OrderRequested func(ctx context.Context, tenant, order uuid.UUID) error
 	OrderReceived  func(ctx context.Context, tenant, order uuid.UUID, r Received) error
+	// LinkReceived counts a payment the checker found through a
+	// customer's payment link (customerlink.go) towards their open
+	// invoices (engine/matching LinkPaid). Without it such accounts are
+	// only checked, and matching counts the payment when the rail's event
+	// is heard.
+	LinkReceived func(ctx context.Context, tenant, link uuid.UUID, r Received) error
 	// MoneyLog records the payments the checker finds (T2); nil records
 	// none.
 	MoneyLog *moneylog.Log

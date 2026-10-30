@@ -3660,12 +3660,52 @@
       "text": "Ìsanwó tó kẹ́yìn: {amount} ní {date}.",
       "reviewed": false
     },
+    "wa.debt.owes_nothing": {
+      "text": "{name} kò jẹ ohunkóhun.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} kò ní nọ́mbà fóònù síbẹ̀. Kọ́kọ́ fi *{name}'s number is 0803…* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "nọ́mbà àkáǹtì tiwọn láti sanwó sí",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "ìjápọ̀ láti san án, gbogbo rẹ̀ tàbí apá kan",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "kò sí ọ̀nà láti sanwó lórí ayélujára (wọn yóò bi ọ́)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Ṣé kí n fi ohun tí {name} jẹ ránṣẹ́, {amount} ({lines}), sí {to}, pẹ̀lú {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Ìlà ìwé {count} wọn yóò hàn bí èyí tí a fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "Mo ti fi iye tí {name} jẹ, {amount}, ránṣẹ́ nípa {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Kò sí ohun tí ó dé ọ̀dọ̀ {name} báyìí: ọ̀pọ̀ ìfiranṣẹ́ ní wákàtí yìí, tàbí SMS ètò rẹ ti tán. Gbìyànjú lẹ́yìn náà.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "Kò lọ: {reason}",
+      "reviewed": false
+    },
     "wa.debt.phone_set": {
       "text": "Nọ́ńbà {name} ni {phone} báyìí: ìwé-ẹ̀rí àti ìránnilétí lè dé ọ̀dọ̀ wọn.",
       "reviewed": false
     },
     "wa.help.debts": {
-      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: àwọn gbèsè tí àwọn oníbàárà jẹ yín",
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: àwọn gbèsè tí àwọn oníbàárà jẹ yín",
       "reviewed": false
     },
     "wa.table.form": {
