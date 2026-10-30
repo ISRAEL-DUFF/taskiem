@@ -1143,7 +1143,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
       - name: limit
         in: query
         schema:
@@ -3322,7 +3322,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
       - name: reveal
         in: query
         schema:
@@ -23508,7 +23508,7 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
         term_id:
           type: string
           format: uuid
@@ -26447,7 +26447,7 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
         customer:
           $ref: '#/components/schemas/InvoiceCustomer'
         lines:
@@ -26474,6 +26474,12 @@ components:
           enum: [business, customer]
         allow_part_payments:
           type: boolean
+        kind:
+          type: string
+          enum: [invoice, credit]
+          description: credit is a notebook debt recorded in chat (Ada owes 5,000), never sent unless the business sends it
+        recorded_at:
+          $ref: '#/components/schemas/NullableTimestamp'
         sent_at:
           $ref: '#/components/schemas/NullableTimestamp'
         paid_at:
@@ -27069,6 +27075,13 @@ components:
         auto_match:
           type: boolean
           description: A strong suggestion is matched to its invoice without asking (docs/matching.md)
+        credit_days:
+          type:
+          - integer
+          - 'null'
+          description: How long a customer has to pay a notebook debt, in days; null for no fixed time (no reminders). Set from chat or with credit_terms; read-only here
+        credit_terms_at:
+          $ref: '#/components/schemas/NullableTimestamp'
     StorefrontOrder:
       type: object
       required: [id, reference, kind, status, customer, basket, total_kobo, payment, created_at]

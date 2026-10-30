@@ -4349,6 +4349,241 @@
       "reviewed": true,
       "context": "after a sheet is copied: it is a copy, once"
     },
+    "wa.debt.owes_short": {
+      "text": "owes {amount}",
+      "reviewed": true,
+      "context": "a customer in a pick list: what they owe"
+    },
+    "wa.debt.someone_new": {
+      "text": "Someone new",
+      "reviewed": true,
+      "context": "pick list: a new customer of that name"
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} is new. Send {name}'s phone number so receipts and reminders can reach them, or *skip*.",
+      "reviewed": true,
+      "context": "a new customer of the debtor book: their phone, or skip"
+    },
+    "wa.debt.which": {
+      "text": "Which {name}?\n{list}\n\nSend a number.",
+      "reviewed": true,
+      "context": "several customers match a name"
+    },
+    "wa.debt.ask_terms": {
+      "text": "How long do you give customers to pay what they owe? Reminders go only after this.\n{list}\n\nSend a number. You can change it later with *credit terms 14 days*.",
+      "reviewed": true,
+      "context": "the owner's credit terms, asked once before the first notebook debt"
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "No fixed time (no reminders)",
+      "reviewed": true,
+      "context": "credit terms: no fixed time"
+    },
+    "wa.debt.days": {
+      "text": "{days} days",
+      "reviewed": true,
+      "context": "credit terms: a number of days"
+    },
+    "wa.debt.no_due": {
+      "text": "No due date.",
+      "reviewed": true,
+      "context": "read-back: the debt has no due date (no fixed time)"
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "An owner sets how long customers have to pay; until then this debt has no due date.",
+      "reviewed": true,
+      "context": "read-back for someone who cannot set the terms: no due date until the owner does"
+    },
+    "wa.debt.due_on": {
+      "text": "Due {date}.",
+      "reviewed": true,
+      "context": "read-back: due date"
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Record that {name} owes {amount}? {due}\n{name} will owe {total} in all. Nothing is sent to them.\n\nReply *yes* or *cancel*.",
+      "reviewed": true,
+      "context": "a notebook debt read back for yes"
+    },
+    "wa.debt.refused": {
+      "text": "That was not recorded: {reason}",
+      "reviewed": true,
+      "context": "a debt or payment refused; {reason} says why"
+    },
+    "wa.debt.recorded": {
+      "text": "Recorded: {name} owes {amount} ({number}). {name} owes {total} in all.",
+      "reviewed": true,
+      "context": "a notebook debt recorded"
+    },
+    "wa.debt.denied": {
+      "text": "You cannot record debts or payments in {org} (it takes invoice.manage).",
+      "reviewed": true,
+      "context": "debtor book words without invoice.manage"
+    },
+    "wa.debt.denied_read": {
+      "text": "You cannot see who owes {org} (it takes invoice.read).",
+      "reviewed": true,
+      "context": "who owes me without invoice.read"
+    },
+    "wa.debt.no_one": {
+      "text": "No one called {name} owes you. Record a debt with *{name} owes* and the amount.",
+      "reviewed": true,
+      "context": "no customer of that name in the book"
+    },
+    "wa.debt.ask_how": {
+      "text": "How did {name} pay?\n1. Cash\n2. Transfer",
+      "reviewed": true,
+      "context": "how a customer paid"
+    },
+    "wa.debt.account_connected": {
+      "text": "Your {name} account ({connection})",
+      "reviewed": true,
+      "context": "a connected account a transfer may go into"
+    },
+    "wa.debt.account_new": {
+      "text": "Another account",
+      "reviewed": true,
+      "context": "another account, named once"
+    },
+    "wa.debt.ask_account": {
+      "text": "Into which account did {name} send it?\n{list}\n\nSend a number.",
+      "reviewed": true,
+      "context": "which account a transfer went into"
+    },
+    "wa.debt.how_cash": {
+      "text": "in cash",
+      "reviewed": true,
+      "context": "read-back: paid in cash"
+    },
+    "wa.debt.how_transfer": {
+      "text": "by transfer into {account}",
+      "reviewed": true,
+      "context": "read-back: paid by transfer into an account"
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Record {amount} from {name} {how}? It pays their oldest debt first. {name} will owe {total}.\n\nReply *yes* or *cancel*.",
+      "reviewed": true,
+      "context": "a customer's payment read back for yes"
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} more than they owe is kept as their credit, for their next debt.",
+      "reviewed": true,
+      "context": "a payment over what is owed"
+    },
+    "wa.debt.paid_recorded": {
+      "text": "Recorded {amount} from {name}. {name} owes {total} now.",
+      "reviewed": true,
+      "context": "a customer's payment recorded"
+    },
+    "wa.debt.credit_held": {
+      "text": "Credit kept for them: {amount}.",
+      "reviewed": true,
+      "context": "a customer's credit"
+    },
+    "wa.debt.phone_bad": {
+      "text": "That is not a phone number I can use. Send it with the country code (+234…), or *skip*.",
+      "reviewed": true,
+      "context": "a phone number that cannot be read"
+    },
+    "wa.debt.applied": {
+      "text": "Done: {count} open debt(s) now follow these terms.",
+      "reviewed": true,
+      "context": "credit terms applied to open lines"
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Nothing to record: Taskiem sees money into {account}. {name}'s balance goes down when the transfer arrives and is matched.",
+      "reviewed": true,
+      "context": "a transfer into a connected account: nothing posted, counted when it arrives"
+    },
+    "wa.debt.ask_account_name": {
+      "text": "What do you call that account? Use its bank and a short name, like *gtbank/shop*.",
+      "reviewed": true,
+      "context": "name a new account once, as a statement channel"
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Use small letters and digits, and one / at most, like *gtbank/shop*.",
+      "reviewed": true,
+      "context": "an account name that cannot be used"
+    },
+    "wa.debt.not_recorded": {
+      "text": "Nothing was recorded.",
+      "reviewed": true,
+      "context": "a debt or payment declined"
+    },
+    "wa.debt.terms_bad": {
+      "text": "Credit terms are 1 to 365 days, or *credit terms none*.",
+      "reviewed": true,
+      "context": "credit terms out of range"
+    },
+    "wa.debt.terms_set": {
+      "text": "Customers now have {terms} to pay what they owe. New debts follow this.",
+      "reviewed": true,
+      "context": "credit terms kept"
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Notebook debts will have no due date and no reminders.",
+      "reviewed": true,
+      "context": "no fixed time: no reminders"
+    },
+    "wa.debt.ask_apply": {
+      "text": "Apply them to the {count} debt(s) already recorded too, each from the day it was recorded?",
+      "reviewed": true,
+      "context": "apply new credit terms to open debts too?"
+    },
+    "wa.debt.nobody": {
+      "text": "Nobody owes you anything. Record a debt with *Ada owes 5,000*.",
+      "reviewed": true,
+      "context": "no one owes anything"
+    },
+    "wa.debt.who_head": {
+      "text": "{count} customer(s) owe you {total}:",
+      "reviewed": true,
+      "context": "who owes me: first line"
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} ({lines} line(s))",
+      "reviewed": true,
+      "context": "who owes me: one customer"
+    },
+    "wa.debt.who_due": {
+      "text": "due {date}",
+      "reviewed": true,
+      "context": "the oldest due date"
+    },
+    "wa.debt.who_more": {
+      "text": "… and {count} more.",
+      "reviewed": true,
+      "context": "who owes me: more than shown"
+    },
+    "wa.debt.who_tail": {
+      "text": "Send *balance* and a name for one customer's debts.",
+      "reviewed": true,
+      "context": "who owes me: last line"
+    },
+    "wa.debt.which_balance": {
+      "text": "More than one matches:\n{list}\n\nSend the full name.",
+      "reviewed": true,
+      "context": "several customers match a name"
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} owes {amount}:",
+      "reviewed": true,
+      "context": "a customer's statement: first line"
+    },
+    "wa.debt.statement_last": {
+      "text": "Last paid {amount} on {date}.",
+      "reviewed": true,
+      "context": "a customer's last payment"
+    },
+    "wa.debt.phone_set": {
+      "text": "{name}'s number is {phone} now: receipts and reminders can reach them.",
+      "reviewed": true,
+      "context": "a customer's phone kept"
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: the debts customers owe you",
+      "reviewed": true,
+      "context": "help line for the debtor book"
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the row's {count} detail(s); you confirm before it is added. Send *cancel* to stop.",
       "reviewed": true,

@@ -175,6 +175,8 @@ actions:
       properties:
         number: { type: string }
         queued: { type: array, items: { type: string } }
+        sent: { type: boolean, description: "false when the customer has no phone or email yet (a notebook debt): nothing was sent, and that is not a failure" }
+        reason: { type: string, description: "why nothing was sent: no_address" }
   register_account:
     title: Give a customer their own account number
     description: "A permanent account number of the customer's own: money paid into it is matched to their open invoices, oldest first, and the rest kept as their credit. Either issue one (issue true) on a connection that can issue account numbers, or register one the business already has for them (account_number and reference). The same customer and connection again answers the account already issued. One per customer, never one per invoice: an invoice's page offers its own. The customer is as their invoices have them: by key when given, else phone, else email."

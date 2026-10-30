@@ -25,6 +25,7 @@ Over the API a line can also say who it is collected for (`pass_through_for`, su
 | Status | Means |
 | --- | --- |
 | Draft | Saved, not sent |
+| Recorded | A notebook debt recorded in chat (`Ada owes 5,000`): owed and open, but not sent ([the debtor book](#the-debtor-book)) |
 | Sent | Sent, nothing paid yet |
 | Part-paid | Some of it paid |
 | Paid | Paid in full |
@@ -32,6 +33,14 @@ Over the API a line can also say who it is collected for (`pass_through_for`, su
 | Void | Cancelled, with the reason; it takes no new payment |
 
 Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time).
+
+## The debtor book
+
+Money customers owe is kept as invoices, whether it was invoiced or only written down ([decision 0060](decisions/0060-no-sheet-needed.md)). A notebook debt is an invoice of kind **credit** in the status **recorded**: it is open and owed everywhere an invoice is (matching, a customer's payments counted oldest first, credit, the list of overdue invoices and the customer's statement), it takes part payments whatever **Customers may pay part** says, and nothing is sent to the customer unless the business sends it. Payments move it to part-paid and paid as they move a sent invoice, and it is overdue the day after its due date.
+
+- **Customers without a phone.** A customer of the book is a record of their own, keyed `book:<id>` on every line of theirs, so their payments and credit group by it. Their name is kept sealed, with a lower-case copy for finding them by name, which is erased with them; two customers of the same name are two records. A phone given later is set on the record and on their lines not yet sent.
+- **When a line is due.** The owner chooses how long customers have to pay (**Credit terms**: a number of days, or no fixed time). Until they choose, and with no fixed time, a line has no due date and is never overdue. A line's due date is set when it is recorded; a change of terms moves the open lines only when the owner asks for that.
+- **Receipts.** `notify_customer` on a line with no phone or email sends nothing and answers `sent: false` (`reason: no_address`), which is not a failure.
 
 ## Amending a sent invoice
 
@@ -134,6 +143,7 @@ Under **Invoices > Settings**:
 | Who pays the transfer fee | The business | Or the customer, where the payments provider takes only the exact amount ([0045](decisions/0045-tally-in-taskiem.md)) |
 | Customers may pay part | Off | When on, a customer can pay part of an invoice |
 | Match strong suggestions automatically | Off | See [Matching](#matching) |
+| Credit terms | Not set | How long customers have to pay a notebook debt, in days, or no fixed time; until set, notebook debts have no due date and are never reminded ([the debtor book](#the-debtor-book)) |
 
 Each invoice can override the connection, the fee and part payments.
 

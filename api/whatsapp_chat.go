@@ -246,6 +246,9 @@ type chatData struct {
 	// File is a file sent in chat being brought into a table
 	// (chat_tables_files.go).
 	File *chatFile `json:"file,omitempty"`
+	// Debt is a notebook debt or a customer's payment being recorded
+	// (chat_debtors.go).
+	Debt *chatDebt `json:"debt,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -616,6 +619,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.TableMake != nil && c.state != stateIdle {
 		return s.waTableMakeReply(ctx, c, text, cmd)
 	}
+	if c.data.Debt != nil && c.state != stateIdle {
+		return s.waDebtReply(ctx, c, text, cmd)
+	}
 	if c.data.File != nil && c.state != stateIdle {
 		return s.waFileReply(ctx, c, text, cmd)
 	}
@@ -677,6 +683,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
+		// The debtor book: owes, paid, who owes me (chat_debtors.go).
+		if done, err := s.waDebtCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
@@ -916,7 +926,7 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.bookings"))
 	}
 	if c.p.Can(PermInvoiceManage) && s.Invoices != nil {
-		lines = append(lines, c.t("wa.help.invoice"))
+		lines = append(lines, c.t("wa.help.invoice"), c.t("wa.help.debts"))
 	}
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))

@@ -3480,6 +3480,194 @@
       "text": "Ẹ̀dà ni èyí: àwọn àyípadà tí ẹ bá ṣe sí sheet náà lẹ́yìn náà kò ní wọlé. Ẹ máa tọ́jú àkójọ náà sínú tábìlì láti ìsinsìnyí.",
       "reviewed": false
     },
+    "wa.debt.owes_short": {
+      "text": "jẹ {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Ẹlòmíràn tuntun",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} jẹ́ tuntun. Ẹ fi nọ́ńbà fóònù {name} ránṣẹ́ kí ìwé-ẹ̀rí àti ìránnilétí lè dé ọ̀dọ̀ wọn, tàbí *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "{name} wo?\n{list}\n\nẸ fi nọ́ńbà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "Ìgbà mélòó lẹ máa ń fún àwọn oníbàárà láti san ohun tí wọ́n jẹ? Ìránnilétí yóò lọ lẹ́yìn èyí nìkan.\n{list}\n\nẸ fi nọ́ńbà ránṣẹ́. Ẹ lè yí i padà lẹ́yìn pẹ̀lú *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "Kò sí àkókò kan pàtó (kò sí ìránnilétí)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "Ọjọ́ {days}",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "Kò ní ọjọ́ ìsanwó.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Olùdásílẹ̀ ló ń ṣètò ìgbà tí àwọn oníbàárà ní láti san; títí di ìgbà náà gbèsè yìí kò ní ọjọ́ ìsanwó.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "Ọjọ́ ìsanwó: {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Ṣé kí a kọ ọ́ pé {name} jẹ {amount}? {due}\n{name} yóò jẹ {total} lápapọ̀. A kò ní fi nǹkan ránṣẹ́ sí wọn.\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "A kò kọ ọ́: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "A ti kọ ọ́: {name} jẹ {amount} ({number}). {name} jẹ {total} lápapọ̀.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "Ẹ kò lè kọ gbèsè tàbí ìsanwó nínú {org} (ó nílò invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "Ẹ kò lè rí àwọn tó jẹ {org} (ó nílò invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Kò sí ẹni tí wọ́n ń pè ní {name} tó jẹ yín. Ẹ kọ gbèsè pẹ̀lú *{name} owes* àti iye owó.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "Báwo ni {name} ṣe san?\n1. Owó ní ọwọ́\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Àkọọ́lẹ̀ {name} yín ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Àkọọ́lẹ̀ mìíràn",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Àkọọ́lẹ̀ wo ni {name} fi ránṣẹ́ sí?\n{list}\n\nẸ fi nọ́ńbà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "ní owó ọwọ́",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "nípa transfer sí {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Ṣé kí a kọ {amount} láti ọ̀dọ̀ {name} {how}? Ó máa kọ́kọ́ san gbèsè wọn tó pẹ́ jù. {name} yóò jẹ {total}.\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} tó ju ohun tí wọ́n jẹ lọ yóò wà gẹ́gẹ́ bí kírẹ́dìtì wọn, fún gbèsè wọn tó kàn.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "A ti kọ {amount} láti ọ̀dọ̀ {name}. {name} jẹ {total} báyìí.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Kírẹ́dìtì tí a fi pamọ́ fún wọn: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "Èyí kì í ṣe nọ́ńbà fóònù tí mo lè lò. Ẹ fi ránṣẹ́ pẹ̀lú kóòdù orílẹ̀-èdè (+234…), tàbí *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "Ó ti parí: gbèsè {count} tó ṣì wà ti ń tẹ̀lé àwọn òfin yìí báyìí.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Kò sí nǹkan láti kọ: Taskiem ń rí owó tó wọ {account}. Iye tí {name} jẹ yóò dín kù nígbà tí transfer náà bá dé tí a sì so ó pọ̀.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Kí lẹ ń pe àkọọ́lẹ̀ yẹn? Ẹ lo orúkọ báǹkì rẹ̀ àti orúkọ kúkúrú, bí *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Ẹ lo lẹ́tà kékeré àti nọ́ńbà, àti / kan ṣoṣo, bí *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "A kò kọ nǹkan kan.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Àwọn òfin kírẹ́dìtì jẹ́ ọjọ́ 1 sí 365, tàbí *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Àwọn oníbàárà ní {terms} báyìí láti san ohun tí wọ́n jẹ. Àwọn gbèsè tuntun yóò tẹ̀lé èyí.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Àwọn gbèsè tí a kọ kò ní ní ọjọ́ ìsanwó tàbí ìránnilétí.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Ṣé kí a lò ó fún àwọn gbèsè {count} tí a ti kọ tẹ́lẹ̀ pẹ̀lú, ọ̀kọ̀ọ̀kan láti ọjọ́ tí a kọ ọ́?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Kò sí ẹni tó jẹ yín ní nǹkan kan. Ẹ kọ gbèsè pẹ̀lú *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "Oníbàárà {count} jẹ yín {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} (ìlà {lines})",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "ọjọ́ ìsanwó {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… àti {count} mìíràn.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Ẹ fi *balance* àti orúkọ ránṣẹ́ fún gbèsè oníbàárà kan.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Ó ju ẹyọ kan lọ tó bá a mu:\n{list}\n\nẸ fi orúkọ kíkún ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} jẹ {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Ìsanwó tó kẹ́yìn: {amount} ní {date}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "Nọ́ńbà {name} ni {phone} báyìí: ìwé-ẹ̀rí àti ìránnilétí lè dé ọ̀dọ̀ wọn.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: àwọn gbèsè tí àwọn oníbàárà jẹ yín",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: ẹ tẹ *{cta}* láti kọ àlàyé {count} ti ìlà náà; ẹ ó fìdí rẹ̀ múlẹ̀ kí a tó fi kún un. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
       "reviewed": false

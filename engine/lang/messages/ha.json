@@ -3480,6 +3480,194 @@
       "text": "Wannan kwafi ne: canje-canjen da aka yi a sheet ɗin daga baya ba za su shigo ba. Ajiye jerin a tebur daga yanzu.",
       "reviewed": false
     },
+    "wa.debt.owes_short": {
+      "text": "yana bin {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Wani sabo",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} sabo ne. Aika lambar wayar {name} don rasit da tunatarwa su isa gare su, ko *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Wane {name}?\n{list}\n\nAika lamba.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "Tsawon wane lokaci kake bai wa abokan ciniki don biyan abin da suke bi? Tunatarwa za ta tafi bayan haka kawai.\n{list}\n\nAika lamba. Kana iya canza shi daga baya da *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "Babu ƙayyadadden lokaci (babu tunatarwa)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "Kwanaki {days}",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "Babu ranar biya.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Mai shi ne ke saita tsawon lokacin da abokan ciniki ke da shi don biya; har sai lokacin wannan bashi ba shi da ranar biya.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "Ranar biya: {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "A rubuta cewa {name} yana bin {amount}? {due}\n{name} zai bi {total} gaba ɗaya. Ba za a aika masa komai ba.\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "Ba a rubuta shi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "An rubuta: {name} yana bin {amount} ({number}). {name} yana bin {total} gaba ɗaya.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "Ba za ka iya rubuta bashi ko biyan kuɗi a {org} ba (yana buƙatar invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "Ba za ka iya ganin waɗanda ke bin {org} bashi ba (yana buƙatar invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Babu wanda ake kira {name} da ke bin ka. Rubuta bashi da *{name} owes* da adadin.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "Ta yaya {name} ya biya?\n1. Tsabar kuɗi\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Asusunka na {name} ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Wani asusu",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Wane asusu {name} ya tura shi?\n{list}\n\nAika lamba.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "a tsabar kuɗi",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "ta transfer zuwa {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "A rubuta {amount} daga {name} {how}? Zai fara biyan tsohon bashinsu. {name} zai bi {total}.\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} da ya wuce abin da suke bi za a ajiye a matsayin kiredit ɗinsu, don bashinsu na gaba.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "An rubuta {amount} daga {name}. {name} yana bin {total} yanzu.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Kiredit da aka ajiye musu: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "Wannan ba lambar waya da zan iya amfani da ita ba ce. Aika ta da lambar ƙasa (+234…), ko *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "An gama: bashi {count} da ke buɗe yanzu suna bin waɗannan sharuɗɗan.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Babu abin da za a rubuta: Taskiem yana ganin kuɗin da ke shiga {account}. Ma'aunin {name} zai ragu idan transfer ɗin ya iso aka daidaita shi.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Me kake kiran wannan asusu? Yi amfani da bankinsa da gajeren suna, kamar *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Yi amfani da ƙananan haruffa da lambobi, da / ɗaya kawai, kamar *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "Ba a rubuta komai ba.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Sharuɗɗan kiredit kwanaki 1 zuwa 365 ne, ko *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Abokan ciniki yanzu suna da {terms} don biyan abin da suke bi. Sabbin basussuka za su bi wannan.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Basussukan da aka rubuta ba za su sami ranar biya ko tunatarwa ba.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "A yi amfani da su a basussuka {count} da aka riga aka rubuta ma, kowanne daga ranar da aka rubuta shi?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Babu wanda ke bin ka komai. Rubuta bashi da *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "Abokan ciniki {count} suna bin ka {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} (layi {lines})",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "ranar biya {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… da wasu {count}.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Aika *balance* da suna don basussukan abokin ciniki ɗaya.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Fiye da ɗaya sun dace:\n{list}\n\nAika cikakken suna.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} yana bin {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Biyan ƙarshe {amount} a ranar {date}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "Lambar {name} ita ce {phone} yanzu: rasit da tunatarwa za su iya isa gare su.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: basussukan da abokan ciniki ke bin ka",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: danna *{cta}* don shigar da bayanai {count} na layin; za ka tabbatar kafin a ƙara shi. Aika *cancel* don tsayawa.",
       "reviewed": false

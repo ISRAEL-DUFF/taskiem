@@ -3480,6 +3480,194 @@
       "text": "Nke a bụ mbipụta: mgbanwe e mere na sheet ahụ ma emechaa agaghị abata. Debe ndepụta ahụ na tebụl site ugbu a.",
       "reviewed": false
     },
+    "wa.debt.owes_short": {
+      "text": "ji {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Onye ọhụrụ",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} bụ onye ọhụrụ. Ziga nọmba ekwentị {name} ka nnata na ncheta ruo ha aka, ma ọ bụ *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Kedu {name}?\n{list}\n\nZiga nọmba.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "Ogologo oge ole ka ị na-enye ndị ahịa ka ha kwụọ ihe ha ji? Ncheta ga-aga naanị mgbe nke a gachara.\n{list}\n\nZiga nọmba. Ị nwere ike ịgbanwe ya ma emechaa site na *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "Enweghị oge a kara aka (enweghị ncheta)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "Ụbọchị {days}",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "Enweghị ụbọchị ịkwụ ụgwọ.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Onye nwe ya na-edozi ogologo oge ndị ahịa nwere ịkwụ ụgwọ; ruo mgbe ahụ ụgwọ a enweghị ụbọchị ịkwụ ya.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "Ụbọchị ịkwụ ụgwọ: {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Dee na {name} ji {amount}? {due}\n{name} ga-eji {total} n'ozuzu. Agaghị eziga ha ihe ọ bụla.\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "Edeghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "E dela ya: {name} ji {amount} ({number}). {name} ji {total} n'ozuzu.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "Ị nweghị ike ide ụgwọ ma ọ bụ ịkwụ ụgwọ na {org} (ọ chọrọ invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "Ị nweghị ike ịhụ ndị ji {org} ụgwọ (ọ chọrọ invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Ọ dịghị onye a na-akpọ {name} ji gị ụgwọ. Dee ụgwọ site na *{name} owes* na ego ole.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "Kedu ka {name} si kwụọ?\n1. Ego n'aka\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Akaụntụ {name} gị ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Akaụntụ ọzọ",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Kedu akaụntụ {name} zigara ya?\n{list}\n\nZiga nọmba.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "site na transfer n'ime {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Dee {amount} si n'aka {name} {how}? Ọ ga-ebu ụzọ kwụọ ụgwọ ha kacha ochie. {name} ga-eji {total}.\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} karịrị ihe ha ji ga-anọ dị ka kredit ha, maka ụgwọ ha ọzọ.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "E dela {amount} si n'aka {name}. {name} ji {total} ugbu a.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Kredit edebere ha: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "Nke ahụ abụghị nọmba ekwentị m nwere ike iji. Ziga ya na koodu obodo (+234…), ma ọ bụ *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "Emechala: ụgwọ {count} meghere ugbu a na-agbaso usoro ndị a.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Ọ dịghị ihe a ga-ede: Taskiem na-ahụ ego na-abata na {account}. Ego {name} ji ga-ebelata mgbe transfer ahụ rutere ma jikọọ ya.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Gịnị ka ị na-akpọ akaụntụ ahụ? Jiri aha ụlọ akụ ya na aha dị mkpụmkpụ, dị ka *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Jiri obere mkpụrụedemede na ọnụọgụgụ, na otu / naanị, dị ka *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "Edeghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Usoro kredit bụ ụbọchị 1 ruo 365, ma ọ bụ *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Ndị ahịa nwere {terms} ugbu a ịkwụ ihe ha ji. Ụgwọ ọhụrụ ga-agbaso nke a.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Ụgwọ e dere agaghị enwe ụbọchị ịkwụ ụgwọ ma ọ bụ ncheta.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Tinye ha na ụgwọ {count} e derela, nke ọ bụla site n'ụbọchị e dere ya?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Ọ dịghị onye ji gị ihe ọ bụla. Dee ụgwọ site na *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "Ndị ahịa {count} ji gị {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} (ahịrị {lines})",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "ụbọchị ịkwụ {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… na {count} ọzọ.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Ziga *balance* na aha maka ụgwọ otu onye ahịa.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Ihe karịrị otu kwekọrọ:\n{list}\n\nZiga aha zuru ezu.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} ji {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Ịkwụ ụgwọ ikpeazụ {amount} na {date}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "Nọmba {name} bụ {phone} ugbu a: nnata na ncheta nwere ike iru ha aka.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: ụgwọ ndị ahịa ji gị",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: pịa *{cta}* ka itinye nkọwa {count} nke ahịrị; ị ga-akwado tupu etinye ya. Ziga *cancel* ka ịkwụsị.",
       "reviewed": false

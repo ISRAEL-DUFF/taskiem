@@ -3480,6 +3480,194 @@
       "text": "Na copy be this: anything wey you change for the sheet later no go enter. Dey keep the list for the table from now.",
       "reviewed": false
     },
+    "wa.debt.owes_short": {
+      "text": "dey owe {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Another person",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} na new person. Send {name} phone number make receipt and reminder fit reach dem, or *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Which {name}?\n{list}\n\nSend number.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "How long you dey give customers to pay wetin dem owe? Reminder go only after this time.\n{list}\n\nSend number. You fit change am later with *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "No fixed time (no reminder)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "{days} days",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "No due date.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Na owner go set how long customers get to pay; until then this debt no get due date.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "E due {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Make I write say {name} dey owe {amount}? {due}\n{name} go owe {total} for everything. Nothing go reach dem.\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "I no write am: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "I don write am: {name} dey owe {amount} ({number}). {name} dey owe {total} for everything.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "You no fit write debt or payment for {org} (e need invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "You no fit see who dey owe {org} (e need invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Nobody wey dem dey call {name} dey owe you. Write debt with *{name} owes* and the amount.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "How {name} take pay?\n1. Cash\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Your {name} account ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Another account",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Which account {name} send am enter?\n{list}\n\nSend number.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "for cash",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "by transfer enter {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Make I write {amount} from {name} {how}? E go first pay their oldest debt. {name} go still owe {total}.\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} wey pass wetin dem owe go stay as their credit, for their next debt.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "I don write {amount} from {name}. {name} dey owe {total} now.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Credit wey dem get: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "I no fit use that phone number. Send am with country code (+234…), or *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "E don do: {count} debt(s) wey still dey now follow these terms.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Nothing to write: Taskiem dey see money wey enter {account}. {name} balance go reduce when the transfer land and match.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Wetin you dey call that account? Use the bank and short name, like *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Use small letters and numbers, and only one /, like *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "I no write anything.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Credit terms na 1 reach 365 days, or *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Customers now get {terms} to pay wetin dem owe. New debt go follow am.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Debt wey you write no go get due date or reminder.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Make I apply am to the {count} debt(s) wey don dey before, each one from the day dem write am?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Nobody dey owe you. Write debt with *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "{count} customer(s) dey owe you {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} ({lines} line(s))",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "due {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… and {count} more.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Send *balance* and name to see one customer debt.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Pass one person match:\n{list}\n\nSend the full name.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} dey owe {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Last pay {amount} on {date}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "{name} number na {phone} now: receipt and reminder fit reach dem.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*: the debt wey customers dey owe you",
+      "reviewed": false
+    },
     "wa.table.form": {
       "text": "{table}: tap *{cta}* to enter the {count} detail(s) for the row; you go confirm before I add am. Send *cancel* to stop.",
       "reviewed": false

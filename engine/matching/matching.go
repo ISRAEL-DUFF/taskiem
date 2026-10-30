@@ -299,8 +299,8 @@ func (m *Matcher) suggest(ctx context.Context, tenant uuid.UUID, e entry) error 
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND status IN ('sent', 'part_paid', 'overdue')
-			ORDER BY sent_at DESC LIMIT 500`, tenant)
+		rows, err := tx.Query(ctx, `SELECT id FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
+			ORDER BY COALESCE(sent_at, recorded_at) DESC LIMIT 500`, tenant)
 		if err != nil {
 			return err
 		}

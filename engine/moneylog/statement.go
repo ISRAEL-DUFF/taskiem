@@ -358,6 +358,11 @@ func StatementColumns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel 
 // that cash moves through: "gtbank/current", "cash", "petty-cash".
 var channelRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,40}(/[a-z0-9][a-z0-9_.-]{0,40})?$`)
 
+// ValidChannel reports whether a name may name an account statements are
+// uploaded for (gtbank/current), as a transfer entered by hand names the
+// account it went into.
+func ValidChannel(name string) bool { return channelRe.MatchString(name) }
+
 // Entered is cash or an expense a person enters.
 type Entered struct {
 	Kind        string    `json:"kind"`      // cash or expense

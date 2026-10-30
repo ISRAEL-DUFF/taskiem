@@ -114,27 +114,31 @@ type Draft struct {
 
 // Invoice is an invoice as the business sees it, the customer opened.
 type Invoice struct {
-	ID                uuid.UUID  `json:"id"`
-	Number            string     `json:"number"`
-	Status            string     `json:"status"`
-	Customer          Customer   `json:"customer"`
-	Lines             []Line     `json:"lines"`
-	TotalKobo         int64      `json:"total_kobo"`
-	PaidKobo          int64      `json:"paid_kobo"`
-	DueKobo           int64      `json:"due_kobo"`
-	Currency          string     `json:"currency"`
-	DueOn             string     `json:"due_on,omitempty"`
-	Note              string     `json:"note,omitempty"`
-	Connection        string     `json:"connection"`
-	FeePaidBy         string     `json:"fee_paid_by"`
-	AllowPartPayments bool       `json:"allow_part_payments"`
-	SentAt            *time.Time `json:"sent_at"`
-	PaidAt            *time.Time `json:"paid_at"`
-	VoidedAt          *time.Time `json:"voided_at"`
-	VoidReason        string     `json:"void_reason,omitempty"`
-	CreatedBy         string     `json:"created_by"`
-	CreatedAt         time.Time  `json:"created_at"`
-	Payments          []Payment  `json:"payments,omitempty"`
+	ID                uuid.UUID `json:"id"`
+	Number            string    `json:"number"`
+	Status            string    `json:"status"`
+	Customer          Customer  `json:"customer"`
+	Lines             []Line    `json:"lines"`
+	TotalKobo         int64     `json:"total_kobo"`
+	PaidKobo          int64     `json:"paid_kobo"`
+	DueKobo           int64     `json:"due_kobo"`
+	Currency          string    `json:"currency"`
+	DueOn             string    `json:"due_on,omitempty"`
+	Note              string    `json:"note,omitempty"`
+	Connection        string    `json:"connection"`
+	FeePaidBy         string    `json:"fee_paid_by"`
+	AllowPartPayments bool      `json:"allow_part_payments"`
+	// Kind is invoice, or credit: a notebook debt recorded in chat,
+	// recorded (RecordedAt) and open but not sent (book.go).
+	Kind       string     `json:"kind"`
+	RecordedAt *time.Time `json:"recorded_at,omitempty"`
+	SentAt     *time.Time `json:"sent_at"`
+	PaidAt     *time.Time `json:"paid_at"`
+	VoidedAt   *time.Time `json:"voided_at"`
+	VoidReason string     `json:"void_reason,omitempty"`
+	CreatedBy  string     `json:"created_by"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Payments   []Payment  `json:"payments,omitempty"`
 	// Amendments are the changes made to it after it was sent, each also
 	// a line (amendments.go).
 	Amendments []Amendment `json:"amendments,omitempty"`
@@ -196,6 +200,12 @@ type Settings struct {
 	AllowPartPayments bool   `json:"allow_part_payments"`
 	// AutoMatch: a strong suggestion is matched without asking (T5).
 	AutoMatch bool `json:"auto_match"`
+	// CreditDays is how long a customer has to pay a notebook debt (nil:
+	// no fixed time), and CreditTermsAt when the owner answered: until
+	// then no credit line has a due date (book.go). SaveSettings leaves
+	// them as they are; SetCreditTerms sets them.
+	CreditDays    *int       `json:"credit_days"`
+	CreditTermsAt *time.Time `json:"credit_terms_at"`
 }
 
 // Invoices runs a business's invoices.
@@ -278,8 +288,9 @@ func invalid(format string, a ...any) error {
 // has none.
 func GetSettings(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
 	st := Settings{Prefix: "INV-", NextNumber: 1, Connection: "main", FeePaidBy: "business"}
-	err := tx.QueryRow(ctx, `SELECT prefix, next_number, connection, fee_paid_by, allow_part_payments, auto_match FROM customer_invoice_settings WHERE tenant_id = $1`, tenant).
-		Scan(&st.Prefix, &st.NextNumber, &st.Connection, &st.FeePaidBy, &st.AllowPartPayments, &st.AutoMatch)
+	err := tx.QueryRow(ctx, `SELECT prefix, next_number, connection, fee_paid_by, allow_part_payments, auto_match, credit_days, credit_terms_at
+		FROM customer_invoice_settings WHERE tenant_id = $1`, tenant).
+		Scan(&st.Prefix, &st.NextNumber, &st.Connection, &st.FeePaidBy, &st.AllowPartPayments, &st.AutoMatch, &st.CreditDays, &st.CreditTermsAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return st, nil
 	}
@@ -349,13 +360,15 @@ func nextNumber(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, Setti
 // --- reading ---
 
 const cols = `id, number, status, customer, subject_id, lines, total_kobo, paid_kobo, currency, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id`
+	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id,
+	kind, recorded_at`
 
 func scan(r pgx.Row) (Invoice, error) {
 	var x Invoice
 	var cust, lines, token []byte
 	err := r.Scan(&x.ID, &x.Number, &x.Status, &cust, &x.subject, &lines, &x.TotalKobo, &x.PaidKobo, &x.Currency, &x.DueOn,
-		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID)
+		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID,
+		&x.Kind, &x.RecordedAt)
 	if err != nil {
 		return x, err
 	}
@@ -466,7 +479,8 @@ func check(d Draft) ([]Line, int64, error) {
 	if d.Customer.Name == "" || len(d.Customer.Name) > 120 {
 		return nil, 0, invalid("the customer's name is required (up to 120 characters)")
 	}
-	if d.Customer.Phone == "" && d.Customer.Email == "" {
+	// A customer of the debtor book may have neither (book.go).
+	if d.Customer.Phone == "" && d.Customer.Email == "" && !strings.HasPrefix(d.Customer.Key, BookKeyPrefix) {
 		return nil, 0, invalid("give the customer's phone number or email, to send the invoice to")
 	}
 	if d.Customer.Email != "" {
@@ -962,8 +976,14 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		if err != nil {
 			return err
 		}
-		if x.SentAt == nil {
+		if x.SentAt == nil && x.RecordedAt == nil {
 			return fmt.Errorf("%w: invoice %s has not been sent", ErrState, x.Number)
+		}
+		// A notebook debt may have no phone or email yet: nothing to send
+		// it to, which is not a failure (a receipt for cash on it).
+		if x.Customer.Phone == "" && x.Customer.Email == "" {
+			out["number"], out["queued"], out["sent"], out["reason"] = x.Number, []string{}, false, "no_address"
+			return nil
 		}
 		if strings.Contains(text, "{link}") {
 			t, err := s.token(ctx, tx, tenant, &x)
@@ -991,7 +1011,7 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		if err != nil {
 			return err
 		}
-		out["number"], out["queued"] = x.Number, queued
+		out["number"], out["queued"], out["sent"] = x.Number, queued, len(queued) > 0
 		if over {
 			out["sms_over_allowance"] = true
 		}
@@ -1347,7 +1367,7 @@ func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, w
 	case "overdue":
 		q = `SELECT number, 'overdue', total_kobo, paid_kobo, to_char(due_on, 'YYYY-MM-DD'), paid_at,
 			((now() AT TIME ZONE 'Africa/Lagos')::date - due_on)
-			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('sent', 'part_paid', 'overdue')
+			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
 			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
 			ORDER BY due_on, number LIMIT $2`
 		args = []any{tenant, limit}

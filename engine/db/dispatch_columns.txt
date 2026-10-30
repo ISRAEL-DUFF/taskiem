@@ -252,6 +252,7 @@ customer_invoices.customer_key
 customer_invoices.due_on
 customer_invoices.fee_paid_by
 customer_invoices.id
+customer_invoices.kind
 customer_invoices.lines
 customer_invoices.note
 customer_invoices.number
@@ -259,6 +260,7 @@ customer_invoices.page_token
 customer_invoices.page_token_hash
 customer_invoices.paid_at
 customer_invoices.paid_kobo
+customer_invoices.recorded_at
 customer_invoices.run_id
 customer_invoices.sent_at
 customer_invoices.status
