@@ -356,3 +356,146 @@ func BankCode(banks []map[string]any, name string) (string, bool) {
 	}
 	return code, code != ""
 }
+
+// Notice is what one side of a link tells the other about a document.
+type Notice struct {
+	ID         uuid.UUID `json:"id"`
+	Link       uuid.UUID `json:"link"`
+	From       string    `json:"from"`
+	Kind       string    `json:"kind"` // declared, queried, resolved
+	Reference  string    `json:"reference"`
+	AmountKobo *int64    `json:"amount_kobo,omitempty"`
+	How        string    `json:"how,omitempty"`
+	Note       string    `json:"note,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// putNoticeTx writes a notice into the business in scope: the other side,
+// entered through EnterTx.
+func putNoticeTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, n *Notice) error {
+	n.ID = uuid.Must(uuid.NewV7())
+	null := func(s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
+	return tx.QueryRow(ctx, `INSERT INTO link_notices (id, tenant_id, link_id, from_name, kind, reference, amount_kobo, how, note)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING created_at`,
+		n.ID, tenant, n.Link, n.From, n.Kind, n.Reference, n.AmountKobo, null(n.How), null(n.Note)).Scan(&n.CreatedAt)
+}
+
+// DeclarePaidTx records the buyer's own word that it paid a bill outside
+// Taskiem (§6.2): declared_paid_kobo, never the seller's paid_kobo. The
+// seller is told, through the one door: the transaction's last writes.
+func DeclarePaidTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, bill string, amountKobo int64, how, note string, by Actor) (Bill, Notice, uuid.UUID, error) {
+	if amountKobo <= 0 || (how != "transfer" && how != "cash" && how != "other") || len(note) > 500 {
+		return Bill{}, Notice{}, uuid.Nil, fmt.Errorf("%w: an amount, and how: transfer, cash or other", ErrInvalid)
+	}
+	b, err := GetBillTx(ctx, tx, bill)
+	if err != nil {
+		return b, Notice{}, uuid.Nil, err
+	}
+	if b.Status == "void" {
+		return b, Notice{}, uuid.Nil, fmt.Errorf("%w: the supplier cancelled this invoice", ErrState)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE bills SET declared_paid_kobo = declared_paid_kobo + $2 WHERE id = $1`, b.ID, amountKobo); err != nil {
+		return b, Notice{}, uuid.Nil, err
+	}
+	b.DeclaredPaidKobo += amountKobo
+	n, seller, err := tellOther(ctx, tx, buyer, b.LinkID, Notice{Kind: "declared", Reference: b.Reference, AmountKobo: &amountKobo, How: how, Note: note},
+		"link.bill.declared", by, nil)
+	return b, n, seller, err
+}
+
+// QueryBillTx marks a bill queried (§8) and flags the seller's invoice so
+// its oldest-first matching passes over it, telling the seller, through
+// the one door.
+func QueryBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, bill, reason string, by Actor) (Bill, Notice, uuid.UUID, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" || len(reason) > 500 {
+		return Bill{}, Notice{}, uuid.Nil, fmt.Errorf("%w: say what is wrong with the bill (up to 500 characters)", ErrInvalid)
+	}
+	b, err := GetBillTx(ctx, tx, bill)
+	if err != nil {
+		return b, Notice{}, uuid.Nil, err
+	}
+	if b.Status == "void" || b.Status == "paid" {
+		return b, Notice{}, uuid.Nil, fmt.Errorf("%w: the bill is %s", ErrState, map[bool]string{true: "cancelled", false: "paid"}[b.Status == "void"])
+	}
+	if b.Disputed {
+		return b, Notice{}, uuid.Nil, fmt.Errorf("%w: the bill is queried already", ErrState)
+	}
+	if err := tx.QueryRow(ctx, `UPDATE bills SET disputed = true WHERE id = $1 RETURNING status`, b.ID).Scan(&b.Status); err != nil {
+		return b, Notice{}, uuid.Nil, err
+	}
+	b.Disputed = true
+	var source uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT source_id FROM bills WHERE id = $1`, b.ID).Scan(&source); err != nil {
+		return b, Notice{}, uuid.Nil, err
+	}
+	n, seller, err := tellOther(ctx, tx, buyer, b.LinkID, Notice{Kind: "queried", Reference: b.Reference, Note: reason}, "link.bill.queried", by,
+		func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE customer_invoices SET disputed = true WHERE id = $1`, source)
+			return err
+		})
+	return b, n, seller, err
+}
+
+// ResolveQueryTx settles a buyer's query on an invoice, as its seller
+// (§8): the invoice is matched oldest-first again, and the buyer's bill is
+// no longer queried, through the one door.
+func ResolveQueryTx(ctx context.Context, tx pgx.Tx, seller, invoice uuid.UUID, reference, buyerKey, note string, by Actor) (Notice, uuid.UUID, error) {
+	buyer, ok := BuyerOf(buyerKey)
+	if !ok {
+		return Notice{}, uuid.Nil, fmt.Errorf("%w: the invoice is not to a linked business", ErrState)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE customer_invoices SET disputed = false WHERE id = $1 AND disputed`, invoice)
+	if err != nil {
+		return Notice{}, uuid.Nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return Notice{}, uuid.Nil, fmt.Errorf("%w: the invoice is not queried", ErrState)
+	}
+	list, _, err := ListTx(ctx, tx)
+	if err != nil {
+		return Notice{}, uuid.Nil, err
+	}
+	link := uuid.Nil
+	for _, l := range list {
+		if l.Business == buyer && l.State == Active {
+			link = l.ID
+		}
+	}
+	if link == uuid.Nil {
+		return Notice{}, buyer, nil // the link ended: the bill stays as it was
+	}
+	n, _, err := tellOther(ctx, tx, seller, link, Notice{Kind: "resolved", Reference: reference, Note: strings.TrimSpace(note)}, "link.bill.resolved", by,
+		func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE bills SET disputed = false WHERE link_id = $1 AND source_id = $2`, link, invoice)
+			return err
+		})
+	return n, buyer, err
+}
+
+// tellOther enters the other side of link and writes the notice there,
+// after then (a write of that event into the other side's own rows).
+// The caller's own writes come first: the scope is the other side's
+// from here on.
+func tellOther(ctx context.Context, tx pgx.Tx, me, link uuid.UUID, n Notice, action string, by Actor, then func(pgx.Tx) error) (Notice, uuid.UUID, error) {
+	if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, me).Scan(&n.From); err != nil {
+		return n, uuid.Nil, err
+	}
+	detail, _ := json.Marshal(map[string]any{"reference": n.Reference})
+	other, err := EnterTx(ctx, tx, link, action, detail, by)
+	if err != nil {
+		return n, uuid.Nil, err
+	}
+	n.Link = link
+	if then != nil {
+		if err := then(tx); err != nil {
+			return n, other, err
+		}
+	}
+	return n, other, putNoticeTx(ctx, tx, other, &n)
+}

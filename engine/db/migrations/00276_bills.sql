@@ -107,6 +107,7 @@ GRANT SELECT (tenant_id, amount_kobo, token, status, created_at, paired_at) ON b
 -- An invoice the buyer queried (§8): its bill is disputed, and oldest-first
 -- matching passes over it (money that names it still pays it).
 ALTER TABLE customer_invoices ADD COLUMN disputed boolean NOT NULL DEFAULT false;
+GRANT UPDATE (disputed) ON customer_invoices TO taskiem_app;
 
 -- Pairing (§5.3): the token of the one unpaired payout of an amount the
 -- linked buyer started in the last three days, for a credit into the
@@ -158,6 +159,29 @@ ALTER TABLE bill_pay_settings FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON bill_pay_settings TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON bill_pay_settings TO taskiem_app;
+
+-- What one side of a link tells the other about a document (§6.2, §8):
+-- the buyer says it paid outside Taskiem, or queries a bill; the seller
+-- settles the query. Written into the side told, through
+-- taskiem_link_enter; that side's people are told from it, in its scope.
+CREATE TABLE link_notices (
+  id           uuid PRIMARY KEY,
+  tenant_id    uuid NOT NULL REFERENCES tenants(id),      -- the side told
+  link_id      uuid NOT NULL REFERENCES business_links(id),
+  from_name    text NOT NULL CHECK (length(from_name) BETWEEN 1 AND 200),
+  kind         text NOT NULL CHECK (kind IN ('declared', 'queried', 'resolved')),
+  reference    text NOT NULL CHECK (length(reference) BETWEEN 1 AND 40),
+  amount_kobo  bigint CHECK (amount_kobo > 0),
+  how          text CHECK (how IN ('transfer', 'cash', 'other')),
+  note         text CHECK (length(note) <= 500),
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX link_notices_tenant ON link_notices (tenant_id, created_at);
+ALTER TABLE link_notices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE link_notices FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON link_notices TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT ON link_notices TO taskiem_app;
 
 -- The seller's invoices waiting to be mirrored: the seller's own rows.
 CREATE TABLE link_mirrors_due (
@@ -217,6 +241,7 @@ ALTER TABLE customer_invoices DROP COLUMN disputed;
 DROP TRIGGER customer_invoice_link_mirror ON customer_invoices;
 DROP FUNCTION taskiem_link_mirror_note();
 DROP TABLE link_mirrors_due;
+DROP TABLE link_notices;
 DROP TABLE bill_pay_settings;
 DROP TABLE bill_payments;
 DROP TRIGGER bill_status ON bills;

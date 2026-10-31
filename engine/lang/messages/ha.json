@@ -4135,6 +4135,42 @@
     "bill.pay_page": {
       "text": "Ko ka biya da kati ko canja kuɗi a shafinsa: {link}",
       "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "ta canja kuɗi",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "da tsabar kuɗi",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "ta wata hanya",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} ya ce ya biya {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* ya ce ya biya {amount} {how} don {reference}. Za a lissafa shi idan kuɗin ya iso gare ku kuma aka haɗa shi.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} ya yi tambaya kan {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* ya yi tambaya kan {reference}: {note}. Kuɗin da bai ambace shi ba ba za a lissafa shi ba har sai kun warware tambayar a takardar kuɗin.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} ya warware tambayarku kan {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* ya warware tambayarku kan {reference}. {note}",
+      "reviewed": false
     }
   }
 }

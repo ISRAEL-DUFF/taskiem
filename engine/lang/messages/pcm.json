@@ -4135,6 +4135,42 @@
     "bill.pay_page": {
       "text": "Or pay with card or transfer for im page: {link}",
       "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "by transfer",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "with cash",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "another way",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} talk say e don pay {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* talk say e don pay {amount} {how} for {reference}. E go count for the invoice when the money reach you and dem match am.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} query {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* query {reference}: {note}. Money wey no name am no go count for am until you settle the query for the invoice.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} don settle your query for {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* don settle your query for {reference}. {note}",
+      "reviewed": false
     }
   }
 }

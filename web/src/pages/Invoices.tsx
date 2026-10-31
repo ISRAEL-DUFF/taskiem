@@ -1052,6 +1052,7 @@ export function InvoicePage() {
       {x && (
         <>
           <InvoiceHero invoice={x} />
+          {x.disputed && <SettleQuery number={x.number} onDone={reload} />}
           {sent && (
             <div className="notice" role="status" data-testid="sent">
               {sentLines(sent).map((l) => (
@@ -1653,5 +1654,35 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
         </button>
       )}
     </form>
+  );
+}
+
+/** A linked buyer's query on this invoice (business links): money that
+ * does not name it is not counted towards it until the query is settled. */
+function SettleQuery({ number, onDone }: { number: string; onDone: () => void }) {
+  const { can } = useAuth();
+  const [note, setNote] = useState("");
+  const act = useAction();
+  return (
+    <section className="card" aria-labelledby="inv-query" data-testid="invoice-query">
+      <h2 id="inv-query">Queried by the customer</h2>
+      <p className="hint">Money that does not name this invoice is not counted towards it until you settle the query. Their message is in your notifications.</p>
+      <ErrorBox error={act.error} />
+      {can("invoice.manage") && (
+        <>
+          <Field label="What you tell them" hint="Optional, such as a credit note on its way.">
+            <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy}
+            onClick={() => void act.run(async () => (await post(invoicePath(number, "/settle-query"), { note: note.trim() }), onDone()), "Query settled")}
+          >
+            Settle the query
+          </button>
+        </>
+      )}
+    </section>
   );
 }

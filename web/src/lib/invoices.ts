@@ -65,6 +65,8 @@ export interface InvoicePayment {
 
 /** One invoice (CustomerInvoice). */
 export interface CustomerInvoice {
+  /** A linked buyer queried it (business links): oldest-first matching passes over it. */
+  disputed?: boolean;
   id: string;
   number: string;
   status: InvoiceStatus;

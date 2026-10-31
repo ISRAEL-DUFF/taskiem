@@ -41,6 +41,9 @@ func (s *Server) billRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/bills/pay/setup", s.setupBillPay)
 	r.With(read).Get("/bills/{id}", s.getBill)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/pay", s.payBill)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/declare", s.declareBillPaid)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/query", s.queryBill)
+	r.With(manage, s.tenantWide).Post("/invoices/{id}/settle-query", s.settleInvoiceQuery)
 }
 
 type billsOut struct {
@@ -224,8 +227,15 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 // tellBill tells the buyer's people who may pay of a new bill, in the bell
 // and in chat, in the buyer's own scope.
 func (s *Server) tellBill(ctx context.Context, buyer uuid.UUID, b links.Mirror) {
+	s.tellPeople(ctx, buyer, "bill:"+b.Source.String(), "/bills", func(l lang.Tag) (string, string) { return billWords(l, b) })
+}
+
+// tellPeople tells the people of a business who may pay and answer for
+// its links (invoice.manage and link.manage), in the bell and in chat, in
+// that business's own scope.
+func (s *Server) tellPeople(ctx context.Context, tenant uuid.UUID, group, link string, words func(lang.Tag) (string, string)) {
 	var to []linkTold
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(PermInvoiceManage, PermLinkManage))
 		if err != nil {
 			return err
@@ -234,8 +244,8 @@ func (s *Server) tellBill(ctx context.Context, buyer uuid.UUID, b links.Mirror) 
 		if err != nil {
 			return err
 		}
-		title, body := billWords(lang.EN, b)
-		if err := notices.AddTx(ctx, tx, buyer, users, notices.Notice{Kind: notices.Setup, Title: title, Body: body, Link: "/bills", Group: "bill:" + b.Source.String()}); err != nil {
+		title, body := words(lang.EN)
+		if err := notices.AddTx(ctx, tx, tenant, users, notices.Notice{Kind: notices.Setup, Title: title, Body: body, Link: link, Group: group}); err != nil {
 			return err
 		}
 		for _, channel := range []string{"whatsapp", "telegram", "slack"} {
@@ -252,19 +262,34 @@ func (s *Server) tellBill(ctx context.Context, buyer uuid.UUID, b links.Mirror) 
 		return nil
 	})
 	if err != nil {
-		s.Logger.Warn("links: telling of a bill", "tenant", buyer, "err", err)
+		s.Logger.Warn("links: telling a business", "tenant", tenant, "err", err)
 		return
 	}
 	for _, t := range to {
-		ch, err := s.chatChannelFor(ctx, t.channel, buyer)
+		ch, err := s.chatChannelFor(ctx, t.channel, tenant)
 		if err != nil {
 			continue
 		}
-		title, body := billWords(s.chooseLang(ctx, buyer, t.addr, "").Tag, b)
+		title, body := words(s.chooseLang(ctx, tenant, t.addr, "").Tag)
 		if err := s.waSay(ctx, ch, t.addr, "", title+"\n"+body); err != nil {
-			s.Logger.Warn("links: a bill's chat message", "tenant", buyer, "err", err)
+			s.Logger.Warn("links: a chat message", "tenant", tenant, "err", err)
 		}
 	}
+}
+
+// tellNotice tells the other side's people what a notice says.
+func (s *Server) tellNotice(ctx context.Context, tenant uuid.UUID, n links.Notice, link string) {
+	s.background(ctx, "link notice", func(ctx context.Context) {
+		s.tellPeople(ctx, tenant, "notice:"+n.ID.String(), link, func(l lang.Tag) (string, string) {
+			amount := ""
+			if n.AmountKobo != nil {
+				amount = invoicing.Naira(*n.AmountKobo)
+			}
+			return tr(l, "bill.notice."+n.Kind+"_title", "from", n.From, "reference", n.Reference),
+				strings.TrimSpace(tr(l, "bill.notice."+n.Kind, "from", whatsapp.SafeText(n.From), "reference", n.Reference, "amount", amount,
+					"how", tr(l, "bill.how."+n.How), "note", whatsapp.SafeText(n.Note)))
+		})
+	})
 }
 
 // holdingAll are the built-in roles holding every one of perms.
@@ -656,4 +681,117 @@ func (s *Server) connectionBanks(ctx context.Context, tenant uuid.UUID, connecti
 		}
 	}
 	return banks, nil
+}
+
+// --- what each side says: paid outside Taskiem, a query, its settling ---
+
+type billDeclareIn struct {
+	AmountKobo int64  `json:"amount_kobo"`
+	How        string `json:"how"`
+	Note       string `json:"note"`
+}
+
+// declareBillPaid is POST /v1/bills/{id}/declare: the business's own word
+// that it paid outside Taskiem (§6.2). It is its own figure beside what
+// the supplier counted; the supplier is told.
+func (s *Server) declareBillPaid(w http.ResponseWriter, r *http.Request) {
+	var in billDeclareIn
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var b links.Bill
+	var n links.Notice
+	var seller uuid.UUID
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := auditTx(r, tx, "bill.declare", chi.URLParam(r, "id"), map[string]any{"amount_kobo": in.AmountKobo, "how": in.How}); err != nil {
+			return err
+		}
+		var err error
+		b, n, seller, err = links.DeclarePaidTx(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"), in.AmountKobo, in.How, strings.TrimSpace(in.Note),
+			links.Actor{Type: p.ActorType(), ID: p.Actor()})
+		return err
+	}); err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	s.tellNotice(r.Context(), seller, n, "/invoices/"+b.Reference)
+	writeJSON(w, http.StatusOK, b)
+}
+
+type billQueryIn struct {
+	Reason string `json:"reason"`
+}
+
+// queryBill is POST /v1/bills/{id}/query (§8): the bill is queried, not
+// paid from Taskiem until the query is settled, and the supplier's invoice
+// is passed over by its oldest-first matching; the supplier is told.
+func (s *Server) queryBill(w http.ResponseWriter, r *http.Request) {
+	var in billQueryIn
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var b links.Bill
+	var n links.Notice
+	var seller uuid.UUID
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := auditTx(r, tx, "bill.query", chi.URLParam(r, "id"), nil); err != nil {
+			return err
+		}
+		var err error
+		b, n, seller, err = links.QueryBillTx(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"), in.Reason, links.Actor{Type: p.ActorType(), ID: p.Actor()})
+		return err
+	}); err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	s.tellNotice(r.Context(), seller, n, "/invoices/"+b.Reference)
+	writeJSON(w, http.StatusOK, b)
+}
+
+type settleQueryIn struct {
+	Note string `json:"note"`
+}
+
+// settleInvoiceQuery is POST /v1/invoices/{id}/settle-query, the seller's
+// answer to a linked buyer's query (§8): the invoice is matched
+// oldest-first again and the buyer's bill is no longer queried; the buyer
+// is told.
+func (s *Server) settleInvoiceQuery(w http.ResponseWriter, r *http.Request) {
+	if !s.invoicesOn(w, r) {
+		return
+	}
+	var in settleQueryIn
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	p := principalFrom(r.Context())
+	var n links.Notice
+	var buyer uuid.UUID
+	var number string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		x, err := s.Invoices.Get(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+		if err != nil {
+			return invoiceErr(err)
+		}
+		number = x.Number
+		if err := auditTx(r, tx, "invoice.settle_query", x.Number, nil); err != nil {
+			return err
+		}
+		n, buyer, err = links.ResolveQueryTx(r.Context(), tx, p.TenantID, x.ID, x.Number, x.Customer.Key, in.Note, links.Actor{Type: p.ActorType(), ID: p.Actor()})
+		return err
+	}); err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	if n.ID != uuid.Nil {
+		s.tellNotice(r.Context(), buyer, n, "/bills")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"number": number, "settled": true})
 }

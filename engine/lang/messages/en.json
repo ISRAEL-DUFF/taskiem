@@ -5168,6 +5168,51 @@
       "text": "Or pay by card or transfer on its page: {link}",
       "reviewed": true,
       "context": "A bill's payment page"
+    },
+    "bill.how.transfer": {
+      "text": "by transfer",
+      "reviewed": true,
+      "context": "How a payment outside Taskiem was made"
+    },
+    "bill.how.cash": {
+      "text": "in cash",
+      "reviewed": true,
+      "context": "How a payment outside Taskiem was made"
+    },
+    "bill.how.other": {
+      "text": "another way",
+      "reviewed": true,
+      "context": "How a payment outside Taskiem was made"
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} says it paid {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer says it paid outside Taskiem"
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* says it paid {amount} {how} for {reference}. It counts towards the invoice when the money reaches you and is matched.",
+      "reviewed": true,
+      "context": "A linked buyer says it paid outside Taskiem"
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} queried {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer queried an invoice"
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* queried {reference}: {note}. Money that does not name it is not counted towards it until you settle the query on the invoice.",
+      "reviewed": true,
+      "context": "A linked buyer queried an invoice"
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} settled your query on {reference}",
+      "reviewed": true,
+      "context": "Notification title: the seller settled a buyer's query"
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* settled your query on {reference}. {note}",
+      "reviewed": true,
+      "context": "The seller settled a buyer's query; {note} is what they said, or nothing"
     }
   }
 }

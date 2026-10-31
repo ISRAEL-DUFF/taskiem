@@ -2,8 +2,9 @@ import { Link, useParams } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { billHero, billPath, billsDue, billStatus, canPay, sentLine, type Bill, type BillPaySettings } from "../lib/bills";
-import { dateLabel, naira } from "../lib/invoices";
-import { EmptyState, ErrorBox, fmtTime, Item, Items, PageHeader, Skeleton, useAction, useLoad } from "../ui";
+import { dateLabel, naira, toKobo } from "../lib/invoices";
+import { useState } from "react";
+import { EmptyState, ErrorBox, Field, fmtTime, Item, Items, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 
 // Bills (business links L1; docs/spec/business-links.md §6): linked
 // suppliers' invoices, in the buyer's business. The supplier's figures
@@ -128,6 +129,11 @@ export function BillPage() {
           )}
           {sentLine(b) && <p className="hint">{sentLine(b)}</p>}
           {can("invoice.manage") && canPay(b) && <PayFromTaskiem bill={b} onDone={reload} />}
+          {b.disputed && (
+            <div className="warning" role="note" data-testid="bill-queried">
+              You queried this bill. It is not paid from Taskiem until {b.supplier_name} settles the query.
+            </div>
+          )}
           {b.due_kobo > 0 && (b.pay_account_number || b.pay_link) && (
             <section className="card" aria-labelledby="bill-pay" data-testid="bill-pay">
               <h2 id="bill-pay">How to pay</h2>
@@ -175,6 +181,7 @@ export function BillPage() {
             </p>
             <p className="hint">Brought up to date {fmtTime(b.mirrored_at)}. The supplier's invoice is the record: a change to it shows here.</p>
           </section>
+          {can("invoice.manage") && b.status !== "void" && b.status !== "paid" && <BillActions bill={b} onDone={reload} />}
         </>
       )}
     </>
@@ -213,6 +220,78 @@ function PayFromTaskiem({ bill, onDone }: { bill: Bill; onDone: () => void }) {
             Set up paying bills
           </button>
         </>
+      )}
+    </section>
+  );
+}
+
+/** What the business says about a bill: paid outside Taskiem (its own
+ * record, the supplier told), or a query (the supplier told why). */
+function BillActions({ bill, onDone }: { bill: Bill; onDone: () => void }) {
+  const [open, setOpen] = useState<"declare" | "query">();
+  const [amount, setAmount] = useState("");
+  const [how, setHow] = useState("transfer");
+  const [reason, setReason] = useState("");
+  const act = useAction();
+  const close = () => (setOpen(undefined), act.clear());
+  return (
+    <section className="card" aria-labelledby="bill-more">
+      <h2 id="bill-more">Something else</h2>
+      {bill.declared_paid_kobo > 0 && <p className="hint">You said you paid {naira(bill.declared_paid_kobo)} outside Taskiem.</p>}
+      <div className="row-actions">
+        <button type="button" onClick={() => setOpen("declare")}>
+          Paid outside Taskiem
+        </button>
+        {!bill.disputed && (
+          <button type="button" onClick={() => setOpen("query")}>
+            Query this bill
+          </button>
+        )}
+      </div>
+      {open === "declare" && (
+        <Modal title="Paid outside Taskiem" onClose={close}>
+          <p className="hint">Your own record, and {bill.supplier_name} is told. It counts as paid when their Taskiem matches the money.</p>
+          <Field label="Amount (₦)">
+            <input inputMode="decimal" value={amount} placeholder="25,000" onChange={(e) => setAmount(e.target.value)} />
+          </Field>
+          <Field label="How">
+            <select value={how} onChange={(e) => setHow(e.target.value)}>
+              <option value="transfer">By transfer</option>
+              <option value="cash">In cash</option>
+              <option value="other">Another way</option>
+            </select>
+          </Field>
+          <ErrorBox error={act.error} />
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy}
+            onClick={() =>
+              void act
+                .run(async () => (await post(`${billPath(bill.id)}/declare`, { amount_kobo: toKobo(amount) ?? 0, how }), onDone()), "Recorded, and the supplier is told")
+                .then((ok) => ok && close())
+            }
+          >
+            Record it
+          </button>
+        </Modal>
+      )}
+      {open === "query" && (
+        <Modal title="Query this bill" onClose={close}>
+          <p className="hint">{bill.supplier_name} is told why. Until they settle it, the bill is not paid from Taskiem.</p>
+          <Field label="What is wrong">
+            <textarea rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
+          <ErrorBox error={act.error} />
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy || !reason.trim()}
+            onClick={() => void act.run(async () => (await post(`${billPath(bill.id)}/query`, { reason: reason.trim() }), onDone()), "Query sent").then((ok) => ok && close())}
+          >
+            Send the query
+          </button>
+        </Modal>
       )}
     </section>
   );

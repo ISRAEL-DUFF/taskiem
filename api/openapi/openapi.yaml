@@ -5521,6 +5521,138 @@ paths:
                     format: uuid
         default:
           $ref: '#/components/responses/Error'
+  /v1/bills/{id}/declare:
+    post:
+      operationId: declareBillPaid
+      tags:
+      - Links
+      summary: Say a bill was paid outside Taskiem
+      description: The business's own word, kept beside what the supplier counted (declared_paid_kobo), never in paid_kobo; the supplier is told.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo, how]
+              properties:
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                how:
+                  type: string
+                  enum: [transfer, cash, other]
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}/query:
+    post:
+      operationId: queryBill
+      tags:
+      - Links
+      summary: Query a bill
+      description: 'The bill is queried: not paid from Taskiem until the query is settled, and the supplier''s invoice is passed over by its oldest-first matching (money that names it still pays it). The supplier is told the reason.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/settle-query:
+    post:
+      operationId: settleInvoiceQuery
+      tags:
+      - Invoices
+      summary: Settle a linked buyer's query on an invoice
+      description: The invoice is matched oldest-first again and the buyer's bill is no longer queried; the buyer is told. 409 when it is not queried.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Settled
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [number, settled]
+                properties:
+                  number:
+                    type: string
+                  settled:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills/{id}:
     get:
       operationId: getBill

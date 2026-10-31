@@ -308,3 +308,76 @@ func TestLinkedMoneyNamesItsInvoice(t *testing.T) {
 	}
 	_ = buyer
 }
+
+// What each side says (§6.2, §8): the buyer says it paid outside Taskiem
+// (its own figure, the seller told); queries a bill (the bill queried,
+// Pay refused, the seller's invoice passed over by oldest-first, the
+// seller told); the seller settles the query (both cleared, the buyer
+// told).
+func TestBillDeclareAndQuery(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	const sellerOn, buyerOn = "+2348010000361", "+2348010000362"
+	w.bind(t, seller, sellerOn)
+	w.bind(t, buyer, buyerOn)
+	w.say(t, sellerOn, "links")
+	w.say(t, buyerOn, "links")
+	x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"amount_kobo": 4250000}, "Idempotency-Key", "b-1")
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", "s-1")
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.srv.WaitBackground()
+	num := x["number"].(string)
+
+	// Paid outside Taskiem: the buyer's own figure; the seller told.
+	before := len(w.graph.Sent(sellerOn))
+	b := buyer.must(200, "POST", "/v1/bills/"+num+"/declare", map[string]any{"amount_kobo": 1000000, "how": "transfer"})
+	if b["declared_paid_kobo"] != float64(1000000) || b["paid_kobo"] != float64(0) || b["status"] != "open" {
+		t.Errorf("declared: %v", b)
+	}
+	buyer.must(400, "POST", "/v1/bills/"+num+"/declare", map[string]any{"amount_kobo": 1000000, "how": "barter"})
+	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* says it paid ₦10,000 by transfer for "+num) {
+		t.Errorf("the seller told: %+v", told)
+	}
+
+	// Queried: the bill, the seller's invoice; Pay refused; the seller told.
+	before = len(w.graph.Sent(sellerOn))
+	if b := buyer.must(200, "POST", "/v1/bills/"+num+"/query", map[string]any{"reason": "We got 4 cartons, not 5"}); b["status"] != "disputed" || b["disputed"] != true {
+		t.Errorf("queried: %v", b)
+	}
+	buyer.must(409, "POST", "/v1/bills/"+num+"/query", map[string]any{"reason": "again"})
+	var disputed bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT disputed FROM customer_invoices WHERE tenant_id = $1 AND number = $2`, sellerID, num).Scan(&disputed); err != nil || !disputed {
+		t.Errorf("the seller's invoice flagged: %v %v", disputed, err)
+	}
+	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* queried "+num+": We got 4 cartons, not 5") {
+		t.Errorf("the seller told of the query: %+v", told)
+	}
+	// The mirror after the flag keeps the query (the buyer's own).
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/"+num, nil); b["status"] != "disputed" {
+		t.Errorf("after the mirror: %v", b)
+	}
+
+	// Settled by the seller: both cleared; the buyer told.
+	before = len(w.graph.Sent(buyerOn))
+	seller.must(200, "POST", "/v1/invoices/"+num+"/settle-query", map[string]any{"note": "A credit note is coming for the fifth carton."})
+	seller.must(409, "POST", "/v1/invoices/"+num+"/settle-query", nil)
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT disputed FROM customer_invoices WHERE tenant_id = $1 AND number = $2`, sellerID, num).Scan(&disputed); err != nil || disputed {
+		t.Errorf("the seller's invoice after settling: %v %v", disputed, err)
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/"+num, nil); b["status"] != "open" || b["disputed"] != false {
+		t.Errorf("the bill after settling: %v", b)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Stores* settled your query on "+num+". A credit note is coming") {
+		t.Errorf("the buyer told: %+v", told)
+	}
+}

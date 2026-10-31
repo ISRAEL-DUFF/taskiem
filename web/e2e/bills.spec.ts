@@ -68,4 +68,23 @@ test("a linked supplier's invoice arrives as a bill", async ({ browser }) => {
   await expect(buyer.getByTestId("bill-hero")).toContainText(sellerName);
   await axeBoth(buyer, "a bill");
   expect(await buyer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  // Ada queries it; Dangote sees the query on the invoice and settles it.
+  await buyer.getByRole("button", { name: "Query this bill" }).click();
+  const sheet = buyer.getByRole("dialog");
+  await sheet.getByLabel("What is wrong").fill("We got 4 cartons, not 5");
+  await axeBoth(buyer, "the query sheet");
+  await sheet.getByRole("button", { name: "Send the query" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(buyer.getByTestId("bill-queried")).toBeVisible();
+  await expect(buyer.getByTestId("bill-hero")).toContainText("Queried");
+  await seller.reload();
+  await expect(seller.getByTestId("invoice-query")).toBeVisible();
+  await axeBoth(seller, "a queried invoice");
+  await seller.getByLabel("What you tell them").fill("A credit note is coming.");
+  await seller.getByRole("button", { name: "Settle the query" }).click();
+  await expect(seller.getByTestId("invoice-query")).toBeHidden();
+  await buyer.reload();
+  await expect(buyer.getByTestId("bill-queried")).toHaveCount(0);
+  await expect(buyer.getByTestId("bill-hero")).toContainText("To pay");
 });

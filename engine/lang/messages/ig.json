@@ -4135,6 +4135,42 @@
     "bill.pay_page": {
       "text": "Ma ọ bụ kwụọ site na kaadị ma ọ bụ nnyefe n'ibe ya: {link}",
       "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "site na nnyefe",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "ụzọ ọzọ",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} kwuru na ọ kwụọla {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* kwuru na ọ kwụọla {amount} {how} maka {reference}. A ga-agụ ya mgbe ego ahụ ruru gị ma jikọọ ya.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} jụrụ ajụjụ maka {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* jụrụ ajụjụ maka {reference}: {note}. Ego na-akpọghị ya aha agaghị agụ maka ya ruo mgbe i doziri ajụjụ ahụ n'akwụkwọ ụgwọ.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} edozila ajụjụ gị maka {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* edozila ajụjụ gị maka {reference}. {note}",
+      "reviewed": false
     }
   }
 }

@@ -4135,6 +4135,42 @@
     "bill.pay_page": {
       "text": "Tàbí sanwó pẹ̀lú káàdì tàbí ìfiránṣẹ́ lórí ojú-ìwé rẹ̀: {link}",
       "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "nípa ìfiránṣẹ́ owó",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "ní owó ọwọ́",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "ọ̀nà míràn",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} sọ pé òun ti san {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* sọ pé òun ti san {amount} {how} fún {reference}. A ó kà á nígbà tí owó bá dé ọ̀dọ̀ yín tí a sì bá a mu.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} bèèrè nípa {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* bèèrè nípa {reference}: {note}. Owó tí kò dárúkọ rẹ̀ kò ní kà sí i títí ẹ ó fi yanjú ìbéèrè náà lórí ìwé owó.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} ti yanjú ìbéèrè yín lórí {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* ti yanjú ìbéèrè yín lórí {reference}. {note}",
+      "reviewed": false
     }
   }
 }
