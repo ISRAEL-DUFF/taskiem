@@ -3,6 +3,8 @@ import { buyerSteps, linesTotal, sameName, sellerAsk, sellerLine, sellerSteps, t
 
 const order: TradeOrder = {
   id: "o1",
+  order_reference: "P-ABC123",
+  order_status: "received",
   link: "l1",
   buyer: "b1",
   buyer_name: "Ada's Kitchen",

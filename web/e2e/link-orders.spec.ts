@@ -32,6 +32,9 @@ const json = (body: unknown, status = 200) => ({ status, contentType: "applicati
 
 const order = {
   id: "o1",
+  order_reference: "P-7QX4KD",
+  order_status: "received",
+  fulfilment: "delivery",
   link: "l1",
   buyer: "b1",
   buyer_name: "Ada's Kitchen",
@@ -88,7 +91,7 @@ test("an order from a linked business, answered by its seller", async ({ page })
 
   // It waits on the Orders page, then on its own.
   await page.goto("/storefront/orders");
-  await expect(page.getByTestId("trade-open")).toContainText("Ada's Kitchen");
+  await expect(page.getByTestId("trade-open")).toContainText("Orders from linked businesses");
   await page.goto("/trade-orders");
   await expect(page.getByTestId("trade-order")).toContainText("P-7QX4KD");
   await expect(page.getByTestId("trade-order")).toContainText("New");

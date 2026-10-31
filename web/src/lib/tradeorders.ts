@@ -21,7 +21,16 @@ export interface TradeLine {
 }
 
 export interface TradeOrder {
+  /** The storefront order's: a linked order is on the Orders page with
+   * every order, under order_reference (the buyer's reference unless
+   * another order had it). */
   id: string;
+  order_reference: string;
+  /** The storefront order's own status (status says it as a linked order). */
+  order_status: string;
+  /** delivery when the buyer said where its orders go: the riders take it. */
+  fulfilment?: "pickup" | "delivery";
+  ready_at?: string;
   link: string;
   buyer: string;
   buyer_name: string;

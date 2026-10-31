@@ -55,6 +55,8 @@ export interface OrderLine {
 
 export type OrderStatus =
   | "received"
+  | "proposed"
+  | "changed"
   | "awaiting_payment"
   | "paid"
   | "accepted"
@@ -92,11 +94,12 @@ export interface Customer {
   best_time?: string;
 }
 
-/** An order, enquiry or call-back (StorefrontOrder). */
+/** An order, enquiry or call-back (StorefrontOrder); trade is a linked
+ * business's order (business links), its customer that business. */
 export interface Order {
   id: string;
   reference: string;
-  kind: FormKind;
+  kind: FormKind | "trade";
   status: OrderStatus;
   customer: Customer;
   basket: OrderLine[] | null;
@@ -422,6 +425,8 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: Tone }> =
     dispatched: { label: "With a rider", tone: "info" },
     on_the_way: { label: "On the way", tone: "info" },
     arrived: { label: "At the door", tone: "info" },
+    proposed: { label: "Waiting for the business to confirm", tone: "info" },
+    changed: { label: "Waiting for the business to accept your change", tone: "info" },
   };
 
 /** A status as the list shows it, with the badge's colour. */
@@ -456,11 +461,12 @@ export function ordersPath(filter: string): string {
     : "/v1/storefront/orders";
 }
 
-export const KIND_LABEL: Record<FormKind, string> = {
+export const KIND_LABEL: Record<FormKind | "trade", string> = {
   order: "Order",
   enquiry: "Question",
   callback: "Call-back",
   booking: "Booking",
+  trade: "From a linked business",
 };
 
 /** How long ago, in words: "just now", "5 min ago", "2 hours ago", "yesterday", "3 days ago", then the date. */

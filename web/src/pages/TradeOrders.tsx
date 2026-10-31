@@ -34,28 +34,16 @@ function useOwnItems() {
   );
 }
 
-/** A card of the orders linked businesses sent, still needing us (on the
- * Orders page); nothing when there are none. */
+/** On the Orders page, where linked businesses' orders are among the
+ * rest: the way to their own page (a change, what was delivered, an order
+ * drafted for a business); nothing while there are none. */
 export function TradeOrdersCard() {
-  const list = useLoad(() => get<{ orders: TradeOrder[] }>("/v1/trade-orders?open=true").catch(() => ({ orders: [] })), []);
-  const open = list.data?.orders ?? [];
-  if (open.length === 0) return null;
+  const list = useLoad(() => get<{ orders: TradeOrder[] }>("/v1/trade-orders").catch(() => ({ orders: [] })), []);
+  if ((list.data?.orders.length ?? 0) === 0) return null;
   return (
-    <section className="card" aria-labelledby="trade-open" data-testid="trade-open">
-      <div className="toolbar" style={{ marginBottom: 6 }}>
-        <h2 id="trade-open" className="grow" style={{ margin: 0 }}>
-          From linked businesses
-        </h2>
-        <Link className="button small" to="/trade-orders">
-          All of them
-        </Link>
-      </div>
-      <Items label="Orders from linked businesses">
-        {open.slice(0, 5).map((o) => (
-          <TradeRow key={o.id} o={o} />
-        ))}
-      </Items>
-    </section>
+    <p className="hint" data-testid="trade-open">
+      Orders from businesses you are linked with are among these. <Link to="/trade-orders">Orders from linked businesses</Link> has what is theirs alone.
+    </p>
   );
 }
 
@@ -173,6 +161,14 @@ export function TradeOrderPage() {
               <h2 id="trade-change">Your change</h2>
               <LinesTable lines={o.change} />
             </section>
+          )}
+          {(o.status === "accepted" || o.status === "ready" || o.status === "dispatched" || o.status === "delivered") && (
+            <p>
+              <Link to={`/storefront/orders/${encodeURIComponent(o.order_reference)}`}>
+                {o.fulfilment === "delivery" ? "Its delivery and riders" : "It on the Orders page"}
+              </Link>
+              {o.fulfilment === "delivery" ? `: a rider takes it to where ${o.buyer_name} said.` : "."}
+            </p>
           )}
           {o.invoice_id && (
             <p>

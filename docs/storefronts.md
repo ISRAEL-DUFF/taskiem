@@ -170,6 +170,8 @@ The run's `trigger.body` holds:
 - `price_changed`: waiting for the customer to confirm new prices ([the price check](#the-price-check));
 - `declined`, `refund_due`, `refunded`, `expired`, `cancelled`, `completed`, and `no_show` for a booking.
 
+An order from a business you are linked with on Taskiem is listed with the rest, of the kind `trade`, the business as its customer: it starts your order workflow, lowers your stock when accepted, and your riders deliver it to where the business said. It needs no page of yours and takes no payment here (its invoice becomes the business's bill), and it may also be `proposed` (you drafted it for them) or `changed` (you asked to change it). Its items and what was delivered of each are on its linked order ([business links](spec/business-links.md) §16.3).
+
 ### Payments and matching
 
 An order's payment is [matched](matching.md) to it as an invoice's is, and listed on the order page under **Money matched**, with how it was matched.

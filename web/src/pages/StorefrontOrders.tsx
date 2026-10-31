@@ -242,7 +242,7 @@ export function StorefrontOrders() {
                   ? "refund"
                   : o.kind === "booking"
                     ? "clock"
-                    : o.kind === "order"
+                    : o.kind === "order" || o.kind === "trade"
                       ? "orders"
                       : "inbox"
               }
@@ -534,7 +534,18 @@ export function StorefrontOrder() {
               </>
             )}
           </section>
-          {o.kind === "order" && (
+          {o.kind === "trade" && (
+            <section className="card" aria-labelledby="order-linked" data-testid="order-linked">
+              <h2 id="order-linked">From a linked business</h2>
+              <p className="hint">
+                {o.customer.name || "A business"} ordered on Taskiem. Its items, a change to them, and what was delivered of each are on the linked order.
+              </p>
+              <Link className="button" to={`/trade-orders/${encodeURIComponent(o.reference)}`}>
+                Open the linked order
+              </Link>
+            </section>
+          )}
+          {(o.kind === "order" || o.kind === "trade") && (
             <OrderDelivery
               reference={o.reference}
               delivery={o.fulfilment === "delivery"}
@@ -586,7 +597,7 @@ export function StorefrontOrder() {
 /** The top of an order's or a booking's page, on pine: its total, how it is
  * paid, the customer and when. Questions and call-backs carry no money and have none. */
 function OrderHero({ o }: { o: Order }) {
-  if (o.kind !== "order" && o.kind !== "booking") return null;
+  if (o.kind !== "order" && o.kind !== "booking" && o.kind !== "trade") return null;
   const booking = o.kind === "booking";
   const total = orderTotal(o);
   return (

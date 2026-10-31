@@ -206,7 +206,49 @@ export function StorefrontSuppliers() {
         />
       )}
       <LinkedSuppliersOwed />
+      <DeliverTo />
     </>
+  );
+}
+
+/** Where linked suppliers deliver the business's orders: carried to each
+ * order to them, where their rider takes it. */
+function DeliverTo() {
+  const cur = useLoad(() => get<{ address: string; phone: string }>("/v1/stock/deliver-to"), []);
+  if (!cur.data) return null;
+  return <DeliverToForm initial={cur.data} onSaved={cur.reload} />;
+}
+
+function DeliverToForm({ initial, onSaved }: { initial: { address: string; phone: string }; onSaved: () => void }) {
+  const [address, setAddress] = useState(initial.address);
+  const [phone, setPhone] = useState(initial.phone);
+  const act = useAction();
+  return (
+    <section className="card" aria-labelledby="suppliers-deliver" data-testid="deliver-to">
+      <h2 id="suppliers-deliver">Where linked suppliers deliver</h2>
+      <p className="hint">
+        Orders to suppliers on Taskiem carry it, and their rider brings them here. Leave it empty and you pick orders up.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(async () => (await put("/v1/stock/deliver-to", { address: address.trim(), phone: phone.trim() }), onSaved()), "Saved");
+        }}
+      >
+        <Field label="Address">
+          <input value={address} maxLength={300} placeholder="12 Admiralty Way, Lekki" onChange={(e) => setAddress(e.target.value)} autoComplete="street-address" />
+        </Field>
+        <Field label="Number the rider calls at the door">
+          <input value={phone} inputMode="tel" placeholder="0803 123 4567" onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+        </Field>
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button type="submit" className="primary" disabled={act.busy || (address === initial.address && phone === initial.phone)}>
+            Save
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 
