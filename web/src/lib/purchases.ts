@@ -81,7 +81,7 @@ export interface Purchase {
   /** Sent to a linked supplier through this link; the supplier's side,
    * mirrored, and our own cancel request and Not all came. */
   link_id?: string;
-  seller_status?: "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
+  seller_status?: "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
   seller_note?: string;
   change?: PurchaseLine[];
   delivered_at?: string;
@@ -143,7 +143,7 @@ export function purchaseSub(p: Purchase): string {
 /** What the order's buttons may do in its status. */
 export function purchaseActions(p: Purchase) {
   return {
-    send: p.status === "drafted",
+    send: p.status === "drafted" && p.seller_status !== "proposed",
     confirm: p.status === "sent" && !p.link_id,
     receive:
       p.status === "sent" ||

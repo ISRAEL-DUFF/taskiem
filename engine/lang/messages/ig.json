@@ -4335,6 +4335,30 @@
     "order.link.open": {
       "text": "{reason}. Mepee iwu ahụ na Taskiem ka ị mee ya.",
       "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} zitere iwu {reference}, a nabatala ya",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* nyere iwu {note}. A nabatala ya, dịka unu siri tọọ ya maka ha.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} deere unu iwu {reference}",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* deere unu iwu: {note}. Kwenye ya, ma ọ bụ kagbuo ya, na Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} kwenyere {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* kwenyere iwu {reference} unu deere ha. A nabatala ya.",
+      "reviewed": false
     }
   }
 }

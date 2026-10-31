@@ -566,6 +566,12 @@ type Purchase struct {
 	ShortAt       *time.Time     `json:"short_at,omitempty"`
 }
 
+// Proposed reports whether a linked supplier drafted the order for us,
+// waiting for our Confirm (docs/spec/business-links.md §7).
+func (x Purchase) Proposed() bool {
+	return x.SellerStatus != nil && *x.SellerStatus == "proposed" && x.Status == Drafted
+}
+
 // Open reports whether the order may still be received.
 func (x Purchase) Open() bool {
 	return x.Status == Drafted || x.Status == Sent || x.Status == Confirmed || x.Status == PartReceived
@@ -823,6 +829,9 @@ func (p *Purchases) SendTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID,
 		}
 		return x, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
 	}
+	if x.Proposed() {
+		return x, fmt.Errorf("%w: %s drafted %s for you; confirm it on its page, saying which of your items each line is", ErrPurchase, x.Supplier, x.Reference)
+	}
 	s, err := SettingsTx(ctx, tx, tenant)
 	if err != nil {
 		return x, err
@@ -978,7 +987,7 @@ func CancelTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string
 	default:
 		return x, fmt.Errorf("%w: %s is %s; goods came in on it", ErrPurchase, x.Reference, StatusWords[x.Status])
 	}
-	if x.LinkID != nil && x.Status != Drafted {
+	if x.LinkID != nil && (x.Status != Drafted || x.Proposed()) {
 		return x, ErrLinked
 	}
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'cancelled', cancelled_at = now(), updated_at = now() WHERE tenant_id = $1 AND id = $2`,

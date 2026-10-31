@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -33,11 +34,14 @@ func (s *Server) linkOrderRoutes(r chi.Router) {
 	manage := s.need(PermStorefrontManage)
 	r.With(manage).Get("/trade-orders", s.listTradeOrders)
 	r.With(manage).Get("/trade-orders/{id}", s.getTradeOrder)
+	r.With(manage, s.tenantWide).Post("/trade-orders", s.placeTradeOrder)
 	r.With(manage, s.tenantWide).Post("/trade-orders/{id}/{step}", s.tradeOrderStep)
+	r.With(manage, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
 	r.With(s.need(PermLinkManage)).Get("/links/{id}/trade", s.getLinkTrade)
 	r.With(s.need(PermLinkManage), s.tenantWide).Put("/links/{id}/trade", s.putLinkTrade)
 	r.With(manage, s.tenantWide).Put("/stock/suppliers/{id}/link", s.linkSupplier)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/accept-change", s.acceptPurchaseChange)
+	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/confirm-proposed", s.confirmProposed)
 	r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/all-came", s.allCame)
 	r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/not-all-came", s.notAllCame)
 }
@@ -140,7 +144,13 @@ func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.tellOrder(r.Context(), told, in)
-	writeJSON(w, http.StatusOK, out)
+	short := []string{}
+	if step == links.StepAccept && told != nil {
+		if sh := s.lowerTradeStock(r.Context(), p.TenantID, out.Order.ID); sh != nil {
+			short = sh
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"order": out.Order, "short": short})
 }
 
 func actorOf(p *Principal) links.Actor {
@@ -151,22 +161,18 @@ func actorOf(p *Principal) links.Actor {
 	return links.Actor{Type: t, ID: id}
 }
 
-type linkTradeOut struct {
-	InvoiceAt string `json:"invoice_at"`
-}
-
 func (s *Server) getLinkTrade(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var out linkTradeOut
+	var out links.Trade
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		if _, err := links.GetTx(r.Context(), tx, id); err != nil {
 			return err
 		}
-		out.InvoiceAt, err = links.InvoiceAtTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id)
+		out, err = links.TradeTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id)
 		return err
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
@@ -175,30 +181,46 @@ func (s *Server) getLinkTrade(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// putLinkTrade is PUT /v1/links/{id}/trade: when the business raises the
-// invoice for this linked business's orders, accepted or delivered.
+// putLinkTrade is PUT /v1/links/{id}/trade: how the business trades with
+// this linked business's orders: when it raises their invoice (accepted
+// or delivered), and whether it accepts them by themselves. A PUT changes
+// only what it names.
 func (s *Server) putLinkTrade(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var in linkTradeOut
+	var in struct {
+		InvoiceAt  *string `json:"invoice_at"`
+		AutoAccept *bool   `json:"auto_accept"`
+	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
+	var t links.Trade
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if err := links.SetInvoiceAtTx(r.Context(), tx, p.TenantID, id, in.InvoiceAt, p.Actor()); err != nil {
+		var err error
+		if t, err = links.TradeTx(r.Context(), tx, p.TenantID, id); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "link.trade_settings", id.String(), map[string]any{"invoice_at": in.InvoiceAt})
+		if in.InvoiceAt != nil {
+			t.InvoiceAt = *in.InvoiceAt
+		}
+		if in.AutoAccept != nil {
+			t.AutoAccept = *in.AutoAccept
+		}
+		if err := links.SetTradeTx(r.Context(), tx, p.TenantID, id, t, p.Actor()); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "link.trade_settings", id.String(), map[string]any{"invoice_at": t.InvoiceAt, "auto_accept": t.AutoAccept})
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, in)
+	writeJSON(w, http.StatusOK, t)
 }
 
 // linkSupplier is PUT /v1/stock/suppliers/{id}/link: the supplier is a
@@ -301,6 +323,9 @@ func (s *Server) acceptPurchaseChange(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.purchaseOrOrderFail(w, r, err)
 		return
+	}
+	if told != nil {
+		s.lowerTradeStock(r.Context(), told.Tenant, told.Order)
 	}
 	s.tellOrder(r.Context(), told, links.StepIn{})
 	s.purchaseAfter(w, r, id, nil)
@@ -441,11 +466,127 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 		told, err = links.WriteOrderTx(ctx, tx, buyer, id)
 		return err
 	})
-	if err != nil {
+	if err != nil || told == nil {
 		return err
+	}
+	// In the seller's own scope: its lines matched to its items (and its
+	// prices), then accepted by itself where it set that for the link.
+	seller := told.Tenant
+	o := s.matchTradeItems(ctx, seller, told.Order)
+	if o != nil && o.AutoAccept && o.Status == links.OrderReceived && allPriced(o.Lines) {
+		var back *links.Told
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+			var err error
+			_, back, err = links.DecideTx(ctx, tx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, links.Actor{Type: "system", ID: "link-orders"})
+			return err
+		})
+		if err == nil {
+			s.lowerTradeStock(ctx, seller, o.ID)
+			s.tellOrder(ctx, back, links.StepIn{})
+			told.Event = "auto_accepted"
+			note = linesWords(o.Lines) + ", " + storefront.FormatNaira(linesKobo(o.Lines))
+		} else {
+			s.Logger.Warn("links: accepting an order by itself", "tenant", seller, "err", err)
+		}
+	} else if o != nil {
+		note = linesWords(o.Lines) + ", " + storefront.FormatNaira(linesKobo(o.Lines))
 	}
 	s.tellOrder(ctx, told, links.StepIn{Note: note})
 	return nil
+}
+
+func allPriced(lines []links.OrderLine) bool {
+	for _, l := range lines {
+		if l.PriceKobo < 1 {
+			return false
+		}
+	}
+	return true
+}
+
+func linesKobo(lines []links.OrderLine) int64 {
+	var t int64
+	for _, l := range lines {
+		t += l.Quantity * l.PriceKobo
+	}
+	return t
+}
+
+// linesWords says an order's lines: "10 bags Rice, 5 cartons Indomie".
+func linesWords(lines []links.OrderLine) string {
+	parts := make([]string, len(lines))
+	for i, l := range lines {
+		parts[i] = (stock.Item{Unit: l.Unit}).Quantity(l.Quantity) + " " + l.Item
+	}
+	return strings.Join(parts, ", ")
+}
+
+// sellerItems are a business's own catalogue items, for matching an
+// order's lines; none when it keeps no stock on Taskiem.
+func (s *Server) sellerItems(ctx context.Context, tenant uuid.UUID) []links.SellerItem {
+	if s.Stock == nil || !s.Stock.Ready() {
+		return nil
+	}
+	_, items, err := s.stockItems(ctx, tenant)
+	if err != nil {
+		return nil
+	}
+	out := make([]links.SellerItem, len(items))
+	for i, it := range items {
+		out[i] = links.SellerItem{ID: it.ID, Name: it.Name, Unit: it.Unit, PriceKobo: it.PriceKobo}
+	}
+	return out
+}
+
+// matchTradeItems matches a new order's lines to the seller's own items
+// and answers the order (nil when it cannot be read).
+func (s *Server) matchTradeItems(ctx context.Context, seller, order uuid.UUID) *links.Order {
+	items := s.sellerItems(ctx, seller)
+	var o links.Order
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+		var err error
+		o, _, err = links.MatchItemsTx(ctx, tx, order.String(), items)
+		return err
+	})
+	if err != nil {
+		s.Logger.Warn("links: matching an order's items", "tenant", seller, "err", err)
+		return nil
+	}
+	return &o
+}
+
+// lowerTradeStock lowers the seller's stock for an accepted order's lines
+// matched to its items, as a storefront order's acceptance does (once, by
+// the order and the item); it answers the items there were too few of,
+// and keeps them on the order's note for the seller.
+func (s *Server) lowerTradeStock(ctx context.Context, seller, order uuid.UUID) []string {
+	if s.Stock == nil || !s.Stock.Ready() {
+		return nil
+	}
+	var o links.Order
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+		var err error
+		o, err = links.GetOrderTx(ctx, tx, order.String(), false)
+		return err
+	}); err != nil {
+		s.Logger.Warn("links: reading an order to lower stock", "tenant", seller, "err", err)
+		return nil
+	}
+	var lines []storefront.Line
+	for _, l := range o.Lines {
+		if l.ItemID != "" {
+			lines = append(lines, storefront.Line{ID: l.ItemID, Name: l.Item, Quantity: int(l.Quantity)})
+		}
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+	short, err := s.Stock.OrderLines(ctx, seller, o.ID, o.Reference, lines)
+	if err != nil {
+		s.Logger.Warn("links: lowering stock for an order", "tenant", seller, "err", err)
+		return nil
+	}
+	return short
 }
 
 // raiseOrderInvoice raises the invoice for a linked order, in the seller's
@@ -630,6 +771,9 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 		case err != nil:
 			return err
 		}
+		if step == links.StepAccept && told != nil {
+			s.lowerTradeStock(ctx, t.ID, id)
+		}
 		s.tellOrder(ctx, told, links.StepIn{})
 		return c.say(ctx, s, c.t("order.link.done_"+step, "reference", ref))
 	}
@@ -640,7 +784,7 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 // buyer).
 func sellerTold(event string) bool {
 	switch event {
-	case "ordered", "cancelled_by_buyer", "cancel_asked", "change_accepted", "received", "short":
+	case "ordered", "auto_accepted", "cancelled_by_buyer", "cancel_asked", "change_accepted", "received", "short", "confirmed":
 		return true
 	}
 	return false
@@ -686,4 +830,184 @@ func (s *Server) orderNote(ctx context.Context, t links.Told, in links.StepIn) s
 		return nil
 	})
 	return note
+}
+
+// itemsByID are a business's own catalogue items, by row id.
+func (s *Server) itemsByID(ctx context.Context, tenant uuid.UUID) (map[string]stock.Item, error) {
+	if s.Stock == nil || !s.Stock.Ready() {
+		return nil, fmt.Errorf("%w: keep your stock on Taskiem to choose your items", errConflict)
+	}
+	_, items, err := s.stockItems(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]stock.Item, len(items))
+	for _, it := range items {
+		out[it.ID] = it
+	}
+	return out, nil
+}
+
+// setTradeLineItem is PUT /v1/trade-orders/{id}/lines/{line}/item: which
+// of our items a new order's line is, remembered for the link's next
+// orders (§17), the line taking our price.
+func (s *Server) setTradeLineItem(w http.ResponseWriter, r *http.Request) {
+	line, err := strconv.Atoi(chi.URLParam(r, "line"))
+	if err != nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	var in struct {
+		ItemID string `json:"item_id"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	items, err := s.itemsByID(r.Context(), p.TenantID)
+	if err != nil {
+		s.stockFail(w, r, err)
+		return
+	}
+	it, ok := items[in.ItemID]
+	if !ok {
+		s.fail(w, r, fmt.Errorf("%w: that is not one of your items", errBadRequest))
+		return
+	}
+	var out tradeOrderOut
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if out.Order, err = links.SetLineItemTx(r.Context(), tx, chi.URLParam(r, "id"), line, links.SellerItem{ID: it.ID, Name: it.Name, Unit: it.Unit,
+			PriceKobo: it.PriceKobo}, p.Actor()); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "trade_order.item", out.Order.Reference, map[string]any{"order_id": out.Order.ID, "line": line, "item_id": it.ID})
+	}); err != nil {
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// placeTradeOrder is POST /v1/trade-orders: an order we draft for a
+// linked business that buys from us (a phone order, §7). It reaches the
+// buyer as a purchase order to us waiting for its Confirm. Each line is
+// one of our items (item_id, at its price unless one is given) or named
+// with its price.
+func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Link  uuid.UUID `json:"link"`
+		Lines []struct {
+			ItemID    string `json:"item_id"`
+			Item      string `json:"item"`
+			Unit      string `json:"unit"`
+			Quantity  int64  `json:"quantity"`
+			PriceKobo *int64 `json:"price_kobo"`
+		} `json:"lines"`
+		Note string `json:"note"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var items map[string]stock.Item
+	lines := make([]links.OrderLine, len(in.Lines))
+	for i, l := range in.Lines {
+		x := links.OrderLine{Item: l.Item, Unit: l.Unit, Quantity: l.Quantity}
+		if l.PriceKobo != nil {
+			x.PriceKobo = *l.PriceKobo
+		}
+		if l.ItemID != "" {
+			if items == nil {
+				var err error
+				if items, err = s.itemsByID(r.Context(), p.TenantID); err != nil {
+					s.stockFail(w, r, err)
+					return
+				}
+			}
+			it, ok := items[l.ItemID]
+			if !ok {
+				s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+				return
+			}
+			x.Item, x.Unit, x.ItemID, x.Matched = it.Name, it.Unit, it.ID, "linked"
+			if l.PriceKobo == nil && it.PriceKobo != nil {
+				x.PriceKobo = *it.PriceKobo
+			}
+		}
+		lines[i] = x
+	}
+	var out tradeOrderOut
+	var told *links.Told
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := auditTx(r, tx, "trade_order.place", in.Link.String(), map[string]any{"lines": len(lines)}); err != nil {
+			return err
+		}
+		var err error
+		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, p.TenantID, in.Link, lines, in.Note, actorOf(p))
+		return err
+	}); err != nil {
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// confirmProposed is POST /v1/stock/purchases/{id}/confirm-proposed: an
+// order a linked supplier drafted for us, confirmed, each line said to be
+// one of our items (items, in order). It is then accepted on both sides.
+func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var in struct {
+		Items []string `json:"items"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	byID, err := s.itemsByID(r.Context(), p.TenantID)
+	if err != nil {
+		s.stockFail(w, r, err)
+		return
+	}
+	items := make([]links.BuyerItem, len(in.Items))
+	for i, x := range in.Items {
+		it, ok := byID[x]
+		if !ok {
+			s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+			return
+		}
+		items[i] = links.BuyerItem{ID: it.ID, Name: it.Name, Unit: it.Unit}
+	}
+	var told *links.Told
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		x, err := stock.PurchaseTx(r.Context(), tx, p.TenantID, id, true)
+		if err != nil {
+			return err
+		}
+		if err := auditTx(r, tx, "purchase.confirm_proposed", x.Reference, map[string]any{"purchase_id": x.ID}); err != nil {
+			return err
+		}
+		told, err = links.ConfirmProposedTx(r.Context(), tx, p.TenantID, id, items, p.Actor(), actorOf(p))
+		return err
+	}); err != nil {
+		s.purchaseOrOrderFail(w, r, err)
+		return
+	}
+	if told != nil {
+		s.lowerTradeStock(r.Context(), told.Tenant, told.Order)
+	}
+	s.tellOrder(r.Context(), told, links.StepIn{})
+	s.purchaseAfter(w, r, id, nil)
 }

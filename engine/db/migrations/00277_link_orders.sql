@@ -26,7 +26,7 @@ CREATE UNIQUE INDEX suppliers_link ON suppliers (tenant_id, link_id) WHERE retir
 
 ALTER TABLE purchase_orders
   ADD COLUMN link_id         uuid REFERENCES business_links(id),
-  ADD COLUMN seller_status   text CHECK (seller_status IN ('received', 'changed', 'accepted', 'ready', 'dispatched', 'delivered', 'declined', 'cancelled')),
+  ADD COLUMN seller_status   text CHECK (seller_status IN ('proposed', 'received', 'changed', 'accepted', 'ready', 'dispatched', 'delivered', 'declined', 'cancelled')),
   ADD COLUMN seller_note     text CHECK (length(seller_note) <= 500),
   -- The seller's proposed lines while seller_status is changed:
   -- [{item_id, item, unit, quantity, cost_kobo}].
@@ -43,14 +43,19 @@ CREATE TABLE trade_orders (
   buyer_name       text NOT NULL CHECK (length(buyer_name) BETWEEN 1 AND 200),
   source_id        uuid NOT NULL,                                  -- the buyer's purchase order
   reference        text NOT NULL CHECK (reference ~ '^P-[A-Z0-9]{6}$'),
-  -- [{item, unit, quantity, price_kobo, delivered}]: the buyer's items,
-  -- at the price agreed (the buyer's proposed price until the seller
-  -- changes it), and what the seller delivered of each.
+  -- [{item, unit, quantity, price_kobo, delivered, item_id, matched}]: the
+  -- buyer's items, at the price agreed (the seller's catalogue price for an
+  -- item matched to its own, else the buyer's proposed price until the
+  -- seller changes it), what the seller delivered of each, and the
+  -- seller's own catalogue row (item_id) when matched: by a link the
+  -- seller confirmed (matched "linked") or by name, to confirm ("name").
   lines            jsonb NOT NULL CHECK (jsonb_typeof(lines) = 'array' AND jsonb_array_length(lines) BETWEEN 1 AND 50),
   total_kobo       bigint NOT NULL CHECK (total_kobo >= 0),
   note             text NOT NULL DEFAULT '' CHECK (length(note) <= 500),
+  -- proposed: drafted by the seller for the buyer, waiting for its Confirm.
   status           text NOT NULL DEFAULT 'received'
-                     CHECK (status IN ('received', 'changed', 'accepted', 'ready', 'dispatched', 'delivered', 'declined', 'cancelled')),
+                     CHECK (status IN ('proposed', 'received', 'changed', 'accepted', 'ready', 'dispatched', 'delivered', 'declined', 'cancelled')),
+  placed_by_seller boolean NOT NULL DEFAULT false,
   change           jsonb CHECK (change IS NULL OR jsonb_typeof(change) = 'array'),
   seller_note      text CHECK (length(seller_note) <= 500),
   -- Mirrored from the buyer: a cancel asked after acceptance; Not all came
@@ -75,13 +80,15 @@ CREATE POLICY tenant_isolation ON trade_orders TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON trade_orders TO taskiem_app;
 
--- The seller's choice per link: the invoice for an order is raised when it
+-- The seller's choices per link: the invoice for an order is raised when it
 -- accepts it, or when the buyer's receipt is settled after delivery (the
--- buyer's tap, or a day with no Not all came).
+-- buyer's tap, or a day with no Not all came); and whether its orders are
+-- accepted by themselves when they arrive priced.
 CREATE TABLE trade_settings (
   tenant_id   uuid NOT NULL REFERENCES tenants(id),
   link_id     uuid NOT NULL REFERENCES business_links(id),
   invoice_at  text NOT NULL DEFAULT 'delivered' CHECK (invoice_at IN ('accepted', 'delivered')),
+  auto_accept boolean NOT NULL DEFAULT false,
   updated_by  text NOT NULL,
   updated_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, link_id)
@@ -91,6 +98,25 @@ ALTER TABLE trade_settings FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON trade_settings TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON trade_settings TO taskiem_app;
+
+-- The seller's own items a linked buyer's item names are (§17: asked once
+-- per item, then remembered): the buyer's name for it, lowered, and the
+-- seller's catalogue row.
+CREATE TABLE trade_item_links (
+  tenant_id   uuid NOT NULL REFERENCES tenants(id),
+  link_id     uuid NOT NULL REFERENCES business_links(id),
+  name_key    text NOT NULL CHECK (length(name_key) BETWEEN 1 AND 120),
+  item_id     text NOT NULL CHECK (length(item_id) BETWEEN 1 AND 100),
+  item        text NOT NULL CHECK (length(item) BETWEEN 1 AND 120),
+  updated_by  text NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, link_id, name_key)
+);
+ALTER TABLE trade_item_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trade_item_links FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON trade_item_links TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT, UPDATE, DELETE ON trade_item_links TO taskiem_app;
 
 -- Work due on linked orders, each in the business it starts in: an order
 -- sent and still to be written into the seller's business (kind order,
@@ -150,6 +176,7 @@ DROP FUNCTION taskiem_link_orders_claim(int);
 DROP TRIGGER purchase_order_link_send ON purchase_orders;
 DROP FUNCTION taskiem_link_order_note();
 DROP TABLE link_orders_due;
+DROP TABLE trade_item_links;
 DROP TABLE trade_settings;
 DROP TABLE trade_orders;
 ALTER TABLE purchase_orders DROP COLUMN short_at, DROP COLUMN cancel_asked_at, DROP COLUMN delivered_at, DROP COLUMN change,

@@ -481,7 +481,7 @@ func (s *Server) cancelPurchase(w http.ResponseWriter, r *http.Request) {
 		var linked bool
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			x, err := stock.PurchaseTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id, false)
-			linked = err == nil && x.LinkID != nil && x.Status != stock.Drafted
+			linked = err == nil && x.LinkID != nil && (x.Status != stock.Drafted || x.Proposed())
 			return nil
 		}); err != nil {
 			s.fail(w, r, err)

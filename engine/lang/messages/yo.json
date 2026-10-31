@@ -4335,6 +4335,30 @@
     "order.link.open": {
       "text": "{reason}. Ṣi ọja-ibere naa ni Taskiem lati ṣe e.",
       "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} fi ọja-ibere {reference} ranṣẹ, a ti gba a",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* bere fun {note}. A ti gba a, gẹgẹ bi ẹ ti ṣeto fun wọn.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} ṣe ọja-ibere {reference} silẹ fun yin",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* ṣe ọja-ibere silẹ fun yin: {note}. Fọwọsi i, tabi fagile e, ni Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} fọwọsi {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* fọwọsi ọja-ibere {reference} ti ẹ ṣe silẹ fun wọn. A ti gba a.",
+      "reviewed": false
     }
   }
 }

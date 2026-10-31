@@ -3,9 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { naira, toKobo } from "../lib/invoices";
-import { buyerSteps, linesTotal, sellerAsk, sellerLine, sellerSteps, tradeStatus, type TradeLine, type TradeOrder } from "../lib/tradeorders";
+import { buyerSteps, linesTotal, sameName, sellerAsk, sellerLine, sellerSteps, tradeStatus, type TradeLine, type TradeOrder } from "../lib/tradeorders";
 import { STATUS, type Purchase } from "../lib/purchases";
-import { quantity } from "../lib/stock";
+import type { LinksView } from "../lib/links";
+import { quantity, type StockItem, type StockView } from "../lib/stock";
 import { EmptyState, ErrorBox, Field, fmtTime, Item, Items, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 
 // Orders between linked businesses (business links L2;
@@ -20,6 +21,18 @@ function TradePill({ status }: { status: TradeOrder["status"] }) {
 }
 
 const tradePath = (id: string) => `/v1/trade-orders/${encodeURIComponent(id)}`;
+
+/** The business's own items, when it keeps its stock on Taskiem; none
+ * otherwise. */
+function useOwnItems() {
+  return useLoad(
+    () =>
+      get<StockView>("/v1/stock")
+        .then((v) => (v.keeps_stock ? v.items : []))
+        .catch((): StockItem[] => []),
+    [],
+  );
+}
 
 /** A card of the orders linked businesses sent, still needing us (on the
  * Orders page); nothing when there are none. */
@@ -64,6 +77,7 @@ function TradeRow({ o }: { o: TradeOrder }) {
 /** Every order linked businesses sent us: those needing us first. */
 export function TradeOrdersPage() {
   const list = useLoad(() => get<{ orders: TradeOrder[] }>("/v1/trade-orders"), []);
+  const [drafting, setDrafting] = useState(false);
   const orders = list.data?.orders;
   return (
     <>
@@ -72,8 +86,25 @@ export function TradeOrdersPage() {
           Orders
         </Link>
       </p>
-      <PageHeader title="Orders from linked businesses" description="Purchase orders businesses you are linked with on Taskiem sent you. What you do here reaches their order at once." />
+      <PageHeader
+        title="Orders from linked businesses"
+        description="Purchase orders businesses you are linked with on Taskiem sent you. What you do here reaches their order at once."
+        actions={
+          <button type="button" className="primary" onClick={() => setDrafting(true)}>
+            Draft an order for them
+          </button>
+        }
+      />
       <ErrorBox error={list.error} />
+      {drafting && (
+        <DraftOrder
+          onClose={() => setDrafting(false)}
+          onDone={() => {
+            setDrafting(false);
+            list.reload();
+          }}
+        />
+      )}
       {!orders ? (
         <Skeleton rows={3} label="Loading the orders…" />
       ) : orders.length === 0 ? (
@@ -136,6 +167,7 @@ export function TradeOrderPage() {
           )}
           {o.note && <p className="hint">Their note: “{o.note}”</p>}
           <LinesCard lines={o.lines} short={o.short} buyer={o.buyer_name} />
+          {can("storefront.manage") && o.status === "received" && <OwnItems o={o} onDone={reload} />}
           {o.change && (
             <section className="card" aria-labelledby="trade-change">
               <h2 id="trade-change">Your change</h2>
@@ -148,7 +180,7 @@ export function TradeOrderPage() {
             </p>
           )}
           {can("storefront.manage") && <SellerActions o={o} onDone={reload} />}
-          {can("link.manage") && <InvoiceAt o={o} onDone={reload} />}
+          {can("link.manage") && <TradeSettings o={o} onDone={reload} />}
         </>
       )}
     </>
@@ -336,26 +368,155 @@ function SellerActions({ o, onDone }: { o: TradeOrder; onDone: () => void }) {
   );
 }
 
-/** When this linked business's orders are invoiced: at acceptance, or
- * once the delivery is received. */
-function InvoiceAt({ o, onDone }: { o: TradeOrder; onDone: () => void }) {
+/** How this linked business's orders are handled: when their invoice is
+ * raised, and whether they are accepted by themselves. */
+function TradeSettings({ o, onDone }: { o: TradeOrder; onDone: () => void }) {
   const act = useAction();
+  const save = (body: object) => void act.run(async () => (await put(`/v1/links/${o.link}/trade`, body), onDone()), "Saved");
   return (
-    <section className="card" aria-labelledby="trade-invoice-at">
-      <h2 id="trade-invoice-at">Invoicing {o.buyer_name}'s orders</h2>
+    <section className="card" aria-labelledby="trade-settings">
+      <h2 id="trade-settings">{o.buyer_name}'s orders</h2>
       <p className="hint">Each order's invoice is raised by itself and becomes their bill on Taskiem.</p>
       <ErrorBox error={act.error} />
       <Field label="Raise the invoice">
-        <select
-          value={o.invoice_at}
-          disabled={act.busy}
-          onChange={(e) => void act.run(async () => (await put(`/v1/links/${o.link}/trade`, { invoice_at: e.target.value }), onDone()), "Saved")}
-        >
+        <select value={o.invoice_at} disabled={act.busy} onChange={(e) => save({ invoice_at: e.target.value })}>
           <option value="delivered">Once the delivery is received</option>
           <option value="accepted">When I accept an order</option>
         </select>
       </Field>
+      <label className="sf-radio">
+        <input type="checkbox" checked={o.auto_accept} disabled={act.busy} onChange={(e) => save({ auto_accept: e.target.checked })} />
+        Accept their orders by themselves when every item has a price
+      </label>
     </section>
+  );
+}
+
+/** Which of our own items each line of a new order is: matched by a match
+ * we confirmed, or by the same name, to confirm. Our price applies, and
+ * accepting lowers our stock. */
+function OwnItems({ o, onDone }: { o: TradeOrder; onDone: () => void }) {
+  const items = useOwnItems();
+  const act = useAction();
+  const list = items.data ?? [];
+  if (list.length === 0) return null;
+  const set = (i: number, id: string) => void act.run(async () => (await put(`${tradePath(o.id)}/lines/${i}/item`, { item_id: id }), onDone()), "Remembered for their next orders");
+  return (
+    <section className="card" aria-labelledby="trade-items" data-testid="trade-items">
+      <h2 id="trade-items">Your items</h2>
+      <p className="hint">Which of your items each is. Your price applies, accepting takes it off your stock, and Taskiem remembers it for {o.buyer_name}'s next orders.</p>
+      <ErrorBox error={act.error} />
+      {o.lines.map((l, i) => (
+        <div key={i} className="toolbar">
+          <Field label={`Their ${l.item}`}>
+            <select value={l.item_id ?? ""} disabled={act.busy} onChange={(e) => e.target.value && set(i, e.target.value)}>
+              <option value="">Not one of mine</option>
+              {list.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {l.matched === "name" && l.item_id && (
+            <button type="button" className="small" disabled={act.busy} onClick={() => set(i, l.item_id ?? "")}>
+              Yes, that is it<span className="sr-only"> for {l.item}</span>
+            </button>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** An order we draft for a linked business that buys from us (a phone
+ * order): it reaches them as a purchase order waiting for their Confirm. */
+function DraftOrder({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const links = useLoad(() => get<LinksView>("/v1/links"), []);
+  const items = useOwnItems();
+  const act = useAction();
+  const buyers = (links.data?.links ?? []).filter((l) => l.state === "active" && (l.role === "customer" || l.role === "both"));
+  const own = items.data ?? [];
+  const [link, setLink] = useState("");
+  const [lines, setLines] = useState([{ item_id: "", item: "", quantity: "1", price: "" }]);
+  const [note, setNote] = useState("");
+  const whole = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
+  const setLine = (i: number, p: Partial<(typeof lines)[number]>) => setLines(lines.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const body = {
+    link: link || buyers[0]?.id,
+    lines: lines.map((l) =>
+      l.item_id ? { item_id: l.item_id, quantity: whole(l.quantity) } : { item: l.item.trim(), quantity: whole(l.quantity), price_kobo: toKobo(l.price) ?? 0 },
+    ),
+    note: note.trim(),
+  };
+  return (
+    <Modal title="Draft an order for them" onClose={onClose}>
+      <ErrorBox error={links.error ?? act.error} />
+      {links.data && buyers.length === 0 ? (
+        <p className="hint">
+          You are not linked with a business that buys from you yet. <Link to="/chat">Find them</Link>
+        </p>
+      ) : (
+        <>
+          <p className="hint">They confirm it, or cancel it, in their Taskiem; until then it goes no further.</p>
+          <Field label="Which business">
+            <select value={link || buyers[0]?.id || ""} onChange={(e) => setLink(e.target.value)}>
+              {buyers.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {lines.map((l, i) => (
+            <fieldset key={i} className="sf-choices">
+              <legend>Item {i + 1}</legend>
+              {own.length > 0 && (
+                <Field label="Your item">
+                  <select value={l.item_id} onChange={(e) => setLine(i, { item_id: e.target.value })}>
+                    <option value="">Another, named here</option>
+                    {own.map((it) => (
+                      <option key={it.id} value={it.id}>
+                        {it.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              {!l.item_id && (
+                <>
+                  <Field label="What it is">
+                    <input maxLength={120} value={l.item} onChange={(e) => setLine(i, { item: e.target.value })} />
+                  </Field>
+                  <Field label="Price each (₦)">
+                    <input inputMode="decimal" value={l.price} onChange={(e) => setLine(i, { price: e.target.value })} />
+                  </Field>
+                </>
+              )}
+              <Field label="How many">
+                <input inputMode="numeric" value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
+              </Field>
+            </fieldset>
+          ))}
+          <div className="toolbar">
+            <button type="button" className="small" disabled={lines.length >= 50} onClick={() => setLines([...lines, { item_id: "", item: "", quantity: "1", price: "" }])}>
+              Add an item
+            </button>
+          </div>
+          <Field label="A word for them (optional)">
+            <input maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy || !body.link || lines.some((l) => Number.isNaN(whole(l.quantity)))}
+            onClick={() => void act.run(async () => (await post("/v1/trade-orders", body), onDone()), "Sent for them to confirm")}
+          >
+            Send for them to confirm
+          </button>
+        </>
+      )}
+    </Modal>
   );
 }
 
@@ -458,10 +619,57 @@ export function PurchasePage() {
               </p>
             </section>
           )}
+          {can("storefront.manage") && buyerSteps(p).confirmProposed && <ConfirmProposed p={p} onDone={reload} />}
           <BuyerActions p={p} onDone={reload} manage={can("storefront.manage")} receive={can("table.edit")} />
         </>
       )}
     </>
+  );
+}
+
+/** Confirming an order a linked supplier drafted for us: which of our own
+ * items each line is (what comes is received into it). */
+function ConfirmProposed({ p, onDone }: { p: Purchase; onDone: () => void }) {
+  const items = useOwnItems();
+  const act = useAction();
+  const own = items.data ?? [];
+  const [chosen, setChosen] = useState<Record<number, string>>({});
+  const pick = (i: number) => chosen[i] ?? sameName(own, p.lines[i]?.item ?? "");
+  const all = p.lines.map((_, i) => pick(i));
+  return (
+    <section className="card" aria-labelledby="purchase-confirm" data-testid="purchase-confirm">
+      <h2 id="purchase-confirm">Confirm it</h2>
+      {items.data && own.length === 0 ? (
+        <p className="hint">
+          Keep your stock on Taskiem to confirm it, so what comes is received into your items. <Link to="/storefront/stock">Stock</Link>
+        </p>
+      ) : (
+        <>
+          <p className="hint">Which of your items each is. What comes is received into it.</p>
+          {p.lines.map((l, i) => (
+            <Field key={i} label={`Their ${l.item}`}>
+              <select value={pick(i)} onChange={(e) => setChosen({ ...chosen, [i]: e.target.value })}>
+                <option value="">Choose your item</option>
+                {own.map((it) => (
+                  <option key={it.id} value={it.id}>
+                    {it.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ))}
+          <ErrorBox error={act.error} />
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy || all.some((x) => !x)}
+            onClick={() => void act.run(async () => (await post(`/v1/stock/purchases/${p.id}/confirm-proposed`, { items: all }), onDone()), "Confirmed, and the supplier is told")}
+          >
+            Confirm the order
+          </button>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -474,6 +682,7 @@ function BuyerActions({ p, onDone, manage, receive }: { p: Purchase; onDone: () 
     act.run(async () => (await post(`/v1/stock/purchases/${p.id}/${what}`, body), onDone()), done).then((ok) => ok && setShort(false));
   const whole = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
   const shown = (manage && (can.acceptChange || can.cancel)) || (receive && can.answerDelivery);
+  const asking = p.seller_status === "accepted" || p.seller_status === "ready" || p.seller_status === "dispatched";
   if (!shown) return null;
   return (
     <section className="card" aria-labelledby="purchase-steps">
@@ -502,7 +711,7 @@ function BuyerActions({ p, onDone, manage, receive }: { p: Purchase; onDone: () 
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm(p.seller_status === "accepted" || p.seller_status === "ready" || p.seller_status === "dispatched" ? `Ask ${p.supplier} to cancel ${p.reference}?` : `Cancel ${p.reference}?`) &&
+              confirm(asking ? `Ask ${p.supplier} to cancel ${p.reference}?` : `Cancel ${p.reference}?`) &&
               void go("cancel", undefined, "Done, and the supplier is told")
             }
           >

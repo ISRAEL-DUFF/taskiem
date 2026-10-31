@@ -4335,6 +4335,30 @@
     "order.link.open": {
       "text": "{reason}. Buɗe odar a Taskiem don yin hakan.",
       "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} ya aika oda {reference}, an karɓa",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* ya yi odar {note}. An karɓe ta, kamar yadda kuka saita musu.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} ya tsara muku oda {reference}",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* ya tsara muku oda: {note}. Tabbatar da ita, ko ku soke ta, a Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} ya tabbatar da {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* ya tabbatar da oda {reference} da kuka tsara musu. An karɓe ta.",
+      "reviewed": false
     }
   }
 }

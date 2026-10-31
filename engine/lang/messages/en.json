@@ -5418,6 +5418,36 @@
       "text": "{reason}. Open the order in Taskiem to do it.",
       "reviewed": true,
       "context": "A linked order's step needs the web; {reason} says why"
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} sent order {reference}, accepted",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer's order, accepted by itself as the seller set"
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* ordered {note}. It is accepted, as you set for them.",
+      "reviewed": true,
+      "context": "A linked buyer's order accepted by itself; {note} is its items and total"
+    },
+    "order.link.proposed_title": {
+      "text": "{from} drafted order {reference} for you",
+      "reviewed": true,
+      "context": "Notification title: a linked supplier drafted an order for the buyer"
+    },
+    "order.link.proposed": {
+      "text": "*{from}* drafted an order for you: {note}. Confirm it, or cancel it, in Taskiem.",
+      "reviewed": true,
+      "context": "A linked supplier drafted an order for the buyer; {note} is its items and total"
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} confirmed {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer confirmed an order the seller drafted for it"
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* confirmed order {reference}, which you drafted for them. It is accepted.",
+      "reviewed": true,
+      "context": "A linked buyer confirmed an order the seller drafted for it"
     }
   }
 }

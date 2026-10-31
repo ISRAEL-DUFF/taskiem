@@ -4335,6 +4335,30 @@
     "order.link.open": {
       "text": "{reason}. Open the order for Taskiem to do am.",
       "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} send order {reference}, e don accept",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* order {note}. E don accept by itself, as you set am for dem.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} draft order {reference} for you",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* draft order for you: {note}. Confirm am, or cancel am, for Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} confirm {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* confirm order {reference} wey you draft for dem. E don accept.",
+      "reviewed": false
     }
   }
 }

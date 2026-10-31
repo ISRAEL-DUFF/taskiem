@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buyerSteps, linesTotal, sellerAsk, sellerLine, sellerSteps, tradeStatus, type TradeOrder } from "./tradeorders";
+import { buyerSteps, linesTotal, sameName, sellerAsk, sellerLine, sellerSteps, tradeStatus, type TradeOrder } from "./tradeorders";
 
 const order: TradeOrder = {
   id: "o1",
@@ -11,6 +11,8 @@ const order: TradeOrder = {
   total_kobo: 40_000_000,
   status: "received",
   invoice_at: "delivered",
+  auto_accept: false,
+  placed_by_seller: false,
   created_at: "2026-10-31T09:00:00Z",
   updated_at: "2026-10-31T09:00:00Z",
 };
@@ -43,10 +45,22 @@ describe("orders from linked businesses", () => {
   });
   it("offers the buyer's steps", () => {
     const p = { status: "sent" as const, link_id: "l1", seller_status: "changed" as const, change: [] };
-    expect(buyerSteps(p)).toEqual({ acceptChange: true, cancel: true, answerDelivery: false });
-    expect(buyerSteps({ ...p, status: "confirmed", seller_status: "delivered", change: undefined })).toEqual({ acceptChange: false, cancel: false, answerDelivery: true });
+    expect(buyerSteps(p)).toEqual({ confirmProposed: false, acceptChange: true, cancel: true, answerDelivery: false });
+    expect(buyerSteps({ ...p, status: "confirmed", seller_status: "delivered", change: undefined })).toEqual({
+      confirmProposed: false,
+      acceptChange: false,
+      cancel: false,
+      answerDelivery: true,
+    });
+    expect(buyerSteps({ ...p, status: "drafted", seller_status: "proposed" })).toMatchObject({ confirmProposed: true, cancel: true });
     expect(buyerSteps({ ...p, seller_status: "delivered", short_at: "x" }).answerDelivery).toBe(false);
     expect(buyerSteps({ ...p, link_id: undefined }).cancel).toBe(false);
+  });
+  it("finds the buyer's item of the same name", () => {
+    expect(sameName([{ id: "1", name: "Rice " }, { id: "2", name: "Garri" }], "rice")).toBe("1");
+    expect(sameName([{ id: "2", name: "Garri" }], "Rice")).toBe("");
+    expect(sellerAsk({ ...order, status: "proposed" })).toContain("waiting for them to confirm it");
+    expect(sellerSteps({ ...order, status: "proposed" }).cancel).toBe(true);
   });
   it("adds up lines", () => {
     expect(linesTotal([{ quantity: 2, price_kobo: 500 }, { quantity: 1, price_kobo: 100 }])).toBe(1100);

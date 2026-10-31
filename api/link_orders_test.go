@@ -357,3 +357,170 @@ func TestLinkedOrderIsolation(t *testing.T) {
 		t.Errorf("statements by business: %v", ofEach)
 	}
 }
+
+// The rest of L2 (§7, §17): a new order's lines are matched to the
+// seller's own items, by name to confirm, then by the match it confirmed,
+// taking its prices; accepting lowers the seller's stock and gives the
+// buyer's order the agreed prices; orders a link set to accept by
+// themselves arrive accepted; and an order the seller drafts for the
+// buyer waits for the buyer's Confirm, saying which of its items each
+// line is, or its cancel.
+func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
+	ctx := context.Background()
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	seller, buyer, _, _ := linkedPair(t, w.waWorld)
+	const sellerOn, buyerOn = "+2348010000371", "+2348010000372"
+	w.bind(t, seller, sellerOn)
+	w.bind(t, buyer, buyerOn)
+	w.say(t, sellerOn, "links")
+	w.say(t, buyerOn, "links")
+	tick := func(want int) {
+		t.Helper()
+		n, err := w.srv.LinkOrdersTick(ctx)
+		if err != nil || n != want {
+			t.Fatalf("did %d, want %d: %v", n, want, err)
+		}
+		w.srv.WaitBackground()
+	}
+	// Both keep stock; the seller sells Rice at ₦45,000.
+	buyer.must(200, "POST", "/v1/stock/setup", nil)
+	rice := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000},
+		"Idempotency-Key", "r")["item"].(map[string]any)["id"].(string)
+	seller.must(200, "POST", "/v1/stock/setup", nil)
+	sRice := seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "rice", "quantity": 50, "unit": "bag", "price_kobo": 4500000},
+		"Idempotency-Key", "sr")["item"].(map[string]any)["id"].(string)
+	sGarri := seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Garri", "quantity": 20, "unit": "bag", "price_kobo": 1500000},
+		"Idempotency-Key", "sg")["item"].(map[string]any)["id"].(string)
+	sellerStock := func(name string) any {
+		t.Helper()
+		return itemsByName(t, seller.must(200, "GET", "/v1/stock", nil))[name]["stock"]
+	}
+	sup := buyer.must(201, "POST", "/v1/stock/suppliers", map[string]any{"name": "Dangote", "phone": "0803 123 4502"})["supplier"].(map[string]any)["id"].(string)
+	link := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	sellerLink := seller.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": link})
+	send := func(key string, n int) (string, string) {
+		t.Helper()
+		id := buyer.must(201, "POST", "/v1/stock/purchases", map[string]any{"supplier_id": sup, "lines": []any{map[string]any{"item_id": rice, "quantity": n}}},
+			"Idempotency-Key", key)["purchase"].(map[string]any)["id"].(string)
+		ref := buyer.must(200, "POST", "/v1/stock/purchases/"+id+"/send", nil)["purchase"].(map[string]any)["reference"].(string)
+		tick(1)
+		return id, ref
+	}
+	orderOf := func(ref string) map[string]any {
+		t.Helper()
+		return seller.must(200, "GET", "/v1/trade-orders/"+ref, nil)["order"].(map[string]any)
+	}
+
+	// Matched by name, at the seller's price; the seller confirms it.
+	po, ref := send("m-1", 10)
+	o := orderOf(ref)
+	l0 := o["lines"].([]any)[0].(map[string]any)
+	if l0["item_id"] != sRice || l0["matched"] != "name" || l0["price_kobo"] != float64(4500000) || o["total_kobo"] != float64(45000000) {
+		t.Fatalf("matched by name: %v", o)
+	}
+	seller.must(400, "PUT", "/v1/trade-orders/"+ref+"/lines/0/item", map[string]any{"item_id": "nope"})
+	if o := seller.must(200, "PUT", "/v1/trade-orders/"+ref+"/lines/0/item", map[string]any{"item_id": sRice})["order"].(map[string]any); o["lines"].([]any)[0].(map[string]any)["matched"] != "linked" {
+		t.Fatalf("confirmed: %v", o)
+	}
+	// Accepted: the seller's stock is lowered, the buyer's order takes its price.
+	if out := seller.must(200, "POST", "/v1/trade-orders/"+ref+"/accept", nil); len(out["short"].([]any)) != 0 {
+		t.Fatalf("accepted: %v", out)
+	}
+	seller.must(409, "PUT", "/v1/trade-orders/"+ref+"/lines/0/item", map[string]any{"item_id": sRice})
+	if got := sellerStock("rice"); got != float64(40) {
+		t.Errorf("the seller's stock after accepting: %v", got)
+	}
+	if p := buyer.must(200, "GET", "/v1/stock/purchases/"+po, nil)["purchase"].(map[string]any); p["total_kobo"] != float64(45000000) ||
+		p["lines"].([]any)[0].(map[string]any)["cost_kobo"] != float64(4500000) {
+		t.Errorf("the buyer's order at the agreed price: %v", p)
+	}
+
+	// Accepted by itself, as the seller sets for the link.
+	if got := seller.must(200, "PUT", "/v1/links/"+sellerLink+"/trade", map[string]any{"auto_accept": true}); got["auto_accept"] != true || got["invoice_at"] != "delivered" {
+		t.Fatalf("auto accept: %v", got)
+	}
+	before := len(w.graph.Sent(sellerOn))
+	po2, ref2 := send("m-2", 5)
+	if o := orderOf(ref2); o["status"] != "accepted" || o["lines"].([]any)[0].(map[string]any)["matched"] != "linked" {
+		t.Fatalf("accepted by itself: %v", o)
+	}
+	if p := buyer.must(200, "GET", "/v1/stock/purchases/"+po2, nil)["purchase"].(map[string]any); p["status"] != "confirmed" || p["seller_status"] != "accepted" {
+		t.Errorf("the buyer's, accepted: %v", p)
+	}
+	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* ordered 5 bags Rice, ₦225,000. It is accepted, as you set for them.") ||
+		len(told[0].Buttons) != 0 {
+		t.Errorf("the seller told: %+v", told)
+	}
+	if got := sellerStock("rice"); got != float64(35) {
+		t.Errorf("the seller's stock after accepting by itself: %v", got)
+	}
+
+	// An order the seller drafts for the buyer: Confirm, saying which of
+	// the buyer's items each line is.
+	before = len(w.graph.Sent(buyerOn))
+	placed := seller.must(201, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item_id": sRice, "quantity": 4}},
+		"note": "As we said on the phone"})["order"].(map[string]any)
+	ref3 := placed["reference"].(string)
+	if placed["status"] != "proposed" || placed["placed_by_seller"] != true || placed["total_kobo"] != float64(18000000) {
+		t.Fatalf("placed: %v", placed)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Stores* drafted an order for you: 4 bags rice, ₦180,000.") {
+		t.Errorf("the buyer told: %+v", told)
+	}
+	var po3 string
+	for _, x := range buyer.must(200, "GET", "/v1/stock/purchases", nil)["purchases"].([]any) {
+		if p := x.(map[string]any); p["reference"] == ref3 {
+			po3 = p["id"].(string)
+			if p["status"] != "drafted" || p["seller_status"] != "proposed" {
+				t.Errorf("the buyer's proposed order: %v", p)
+			}
+		}
+	}
+	if po3 == "" {
+		t.Fatal("no proposed order on the buyer's side")
+	}
+	buyer.must(400, "POST", "/v1/stock/purchases/"+po3+"/send", nil)
+	buyer.must(400, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{"nope"}})
+	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{rice}})["purchase"].(map[string]any); p["status"] != "confirmed" ||
+		p["lines"].([]any)[0].(map[string]any)["item_id"] != rice || p["lines"].([]any)[0].(map[string]any)["item"] != "Rice" {
+		t.Fatalf("confirmed: %v", p)
+	}
+	buyer.must(409, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{rice}})
+	if o := orderOf(ref3); o["status"] != "accepted" {
+		t.Errorf("the seller's, confirmed: %v", o)
+	}
+	if got := sellerStock("rice"); got != float64(31) {
+		t.Errorf("the seller's stock after the buyer confirmed: %v", got)
+	}
+
+	// Another, cancelled by the buyer; the seller's withdrawn; and none
+	// placed for a buyer that has not marked the seller as its supplier.
+	placed = seller.must(201, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item_id": sGarri, "quantity": 2}}})["order"].(map[string]any)
+	var po4 string
+	for _, x := range buyer.must(200, "GET", "/v1/stock/purchases", nil)["purchases"].([]any) {
+		if p := x.(map[string]any); p["reference"] == placed["reference"] {
+			po4 = p["id"].(string)
+		}
+	}
+	if out := buyer.must(200, "POST", "/v1/stock/purchases/"+po4+"/cancel", nil); out["cancel"] != "cancelled" {
+		t.Fatalf("cancelled: %v", out)
+	}
+	if o := orderOf(placed["reference"].(string)); o["status"] != "cancelled" {
+		t.Errorf("the seller's, cancelled: %v", o)
+	}
+	placed = seller.must(201, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item": "Palm oil", "quantity": 1, "price_kobo": 3000000}}})["order"].(map[string]any)
+	seller.must(200, "POST", "/v1/trade-orders/"+placed["reference"].(string)+"/cancel", nil)
+	for _, x := range buyer.must(200, "GET", "/v1/stock/purchases", nil)["purchases"].([]any) {
+		if p := x.(map[string]any); p["reference"] == placed["reference"] && (p["status"] != "cancelled" || p["seller_status"] != "cancelled") {
+			t.Errorf("withdrawn: %v", p)
+		}
+	}
+	seller.must(400, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item": "Palm oil", "quantity": 1}}})
+	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": nil})
+	seller.must(409, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item_id": sGarri, "quantity": 1}}})
+}

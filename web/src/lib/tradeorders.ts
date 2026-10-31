@@ -5,7 +5,7 @@
 
 import type { Purchase } from "./purchases";
 
-export type TradeStatus = "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled";
+export type TradeStatus = "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled";
 
 export interface TradeLine {
   item: string;
@@ -14,6 +14,10 @@ export interface TradeLine {
   price_kobo: number;
   /** What the seller delivered of it. */
   delivered?: number;
+  /** The seller's own item it is: matched by a match the seller confirmed
+   * (linked), or by the same name, to confirm (name). */
+  item_id?: string;
+  matched?: "linked" | "name";
 }
 
 export interface TradeOrder {
@@ -39,6 +43,10 @@ export interface TradeOrder {
   short_agreed_at?: string;
   invoice_id?: string;
   invoice_at: "accepted" | "delivered";
+  /** Its orders are accepted by themselves when they arrive priced. */
+  auto_accept: boolean;
+  /** We drafted it for the buyer: proposed until it confirms. */
+  placed_by_seller: boolean;
   accepted_at?: string;
   delivered_at?: string;
   created_at: string;
@@ -50,6 +58,8 @@ type Tone = "ok" | "warn" | "info" | "muted" | "danger";
 /** An order's status in a word or two, with its tone, as either side says it. */
 export function tradeStatus(s: TradeStatus): { label: string; tone: Tone } {
   switch (s) {
+    case "proposed":
+      return { label: "Waiting for them", tone: "info" };
     case "received":
       return { label: "New", tone: "warn" };
     case "changed":
@@ -79,7 +89,7 @@ export function sellerSteps(o: Pick<TradeOrder, "status" | "cancel_asked_at" | "
     ready: o.status === "accepted",
     dispatched: o.status === "accepted" || o.status === "ready",
     delivered: live,
-    cancel: live,
+    cancel: live || o.status === "proposed",
     keep: live && !!o.cancel_asked_at,
     agree: o.status === "delivered" && !!o.short_at && !o.short_agreed_at,
   };
@@ -91,6 +101,7 @@ export function sellerAsk(o: TradeOrder): string {
   if (o.cancel_asked_at) return `${o.buyer_name} asks to cancel it. Cancel it, or keep it.`;
   if (o.status === "delivered" && o.short_at && !o.short_agreed_at) return `${o.buyer_name} says not all of it came. Agree their count, or talk to them.`;
   if (o.status === "changed") return `Waiting for ${o.buyer_name} to accept your change.`;
+  if (o.status === "proposed") return `You drafted it for ${o.buyer_name}: waiting for them to confirm it.`;
   return "";
 }
 
@@ -101,6 +112,8 @@ export function sellerLine(p: Pick<Purchase, "supplier" | "seller_status" | "lin
     case undefined:
     case null:
       return `On its way to ${p.supplier} on Taskiem.`;
+    case "proposed":
+      return `${p.supplier} drafted this order for you. Confirm it, saying which of your items each line is, or cancel it.`;
     case "received":
       return p.cancel_asked_at ? "" : `${p.supplier} has it, and has not answered yet.`;
     case "changed":
@@ -124,11 +137,20 @@ export function sellerLine(p: Pick<Purchase, "supplier" | "seller_status" | "lin
 export function buyerSteps(p: Pick<Purchase, "status" | "seller_status" | "link_id" | "cancel_asked_at" | "short_at" | "change">) {
   const open = p.status === "sent" || p.status === "confirmed";
   const delivered = p.seller_status === "delivered";
+  const proposed = !!p.link_id && p.status === "drafted" && p.seller_status === "proposed";
   return {
+    confirmProposed: proposed,
     acceptChange: !!p.link_id && open && p.seller_status === "changed" && !!p.change,
-    cancel: !!p.link_id && open && !p.cancel_asked_at && p.seller_status !== "delivered",
+    cancel: proposed || (!!p.link_id && open && !p.cancel_asked_at && p.seller_status !== "delivered"),
     answerDelivery: !!p.link_id && delivered && !p.short_at && p.status !== "cancelled",
   };
+}
+
+/** The buyer's own item a supplier's line most likely is: the one of the
+ * same name, case aside; "" when none is. */
+export function sameName(items: { id: string; name: string }[], name: string): string {
+  const k = name.trim().toLowerCase();
+  return items.find((it) => it.name.trim().toLowerCase() === k)?.id ?? "";
 }
 
 /** The order's total at a set of lines. */

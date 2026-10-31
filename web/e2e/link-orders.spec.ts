@@ -37,13 +37,15 @@ const order = {
   buyer_name: "Ada's Kitchen",
   reference: "P-7QX4KD",
   lines: [
-    { item: "Rice", unit: "bag", quantity: 10, price_kobo: 4_000_000 },
+    { item: "Rice", unit: "bag", quantity: 10, price_kobo: 4_000_000, item_id: "r1", matched: "name" },
     { item: "Indomie", unit: "carton", quantity: 5, price_kobo: 850_000 },
   ],
   total_kobo: 44_250_000,
   note: "Before Friday, please",
   status: "received",
   invoice_at: "delivered",
+  auto_accept: false,
+  placed_by_seller: false,
   created_at: "2026-10-31T09:00:00Z",
   updated_at: "2026-10-31T09:00:00Z",
 };
@@ -52,15 +54,33 @@ test("an order from a linked business, answered by its seller", async ({ page })
   await signUp(page);
   const sent: { url: string; body: unknown }[] = [];
   let current: Record<string, unknown> = order;
+  const ownItems = { keeps_stock: true, catalogue: "products", items: [{ id: "r1", name: "Rice", available: true, stock: 40, unit: "bag", price_kobo: 4_500_000 }] };
+  await page.route("**/v1/stock", (route) => route.fulfill(json(ownItems)));
+  await page.route("**/v1/links", (route) =>
+    route.fulfill(
+      json({
+        links: [{ id: "l1", business: "b1", name: "Ada's Kitchen", state: "active", role: "customer", asked_by_us: false, requested_at: "2026-10-01T00:00:00Z", expires_at: "2026-11-01T00:00:00Z" }],
+        sent: [],
+      }),
+    ),
+  );
   await page.route("**/v1/trade-orders**", async (route) => {
     const r = route.request();
     const path = new URL(r.url()).pathname;
+    if (r.method() === "PUT") {
+      sent.push({ url: path, body: r.postDataJSON() });
+      return route.fulfill(json({ order: current }));
+    }
+    if (r.method() === "POST" && path === "/v1/trade-orders") {
+      sent.push({ url: path, body: r.postDataJSON() });
+      return route.fulfill(json({ order: { ...order, id: "o2", status: "proposed", placed_by_seller: true } }, 201));
+    }
     if (r.method() === "POST") {
       sent.push({ url: path, body: r.postDataJSON() });
       if (path.endsWith("/accept")) current = { ...order, status: "accepted", accepted_at: "2026-10-31T10:00:00Z" };
       if (path.endsWith("/delivered"))
         current = { ...current, status: "delivered", lines: order.lines.map((l, i) => ({ ...l, delivered: i === 0 ? 8 : 5 })) };
-      return route.fulfill(json({ order: current }));
+      return route.fulfill(json({ order: current, short: [] }));
     }
     if (path === "/v1/trade-orders") return route.fulfill(json({ orders: [current] }));
     return route.fulfill(json({ order: current }));
@@ -73,11 +93,27 @@ test("an order from a linked business, answered by its seller", async ({ page })
   await expect(page.getByTestId("trade-order")).toContainText("P-7QX4KD");
   await expect(page.getByTestId("trade-order")).toContainText("New");
   await axeBoth(page, "/trade-orders");
+
+  // An order drafted for a linked business that buys from us.
+  await page.getByRole("button", { name: "Draft an order for them" }).click();
+  const draft = page.getByRole("dialog");
+  await draft.getByLabel("Your item").selectOption({ label: "Rice" });
+  await draft.getByLabel("How many").fill("3");
+  await axeBoth(page, "drafting an order for a linked business");
+  await draft.getByRole("button", { name: "Send for them to confirm" }).click();
+  await expect.poll(() => sent.at(-1)?.url).toBe("/v1/trade-orders");
+  expect(sent.at(-1)?.body).toEqual({ link: "l1", lines: [{ item_id: "r1", quantity: 3 }], note: "" });
+
   await page.getByTestId("trade-order").click();
   await expect(page.getByTestId("trade-hero")).toContainText("₦442,500");
   await expect(page.getByTestId("trade-ask")).toHaveText("Accept it, change it, or decline it.");
   await expect(page.getByText("Their note: “Before Friday, please”")).toBeVisible();
+  // Their Rice is our Rice by name: said so, it is remembered.
+  await expect(page.getByTestId("trade-items").getByLabel("Their Rice")).toHaveValue("r1");
   await axeBoth(page, "an order from a linked business");
+  await page.getByRole("button", { name: "Yes, that is it for Rice" }).click();
+  await expect.poll(() => sent.at(-1)?.url).toBe("/v1/trade-orders/o1/lines/0/item");
+  expect(sent.at(-1)?.body).toEqual({ item_id: "r1" });
 
   // A change, in a dialog: what can be supplied, at the seller's prices.
   await page.getByRole("button", { name: "Change", exact: true }).click();
@@ -173,4 +209,27 @@ test("an order to a linked supplier, followed by its buyer", async ({ page }) =>
   await dialog.getByRole("button", { name: "Record what came" }).click();
   await expect.poll(() => sent.at(-1)?.url).toBe("/v1/stock/purchases/p1/not-all-came");
   expect(sent.at(-1)?.body).toEqual({ counts: [7, 5] });
+});
+
+test("an order a linked supplier drafted, confirmed by its buyer", async ({ page }) => {
+  await signUp(page);
+  const sent: { url: string; body: unknown }[] = [];
+  const proposed = { ...purchase, status: "drafted", seller_status: "proposed", change: undefined, counter: null, counter_at: null, approved_by: null, sent_at: null,
+    lines: [{ item_id: "", item: "rice", unit: "bag", quantity: 4, cost_kobo: 4_500_000, received: 0 }], total_kobo: 18_000_000 };
+  await page.route("**/v1/stock", (route) =>
+    route.fulfill(json({ keeps_stock: true, catalogue: "products", items: [{ id: "9", name: "Garri", available: true, stock: 2 }, { id: "1", name: "Rice", available: true, stock: 3 }] })),
+  );
+  await page.route("**/v1/stock/purchases/p1**", async (route) => {
+    const r = route.request();
+    if (r.method() === "POST") sent.push({ url: new URL(r.url()).pathname, body: r.postDataJSON() });
+    return route.fulfill(json({ purchase: proposed }));
+  });
+  await page.goto("/purchases/p1");
+  await expect(page.getByTestId("purchase-seller")).toContainText("Dangote Depot drafted this order for you.");
+  const card = page.getByTestId("purchase-confirm");
+  await expect(card.getByLabel("Their rice")).toHaveValue("1");
+  await axeBoth(page, "a proposed order");
+  await card.getByRole("button", { name: "Confirm the order" }).click();
+  await expect.poll(() => sent.at(-1)?.url).toBe("/v1/stock/purchases/p1/confirm-proposed");
+  expect(sent.at(-1)?.body).toEqual({ items: ["1"] });
 });

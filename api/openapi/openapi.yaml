@@ -5688,6 +5688,69 @@ paths:
                       $ref: '#/components/schemas/TradeOrder'
         default:
           $ref: '#/components/responses/Error'
+    post:
+      operationId: placeTradeOrder
+      tags:
+      - Links
+      summary: Draft an order for a linked business that buys from us
+      description: It reaches them as a purchase order to us waiting for their Confirm, and goes no further until then. 409 when they have not marked us as their supplier on Taskiem.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [link, lines]
+              properties:
+                link:
+                  type: string
+                  format: uuid
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [quantity]
+                    properties:
+                      item_id:
+                        type: string
+                        description: One of our items, at its price unless price_kobo is given
+                      item:
+                        type: string
+                      unit:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      price_kobo:
+                        type: integer
+                        minimum: 1
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: The order, proposed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/trade-orders/{id}:
     get:
       operationId: getTradeOrder
@@ -5706,6 +5769,56 @@ paths:
         schema:
           type: string
         description: The order's id, or the buyer's reference
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders/{id}/lines/{line}/item:
+    put:
+      operationId: setTradeLineItem
+      tags:
+      - Links
+      summary: Say which of our items a line of a new order is
+      description: Remembered for the link's next orders; the line takes our price. 409 once the order is no longer new.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: line
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [item_id]
+              properties:
+                item_id:
+                  type: string
       responses:
         '200':
           description: The order
@@ -5775,10 +5888,15 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [order]
+                required: [order, short]
                 properties:
                   order:
                     $ref: '#/components/schemas/TradeOrder'
+                  short:
+                    type: array
+                    description: On accept, our items there was too little stock of
+                    items:
+                      type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/links/{id}/trade:
@@ -5801,25 +5919,27 @@ paths:
           format: uuid
       responses:
         '200':
-          description: When the invoice is raised
+          description: How we trade with the link's orders
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [invoice_at]
+                required: [invoice_at, auto_accept]
                 properties:
                   invoice_at:
                     type: string
                     enum: [accepted, delivered]
+                  auto_accept:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
     put:
       operationId: putLinkTrade
       tags:
       - Links
-      summary: Choose when a linked business's orders are invoiced
-      description: At acceptance, or once the delivery is received (the default).
+      summary: Choose how a linked business's orders are handled
+      description: When their invoice is raised, at acceptance or once the delivery is received (the default), and whether they are accepted by themselves when they arrive priced (off by default). A PUT changes only what it names.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -5840,24 +5960,28 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [invoice_at]
               properties:
                 invoice_at:
                   type: string
                   enum: [accepted, delivered]
+                auto_accept:
+                  type: boolean
+                  description: Accept its orders by themselves when they arrive priced
       responses:
         '200':
-          description: When the invoice is raised
+          description: How we trade with the link's orders
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: false
-                required: [invoice_at]
+                required: [invoice_at, auto_accept]
                 properties:
                   invoice_at:
                     type: string
                     enum: [accepted, delivered]
+                  auto_accept:
+                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/bills/{id}:
@@ -7820,6 +7944,53 @@ paths:
         schema:
           type: string
           format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/confirm-proposed:
+    post:
+      operationId: confirmProposed
+      tags:
+      - Stock
+      summary: Confirm an order a linked supplier drafted for us
+      description: Each line is said to be one of our items, in order; the order is then accepted on both sides. 409 when it is not waiting for our Confirm.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: string
       responses:
         '200':
           description: The order
@@ -27193,8 +27364,8 @@ components:
           description: Sent to a linked supplier, through this link (business links L2)
         seller_status:
           type: string
-          enum: [received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
-          description: The linked supplier's side, mirrored from its order
+          enum: [proposed, received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+          description: The linked supplier's side, mirrored from its order; proposed, drafted by the supplier for us, waiting for our Confirm
         seller_note:
           type: string
           description: The linked supplier's word on it
@@ -27245,10 +27416,17 @@ components:
         delivered:
           type: integer
           minimum: 0
+        item_id:
+          type: string
+          description: Our own catalogue item it is, when matched
+        matched:
+          type: string
+          enum: [linked, name]
+          description: linked, by a match we confirmed for the link; name, by the same name, for us to confirm
     TradeOrder:
       type: object
       additionalProperties: false
-      required: [id, link, buyer, buyer_name, reference, lines, total_kobo, status, invoice_at, created_at, updated_at]
+      required: [id, link, buyer, buyer_name, reference, lines, total_kobo, status, invoice_at, auto_accept, placed_by_seller, created_at, updated_at]
       properties:
         id:
           type: string
@@ -27274,7 +27452,8 @@ components:
           type: string
         status:
           type: string
-          enum: [received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+          enum: [proposed, received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+          description: proposed, drafted by us for the buyer and waiting for its Confirm
         change:
           type: array
           items:
@@ -27306,6 +27485,10 @@ components:
         invoice_at:
           type: string
           enum: [accepted, delivered]
+        auto_accept:
+          type: boolean
+        placed_by_seller:
+          type: boolean
         decided_by:
           type: string
         accepted_at:
