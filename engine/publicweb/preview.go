@@ -80,7 +80,7 @@ func (s *Server) servePreview(w http.ResponseWriter, r *http.Request) {
 		d.Services = nil
 		s.renderPrivate(w, r, http.StatusOK, "storefront.html", d)
 	case "order":
-		act, _ := findAction(shop.Model.Actions, "order")
+		act, _ := findAction(shop.Model.Home().Actions, "order")
 		f := formView(shop, act, Site{}, false)
 		f.Look, f.Token, f.Action = l, "preview", previewPrefix
 		for i, it := range shop.Items {

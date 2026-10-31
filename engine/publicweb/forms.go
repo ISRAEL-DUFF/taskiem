@@ -176,7 +176,7 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 		return
 	}
-	act, enabled := findAction(p.Model.Actions, kind)
+	act, enabled := findAction(p.Model.Home().Actions, kind)
 	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
@@ -349,7 +349,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		sub.Channel = "embed"
 	}
 	sub.Submitted = s.now().UTC()
-	ref, ok, err := s.record(r.Context(), site.ID, p.Model.Slug, act.Kind, idem, sub)
+	ref, ok, err := s.record(r.Context(), site.ID, p.Model.Slug, act, idem, sub)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: submit", "storefront", site.ID, "kind", act.Kind, "err", err)
@@ -373,7 +373,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 
 // record seals a submission and records it, with a new reference if the
 // one drawn is taken. A repeat of idem answers with its first reference.
-func (s *Server) record(ctx context.Context, sf uuid.UUID, slug, kind string, idem [32]byte, sub storefront.Submission) (string, bool, error) {
+func (s *Server) record(ctx context.Context, sf uuid.UUID, slug string, act storefront.PublicAction, idem [32]byte, sub storefront.Submission) (string, bool, error) {
 	hash := storefront.StatusHash(sub.StatusKey)
 	for range 3 {
 		ref := storefront.NewReference(slug)
@@ -381,7 +381,7 @@ func (s *Server) record(ctx context.Context, sf uuid.UUID, slug, kind string, id
 		if err != nil {
 			return "", false, err
 		}
-		got, ok, err := s.Submit(ctx, sf, kind, ref, idem[:], hash, payload)
+		got, ok, err := s.Submit(ctx, sf, act.ID, act.Kind, ref, idem[:], hash, payload)
 		if errors.Is(err, ErrReferenceTaken) {
 			continue
 		}

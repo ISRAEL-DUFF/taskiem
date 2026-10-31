@@ -90,9 +90,12 @@ type Model struct {
 	HasCatalog bool   `json:"has_catalogue"`
 	// HasServices: the page lists services to book.
 	HasServices bool `json:"has_services,omitempty"`
-	// Actions are the forms the page offers.
-	Actions     []PublicAction `json:"actions,omitempty"`
-	PublishedAt time.Time      `json:"published_at"`
+	// Actions are the forms the page offers: the home front's, kept for a
+	// public host on the binary before fronts.
+	Actions []PublicAction `json:"actions,omitempty"`
+	// Fronts are the enabled fronts, the home page first (fronts §5.1).
+	Fronts      []PublicFront `json:"fronts,omitempty"`
+	PublishedAt time.Time     `json:"published_at"`
 }
 
 // Item is one catalogue item as pages show it.
@@ -205,6 +208,9 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 		m.Logo = img
 	}
 	if m.Actions, err = publicActions(ctx, tx, tenant); err != nil {
+		return Storefront{}, err
+	}
+	if m.Fronts, err = publicFronts(ctx, tx, tenant, m.Actions); err != nil {
 		return Storefront{}, err
 	}
 	raw, _ := json.Marshal(m)

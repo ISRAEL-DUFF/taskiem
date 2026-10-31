@@ -42,7 +42,7 @@ type inboxRow struct {
 	idem, hash, payload []byte
 }
 
-func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, kind, ref string, idem, hash, payload []byte) (string, bool, error) {
+func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, _ *uuid.UUID, kind, ref string, idem, hash, payload []byte) (string, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r, ok := f.byIdem[hex.EncodeToString(idem)]; ok {

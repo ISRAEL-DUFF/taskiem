@@ -51,7 +51,7 @@ func (c *fakeCalendar) busyLocked(except string, from, to time.Time) []storefron
 	return out
 }
 
-func (c *fakeCalendar) book(_ context.Context, sf uuid.UUID, ref string, idem, hash, payload []byte, b storefront.Booked) (string, bool, error) {
+func (c *fakeCalendar) book(_ context.Context, sf uuid.UUID, _ *uuid.UUID, ref string, idem, hash, payload []byte, b storefront.Booked) (string, bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	in := c.e.inbox

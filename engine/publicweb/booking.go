@@ -394,7 +394,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 		sub.Channel = "embed"
 	}
 	sub.Submitted = s.now().UTC()
-	ref, ok, err := s.recordBooking(r.Context(), site.ID, p.Model.Slug, idem, sub)
+	ref, ok, err := s.recordBooking(r.Context(), site.ID, p.Model.Slug, act.ID, idem, sub)
 	switch {
 	case errors.Is(err, ErrSlotTaken):
 		// Fresh times, keeping what was typed; a new token, since the
@@ -435,7 +435,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 
 // recordBooking seals a booking and holds its slot, as record does for
 // the other forms.
-func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, idem [32]byte, sub storefront.Submission) (string, bool, error) {
+func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, action *uuid.UUID, idem [32]byte, sub storefront.Submission) (string, bool, error) {
 	hash := storefront.StatusHash(sub.StatusKey)
 	for range 3 {
 		ref := storefront.NewReference(slug)
@@ -443,7 +443,7 @@ func (s *Server) recordBooking(ctx context.Context, sf uuid.UUID, slug string, i
 		if err != nil {
 			return "", false, err
 		}
-		got, ok, err := s.Book(ctx, sf, ref, idem[:], hash, payload, *sub.Booking)
+		got, ok, err := s.Book(ctx, sf, action, ref, idem[:], hash, payload, *sub.Booking)
 		if errors.Is(err, ErrReferenceTaken) {
 			continue
 		}

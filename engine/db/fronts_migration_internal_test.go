@@ -47,6 +47,9 @@ func TestFrontsMigrationUpDownUp(t *testing.T) {
 	exec(`INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment) VALUES
 		('00000000-0000-0000-0000-0000000000b1', 'order', '00000000-0000-0000-0000-0000000000a1', true, 'Order now', 'after_accept'),
 		('00000000-0000-0000-0000-0000000000b1', 'enquiry', '00000000-0000-0000-0000-0000000000a1', true, 'Ask', 'none')`)
+	exec(`INSERT INTO storefront_snapshots (storefront_id, version, tenant_id, model, hash, created_by) VALUES ('00000000-0000-0000-0000-0000000000b1', 1,
+		'00000000-0000-0000-0000-0000000000a1', '{"version": 1, "card": {"name": "Ada Kitchen"}, "actions": [{"kind": "order", "label": "Order now", "payment": "after_accept"}]}',
+		sha256('x'), 'user:ada')`)
 	order := func(id, kind, ref string) {
 		t.Helper()
 		exec(`INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, payment)
@@ -86,8 +89,28 @@ func TestFrontsMigrationUpDownUp(t *testing.T) {
 	}
 
 	// 00280 moves the definers to action ids; its Down puts them back.
-	if _, err := p.UpTo(ctx, 280); err != nil {
+	// 00281 gives each snapshot its home front, the actions named by id.
+	if _, err := p.UpTo(ctx, 281); err != nil {
 		t.Fatal(err)
+	}
+	var home struct {
+		Slug    string `json:"slug"`
+		Name    string `json:"name"`
+		Actions []struct {
+			ID, Slug, Kind, Label string
+		} `json:"actions"`
+	}
+	var top int
+	if err := conn.QueryRow(ctx, `SELECT model->'fronts'->0, jsonb_array_length(model->'actions') FROM storefront_snapshots`).Scan(&home, &top); err != nil {
+		t.Fatal(err)
+	}
+	var orderAction string
+	if err := conn.QueryRow(ctx, `SELECT id::text FROM storefront_actions WHERE kind = 'order' AND builtin`).Scan(&orderAction); err != nil {
+		t.Fatal(err)
+	}
+	if home.Slug != "" || home.Name != "Ada Kitchen" || len(home.Actions) != 1 || home.Actions[0].ID != orderAction || home.Actions[0].Slug != "order" ||
+		home.Actions[0].Label != "Order now" || top != 1 {
+		t.Fatalf("the snapshot's home front: %+v, %d top-level actions", home, top)
 	}
 	var claimCols int
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.parameters WHERE specific_name LIKE 'taskiem_storefront_inbox_claim%' AND parameter_mode = 'OUT'`).Scan(&claimCols); err != nil || claimCols != 9 {
@@ -102,6 +125,10 @@ func TestFrontsMigrationUpDownUp(t *testing.T) {
 	}
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.parameters WHERE specific_name LIKE 'taskiem_storefront_inbox_claim%' AND parameter_mode = 'OUT'`).Scan(&claimCols); err != nil || claimCols != 8 {
 		t.Fatalf("the claim's columns after down: %d %v", claimCols, err)
+	}
+	var fronts bool
+	if err := conn.QueryRow(ctx, `SELECT model ? 'fronts' FROM storefront_snapshots`).Scan(&fronts); err != nil || fronts {
+		t.Fatalf("down kept the snapshot's fronts: %v", err)
 	}
 	var key string
 	if err := conn.QueryRow(ctx, `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'storefront_actions_pkey'`).Scan(&key); err != nil ||

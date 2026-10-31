@@ -133,12 +133,16 @@ func (o ActionOptions) Deposit(price int64) int64 {
 
 // PublicAction is what a published page shows of a form.
 type PublicAction struct {
-	Kind         string `json:"kind"`
-	Label        string `json:"label"`
-	Payment      string `json:"payment"`
-	Pickup       bool   `json:"pickup,omitempty"`
-	Delivery     bool   `json:"delivery,omitempty"`
-	DeliveryNote string `json:"delivery_note,omitempty"`
+	// ID and Slug name the action (fronts F1); a snapshot's top-level
+	// actions, kept for a public host on the old binary, have neither.
+	ID           *uuid.UUID `json:"id,omitempty"`
+	Slug         string     `json:"slug,omitempty"`
+	Kind         string     `json:"kind"`
+	Label        string     `json:"label"`
+	Payment      string     `json:"payment"`
+	Pickup       bool       `json:"pickup,omitempty"`
+	Delivery     bool       `json:"delivery,omitempty"`
+	DeliveryNote string     `json:"delivery_note,omitempty"`
 	// Zones are the delivery areas the customer chooses from, with fees.
 	Zones []Zone `json:"zones,omitempty"`
 	// PayOnDelivery offers paying at the door with delivery.

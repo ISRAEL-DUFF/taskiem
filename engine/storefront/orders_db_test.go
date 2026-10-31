@@ -459,6 +459,13 @@ func TestSubmitToAnActionByID(t *testing.T) {
 		linked == nil || *linked != action {
 		t.Fatalf("the trigger deployed first: %v %v", linked, err)
 	}
+	// The published snapshot's home front names its actions by id (F1d).
+	var home uuid.UUID
+	var top *string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (model->'fronts'->0->'actions'->0->>'id')::uuid, model->'actions'->0->>'id' FROM storefront_snapshots
+		WHERE tenant_id = $1 ORDER BY version DESC LIMIT 1`, w.env.Tenant).Scan(&home, &top); err != nil || home != action || top != nil {
+		t.Fatalf("the snapshot's actions: %v %v %v", home, top, err)
+	}
 	submit := func(to uuid.UUID, ref string) *string {
 		t.Helper()
 		key, hash := storefront.NewStatusKey()

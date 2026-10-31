@@ -148,3 +148,92 @@ func syncFirstFront(ctx context.Context, tx pgx.Tx, sf Storefront) error {
 	}
 	return nil
 }
+
+// PublicFront is a front as its published snapshot holds it (§5.1): what
+// the public host renders, the actions with their ids so a submission
+// names the action it is for.
+type PublicFront struct {
+	ID      uuid.UUID      `json:"id"`
+	Slug    string         `json:"slug"`
+	Kind    string         `json:"kind"`
+	Name    string         `json:"name"`
+	Tagline string         `json:"tagline,omitempty"`
+	Photo   string         `json:"photo,omitempty"`
+	Blocks  []PublicBlock  `json:"blocks,omitempty"`
+	Actions []PublicAction `json:"actions,omitempty"`
+}
+
+// PublicBlock is a published block.
+type PublicBlock struct {
+	Kind   string          `json:"kind"`
+	Config json.RawMessage `json:"config"`
+}
+
+// Home is the snapshot's first front: the storefront's home page. A
+// snapshot published before fronts (none left after migration 00281, but
+// a public host may read one mid-deploy) reads as one front with the
+// snapshot's actions, without ids.
+func (m Model) Home() PublicFront {
+	for _, f := range m.Fronts {
+		if f.Slug == "" {
+			return f
+		}
+	}
+	return PublicFront{Kind: "shop", Name: m.Card.Name, Actions: m.Actions}
+}
+
+// publicFronts are the fronts a publish snapshots: the enabled ones, each
+// with its blocks and its actions (those of actions, the enabled built-in
+// ones, given their ids and slugs on the first front).
+func publicFronts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actions []PublicAction) ([]PublicFront, error) {
+	fronts, err := Fronts(ctx, tx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	sf, err := Get(ctx, tx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	ids := map[string]PublicAction{}
+	rows, err := tx.Query(ctx, `SELECT kind, id, slug FROM storefront_actions WHERE storefront_id = $1 AND builtin`, sf.ID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var kind, slug string
+		var id uuid.UUID
+		if err := rows.Scan(&kind, &id, &slug); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids[kind] = PublicAction{ID: &id, Slug: slug}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var out []PublicFront
+	for _, f := range fronts {
+		if !f.Enabled {
+			continue
+		}
+		pf := PublicFront{ID: f.ID, Slug: f.Slug, Kind: f.Kind, Name: f.Name, Tagline: f.Tagline, Photo: f.Photo}
+		blocks, err := Blocks(ctx, tx, f.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range blocks {
+			pf.Blocks = append(pf.Blocks, PublicBlock{Kind: b.Kind, Config: b.Config})
+		}
+		if f.Slug == "" {
+			for _, a := range actions {
+				if x, ok := ids[a.Kind]; ok {
+					a.ID, a.Slug = x.ID, x.Slug
+				}
+				pf.Actions = append(pf.Actions, a)
+			}
+		}
+		out = append(out, pf)
+	}
+	return out, nil
+}

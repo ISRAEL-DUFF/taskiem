@@ -19,13 +19,22 @@ var ErrReferenceTaken = errors.New("publicweb: the reference is taken")
 // idem, which is the first one made for it when the submission is a
 // repeat; ok is false when the storefront is not published or the form is
 // not enabled.
-type Submit func(ctx context.Context, storefront uuid.UUID, kind, reference string, idem, statusHash, payload []byte) (ref string, ok bool, err error)
+// The action is the one the page's snapshot names (fronts F1); nil for a
+// snapshot published before fronts, when the kind's built-in action takes
+// it.
+type Submit func(ctx context.Context, storefront uuid.UUID, action *uuid.UUID, kind, reference string, idem, statusHash, payload []byte) (ref string, ok bool, err error)
 
-// DBSubmit records submissions with taskiem_public_submit.
+// DBSubmit records submissions with taskiem_public_submit_action, or
+// taskiem_public_submit by kind.
 func DBSubmit(pool *pgxpool.Pool) Submit {
-	return func(ctx context.Context, storefront uuid.UUID, kind, reference string, idem, statusHash, payload []byte) (string, bool, error) {
+	return func(ctx context.Context, storefront uuid.UUID, action *uuid.UUID, kind, reference string, idem, statusHash, payload []byte) (string, bool, error) {
 		var ref *string
-		err := pool.QueryRow(ctx, `SELECT taskiem_public_submit($1, $2, $3, $4, $5, $6)`, storefront, kind, reference, idem, statusHash, payload).Scan(&ref)
+		var err error
+		if action != nil {
+			err = pool.QueryRow(ctx, `SELECT taskiem_public_submit_action($1, $2, $3, $4, $5)`, *action, reference, idem, statusHash, payload).Scan(&ref)
+		} else {
+			err = pool.QueryRow(ctx, `SELECT taskiem_public_submit($1, $2, $3, $4, $5, $6)`, storefront, kind, reference, idem, statusHash, payload).Scan(&ref)
+		}
 		var pe *pgconn.PgError
 		if errors.As(err, &pe) && pe.Code == "23505" && pe.ConstraintName == "storefront_inbox_reference_key" {
 			return "", false, ErrReferenceTaken
