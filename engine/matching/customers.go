@@ -151,7 +151,7 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 	linked := strings.HasPrefix(customer, "key:link:")
 	var token string
 	if linked {
-		named := -1
+		var named int
 		if named, token = namedInvoice(list, c.Note); named < 0 && c.AmountKobo > 0 {
 			if err := tx.QueryRow(ctx, `SELECT COALESCE(taskiem_link_payout_token($1, $2), '')`, customer, c.AmountKobo).Scan(&token); err != nil {
 				return nil, err
@@ -232,7 +232,7 @@ func namedInvoice(list []invoicing.Invoice, note string) (int, string) {
 	up, num := strings.ToUpper(note), strings.ToUpper(list[found].Number)
 	if i := strings.Index(up, num+"/"); i >= 0 {
 		rest := up[i+len(num)+1:]
-		if n := strings.IndexFunc(rest, func(r rune) bool { return !(r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') }); n != 0 {
+		if n := strings.IndexFunc(rest, func(r rune) bool { return (r < 'A' || r > 'Z') && (r < '0' || r > '9') }); n != 0 {
 			if n < 0 {
 				n = len(rest)
 			}

@@ -271,6 +271,7 @@ customer_invoices.currency
 customer_invoices.customer
 customer_invoices.customer_id
 customer_invoices.customer_key
+customer_invoices.disputed
 customer_invoices.due_on
 customer_invoices.fee_paid_by
 customer_invoices.id
