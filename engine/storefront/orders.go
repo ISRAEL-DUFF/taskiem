@@ -497,7 +497,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 		Scan(&form); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, err
 	}
-	if kept := keepAsked(sub.Answers, form); kept != nil {
+	if kept := keepAsked(sub.Answers, EffectiveForm(form, x.kind)); kept != nil {
 		if answers, err = o.Vault.SealUnderTx(ctx, tx, x.tenant, subject, "answers", kept); err != nil {
 			return Order{}, err
 		}

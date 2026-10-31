@@ -195,18 +195,19 @@ func publicFronts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actions []Pu
 		return nil, err
 	}
 	ids := map[string]PublicAction{}
-	rows, err := tx.Query(ctx, `SELECT kind, id, slug FROM storefront_actions WHERE storefront_id = $1 AND builtin`, sf.ID)
+	rows, err := tx.Query(ctx, `SELECT kind, id, slug, form FROM storefront_actions WHERE storefront_id = $1 AND builtin`, sf.ID)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
 		var kind, slug string
 		var id uuid.UUID
-		if err := rows.Scan(&kind, &id, &slug); err != nil {
+		var form []byte
+		if err := rows.Scan(&kind, &id, &slug, &form); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		ids[kind] = PublicAction{ID: &id, Slug: slug}
+		ids[kind] = PublicAction{ID: &id, Slug: slug, Form: EffectiveForm(form, kind)}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -228,7 +229,7 @@ func publicFronts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actions []Pu
 		if f.Slug == "" {
 			for _, a := range actions {
 				if x, ok := ids[a.Kind]; ok {
-					a.ID, a.Slug = x.ID, x.Slug
+					a.ID, a.Slug, a.Form = x.ID, x.Slug, x.Form
 				}
 				pf.Actions = append(pf.Actions, a)
 			}

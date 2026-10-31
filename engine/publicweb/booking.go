@@ -58,6 +58,9 @@ type bookingData struct {
 	Ahead    int
 
 	Name, Phone, Email string
+	// Questions are the booking action's own questions (fronts F1): its
+	// form's fields but the time.
+	Questions []*field
 }
 
 type serviceView struct {
@@ -243,7 +246,8 @@ func (s *Server) serveBooking(w http.ResponseWriter, r *http.Request, site Site,
 	}
 	c := p.Model.Card
 	d := bookingData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Label: act.Label, Action: "/a/booking", Home: "/",
-		Honeypot: formguard.HoneypotField, Purpose: purposes["booking"], form: formID(site.ID, "booking")}
+		Honeypot: formguard.HoneypotField, Purpose: purposes["booking"], form: formID(site.ID, "booking"),
+		Questions: questions(storefront.EffectiveForm(act.Form, act.Kind))}
 	d.Look = s.lookFor(r.Context(), site.Tenant, c.Name)
 	prefix := ""
 	if embed {
@@ -359,7 +363,7 @@ func (s *Server) submitBooking(w http.ResponseWriter, r *http.Request, site Site
 		s.showBooking(w, r, http.StatusBadRequest, d, "")
 		return
 	}
-	f := formData{Kind: "booking", Business: d.Business, Name: d.Name, Phone: d.Phone, Email: d.Email}
+	f := formData{Kind: "booking", Business: d.Business, Name: d.Name, Phone: d.Phone, Email: d.Email, Questions: d.Questions}
 	sub, msg := f.check(v, nil)
 	d.Name, d.Phone, d.Email = f.Name, f.Phone, f.Email
 	if msg != "" {

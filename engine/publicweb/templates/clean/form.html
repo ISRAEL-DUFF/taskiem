@@ -61,7 +61,7 @@
 {{else if eq .Kind "callback"}}
 <div class="field"><label for="f-best">Best time to call <span class="hint">(optional)</span></label>
 <input id="f-best" type="text" name="best_time" value="{{.BestTime}}" maxlength="60" placeholder="Weekdays after 5pm"></div>
-{{end}}
+{{end}}{{range .Questions}}{{template "hfield" .}}{{end}}
 </div>
 <p class="hint privacy">Your details go to {{.Business}} only, to {{.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
 <button class="btn btn-primary btn-block" type="submit">{{if eq .Kind "order"}}Send order{{else}}Send{{end}}</button>

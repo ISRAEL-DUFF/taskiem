@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -108,6 +109,9 @@ type formData struct {
 	// (dispatch D2, D4).
 	Area, Landmark, Pin     string
 	PayOnDelivery, PayLater bool
+	// Questions are the action's own questions (fronts F1): its form's
+	// fields but the basket and time, drawn as hosted forms' fields.
+	Questions []*field
 }
 
 type zoneItem struct {
@@ -244,6 +248,10 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 	if embed {
 		f.Action, f.Home = "/embed/a/"+act.Kind, ""
 	}
+	// The page is drawn from the action's form (fronts F1): the basket
+	// where it has one, then its questions.
+	form := storefront.EffectiveForm(act.Form, act.Kind)
+	f.Questions = questions(form)
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
 		f.PayOnDelivery = act.Delivery && act.PayOnDelivery && act.Payment != "none"
@@ -262,17 +270,8 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 		case f.Delivery && !f.Pickup:
 			f.Fulfilment = "delivery"
 		}
-		seen := map[string]bool{}
-		for _, it := range p.Items {
-			if seen[it.ID] {
-				continue
-			}
-			seen[it.ID] = true
-			x := formItem{N: len(f.Items), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut()}
-			if it.PriceKobo != nil {
-				x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
-			}
-			f.Items = append(f.Items, x)
+		if storefront.HasWidget(form, "basket") {
+			f.Items = basketItems(p.Items)
 		}
 	}
 	return f
@@ -401,6 +400,9 @@ func (f *formData) keep(v url.Values) {
 	f.chooseZone(v.Get("zone"))
 	f.Area, f.Landmark, f.Pin = v.Get("area"), v.Get("landmark"), v.Get("pin")
 	f.PayLater = f.PayOnDelivery && v.Get("pay") == "on_delivery"
+	for _, q := range f.Questions {
+		q.show(v)
+	}
 	for i := range f.Items {
 		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
@@ -502,7 +504,53 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 			return sub, "Please do not put card numbers, BVNs or NINs in this form. " + f.Business + " will never ask for them here."
 		}
 	}
+	answers, msg := readAnswers(f.Questions, v)
+	if msg != "" {
+		return sub, msg
+	}
+	sub.Answers = answers
 	return sub, ""
+}
+
+// questions are a form's questions as fields, in order.
+func questions(form []byte) []*field {
+	var schema map[string]any
+	if json.Unmarshal(form, &schema) != nil {
+		return nil
+	}
+	all := fields(schema)
+	var out []*field
+	for _, name := range storefront.FormFields(form) {
+		if f, ok := all[name]; ok && !f.Hidden && f.Widget != "file" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// readAnswers reads the questions' answers; msg is the first refusal, the
+// field at fault marked.
+func readAnswers(qs []*field, v url.Values) (map[string]any, string) {
+	var answers map[string]any
+	for _, q := range qs {
+		q.show(v)
+		val, present, msg := q.parse(v)
+		if msg != "" {
+			q.Error = msg
+			return nil, msg
+		}
+		if present {
+			if s, ok := val.(string); ok && sensitive(s) {
+				q.Value, q.Error = "", "Please do not put card numbers, BVNs or NINs here."
+				return nil, q.Error
+			}
+			if answers == nil {
+				answers = map[string]any{}
+			}
+			answers[q.Name] = val
+		}
+	}
+	return answers, ""
 }
 
 // basket builds the order's lines. Quantities come from the form; ids,
@@ -641,4 +689,22 @@ func sensitive(s string) bool {
 		}
 	}
 	return false
+}
+
+// basketItems are the catalogue's items as the basket shows them, each once.
+func basketItems(items []storefront.Item) []formItem {
+	var out []formItem
+	seen := map[string]bool{}
+	for _, it := range items {
+		if seen[it.ID] {
+			continue
+		}
+		seen[it.ID] = true
+		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut()}
+		if it.PriceKobo != nil {
+			x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
+		}
+		out = append(out, x)
+	}
+	return out
 }

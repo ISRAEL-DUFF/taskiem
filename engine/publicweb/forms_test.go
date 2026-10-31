@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -705,5 +706,78 @@ func TestOrderDropAndPayAtDoor(t *testing.T) {
 	e = formServer(t, orderPage())
 	if body, _ := e.form(t, "/a/order"); strings.Contains(body, `value="on_delivery"`) {
 		t.Error("pay at the door offered without the setting")
+	}
+}
+
+// Fronts F1 (§5.4): the order and booking pages are drawn from the
+// action's form. A snapshot that carries the built-in forms (the basket,
+// the time) renders exactly what one without forms does; an action's own
+// question is shown with the hosted forms' fields, refused when required
+// and missing, and sent as the submission's answers.
+func TestPagesDrawnFromTheActionsForm(t *testing.T) {
+	render := func(withForms bool, extra string) (*formEnv, map[string]string) {
+		p := orderPage()
+		p.Model.HasServices = true
+		p.Model.Actions = append(p.Model.Actions, storefront.PublicAction{Kind: "booking", Label: "Book", Payment: "none"})
+		if withForms {
+			for i := range p.Model.Actions {
+				p.Model.Actions[i].Form = storefront.BuiltinForm(p.Model.Actions[i].Kind)
+				if extra != "" && (p.Model.Actions[i].Kind == "order" || p.Model.Actions[i].Kind == "booking") {
+					var f map[string]any
+					_ = json.Unmarshal(p.Model.Actions[i].Form, &f)
+					var q any
+					_ = json.Unmarshal([]byte(extra), &q)
+					f["properties"].(map[string]any)["spice"] = q
+					f["required"] = []any{"spice"}
+					p.Model.Actions[i].Form, _ = json.Marshal(f)
+				}
+			}
+		}
+		e := formServer(t, p)
+		c := &fakeCalendar{e: e, holds: map[string]storefront.Busy{}, bookings: map[string]BookingState{}}
+		var days [7][]storefront.Span
+		for i := range 6 {
+			days[i] = []storefront.Span{{Open: "09:00", Close: "12:00"}}
+		}
+		c.page = ServicesPage{Availability: storefront.Availability{Days: days}, Services: []storefront.Item{haircut}}
+		e.s.Services, e.s.Busy, e.s.Book, e.s.Booking, e.s.Change, e.s.PriceChange = c.services, c.busy, c.book, c.booking, c.change, c.priceChange
+		out := map[string]string{}
+		for _, path := range []string{"/a/order", "/a/enquiry", "/a/callback", "/a/booking?service=7"} {
+			out[path] = tokenRe.ReplaceAllString(get(e.h, "GET", sfHost, path).Body.String(), `name="token" value="T"`)
+		}
+		return e, out
+	}
+	_, without := render(false, "")
+	_, with := render(true, "")
+	for path, body := range without {
+		if with[path] != body {
+			t.Errorf("%s: the built-in form changes the page", path)
+		}
+	}
+
+	e, pages := render(true, `{"type": "string", "title": "How hot?", "enum": ["mild", "hot"], "x-form": {"widget": "radio"}}`)
+	for _, path := range []string{"/a/order", "/a/booking?service=7"} {
+		if !strings.Contains(pages[path], "How hot?") || !strings.Contains(pages[path], `name="a.spice" value="hot"`) {
+			t.Fatalf("%s: the question is not shown", path)
+		}
+	}
+	if strings.Contains(pages["/a/enquiry"], "How hot?") {
+		t.Fatal("another action's question shown")
+	}
+	_, tok := e.form(t, "/a/order")
+	*e.now = e.now.Add(20 * time.Second)
+	w := e.post("/a/order", goodOrder(tok))
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "How hot?") || !strings.Contains(w.Body.String(), "4 Akoka Road, Yaba</textarea>") {
+		t.Fatalf("a required question left out: %d %s", w.Code, w.Body.String())
+	}
+	v := goodOrder(tok)
+	v.Set("a.spice", "hot")
+	if w = e.post("/a/order", v); w.Code != http.StatusSeeOther {
+		t.Fatalf("answered: %d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+	if err != nil || len(sub.Answers) != 1 || sub.Answers["spice"] != "hot" || sub.TotalKobo != 450200 {
+		t.Fatalf("the submission's answers: %v %v", sub.Answers, err)
 	}
 }
