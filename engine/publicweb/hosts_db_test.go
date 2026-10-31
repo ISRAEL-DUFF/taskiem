@@ -177,7 +177,9 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// A school family's page (B6): the link, the family's students, invoices, receipts and requests, and what its forms send to the inbox.
 		"taskiem_public_school_family(bytea)": true, "taskiem_public_school_family_students(bytea)": true, "taskiem_public_school_family_invoices(bytea)": true,
 		"taskiem_public_school_family_receipts(bytea)": true, "taskiem_public_school_family_requests(bytea)": true,
-		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true}
+		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true,
+		// Business links: a business's link code, printed on its invoice's page (decision 0061).
+		"taskiem_public_link_code(uuid)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)
