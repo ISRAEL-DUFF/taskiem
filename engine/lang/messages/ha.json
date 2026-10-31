@@ -4492,6 +4492,10 @@
       "text": "Lokacin da wani ya aika fom ɗin {form} na shagon",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "Lokacin da wani ya aika fom a shafin shago",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "Lokacin da wani aiki ya kira shi",
       "reviewed": false

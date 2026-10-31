@@ -4492,6 +4492,10 @@
       "text": "When person send the shop {form} form",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "When person send form for the storefront",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "When another workflow call am",
       "reviewed": false

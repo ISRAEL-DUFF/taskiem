@@ -1729,7 +1729,7 @@
             ],
             "properties": {
               "config": {
-                "description": "A form on the organisation's public storefront (docs/storefronts.md); its submissions start runs.",
+                "description": "A form on the organisation's public storefront (docs/storefronts.md); its submissions start runs. action names one of the built-in four on the storefront's first front; action_id, when set, names any action on any front (docs/spec/fronts.md §5.3), and action is then ignored.",
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
@@ -1743,6 +1743,11 @@
                       "callback",
                       "booking"
                     ]
+                  },
+                  "action_id": {
+                    "description": "The action's id (a uuid), for an action that is not one of the built-in four, or to name one by id.",
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
                   }
                 }
               }

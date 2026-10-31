@@ -58,26 +58,32 @@ func writeActionTaken(w http.ResponseWriter, e actionTaken) {
 	})
 }
 
-// storefrontActionOf is the storefront action version v of wf starts on
-// ("" when it starts some other way).
-func storefrontActionOf(ctx context.Context, tx pgx.Tx, wf uuid.UUID, v int) (string, error) {
+// storefrontTriggerOf is the storefront trigger's config of version v of
+// wf (nil when it starts some other way).
+func storefrontTriggerOf(ctx context.Context, tx pgx.Tx, wf uuid.UUID, v int) (map[string]any, error) {
 	var def []byte
 	if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&def); err != nil {
-		return "", err
+		return nil, err
 	}
 	d, err := wd.Load(def)
 	if err != nil || d.Trigger.Type != "storefront" {
-		return "", nil //nolint:nilerr // an invalid definition is refused by the publishing checks
+		return nil, nil //nolint:nilerr // an invalid definition is refused by the publishing checks
 	}
-	action, _ := d.Trigger.Config["action"].(string)
-	return action, nil
+	return d.Trigger.Config, nil
 }
 
 // actionHolders are the workflows other than wf that hold version v's
 // storefront action in the environments a publish deploys to.
 func actionHolders(ctx context.Context, tx pgx.Tx, wf uuid.UUID, v int) ([]*ingest.ActionTaken, error) {
-	action, err := storefrontActionOf(ctx, tx, wf, v)
-	if err != nil || action == "" {
+	c, err := storefrontTriggerOf(ctx, tx, wf, v)
+	if err != nil || c == nil {
+		return nil, err
+	}
+	id, action, err := ingest.StorefrontAction(ctx, tx, c)
+	if errors.Is(err, ingest.ErrNoStorefrontAction) {
+		return nil, nil //nolint:nilerr // refused, in its own words, when it is deployed
+	}
+	if err != nil {
 		return nil, err
 	}
 	envs, err := deployTargets(ctx, tx, "")
@@ -86,7 +92,7 @@ func actionHolders(ctx context.Context, tx pgx.Tx, wf uuid.UUID, v int) ([]*inge
 	}
 	var out []*ingest.ActionTaken
 	for _, env := range envs {
-		held, err := ingest.StorefrontActionHolder(ctx, tx, env, action, wf)
+		held, err := ingest.StorefrontActionHolderOf(ctx, tx, env, action, id, wf)
 		if err != nil {
 			return nil, err
 		}

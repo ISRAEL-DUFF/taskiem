@@ -226,6 +226,15 @@ export interface Trigger {
   config?: Record<string, unknown>;
 }
 
+/**
+ * A storefront trigger's config (docs/spec/fronts.md §5.3): action names one of the built-in four on the storefront's
+ * first front; action_id, when set, names any action on any front, and action is then ignored.
+ */
+export interface StorefrontTriggerConfig {
+  action: "order" | "enquiry" | "callback" | "booking";
+  action_id?: string;
+}
+
 /** A page of a form: its fields (inputs-schema properties), shown unless show_if (CEL over answers) is false. */
 export interface FormPage {
   title?: string;

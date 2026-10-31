@@ -89,6 +89,9 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 		if errors.As(err, &held) {
 			return actionTaken{ActionTaken: held}
 		}
+		if errors.Is(err, ingest.ErrNoStorefrontAction) {
+			return fmt.Errorf("%w: the storefront has no action with the id this workflow's trigger names", errConflict)
+		}
 		if errors.Is(err, ingest.ErrTriggerTaken) {
 			return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), ingest.ErrTriggerTaken.Error()+": "))
 		}

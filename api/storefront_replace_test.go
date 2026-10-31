@@ -81,3 +81,63 @@ func TestPublishReplacesTheFormsWorkflow(t *testing.T) {
 		t.Errorf("a request that could never be approved: %d %v", waiting, err)
 	}
 }
+
+// A storefront trigger may name its action by id (fronts F1, §5.3): the
+// built-in order action by id is the same action as action "order", so the
+// one-workflow rule holds across both forms, the trigger row keeps the id,
+// and an id the business has no action for is refused.
+func TestStorefrontTriggerByActionID(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	var order string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id::text FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order' AND builtin`, w.biz).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	tpl, _ := templates.Default().Get("storefront-order")
+	byID := func(name, id string) string {
+		t.Helper()
+		raw, err := tpl.Instantiate(map[string]any{}, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var def map[string]any
+		if err := json.Unmarshal(raw, &def); err != nil {
+			t.Fatal(err)
+		}
+		def["trigger"].(map[string]any)["config"].(map[string]any)["action_id"] = id
+		return ada.must(201, "POST", "/v1/workflows", map[string]any{"name": name, "definition": def})["id"].(string)
+	}
+	mine := byID("Orders by id", order)
+	if e := ada.must(409, "POST", "/v1/workflows/"+mine+"/versions/1/publish", nil); e["code"] != "action_taken" || e["action"] != "order" {
+		t.Fatalf("the same action by id: %v", e)
+	}
+	ada.must(200, "POST", "/v1/workflows/"+mine+"/versions/1/publish", map[string]any{"replace": true})
+	var held string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT storefront_action_id::text FROM triggers WHERE workflow_id = $1 AND environment = 'prod'`, mine).Scan(&held); err != nil || held != order {
+		t.Fatalf("the trigger's action: %q %v", held, err)
+	}
+	// Back by kind: still the same action.
+	plain := draftOrder(t, ada, "Orders by kind")
+	if e := ada.must(409, "POST", "/v1/workflows/"+plain+"/versions/1/publish", nil); e["code"] != "action_taken" {
+		t.Fatalf("the same action by kind: %v", e)
+	}
+	// An id the business has no action for.
+	none := byID("Orders nowhere", "00000000-0000-0000-0000-00000000dead")
+	if e := ada.must(409, "POST", "/v1/workflows/"+none+"/versions/1/publish", nil); !strings.Contains(e["error"].(string), "no action") {
+		t.Fatalf("no such action: %v", e)
+	}
+}
+
+// draftOrder saves a workflow made from storefront-order.
+func draftOrder(t *testing.T, c *client, name string) string {
+	t.Helper()
+	tpl, _ := templates.Default().Get("storefront-order")
+	def, err := tpl.Instantiate(map[string]any{}, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.must(201, "POST", "/v1/workflows", map[string]any{"name": name, "definition": json.RawMessage(def)})["id"].(string)
+}
