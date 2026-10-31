@@ -143,9 +143,9 @@ type closedData struct {
 
 var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back", "booking": "handle your booking"}
 
-func findAction(list []storefront.PublicAction, kind string) (storefront.PublicAction, bool) {
+func findAction(list []storefront.PublicAction, ref string) (storefront.PublicAction, bool) {
 	for _, a := range list {
-		if a.Kind == kind {
+		if a.Ref() == ref {
 			return a, true
 		}
 	}
@@ -166,7 +166,7 @@ func most(it storefront.Item) int {
 	return maxQuantity
 }
 
-func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, kind string, embed bool) {
+func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ref string, embed bool) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "GET, HEAD, POST")
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
@@ -180,7 +180,8 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 		return
 	}
-	act, enabled := findAction(p.Model.Home().Actions, kind)
+	act, enabled := findAction(p.Model.Home().Actions, ref)
+	kind := act.Kind
 	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
@@ -240,13 +241,13 @@ func (s *Server) formsOpen() bool {
 func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool) formData {
 	c := p.Model.Card
 	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Kind: act.Kind, Label: act.Label,
-		Action: "/a/" + act.Kind, Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
-		form: formID(site.ID, act.Kind)}
+		Action: "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
+		form: formID(site.ID, act.Ref())}
 	if f.Lang == "" {
 		f.Lang = "en"
 	}
 	if embed {
-		f.Action, f.Home = "/embed/a/"+act.Kind, ""
+		f.Action, f.Home = "/embed/a/"+act.Ref(), ""
 	}
 	// The page is drawn from the action's form (fronts F1): the basket
 	// where it has one, then its questions.
@@ -315,7 +316,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		s.showForm(w, r, http.StatusBadRequest, f, "")
 		return
 	}
-	claims, err := s.guard.Verify(v.Get(tokenField), formID(site.ID, act.Kind), s.now())
+	claims, err := s.guard.Verify(v.Get(tokenField), formID(site.ID, act.Ref()), s.now())
 	switch {
 	case errors.Is(err, formguard.ErrTooFast):
 		// A fast typist must not lose an order: the same token works in a

@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -379,7 +380,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 	switch {
 	case site.Kind == "storefront" && path == "/report" && !embed:
 		s.serveReport(w, r, site)
-	case site.Kind == "storefront" && strings.HasPrefix(path, "/a/") && formKinds[path[len("/a/"):]]:
+	case site.Kind == "storefront" && strings.HasPrefix(path, "/a/") && actionRef.MatchString(path[len("/a/"):]):
 		s.serveForm(w, r, site, path[len("/a/"):], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && !strings.Contains(path[len("/o/"):], "/"):
 		s.serveStatus(w, r, site, path[len("/o/"):], embed)
@@ -420,8 +421,10 @@ func redirects(r *http.Request, host string, site Site) bool {
 	return r.URL.Path != "/embed" && !strings.HasPrefix(r.URL.Path, "/embed/")
 }
 
-// formKinds are the storefront forms served under /a/.
-var formKinds = map[string]bool{"order": true, "enquiry": true, "callback": true, "booking": true}
+// actionRef is how /a/ names a storefront action: a built-in form's kind,
+// or another action's slug (fronts F2); the page answers 404 for one the
+// storefront does not have on.
+var actionRef = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`)
 
 // changePages are a status link's pages for changing what was sent:
 // /o/{reference}/{page}.

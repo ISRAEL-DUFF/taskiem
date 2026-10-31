@@ -13,12 +13,12 @@
   {{with .M.Card.Tagline}}<p class="lede">{{.}}</p>{{end}}
   {{if or .Verified .M.Card.Area}}<p class="facts">{{if .Verified}}{{template "i-check"}}Verified business{{end}}{{if and .Verified .M.Card.Area}} · {{end}}{{.M.Card.Area}}</p>{{end}}
   <div class="hero-actions">
-    {{range .Forms}}{{if or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="/a/{{.Kind}}">{{.Label}}</a>{{end}}{{end}}
+    {{range .Forms}}{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
     {{with .M.WhatsLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat on WhatsApp">{{template "i-whatsapp"}}{{if not $.Forms}}<span>Chat on WhatsApp</span>{{end}}</a>{{end}}
     {{with .Phone}}<a class="round" href="tel:{{.}}" aria-label="Call">{{template "i-call"}}</a>{{end}}
     {{with .M.MapLink}}<a class="round" href="{{.}}" rel="noopener" aria-label="Directions">{{template "i-map"}}</a>{{end}}
   </div>
-  {{if .Forms}}<nav class="more" aria-label="Order and contact forms">{{range .Forms}}{{if not (or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering)))}}<a href="/a/{{.Kind}}">{{.Label}}</a>{{end}}{{end}}</nav>{{end}}
+  {{if .Forms}}<nav class="more" aria-label="Order and contact forms">{{range .Forms}}{{if not (or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering)))}}<a href="/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}</nav>{{end}}
 </header>
 <main class="page">
   {{if .Closed}}<p class="notice" role="status">{{.Closed}}</p>{{end}}

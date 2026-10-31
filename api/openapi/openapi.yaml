@@ -1097,9 +1097,9 @@ paths:
       - name: kind
         in: path
         required: true
+        description: A built-in form's kind, or another action's id (fronts F2)
         schema:
           type: string
-          enum: [order, enquiry, callback, booking]
       requestBody:
         required: true
         content:
@@ -19586,7 +19586,10 @@ paths:
         A version whose storefront trigger names a form another workflow already starts answers 409 with `code`
         `action_taken` (docs/spec/fronts.md F0); with `replace` the other workflow is taken out of the environments
         this one deploys to and this one published, in one change. Under four-eyes publishing `replace` is refused,
-        with `can_replace` false and the reason in `refused`, and no request is made.
+        with `can_replace` false and the reason in `refused`, and no request is made. With `new_action` (fronts F2,
+        offered as `can_new_action`) the held action is copied instead, off, on the same front, and a new version
+        naming the copy by `action_id` is saved and published (or asked for, under four-eyes); the answer gives that
+        `version` and the `new_action`.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19619,6 +19622,9 @@ paths:
                 replace:
                   type: boolean
                   description: Take the workflow that starts this version's storefront form out of use, in the same change
+                new_action:
+                  type: boolean
+                  description: Give this workflow a copy of the storefront form another workflow starts, off, instead
       responses:
         '200':
           description: Published
@@ -19667,6 +19673,9 @@ paths:
                   refused:
                     type: string
                     description: Why replace is not offered (four-eyes publishing), when it is not
+                  can_new_action:
+                    type: boolean
+                    description: Whether new_action can make a copy of the form (not for the booking form)
         default:
           $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/versions/{v}/publish/approve:
@@ -21858,6 +21867,20 @@ components:
           description: Subscriptions registered at providers for remote triggers.
           items:
             $ref: '#/components/schemas/RemoteSubscription'
+        new_action:
+          type: object
+          description: The storefront action made for this workflow with new_action (fronts F2), off
+          required: [id, slug, kind, label]
+          properties:
+            id:
+              type: string
+              format: uuid
+            slug:
+              type: string
+            kind:
+              type: string
+            label:
+              type: string
       additionalProperties: false
     ValidateRequest:
       type: object
@@ -26506,6 +26529,16 @@ components:
       type: object
       required: [kind, enabled, label, payment, options, workflow_id]
       properties:
+        id:
+          type: string
+          format: uuid
+          description: The action's id (fronts F1); absent for a built-in form not saved yet
+        slug:
+          type: string
+          description: Its address on the page, /a/<slug>
+        builtin:
+          type: boolean
+          description: One of the four forms found by kind; the others are copies made for a workflow (fronts F2), saved by id
         kind:
           type: string
           enum: [order, enquiry, callback, booking]

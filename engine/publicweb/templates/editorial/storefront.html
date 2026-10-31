@@ -11,7 +11,7 @@
   {{with .M.Card.Tagline}}<p class="tagline">{{.}}</p>{{end}}
   {{if or .OpenKnown .Verified}}<p class="facts">{{if .OpenKnown}}<span class="{{if .OpenNow}}is-open{{else}}is-closed{{end}}">{{if .OpenNow}}Open now{{else}}Closed now{{end}}</span>{{end}}{{if and .OpenKnown .Verified}}<span class="sep">|</span>{{end}}{{if .Verified}}<span>Verified business</span>{{end}}</p>{{end}}
   {{if .Forms}}<nav class="forms" aria-label="Order and contact forms">
-    {{range .Forms}}<a class="btn{{if or (eq .Kind "order") (and (eq .Kind "booking") (not $.Ordering))}} btn-primary{{end}}" href="/a/{{.Kind}}">{{.Label}}</a>
+    {{range .Forms}}<a class="btn{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}} btn-primary{{end}}" href="/a/{{.Ref}}">{{.Label}}</a>
     {{end}}
   </nav>{{end}}
   {{if or .M.WhatsLink .Phone .M.MapLink}}<nav class="contact" aria-label="Contact">

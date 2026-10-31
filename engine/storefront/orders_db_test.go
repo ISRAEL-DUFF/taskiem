@@ -591,3 +591,101 @@ func TestAnswersReachTheRunApart(t *testing.T) {
 		t.Fatalf("the form asks it now: %v", err)
 	}
 }
+
+// Fronts F2: a copy of the order action, made for a second workflow, is
+// off until switched on, which needs a workflow deployed for it; once on
+// and published it is on the home front with its own slug, and a
+// submission to it starts its own workflow, not the built-in form's.
+func TestCopiedActionStartsItsOwnWorkflow(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var order uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order' AND builtin`, w.env.Tenant).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	var c storefront.CopiedAction
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		c, err = storefront.CopyAction(ctx, tx, order)
+		return err
+	})
+	if c.Slug != "order-2" || c.Kind != "order" {
+		t.Fatalf("the copy: %+v", c)
+	}
+	on := storefront.Action{ID: &c.ID, Enabled: true, Label: "Food delivery", Payment: "after_accept", Options: storefront.ActionOptions{Pickup: true}}
+	err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+		_, err := storefront.SaveAction(ctx, tx, w.env.Tenant, on)
+		return err
+	})
+	if !errors.Is(err, storefront.ErrNoWorkflow) {
+		t.Fatalf("switched on with no workflow: %v", err)
+	}
+	tpl, _ := templates.Default().Get("storefront-order")
+	def, err := tpl.Instantiate(map[string]any{}, "Food delivery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf := w.env.Publish(t, string(def))
+	w.in(func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action, storefront_action_id)
+			VALUES ($1, $2, $3, 1, 'prod', 'storefront', 'order', $4)`, uuid.New(), w.env.Tenant, wf, c.ID); err != nil {
+			return err
+		}
+		a, err := storefront.SaveAction(ctx, tx, w.env.Tenant, on)
+		if err != nil {
+			return err
+		}
+		if a.Builtin || !a.Enabled || a.Workflow == nil || *a.Workflow != wf || a.Slug != "order-2" {
+			return fmt.Errorf("saved: %+v", a)
+		}
+		list, err := storefront.Actions(ctx, tx, w.env.Tenant)
+		if err != nil {
+			return err
+		}
+		if n := len(list); n != len(storefront.Kinds)+1 || list[n-1].Slug != "order-2" {
+			return fmt.Errorf("the list: %+v", list)
+		}
+		_, err = storefront.Publish(ctx, tx, w.env.Tenant, "shops.test", "user:ada", false)
+		return err
+	})
+	var slugs string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT string_agg(a->>'slug', ',') FROM storefront_snapshots s, jsonb_array_elements(s.model->'fronts'->0->'actions') a
+		WHERE s.tenant_id = $1 AND s.version = (SELECT max(version) FROM storefront_snapshots WHERE tenant_id = $1)`, w.env.Tenant).Scan(&slugs); err != nil ||
+		slugs != "order,enquiry,order-2" {
+		t.Fatalf("the snapshot's actions: %q %v", slugs, err)
+	}
+	key, hash := storefront.NewStatusKey()
+	sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567"},
+		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 1, PriceKobo: 150000, LineKobo: 150000}}, TotalKobo: 150000,
+		Fulfilment: "pickup", Payment: "after_accept", Channel: "direct", Submitted: time.Now(), StatusKey: key}
+	ct, err := storefront.SealSubmission(w.key, w.sf.ID, "AD-COPY01", sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got *string
+	if err := w.env.DB.PublicPool(t, 1).QueryRow(ctx, `SELECT taskiem_public_submit_action($1, 'AD-COPY01', $2, $3, $4)`, c.ID, bytes.Repeat([]byte{9}, 32), hash, ct).
+		Scan(&got); err != nil || got == nil {
+		t.Fatalf("submit to the copy: %v %v", got, err)
+	}
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var started uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT r.workflow_id FROM storefront_orders o JOIN runs r ON r.id = o.run_id WHERE o.reference = 'AD-COPY01'`).
+		Scan(&started); err != nil || started != wf {
+		t.Fatalf("the run's workflow: %v (want %v) %v", started, wf, err)
+	}
+	// A booking is not copied.
+	var booking uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment) VALUES ($1, 'booking', $2, false, 'Book', 'none') RETURNING id`,
+		w.sf.ID, w.env.Tenant).Scan(&booking); err != nil {
+		t.Fatal(err)
+	}
+	err = db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+		_, err := storefront.CopyAction(ctx, tx, booking)
+		return err
+	})
+	if !errors.Is(err, storefront.ErrInvalid) {
+		t.Fatalf("a booking copied: %v", err)
+	}
+}

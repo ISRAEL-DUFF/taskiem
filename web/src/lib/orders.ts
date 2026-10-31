@@ -36,6 +36,11 @@ export const ZONE_LIMITS = { zones: 30, name: 40, feeKobo: 10_000_000 } as const
 
 /** One of the storefront's forms (StorefrontAction). */
 export interface StorefrontAction {
+  /** The action's id and slug; builtin is one of the four found by kind,
+   * the others copies made for a workflow (fronts F2). */
+  id?: string;
+  slug?: string;
+  builtin?: boolean;
   kind: FormKind;
   enabled: boolean;
   label: string;
@@ -394,9 +399,10 @@ export function zoneProblem(rows: { name: string; fee: string }[]): string | nul
 export const zoneLine = (z: DeliveryZone) =>
   `${z.name}, ${z.fee_kobo > 0 ? `${formatPrice(z.fee_kobo)} delivery` : "free delivery"}`;
 
-/** A form's public address on the published page. */
-export const formURL = (previewURL: string, kind: FormKind) =>
-  `${previewURL.replace(/\/+$/, "")}/a/${kind}`;
+/** A form's public address on the published page: a built-in form's by
+ * its kind, another action's by its slug. */
+export const formURL = (previewURL: string, ref: string) =>
+  `${previewURL.replace(/\/+$/, "")}/a/${ref}`;
 
 // --- orders ---
 

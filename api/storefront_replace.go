@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ingest"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -55,7 +57,71 @@ func writeActionTaken(w http.ResponseWriter, e actionTaken) {
 	writeJSON(w, http.StatusConflict, map[string]any{
 		"error": msg, "code": "action_taken", "action": e.Action, "action_words": words, "environment": e.Environment,
 		"workflow": map[string]any{"id": e.Workflow, "name": e.Name}, "can_replace": e.Refused == "", "refused": e.Refused,
+		"can_new_action": storefront.CanCopy(e.Action),
 	})
+}
+
+// newActionVersion is Make a new action for this workflow (fronts F2):
+// when another workflow holds the storefront action version v names, the
+// action is copied (same front and kind, its settings and form, off) and
+// a new version of wf naming the copy by action_id is saved, which the
+// publish then publishes; the holder keeps its action. With nothing held
+// it is v, unchanged.
+func newActionVersion(r *http.Request, tx pgx.Tx, wf uuid.UUID, v int) (int, *storefront.CopiedAction, error) {
+	ctx := r.Context()
+	held, err := actionHolders(ctx, tx, wf, v)
+	if err != nil || len(held) == 0 {
+		return v, nil, err
+	}
+	c, err := storefrontTriggerOf(ctx, tx, wf, v)
+	if err != nil {
+		return v, nil, err
+	}
+	from, _, err := ingest.StorefrontAction(ctx, tx, c)
+	if err != nil {
+		return v, nil, err
+	}
+	if from == nil {
+		return v, nil, fmt.Errorf("%w: the storefront has no %s yet to copy", errConflict, actionWords[held[0].Action])
+	}
+	copied, err := storefront.CopyAction(ctx, tx, *from)
+	if errors.Is(err, storefront.ErrInvalid) {
+		return v, nil, fmt.Errorf("%w: %s", errConflict, plainError(err))
+	}
+	if err != nil {
+		return v, nil, err
+	}
+	// The row lock serialises version numbering, as a saved version does.
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
+		return v, nil, err
+	}
+	var def, layout []byte
+	var latest int
+	if err := tx.QueryRow(ctx, `SELECT definition, layout, (SELECT max(version) FROM workflow_versions WHERE workflow_id = $1) FROM workflow_versions
+		WHERE workflow_id = $1 AND version = $2`, wf, v).Scan(&def, &layout, &latest); err != nil {
+		return v, nil, err
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(def, &doc); err != nil {
+		return v, nil, err
+	}
+	trig, _ := doc["trigger"].(map[string]any)
+	cfg, _ := trig["config"].(map[string]any)
+	if cfg == nil {
+		return v, nil, fmt.Errorf("%w: the storefront trigger has no config", errConflict)
+	}
+	cfg["action_id"] = copied.ID.String()
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return v, nil, err
+	}
+	if err := insertVersion(r, tx, wf, latest+1, out, layout); err != nil {
+		return v, nil, err
+	}
+	if err := auditTx(r, tx, "storefront.action_copy", copied.Slug, map[string]any{"from": from.String(), "workflow": wf.String(), "version": latest + 1}); err != nil {
+		return v, nil, err
+	}
+	return latest + 1, &copied, nil
 }
 
 // storefrontTriggerOf is the storefront trigger's config of version v of

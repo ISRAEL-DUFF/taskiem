@@ -64,7 +64,7 @@ export function StorefrontForms({
       <div className="sf-forms">
         {actions.data?.actions.map((a) => (
           <FormCard
-            key={`${a.kind}/${a.workflow_id ?? ""}`}
+            key={`${a.id ?? a.kind}/${a.workflow_id ?? ""}`}
             action={a}
             previewURL={previewURL}
             published={published}
@@ -89,7 +89,16 @@ function FormCard({
 }) {
   const { can } = useAuth();
   const kind = action.kind;
-  const info = FORM_INFO[kind];
+  // A copy made for a workflow (fronts F2) is addressed by its slug and
+  // saved by its id; the built-in four by their kind.
+  const copy = action.builtin === false && !!action.id;
+  const ref = copy ? (action.slug ?? kind) : kind;
+  const info = copy
+    ? {
+        ...FORM_INFO[kind],
+        title: `${FORM_INFO[kind].title} (another form)`,
+      }
+    : FORM_INFO[kind];
   const [saved, setSaved] = useState(action);
   const [form, setForm] = useState<ActionForm>(() => actionForm(action));
   const [notice, setNotice] = useState("");
@@ -101,7 +110,7 @@ function FormCard({
     JSON.stringify(actionRequest(kind, form)) !==
     JSON.stringify(actionRequest(kind, actionForm(saved)));
   const problem = actionProblem(kind, form);
-  const id = `sf-form-${kind}`;
+  const id = `sf-form-${ref}`;
   const canSetup = can("workflow.edit") && can("workflow.publish");
   const set = (patch: Partial<ActionForm>) => {
     setNotice("");
@@ -114,7 +123,7 @@ function FormCard({
       try {
         const out = await tidy(
           put<StorefrontAction>(
-            `/v1/storefront/actions/${kind}`,
+            `/v1/storefront/actions/${copy ? action.id : kind}`,
             actionRequest(kind, form),
           ),
         );
@@ -152,7 +161,7 @@ function FormCard({
       onReload();
     }, false);
 
-  const showSetup = !saved.workflow_id || noWorkflow;
+  const showSetup = !copy && (!saved.workflow_id || noWorkflow);
   return (
     <article className="sf-form" aria-labelledby={id}>
       <div className="toolbar" style={{ marginBottom: 6 }}>
@@ -180,7 +189,7 @@ function FormCard({
           <>
             {" "}
             <a
-              href={formURL(previewURL, kind)}
+              href={formURL(previewURL, ref)}
               target="_blank"
               rel="noreferrer"
             >

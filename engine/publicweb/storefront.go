@@ -260,6 +260,12 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 			d.Ordering = d.Ordering || k == "order"
 		}
 	}
+	// Then the other actions on (fronts F2), in their order.
+	for _, a := range p.Model.Home().Actions {
+		if a.Ref() != a.Kind {
+			d.Forms = append(d.Forms, a)
+		}
+	}
 	byTitle := map[string]int{}
 	for _, it := range p.Items {
 		x := item{Item: it, Small: it.Photo["320"], Large: it.Photo["800"], Orderable: orderable(it)}

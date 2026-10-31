@@ -78,7 +78,7 @@ func (s *Server) turnOnDeliveriesTx(ctx context.Context, tx pgx.Tx, p *Principal
 	}
 	var delivers bool
 	for _, a := range actions {
-		if a.Kind == "order" {
+		if a.Builtin && a.Kind == "order" {
 			delivers = a.Options.Delivery
 		}
 	}

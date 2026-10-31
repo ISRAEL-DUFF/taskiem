@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -58,8 +59,12 @@ func (s *Server) putStorefrontAction(w http.ResponseWriter, r *http.Request) {
 				return storefrontErr(err)
 			}
 		}
-		a, err = storefront.SaveAction(r.Context(), tx, p.TenantID, storefront.Action{Kind: chi.URLParam(r, "kind"), Enabled: req.Enabled, Label: req.Label,
-			Payment: req.Payment, Options: req.Options})
+		// A built-in form by its kind, another action by its id (fronts F2).
+		in := storefront.Action{Kind: chi.URLParam(r, "kind"), Enabled: req.Enabled, Label: req.Label, Payment: req.Payment, Options: req.Options}
+		if id, err := uuid.Parse(in.Kind); err == nil {
+			in.ID, in.Kind = &id, ""
+		}
+		a, err = storefront.SaveAction(r.Context(), tx, p.TenantID, in)
 		if errors.Is(err, storefront.ErrNoWorkflow) {
 			return fmt.Errorf("%w: %s", errConflict, plainError(err))
 		}
@@ -75,7 +80,11 @@ func (s *Server) putStorefrontAction(w http.ResponseWriter, r *http.Request) {
 				return storefrontErr(err)
 			}
 		}
-		return auditTx(r, tx, "storefront.action_save", a.Kind, map[string]any{"enabled": a.Enabled, "payment": a.Payment})
+		target := a.Kind
+		if !a.Builtin && a.Slug != "" {
+			target = a.Slug
+		}
+		return auditTx(r, tx, "storefront.action_save", target, map[string]any{"enabled": a.Enabled, "payment": a.Payment})
 	})
 	if err != nil {
 		s.fail(w, r, err)

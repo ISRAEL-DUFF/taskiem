@@ -234,7 +234,36 @@ func publicFronts(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actions []Pu
 				pf.Actions = append(pf.Actions, a)
 			}
 		}
+		// The front's other actions that are on (fronts F2), after the
+		// built-in ones.
+		others, err := otherActions(ctx, tx, f.ID)
+		if err != nil {
+			return nil, err
+		}
+		pf.Actions = append(pf.Actions, others...)
 		out = append(out, pf)
 	}
 	return out, nil
+}
+
+// otherActions are a front's actions that are on but not built in, for a
+// snapshot, in their order.
+func otherActions(ctx context.Context, tx pgx.Tx, front uuid.UUID) ([]PublicAction, error) {
+	rows, err := tx.Query(ctx, `SELECT id, slug, kind, label, payment, options, form FROM storefront_actions
+		WHERE front_id = $1 AND NOT builtin AND enabled ORDER BY position, slug`, front)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (PublicAction, error) {
+		var a Action
+		var id uuid.UUID
+		var opts, form []byte
+		if err := r.Scan(&id, &a.Slug, &a.Kind, &a.Label, &a.Payment, &opts, &form); err != nil {
+			return PublicAction{}, err
+		}
+		_ = json.Unmarshal(opts, &a.Options)
+		pa := publicAction(a)
+		pa.ID, pa.Slug, pa.Form = &id, a.Slug, EffectiveForm(form, a.Kind)
+		return pa, nil
+	})
 }

@@ -20,6 +20,11 @@ var ErrNoWorkflow = errors.New("storefront: no workflow is deployed for this for
 
 // Action is one form's settings.
 type Action struct {
+	// ID and Slug name the action (fronts F1); Builtin is one of the four
+	// found by kind, the others copies made for a workflow (F2).
+	ID      *uuid.UUID    `json:"id,omitempty"`
+	Slug    string        `json:"slug,omitempty"`
+	Builtin bool          `json:"builtin"`
 	Kind    string        `json:"kind"`
 	Enabled bool          `json:"enabled"`
 	Label   string        `json:"label"`
@@ -184,28 +189,36 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 		return nil, err
 	}
 	have := map[string]Action{}
-	rows, err := tx.Query(ctx, `SELECT kind, enabled, label, payment, options FROM storefront_actions WHERE storefront_id = $1 AND builtin`, sf.ID)
+	rows, err := tx.Query(ctx, `SELECT id, slug, builtin, kind, enabled, label, payment, options FROM storefront_actions WHERE storefront_id = $1
+		ORDER BY NOT builtin, position, slug`, sf.ID)
 	if err != nil {
 		return nil, err
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Action, error) {
 		var a Action
+		var id uuid.UUID
 		var opts []byte
-		err := r.Scan(&a.Kind, &a.Enabled, &a.Label, &a.Payment, &opts)
+		err := r.Scan(&id, &a.Slug, &a.Builtin, &a.Kind, &a.Enabled, &a.Label, &a.Payment, &opts)
+		a.ID = &id
 		_ = json.Unmarshal(opts, &a.Options)
 		return a, err
 	})
 	if err != nil {
 		return nil, err
 	}
+	var others []Action
 	for _, a := range list {
-		have[a.Kind] = a
+		if a.Builtin {
+			have[a.Kind] = a
+		} else {
+			others = append(others, a)
+		}
 	}
 	out := make([]Action, 0, len(Kinds))
 	for _, k := range Kinds {
 		a, ok := have[k]
 		if !ok {
-			a = Action{Kind: k, Label: defaultLabels[k], Payment: "after_accept"}
+			a = Action{Kind: k, Slug: k, Builtin: true, Label: defaultLabels[k], Payment: "after_accept"}
 			if !takesPayment(k) {
 				a.Payment = "none"
 			}
@@ -219,12 +232,35 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 		}
 		out = append(out, a)
 	}
+	// The other actions, each with the workflow deployed in prod for it.
+	for _, a := range others {
+		var wf uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT workflow_id FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, *a.ID).Scan(&wf)
+		if err == nil {
+			a.Workflow = &wf
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+		out = append(out, a)
+	}
 	return out, nil
 }
 
-// SaveAction sets a form's settings. A form can be enabled only once a
-// workflow is deployed in prod for it.
+// SaveAction sets a form's settings: a built-in form's by its kind, any
+// other action's by its id (its kind its own). A form can be enabled only
+// once a workflow is deployed in prod for it.
 func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Action, error) {
+	if a.ID != nil {
+		var kind string
+		err := tx.QueryRow(ctx, `SELECT kind FROM storefront_actions WHERE id = $1 AND NOT builtin`, *a.ID).Scan(&kind)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Action{}, fmt.Errorf("%w: no such action", ErrInvalid)
+		}
+		if err != nil {
+			return Action{}, err
+		}
+		a.Kind = kind
+	}
 	if !contains(Kinds, a.Kind) {
 		return Action{}, fmt.Errorf("%w: no form %q", ErrInvalid, a.Kind)
 	}
@@ -285,7 +321,13 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	}
 	if a.Enabled {
 		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM triggers t WHERE type = 'storefront' AND `+BuiltinTriggerSQL("t", "$1")+` AND environment = 'prod'`, a.Kind).Scan(&n); err != nil {
+		var err error
+		if a.ID != nil {
+			err = tx.QueryRow(ctx, `SELECT count(*) FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, *a.ID).Scan(&n)
+		} else {
+			err = tx.QueryRow(ctx, `SELECT count(*) FROM triggers t WHERE type = 'storefront' AND `+BuiltinTriggerSQL("t", "$1")+` AND environment = 'prod'`, a.Kind).Scan(&n)
+		}
+		if err != nil {
 			return Action{}, err
 		}
 		if n == 0 {
@@ -293,6 +335,22 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		}
 	}
 	opts, _ := json.Marshal(a.Options)
+	if a.ID != nil {
+		if _, err := tx.Exec(ctx, `UPDATE storefront_actions SET enabled = $2, label = $3, payment = $4, options = $5, updated_at = now() WHERE id = $1`,
+			*a.ID, a.Enabled, a.Label, a.Payment, opts); err != nil {
+			return Action{}, err
+		}
+		list, err := Actions(ctx, tx, tenant)
+		if err != nil {
+			return Action{}, err
+		}
+		for _, x := range list {
+			if x.ID != nil && *x.ID == *a.ID {
+				return x, nil
+			}
+		}
+		return a, nil
+	}
 	// A built-in action lives on the first front, its slug its kind
 	// (fronts §5.3).
 	front, err := ensureFirstFront(ctx, tx, sf)
@@ -311,12 +369,82 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		return Action{}, err
 	}
 	for _, x := range list {
-		if x.Kind == a.Kind {
+		if x.Builtin && x.Kind == a.Kind {
 			return x, nil
 		}
 	}
 	return a, nil
 }
+
+// publicAction is an action as a snapshot holds it.
+func publicAction(a Action) PublicAction {
+	return PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
+		Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent}
+}
+
+// Ref is how a page addresses the action, /a/<ref>: its slug, or for one
+// published before fronts its kind.
+func (a PublicAction) Ref() string {
+	if a.Slug != "" {
+		return a.Slug
+	}
+	return a.Kind
+}
+
+// CopiedAction is a new action copied from another for a workflow.
+type CopiedAction struct {
+	ID    uuid.UUID `json:"id"`
+	Slug  string    `json:"slug"`
+	Kind  string    `json:"kind"`
+	Label string    `json:"label"`
+}
+
+// CopyAction makes a new action from one the business has (fronts F2,
+// Make a new action for this workflow): on the same front, of the same
+// kind, with its label, payment, options and form, off, its slug the
+// kind's next free one (order-2, order-3, …). A booking is not copied:
+// the storefront keeps one calendar until fronts (F3).
+func CopyAction(ctx context.Context, tx pgx.Tx, from uuid.UUID) (CopiedAction, error) {
+	var c CopiedAction
+	var sf, front, tenant uuid.UUID
+	var payment string
+	var opts, form []byte
+	err := tx.QueryRow(ctx, `SELECT storefront_id, front_id, tenant_id, kind, label, payment, options, form FROM storefront_actions WHERE id = $1`, from).
+		Scan(&sf, &front, &tenant, &c.Kind, &c.Label, &payment, &opts, &form)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, fmt.Errorf("%w: no such action", ErrInvalid)
+	}
+	if err != nil {
+		return c, err
+	}
+	if !CanCopy(c.Kind) {
+		return c, fmt.Errorf("%w: the booking form is not copied: a storefront takes bookings on one calendar for now", ErrInvalid)
+	}
+	var taken []string
+	rows, err := tx.Query(ctx, `SELECT slug FROM storefront_actions WHERE front_id = $1`, front)
+	if err != nil {
+		return c, err
+	}
+	if taken, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
+		return c, err
+	}
+	for n := 2; ; n++ {
+		if s := fmt.Sprintf("%s-%d", c.Kind, n); !contains(taken, s) {
+			c.Slug = s
+			break
+		}
+	}
+	c.ID = uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO storefront_actions (id, storefront_id, front_id, tenant_id, kind, slug, builtin, enabled, label, payment, options, form, position)
+		SELECT $1, $2, $3, $4, $5, $6, false, false, $7, $8, $9, $10, COALESCE(max(position), 0) + 1 FROM storefront_actions WHERE front_id = $3`,
+		c.ID, sf, front, tenant, c.Kind, c.Slug, c.Label, payment, opts, form); err != nil {
+		return c, err
+	}
+	return c, nil
+}
+
+// CanCopy reports whether an action of a kind can be copied (F2).
+func CanCopy(kind string) bool { return kind != "booking" }
 
 // publicActions are the enabled forms, for a snapshot.
 func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAction, error) {
@@ -326,9 +454,8 @@ func publicActions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]PublicAc
 	}
 	var out []PublicAction
 	for _, a := range list {
-		if a.Enabled {
-			out = append(out, PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
-				Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent})
+		if a.Enabled && a.Builtin {
+			out = append(out, publicAction(a))
 		}
 	}
 	return out, nil

@@ -148,6 +148,44 @@ test("a second workflow on a form offers to replace the first", async ({ page })
   await expect(held).toHaveCount(0);
 });
 
+test("a second workflow on a form can have a new form of its own", async ({ page }) => {
+  // Make a new action for this workflow (docs/spec/fronts.md F2): another
+  // copy of the question form's workflow gets its own question form, off,
+  // and the first keeps the form it has.
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("owner@e2e.test");
+  await page.getByLabel("Password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).not.toHaveURL(/login/);
+  const h = { headers: { "X-Taskiem-Request": "1" } };
+  type List = { workflows: { id: string; name: string }[] };
+  const all = ((await (await page.request.get("/v1/workflows")).json()) as List).workflows;
+  type Actions = { actions: { kind: string; builtin?: boolean; workflow_id: string | null }[] };
+  const forms = ((await (await page.request.get("/v1/storefront/actions")).json()) as Actions).actions;
+  const holder = forms.find((a) => a.kind === "enquiry" && a.builtin !== false)?.workflow_id;
+  const first = all.find((w) => w.id === holder);
+  expect(first, "the question form's workflow").toBeTruthy();
+  const v1 = (await (await page.request.get(`/v1/workflows/${first?.id ?? ""}/versions/1`)).json()) as { definition: { name: string } };
+  const made = (await (
+    await page.request.post("/v1/workflows", { ...h, data: { name: "Questions for the bakery", definition: { ...v1.definition, name: "Questions for the bakery" } } })
+  ).json()) as { id: string };
+
+  await page.goto(`/workflows/${made.id}`);
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const held = page.getByTestId("action-taken");
+  await expect(held).toContainText("Or make a new action for this workflow");
+  await held.getByRole("button", { name: "Make a new action for this workflow" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "It starts on a new form" })).toBeVisible();
+  await expect(held).toHaveCount(0);
+
+  await page.goto("/storefront");
+  const card = page.getByRole("article", { name: "Questions (another form)" });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("Off");
+  const vs = await axe(page);
+  expect(vs, describe("/storefront (a second question form)", vs)).toEqual([]);
+});
+
 test("an owner sets booking hours and the booking form", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");

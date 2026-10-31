@@ -39,11 +39,12 @@ type fakeInbox struct {
 
 type inboxRow struct {
 	sf                  uuid.UUID
+	action              *uuid.UUID
 	kind                string
 	idem, hash, payload []byte
 }
 
-func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, _ *uuid.UUID, kind, ref string, idem, hash, payload []byte) (string, bool, error) {
+func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, action *uuid.UUID, kind, ref string, idem, hash, payload []byte) (string, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r, ok := f.byIdem[hex.EncodeToString(idem)]; ok {
@@ -57,7 +58,7 @@ func (f *fakeInbox) submit(_ context.Context, sf uuid.UUID, _ *uuid.UUID, kind, 
 		return "", false, ErrReferenceTaken
 	}
 	f.byIdem[hex.EncodeToString(idem)] = ref
-	f.rows[ref] = inboxRow{sf: sf, kind: kind, idem: idem, hash: hash, payload: payload}
+	f.rows[ref] = inboxRow{sf: sf, action: action, kind: kind, idem: idem, hash: hash, payload: payload}
 	return ref, true, nil
 }
 
@@ -779,5 +780,48 @@ func TestPagesDrawnFromTheActionsForm(t *testing.T) {
 	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
 	if err != nil || len(sub.Answers) != 1 || sub.Answers["spice"] != "hot" || sub.TotalKobo != 450200 {
 		t.Fatalf("the submission's answers: %v %v", sub.Answers, err)
+	}
+}
+
+// Fronts F2: an action copied for another workflow and switched on is
+// served at /a/<its slug>, has its own button after the built-in forms,
+// posts to its own address and is sent to the inbox naming it.
+func TestCopiedActionServed(t *testing.T) {
+	builtin, copied := uuid.New(), uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's <Kitchen>"}
+	for _, a := range p.Model.Actions {
+		a.Slug, a.Form = a.Kind, storefront.BuiltinForm(a.Kind)
+		if a.Kind == "order" {
+			a.ID = &builtin
+		}
+		home.Actions = append(home.Actions, a)
+	}
+	home.Actions = append(home.Actions, storefront.PublicAction{ID: &copied, Slug: "order-2", Kind: "order", Label: "Food delivery", Payment: "after_accept",
+		Pickup: true, Form: storefront.BuiltinForm("order")})
+	p.Model.Fronts = []storefront.PublicFront{home}
+	e := formServer(t, p)
+
+	page := get(e.h, "GET", sfHost, "/").Body.String()
+	if !strings.Contains(page, `href="/a/order-2">Food delivery</a>`) || !strings.Contains(page, `href="/a/order"`) {
+		t.Fatalf("the buttons: %s", page)
+	}
+	body, tok := e.form(t, "/a/order-2")
+	if !strings.Contains(body, `action="/a/order-2"`) || !strings.Contains(body, "<h1>Food delivery</h1>") {
+		t.Fatal("the copy's page")
+	}
+	if w := get(e.h, "GET", sfHost, "/a/order-3"); w.Code != http.StatusNotFound {
+		t.Fatalf("an action the storefront does not have: %d", w.Code)
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := goodOrder(tok)
+	v.Set("fulfilment", "pickup")
+	w := e.post("/a/order-2", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	if row := e.inbox.rows[ref]; row.action == nil || *row.action != copied || row.kind != "order" {
+		t.Fatalf("sent to %+v", row)
 	}
 }

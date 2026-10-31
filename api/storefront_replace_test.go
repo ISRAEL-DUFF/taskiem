@@ -165,3 +165,60 @@ func TestPublishRefusesAnswersTheFormDoesNotAsk(t *testing.T) {
 	}
 	ada.must(200, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil)
 }
+
+// Fronts F2: Make a new action for this workflow. The 409 offers it; the
+// publish with new_action copies the held order action (off), saves a new
+// version naming the copy, and publishes that, leaving the first workflow
+// on its form; the copy is listed and switched on by its id.
+func TestPublishMakesANewAction(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	first := orderWorkflowID(t, w)
+	mine := draftOrder(t, ada, "Food delivery")
+	if e := ada.must(409, "POST", "/v1/workflows/"+mine+"/versions/1/publish", nil); e["can_new_action"] != true {
+		t.Fatalf("not offered: %v", e)
+	}
+	out := ada.must(200, "POST", "/v1/workflows/"+mine+"/versions/1/publish", map[string]any{"new_action": true})
+	made, _ := out["new_action"].(map[string]any)
+	if out["state"] != "published" || out["version"] != float64(2) || made["slug"] != "order-2" || made["kind"] != "order" {
+		t.Fatalf("published: %v", out)
+	}
+	var held, copied string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT t.workflow_id::text FROM triggers t JOIN storefront_actions a ON a.id = t.storefront_action_id
+		WHERE a.builtin AND a.kind = 'order' AND t.environment = 'prod'`).Scan(&held); err != nil || held != first {
+		t.Fatalf("the order form's workflow: %q %v", held, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT workflow_id::text FROM triggers WHERE storefront_action_id = $1 AND environment = 'prod'`, made["id"]).
+		Scan(&copied); err != nil || copied != mine {
+		t.Fatalf("the new action's workflow: %q %v", copied, err)
+	}
+	list := ada.must(200, "GET", "/v1/storefront/actions", nil)["actions"].([]any)
+	last := list[len(list)-1].(map[string]any)
+	if last["slug"] != "order-2" || last["builtin"] != false || last["enabled"] != false || last["workflow_id"] != mine {
+		t.Fatalf("listed: %v", last)
+	}
+	w.srv.PublicHosts = []string{"shops.test"}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO tenant_verifications (id, tenant_id, level, method, actor) VALUES (gen_random_uuid(), $1, 'phone', 'test', 'test')`,
+		w.biz); err != nil {
+		t.Fatal(err)
+	}
+	on := ada.must(200, "PUT", "/v1/storefront/actions/"+made["id"].(string), map[string]any{"enabled": true, "label": "Food delivery", "payment": "after_accept",
+		"options": map[string]any{"pickup": true}})
+	if on["enabled"] != true || on["slug"] != "order-2" {
+		t.Fatalf("switched on: %v", on)
+	}
+}
+
+// orderWorkflowID is the workflow deployed in prod for the order form.
+func orderWorkflowID(t *testing.T, w *dispatchWorld) string {
+	t.Helper()
+	var id string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT workflow_id::text FROM triggers WHERE type = 'storefront' AND storefront_action = 'order' AND environment = 'prod'`).
+		Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
