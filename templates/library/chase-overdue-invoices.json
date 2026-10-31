@@ -1,8 +1,8 @@
 {
   "id": "chase-overdue-invoices",
   "title": "Chase overdue invoices every day",
-  "summary": "Every morning, text and email each customer whose invoice is past its due date a reminder with its link, every few days, and tell you when one is still unpaid after the last reminder.",
-  "description": "Once a day at the time you choose, finds your invoices that are past their due date and not fully paid. Each customer gets a reminder by SMS, and by email when you have their address, with the invoice's number, what is still due and the link to pay it: the first the day after the due date, then one every few days, up to the number you choose. After the last reminder you are told once that the invoice is still unpaid. A customer never gets the same reminder twice, even if the workflow runs again the same day. Paid and voided invoices are left alone.",
+  "summary": "Every morning, remind each customer who owes you money that is past its due date (invoices and debts written down in chat alike), every few days, in one message per customer, and tell you when one is still unpaid after the last reminder.",
+  "description": "Once a day at the time you choose, finds what customers owe you that is past its due date and not fully paid: invoices, and debts written down in chat (Ada owes 5,000) once their credit terms have passed. With One message per customer (on unless you turn it off), each customer gets one reminder for everything they owe that is overdue, by SMS, and by email when you have their address, with what they owe in all and a link to one page of all of it, where they pay the whole or a part; off, they get one per invoice, with its number and its link. The first goes the day after the due date, then one every few days, up to the number you choose. After the last reminder you are told once that it is still unpaid. A customer never gets the same reminder twice, even if the workflow runs again the same day. Paid and voided invoices are left alone, and a debt with no due date is never reminded.",
   "category": "collections",
   "tags": [
     "collections",
@@ -17,10 +17,22 @@
     "reminder",
     "outstanding",
     "nudge",
-    "past due"
+    "past due",
+    "owe",
+    "owes",
+    "owing",
+    "debtors",
+    "debtor",
+    "debt",
+    "debts",
+    "credit"
   ],
   "requires": [
-    "invoice"
+    "invoice",
+    "customers who owe",
+    "people who owe me",
+    "my debtors",
+    "debtors who owe"
   ],
   "connectors": [
     "invoices@1",
@@ -57,6 +69,15 @@
       "example": 3,
       "minimum": 1,
       "maximum": 10
+    },
+    {
+      "name": "per_customer",
+      "type": "boolean",
+      "title": "One message per customer",
+      "description": "One reminder per customer for everything they owe that is overdue, instead of one per invoice.",
+      "required": false,
+      "default": true,
+      "example": true
     }
   ],
   "definition": {
@@ -64,7 +85,7 @@
     "id": "wf_chaseOverdueInvoices",
     "version": 1,
     "name": "Chase overdue invoices",
-    "description": "Reminds each customer with an overdue invoice every few days, then tells the owner.",
+    "description": "Reminds each customer with something overdue every few days, once per customer or once per invoice, then tells the owner.",
     "trigger": {
       "type": "schedule",
       "config": {
@@ -82,7 +103,8 @@
         "input": {
           "status": "overdue",
           "limit": 200
-        }
+        },
+        "when": "={{per_customer}} == false"
       },
       {
         "id": "chase_each",
@@ -140,6 +162,82 @@
               },
               "effect": {
                 "idempotency_seed": "='overdue-owner:' + item.number"
+              }
+            }
+          ]
+        },
+        "when": "={{per_customer}} == false"
+      },
+      {
+        "id": "overdue_customers",
+        "type": "connector",
+        "name": "Find the customers with something overdue",
+        "connector": "invoices@1",
+        "action": "list",
+        "when": "={{per_customer}}",
+        "input": {
+          "status": "overdue",
+          "group": "customer",
+          "limit": 200
+        }
+      },
+      {
+        "id": "chase_customers",
+        "type": "foreach",
+        "name": "For each customer",
+        "needs": [
+          "overdue_customers"
+        ],
+        "when": "={{per_customer}}",
+        "config": {
+          "items": "=has(steps.overdue_customers.output.customers) ? steps.overdue_customers.output.customers : []",
+          "max_concurrency": 5,
+          "max_items": 200,
+          "steps": [
+            {
+              "id": "remind_customer",
+              "type": "connector",
+              "name": "Remind the customer",
+              "connector": "invoices@1",
+              "action": "notify_customer",
+              "when": "=(int(item.days_overdue) - 1) / {{every_days}} < {{reminders}}",
+              "input": {
+                "number": "=item.number",
+                "text": "A reminder: {customer_due} is overdue on {customer_lines} item(s). See what you owe and pay: {customer_link}",
+                "subject": "Overdue: {customer_due}"
+              },
+              "effect": {
+                "idempotency_seed": "='overdue-customer:' + item.customer + ':' + string((int(item.days_overdue) - 1) / {{every_days}})"
+              },
+              "on_error": {
+                "steps": [
+                  {
+                    "id": "remind_customer_failed",
+                    "type": "transform",
+                    "name": "Note the reminder that could not go",
+                    "config": {
+                      "output": {
+                        "number": "=item.number",
+                        "reason": "=steps.remind_customer.error.message"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "tell_owner_customer",
+              "type": "connector",
+              "name": "Tell you a customer still owes after the last reminder",
+              "connector": "notify@1",
+              "action": "tell",
+              "when": "=(int(item.days_overdue) - 1) / {{every_days}} >= {{reminders}}",
+              "input": {
+                "title": "A customer still owes you",
+                "message": "='A customer still owes ' + item.due + ' on ' + string(int(item.lines)) + ' item(s), the oldest ' + item.number + ', ' + string(int(item.days_overdue)) + ' days overdue after ' + string({{reminders}}) + ' reminders.'"
+              },
+              "effect": {
+                "idempotency_seed": "='overdue-owner-customer:' + item.customer"
               }
             }
           ]

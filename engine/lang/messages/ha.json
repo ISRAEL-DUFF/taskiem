@@ -268,6 +268,10 @@
       "text": "Invoice {number} daga {business}: {amount} za a biya. Danna Biya ta transfer don samun lambar asusu da za ku biya ciki, ko Buɗe invoice don ganin ta.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "Kana bin {business} {amount} a kan takardun kuɗi {count}. Duba su ka biya duka ko wani bangare: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Lambar asusunku na invoice {number} tana kan hanya. Idan ba ta zo cikin minti ɗaya ba, danna Sabuwar lambar asusu.",
       "reviewed": false
@@ -1316,6 +1320,146 @@
       "text": "Kafin ka wallafa shi, ƙirƙiri teburin da yake buƙata a cikin manhajar: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "Ina shirya bayananka. Zai ɗauki minti ɗaya ko biyu.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar{link}, ko waɗannan matakan za su gaza.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "Ba za ka iya yin tebur ko canza shi a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Wane jeri kake so ka ajiye?\n{list}\nAmsa da lambarsa.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Wani abu dabam",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Menene sunan jerin? Misali: Masu bashi, Masu kawo kaya, Membobi.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Ba shi gajeren suna, ƙasa da haruffa 60.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Ba shi suna mai haruffa, kamar Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "Kana da tebur mai suna {table} tuni. Aika *add to {table}* don ƙara masa.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Me kake rubutawa ga kowanne a {table}? Raba su da waƙafi, misali: name, phone, abin da suka saya, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "Ban iya karanta wani ginshiƙi daga wannan ba. Aika su da waƙafi, misali: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* zai ajiye, ga kowanne:\n{columns}\n\nAmsa *yes* don a yi shi, ko aika jerin kuma don canza shi.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Ba a canza komai ba.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "An yi *{table}*. Ƙara masa da *add to {name}*, ko ka gan shi a manhajar{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "Ban iya shirya bayananka yanzu ba, don haka ba a yi {table} ba tukuna. Amsa *try again* bayan 'yan mintoci (zan ajiye shi kwana ɗaya), ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Amsa *try again* don a yi {table}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "Ba a yi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "Yanzu ana kiran {old} da *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Cire ginshiƙi ko tebur yana goge duk abin da ke ciki, don haka a manhajar ake yi, inda za ka rubuta sunansa don tabbatarwa{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Wanne?\n{list}\nSake aikawa da cikakken sunan teburin.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "kalmomi",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "lamba (adadi, farashi)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "cikakken lamba (ƙidaya)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "eh ko a'a",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "kwanan wata",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "kwanan wata da lokaci",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "lambar waya",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "adireshin imel",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "dabi'u da yawa tare",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Me zai shiga *{column}*?\n{list}\nAmsa da lambarsa.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "A ƙara ginshiƙin *{column}* ({type}) ga *{table}*? Amsa *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Ba ginshiƙin suna mai haruffa, kamar phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} yana da ginshiƙin {column} tuni.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "An ƙara *{column}* ga *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Sake gwadawa",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Wannan ya yi tsayi a gare ni; bayyana shi cikin ƙasa da haruffa {max}.",
       "reviewed": false
@@ -1545,7 +1689,107 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, sunan tebur da kalma: nemo layuka",
+      "text": "• *find*, sunan tebur da kalma: nemo layuka, sannan *change 1* ko *delete 1*",
+      "reviewed": false
+    },
+    "wa.help.ask": {
+      "text": "• Tambayi game da teburanka: *how many customers*, *total balance*, ko wata tambaya kamar *wa ke bina fiye da 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Me kake so ka sani? Misali: *ask how many customers are in Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "Ba zan iya karanta irin wannan tambaya a nan ba tukuna. Waɗannan suna aiki: *how many customers*, *total balance* (layin lamba), da *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "Ban iya amsa wannan daga teburanka ba. Gwada *find*, sunan tebur da kalma, ko *tables* don ganin su.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "Kason AI na wannan wata ya ƙare, don haka ba zan iya karanta wannan tambaya ba. *how many customers*, *total balance* da *find* suna aiki har yanzu.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Wannan tambayoyi {count} ne a wannan sa'a. Sake tambaya daga baya kaɗan, ko yi amfani da *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Lokacin ƙarawa",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} inda {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " da ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} shi ne {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} ba {value} ba ne",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} ya gaza {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} bai wuce {value} ba",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} ya fi {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} ya kai {value} ko fiye",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} yana ɗauke da \"{value}\"",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} babu komai",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} yana da wani abu",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} mafi girma da farko",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} mafi ƙanƙanta da farko",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Jimillar {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(a kan layuka {count} na farko)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: babu.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -2708,6 +2952,10 @@
       "text": "ta POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "bashi",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Kuɗi a hannu",
       "reviewed": false
@@ -2718,6 +2966,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Bashi",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2790,6 +3042,18 @@
     },
     "wa.sale.matched": {
       "text": "An haɗa shi da kuɗin da ya shigo.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} zai ci bashin {total} gaba ɗaya.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} sabo ne a littafin bashinka.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "An rubuta a matsayin bashi: {name} yana bin sa ({number}), {total} gaba ɗaya yanzu.",
       "reviewed": false
     },
     "wa.sale.short": {
@@ -3105,7 +3369,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… da wasu {count}. Rage binciken, ko buɗe Tables a Taskiem.",
+      "text": "… da wasu {count}. Aika *more* don na gaba guda biyar.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3118,6 +3382,454 @@
     },
     "wa.table.find_what": {
       "text": "Aika *find*, sunan tebur da abin da kake nema.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Aika *change 1* don gyara layi na 1, ko *delete 1* don cire shi.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Wannan ke nan duka a {table} don wannan binciken.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "Babu layi na {n} a jerin. Aika lamba daga 1 zuwa {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "Ba za ka iya canza layuka a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} ba ya nan kuma. Aika *tables* don ganin abin da ke akwai.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Layi na {id} ba ya cikin {table} kuma.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Layi na {id} a {table}:\n{row}\n\nWane bayani kake son canzawa? Aika lambarsa.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Aika lamba daga 1 zuwa {max}, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "Sabon bayanin:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: danna *{cta}* don shigar da sabon bayanin; za ka tabbatar kafin a ajiye shi. Aika *cancel* don tsayawa.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "A ajiye wannan canjin a layi na {id} a {table}?\n{changes}\n\nAmsa da *yes* don ajiyewa, lambar wani bayani don canza shi ma, ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "A cire layi na {id} daga {table}? Ba za a iya dawo da shi ba.\n{row}\n\nAmsa da *yes* don cire shi ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Amsa da *yes* don ci gaba ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Ba a canza komai ba. Layukan da aka samo suna nan da lambobinsu.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "Ka canza layuka da yawa yanzu. Jira minti ɗaya, sannan ka sake gwadawa.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "Ba a ajiye shi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "Bai yiwu ba: {reason}\n\nAmsa da *yes* don sake gwadawa ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Layi na {id} ya canza bayan ka gan shi, don haka ba a rubuta komai ba. Ga shi yanzu.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "An ajiye layi na {id} a {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "An cire layi na {id} daga {table}.",
+      "reviewed": false
+    },
+    "button.file_new": {
+      "text": "Sabon tebur",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Ƙara a tebur",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "Ba yanzu ba",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "Ba za ka iya kawo jeri cikin tebura a {org} ba (yana buƙatar table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "Ina iya karanta fayilolin CSV da Excel (.xlsx). Ajiye jerin a matsayin ɗaya daga cikinsu ka sake aikawa.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "Ka aika fayiloli da yawa yanzu. Jira minti ɗaya, sannan ka sake aikawa.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "Wannan fayil ya wuce 2 MB. Aika ƙarami, ko yi amfani da Import a shafin Tables{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "Wannan fayil yana da layuka fiye da {limit}, fiye da abin da shigo da ɗaya ke ɗauka. Raba shi zuwa ƙananan fayiloli ka aika kowanne.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "Ban iya karanta wannan fayil ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "Ban iya ɗauko wannan fayil ba. Sake aika shi nan da minti ɗaya.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: layuka {rows} tare da {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Ƙara a tebur* zai ƙara su a {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*Sabon tebur* zai yi tebur daga gare shi. Don ƙara layukan a wani tebur, aika *add to* da sunansa. *Ba yanzu ba* ba zai ajiye komai ba.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Danna *Sabon tebur*, ko aika *add to* da sunan tebur, ko *Ba yanzu ba*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Tebura da yawa sun dace:\n{list}\n\nAika *add to* da cikakken suna.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Ba a ƙara komai ba, kuma ba a ajiye fayil ɗin ba.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "Wannan tebur ba ya nan kuma. Sake aika fayil ɗin.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Wane shafi na *{table}* ne *{header}* zai shiga?\n{list}\n0. Bar shi",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Aika lamba daga 0 zuwa {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "Babu ɗaya daga cikin kanun fayil ɗin da ke shafi na *{table}*, don haka ba a ƙara komai ba.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Ba a ƙara komai ba: {reason}. Gyara fayil ɗin ka sake aikawa.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "A yi *{table}* da waɗannan shafuka:\n{columns}\n\nkuma a ƙara layukansa {rows}? Na farko:\n{first}\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "A ƙara layuka {rows} a *{table}*? Na farko:\n{first}\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "Ban iya sake ɗauko fayil ɗin kamar yadda yake ba. Sake aika shi.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "Bai yiwu ba: {reason}\n\nAmsa da *yes* don sake gwadawa ko *cancel*. Layukan da aka riga aka ƙara ba za a ƙara su sau biyu ba.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "An yi *{table}* kuma an ƙara layuka {rows} daga {file}. Ba a ajiye fayil ɗin ba. Aika *find {name}* da kalma don nemo layuka.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "An ƙara layuka {rows} a *{table}* daga {file}. Ba a ajiye fayil ɗin ba.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "An riga an ƙara layukan {file} a *{table}*, don haka ba a ƙara komai sau biyu ba.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "Ba zan iya buɗe fayilolin da aka aika a Slack ba tukuna. Shigo da shi a shafin Tables{link}, ko aiko min da shi a WhatsApp ko Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Aika *copy my sheet* da mahaɗin sheet ɗin (buɗe sheet ɗin a browser ka kwafi adireshin).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Fara haɗa Google Sheets: aika *connect Google Sheets*. Sannan ka sake aika *copy my sheet* da mahaɗin.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "Ban iya karanta wannan sheet ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem ba zai iya buɗe wannan sheet da asusun Google ɗinka ba. Duba mahaɗin, da cewa asusun da ka haɗa zai iya buɗe shi.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "Sheet ɗin ya canza tun da na karanta shi, don haka ba a ƙara komai ba. Sake aika *copy my sheet* da mahaɗin.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Wannan kwafi ne: canje-canjen da aka yi a sheet ɗin daga baya ba za su shigo ba. Ajiye jerin a tebur daga yanzu.",
+      "reviewed": false
+    },
+    "wa.debt.owes_short": {
+      "text": "yana bin {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Wani sabo",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} sabo ne. Aika lambar wayar {name} don rasit da tunatarwa su isa gare su, ko *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Wane {name}?\n{list}\n\nAika lamba.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "Tsawon wane lokaci kake bai wa abokan ciniki don biyan abin da suke bi? Tunatarwa za ta tafi bayan haka kawai.\n{list}\n\nAika lamba. Kana iya canza shi daga baya da *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "Babu ƙayyadadden lokaci (babu tunatarwa)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "Kwanaki {days}",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "Babu ranar biya.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Mai shi ne ke saita tsawon lokacin da abokan ciniki ke da shi don biya; har sai lokacin wannan bashi ba shi da ranar biya.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "Ranar biya: {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "A rubuta cewa {name} yana bin {amount}? {due}\n{name} zai bi {total} gaba ɗaya. Ba za a aika masa komai ba.\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "Ba a rubuta shi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "An rubuta: {name} yana bin {amount} ({number}). {name} yana bin {total} gaba ɗaya.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "Ba za ka iya rubuta bashi ko biyan kuɗi a {org} ba (yana buƙatar invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "Ba za ka iya ganin waɗanda ke bin {org} bashi ba (yana buƙatar invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Babu wanda ake kira {name} da ke bin ka. Rubuta bashi da *{name} owes* da adadin.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "Ta yaya {name} ya biya?\n1. Tsabar kuɗi\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Asusunka na {name} ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Wani asusu",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Wane asusu {name} ya tura shi?\n{list}\n\nAika lamba.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "a tsabar kuɗi",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "ta transfer zuwa {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "A rubuta {amount} daga {name} {how}? Zai fara biyan tsohon bashinsu. {name} zai bi {total}.\n\nAmsa da *yes* ko *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} da ya wuce abin da suke bi za a ajiye a matsayin kiredit ɗinsu, don bashinsu na gaba.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "An rubuta {amount} daga {name}. {name} yana bin {total} yanzu.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Kiredit da aka ajiye musu: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "Wannan ba lambar waya da zan iya amfani da ita ba ce. Aika ta da lambar ƙasa (+234…), ko *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "An gama: bashi {count} da ke buɗe yanzu suna bin waɗannan sharuɗɗan.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Babu abin da za a rubuta: Taskiem yana ganin kuɗin da ke shiga {account}. Ma'aunin {name} zai ragu idan transfer ɗin ya iso aka daidaita shi.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Me kake kiran wannan asusu? Yi amfani da bankinsa da gajeren suna, kamar *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Yi amfani da ƙananan haruffa da lambobi, da / ɗaya kawai, kamar *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "Ba a rubuta komai ba.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Sharuɗɗan kiredit kwanaki 1 zuwa 365 ne, ko *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Abokan ciniki yanzu suna da {terms} don biyan abin da suke bi. Sabbin basussuka za su bi wannan.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Basussukan da aka rubuta ba za su sami ranar biya ko tunatarwa ba.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "A yi amfani da su a basussuka {count} da aka riga aka rubuta ma, kowanne daga ranar da aka rubuta shi?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Babu wanda ke bin ka komai. Rubuta bashi da *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "Abokan ciniki {count} suna bin ka {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} (layi {lines})",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "ranar biya {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… da wasu {count}.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Aika *balance* da suna don basussukan abokin ciniki ɗaya.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Fiye da ɗaya sun dace:\n{list}\n\nAika cikakken suna.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} yana bin {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Biyan ƙarshe {amount} a ranar {date}.",
+      "reviewed": false
+    },
+    "wa.debt.owes_nothing": {
+      "text": "{name} ba ya bin komai.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} ba shi da lambar waya tukuna. Aika *{name}'s number is 0803…* da farko.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "lambar asusun su ta kansu don biya",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "hanyar biya, duka ko wani bangare",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "babu hanyar biya ta yanar gizo (za su tambaye ka)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "In aika wa {name} abin da yake bin, {amount} ({lines}), zuwa {to}, tare da {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Layukan littafi {count} nasu za su nuna an aika.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "An aika wa {name} ragowar {amount} ta {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Babu abin da ya je wa {name} yanzu: saƙonni da yawa a wannan sa'a, ko SMS na shirinka ya ƙare. Sake gwadawa daga baya.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "Bai tafi ba: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "Lambar {name} ita ce {phone} yanzu: rasit da tunatarwa za su iya isa gare su.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: basussukan da abokan ciniki ke bin ka",
       "reviewed": false
     },
     "wa.table.form": {
@@ -3185,7 +3897,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} ba ta da teburin bayanai tukuna. Ƙirƙiri ɗaya a Taskiem, ƙarƙashin Tables{link}.",
+      "text": "{org} ba ta da teburin bayanai tukuna. Aika *new table* don yin ɗaya a nan, ko ƙirƙiri ɗaya a Taskiem, ƙarƙashin Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

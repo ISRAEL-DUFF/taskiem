@@ -268,6 +268,10 @@
       "text": "Invoice {number} láti ọ̀dọ̀ {business}: {amount} ni ẹ ó san. Tẹ San nípa transfer fún nọ́mbà àkáǹtì tí ẹ ó sanwó sí, tàbí Ṣí invoice láti rí i.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "O jẹ {business} {amount} lórí ìwé owó {count}. Wo wọn kí o san gbogbo rẹ̀ tàbí apá kan: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Nọ́mbà àkáǹtì yín fún invoice {number} ń bọ̀. Bí kò bá dé láàárín ìṣẹ́jú kan, ẹ tẹ Nọ́mbà àkáǹtì tuntun.",
       "reviewed": false
@@ -1316,6 +1320,146 @@
       "text": "Kí o tó tẹ̀ ẹ́ jáde, ṣẹ̀dá àwọn tábìlì tí ó nílò nínú àpù náà: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "Mo ń ṣètò àkọsílẹ̀ rẹ. Ó máa gba ìṣẹ́jú kan tàbí méjì.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù{link}, bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "O kò lè ṣe tàbí yí tábìlì padà ní {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Àkọsílẹ̀ wo ni o fẹ́ máa tọ́jú?\n{list}\nFi nọ́mbà rẹ̀ dáhùn.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Nǹkan míràn",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Kí ni orúkọ àkọsílẹ̀ náà? Fún àpẹẹrẹ: Àwọn tó jẹ gbèsè, Àwọn olùpèsè, Àwọn ọmọ ẹgbẹ́.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Fún un ní orúkọ kúkúrú, tí kò ju lẹ́tà 60 lọ.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Fún un ní orúkọ tó ní lẹ́tà, bí Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "O ti ní tábìlì tí a ń pè ní {table}. Fi *add to {table}* ránṣẹ́ láti fi kún un.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Kí ni o máa ń kọ fún ẹnì kọ̀ọ̀kan nínú {table}? Ya wọ́n sọ́tọ̀ pẹ̀lú àmì kọ́mà, fún àpẹẹrẹ: name, phone, ohun tí wọ́n rà, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "Mi ò lè ka ọ̀wọ̀n kankan nínú ìyẹn. Fi wọ́n ránṣẹ́ pẹ̀lú kọ́mà, fún àpẹẹrẹ: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* yóò máa tọ́jú, fún ẹnì kọ̀ọ̀kan:\n{columns}\n\nFi *yes* dáhùn láti ṣe é, tàbí fi àkọsílẹ̀ náà ránṣẹ́ lẹ́ẹ̀kan sí i láti yí i padà.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Kò sí ohun tí a yí padà.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "Mo ti ṣe *{table}*. Fi kún un pẹ̀lú *add to {name}*, tàbí wò ó nínú áàpù{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "Mi ò lè ṣètò àkọsílẹ̀ rẹ nísinsìnyí, nítorí náà a kò tíì ṣe {table}. Fi *try again* dáhùn lẹ́yìn ìṣẹ́jú díẹ̀ (màá tọ́jú rẹ̀ fún ọjọ́ kan), tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Fi *try again* dáhùn láti ṣe {table}, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "A kò ṣe é: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "{old} ti di *{table}* báyìí.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Yíyọ ọ̀wọ̀n tàbí tábìlì kúrò máa pa gbogbo ohun tó wà nínú rẹ̀ rẹ́, nítorí náà inú áàpù ni a ti ń ṣe é, níbi tí o ti máa tẹ orúkọ rẹ̀ láti fìdí rẹ̀ múlẹ̀{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Èwo?\n{list}\nFi ránṣẹ́ lẹ́ẹ̀kan sí i pẹ̀lú orúkọ tábìlì náà ní kíkún.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "ọ̀rọ̀",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "nọ́mbà (iye owó, iye)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "nọ́mbà odidi (iye)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "bẹ́ẹ̀ni tàbí bẹ́ẹ̀kọ́",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "ọjọ́",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "ọjọ́ àti àkókò",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "nọ́mbà fóònù",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "àdírẹ́sì ímeèlì",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "ọ̀pọ̀ iye papọ̀",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Kí ni yóò wà nínú *{column}*?\n{list}\nFi nọ́mbà rẹ̀ dáhùn.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Ṣé kí n fi ọ̀wọ̀n *{column}* ({type}) kún *{table}*? Fi *yes* tàbí *cancel* dáhùn.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Fún ọ̀wọ̀n náà ní orúkọ tó ní lẹ́tà, bí phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} ti ní ọ̀wọ̀n {column} tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "Mo ti fi *{column}* kún *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Tún gbìyànjú",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Ìyẹn ti gùn jù fún mi; ẹ ṣàlàyé rẹ̀ ní ìsàlẹ̀ ohun kikọ {max}.",
       "reviewed": false
@@ -1545,7 +1689,107 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà",
+      "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà, lẹ́yìn náà *change 1* tàbí *delete 1*",
+      "reviewed": false
+    },
+    "wa.help.ask": {
+      "text": "• Béèrè nípa àwọn tábìlì rẹ: *how many customers*, *total balance*, tàbí ìbéèrè kankan bíi *ta ló jẹ ju 10k lọ?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Kí lo fẹ́ mọ̀? Fún àpẹẹrẹ: *ask how many customers are in Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "Mi ò tíì lè ka irú ìbéèrè bẹ́ẹ̀ níbí. Ìwọ̀nyí ń ṣiṣẹ́: *how many customers*, *total balance* (ọ̀wọ̀n nọ́mbà), àti *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "Mi ò lè dáhùn ìyẹn láti inú àwọn tábìlì rẹ. Gbìyànjú *find*, orúkọ tábìlì àti ọ̀rọ̀ kan, tàbí *tables* láti rí wọn.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "Ìpín AI oṣù yìí ti tán, nítorí náà mi ò lè ka ìbéèrè náà. *how many customers*, *total balance* àti *find* ṣì ń ṣiṣẹ́.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Ìbéèrè {count} nìyẹn ní wákàtí yìí. Tún béèrè díẹ̀ lẹ́yìn náà, tàbí lo *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Ìgbà tí a fi kún un",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} níbi tí {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " àti ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} jẹ́ {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} kì í ṣe {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} kéré ju {value} lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} kò ju {value} lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} ju {value} lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} tó {value} tàbí jù bẹ́ẹ̀ lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} ní \"{value}\" nínú",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} ṣófo",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} ní nǹkan",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} tó ga jù lọ ṣáájú",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} tó kéré jù lọ ṣáájú",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Àpapọ̀ {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(lórí ìlà {count} àkọ́kọ́)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: kò sí.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -2708,6 +2952,10 @@
       "text": "lórí POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "lórí gbèsè",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Owó lọ́wọ́",
       "reviewed": false
@@ -2718,6 +2966,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Gbèsè",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2790,6 +3042,18 @@
     },
     "wa.sale.matched": {
       "text": "A ti so ó pọ̀ mọ́ owó tó wọlé.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} yóò jẹ {total} lápapọ̀.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} jẹ́ tuntun nínú ìwé gbèsè rẹ.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "A kọ ọ́ sílẹ̀ bí gbèsè: {name} jẹ ẹ́ ({number}), {total} lápapọ̀ báyìí.",
       "reviewed": false
     },
     "wa.sale.short": {
@@ -3105,7 +3369,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… àti {count} mìíràn. Ẹ wá pẹ̀lú ọ̀rọ̀ tó pọ̀ sí i, tàbí ẹ ṣí Tables nínú Taskiem.",
+      "text": "… àti {count} mìíràn. Ẹ fi *more* ránṣẹ́ fún márùn-ún tó kàn.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3118,6 +3382,454 @@
     },
     "wa.table.find_what": {
       "text": "Ẹ fi *find*, orúkọ tábìlì àti ohun tí ẹ ń wá ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Ẹ fi *change 1* ránṣẹ́ láti ṣàtúnṣe ìlà 1, tàbí *delete 1* láti yọ ọ́ kúrò.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Gbogbo rẹ̀ nìyẹn nínú {table} fún ìwádìí yẹn.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "Kò sí ìlà {n} nínú àkójọ náà. Ẹ fi nọ́ńbà láti 1 sí {max} ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "Ẹ kò lè yí àwọn ìlà padà nínú {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} kò sí mọ́. Ẹ fi *tables* ránṣẹ́ láti rí èyí tó wà.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Ìlà {id} kò sí nínú {table} mọ́.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Ìlà {id} nínú {table}:\n{row}\n\nÈwo lẹ fẹ́ yí padà? Ẹ fi nọ́ńbà rẹ̀ ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Ẹ fi nọ́ńbà láti 1 sí {max} ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "Èyí tuntun:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: ẹ tẹ *{cta}* láti kọ èyí tuntun; ẹ ó fìdí rẹ̀ múlẹ̀ kí a tó fi pamọ́. Ẹ fi *cancel* ránṣẹ́ láti dúró.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Ṣé kí a fi àyípadà yìí pamọ́ sí ìlà {id} nínú {table}?\n{changes}\n\nẸ dáhùn *yes* láti fi pamọ́, nọ́ńbà àlàyé mìíràn láti yí òun náà padà, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Ṣé kí a yọ ìlà {id} kúrò nínú {table}? A kò ní lè rí i padà.\n{row}\n\nẸ dáhùn *yes* láti yọ ọ́ tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Ẹ dáhùn *yes* láti tẹ̀síwájú tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Kò sí ohun tí a yí padà. Àwọn ìlà tí a rí ṣì ní nọ́ńbà wọn.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "Ẹ ti yí ọ̀pọ̀ ìlà padà báyìí. Ẹ dúró fún ìṣẹ́jú kan, lẹ́yìn náà ẹ tún gbìyànjú.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "A kò fi í pamọ́: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "Kò ṣeé ṣe: {reason}\n\nẸ dáhùn *yes* láti tún gbìyànjú tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Ìlà {id} yí padà lẹ́yìn tí ẹ rí i, nítorí náà a kò kọ nǹkan kan. Òun nìyí báyìí.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "A ti fi ìlà {id} pamọ́ nínú {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "A ti yọ ìlà {id} kúrò nínú {table}.",
+      "reviewed": false
+    },
+    "button.file_new": {
+      "text": "Tábìlì tuntun",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Fi kún tábìlì",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "Kì í ṣe báyìí",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "Ẹ kò lè mú àkójọ wọ inú tábìlì nínú {org} (ó nílò table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "Mo lè ka fáìlì CSV àti Excel (.xlsx). Ẹ fi àkójọ náà pamọ́ bí ọ̀kan nínú wọn kí ẹ sì tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "Ẹ ti fi ọ̀pọ̀ fáìlì ránṣẹ́ báyìí. Ẹ dúró fún ìṣẹ́jú kan, lẹ́yìn náà ẹ tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "Fáìlì yẹn ju 2 MB lọ. Ẹ fi èyí tó kéré ránṣẹ́, tàbí ẹ lo Import ní ojú-ìwé Tables{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "Fáìlì yẹn ní ju ìlà {limit} lọ, ó ju ohun tí ìgbéwọlé kan lè gbà lọ. Ẹ pín in sí fáìlì kéékèèké kí ẹ sì fi ọ̀kọ̀ọ̀kan ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "Mi ò lè ka fáìlì yẹn: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "Mi ò lè gba fáìlì yẹn. Ẹ tún fi ránṣẹ́ ní ìṣẹ́jú kan.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: ìlà {rows} pẹ̀lú {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Fi kún tábìlì* yóò fi wọ́n kún {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*Tábìlì tuntun* yóò ṣe tábìlì láti inú rẹ̀. Láti fi àwọn ìlà kún tábìlì mìíràn, ẹ fi *add to* àti orúkọ rẹ̀ ránṣẹ́. *Kì í ṣe báyìí* kò ní tọ́jú nǹkan kan.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Ẹ tẹ *Tábìlì tuntun*, tàbí ẹ fi *add to* àti orúkọ tábìlì ránṣẹ́, tàbí *Kì í ṣe báyìí*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Ọ̀pọ̀ tábìlì ló bá a mu:\n{list}\n\nẸ fi *add to* àti orúkọ kíkún ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "A kò fi nǹkan kan kún un, a kò sì tọ́jú fáìlì náà.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "Tábìlì yẹn kò sí mọ́. Ẹ tún fi fáìlì náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Ọwọ̀n wo nínú *{table}* ni *{header}* yóò wọ̀?\n{list}\n0. Fi í sílẹ̀",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Ẹ fi nọ́ńbà láti 0 sí {max} ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "Kò sí èyíkéyìí nínú àwọn àkọlé fáìlì náà tó jẹ́ ọwọ̀n *{table}*, nítorí náà a kò fi nǹkan kan kún un.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "A kò fi nǹkan kan kún un: {reason}. Ẹ ṣàtúnṣe fáìlì náà kí ẹ sì tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Ṣé kí a ṣe *{table}* pẹ̀lú àwọn ọwọ̀n yìí:\n{columns}\n\nkí a sì fi ìlà {rows} rẹ̀ kún un? Àwọn àkọ́kọ́:\n{first}\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Ṣé kí a fi ìlà {rows} kún *{table}*? Àwọn àkọ́kọ́:\n{first}\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "Mi ò lè tún gba fáìlì náà bí ó ti rí. Ẹ tún fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "Kò ṣeé ṣe: {reason}\n\nẸ dáhùn *yes* láti tún gbìyànjú tàbí *cancel*. Àwọn ìlà tí a ti fi kún kò ní wọlé lẹ́ẹ̀mejì.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "A ti ṣe *{table}* a sì ti fi ìlà {rows} láti {file} kún un. A kò tọ́jú fáìlì náà. Ẹ fi *find {name}* àti ọ̀rọ̀ kan ránṣẹ́ láti wá àwọn ìlà.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "A ti fi ìlà {rows} láti {file} kún *{table}*. A kò tọ́jú fáìlì náà.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "A ti fi àwọn ìlà {file} kún *{table}* tẹ́lẹ̀, nítorí náà kò sí ohun tí a fi kún un lẹ́ẹ̀mejì.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "Mi ò tíì lè ṣí fáìlì tí a fi ránṣẹ́ lórí Slack. Ẹ gbé e wọlé ní ojú-ìwé Tables{link}, tàbí ẹ fi ránṣẹ́ sí mi lórí WhatsApp tàbí Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Ẹ fi *copy my sheet* àti ìjápọ̀ sheet náà ránṣẹ́ (ẹ ṣí sheet náà nínú browser yín kí ẹ sì da àdírẹ́sì rẹ̀ kọ).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Ẹ kọ́kọ́ so Google Sheets pọ̀: ẹ fi *connect Google Sheets* ránṣẹ́. Lẹ́yìn náà ẹ tún fi *copy my sheet* àti ìjápọ̀ náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "Mi ò lè ka sheet yẹn: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem kò lè ṣí sheet yẹn pẹ̀lú àkọọ́lẹ̀ Google yín. Ẹ ṣàyẹ̀wò ìjápọ̀ náà, àti pé àkọọ́lẹ̀ tí ẹ so pọ̀ lè ṣí i.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "Sheet náà ti yí padà láti ìgbà tí mo kà á, nítorí náà a kò fi nǹkan kan kún un. Ẹ tún fi *copy my sheet* àti ìjápọ̀ náà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Ẹ̀dà ni èyí: àwọn àyípadà tí ẹ bá ṣe sí sheet náà lẹ́yìn náà kò ní wọlé. Ẹ máa tọ́jú àkójọ náà sínú tábìlì láti ìsinsìnyí.",
+      "reviewed": false
+    },
+    "wa.debt.owes_short": {
+      "text": "jẹ {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Ẹlòmíràn tuntun",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} jẹ́ tuntun. Ẹ fi nọ́ńbà fóònù {name} ránṣẹ́ kí ìwé-ẹ̀rí àti ìránnilétí lè dé ọ̀dọ̀ wọn, tàbí *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "{name} wo?\n{list}\n\nẸ fi nọ́ńbà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "Ìgbà mélòó lẹ máa ń fún àwọn oníbàárà láti san ohun tí wọ́n jẹ? Ìránnilétí yóò lọ lẹ́yìn èyí nìkan.\n{list}\n\nẸ fi nọ́ńbà ránṣẹ́. Ẹ lè yí i padà lẹ́yìn pẹ̀lú *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "Kò sí àkókò kan pàtó (kò sí ìránnilétí)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "Ọjọ́ {days}",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "Kò ní ọjọ́ ìsanwó.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Olùdásílẹ̀ ló ń ṣètò ìgbà tí àwọn oníbàárà ní láti san; títí di ìgbà náà gbèsè yìí kò ní ọjọ́ ìsanwó.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "Ọjọ́ ìsanwó: {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Ṣé kí a kọ ọ́ pé {name} jẹ {amount}? {due}\n{name} yóò jẹ {total} lápapọ̀. A kò ní fi nǹkan ránṣẹ́ sí wọn.\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "A kò kọ ọ́: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "A ti kọ ọ́: {name} jẹ {amount} ({number}). {name} jẹ {total} lápapọ̀.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "Ẹ kò lè kọ gbèsè tàbí ìsanwó nínú {org} (ó nílò invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "Ẹ kò lè rí àwọn tó jẹ {org} (ó nílò invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Kò sí ẹni tí wọ́n ń pè ní {name} tó jẹ yín. Ẹ kọ gbèsè pẹ̀lú *{name} owes* àti iye owó.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "Báwo ni {name} ṣe san?\n1. Owó ní ọwọ́\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Àkọọ́lẹ̀ {name} yín ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Àkọọ́lẹ̀ mìíràn",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Àkọọ́lẹ̀ wo ni {name} fi ránṣẹ́ sí?\n{list}\n\nẸ fi nọ́ńbà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "ní owó ọwọ́",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "nípa transfer sí {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Ṣé kí a kọ {amount} láti ọ̀dọ̀ {name} {how}? Ó máa kọ́kọ́ san gbèsè wọn tó pẹ́ jù. {name} yóò jẹ {total}.\n\nẸ dáhùn *yes* tàbí *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} tó ju ohun tí wọ́n jẹ lọ yóò wà gẹ́gẹ́ bí kírẹ́dìtì wọn, fún gbèsè wọn tó kàn.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "A ti kọ {amount} láti ọ̀dọ̀ {name}. {name} jẹ {total} báyìí.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Kírẹ́dìtì tí a fi pamọ́ fún wọn: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "Èyí kì í ṣe nọ́ńbà fóònù tí mo lè lò. Ẹ fi ránṣẹ́ pẹ̀lú kóòdù orílẹ̀-èdè (+234…), tàbí *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "Ó ti parí: gbèsè {count} tó ṣì wà ti ń tẹ̀lé àwọn òfin yìí báyìí.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Kò sí nǹkan láti kọ: Taskiem ń rí owó tó wọ {account}. Iye tí {name} jẹ yóò dín kù nígbà tí transfer náà bá dé tí a sì so ó pọ̀.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Kí lẹ ń pe àkọọ́lẹ̀ yẹn? Ẹ lo orúkọ báǹkì rẹ̀ àti orúkọ kúkúrú, bí *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Ẹ lo lẹ́tà kékeré àti nọ́ńbà, àti / kan ṣoṣo, bí *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "A kò kọ nǹkan kan.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Àwọn òfin kírẹ́dìtì jẹ́ ọjọ́ 1 sí 365, tàbí *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Àwọn oníbàárà ní {terms} báyìí láti san ohun tí wọ́n jẹ. Àwọn gbèsè tuntun yóò tẹ̀lé èyí.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Àwọn gbèsè tí a kọ kò ní ní ọjọ́ ìsanwó tàbí ìránnilétí.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Ṣé kí a lò ó fún àwọn gbèsè {count} tí a ti kọ tẹ́lẹ̀ pẹ̀lú, ọ̀kọ̀ọ̀kan láti ọjọ́ tí a kọ ọ́?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Kò sí ẹni tó jẹ yín ní nǹkan kan. Ẹ kọ gbèsè pẹ̀lú *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "Oníbàárà {count} jẹ yín {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} (ìlà {lines})",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "ọjọ́ ìsanwó {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… àti {count} mìíràn.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Ẹ fi *balance* àti orúkọ ránṣẹ́ fún gbèsè oníbàárà kan.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Ó ju ẹyọ kan lọ tó bá a mu:\n{list}\n\nẸ fi orúkọ kíkún ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} jẹ {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Ìsanwó tó kẹ́yìn: {amount} ní {date}.",
+      "reviewed": false
+    },
+    "wa.debt.owes_nothing": {
+      "text": "{name} kò jẹ ohunkóhun.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} kò ní nọ́mbà fóònù síbẹ̀. Kọ́kọ́ fi *{name}'s number is 0803…* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "nọ́mbà àkáǹtì tiwọn láti sanwó sí",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "ìjápọ̀ láti san án, gbogbo rẹ̀ tàbí apá kan",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "kò sí ọ̀nà láti sanwó lórí ayélujára (wọn yóò bi ọ́)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Ṣé kí n fi ohun tí {name} jẹ ránṣẹ́, {amount} ({lines}), sí {to}, pẹ̀lú {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Ìlà ìwé {count} wọn yóò hàn bí èyí tí a fi ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "Mo ti fi iye tí {name} jẹ, {amount}, ránṣẹ́ nípa {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Kò sí ohun tí ó dé ọ̀dọ̀ {name} báyìí: ọ̀pọ̀ ìfiranṣẹ́ ní wákàtí yìí, tàbí SMS ètò rẹ ti tán. Gbìyànjú lẹ́yìn náà.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "Kò lọ: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "Nọ́ńbà {name} ni {phone} báyìí: ìwé-ẹ̀rí àti ìránnilétí lè dé ọ̀dọ̀ wọn.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: àwọn gbèsè tí àwọn oníbàárà jẹ yín",
       "reviewed": false
     },
     "wa.table.form": {
@@ -3185,7 +3897,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} kò tíì ní tábìlì dátà kankan. Ẹ ṣẹ̀dá ọ̀kan nínú Taskiem, lábẹ́ Tables{link}.",
+      "text": "{org} kò tíì ní tábìlì dátà kankan. Fi *new table* ránṣẹ́ láti ṣe ọ̀kan níbí, tàbí ṣẹ̀dá ọ̀kan nínú Taskiem, lábẹ́ Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

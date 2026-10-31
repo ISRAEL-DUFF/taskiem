@@ -177,7 +177,10 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// A school family's page (B6): the link, the family's students, invoices, receipts and requests, and what its forms send to the inbox.
 		"taskiem_public_school_family(bytea)": true, "taskiem_public_school_family_students(bytea)": true, "taskiem_public_school_family_invoices(bytea)": true,
 		"taskiem_public_school_family_receipts(bytea)": true, "taskiem_public_school_family_requests(bytea)": true,
-		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true}
+		"taskiem_public_school_family_ask(bytea,text,uuid,bytea,bytea)": true,
+		// A customer's page (decision 0060, R5): their open lines with nothing personal, and paying towards the total.
+		"taskiem_public_customer_link(bytea)": true, "taskiem_public_customer_link_request(bytea,text,bigint)": true,
+		"taskiem_public_customer_link_payment(bytea)": true, "taskiem_public_customer_link_own_account(bytea)": true}
 	for _, f := range definers {
 		if !allowed[f] {
 			t.Errorf("taskiem_public may execute the privileged function %s", f)

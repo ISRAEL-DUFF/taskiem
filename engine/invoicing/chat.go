@@ -22,9 +22,22 @@ import (
 // OutboxInvoice is the chat outbox kind of an invoice to a contact.
 const OutboxInvoice = "invoice"
 
+// OutboxBalance is the chat outbox kind of what a customer owes in all
+// (decision 0060, R5): their balance and their payment link, worked out
+// when it is sent, naming one open invoice of theirs (SendBalance, and a
+// reminder that carries {customer_link}). Outside WhatsApp's window it
+// goes as the taskiem_balance template once approved.
+const OutboxBalance = "balance"
+
 // queueChat queues the invoice to its customer's chat app when they asked
 // this business for updates there; the channel, or "" when none.
 func (s *Invoices) queueChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Invoice, key string) (string, error) {
+	return s.queueChatKind(ctx, tx, tenant, x, OutboxInvoice, key)
+}
+
+// queueChatKind is queueChat for a kind of message about the invoice or
+// its customer.
+func (s *Invoices) queueChatKind(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Invoice, kind, key string) (string, error) {
 	if !s.Reach.Ready() || len(s.Chat) == 0 || x.Customer.Phone == "" {
 		return "", nil
 	}
@@ -43,7 +56,7 @@ func (s *Invoices) queueChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x
 		}
 	}
 	contact, invoice := t.Contact, x.ID
-	queued, err := whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: t.Channel, Kind: OutboxInvoice, Contact: &contact, Invoice: &invoice},
+	queued, err := whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: t.Channel, Kind: kind, Contact: &contact, Invoice: &invoice},
 		key+":chat")
 	if err != nil || !queued {
 		return "", err

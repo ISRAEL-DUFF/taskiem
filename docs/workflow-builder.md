@@ -89,7 +89,7 @@ wd/v1 needs at least one step in each list. When an If's **No** has nothing in i
 - **Build:** the canvas.
 - **Runs:** this workflow's runs, newest first.
 - **Settings:** the name, **When it runs**, environments and promotion, the form editor for a form trigger, the email address for an email trigger, and **Where it starts** (its web addresses, schedules and signing secrets).
-- **Code** and **JSON** (with Advanced): the workflow as TypeScript or as its wd/v1 definition, both editable.
+- **Code** and **JSON** (with Advanced): the workflow as TypeScript or as its wd/v1 definition, both editable. Both are plain text boxes today; a proper editor is planned in [a proper code editor](spec/code-editor.md).
 
 ## On a phone
 

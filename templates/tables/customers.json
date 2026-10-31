@@ -1,0 +1,39 @@
+{
+  "name": "customers",
+  "title": "Customers",
+  "description": "The people who buy from the business: a name, and a phone or email to reach them.",
+  "columns": [
+    {
+      "name": "name",
+      "title": "Name",
+      "type": "text",
+      "required": true,
+      "personal": true
+    },
+    {
+      "name": "phone",
+      "title": "Phone",
+      "type": "phone"
+    },
+    {
+      "name": "email",
+      "title": "Email",
+      "type": "email"
+    },
+    {
+      "name": "area",
+      "title": "Area",
+      "type": "text"
+    },
+    {
+      "name": "marketing_opt_in",
+      "title": "Agreed to marketing",
+      "type": "boolean"
+    },
+    {
+      "name": "email_status",
+      "title": "Email status",
+      "type": "text"
+    }
+  ]
+}

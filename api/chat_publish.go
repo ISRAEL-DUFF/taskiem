@@ -197,6 +197,12 @@ func (s *Server) waBuildFinish(ctx context.Context, c *chat, b *waBuild, specs [
 			for _, t := range specs {
 				failed = append(failed, t.Name)
 			}
+		} else if s.tablesProvisioning(ctx, c.tenant.ID) {
+			// The first table makes the business's records project, which
+			// takes a minute or two: say so first (decision 0060, §9.1).
+			if err := c.say(ctx, s, c.t("wa.build.tables_setting_up")); err != nil {
+				return "", err
+			}
 		}
 		for _, spec := range specs {
 			if !c.p.Can(PermTableEdit) {
@@ -208,7 +214,12 @@ func (s *Server) waBuildFinish(ctx context.Context, c *chat, b *waBuild, specs [
 			case err == nil:
 				made = append(made, spec.Name)
 			case errors.Is(err, datatables.ErrConflict):
-				// It exists already: the draft uses it as it is.
+				// It exists already: the draft uses it as it is, and what
+				// it lacks is said.
+				if missing := s.tableMissing(ctx, c.tenant.ID, spec.Name, tableReqOf(spec).Columns); len(missing) > 0 {
+					notes = append(notes, c.t("wa.build.table_lacks", "table", whatsapp.SafeText(spec.Name),
+						"columns", whatsapp.SafeText(strings.Join(missing, ", ")), "link", s.waLink(c, "/tables")))
+				}
 			default:
 				s.Logger.Warn("chat: making a draft's table", "tenant", c.tenant.ID, "table", spec.Name, "err", err)
 				failed = append(failed, spec.Name)
@@ -554,4 +565,16 @@ func (s *Server) railNames(c *chat, ids []string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+// tablesProvisioning reports whether making a table now would first make
+// the business's records project: data tables are on, and the project is
+// not ready.
+func (s *Server) tablesProvisioning(ctx context.Context, tenant uuid.UUID) bool {
+	svc, err := s.tables()
+	if err != nil {
+		return false
+	}
+	st, err := svc.Status(ctx, tenant)
+	return err == nil && st.Available && !st.Ready()
 }

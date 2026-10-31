@@ -1143,7 +1143,13 @@ paths:
         in: query
         schema:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [invoice, credit]
+        description: credit for the debtor book's notebook debts only
       - name: limit
         in: query
         schema:
@@ -1749,8 +1755,33 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [credit_kobo, accounts, payers, revealed]
+                required: [open, owed_kobo, credit_kobo, accounts, payers, revealed]
                 properties:
+                  open:
+                    type: array
+                    description: The customer's statement, their open invoices and notebook debts oldest first (what their money pays first)
+                    items:
+                      type: object
+                      required: [id, number, kind, status, due_kobo]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        number:
+                          type: string
+                        kind:
+                          type: string
+                          enum: [invoice, credit]
+                        status:
+                          type: string
+                        due_kobo:
+                          type: integer
+                        due_on:
+                          type: string
+                          format: date
+                  owed_kobo:
+                    type: integer
+                    description: What is due on them in all
                   credit_kobo:
                     type: integer
                   accounts:
@@ -2151,8 +2182,93 @@ paths:
                     type: integer
                   skipped:
                     type: integer
+                  paired:
+                    type: integer
+                    description: Lines recorded as the bank's confirmation of a transfer entered by hand (same account, amount and within three days)
+                  waiting:
+                    type: integer
+                    description: Lines that wait for a person to say whether each is a transfer entered by hand (GET /v1/money/statement-waiting)
                   columns:
                     $ref: '#/components/schemas/MoneyStatementFormat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statement-waiting:
+    get:
+      operationId: listStatementWaiting
+      tags:
+      - Invoices
+      summary: Statement lines waiting to be paired
+      description: "Money-in lines of an uploaded statement that may be a transfer someone entered by hand (in chat, \"Ada paid 2,000 transfer\"): several such transfers fit, or one of another amount. They are not in the money log until a person decides."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      responses:
+        '200':
+          description: The lines, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lines]
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MoneyStatementWaiting'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/statement-waiting/{id}:
+    post:
+      operationId: decideStatementLine
+      tags:
+      - Invoices
+      summary: Say whether a statement line is a transfer entered by hand
+      description: "same with entry_id records the line as the bank's confirmation of that transfer (counted once, never matched again); different records it as money of its own, which matching then looks at."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [same, different]
+                entry_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, decision, entry_id]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  decision:
+                    type: string
+                  entry_id:
+                    type: string
+                    format: uuid
         default:
           $ref: '#/components/responses/Error'
   /v1/money/entries:
@@ -3322,7 +3438,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
       - name: reveal
         in: query
         schema:
@@ -5167,6 +5283,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvoiceSettings'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoice-settings/credit-terms:
+    put:
+      operationId: putCreditTerms
+      tags:
+      - Invoices
+      summary: Set how long customers have to pay a notebook debt
+      description: "credit_days for lines recorded from now on (null: no fixed time, so notebook debts are never overdue or reminded); apply_open dates the open notebook debts by it too, each from the day it was recorded."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                credit_days:
+                  type: [integer, "null"]
+                  minimum: 1
+                  maximum: 365
+                apply_open:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings, and how many open debts were dated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [settings, applied]
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/InvoiceSettings'
+                  applied:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/orders:
@@ -23508,7 +23664,7 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
         term_id:
           type: string
           format: uuid
@@ -25198,6 +25354,11 @@ components:
                 enum: [created, exists, skipped, failed]
               error:
                 type: string
+              missing:
+                type: array
+                description: The columns a table that exists already lacks, which the workflow uses.
+                items:
+                  type: string
     AlertChannelKind:
       type: string
       enum:
@@ -25875,11 +26036,16 @@ components:
           type: integer
         paid_how:
           type: string
-          enum: [cash, transfer, pos]
+          enum: [cash, transfer, pos, credit]
+          description: credit for a sale on credit recorded in chat ("sold 3 bags of rice 45,000 credit to Ada")
         status:
           type: string
-          enum: [recorded, waiting, matched]
-          description: recorded (cash), waiting for its money, or matched to it
+          enum: [recorded, waiting, matched, credit]
+          description: recorded (cash), waiting for its money, matched to it, or credit (what the customer owes is on invoice_id)
+        invoice_id:
+          type: string
+          format: uuid
+          description: A sale on credit's notebook debt
         entry_id:
           type: string
           format: uuid
@@ -26442,7 +26608,7 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, sent, part_paid, paid, overdue, void]
+          enum: [draft, recorded, sent, part_paid, paid, overdue, void]
         customer:
           $ref: '#/components/schemas/InvoiceCustomer'
         lines:
@@ -26469,6 +26635,12 @@ components:
           enum: [business, customer]
         allow_part_payments:
           type: boolean
+        kind:
+          type: string
+          enum: [invoice, credit]
+          description: credit is a notebook debt recorded in chat (Ada owes 5,000), never sent unless the business sends it
+        recorded_at:
+          $ref: '#/components/schemas/NullableTimestamp'
         sent_at:
           $ref: '#/components/schemas/NullableTimestamp'
         paid_at:
@@ -26898,6 +27070,43 @@ components:
         cap_kobo:
           type: integer
           minimum: 0
+    MoneyStatementWaiting:
+      type: object
+      required: [id, channel, occurred_at, amount_kobo, candidates, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        amount_kobo:
+          type: integer
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [entry_id, amount_kobo, occurred_at]
+            properties:
+              entry_id:
+                type: string
+                format: uuid
+              amount_kobo:
+                type: integer
+              occurred_at:
+                type: string
+                format: date-time
+              description:
+                type: string
+              entered_by:
+                type: string
     MoneyStatementFormat:
       type: object
       properties:
@@ -27064,6 +27273,13 @@ components:
         auto_match:
           type: boolean
           description: A strong suggestion is matched to its invoice without asking (docs/matching.md)
+        credit_days:
+          type:
+          - integer
+          - 'null'
+          description: How long a customer has to pay a notebook debt, in days; null for no fixed time (no reminders). Set from chat or with credit_terms; read-only here
+        credit_terms_at:
+          $ref: '#/components/schemas/NullableTimestamp'
     StorefrontOrder:
       type: object
       required: [id, reference, kind, status, customer, basket, total_kobo, payment, created_at]
@@ -29614,6 +29830,11 @@ components:
                 enum: [created, exists, skipped, failed]
               error:
                 type: string
+              missing:
+                type: array
+                description: The columns a table that exists already lacks, which the workflow uses.
+                items:
+                  type: string
             additionalProperties: false
       additionalProperties: false
     TryDraftRequest:
@@ -33426,6 +33647,10 @@ components:
                 - money_daily
                 - school_approval
                 - school_family
+                - rider
+                - sales_evening
+                - supplier
+                - balance
               status:
                 type: string
                 enum:

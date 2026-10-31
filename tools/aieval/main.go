@@ -9,12 +9,15 @@
 // and properties the case requires (rules.go), and policy findings. A
 // model-graded rubric ("does it do what was asked") is optional (-judge).
 // The repair suite (evals/repair) checks failure classification and
-// patches (-mode repair).
+// patches (-mode repair). The chat suite (evals/chat) checks the model's
+// routing of the table and debtor commands and its query specs for
+// questions over tables (-mode chat).
 //
 //	go run ./tools/aieval                                          # offline heuristic
 //	go run ./tools/aieval -compare evals/builder/baseline.json     # the CI gate
 //	go run ./tools/aieval -provider anthropic -min-gate 0.7 -out r.json -markdown r.md
 //	go run ./tools/aieval -mode repair -compare evals/repair/baseline.json
+//	go run ./tools/aieval -mode chat -compare evals/chat/baseline.json
 //
 // The fake provider is a keyword heuristic, not a model: it exercises the
 // pipeline and the grader offline, deterministically, so a change to the
@@ -63,7 +66,7 @@ type options struct {
 func run(args []string, stdout io.Writer) error {
 	var o options
 	fs := flag.NewFlagSet("aieval", flag.ContinueOnError)
-	fs.StringVar(&o.mode, "mode", "builder", "builder | repair")
+	fs.StringVar(&o.mode, "mode", "builder", "builder | repair | chat")
 	fs.StringVar(&o.suite, "suite", "", "a .jsonl file or a directory of them (default evals/<mode>)")
 	fs.StringVar(&o.provider, "provider", "fake", "fake | anthropic | selfhosted (configured by TASKIEM_AI_* and ANTHROPIC_API_KEY)")
 	fs.StringVar(&o.model, "model", "", "model id (default: TASKIEM_AI_MODEL or claude-opus-5-5); answers from another model are not scored")
@@ -108,6 +111,8 @@ func run(args []string, stdout io.Writer) error {
 		return runBuilder(o, prices, reg, stdout)
 	case "repair":
 		return runRepairSuite(o, prices, reg, stdout)
+	case "chat":
+		return runChatSuite(o, prices, stdout)
 	}
 	return fmt.Errorf("unknown -mode %q", o.mode)
 }

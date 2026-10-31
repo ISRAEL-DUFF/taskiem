@@ -331,8 +331,10 @@ func TestCoerce(t *testing.T) {
 func TestMatch(t *testing.T) {
 	lib := templates.Default()
 	for goal, want := range map[string]string{
-		"Every Friday, text my customers who owe me":                         "debtor-reminder-sms",
-		"remind my debtors on whatsapp every week":                           "debtor-reminder-whatsapp",
+		"Every Friday, text my customers who owe me": "debtor-reminder-sms",
+		// The debtor book's reminder (decision 0060) ranks above the sheet
+		// one, which a business with Google Sheets is still offered.
+		"remind my debtors on whatsapp every week":                           "chase-overdue-invoices",
 		"send me a summary of today's sales every evening":                   "daily-sales-summary",
 		"when a customer pays on paystack send them a thank you sms":         "payment-thank-you-sms",
 		"alert me when my paystack balance is low":                           "low-balance-alert",
@@ -379,8 +381,10 @@ func TestMatch(t *testing.T) {
 
 // The invoice templates are offered strongly enough for the offline
 // builder to start from them (its threshold is 20), and only for goals
-// about invoices: not for loans overdue in a database, nor for paying a
-// bill. The template they supersede is never offered.
+// about invoices or customers who owe (by phrase, never the bare word
+// "owe": decision 0060): not for loans overdue in a database, nor for
+// paying a bill or the suppliers the business owes. The templates they
+// supersede are never offered.
 func TestMatchInvoices(t *testing.T) {
 	lib := templates.Default()
 	for goal, want := range map[string]string{
@@ -392,6 +396,8 @@ func TestMatchInvoices(t *testing.T) {
 		"three days after I send an invoice, remind them if unpaid": "chase-overdue-invoices",
 		"send a receipt when an invoice is paid":                    "invoice-paid-receipt",
 		"when a customer pays an invoice, send them a receipt":      "invoice-paid-receipt",
+		"remind my customers who owe me":                            "chase-overdue-invoices",
+		"chase my debtors":                                          "chase-overdue-invoices",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want || m[0].Score < 20 {
@@ -401,7 +407,8 @@ func TestMatchInvoices(t *testing.T) {
 	for _, goal := range []string{
 		"Every morning, find loans that are 7 days overdue in Postgres and text each borrower",
 		"Pay a customer's electricity bill through Interswitch and text them the token",
-		"Every Friday, text my customers who owe me",
+		"pay the suppliers I owe every Friday",
+		"remind me what I owe my landlord",
 	} {
 		for _, m := range lib.Match(goal, 3) {
 			if len(m.Template.Requires) > 0 {

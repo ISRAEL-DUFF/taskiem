@@ -228,9 +228,10 @@ func flowDone(token string) map[string]any {
 
 // --- inputs ---
 
-// waSendInputsFlow sends the inputs form for a workflow, or the row form
-// for a data table (data.Table set), when Flows are set up and the fields
-// fit one; false leaves them to chat.
+// waSendInputsFlow sends the inputs form for a workflow, the row form for
+// a data table (data.Table set), or a found row's new value (data.Found
+// set), when Flows are set up and the fields fit one; false leaves them
+// to chat.
 func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, fields []whatsapp.Field) (bool, error) {
 	if c.wa == nil || c.wa.Config.FlowKey == nil {
 		return false, nil
@@ -247,10 +248,15 @@ func (s *Server) waSendInputsFlow(ctx context.Context, c *chat, data chatData, f
 	var wf *uuid.UUID
 	var version *int
 	body := c.t("wa.form.inputs", "workflow", data.Name, "count", strconv.Itoa(len(fields)), "cta", c.t("button.fill_in"))
-	if data.Table != uuid.Nil {
+	switch {
+	case data.Found != nil:
+		// A found row's new value (chat_tables_rows.go): the one column.
+		meta["table"], meta["column"] = data.Table.String(), data.Found.Column
+		body = c.t("wa.rows.form", "table", whatsapp.SafeText(data.Name), "cta", c.t("button.fill_in"))
+	case data.Table != uuid.Nil:
 		meta["table"] = data.Table.String()
 		body = c.t("wa.table.form", "table", whatsapp.SafeText(data.Name), "count", strconv.Itoa(len(fields)), "cta", c.t("button.fill_in"))
-	} else {
+	default:
 		wf, version = &data.Workflow, &data.Version
 	}
 	raw, _ := json.Marshal(meta)
@@ -408,6 +414,9 @@ func (s *Server) waFlowCompleted(ctx context.Context, c *chat) error {
 		data.Flow = ""
 		if err := s.setFlow(ctx, row, "done", map[string]any{}); err != nil {
 			return err
+		}
+		if data.Found != nil {
+			return s.waRowFormDone(ctx, c, data, inputs)
 		}
 		if data.Table != uuid.Nil {
 			return s.waTableFormDone(ctx, c, data, inputs)

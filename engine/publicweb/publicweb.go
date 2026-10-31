@@ -178,6 +178,11 @@ type Server struct {
 	// InvoicePay offers ways to pay on invoice pages (T4); nil: the pages
 	// only show the invoice.
 	InvoicePay InvoicePay
+	// Customers reads customers' pages, /c/{token}: what a customer owes
+	// across their open invoices (customer.go); CustomerPay offers ways
+	// to pay it. Nil: none.
+	Customers   Customers
+	CustomerPay InvoicePay
 	// OrderPay offers Pay by bank transfer on an order's status page (N3);
 	// nil: the page offers the card page only.
 	OrderPay OrderPay

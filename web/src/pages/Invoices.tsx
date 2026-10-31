@@ -4,6 +4,12 @@ import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import {
+  CREDIT_CHOICES,
+  CREDIT_TERMS_PATH,
+  creditChoice,
+  creditProblem,
+  creditRequest,
+  creditTermsWords,
   amendmentProblem,
   amendmentRequest,
   emptyAmendment,
@@ -488,6 +494,29 @@ function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manag
       {!v && !view.error && <Skeleton rows={2} label="Loading the customer's credit…" />}
       {v && (
         <>
+          {(v.open ?? []).length > 0 && (
+            <>
+              <h3>What they owe</h3>
+              <p className="hint" data-testid="customer-owed">
+                {naira(v.owed_kobo ?? 0)} in all, on {(v.open ?? []).length} {(v.open ?? []).length === 1 ? "bill" : "bills"}. Their money pays the oldest first.
+              </p>
+              <Items label="The customer's open bills">
+                {(v.open ?? []).map((o) => (
+                  <Item
+                    key={o.id}
+                    testid="statement-line"
+                    to={`/invoices/${encodeURIComponent(o.number)}`}
+                    icon="invoices"
+                    tone={o.status === "overdue" ? "danger" : undefined}
+                    title={o.kind === "credit" ? `${o.number} · notebook debt` : o.number}
+                    side={naira(o.due_kobo)}
+                    sub={o.due_on ? `due ${dateLabel(o.due_on)}` : "no due date"}
+                    sideSub={<StatusPill status={o.status} />}
+                  />
+                ))}
+              </Items>
+            </>
+          )}
           <dl className="kv">
             <dt>Credit</dt>
             <dd data-testid="customer-credit">{creditWords(v.credit_kobo)}</dd>
@@ -1022,6 +1051,12 @@ export function InvoicePage() {
       {x && (
         <>
           <InvoiceHero invoice={x} />
+          {x.kind === "credit" && (
+            <p className="hint" data-testid="notebook-debt">
+              A notebook debt, recorded in chat: owed, and counted with the customer's invoices, but not sent to them
+              {x.sent_at ? " until it was sent with their balance" : ""}.
+            </p>
+          )}
           {sent && (
             <div className="notice" role="status" data-testid="sent">
               {sentLines(sent).map((l) => (
@@ -1544,7 +1579,81 @@ export function InvoiceSettingsPage() {
       <ErrorBox error={settings.error} />
       {!settings.data && !settings.error && <Skeleton rows={4} label="Loading the settings…" />}
       {settings.data && <SettingsEditor saved={settings.data} />}
+      {settings.data && <CreditTerms saved={settings.data} />}
     </>
+  );
+}
+
+/** How long customers have to pay a notebook debt ("Ada owes 5,000" in chat), and dating the open ones by it. */
+function CreditTerms({ saved: initial }: { saved: InvoiceSettings }) {
+  const { can } = useAuth();
+  const manage = can("invoice.manage");
+  const [saved, setSaved] = useState(initial);
+  const start = creditChoice(initial.credit_days, !!initial.credit_terms_at);
+  const [choice, setChoice] = useState(start.choice);
+  const [other, setOther] = useState(start.other);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [said, setSaid] = useState("");
+  const [tried, setTried] = useState(false);
+  const act = useAction();
+  const problem = creditProblem(choice, other);
+  return (
+    <form
+      className="card"
+      noValidate
+      aria-labelledby="credit-terms-h"
+      data-testid="credit-terms"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setTried(true);
+        if (problem || !manage) return;
+        void act.run(async () => {
+          const r = await plainly(put<{ settings: InvoiceSettings; applied: number }>(CREDIT_TERMS_PATH, creditRequest(choice, other, applyOpen)));
+          setSaved(r.settings);
+          setSaid(applyOpen ? `${r.applied} open ${r.applied === 1 ? "debt" : "debts"} now follow these terms.` : "");
+          setApplyOpen(false);
+          setTried(false);
+        }, "Credit terms saved");
+      }}
+    >
+      <h2 id="credit-terms-h">Credit terms</h2>
+      <p className="hint">
+        How long customers have to pay a debt you write down in chat (Ada owes 5,000). A debt is due that many days after it is recorded, and reminders go only once it is overdue. Now:{" "}
+        {creditTermsWords(saved)}
+      </p>
+      <fieldset disabled={!manage} className="sf-choices">
+        <legend>Customers have</legend>
+        {CREDIT_CHOICES.map((c) => (
+          <label className="row" key={c.value}>
+            <input type="radio" name="credit-terms" checked={choice === c.value} onChange={() => setChoice(c.value)} />
+            <span>{c.label}</span>
+          </label>
+        ))}
+        {choice === "other" && (
+          <Field label="Days">
+            <input type="number" inputMode="numeric" min={1} max={365} step={1} value={other} onChange={(e) => setOther(e.target.value)} />
+          </Field>
+        )}
+        <label className="row">
+          <input type="checkbox" checked={applyOpen} onChange={(e) => setApplyOpen(e.target.checked)} />
+          <span>
+            Also date the open debts by these terms <span className="hint">Each from the day it was recorded. Otherwise only new debts follow them.</span>
+          </span>
+        </label>
+      </fieldset>
+      {tried && problem && (
+        <div className="error" role="alert">
+          {problem}
+        </div>
+      )}
+      <div role="status">{said && <div className="notice">{said}</div>}</div>
+      <ErrorBox error={act.error} />
+      {manage && (
+        <button type="submit" className="primary" disabled={act.busy}>
+          Save credit terms
+        </button>
+      )}
+    </form>
   );
 }
 

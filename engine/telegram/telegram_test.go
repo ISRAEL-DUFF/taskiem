@@ -129,9 +129,9 @@ func TestParse(t *testing.T) {
 		t.Fatalf("image as a file: %+v %v", u, err)
 	}
 	u, err = telegram.Parse([]byte(`{"update_id":22,"message":{"message_id":8,"from":{"id":777},"chat":{"id":777,"type":"private"},
-		"document":{"file_id":"D2","mime_type":"application/pdf"}}}`))
-	if err != nil || u.Photo != nil {
-		t.Fatalf("a PDF is not a photo: %+v %v", u, err)
+		"document":{"file_id":"D2","mime_type":"application/pdf","file_name":"list.pdf"}}}`))
+	if err != nil || u.Photo != nil || u.Document == nil || u.Document.FileID != "D2" || u.Document.Name != "list.pdf" {
+		t.Fatalf("a PDF is a document, not a photo: %+v %v", u, err)
 	}
 	u, err = telegram.Parse([]byte(`{"update_id":14,"message":{"message_id":6,"from":{"id":777,"username":"ada"},"chat":{"id":-100123,"type":"supergroup"},"text":"hi"}}`))
 	if err != nil || u.Kind != "message" || u.ChatType != "supergroup" || u.ChatID != -100123 || u.Private() {

@@ -255,6 +255,8 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			sendErr = s.sendReachItem(ctx, it)
 		case invoicing.OutboxInvoice:
 			sendErr = s.sendInvoiceItem(ctx, it)
+		case invoicing.OutboxBalance:
+			sendErr = s.sendBalanceItem(ctx, it)
 		case dispatch.OutboxRider:
 			sendErr = s.sendRiderItem(ctx, it)
 		case matching.OutboxMatch:

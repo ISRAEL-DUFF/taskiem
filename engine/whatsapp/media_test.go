@@ -22,6 +22,18 @@ func TestParseAudio(t *testing.T) {
 	}
 }
 
+func TestParseDocument(t *testing.T) {
+	ins, err := whatsapp.Parse(whatsapptest.Delivery("PN", "+2348010000001", "wamid.d", whatsapptest.Document("media-4", "text/csv", "Debtors.csv", "my list")))
+	if err != nil || len(ins) != 1 {
+		t.Fatal(ins, err)
+	}
+	in := ins[0]
+	if in.Type != "document" || in.Text != "my list" || in.Image != nil || in.Document == nil || in.Document.ID != "media-4" || in.Document.Name != "Debtors.csv" ||
+		in.Document.MimeType != "text/csv" {
+		t.Fatalf("%+v %+v", in, in.Document)
+	}
+}
+
 func TestParseImage(t *testing.T) {
 	body := whatsapptest.Delivery("PN", "+2348010000001", "wamid.i", whatsapptest.Image("media-2", "image/jpeg", "Jollof rice ₦2,000"))
 	ins, err := whatsapp.Parse(body)

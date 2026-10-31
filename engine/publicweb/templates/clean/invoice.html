@@ -1,6 +1,6 @@
 {{template "fhead" .}}{{with .Refresh}}<meta http-equiv="refresh" content="{{.}}">
 {{end}}{{template "fbody" .}}
-<h1>Invoice {{.Number}}</h1>
+<h1>{{.Heading}}</h1>
 <p class="facts"><span class="badge">{{.Status}}</span>{{with .DueOn}}<span>{{.}}</span>{{end}}</p>
 {{with .Message}}<p class="notice" role="status">{{.}}</p>{{end}}
 <div class="panel inv">

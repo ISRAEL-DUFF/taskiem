@@ -28,6 +28,10 @@ A credit naming a registered account by its reference but paid into another acco
 
 Issuing students' account numbers registers each one ([schools](schools.md#account-numbers)); credits that never arrive as a webhook are read back from the rail every 15 minutes ([the look-back](schools.md#the-look-back)) and matched the same way.
 
+## Customers' payment links
+
+Money paid through an account number or card link issued from a customer's payment link ([invoices](invoices.md#a-customers-payment-link)) is that customer's, as money into their own account number is: matched **exactly**, with no one asked, to their oldest open invoice or debt, then the next, until it runs out, each part saying "paid through the customer's own payment link"; what is left is their credit. It is counted when the payment service tells Taskiem, or when Taskiem's check every 30 seconds finds it, whichever comes first, and once (the money log has one entry for it either way, and what is counted comes off that entry).
+
 ## Split payments
 
 One payment can count towards several invoices and storefront orders (two children's fees, two terms), each part a match of its own, listed on its invoice and undone on its own; undoing one part leaves the others. The parts never add up to more than the payment counts for: the database refuses a part that would, under the lock every writer takes on the payment, so two people splitting it at once cannot count it twice. A further part of the same payment towards an invoice it already counts towards **adds to the first** (a second row, undone on its own; the invoice's paid amount is the sum of its parts not undone), so a person who split too little can give the invoice more without undoing anything. An order takes one payment, so a further part towards the same order is refused as any second payment is. The same match asked for again when nothing is left of the payment changes nothing.

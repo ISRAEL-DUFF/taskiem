@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -189,6 +190,80 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 		return nil
 	case errors.Is(err, whatsapp.ErrWindowClosed), whatsapp.TemplateUnusable(err):
 		return fmt.Errorf("%w: outside WhatsApp's 24-hour window, the invoice went by SMS or email only: %w", whatsapp.ErrNothingToSend, err)
+	case errors.Is(err, telegram.ErrBlocked):
+		if berr := s.Reach.Blocked(ctx, it.Channel, addr); berr != nil {
+			return berr
+		}
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	}
+	return fmt.Errorf("to %s: %w", whatsapp.MaskNumber(addr), err)
+}
+
+// sendBalanceItem sends a customer what they owe in all
+// (invoicing.OutboxBalance): their balance, how many bills, and their
+// payment link, as they stand when it goes; outside WhatsApp's window as
+// the taskiem_balance template once approved. The SMS and email went when
+// it was queued, so a message the chat cannot carry, or a customer who
+// owes nothing by then, is dropped.
+func (s *Server) sendBalanceItem(ctx context.Context, it whatsapp.OutboxItem) error {
+	if s.Invoices == nil || !s.Reach.Ready() {
+		return fmt.Errorf("%w: invoices in chat are off", whatsapp.ErrNothingToSend)
+	}
+	if it.Contact == nil || it.Invoice == nil {
+		return fmt.Errorf("%w: incomplete", whatsapp.ErrNothingToSend)
+	}
+	ch, err := s.chatChannelFor(ctx, it.Channel, it.Tenant)
+	if err != nil {
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	}
+	var business, addr, link string
+	var due int64
+	var bills int
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, it.Tenant).Scan(&business); err != nil {
+			return err
+		}
+		x, err := s.Invoices.Get(ctx, tx, it.Tenant, it.Invoice.String())
+		if err != nil {
+			return err
+		}
+		open, err := s.Invoices.OpenInvoicesOf(ctx, tx, it.Tenant, x.CustomerID())
+		if err != nil {
+			return err
+		}
+		for _, o := range open {
+			due += o.DueKobo
+		}
+		if bills = len(open); due <= 0 {
+			return errInvoiceMoot
+		}
+		if link, err = s.Invoices.CustomerLink(ctx, tx, it.Tenant, x.CustomerID(), "system:chat"); err != nil {
+			return err
+		}
+		addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, reach.Target{Channel: it.Channel, Contact: *it.Contact})
+		return err
+	})
+	switch {
+	case errors.Is(err, reach.ErrGone), errors.Is(err, invoicing.ErrNotFound), errors.Is(err, errInvoiceMoot), errors.Is(err, invoicing.ErrState):
+		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
+	case err != nil:
+		return err
+	}
+	if link == "" {
+		return fmt.Errorf("%w: no customer pages are served", whatsapp.ErrNothingToSend)
+	}
+	l := s.chooseLang(ctx, it.Tenant, addr, "").Tag
+	tpl := whatsapp.TplBalance
+	count := strconv.Itoa(bills)
+	m := whatsapp.Message{Tenant: it.Tenant, Template: &tpl,
+		Vars: map[string]string{"tenant": business, "amount": invoicing.Naira(due), "count": count, "link": link},
+		Text: ch.Prefix(business) + tr(l, "invoice.chat.balance", "business", business, "amount", invoicing.Naira(due), "count", count, "link", link)}
+	_, err = ch.Send(ctx, addr, m)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, whatsapp.ErrWindowClosed), whatsapp.TemplateUnusable(err):
+		return fmt.Errorf("%w: outside WhatsApp's 24-hour window, the balance went by SMS or email only: %w", whatsapp.ErrNothingToSend, err)
 	case errors.Is(err, telegram.ErrBlocked):
 		if berr := s.Reach.Blocked(ctx, it.Channel, addr); berr != nil {
 			return berr

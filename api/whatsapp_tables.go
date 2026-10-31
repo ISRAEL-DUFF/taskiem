@@ -25,12 +25,12 @@ import (
 // "tables" lists the organisation's tables; "add to <table>" collects one
 // row, in a WhatsApp form where Flows are set up and column by column in
 // chat otherwise, and adds it only after an explicit yes; "find <table>
-// <text>" looks rows up. Rows go through the connector's actions on the
+// <text>" looks rows up, and a row found is changed or removed after an
+// explicit yes (chat_tables_rows.go). Rows go through the connector's actions on the
 // data_tables connection exactly as the API's do (datatables_rows.go),
 // the values checked by the same code; personal columns wait sealed in
 // the session, like a run's inputs, and are masked in every message.
-// Creating or changing a table, and editing or deleting rows, stay in
-// the web app.
+// Tables are made and changed in chat_tables_make.go.
 
 const (
 	// tablesChatPurpose is the recorded purpose of the connection reads
@@ -583,7 +583,8 @@ func tablesChatReason(err error) string {
 // waTableFind answers "find <table> <text>": the table is the longest
 // name or title the words start with, the rest is the search (text alone
 // on the table's first text column, or column:text), and up to five rows
-// come back as short lines, personal values masked.
+// come back as short numbered lines, personal values masked, for *more*,
+// *change 2* and *delete 2* (chat_tables_rows.go).
 func (s *Server) waTableFind(ctx context.Context, c *chat, arg string) error {
 	if !c.p.Can(PermTableRead) {
 		return c.say(ctx, s, c.t("wa.table.denied_read", "org", c.tenant.Name))
@@ -618,44 +619,13 @@ func (s *Server) waTableFind(ctx context.Context, c *chat, arg string) error {
 	case text == "":
 		return c.say(ctx, s, c.t("wa.table.find_what"))
 	}
-	t := match[0]
-	title := whatsapp.SafeText(tableTitle(t))
-	filter, ok := searchFilter(t.Columns, text)
-	if !ok {
-		return c.say(ctx, s, c.t("wa.table.find_no_column", "table", title))
-	}
-	tctx := s.waTablesCtx(ctx, c)
-	tr, err := s.tableRowsFor(tctx, c.tenant.ID, t, tablesChatPurpose)
-	if err != nil {
-		s.Logger.Warn("whatsapp: the data tables connection", "err", err)
-		return c.say(ctx, s, c.t("wa.table.unavailable"))
-	}
-	out, err := tr.call(tctx, s, "read_rows", map[string]any{"table": t.Name, "limit": waFindRows, "filters": []any{filter},
-		"order": []any{map[string]any{"column": "id", "desc": true}}, "count": "exact"}, "")
-	if err != nil {
-		s.Logger.Warn("whatsapp: reading rows", "table", t.Name, "err", err)
-		return c.say(ctx, s, c.t("wa.table.unavailable"))
-	}
-	rows := rowsOf(out)
-	quoted := fmt.Sprintf("%q", whatsapp.SafeText(text))
-	if len(rows) == 0 {
-		return c.say(ctx, s, c.t("wa.table.find_none", "table", title, "text", quoted))
-	}
-	lines := []string{c.t("wa.table.find_head", "table", title, "text", quoted)}
-	for _, r := range rows {
-		m, _ := r.(map[string]any)
-		lines = append(lines, waTableRowLine(t.Columns, m))
-	}
-	if more := countOf(out) - int64(len(rows)); more > 0 {
-		lines = append(lines, c.t("wa.table.find_more", "count", strconv.FormatInt(more, 10)))
-	}
-	return c.say(ctx, s, strings.Join(lines, "\n"))
+	return s.waFindPage(ctx, c, match[0], text, 0)
 }
 
 // waTableRowLine is one found row on a line: its id and its columns that
 // have a value, personal ones masked.
 func waTableRowLine(cols []datatables.Column, row map[string]any) string {
-	parts := []string{"• #" + cell(row["id"])}
+	parts := []string{"#" + cell(row["id"])}
 	for _, col := range cols {
 		v := row[col.Name]
 		if v == nil {
@@ -714,6 +684,14 @@ func (s *Server) waFlowTableInputs(ctx context.Context, row flowRow, req whatsap
 	fields, cols, err := waTableFields(t, l)
 	if err != nil {
 		return nil, err
+	}
+	if name, _ := row.data["column"].(string); name != "" {
+		// A found row's new value: that column alone.
+		i := slices.IndexFunc(cols, func(c datatables.Column) bool { return c.Name == name })
+		if i < 0 {
+			return nil, fmt.Errorf("a row form for a column the table no longer has")
+		}
+		fields, cols = fields[i:i+1], cols[i:i+1]
 	}
 	n := min(whatsapp.FlowSlots, len(fields))
 	fields, cols = fields[:n], cols[:n]

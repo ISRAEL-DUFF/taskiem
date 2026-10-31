@@ -302,6 +302,8 @@ export function movePreview(it: StockItem, f: MoveForm): string | null {
 // --- sales (docs/stock.md "Sales"; /v1/stock/sales) ---
 
 export type PaidHow = "cash" | "transfer" | "pos";
+/** How a recorded sale was paid: as the form's ways, or on credit (chat's "credit to Ada"), which no money pays yet. */
+export type SaleHow = PaidHow | "credit";
 
 export interface SaleLine {
   item_id: string;
@@ -317,9 +319,9 @@ export interface Sale {
   reference: string;
   lines: SaleLine[];
   amount_kobo: number;
-  paid_how: PaidHow;
-  /** recorded (cash), waiting (its money not yet seen) or matched. */
-  status: "recorded" | "waiting" | "matched";
+  paid_how: SaleHow;
+  /** recorded (cash), waiting (its money not yet seen), matched, or credit (owed by a customer, on their debts). */
+  status: "recorded" | "waiting" | "matched" | "credit";
   entry_id?: string;
   matched_how?: string;
   note?: string;
@@ -340,7 +342,7 @@ export interface UnsoldEntry {
 export interface SalesDay {
   day: string;
   total_kobo: number;
-  by_how: Record<PaidHow, number>;
+  by_how: Partial<Record<SaleHow, number>>;
   count: number;
   waiting: number;
   top: { item: string; unit?: string; quantity: number; total_kobo: number }[];
@@ -355,11 +357,14 @@ export const PAID_HOW: Record<PaidHow, string> = {
   pos: "Terminal",
 };
 
+/** How a recorded sale was paid, as a word: the form's ways and on credit. */
+export const SALE_HOW: Record<SaleHow, string> = { ...PAID_HOW, credit: "On credit" };
+
 /** A day's takings by how they were paid, the ways with none left out. */
 export function byHowLine(d: SalesDay): string {
-  return (Object.keys(PAID_HOW) as PaidHow[])
+  return (Object.keys(SALE_HOW) as SaleHow[])
     .filter((h) => (d.by_how[h] ?? 0) > 0)
-    .map((h) => `${PAID_HOW[h]} ${formatPrice(d.by_how[h])}`)
+    .map((h) => `${SALE_HOW[h]} ${formatPrice(d.by_how[h] ?? 0)}`)
     .join(" · ");
 }
 
@@ -369,7 +374,7 @@ export const saleTitle = (s: Sale) =>
 
 /** A sale underneath its title: when, how paid, whether its money came, its reference. */
 export function saleSub(s: Sale): string {
-  const parts = [whenLabel(s.sold_at), PAID_HOW[s.paid_how]];
+  const parts = [whenLabel(s.sold_at), SALE_HOW[s.paid_how]];
   if (s.status === "waiting")
     parts.push(
       s.paid_how === "pos"

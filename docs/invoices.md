@@ -25,13 +25,33 @@ Over the API a line can also say who it is collected for (`pass_through_for`, su
 | Status | Means |
 | --- | --- |
 | Draft | Saved, not sent |
+| Recorded | A notebook debt recorded in chat (`Ada owes 5,000`): owed and open, but not sent ([the debtor book](#the-debtor-book)) |
 | Sent | Sent, nothing paid yet |
 | Part-paid | Some of it paid |
 | Paid | Paid in full |
 | Overdue | Past its due date and not paid in full |
 | Void | Cancelled, with the reason; it takes no new payment |
 
-Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time).
+Taskiem works the status out from the invoice and its payments; an invoice becomes overdue the day after its due date (Lagos time). The list's **Show** filter has each status and **Notebook debts** (`GET /v1/invoices?kind=credit`); a notebook debt's own page says it was recorded in chat, and **Send** sends it like a draft.
+
+## The debtor book
+
+Money customers owe is kept as invoices, whether it was invoiced or only written down ([decision 0060](decisions/0060-no-sheet-needed.md)). A notebook debt is an invoice of kind **credit** in the status **recorded**: it is open and owed everywhere an invoice is (matching, a customer's payments counted oldest first, credit, the list of overdue invoices and the customer's statement), it takes part payments whatever **Customers may pay part** says, and nothing is sent to the customer unless the business sends it. Payments move it to part-paid and paid as they move a sent invoice, and it is overdue the day after its due date.
+
+- **Who a customer is.** A customer of the book is a record (`invoice_customers`). Their name is kept sealed, with a lower-case copy for finding them by name, which is erased with them.
+  - **With a phone,** they are that phone's customer, as an invoice sent to the number is: their lines carry no key, so what they owe in notebook debts and in invoices sent to that number is one balance, with one statement, one payment link and one credit. A phone has one record: recording someone new under a number already in the book finds that customer.
+  - **Without a phone,** they are a record of their own, keyed `book:<id>` on every line of theirs, so their payments and credit group by it; two customers of the same name are two records. A phone given later is set on the record and on their lines not yet sent, and they stay keyed by the record: invoices sent to that number before stay apart.
+  - **Finding them by name.** Chat looks a name up in the book (the exact name, else names starting with the words, else names containing them, nine at most), and among customers the business sent invoices to by phone who are not in the book yet, the 200 most recently sent to, whose names are opened to be compared and kept nowhere. The book's own come first. Choosing a customer of a sent invoice puts them in the book as their phone's customer, with the name and number of the invoice last sent to them.
+- **When a line is due.** The owner chooses how long customers have to pay (**Credit terms**: a number of days, or no fixed time). Until they choose, and with no fixed time, a line has no due date and is never overdue. A line's due date is set when it is recorded; a change of terms moves the open lines only when the owner asks for that.
+- **Receipts.** `notify_customer` on a line with no phone or email sends nothing and answers `sent: false` (`reason: no_address`), which is not a failure.
+- **Credit.** Money a customer paid beyond what they owed is their credit, and it pays their next line as soon as the line is recorded, as it pays an invoice when it is sent.
+- **Their balance in one message.** `send Ada her balance` in chat sends the customer one SMS (and email, when they have one, and on WhatsApp or Telegram when they asked the business for updates there, as the `taskiem_balance` [template](whatsapp.md#templates) outside WhatsApp's 24-hour window once Meta approves it) naming their open invoices and debts with what is due on each, the total, and one way to pay it: their own account number when they have one, else their payment link (below). Their recorded lines are sent with it, together; nothing is folded into another invoice or voided, so each keeps its history. It needs a phone or an email; without one, chat asks for it first.
+
+### A customer's payment link
+
+A customer's payment link, `https://<form host>/c/<token>`, opens a page of what they owe the business across their open invoices and debts: each with its number, what it is for, its due date and what is still due on it, in the order their money pays them, and the total. It is made the first time it is sent and kept with the customer, so the same link works for every later balance; it shows nothing about the customer, and a customer who owes nothing, an unknown link and a mistyped one all answer "There is nothing to pay on this page".
+
+**Pay what you owe** works as an invoice's **Pay this invoice** does ([paying from the page](#paying-from-the-page)): a one-time account number or a card link from the business's payments connection (the one of the customer's oldest open line), for the total or any part of it from ₦1,000, with the same limits per link. Money paid through it is the customer's: [matching](matching.md#customers-payment-links) counts it towards their open invoices and debts oldest first, with no one asked, and keeps what is left as their credit.
 
 ## Amending a sent invoice
 
@@ -116,7 +136,7 @@ A match from here can be undone on the invoice like any payment. People with `in
 
 A payment that is more than is due on the invoice suggested can be **split** across the same customer's open invoices, oldest first, with the amounts editable; each part is a match of its own, and what is left over is the customer's credit or waits to be matched ([split payments](matching.md#split-payments)). A credit held for a person (paid into a customer's account number with a reference that disagrees) says why on its card.
 
-Each sent invoice shows **The customer's money**: the customer's credit (paid and not yet counted towards an invoice), their own account numbers (each with its reference), and the payers remembered for them, each with **Forget this payer** for people with `invoice.manage` ([payer memory](matching.md#payer-memory)). A customer's credit counts towards the next invoice sent to them: Send says how much of it did, and the message to the customer says what is left to pay.
+Each sent invoice shows **The customer's money**: **What they owe**, the customer's statement (every open invoice and notebook debt of theirs, oldest first, as their money pays them, with what is due on each and the total; `open` and `owed_kobo` in `GET /v1/invoices/{id}/customer`), the customer's credit (paid and not yet counted towards an invoice), their own account numbers (each with its reference), and the payers remembered for them, each with **Forget this payer** for people with `invoice.manage` ([payer memory](matching.md#payer-memory)). A customer's credit counts towards the next invoice sent to them: Send says how much of it did, and the message to the customer says what is left to pay.
 
 **Give this customer an account number** (`invoice.manage`) gives the invoice's customer a permanent account number of their own, so every transfer into it is matched to their open invoices, oldest first, and the rest kept as their credit ([customers' own account numbers](matching.md#customers-own-account-numbers)). Choose one of the business's connections that can issue account numbers (the form says what each needs: the customer's email, their BVN or NIN typed in and never kept, or the wallet the number pays into), or **Enter one by hand**: the connection, the account number and the reference a payments provider already gave the business for this customer. The same customer and connection again shows the account already issued. One per customer, never one per invoice: an invoice's page offers its own.
 
@@ -134,6 +154,7 @@ Under **Invoices > Settings**:
 | Who pays the transfer fee | The business | Or the customer, where the payments provider takes only the exact amount ([0045](decisions/0045-tally-in-taskiem.md)) |
 | Customers may pay part | Off | When on, a customer can pay part of an invoice |
 | Match strong suggestions automatically | Off | See [Matching](#matching) |
+| Credit terms | Not set | How long customers have to pay a notebook debt, in days, or no fixed time; until set, notebook debts have no due date and are never reminded ([the debtor book](#the-debtor-book)). Its own card, **Save credit terms** (`PUT /v1/invoice-settings/credit-terms`), with **Also date the open debts by these terms** to date the open ones from the day each was recorded |
 
 Each invoice can override the connection, the fee and part payments.
 
@@ -156,9 +177,10 @@ The **Invoices** platform connector (`invoices@1`, no connection needed) acts on
 | `send` | Sends it, as above |
 | `get` | Its status, total, what was paid and what is still due |
 | `void` | Voids it, with a `reason` |
-| `notify_customer` | An SMS, and an email when there is one, to the invoice's customer: `{link}` becomes the invoice's page link, `{number}` its number, `{due}` what is still due and `{fee_line}` a sentence on the bank's fee ("You sent ₦25,000; ₦24,650 reached Ada Cakes after the bank's fee of ₦350.", in the business's language for its customers) when the rail said what it kept, or nothing |
+| `notify_customer` | An SMS, and an email when there is one, to the invoice's customer: `{link}` becomes the invoice's page link, `{number}` its number, `{due}` what is still due, `{customer_due}` and `{customer_lines}` what the customer owes on everything overdue and on how many, `{customer_link}` the customer's [payment link](#a-customers-payment-link), and `{fee_line}` a sentence on the bank's fee ("You sent ₦25,000; ₦24,650 reached Ada Cakes after the bank's fee of ₦350.", in the business's language for its customers) when the rail said what it kept, or nothing |
 | `list` | `status: overdue` (sent or part paid and past the due date, oldest due first, with `days_overdue`, Lagos time) or `status: paid` (paid within `paid_within_hours`, 1 to 168, default 24); at most `limit` (default 50, up to 200). Numbers, totals, what is due and dates only: no customer details |
 | `register_account` | A permanent account number of the customer's own ([matching](matching.md#customers-own-account-numbers)): `customer` (as their invoices have them: `key` when given, else `phone`, else `email`) and `connection` (`paystack/main`), then either `issue: true` to issue one on a connection that can (with `account` for the wallet on a rail that holds several, `bvn` or `nin` where the rail needs one, `account_name` where it lets the business name it) or `account_number` and `reference` (and `bank_name`) for one the business already has. The same customer and connection again answers the account already issued, so a retry of the step is safe. Answers the number, bank, reference and connection. Never one per invoice |
+| `customer_link` | The [payment link](#a-customers-payment-link) of the customer of `number` (any of their open invoices or debts), made the first time and the same after, with what they owe in all (`due_kobo`, `due`). Fails when they owe nothing |
 
 There is no action that marks an invoice paid. A run that waits for payment waits for the `invoice.paid` signal, correlated by the invoice's number; the signal resumes a waiting run and starts none. A workflow that should start when an invoice is paid has the invoice trigger instead ([below](#starting-a-workflow-when-an-invoice-is-paid)).
 

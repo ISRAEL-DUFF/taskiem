@@ -11,6 +11,13 @@
     {"name": "bank_sender", "type": "string", "title": "Your bank's alert address", "description": "The address your bank's alerts come from (or just its domain, such as yourbank.com). Only mail from it is taken.", "required": true, "example": "alerts@yourbank.com", "max_length": 120},
     {"name": "table", "type": "string", "title": "Alerts table", "description": "Your table with received_at, subject and details columns.", "required": false, "default": "bank_alerts", "example": "bank_alerts", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"}
   ],
+  "tables": [
+    {"name": "{{table}}", "title": "Bank alerts", "description": "Each alert your bank emailed you.", "columns": [
+      {"name": "received_at", "title": "Received", "type": "datetime"},
+      {"name": "subject", "title": "Subject", "type": "text"},
+      {"name": "details", "title": "Details", "type": "text"}
+    ]}
+  ],
   "definition": {
     "schema": "wd/v1",
     "id": "wf_bankAlertEmail",

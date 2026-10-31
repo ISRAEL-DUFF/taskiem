@@ -31,6 +31,8 @@ func (s *Server) moneyRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/money/fee-rates", s.putFeeRate)
 	r.With(read).Get("/money/statement-format", s.getStatementFormat)
 	r.With(manage, s.tenantWide).Post("/money/statements", s.uploadStatement)
+	r.With(read).Get("/money/statement-waiting", s.listStatementWaiting)
+	r.With(manage, s.tenantWide).Post("/money/statement-waiting/{id}", s.decideStatementLine)
 	r.With(manage, s.tenantWide).Post("/money/entries", s.enterMoney)
 }
 
@@ -241,7 +243,58 @@ func (s *Server) uploadStatement(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, leakErr(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"channel": req.Channel, "added": got.Added, "skipped": got.Skipped, "columns": cols})
+	writeJSON(w, http.StatusOK, map[string]any{"channel": req.Channel, "added": got.Added, "skipped": got.Skipped, "paired": got.Paired,
+		"waiting": got.Waiting, "columns": cols})
+}
+
+// listStatementWaiting serves GET /v1/money/statement-waiting: statement
+// lines that wait for a person to say whether each is a transfer entered
+// by hand (moneylog pairing).
+func (s *Server) listStatementWaiting(w http.ResponseWriter, r *http.Request) {
+	var list []moneylog.Waiting
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		list, err = moneylog.WaitingLines(r.Context(), tx, principalFrom(r.Context()).TenantID, 100)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"lines": list})
+}
+
+// decideStatementLine serves POST /v1/money/statement-waiting/{id}:
+// {"decision": "same", "entry_id": …} records the line as the bank's
+// confirmation of that transfer; {"decision": "different"} as money of
+// its own.
+func (s *Server) decideStatementLine(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	var req struct {
+		Decision string    `json:"decision"`
+		EntryID  uuid.UUID `json:"entry_id"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if req.Decision != "same" && req.Decision != "different" {
+		s.fail(w, r, fmt.Errorf("%w: decision is same or different", errBadRequest))
+		return
+	}
+	p := principalFrom(r.Context())
+	entry, err := s.moneyLog().Decide(r.Context(), p.TenantID, id, req.Decision == "same", req.EntryID, p.Actor())
+	if errors.Is(err, moneylog.ErrNoWaiting) {
+		err = pgx.ErrNoRows
+	}
+	if err != nil {
+		s.fail(w, r, leakErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "decision": req.Decision, "entry_id": entry})
 }
 
 // enterMoney serves POST /v1/money/entries: cash or an expense, once per

@@ -19,6 +19,11 @@ import (
 // No field can hold a credential, a secret or a variable's value, so none
 // can reach a prompt.
 type Context struct {
+	// Holds are the template replacement conditions that hold for the
+	// business (templates.ReplaceWhen): retrieval offers a sheet
+	// template's twin, never the sheet template, where no_sheets holds
+	// (decision 0060). Never sent to the model.
+	Holds       map[string]bool    `json:"-"`
 	Connections []Connection       `json:"connections,omitempty"`
 	Policies    []Policy           `json:"policies,omitempty"`
 	Variables   []Variable         `json:"variables,omitempty"`
