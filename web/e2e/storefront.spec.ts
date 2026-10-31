@@ -114,6 +114,40 @@ test("an owner sets up the question form and finds the orders", async ({ page })
   await expect(page).toHaveURL(/status=all/);
 });
 
+test("a second workflow on a form offers to replace the first", async ({ page }) => {
+  // One workflow per form (docs/spec/fronts.md F0): the question form's
+  // workflow, set up above, is copied as another workflow, whose publish is
+  // refused with Replace it with this one.
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("owner@e2e.test");
+  await page.getByLabel("Password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).not.toHaveURL(/login/);
+  const h = { headers: { "X-Taskiem-Request": "1" } };
+  type List = { workflows: { id: string; name: string }[] };
+  const all = ((await (await page.request.get("/v1/workflows")).json()) as List).workflows;
+  const first = all.find((w) => /question/i.test(w.name));
+  expect(first, "the question form's workflow").toBeTruthy();
+  const v1 = (await (await page.request.get(`/v1/workflows/${first?.id ?? ""}/versions/1`)).json()) as { definition: { name: string } };
+  const made = (await (
+    await page.request.post("/v1/workflows", { ...h, data: { name: "Questions, answered by Bisi", definition: { ...v1.definition, name: "Questions, answered by Bisi" } } })
+  ).json()) as { id: string };
+
+  await page.goto(`/workflows/${made.id}`);
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const held = page.getByTestId("action-taken");
+  await expect(held).toContainText("This action already runs");
+  await expect(held).toContainText(first?.name ?? "");
+  await expect(held).toContainText("question form");
+
+  const vs = await axe(page);
+  expect(vs, describe("/workflows/:id (a form held)", vs)).toEqual([]);
+
+  await held.getByRole("button", { name: "Replace it with this one" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "The form starts this workflow now." })).toBeVisible();
+  await expect(held).toHaveCount(0);
+});
+
 test("an owner sets booking hours and the booking form", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");

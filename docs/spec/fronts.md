@@ -1,6 +1,6 @@
 # Fronts: a storefront with any number of pages, each with its own things and its own actions
 
-Status: **Draft** 30 October 2026, for review (revised the same day after a review against the code: §3, §5, §9, §10, §13 and §14; and again for the review's gaps: part payments, Food's options, the Spaces calendar, one reservation model, the form's one owner, known tables shared with 0060) · Decision: [0059](../decisions/0059-fronts.md) (proposed) · Builds on: [storefronts](../storefronts.md) ([0036](../decisions/0036-storefronts.md)), [forms](../forms.md) ([spec](forms.md)), [data tables](../data-tables.md), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [dispatch](dispatch.md), [invoices and the money log](invoices-and-money-log.md), [public page themes](../decisions/0042-public-page-themes.md)
+Status: **Building**: F0 built 31 October 2026 (§13.1); the rest a draft of 30 October 2026, for review (revised the same day after a review against the code: §3, §5, §9, §10, §13 and §14; and again for the review's gaps: part payments, Food's options, the Spaces calendar, one reservation model, the form's one owner, known tables shared with 0060) · Decision: [0059](../decisions/0059-fronts.md) (proposed) · Builds on: [storefronts](../storefronts.md) ([0036](../decisions/0036-storefronts.md)), [forms](../forms.md) ([spec](forms.md)), [data tables](../data-tables.md), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [dispatch](dispatch.md), [invoices and the money log](invoices-and-money-log.md), [public page themes](../decisions/0042-public-page-themes.md)
 
 ## 1. Summary
 
@@ -320,6 +320,16 @@ The public paths of today (`/`, `/a/order`, `/a/booking`, `/o/<ref>`) keep servi
 | F8 | The builder's kinds and one eval per kind; docs ([storefronts](../storefronts.md) rewritten around fronts and kinds, [forms](../forms.md) with the four fields, [stock](stock.md) on what fronts do and do not move, the owners' guide "Sell more than one thing"); the decision accepted with what was built; the atlas's business modules page | M |
 
 F0 ships first and alone: it is the owner's case, today. Then come F1, then F2 and F3 together (the food front), then one PR each. The kinds after F3 can be reordered by what owners ask for first.
+
+### 13.1 As built (F0)
+
+Built 31 October 2026:
+- **The refusal names the form.** Registering a storefront trigger whose action another workflow holds returns `ingest.ActionTaken` (the action, the workflow's id and name, the environment), still an `ErrTriggerTaken`. A publish answers 409 with `code` `action_taken`: the action, how people name it (`order form`), the workflow that starts it and the environment, `can_replace`, and a message saying the form already runs that workflow. Promoting and approving keep the plain conflict, now naming the form and the workflow.
+- **Replace it with this one.** The same publish with `replace: true` takes the workflow holding the action out of the environments this one deploys to (`undeployTx`, audited as `workflow.undeploy` with `via: replace`, `replaced_by` and `storefront_action`) and publishes this one, in one transaction, so the form never starts none and never two. Runs already started carry on. A workflow Git manages is refused, since it is changed in Git. With nothing to replace it is an ordinary publish.
+- **Four-eyes.** Under four-eyes publishing the publish is refused at once with `can_replace` false and the reason in `refused` (the form would start nothing while a second person decided), and no publish request is made, since one that could never be approved would only wait.
+- **The editor.** A refused publish shows *This action already runs **Storefront orders***, the version saved but not published, and **Replace it with this one** (or the four-eyes reason); **Keep …** closes it. A successful replace says the form starts this workflow now.
+- **Not changed here:** the other surfaces that publish a storefront workflow (Storefront > Forms' **Set up**, `turn on orders` and `turn on deliveries` in chat, the Deliveries page) keep their own paths; the API's publish is the one the editor, the CLI and the SDK use. **Make a new action for this workflow** waits for F1's action ids (F2).
+- Tests: `TestPublishReplacesTheFormsWorkflow` (the refusal, the swap in one transaction with its audit, an idempotent replace, four-eyes refused with no request left), `TestTurnOnDeliveries` unchanged, and the storefront browser test *a second workflow on a form offers to replace the first* (with axe on the notice).
 
 ## 14. Risks and open questions
 
