@@ -313,6 +313,7 @@ func TestLinkedOrders(t *testing.T) {
 	if r := w.press(t, sellerOn, asked[0].Buttons[1].ID); len(r) != 1 || !strings.Contains(r[0].Text, "That order has moved on") {
 		t.Errorf("declined after accepting: %+v", r)
 	}
+	w.srv.WaitBackground() // the buyer is told of the acceptance first
 	if r := w.press(t, buyerOn, asked[0].Buttons[0].ID); len(r) != 1 || !strings.Contains(r[0].Text, "That order has moved on") {
 		t.Errorf("the buyer pressing the seller's button: %+v", r)
 	}
