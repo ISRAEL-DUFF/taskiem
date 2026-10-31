@@ -191,7 +191,7 @@ for (const [name, out] of Object.entries(pages)) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${r.title === "Home" || !r.title ? "Taskiem · Run your business from WhatsApp" : `${r.title} · Taskiem`}</title>
+<title>${out === "index" || !r.title ? "Taskiem · Run your business from WhatsApp" : `${r.title} · Taskiem`}</title>
 <meta name="description" content="Tell Taskiem what to do in your own words. It reminds customers who owe you, thanks those who pay, and pays your staff after you approve.">
 <meta property="og:image" content="/img/og.png">
 <meta name="theme-color" content="#0d3b2e">
