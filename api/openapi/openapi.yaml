@@ -5389,6 +5389,138 @@ paths:
                       $ref: '#/components/schemas/Bill'
         default:
           $ref: '#/components/responses/Error'
+  /v1/bills/pay:
+    get:
+      operationId: getBillPay
+      tags:
+      - Links
+      summary: How bills are paid from Taskiem
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      responses:
+        '200':
+          description: The settings; workflow_id is null until set up
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [workflow_id, connection, funding_account, approver_role]
+                properties:
+                  workflow_id:
+                    type: [string, 'null']
+                    format: uuid
+                  connection:
+                    type: string
+                  funding_account:
+                    type: string
+                  approver_role:
+                    type: string
+                  waiting:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/pay/setup:
+    put:
+      operationId: setupBillPay
+      tags:
+      - Links
+      summary: Set up paying bills from Taskiem
+      description: The payments account bills are paid from (Taskiem's own wallet when left out) and who approves, written into a managed workflow made from the pay-linked-bill template, under the business's governance.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                rail_connection:
+                  type: string
+                funding_account:
+                  type: string
+                approver_role:
+                  type: string
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [workflow_id, connection, funding_account, approver_role]
+                properties:
+                  workflow_id:
+                    type: [string, 'null']
+                    format: uuid
+                  connection:
+                    type: string
+                  funding_account:
+                    type: string
+                  approver_role:
+                    type: string
+                  waiting:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}/pay:
+    post:
+      operationId: payBill
+      tags:
+      - Links
+      summary: Pay a bill from Taskiem
+      description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                  description: A part payment, where the supplier takes parts; left out, what is left
+      responses:
+        '202':
+          description: The payment, under way
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payment, run_id]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/BillPayment'
+                  run_id:
+                    type: string
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills/{id}:
     get:
       operationId: getBill
@@ -27515,7 +27647,7 @@ components:
     Bill:
       type: object
       additionalProperties: false
-      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, mirrored_at, created_at]
+      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, mirrored_at, created_at]
       properties:
         id:
           type: string
@@ -27555,6 +27687,12 @@ components:
         declared_paid_kobo:
           type: integer
           description: What the business says it paid outside Taskiem; its own figure
+        paying_kobo:
+          type: integer
+          description: A payment from Taskiem under way
+        sent_kobo:
+          type: integer
+          description: What the bank confirmed the business sent from Taskiem; the supplier's match counts it in paid_kobo
         pay_account_number:
           type: string
           description: The account number the supplier issued this business; a transfer into it is matched to the supplier's invoices exactly
@@ -27568,6 +27706,42 @@ components:
           format: date-time
         created_at:
           type: string
+          format: date-time
+    BillPayment:
+      type: object
+      additionalProperties: false
+      required: [id, bill, reference, amount_kobo, token, connection, status, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        bill:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        amount_kobo:
+          type: integer
+        token:
+          type: string
+          description: What the payout's narration carries
+        connection:
+          type: string
+        account_name:
+          type: string
+        run_id:
+          type: [string, 'null']
+          format: uuid
+        status:
+          type: string
+          enum: [pending, paid, failed, rejected]
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: [string, 'null']
           format: date-time
     LinkRequestResult:
       type: object

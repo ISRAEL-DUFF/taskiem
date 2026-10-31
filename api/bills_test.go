@@ -9,8 +9,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	billsconn "github.com/israel-duff/taskiem/connectors/bills"
+	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
 
@@ -129,5 +133,86 @@ func TestBillsMirrored(t *testing.T) {
 		return tx.QueryRow(ctx, `SELECT count(*) FROM link_mirrors_due`).Scan(&n)
 	}); err != nil || n != 0 {
 		t.Errorf("left due: %d %v", n, err)
+	}
+}
+
+// Paying a bill from Taskiem (§6.2): set up once with the payments
+// account; Pay finds the supplier's bank by name among the banks that
+// account pays, records the payment under way (the bill paying, a second
+// Pay refused) and starts the workflow with the bill's token; the
+// workflow's outcome is recorded on the bill. A bank the account does not
+// list is refused plainly.
+func TestBillPay(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	payments := &links.Payments{Pool: w.env.DB.App}
+	for _, c := range []*connector.Connector{billsconn.New(payments), paystack.New(paystack.Options{})} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	banks := []map[string]any{{"name": "Wema Bank Plc", "code": "035"}, {"name": "Access Bank", "code": "044"}}
+	w.srv.BillBanks = func(context.Context, uuid.UUID, string) ([]map[string]any, error) { return banks, nil }
+	seller, buyer, _, buyerID := linkedPair(t, w)
+	x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"amount_kobo": 4250000}, "Idempotency-Key", "b-1")
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", "s-1")
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bill := buyer.must(200, "GET", "/v1/bills/"+x["number"].(string), nil)
+	id := bill["id"].(string)
+
+	// Not set up: refused, saying what to do.
+	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/pay", nil); !strings.Contains(e["error"].(string), "set up paying bills first") {
+		t.Errorf("not set up: %v", e)
+	}
+	if st := buyer.must(200, "GET", "/v1/bills/pay", nil); st["workflow_id"] != nil {
+		t.Errorf("settings before: %v", st)
+	}
+	buyer.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main", "mode": "test",
+		"credentials": map[string]string{"secret_key": "sk_test_good"}})
+	st := buyer.must(200, "PUT", "/v1/bills/pay/setup", map[string]any{"rail_connection": "main"})
+	if st["workflow_id"] == nil || st["connection"] != "main" || st["approver_role"] != "owner" {
+		t.Fatalf("set up: %v", st)
+	}
+
+	out := buyer.must(202, "POST", "/v1/bills/"+id+"/pay", nil)
+	pay := out["payment"].(map[string]any)
+	if pay["amount_kobo"] != float64(4250000) || pay["status"] != "pending" || !strings.HasPrefix(pay["token"].(string), x["number"].(string)+"/") || out["run_id"] == "" {
+		t.Fatalf("pay: %v", out)
+	}
+	var body string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT payload::text FROM run_events WHERE run_id = $1 AND type = 'RunStarted'`, out["run_id"]).Scan(&body); err != nil {
+		t.Fatalf("the run: %v", err)
+	}
+	for _, want := range []string{`"bank_code": "035"`, `"$pii": "account_number"`, `"token": "` + pay["token"].(string) + `"`, `"amount_kobo": 4250000`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the run's input has no %s: %s", want, body)
+		}
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/"+id, nil); b["status"] != "paying" || b["paying_kobo"] != float64(4250000) {
+		t.Errorf("paying: %v", b)
+	}
+	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/pay", nil); !strings.Contains(e["error"].(string), "already under way") {
+		t.Errorf("paid twice: %v", e)
+	}
+
+	// The workflow records the bank's confirmation: sent, no longer paying;
+	// paid when the supplier's match counts it.
+	if _, err := payments.FinishBillPayment(ctx, uuid.MustParse(buyerID), uuid.MustParse(pay["id"].(string)), "paid", "DANGOTE/ADA"); err != nil {
+		t.Fatal(err)
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/"+id, nil); b["status"] != "open" || b["paying_kobo"] != float64(0) || b["sent_kobo"] != float64(4250000) {
+		t.Errorf("sent: %v", b)
+	}
+
+	// A bank the payments account does not list: refused.
+	banks = []map[string]any{{"name": "Access Bank", "code": "044"}}
+	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/pay", nil); !strings.Contains(e["error"].(string), "does not list Wema Bank as one bank") {
+		t.Errorf("unknown bank: %v", e)
 	}
 }

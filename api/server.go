@@ -153,6 +153,9 @@ type Server struct {
 	Catalogue *catalogue.Checker
 	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
 	// single sign-on and OAuth connection callbacks are built from it.
+	// BillBanks lists the banks a payments connection pays, for paying a
+	// linked supplier's bill (bills.go); nil asks the connection.
+	BillBanks func(ctx context.Context, tenant uuid.UUID, connection string) ([]map[string]any, error)
 	PublicURL string
 	// HooksURL is where providers reach /hooks (TASKIEM_HOOKS_URL); the
 	// addresses on the Connections page are built from it, or from

@@ -20,7 +20,10 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/notices"
+	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // Bills, business links L1 (docs/spec/business-links.md §6): a linked
@@ -32,8 +35,12 @@ import (
 
 func (s *Server) billRoutes(r chi.Router) {
 	read := s.need(PermInvoiceRead)
+	manage := s.need(PermInvoiceManage)
 	r.With(read).Get("/bills", s.listBills)
+	r.With(manage).Get("/bills/pay", s.getBillPay)
+	r.With(manage, s.tenantWide).Put("/bills/pay/setup", s.setupBillPay)
 	r.With(read).Get("/bills/{id}", s.getBill)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/pay", s.payBill)
 }
 
 type billsOut struct {
@@ -69,6 +76,19 @@ func (s *Server) getBill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, b)
+}
+
+// billErr answers a bill's refusals with their reasons.
+func billErr(err error) error {
+	switch {
+	case errors.Is(err, links.ErrState):
+		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrState.Error()+": "))
+	case errors.Is(err, links.ErrInvalid):
+		return fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": "))
+	case errors.Is(err, links.ErrNotFound):
+		return pgx.ErrNoRows
+	}
+	return err
 }
 
 // --- the mirror worker ---
@@ -354,4 +374,286 @@ func billDetail(l lang.Tag, b links.Bill) string {
 		out = append(out, tr(l, "bill.pay_page", "link", b.PayLink))
 	}
 	return strings.Join(out, "\n")
+}
+
+// --- paying a bill from Taskiem (§6.2) ---
+
+// payLinkedBillTemplate is the managed workflow a business's bills are
+// paid with: the name on the account found, one approval, the payout
+// carrying the bill's token, the bank's confirmation, the outcome recorded.
+const payLinkedBillTemplate = "pay-linked-bill"
+
+type billPaySettings struct {
+	WorkflowID     *uuid.UUID `json:"workflow_id"`
+	Connection     string     `json:"connection"`
+	FundingAccount string     `json:"funding_account"`
+	ApproverRole   string     `json:"approver_role"`
+	// Waiting: the workflow waits for a second person to publish it.
+	Waiting bool `json:"waiting,omitempty"`
+}
+
+func billPaySettingsTx(ctx context.Context, tx pgx.Tx) (billPaySettings, error) {
+	var st billPaySettings
+	err := tx.QueryRow(ctx, `SELECT workflow_id, connection, funding_account, approver_role FROM bill_pay_settings`).
+		Scan(&st.WorkflowID, &st.Connection, &st.FundingAccount, &st.ApproverRole)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return billPaySettings{ApproverRole: "owner"}, nil
+	}
+	return st, err
+}
+
+func (s *Server) getBillPay(w http.ResponseWriter, r *http.Request) {
+	var st billPaySettings
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		st, err = billPaySettingsTx(r.Context(), tx)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+type billPaySetup struct {
+	RailConnection string `json:"rail_connection"`
+	FundingAccount string `json:"funding_account"`
+	ApproverRole   string `json:"approver_role"`
+}
+
+// setupBillPay is PUT /v1/bills/pay/setup: the payments account bills are
+// paid from and who approves, written into the managed workflow made from
+// pay-linked-bill (a new version after the first), under the business's
+// governance as any payout workflow.
+func (s *Server) setupBillPay(w http.ResponseWriter, r *http.Request) {
+	var in billPaySetup
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if in.ApproverRole == "" {
+		in.ApproverRole = "owner"
+	}
+	tpl, ok := templates.Default().Get(payLinkedBillTemplate)
+	if !ok {
+		s.fail(w, r, fmt.Errorf("%w: paying bills is not available here", errConflict))
+		return
+	}
+	p := principalFrom(r.Context())
+	var out billPaySettings
+	err := s.tx(r, func(tx pgx.Tx) error {
+		ctx := r.Context()
+		// With no payments account chosen, bills are paid from the
+		// business's Taskiem wallet.
+		if in.RailConnection == "" || in.RailConnection == secrets.PlatformName {
+			var wallet *string
+			err := tx.QueryRow(ctx, `SELECT wallet_id FROM receive_money WHERE tenant_id = $1`, p.TenantID).Scan(&wallet)
+			if errors.Is(err, pgx.ErrNoRows) || err == nil && (wallet == nil || *wallet == "") {
+				return fmt.Errorf("%w: choose the payments account bills are paid from, or turn on receiving money with Taskiem", errConflict)
+			}
+			if err != nil {
+				return err
+			}
+			in.RailConnection, in.FundingAccount = secrets.PlatformName, *wallet
+		}
+		doc, err := tpl.Instantiate(map[string]any{"rail_connection": in.RailConnection, "funding_account": in.FundingAccount, "approver_role": in.ApproverRole},
+			"Pay bills from linked suppliers")
+		if err != nil {
+			return fmt.Errorf("%w: %s", errBadRequest, err.Error())
+		}
+		have, err := billPaySettingsTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+		g, err := governanceTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if out.Waiting, err = publishNeedsApproval(ctx, tx, g, nil); err != nil {
+			return err
+		}
+		wf, _, err := s.managedWorkflowTx(r, tx, managedWorkflow{Name: "Pay bills from linked suppliers", Template: payLinkedBillTemplate, What: "how bills are paid"},
+			doc, have.WorkflowID, out.Waiting)
+		if err != nil {
+			return err
+		}
+		out.WorkflowID, out.Connection, out.FundingAccount, out.ApproverRole = &wf, in.RailConnection, in.FundingAccount, in.ApproverRole
+		_, err = tx.Exec(ctx, `INSERT INTO bill_pay_settings (tenant_id, workflow_id, connection, funding_account, approver_role, updated_by)
+			VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (tenant_id) DO UPDATE SET workflow_id = $2, connection = $3, funding_account = $4,
+			approver_role = $5, updated_by = $6, updated_at = now()`, p.TenantID, wf, in.RailConnection, in.FundingAccount, in.ApproverRole, p.Actor())
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type billPayIn struct {
+	// AmountKobo is a part payment, where the supplier takes parts; empty
+	// pays what is left.
+	AmountKobo int64 `json:"amount_kobo"`
+}
+
+type billPayOut struct {
+	Payment links.BillPayment `json:"payment"`
+	RunID   uuid.UUID         `json:"run_id"`
+}
+
+// payBill is POST /v1/bills/{id}/pay: a payout of the bill from the
+// business's own payments account, through the pay-linked-bill workflow
+// (the approver approves it in Approvals or chat). The supplier's bank is
+// found by name among the banks that account pays (docs/spec/business-
+// links.md §16.2): with no single match it is refused, plainly.
+func (s *Server) payBill(w http.ResponseWriter, r *http.Request) {
+	var in billPayIn
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	p := principalFrom(r.Context())
+	var st billPaySettings
+	var b links.Bill
+	var version int
+	err := s.tx(r, func(tx pgx.Tx) error {
+		ctx := r.Context()
+		if err := links.SettleStalePaymentsTx(ctx, tx); err != nil {
+			return err
+		}
+		var err error
+		if st, err = billPaySettingsTx(ctx, tx); err != nil {
+			return err
+		}
+		if st.WorkflowID == nil {
+			return fmt.Errorf("%w: set up paying bills first: choose the payments account they are paid from", errConflict)
+		}
+		version, err = deployedVersion(ctx, tx, *st.WorkflowID, "prod")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("%w: paying bills waits to be published", errConflict)
+		}
+		if err != nil {
+			return err
+		}
+		b, err = links.GetBillTx(ctx, tx, chi.URLParam(r, "id"))
+		return err
+	})
+	if err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	if b.PayAccountNumber == "" || b.PayBankName == "" {
+		s.fail(w, r, fmt.Errorf("%w: %s has not given your business an account number to pay into; pay on the invoice's page instead", errConflict, b.SupplierName))
+		return
+	}
+	code, err := s.billBankCode(r.Context(), p.TenantID, st.Connection, b.PayBankName)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if in.AmountKobo == 0 {
+		in.AmountKobo = b.DueKobo
+	}
+	var pay links.BillPayment
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		if pay, err = links.StartBillPaymentTx(r.Context(), tx, p.TenantID, links.PayIn{Bill: b.ID, AmountKobo: in.AmountKobo, Connection: st.Connection,
+			BankCode: code, AccountNumber: b.PayAccountNumber, By: p.ActorType() + ":" + p.Actor()}); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "bill.pay", b.Reference, map[string]any{"amount_kobo": in.AmountKobo, "payment": pay.ID})
+	}); err != nil {
+		s.fail(w, r, billErr(err))
+		return
+	}
+	ref, _, err := s.Store.StartRun(r.Context(), runtime.StartRequest{TenantID: p.TenantID, WorkflowID: *st.WorkflowID, Version: version, Environment: "prod",
+		Trigger: map[string]any{"type": "manual", "body": map[string]any{"payment_id": pay.ID.String(), "supplier": b.SupplierName, "reference": b.Reference,
+			"token": pay.Token, "bank_code": code, "account_number": b.PayAccountNumber, "amount_kobo": pay.AmountKobo}},
+		StartedBy: p.Actor(), TriggerID: "bills/pay", DedupKey: "bill-payment:" + pay.ID.String()})
+	if err != nil {
+		// Nothing will pay it: the bill is not left paying.
+		_ = s.tx(r, func(tx pgx.Tx) error {
+			_, ferr := links.FinishBillPaymentTx(r.Context(), tx, pay.ID, "failed", "")
+			return ferr
+		})
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error { return links.SetPaymentRunTx(r.Context(), tx, pay.ID, ref.ID) }); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	pay.RunID = &ref.ID
+	writeJSON(w, http.StatusAccepted, billPayOut{Payment: pay, RunID: ref.ID})
+}
+
+// billBankCode is the code of the bank named, among the banks the
+// business's payments connection pays: by name, with "Bank", "PLC" and
+// "Limited" and punctuation set aside, exactly one match. BillBanks, when
+// set, lists them instead of the connection.
+func (s *Server) billBankCode(ctx context.Context, tenant uuid.UUID, connection, bank string) (string, error) {
+	var banks []map[string]any
+	var err error
+	if s.BillBanks != nil {
+		banks, err = s.BillBanks(ctx, tenant, connection)
+	} else {
+		banks, err = s.connectionBanks(ctx, tenant, connection)
+	}
+	if err != nil {
+		return "", err
+	}
+	if code, ok := links.BankCode(banks, bank); ok {
+		return code, nil
+	}
+	return "", fmt.Errorf("%w: your payments account does not list %s as one bank; pay into the account from your bank app, or on the invoice's page", errConflict, bank)
+}
+
+// connectionBanks asks a payments connection (by name, or Taskiem's
+// own wallet) for the banks it pays.
+func (s *Server) connectionBanks(ctx context.Context, tenant uuid.UUID, connection string) ([]map[string]any, error) {
+	// The connection is named as a workflow's capability step names it:
+	// the connector is the one of that name that can pay bank accounts.
+	id, name := receiveConnector, secrets.PlatformName
+	if connection != secrets.PlatformName {
+		rails := s.accountRails()
+		if rails == nil {
+			return nil, fmt.Errorf("%w: this server cannot pay bank accounts", errConflict)
+		}
+		capable, err := rails.Capable(ctx, tenant, "pay_bank")
+		if err != nil {
+			return nil, err
+		}
+		i := slices.IndexFunc(capable, func(r invoicing.Rail) bool { return r.Connection == connection })
+		if i < 0 {
+			return nil, fmt.Errorf("%w: the payments account %q cannot pay bank accounts in prod", errConflict, connection)
+		}
+		id, name = capable[i].Connector, connection
+	}
+	reg, err := s.Registry.For(ctx, tenant.String())
+	if err != nil {
+		return nil, err
+	}
+	c, found := connectorByID(reg, id)
+	if !found {
+		return nil, fmt.Errorf("%w: the payments account %q is not available here", errConflict, connection)
+	}
+	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: "bills.banks"})
+	creds, err := s.Vault.Credentials(use, tenant, "prod", id, name)
+	if err != nil {
+		return nil, err
+	}
+	out, err := s.runAction(ctx, tenant, c, creds, "list_banks", "bills.banks", map[string]any{}, "")
+	if err != nil {
+		return nil, fmt.Errorf("%w: your payments account did not list its banks just now; try again: %s", errConflict, plainConnectorError(err))
+	}
+	list, _ := out["banks"].([]any)
+	banks := make([]map[string]any, 0, len(list))
+	for _, x := range list {
+		if m, ok := x.(map[string]any); ok {
+			banks = append(banks, m)
+		}
+	}
+	return banks, nil
 }

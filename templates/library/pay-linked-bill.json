@@ -1,0 +1,251 @@
+{
+  "id": "pay-linked-bill",
+  "title": "Linked trade: settle with approval",
+  "summary": "Settle a bill from a linked business on Taskiem from your own account, after one sign-off; their invoice is counted settled by itself.",
+  "description": "Started by Pay on a bill from a linked business. The name on their account is checked with your connected account, someone with the chosen role signs it off seeing that name, and the transfer goes once (it carries the bill's reference, so their Taskiem counts it towards that invoice, and a retry never sends twice). Taskiem waits for the bank to confirm and records the outcome on the bill.",
+  "category": "suppliers",
+  "tags": [
+    "linked"
+  ],
+  "keywords": [
+    "linked trade"
+  ],
+  "requires": [
+    "linked"
+  ],
+  "connectors": [
+    "bills@1",
+    "capability:pay_bank",
+    "capability:resolve_account"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who approves",
+      "description": "The role that approves paying bills.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    },
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank",
+        "resolve_account"
+      ],
+      "title": "Pay from",
+      "description": "The payments account bills are paid from: any you connected that can pay bank accounts.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to pay from",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one payments come out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payLinkedBill",
+    "version": 1,
+    "name": "Linked trade: settle with approval",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "payment_id",
+          "supplier",
+          "reference",
+          "token",
+          "bank_code",
+          "account_number",
+          "amount_kobo"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "payment_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Payment"
+          },
+          "supplier": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "title": "Supplier"
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "title": "Invoice number"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "What the transfer carries"
+          },
+          "bank_code": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 10,
+            "title": "Bank"
+          },
+          "account_number": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 10,
+            "title": "Account number"
+          },
+          "amount_kobo": {
+            "type": "integer",
+            "minimum": 100,
+            "title": "Amount (kobo)"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "check_name",
+        "type": "capability",
+        "uses": "resolve_account",
+        "name": "Find the name on the supplier's account",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number"
+        }
+      },
+      {
+        "id": "approve_payment",
+        "type": "approval",
+        "name": "Get the payment approved",
+        "needs": [
+          "check_name"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "48h",
+          "on_timeout": "reject",
+          "subject": {
+            "supplier": "=trigger.body.supplier",
+            "account_name": "=steps.check_name.output.account_name",
+            "amount_naira": "=double(trigger.body.amount_kobo) / 100.0",
+            "invoice": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "pay_bill",
+        "type": "capability",
+        "uses": "pay_bank",
+        "name": "Pay the supplier",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "check_name",
+          "approve_payment"
+        ],
+        "when": "=steps.approve_payment.output.decision == 'approved'",
+        "input": {
+          "amount_kobo": "=trigger.body.amount_kobo",
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number",
+          "account_name": "=steps.check_name.output.account_name",
+          "narration": "=trigger.body.token",
+          "source": "{{funding_account}}"
+        },
+        "effect": {
+          "idempotency_seed": "='bill-payment:' + trigger.body.payment_id"
+        },
+        "retry": {
+          "max": 8,
+          "backoff": "exponential",
+          "initial": "5s",
+          "max_delay": "10m",
+          "max_duration": "6h"
+        }
+      },
+      {
+        "id": "settle",
+        "type": "capability",
+        "uses": "await_settlement",
+        "name": "Wait for the bank to confirm",
+        "needs": [
+          "pay_bill"
+        ],
+        "timeout": "72h",
+        "when": "=steps.pay_bill.output.status == 'pending'",
+        "input": {
+          "payout_id": "=steps.pay_bill.output.payout_id"
+        }
+      },
+      {
+        "id": "record_paid",
+        "type": "connector",
+        "name": "Record how the payment went",
+        "connector": "bills@1",
+        "action": "finish_bill_payment",
+        "needs": [
+          "pay_bill"
+        ],
+        "when": "=steps.pay_bill.output.status != 'pending'",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "=steps.pay_bill.output.status == 'settled' ? 'paid' : 'failed'",
+          "account_name": "=steps.check_name.output.account_name"
+        }
+      },
+      {
+        "id": "record_settled",
+        "type": "connector",
+        "name": "Record how the payment went",
+        "connector": "bills@1",
+        "action": "finish_bill_payment",
+        "needs": [
+          "settle"
+        ],
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "=steps.settle.output.status == 'settled' ? 'paid' : 'failed'",
+          "account_name": "=steps.check_name.output.account_name"
+        }
+      },
+      {
+        "id": "record_rejected",
+        "type": "connector",
+        "name": "Record that nothing was paid",
+        "connector": "bills@1",
+        "action": "finish_bill_payment",
+        "needs": [
+          "approve_payment"
+        ],
+        "when": "=steps.approve_payment.output.decision != 'approved'",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "rejected"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "7d"
+    }
+  }
+}

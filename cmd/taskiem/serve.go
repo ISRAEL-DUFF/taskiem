@@ -54,6 +54,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
@@ -748,6 +749,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Riders = riderOps
+	copts.Bills = &links.Payments{Pool: pool}
 	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps

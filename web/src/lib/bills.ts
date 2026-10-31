@@ -24,6 +24,9 @@ export interface Bill {
   disputed: boolean;
   /** What the business says it paid outside Taskiem: its own figure. */
   declared_paid_kobo: number;
+  /** A payment from Taskiem under way, and what the bank confirmed was sent. */
+  paying_kobo: number;
+  sent_kobo: number;
   /** The account number the supplier issued this business, and its bank. */
   pay_account_number?: string;
   pay_bank_name?: string;
@@ -66,6 +69,25 @@ export function billHero(b: Pick<Bill, "status" | "amount_kobo" | "paid_kobo" | 
     default:
       return { label: "To pay", kobo: b.due_kobo, sub: `of ${naira(b.amount_kobo)} · ${naira(b.paid_kobo)} paid`, paid };
   }
+}
+
+/** What the business sent from Taskiem that the supplier has not counted
+ * yet, in words; empty when there is none. */
+export function sentLine(b: Pick<Bill, "sent_kobo" | "paid_kobo" | "supplier_name">): string {
+  if (b.sent_kobo <= b.paid_kobo) return "";
+  return `You sent ${naira(b.sent_kobo)} from Taskiem; ${b.supplier_name} has counted ${naira(b.paid_kobo)} so far.`;
+}
+
+/** Whether Pay from Taskiem is offered on a bill. */
+export function canPay(b: Pick<Bill, "status" | "due_kobo" | "pay_account_number">): boolean {
+  return b.due_kobo > 0 && !!b.pay_account_number && (b.status === "open" || b.status === "part_paid");
+}
+
+export interface BillPaySettings {
+  workflow_id: string | null;
+  connection: string;
+  approver_role: string;
+  waiting?: boolean;
 }
 
 /** What is left to pay across bills. */

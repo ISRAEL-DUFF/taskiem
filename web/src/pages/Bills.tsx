@@ -1,8 +1,9 @@
 import { Link, useParams } from "react-router-dom";
-import { get } from "../api";
-import { billHero, billPath, billsDue, billStatus, type Bill } from "../lib/bills";
+import { get, post, put } from "../api";
+import { useAuth } from "../auth";
+import { billHero, billPath, billsDue, billStatus, canPay, sentLine, type Bill, type BillPaySettings } from "../lib/bills";
 import { dateLabel, naira } from "../lib/invoices";
-import { EmptyState, ErrorBox, fmtTime, Item, Items, PageHeader, Skeleton, useLoad } from "../ui";
+import { EmptyState, ErrorBox, fmtTime, Item, Items, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 
 // Bills (business links L1; docs/spec/business-links.md §6): linked
 // suppliers' invoices, in the buyer's business. The supplier's figures
@@ -80,7 +81,8 @@ function BillRow({ b }: { b: Bill }) {
 /** One bill: what is left to pay first, then its lines. */
 export function BillPage() {
   const { id = "" } = useParams();
-  const { data: b, error } = useLoad(() => get<Bill>(billPath(id)), [id]);
+  const { data: b, error, reload } = useLoad(() => get<Bill>(billPath(id)), [id]);
+  const { can } = useAuth();
   const h = b ? billHero(b) : undefined;
   const pct = h ? Math.round(h.paid * 100) : 0;
   return (
@@ -119,6 +121,13 @@ export function BillPage() {
               </div>
             </dl>
           </section>
+          {b.paying_kobo > 0 && (
+            <div className="notice" role="status" data-testid="bill-paying">
+              A payment of {naira(b.paying_kobo)} from Taskiem is under way: it waits for approval, then for the bank.
+            </div>
+          )}
+          {sentLine(b) && <p className="hint">{sentLine(b)}</p>}
+          {can("invoice.manage") && canPay(b) && <PayFromTaskiem bill={b} onDone={reload} />}
           {b.due_kobo > 0 && (b.pay_account_number || b.pay_link) && (
             <section className="card" aria-labelledby="bill-pay" data-testid="bill-pay">
               <h2 id="bill-pay">How to pay</h2>
@@ -169,5 +178,42 @@ export function BillPage() {
         </>
       )}
     </>
+  );
+}
+
+/** Paying a bill from the business's own Taskiem wallet, after its
+ * approval: set up once, then Pay. */
+function PayFromTaskiem({ bill, onDone }: { bill: Bill; onDone: () => void }) {
+  const settings = useLoad(() => get<BillPaySettings>("/v1/bills/pay"), []);
+  const act = useAction();
+  if (!settings.data) return <ErrorBox error={settings.error} />;
+  const ready = !!settings.data.workflow_id;
+  return (
+    <section className="card" aria-labelledby="bill-pay-taskiem" data-testid="bill-pay-taskiem">
+      <h2 id="bill-pay-taskiem">Pay from Taskiem</h2>
+      <ErrorBox error={act.error} />
+      {ready ? (
+        <>
+          <p className="hint">
+            It is paid from your Taskiem wallet once someone with the {settings.data.approver_role} role approves it, and {bill.supplier_name}'s Taskiem counts it towards {bill.reference} by itself.
+          </p>
+          <button
+            type="button"
+            className="primary"
+            disabled={act.busy}
+            onClick={() => void act.run(async () => (await post(`${billPath(bill.id)}/pay`), onDone()), "Sent for approval")}
+          >
+            Pay {naira(bill.due_kobo)}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="hint">Pay bills from linked suppliers from your Taskiem wallet, each after one approval.</p>
+          <button type="button" disabled={act.busy} onClick={() => void act.run(async () => (await put("/v1/bills/pay/setup", {}), settings.reload()), "Paying bills is set up")}>
+            Set up paying bills
+          </button>
+        </>
+      )}
+    </section>
   );
 }

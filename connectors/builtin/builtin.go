@@ -5,6 +5,7 @@ package builtin
 import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/connectors/anchor"
+	"github.com/israel-duff/taskiem/connectors/bills"
 	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/brevo"
 	"github.com/israel-duff/taskiem/connectors/dojah"
@@ -107,6 +108,9 @@ type Options struct {
 	// Riders binds the riders platform connector (docs/dispatch.md); nil:
 	// its actions fail plainly.
 	Riders riders.Ops
+	// Bills binds the bills platform connector (business links, paying a
+	// linked supplier's bill); nil: its action fails plainly.
+	Bills bills.Ops
 	// Stock binds the stock platform connector (docs/stock.md); nil: its
 	// actions fail plainly.
 	Stock stock.Ops
@@ -172,6 +176,7 @@ func Register(r *connector.Registry, o Options) error {
 		sftp.New(),
 		storefront.New(o.Storefront),
 		riders.New(o.Riders),
+		bills.New(o.Bills),
 		stock.New(o.Stock),
 		invoices.New(o.Invoices),
 		schools.New(o.Schools),

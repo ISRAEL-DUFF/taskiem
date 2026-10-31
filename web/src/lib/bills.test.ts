@@ -15,6 +15,8 @@ const bill: Bill = {
   allow_part_payments: true,
   disputed: false,
   declared_paid_kobo: 0,
+  paying_kobo: 0,
+  sent_kobo: 0,
   mirrored_at: "2026-10-31T09:00:00Z",
   created_at: "2026-10-31T09:00:00Z",
 };
@@ -32,6 +34,16 @@ describe("bills", () => {
     expect(billHero(bill)).toEqual({ label: "To pay", kobo: 32500000, sub: "of ₦425,000 · ₦100,000 paid", paid: 10000000 / 42500000 });
     expect(billHero({ ...bill, status: "paid", paid_kobo: 42500000, due_kobo: 0 })).toEqual({ label: "Paid in full", kobo: 42500000, sub: "Nothing left to pay", paid: 1 });
     expect(billHero({ ...bill, status: "void" }).sub).toBe("Dangote Stores cancelled this invoice");
+  });
+
+  it("say what was sent and not yet counted, and when Pay is offered", async () => {
+    const { canPay, sentLine } = await import("./bills");
+    expect(sentLine({ ...bill, sent_kobo: 42500000 })).toBe("You sent ₦425,000 from Taskiem; Dangote Stores has counted ₦100,000 so far.");
+    expect(sentLine({ ...bill, sent_kobo: 10000000 })).toBe("");
+    expect(canPay({ ...bill, pay_account_number: "8800000001" })).toBe(true);
+    expect(canPay({ ...bill, pay_account_number: undefined })).toBe(false);
+    expect(canPay({ ...bill, status: "paying", pay_account_number: "8800000001" })).toBe(false);
+    expect(canPay({ ...bill, status: "disputed", pay_account_number: "8800000001" })).toBe(false);
   });
 
   it("add up what is left to pay", () => {

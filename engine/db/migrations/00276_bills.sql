@@ -36,6 +36,11 @@ CREATE TABLE bills (
   -- outside Taskiem (never compared with paid_kobo by the reconciler).
   disputed           boolean NOT NULL DEFAULT false,
   declared_paid_kobo bigint NOT NULL DEFAULT 0 CHECK (declared_paid_kobo >= 0),
+  -- The buyer's own payments from Taskiem: under way (a payout created and
+  -- not yet settled or refused), and sent (the rail confirmed). What the
+  -- seller counts is paid_kobo, when its match says so.
+  paying_kobo        bigint NOT NULL DEFAULT 0 CHECK (paying_kobo >= 0),
+  sent_kobo          bigint NOT NULL DEFAULT 0 CHECK (sent_kobo >= 0),
   status             text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'paying', 'part_paid', 'paid', 'disputed', 'void')),
   mirrored_at        timestamptz NOT NULL DEFAULT now(),
   created_at         timestamptz NOT NULL DEFAULT now(),
@@ -56,6 +61,7 @@ BEGIN
   NEW.status := CASE
     WHEN NEW.voided THEN 'void'
     WHEN NEW.paid_kobo >= NEW.amount_kobo THEN 'paid'
+    WHEN NEW.paying_kobo > 0 THEN 'paying'
     WHEN NEW.disputed THEN 'disputed'
     WHEN NEW.paid_kobo > 0 THEN 'part_paid'
     ELSE 'open' END;
@@ -64,6 +70,52 @@ END
 $$;
 -- +goose StatementEnd
 CREATE TRIGGER bill_status BEFORE INSERT OR UPDATE ON bills FOR EACH ROW EXECUTE FUNCTION taskiem_bill_status();
+
+-- Paying a bill from Taskiem (§6.2): each payout the buyer starts, through
+-- its own payments connection under its approval policy (the managed
+-- workflow in bill_pay_settings). token is what the payout's narration
+-- carries, the bill's reference and a short code (INV-0042/7QX4), which
+-- the seller's matching reads to count the money towards that invoice.
+CREATE TABLE bill_payments (
+  id              uuid PRIMARY KEY,
+  tenant_id       uuid NOT NULL REFERENCES tenants(id),
+  bill_id         uuid NOT NULL REFERENCES bills(id),
+  amount_kobo     bigint NOT NULL CHECK (amount_kobo > 0),
+  token           text NOT NULL CHECK (length(token) BETWEEN 1 AND 60),
+  connection      text NOT NULL,
+  bank_code       text NOT NULL,
+  account_number  text NOT NULL,
+  account_name    text,
+  run_id          uuid,
+  status          text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed', 'rejected')),
+  created_by      text NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  finished_at     timestamptz,
+  UNIQUE (tenant_id, token)
+);
+CREATE INDEX bill_payments_bill ON bill_payments (tenant_id, bill_id);
+ALTER TABLE bill_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bill_payments FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON bill_payments TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT, UPDATE ON bill_payments TO taskiem_app;
+
+-- How a business pays its bills: the managed workflow made from the
+-- pay-linked-bill template, and what it was made with.
+CREATE TABLE bill_pay_settings (
+  tenant_id        uuid PRIMARY KEY REFERENCES tenants(id),
+  workflow_id      uuid NOT NULL,
+  connection       text NOT NULL,
+  funding_account  text NOT NULL DEFAULT '',
+  approver_role    text NOT NULL,
+  updated_by       text NOT NULL,
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE bill_pay_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bill_pay_settings FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON bill_pay_settings TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT, UPDATE ON bill_pay_settings TO taskiem_app;
 
 -- The seller's invoices waiting to be mirrored: the seller's own rows.
 CREATE TABLE link_mirrors_due (
@@ -121,6 +173,8 @@ DROP FUNCTION taskiem_link_mirrors_claim(int);
 DROP TRIGGER customer_invoice_link_mirror ON customer_invoices;
 DROP FUNCTION taskiem_link_mirror_note();
 DROP TABLE link_mirrors_due;
+DROP TABLE bill_pay_settings;
+DROP TABLE bill_payments;
 DROP TRIGGER bill_status ON bills;
 DROP FUNCTION taskiem_bill_status();
 DROP TABLE bills;
