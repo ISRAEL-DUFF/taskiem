@@ -4435,6 +4435,34 @@
     "wa.prices.how": {
       "text": "Sọ iye melo, bii *order 20 bags of rice from Dangote*.",
       "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "O ko ti sopọ mọ *{name}*. Fi *link with {name}* ranṣẹ lati beere lọwọ wọn, lẹhinna paṣẹ lọwọ wọn.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Sọ iye ati ohun ti o fẹ lati ọdọ *{name}*, bii *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* si *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "Awọn aṣẹ {count}, ọkan fun iṣowo kọọkan:\n{orders}\n\nṢe ki n fi gbogbo wọn ranṣẹ?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} si *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "A ti fi ranṣẹ:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} kọja opin rẹ: oniwun miiran tabi admin yoo fi wọn ranṣẹ, lati oju-iwe Suppliers.",
+      "reviewed": false
     }
   }
 }

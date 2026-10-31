@@ -118,21 +118,7 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 		}
 		return c.say(ctx, s, c.t("wa.prices.none", "name", whatsapp.SafeText(m[3])))
 	}
-	words := strings.ToLower(strings.TrimSpace(m[2]))
-	if u := unitOfRe.FindStringSubmatch(words); u != nil {
-		words = u[1]
-	}
-	var hits []links.PriceItem
-	for _, it := range p.Items {
-		n := strings.ToLower(it.Name)
-		if n == words {
-			hits = []links.PriceItem{it}
-			break
-		}
-		if strings.Contains(n, words) || strings.Contains(words, n) {
-			hits = append(hits, it)
-		}
-	}
+	hits := matchPriceItems(p.Items, m[2])
 	switch len(hits) {
 	case 0:
 		return c.say(ctx, s, c.t("wa.prices.no_item", "name", whatsapp.SafeText(p.Business), "item", whatsapp.SafeText(m[2])))

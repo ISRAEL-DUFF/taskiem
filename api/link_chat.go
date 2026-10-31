@@ -44,6 +44,7 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages", s.sendLinkMessage)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
+	r.Get("/link-chats/{link}/items", s.linkChatItems)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
@@ -177,15 +178,27 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Text    string     `json:"text"`
-		ReplyTo *uuid.UUID `json:"reply_to"`
+		Text     string       `json:"text"`
+		ReplyTo  *uuid.UUID   `json:"reply_to"`
+		Mentions []mentionRef `json:"mentions"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo})
+	var ments []links.Mention
+	if len(in.Mentions) > 0 {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			ments, err = checkMentions(r.Context(), tx, p.TenantID, link, in.Text, in.Mentions)
+			return err
+		}); err != nil {
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
+	}
+	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments})
 	if err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return

@@ -27,6 +27,8 @@ import {
 } from "../lib/linkchat";
 import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
+import { MentionList, MentionText, useMentions } from "./Mentions";
+import { priceWords, type PriceItem } from "../lib/pricelists";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
@@ -375,7 +377,11 @@ function Bubble({
           {m.attachment && (
             <AttachmentView m={m} a={m.attachment} other={other} />
           )}
-          {m.body && <span className="text">{m.body}</span>}
+          {m.body && (
+            <span className="text">
+              <MentionText text={m.body} mentions={m.mentions} />
+            </span>
+          )}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
@@ -475,6 +481,28 @@ export function ConversationPane({
   const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
+  const textBox = useRef<HTMLTextAreaElement>(null);
+  const items = useLoad(
+    () =>
+      get<{ items: PriceItem[] }>(`/v1/link-chats/${conv.link}/items`).then(
+        (r) => r.items,
+        () => [] as PriceItem[],
+      ),
+    [conv.link],
+  );
+  const mentions = useMentions(text, setText, textBox, {
+    "@": others
+      .filter((o) => o.state === "active")
+      .map((o) => ({ kind: "business" as const, id: o.link, name: o.name })),
+    "#": (items.data ?? [])
+      .filter((it) => it.available)
+      .map((it) => ({
+        kind: "item" as const,
+        id: it.item_id,
+        name: it.name,
+        sub: priceWords(it),
+      })),
+  });
   const [reply, setReply] = useState<LinkMessage>();
   const [pending, setFile] = useState<File>();
   const file = pending;
@@ -566,15 +594,18 @@ export function ConversationPane({
           if (reply) form.append("reply_to", reply.id);
           out = await upload<{ message: LinkMessage }>(`${path}/files`, form);
         } else {
+          const refs = mentions.refs();
           out = await post<{ message: LinkMessage }>(`${path}/messages`, {
             text: body,
             reply_to: reply?.id,
+            mentions: refs.length > 0 ? refs : undefined,
           });
         }
         setMessages((cur) => merge(cur ?? [], [out.message]));
         if (!held) {
           setText("");
           setFile(undefined);
+          mentions.reset();
         }
         setReply(undefined);
         onChanged();
@@ -794,6 +825,7 @@ export function ConversationPane({
               e.target.value = "";
             }}
           />
+          <MentionList m={mentions} />
           {voice.secs !== undefined || voice.holding ? (
             <RecordingBar voice={voice} />
           ) : (
@@ -827,12 +859,17 @@ export function ConversationPane({
               </label>
               <textarea
                 id="chat-text"
+                ref={textBox}
                 rows={1}
                 maxLength={4000}
                 placeholder={file ? "Add a caption" : "Type a message"}
                 value={text}
-                onChange={(e) => typed(e.target.value)}
+                onChange={(e) => {
+                  typed(e.target.value);
+                  mentions.update(e.target.value, e.target.selectionStart);
+                }}
                 onKeyDown={(e) => {
+                  if (mentions.onKeyDown(e)) return;
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     send();

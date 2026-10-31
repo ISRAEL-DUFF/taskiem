@@ -232,3 +232,58 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
   expect(kept.messages).toHaveLength(1);
   await axeBoth(buyer, "after delete for me");
 });
+
+test("mentions: @ a linked business, # an item with its price", async ({ browser }) => {
+  const stamp = letters();
+  const make = async (name: string) => {
+    const p = await (await browser.newContext()).newPage();
+    await signUp(p, name);
+    return p;
+  };
+  const seller = await make(`Ikoyi Rice ${stamp}`);
+  const buyer = await make(`Jide Foods ${stamp}`);
+  const third = await make(`Kola Gas ${stamp}`);
+  const link = async (to: Page, name: string) => {
+    expect((await to.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
+    const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(name.toLowerCase())}`, { headers: H })).json();
+    expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
+    const id = (await (await to.request.get("/v1/links", { headers: H })).json()).links[0].id as string;
+    expect((await to.request.post(`/v1/links/${id}/accept`, { headers: H })).status()).toBe(200);
+    return id;
+  };
+  const withSeller = await link(seller, `Ikoyi Rice ${stamp}`);
+  const withThird = await link(third, `Kola Gas ${stamp}`);
+  await buyer.route(`**/v1/link-chats/${withSeller}/items`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ whose: "theirs", items: [{ item_id: "r1", name: "Rice, 50 kg", unit: "bag", price_kobo: 4_200_000, min_quantity: 5, available: true }] }),
+    }),
+  );
+
+  await buyer.goto(`/chat?with=${withSeller}`);
+  const pane = buyer.getByTestId("chat-pane");
+  const box = pane.getByLabel("Message");
+
+  // "#": the item, with its unit and price.
+  await box.fill("Can I get 10 #ri");
+  await expect(pane.getByTestId("mention-list")).toContainText("#Rice, 50 kg");
+  await expect(pane.getByTestId("mention-list")).toContainText("₦42,000 a bag · at least 5");
+  await axeBoth(buyer, "an item suggested");
+  await box.press("Escape");
+  await expect(pane.getByTestId("mention-list")).toHaveCount(0);
+
+  // "@": a linked business, picked with the keyboard, sent as a mention.
+  await box.fill("Ask @Kol");
+  await expect(pane.getByTestId("mention-list")).toContainText(`@Kola Gas ${stamp}`);
+  await box.press("Enter");
+  await expect(box).toHaveValue(`Ask @Kola Gas ${stamp} `);
+  await box.press("End");
+  await box.pressSequentially("for gas");
+  await box.press("Enter");
+  const sent = pane.locator('[data-testid="chat-message"][data-mine="true"]').last();
+  await expect(sent.getByRole("link", { name: `@Kola Gas ${stamp}` })).toHaveAttribute("href", `/chat?with=${withThird}`);
+  const theirs = await (await seller.request.get(`/v1/link-chats/${withSeller}/messages`, { headers: H })).json();
+  expect(theirs.messages[0].mentions).toEqual([{ kind: "business", name: `Kola Gas ${stamp}` }]);
+  await axeBoth(buyer, "a message with a mention");
+});

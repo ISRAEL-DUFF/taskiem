@@ -5543,6 +5543,41 @@
       "text": "Say how many, like *order 20 bags of rice from Dangote*.",
       "reviewed": true,
       "context": "How to order from a price list in chat"
+    },
+    "wa.mention.unlinked": {
+      "text": "You are not linked with *{name}*. Send *link with {name}* to ask them, then order from them.",
+      "reviewed": true,
+      "context": "A mention names a business not linked"
+    },
+    "wa.mention.how": {
+      "text": "Say how many of what from *{name}*, like *20 bags of rice from @{name}*.",
+      "reviewed": true,
+      "context": "A mention with nothing to order"
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* to *{supplier}*: {items}, {total}",
+      "reviewed": true,
+      "context": "One order drafted from a message naming several businesses"
+    },
+    "wa.mention.confirm": {
+      "text": "{count} orders, one per business:\n{orders}\n\nSend them all?",
+      "reviewed": true,
+      "context": "The orders drafted from a message naming businesses, asked before sending"
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} to *{supplier}*",
+      "reviewed": true,
+      "context": "One order sent"
+    },
+    "wa.mention.sent": {
+      "text": "Sent:\n{orders}",
+      "reviewed": true,
+      "context": "The orders sent from one yes"
+    },
+    "wa.mention.second": {
+      "text": "{references} are above your limit: another owner or admin sends them, from the Suppliers page.",
+      "reviewed": true,
+      "context": "Orders that need a second person to send them"
     }
   }
 }

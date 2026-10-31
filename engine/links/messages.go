@@ -70,6 +70,18 @@ type Preview struct {
 	Description string `json:"description,omitempty"`
 }
 
+// Mention is a structured reference in a message, put in by the
+// composer: a linked business ("@Dangote Stores") or an item of the
+// conversation's price list ("#Rice, 50 kg", with its unit and price).
+type Mention struct {
+	Kind      string    `json:"kind"` // business or item
+	Name      string    `json:"name"`
+	Link      uuid.UUID `json:"link,omitzero"` // a business, on our copy only
+	ItemID    string    `json:"item_id,omitempty"`
+	Unit      string    `json:"unit,omitempty"`
+	PriceKobo int64     `json:"price_kobo,omitempty"`
+}
+
 // Quote is the message a reply quotes, as the reply shows it.
 type Quote struct {
 	PairID uuid.UUID `json:"pair_id"`
@@ -93,6 +105,7 @@ type Message struct {
 	Attachment *Attachment `json:"attachment,omitempty"`
 	Forwarded  bool        `json:"forwarded,omitempty"`
 	Preview    *Preview    `json:"preview,omitempty"`
+	Mentions   []Mention   `json:"mentions,omitempty"`
 	Reply      *Quote      `json:"reply,omitempty"`
 	ReadAt     *time.Time  `json:"read_at,omitempty"`
 	CreatedAt  time.Time   `json:"created_at"`
@@ -116,18 +129,18 @@ type Conversation struct {
 	pinnedAt *time.Time
 }
 
-const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.read_at, m.created_at,
+const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
 	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
 func scanMessage(r pgx.Row) (Message, error) {
 	var m Message
-	var card, qcard, att, qatt, prev []byte
+	var card, qcard, att, qatt, prev, ments []byte
 	var qPair *uuid.UUID
 	var qMine *bool
 	var qKind, qBody *string
-	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &att, &m.Forwarded, &prev, &m.ReadAt, &m.CreatedAt,
+	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
 		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt); err != nil {
 		return m, err
 	}
@@ -140,6 +153,11 @@ func scanMessage(r pgx.Row) (Message, error) {
 	if att != nil {
 		m.Attachment = &Attachment{}
 		if err := json.Unmarshal(att, m.Attachment); err != nil {
+			return m, err
+		}
+	}
+	if ments != nil {
+		if err := json.Unmarshal(ments, &m.Mentions); err != nil {
 			return m, err
 		}
 	}
@@ -319,17 +337,29 @@ type SendOpts struct {
 	Forwarded bool
 	// Preview is the first link's preview, on both copies.
 	Preview *Preview
+	// Mentions are the message's structured references (checked by the
+	// caller); the other side's copy names a business without our link.
+	Mentions []Mention
 }
 
 // SendWithTx is SendTx with what o carries.
 func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender, by Actor, o SendOpts) (Message, uuid.UUID, error) {
-	replyTo, ours, theirs := o.ReplyTo, o.Ours, o.Theirs
-	var preview []byte
+	replyTo, ourFile, theirFile := o.ReplyTo, o.Ours, o.Theirs
+	var preview, ours, theirs []byte
 	if o.Preview != nil {
 		preview, _ = json.Marshal(o.Preview)
 	}
+	if len(o.Mentions) > 0 {
+		ours, _ = json.Marshal(o.Mentions)
+		other := make([]Mention, len(o.Mentions))
+		for i, x := range o.Mentions {
+			x.Link = uuid.Nil
+			other[i] = x
+		}
+		theirs, _ = json.Marshal(other)
+	}
 	body = strings.TrimSpace(body)
-	if (body == "" && ours == nil) || len([]rune(body)) > MaxMessage || (ours == nil) != (theirs == nil) {
+	if (body == "" && ourFile == nil) || len([]rune(body)) > MaxMessage || (ourFile == nil) != (theirFile == nil) {
 		return Message{}, uuid.Nil, fmt.Errorf("%w: a message says something, in up to %d characters", ErrInvalid, MaxMessage)
 	}
 	// The stored attachment keeps its path, which the API never shows.
@@ -359,8 +389,8 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	name := cutRunes(strings.TrimSpace(from.FirstName), 80)
 	pair := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview)
-		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ours), o.Forwarded, preview); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview, mentions)
+		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ourFile), o.Forwarded, preview, ours); err != nil {
 		return Message{}, uuid.Nil, err
 	}
 	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.pair_id = $2`, tenant, pair))
@@ -372,8 +402,8 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	if err != nil {
 		return m, uuid.Nil, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview)
-		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirs), o.Forwarded, preview)
+	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview, mentions)
+		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirFile), o.Forwarded, preview, theirs)
 	return m, other, err
 }
 

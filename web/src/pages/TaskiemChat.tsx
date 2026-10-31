@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { get, post, upload } from "../api";
+import type { Conversation } from "../lib/linkchat";
+import { priceWords, type SupplierPrices } from "../lib/pricelists";
+import { MentionList, useMentions } from "./Mentions";
 import { Icon } from "../icons";
 import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { clock, dayLabel } from "../lib/linkchat";
@@ -8,7 +11,7 @@ import {
   mergeTaskiem,
   type TaskiemMessage,
 } from "../lib/taskiemchat";
-import { ErrorBox, fmtTime, Skeleton, useAction } from "../ui";
+import { ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 
 // The Taskiem conversation on the web (business links L3, §5.5): the
 // person's own conversation with Taskiem, the one they have on WhatsApp,
@@ -28,6 +31,39 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const [live, setLive] = useState<string>(); // the answer whose buttons press
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
+  const textBox = useRef<HTMLTextAreaElement>(null);
+  // "@" a linked business, "#" an item of a supplier's price list.
+  const convs = useLoad(
+    () =>
+      get<{ conversations: Conversation[] }>("/v1/link-chats").then(
+        (r) => r.conversations,
+        () => [] as Conversation[],
+      ),
+    [],
+  );
+  const prices = useLoad(
+    () =>
+      get<{ suppliers: SupplierPrices[] }>("/v1/supplier-prices").then(
+        (r) => r.suppliers,
+        () => [] as SupplierPrices[],
+      ),
+    [],
+  );
+  const mentions = useMentions(text, setText, textBox, {
+    "@": (convs.data ?? [])
+      .filter((c) => c.state === "active")
+      .map((c) => ({ kind: "business" as const, id: c.link, name: c.name })),
+    "#": (prices.data ?? []).flatMap((p) =>
+      p.items
+        .filter((it) => it.available)
+        .map((it) => ({
+          kind: "item" as const,
+          id: `${p.link}:${it.item_id}`,
+          name: it.name,
+          sub: `${p.business} · ${priceWords(it)}`,
+        })),
+    ),
+  });
   // A photo waiting for its caption, or a voice note tapped (not held).
   const [file, setFile] = useState<File>();
   const [fileError, setFileError] = useState<unknown>();
@@ -75,7 +111,10 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           .reverse()
           .find((m) => !m.inbound && m.buttons?.some((b) => b.id));
         setLive(answer ? `${answer.id}@${answer.created_at}` : undefined);
-        if (body.text !== undefined && !body.reply) setText("");
+        if (body.text !== undefined && !body.reply) {
+          setText("");
+          mentions.reset();
+        }
       }, false)
       .then(() => undefined);
   // A voice note or a photo: read as one sent on WhatsApp.
@@ -239,6 +278,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           e.target.value = "";
         }}
       />
+      <MentionList m={mentions} />
       {voice.secs !== undefined || voice.holding ? (
         <RecordingBar voice={voice} />
       ) : (
@@ -272,12 +312,17 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </label>
           <textarea
             id="taskiem-text"
+            ref={textBox}
             rows={1}
             maxLength={4000}
             placeholder={file ? "Add a caption" : "Type a message"}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              mentions.update(e.target.value, e.target.selectionStart);
+            }}
             onKeyDown={(e) => {
+              if (mentions.onKeyDown(e)) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();

@@ -3,6 +3,7 @@
 // message, a card and the list read, in WhatsApp's words.
 
 import { naira } from "./invoices";
+import type { Mention } from "./mentions";
 
 export type DocKind = "order" | "purchase" | "invoice" | "bill";
 
@@ -53,6 +54,7 @@ export interface LinkMessage {
   attachment?: Attachment;
   forwarded?: boolean;
   preview?: LinkPreview;
+  mentions?: Mention[];
   reply?: Quote;
   read_at?: string;
   created_at: string;

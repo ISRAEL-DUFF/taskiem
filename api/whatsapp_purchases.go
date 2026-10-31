@@ -354,6 +354,12 @@ func (s *Server) waPurchaseCommand(ctx context.Context, c *chat, text, cmd strin
 	if !s.Purchases.Ready() || !s.Stock.Ready() {
 		return false, nil
 	}
+	// "Buy 400 bags of cement from @Dangote and … from @Cherry" (mentions.go).
+	if strings.Contains(text, "@") {
+		if done, err := s.waMentionOrder(ctx, c, text); done || err != nil {
+			return true, err
+		}
+	}
 	switch {
 	case cmd == "suppliers" || cmd == "my suppliers":
 		return true, s.waSuppliers(ctx, c)
@@ -685,6 +691,11 @@ func (s *Server) waPurchaseApply(ctx context.Context, c *chat) error {
 			s.Logger.Warn("stock: sending an order", "err", err)
 		}
 		msg = c.t("wa.order.sent", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier))
+	case "stock_orders":
+		var err error
+		if msg, err = s.sendDrafted(ctx, c, pc.Drafted); err != nil {
+			return s.purchaseChatFail(ctx, c, err)
+		}
 	case "stock_receive":
 		x, err := s.Purchases.Receive(s.waTablesCtx(ctx, c), c.tenant.ID, pc.Purchase, map[string]int64{pc.Item: pc.Quantity}, c.p.Actor(), key)
 		if err != nil {

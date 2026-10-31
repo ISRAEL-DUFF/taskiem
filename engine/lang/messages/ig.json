@@ -4435,6 +4435,34 @@
     "wa.prices.how": {
       "text": "Kwuo ole, dịka *order 20 bags of rice from Dangote*.",
       "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "Ị jikọtaghị na *{name}*. Zipu *link with {name}* ka ịjụ ha, wee nye ha iwu.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Kwuo ole na ihe ị chọrọ n'aka *{name}*, dịka *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* nye *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "Iwu {count}, otu maka azụmahịa ọ bụla:\n{orders}\n\nM ziga ha niile?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} nye *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "E zigara:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} karịrị oke gị: onye nwe ọzọ ma ọ bụ admin ga-eziga ha, site na ibe Suppliers.",
+      "reviewed": false
     }
   }
 }

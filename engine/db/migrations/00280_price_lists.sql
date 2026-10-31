@@ -100,11 +100,17 @@ END
 $$;
 -- +goose StatementEnd
 
+-- Mentions in a message (§5.5): structured references put in by the
+-- composer, not names matched later: [{kind: business|item, name, link
+-- (a business, on our copy only), item_id, unit, price_kobo}].
+ALTER TABLE link_messages ADD COLUMN mentions jsonb CHECK (mentions IS NULL OR (jsonb_typeof(mentions) = 'array' AND jsonb_array_length(mentions) <= 10));
+
 -- A link's prices are due to be mirrored into the buyer's business.
 ALTER TABLE link_orders_due DROP CONSTRAINT link_orders_due_kind_check;
 ALTER TABLE link_orders_due ADD CONSTRAINT link_orders_due_kind_check CHECK (kind IN ('order', 'mirror', 'invoice', 'receipt', 'prices'));
 
 -- +goose Down
+ALTER TABLE link_messages DROP COLUMN mentions;
 DELETE FROM link_orders_due WHERE kind = 'prices';
 ALTER TABLE link_orders_due DROP CONSTRAINT link_orders_due_kind_check;
 ALTER TABLE link_orders_due ADD CONSTRAINT link_orders_due_kind_check CHECK (kind IN ('order', 'mirror', 'invoice', 'receipt'));

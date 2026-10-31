@@ -4435,6 +4435,34 @@
     "wa.prices.how": {
       "text": "Talk how many, like *order 20 bags of rice from Dangote*.",
       "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "You never link with *{name}*. Send *link with {name}* to ask dem, then order from dem.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* to *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "{count} orders, one for each business:\n{orders}\n\nMake I send all?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} to *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "I don send:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} pass your limit: another owner or admin go send dem, from Suppliers page.",
+      "reviewed": false
     }
   }
 }

@@ -6262,6 +6262,23 @@ paths:
                 reply_to:
                   type: string
                   format: uuid
+                mentions:
+                  type: array
+                  maxItems: 10
+                  description: 'Each a business you are linked with ({kind: business, link}) or an item of this conversation''s price list ({kind: item, item_id}), named in the text as @Name or #Name; one the text does not name is left out.'
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [kind]
+                    properties:
+                      kind:
+                        type: string
+                        enum: [business, item]
+                      link:
+                        type: string
+                        format: uuid
+                      item_id:
+                        type: string
       responses:
         '201':
           description: Sent
@@ -7043,6 +7060,43 @@ paths:
               schema:
                 type: string
                 format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/items:
+    get:
+      operationId: linkChatItems
+      tags:
+      - Links
+      summary: What "#" names in a conversation
+      description: 'The price list the other business shares with you (whose: theirs), else the one you share with them (ours), each item with its unit and price.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The items
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  whose:
+                    type: string
+                    enum: [theirs, ours]
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceItem'
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/typing:
@@ -28777,6 +28831,27 @@ components:
               created_at:
                 type: string
                 format: date-time
+    LinkMention:
+      type: object
+      additionalProperties: false
+      required: [kind, name]
+      description: A structured reference the composer put in a message
+      properties:
+        kind:
+          type: string
+          enum: [business, item]
+        name:
+          type: string
+        link:
+          type: string
+          format: uuid
+          description: A business, on our copy only
+        item_id:
+          type: string
+        unit:
+          type: string
+        price_kobo:
+          type: integer
     LinkMessage:
       type: object
       additionalProperties: false
@@ -28835,6 +28910,11 @@ components:
               type: string
             description:
               type: string
+        mentions:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/LinkMention'
         reply:
           type: object
           additionalProperties: false
