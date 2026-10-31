@@ -28,6 +28,7 @@ const ussdSMSConnector = "africastalking@1"
 
 // RunUSSD works the USSD queue until ctx ends.
 func (s *Server) RunUSSD(ctx context.Context) error {
+	s.chatHooks()
 	for {
 		if err := s.USSDTick(ctx); err != nil && ctx.Err() == nil {
 			s.Logger.Error("ussd notifier", "err", err)

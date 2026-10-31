@@ -408,6 +408,29 @@ func (s *Server) draftLowPurchases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"purchases": drafted, "no_supplier": skipped})
 }
 
+// getPurchase is GET /v1/stock/purchases/{id}: one order, with a linked
+// supplier's side of it.
+func (s *Server) getPurchase(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var x stock.Purchase
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		x, err = stock.PurchaseTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id, false)
+		return err
+	}); err != nil {
+		s.purchaseFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
+}
+
 // purchaseStep runs a step on an order by its id.
 func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action string, do func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error)) {
 	if !s.purchasesReady(w) {
@@ -451,8 +474,26 @@ func (s *Server) confirmPurchase(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// cancelPurchase is POST /v1/stock/purchases/{id}/cancel.
+// cancelPurchase is POST /v1/stock/purchases/{id}/cancel. An order sent
+// to a linked supplier is cancelled through the link (link_orders.go).
 func (s *Server) cancelPurchase(w http.ResponseWriter, r *http.Request) {
+	if id, err := idParam(r); err == nil && s.purchasesReady(w) {
+		var linked bool
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			x, err := stock.PurchaseTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id, false)
+			linked = err == nil && x.LinkID != nil && (x.Status != stock.Drafted || x.Proposed())
+			return nil
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if linked {
+			s.cancelLinkedPurchase(w, r, id)
+			return
+		}
+	} else if err == nil {
+		return
+	}
 	s.purchaseStep(w, r, "purchase.cancel", stock.CancelTx)
 }
 

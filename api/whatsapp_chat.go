@@ -20,6 +20,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -197,6 +198,9 @@ type chat struct {
 	// blocked is the draft waiting for a connection, while this message is
 	// read (connect_links.go).
 	blocked uuid.UUID
+	// upload is a file sent on the web (a voice note or a photo), held in
+	// memory while the message is read: fetchMedia answers it.
+	upload []byte
 }
 
 // t is a message in the conversation's language.
@@ -237,6 +241,8 @@ type chatData struct {
 	Money *chatMoney `json:"money,omitempty"`
 	// Invite is an invitation the owner is confirming (chat_invites.go).
 	Invite *chatInvite `json:"invite,omitempty"`
+	// Link is a link to another business being asked for (chat_links.go).
+	Link *chatLink `json:"link,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -335,7 +341,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
-	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+	if ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
 		if dm, ok := ch.(*slackDMChannel); ok {
 			// Another business from Slack has the workspace's Slack too.
@@ -380,6 +386,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
 		return s.waSay(ctx, ch, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
 	}
+	// From here the conversation is with this business: what is said is
+	// kept in its history (chat_history.go), and so are the replies.
+	ctx = withChatTenant(ctx, c.tenant.ID)
+	s.recordHeard(ctx, c)
 	// The language of this tenant's conversation: chosen, detected from
 	// what is written, or the tenant's default (languages.go).
 	c.lang = s.chooseLang(ctx, c.tenant.ID, number, text)
@@ -460,6 +470,11 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	}
 	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
+	}
+	// An offer's Link button tapped from a number no one is bound to (a
+	// business's own WhatsApp number): the link to open signed in.
+	if code, ok := strings.CutPrefix(in.Reply, linkOfferPrefix); ok && links.ValidCode(code) {
+		return s.waSay(ctx, wa, number, "", tr(l, "link.offer_open", "url", s.linkCodeURL(code)))
 	}
 	// A key typed into the chat is never acted on or kept (connect_links.go).
 	if done, err := s.keyGuard(ctx, &chat{ch: wa, wa: wa, addr: number, lang: langChoice{Tag: l}}, text); done || err != nil {
@@ -585,6 +600,24 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		return c.say(ctx, s, c.t("wa.cancelled"))
 	}
+	// Accept, Decline or Block on a link request (chat_links.go), whatever
+	// else the conversation is in the middle of.
+	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
+		return s.waLinkOffer(ctx, c, code)
+	}
+	if strings.HasPrefix(text, linkPrefix) && !strings.HasPrefix(text, linkPrefix+"role:") {
+		return s.waLinkPress(ctx, c, text)
+	}
+	// A reply quoting a linked business's message, into its conversation
+	// (link_chat.go), whatever else the conversation is in the middle of.
+	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
+		return err
+	}
+	// Accept or Decline on a linked business's order, All came on its
+	// delivery (link_orders.go).
+	if strings.HasPrefix(text, orderPrefix) {
+		return s.waOrderPress(ctx, c, text)
+	}
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}
@@ -599,6 +632,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.Invite != nil && c.state != stateIdle {
 		return s.waInviteReply(ctx, c, cmd)
+	}
+	if c.data.Link != nil && c.state != stateIdle {
+		return s.waLinkReply(ctx, c, text, cmd)
 	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
@@ -648,6 +684,17 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
+		// A message to a linked business (link_chat.go): "ask Dangote …".
+		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") {
+			if done, err := s.waAsk(ctx, c, strings.Join(f[1:], " ")); done || err != nil {
+				return err
+			}
+		}
+		// A linked supplier's bills (bills.go): "bill INV-0042" before the
+		// invoice words, which need a name and an amount.
+		if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
@@ -732,6 +779,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// Bringing someone in (chat_invites.go).
 		if strings.HasPrefix(cmd, "invite ") {
 			return s.waInvite(ctx, c, text)
+		}
+		// Other businesses on Taskiem (chat_links.go).
+		if done, err := s.waLinkCommand(ctx, c, text, cmd); done || err != nil {
+			return err
 		}
 		// An email of one's own, and paying with one (chat_doors.go).
 		if f := strings.Fields(text); len(f) == 2 && strings.Contains(f[1], "@") {

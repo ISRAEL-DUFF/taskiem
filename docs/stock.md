@@ -75,7 +75,7 @@ A **purchase order** is a supplier, lines (an item, how many, the price of one: 
 4. **Received**, in part or in full (**Goods came in**, `received 10 bags of rice` in chat, `receive` with `purchase` in a workflow): a `received` movement per item naming the order, the item's cost price set to the order's, and the value received owed to the supplier until paid. Once every line has come, the order is received.
 5. **Paid**, in cash or by transfer (**Record a payment**, `paid Dangote 425,000 transfer`): an `expense` in the [money log](money-log.md) with the supplier as its vendor and the order in its description. What is received and not yet paid is owed to the supplier, shown on **Suppliers** and in chat (`suppliers`).
 
-An order can be cancelled until anything is received on it. The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
+An order can be cancelled until anything is received on it. A supplier that is also a business on Taskiem, linked to yours, can be marked as that business (**On Taskiem** on the Suppliers page): its orders then arrive as orders in its business rather than messages, and its answers come back to the order. Before it accepts an order, a cancel cancels it on both sides; once it has, a cancel is a request it accepts or declines, which is narrower than the rule above. Say where they deliver (**Where linked suppliers deliver** on the Suppliers page) and their rider brings your orders there. When it delivers, **All came** or **Not all came** records what came; with neither, its count is taken a day later. It may also draft an order for you (an order taken by phone): it waits on its page for your **Confirm**, where you say which of your items each line is ([business links](spec/business-links.md) §16.3). A linked supplier may share a **price list** with you (**Prices** on its row; `prices from Dangote` in chat): its items at your prices, with a minimum and whether each is available. Order from it (**Draft the order**, or `order 20 bags of rice from Dangote`), saying the first time which of your items each of theirs is; that is remembered, and those items reach them as their own. Your own price lists, for the businesses you supply, are under **Storefront > Price lists** ([business links](spec/business-links.md) §16.5). The morning [money summary](money-reports.md#the-daily-summary-in-chat) lists what is low, with how many to order.
 
 ## Counts, shrinkage and leaks
 
@@ -140,7 +140,9 @@ Items are found as `price` finds them: the exact name, else the one the words st
 | `GET`/`POST /v1/stock/counts` | Counts; a count is `lines` (`item_id`, `count`) and a `reason`, with an `Idempotency-Key` |
 | `GET /v1/stock/shrinkage?from=&to=` | A period's received, sold and lost, at cost (this month by default) |
 | `GET`/`POST /v1/stock/purchases`, `POST /v1/stock/purchases/low` | Orders, drafted by hand or for what is low, with an `Idempotency-Key` |
+| `GET /v1/stock/purchases/{id}` | One order, with a linked supplier's side of it |
 | `POST /v1/stock/purchases/{id}/send`, `/confirm`, `/cancel`, `/receive`, `/pay` | An order's steps; `receive` and `pay` take an `Idempotency-Key` |
+| `PUT /v1/stock/suppliers/{id}/link`; `POST /v1/stock/purchases/{id}/accept-change`, `/all-came`, `/not-all-came` | A linked supplier, and an order's steps with it ([business links](spec/business-links.md) §16.3) |
 | `GET /v1/stock/sales?day=2026-10-29` | A day's sales (today in Lagos by default), added up by how paid, the top items, how many wait, and the terminal's sales with no items |
 
 ## In workflows: `stock@1`

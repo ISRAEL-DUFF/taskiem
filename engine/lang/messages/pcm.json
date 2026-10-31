@@ -3851,6 +3851,618 @@
     "wd.workflow.does": {
       "text": "Use your own workflow: {template}, wey {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "To link with another business for Taskiem, send *link Dangote*, *who sells cement*, or *link 0803 123 4567*.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "No business don link with you yet. Send *who sells cement* or *link Dangote* to find one.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Businesses for Taskiem wey una dey do business:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: don link, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* wan link with you",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: you don ask, dey wait for dem",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: dem no accept",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: you don block dem",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: link don end",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: request don go",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "dem dey supply you",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "dem dey buy from you",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "dem dey supply you and buy from you",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} wan link with you",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* wan link with {org} for Taskiem ({role}). If una link, una invoice and order go reach each other by demself. Nothing go share until you accept.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "No",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Block",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Dem dey supply us",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Dem dey buy from us",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Both",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Businesses for Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(don link)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(you don ask)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(dem don ask you)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Send the number of the one wey you wan link with, or *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Na owner or admin fit ask to link with dem.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "No business for Taskiem wey others fit find match {query}.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Send one number from the list, or *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "How you dey do business with *{name}*?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Ask anybody wey dey use {shown} for Taskiem to link. How you dey do business with dem?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "We don ask *{name}* to link. You go hear when dem accept.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "If any business for Taskiem dey use {shown}, e don get your request. You go hear only if dem accept.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "You don already link with *{name}*.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "You don ask *{name}* before. E dey wait for dia answer.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Na only owner or admin of {org} fit link with other businesses.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Link request don reach for today. Try again tomorrow.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "That request no dey wait again.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "Una don link with *{name}*. Send *links* to see una linked businesses.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "You don say no. Nobody go tell *{name}*.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "You don block am. Request from *{name}* no go reach you again.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} don accept your link",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* don accept the link with {org}. Una businesses don link for Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} don end the link",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* don end the link with {org}. Wetin don pass between una go still dey both sides.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* don ask you before. Send *links* to answer.",
+      "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} dey Taskiem too. Link with us: {url}",
+      "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Link",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Open {url} as you don sign in to your business for Taskiem to link.",
+      "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Other businesses for Taskiem fit find you to do business, by your name, wetin you dey sell and your area: send *find us* make dem find you, or *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Other businesses for Taskiem fit find {org} now by im name, wetin e dey sell and im area. Send *hide us* to stop am.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Other businesses no go find {org} for search again. Person wey get your phone number or link fit still ask to link. Send *find us* to change am.",
+      "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Bill from {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* send invoice {reference}: {amount} to pay. E dey under Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "E due {date}.",
+      "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Na only people wey fit see {org} invoice fit see im bills.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "No bill {reference}. Send *bills* to see dem.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "No bill to pay from linked suppliers.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills to pay:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} from {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Everything: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* from *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Total {total} · paid {paid} · {due} to pay.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "to pay",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "dey pay",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "part-paid",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "paid",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "you don query am",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "supplier don cancel am",
+      "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Pay into {account} ({bank}) and put {reference} for the transfer note: e go count for that invoice by itself (without am, e go count for your oldest invoice first).",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Or pay with card or transfer for im page: {link}",
+      "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "by transfer",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "with cash",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "another way",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} talk say e don pay {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* talk say e don pay {amount} {how} for {reference}. E go count for the invoice when the money reach you and dem match am.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} query {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* query {reference}: {note}. Money wey no name am no go count for am until you settle the query for the invoice.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} don settle your query for {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* don settle your query for {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} send order {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* order {note}. Accept am, change am or decline am for Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* cancel order {reference} before you accept am.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} wan cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* dey ask make you cancel order {reference} wey you don accept. Cancel am, or keep am.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} accept your change for {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* accept your change for order {reference}. The order don dey accepted.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} receive {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* talk say everything for order {reference} don land.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} talk say no be everything for {reference} land",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* talk say no be everything for order {reference} land. Wetin dem count: {note}. Agree with their count, or talk to dem.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} accept {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* accept your order {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} decline {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* decline your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} wan change {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* fit supply order {reference} like this: {note}. Accept the change, or cancel the order.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} don ready",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* talk say your order {reference} don ready. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} dey come",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* don send your order {reference}, e dey come. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} deliver {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* don deliver your order {reference}: {note}. Tap All came, or Not all came, before one day pass; after that, na their count we go use.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* cancel your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} cancel {reference} as you ask",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* agree to cancel your order {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} no cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* no cancel your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} agree your count for {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* agree with your count of wetin land for order {reference}.",
+      "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Decline",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Everything land",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "You don accept {reference}. We don tell dem.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "You don decline {reference}. We don tell dem.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "We don write am: everything for {reference} don land. Your stock don go up, and we don tell the supplier.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "That order don move pass that one; open am for Taskiem to see where e reach.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Na only person wey dey manage orders for {org} fit answer that one.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Open the order for Taskiem to do am.",
+      "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} send order {reference}, e don accept",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* order {note}. E don accept by itself, as you set am for dem.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} draft order {reference} for you",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* draft order for you: {note}. Confirm am, or cancel am, for Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} confirm {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* confirm order {reference} wey you draft for dem. E don accept.",
+      "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} about {reference}",
+      "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "About {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Na only person wey dey write to linked businesses for {org} fit send that one.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Wetin you wan tell *{name}*? Send *ask {name}* and your message.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "E no send: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
+      "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Foto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Voice note",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "File",
+      "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "*{name}* price for you:\n{items}\n\nOrder like *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "for one {unit}",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(at least {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(e no dey now)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… and {count} more for web.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* never share price list with you. Ask dem, or send *order from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "*{item}* no dey *{name}* price list. Send *prices from {name}* to see am.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Which of your items be their *{item}*? Talk am once for web, for {name} price for Suppliers page, then order again.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "E no draft: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Talk how many, like *order 20 bags of rice from Dangote*.",
+      "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "You never link with *{name}*. Send *link with {name}* to ask dem, then order from dem.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Talk how many and wetin from *{name}*, like *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* to *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "{count} orders, one for each business:\n{orders}\n\nMake I send all?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} to *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "I don send:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} pass your limit: another owner or admin go send dem, from Suppliers page.",
+      "reviewed": false
     }
   }
 }

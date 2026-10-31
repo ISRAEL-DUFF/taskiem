@@ -11,8 +11,11 @@ export interface Supplier {
   id: string;
   name: string;
   phone: string;
-  /** Where an order goes: the chat app they tapped in on, or sms. */
-  reached: "whatsapp" | "telegram" | "sms";
+  /** Where an order goes: the chat app they tapped in on, or sms; link
+   * when the supplier is a linked business on Taskiem. */
+  reached: "whatsapp" | "telegram" | "sms" | "link";
+  /** The link with the supplier's business, when it is one. */
+  link_id?: string | null;
   owed_kobo: number;
   /** Their orders not yet received or cancelled. */
   open: number;
@@ -40,6 +43,8 @@ export interface PurchaseLine {
   quantity: number;
   cost_kobo: number;
   received: number;
+  /** What a linked supplier says it delivered. */
+  delivered?: number;
 }
 
 export type PurchaseStatus =
@@ -73,6 +78,15 @@ export interface Purchase {
   paid_kobo: number;
   owed_kobo: number;
   created_at: string;
+  /** Sent to a linked supplier through this link; the supplier's side,
+   * mirrored, and our own cancel request and Not all came. */
+  link_id?: string;
+  seller_status?: "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled" | null;
+  seller_note?: string;
+  change?: PurchaseLine[];
+  delivered_at?: string;
+  cancel_asked_at?: string;
+  short_at?: string;
 }
 
 /** An order's status in a word or two, and its badge. */
@@ -89,6 +103,7 @@ export const STATUS: Record<PurchaseStatus, { label: string; tone: string }> = {
 export function reachedLine(s: Supplier): string {
   if (s.reached === "whatsapp") return "Gets orders on WhatsApp";
   if (s.reached === "telegram") return "Gets orders on Telegram";
+  if (s.reached === "link") return "Linked on Taskiem: orders go straight to their business";
   return "Gets orders by text message until they tap the link";
 }
 
@@ -128,15 +143,16 @@ export function purchaseSub(p: Purchase): string {
 /** What the order's buttons may do in its status. */
 export function purchaseActions(p: Purchase) {
   return {
-    send: p.status === "drafted",
-    confirm: p.status === "sent",
+    send: p.status === "drafted" && p.seller_status !== "proposed",
+    confirm: p.status === "sent" && !p.link_id,
     receive:
       p.status === "sent" ||
       p.status === "confirmed" ||
       p.status === "part_received",
     pay: p.status !== "drafted" && p.status !== "cancelled",
     cancel:
-      p.status === "drafted" || p.status === "sent" || p.status === "confirmed",
+      (p.status === "drafted" || p.status === "sent" || p.status === "confirmed") &&
+      !(p.link_id && (p.cancel_asked_at || p.seller_status === "delivered")),
   };
 }
 

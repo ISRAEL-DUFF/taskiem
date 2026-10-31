@@ -38,6 +38,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -82,6 +83,9 @@ type Server struct {
 	// is dormant: sent nothing, acting on nothing until proven again, and
 	// removed after as long again (TASKIEM_BINDING_DORMANT_DAYS); 0 is off.
 	BindingDormantDays int
+	// ChatHistoryDays is how long the Taskiem conversation's history is
+	// kept (TASKIEM_CHAT_HISTORY_DAYS; DefaultChatHistoryDays when 0).
+	ChatHistoryDays int
 	// termsAsked are the people asked about, or agreed to, the current
 	// terms since start: chat does not look them up again.
 	termsAsked sync.Map
@@ -153,6 +157,9 @@ type Server struct {
 	Catalogue *catalogue.Checker
 	// PublicURL is where people reach the web app (TASKIEM_PUBLIC_URL);
 	// single sign-on and OAuth connection callbacks are built from it.
+	// BillBanks lists the banks a payments connection pays, for paying a
+	// linked supplier's bill (bills.go); nil asks the connection.
+	BillBanks func(ctx context.Context, tenant uuid.UUID, connection string) ([]map[string]any, error)
 	PublicURL string
 	// HooksURL is where providers reach /hooks (TASKIEM_HOOKS_URL); the
 	// addresses on the Connections page are built from it, or from
@@ -257,8 +264,11 @@ type Server struct {
 	hosts        hostCache                           // custom domains: Host to embed app
 	defs         lru.Cache[string, *wd.Definition]   // "workflow/version"; versions are immutable, bounded (S34)
 	stockLow     lru.Cache[uuid.UUID, lowSeen]       // businesses' low items, for the evening and morning messages (stock_sales.go)
-	bg           sync.WaitGroup
-	bgActive     atomic.Int64 // work running after its request was answered (reset emails)
+	previews     lru.Cache[string, *links.Preview]   // link previews by URL (link_preview.go)
+	// previewAnyPort lets a link preview reach any port (tests' local pages).
+	previewAnyPort bool
+	bg             sync.WaitGroup
+	bgActive       atomic.Int64 // work running after its request was answered (reset emails)
 }
 
 // Handler builds the router.
@@ -267,6 +277,7 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
+	s.chatHooks()      // what the channels send is kept in the history (chat_history.go)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
@@ -458,7 +469,13 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
 			s.invoiceRoutes(r)
-			s.schoolRoutes(r) // the Schools area (schools.go)
+			s.linkRoutes(r)        // business links (links.go)
+			s.billRoutes(r)        // their bills (bills.go)
+			s.linkOrderRoutes(r)   // their orders (link_orders.go)
+			s.linkChatRoutes(r)    // their conversations (link_chat.go)
+			s.taskiemChatRoutes(r) // the Taskiem conversation on the web (chat_history.go)
+			s.priceListRoutes(r)   // price lists and item links (price_lists.go)
+			s.schoolRoutes(r)      // the Schools area (schools.go)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
@@ -498,6 +515,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/stock/settings", s.getStockSettings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/settings", s.putStockSettings)
 			r.With(s.need(PermTableRead)).Get("/stock/purchases", s.listPurchases)
+			r.With(s.need(PermTableRead)).Get("/stock/purchases/{id}", s.getPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases", s.draftPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/low", s.draftLowPurchases)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/send", s.sendPurchase)

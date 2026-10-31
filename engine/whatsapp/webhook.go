@@ -58,6 +58,10 @@ type Inbound struct {
 	// Location is a shared location (type location), as a maps link: a
 	// rider's at the door (dispatch). Telegram's arrive here too.
 	Location string
+	// Quoted is the id of the message this one replies to, quoting it
+	// (WhatsApp's context.id; Telegram's reply_to_message): a reply in a
+	// linked business's conversation (business links L3).
+	Quoted string
 }
 
 // MapsLink is a latitude and longitude as a maps link.
@@ -98,9 +102,12 @@ func Parse(body []byte) ([]Inbound, error) {
 						PhoneNumberID string `json:"phone_number_id"`
 					} `json:"metadata"`
 					Messages []struct {
-						ID   string `json:"id"`
-						From string `json:"from"`
-						Type string `json:"type"`
+						ID      string `json:"id"`
+						From    string `json:"from"`
+						Type    string `json:"type"`
+						Context struct {
+							ID string `json:"id"`
+						} `json:"context"`
 						Text struct {
 							Body string `json:"body"`
 						} `json:"text"`
@@ -155,7 +162,7 @@ func Parse(body []byte) ([]Inbound, error) {
 				continue
 			}
 			for _, m := range c.Value.Messages {
-				in := Inbound{ID: m.ID, From: m.From, PhoneNumberID: c.Value.Metadata.PhoneNumberID, Type: m.Type}
+				in := Inbound{ID: m.ID, From: m.From, PhoneNumberID: c.Value.Metadata.PhoneNumberID, Type: m.Type, Quoted: m.Context.ID}
 				switch m.Type {
 				case "text":
 					in.Text = m.Text.Body

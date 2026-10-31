@@ -794,6 +794,7 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 // RunForms takes form submissions from the inbox every second, and every
 // 10 seconds sends form steps' links, reminders and codes.
 func (s *Server) RunForms(ctx context.Context) error {
+	s.chatHooks()
 	if s.Forms == nil {
 		<-ctx.Done()
 		return nil

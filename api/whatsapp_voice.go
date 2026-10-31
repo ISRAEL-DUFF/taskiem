@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -139,6 +140,13 @@ func (s *Server) fetchVoice(ctx context.Context, c *chat, max int64) ([]byte, st
 func (s *Server) fetchMedia(ctx context.Context, c *chat, media *whatsapp.Media, max int64) ([]byte, string, int, error) {
 	if media == nil {
 		return nil, "", 0, errors.New("no file to fetch")
+	}
+	// Sent on the web: the file came with the message.
+	if media.ID == webMediaID && c.upload != nil {
+		if int64(len(c.upload)) > max {
+			return nil, "", len(c.upload), whatsapp.ErrMediaTooLarge
+		}
+		return slices.Clone(c.upload), media.MimeType, len(c.upload), nil
 	}
 	if c.wa == nil {
 		if s.Telegram == nil {

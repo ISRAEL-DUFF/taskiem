@@ -44,6 +44,7 @@ const waDecisionTTL = 24 * time.Hour
 // RunWhatsApp sends approval requests and run outcomes until ctx ends
 // (role api, with the platform number configured).
 func (s *Server) RunWhatsApp(ctx context.Context) error {
+	s.chatHooks()
 	if len(s.chatChannelsOn()) == 0 {
 		return nil
 	}
@@ -76,6 +77,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 	// whether or not transcription is still on.
 	if err := s.purgeTranscripts(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("transcripts: %w", err))
+	}
+	// The Taskiem conversation's history past its retention (chat_history.go).
+	if err := s.purgeChatHistory(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("chat history: %w", err))
 	}
 	// Chat bindings silent too long (chat_dormant.go).
 	if err := s.dormantSweep(ctx); err != nil {

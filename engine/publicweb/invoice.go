@@ -35,6 +35,9 @@ type InvoicePage struct {
 	PaidKobo  int64
 	DueOn     *time.Time
 	Note      string
+	// LinkCode is the business's link code, printed for a customer that
+	// is a business on Taskiem too (business links); empty when it has none.
+	LinkCode string
 }
 
 // Invoices reads a sent invoice by its page token's hash; ok is false for
@@ -47,11 +50,11 @@ func DBInvoices(pool *pgxpool.Pool) Invoices {
 	return func(ctx context.Context, tokenHash []byte) (InvoicePage, bool, error) {
 		var p InvoicePage
 		var lines []byte
-		var business, note *string
+		var business, note, code *string
 		err := pool.QueryRow(ctx, `SELECT i.tenant_id, i.number, i.status, i.lines, i.total_kobo, i.paid_kobo, i.due_on, i.note,
-			taskiem_public_brand(i.tenant_id)->>'name'
+			taskiem_public_brand(i.tenant_id)->>'name', taskiem_public_link_code(i.tenant_id)
 			FROM taskiem_public_customer_invoice($1) i`, tokenHash).
-			Scan(&p.Tenant, &p.Number, &p.Status, &lines, &p.TotalKobo, &p.PaidKobo, &p.DueOn, &note, &business)
+			Scan(&p.Tenant, &p.Number, &p.Status, &lines, &p.TotalKobo, &p.PaidKobo, &p.DueOn, &note, &business, &code)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return InvoicePage{}, false, nil
 		}
@@ -66,6 +69,9 @@ func DBInvoices(pool *pgxpool.Pool) Invoices {
 		}
 		if note != nil {
 			p.Note = *note
+		}
+		if code != nil {
+			p.LinkCode = *code
 		}
 		return p, true, nil
 	}
@@ -98,6 +104,9 @@ type invoiceData struct {
 	Payable bool
 	Pay     *payView
 	Refresh int
+	// LinkURL opens a link request to the business, for a customer that is
+	// a business on Taskiem too (the web app's /l/<code>).
+	LinkURL string
 }
 
 type invoiceLine struct {
@@ -163,6 +172,9 @@ func (s *Server) serveInvoice(w http.ResponseWriter, r *http.Request, token, sub
 		Business: business, Number: p.Number, Status: words, Total: invoicing.Naira(p.TotalKobo), Note: p.Note}
 	for _, l := range p.Lines {
 		d.Lines = append(d.Lines, invoiceLineView(l))
+	}
+	if p.LinkCode != "" && s.AppURL != "" {
+		d.LinkURL = strings.TrimRight(s.AppURL, "/") + "/l/" + p.LinkCode
 	}
 	if p.PaidKobo > 0 {
 		d.Paid = invoicing.Naira(p.PaidKobo)

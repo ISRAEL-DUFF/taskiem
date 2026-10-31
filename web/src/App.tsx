@@ -54,6 +54,19 @@ import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
+import {
+  ChatPage,
+  LinkCodePage,
+  LinkCodeSignedOut,
+  LinkedBusinessesPage,
+} from "./pages/Links";
+import { BillPage, BillsPage } from "./pages/Bills";
+import {
+  PurchasePage,
+  TradeOrderPage,
+  TradeOrdersPage,
+} from "./pages/TradeOrders";
+import { StorefrontPriceLists, SupplierPricesPage } from "./pages/PriceLists";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -226,6 +239,9 @@ function Shell() {
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
+    // A business's link code (business links): sign in, or sign up first.
+    if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname))
+      return alone(<LinkCodeSignedOut />);
     return loc.pathname === "/login" ? (
       alone(<Login />)
     ) : (
@@ -360,12 +376,16 @@ function SignedIn() {
     ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
     ["/invoices", "Invoices", "invoices", invoiceAccess(can).see],
     ["/money", "Money", "money", invoiceAccess(can).see],
+    // Linked suppliers' invoices (business links, pages/Bills.tsx).
+    ["/bills", "Bills", "invoices", invoiceAccess(can).see],
     ["/schools", "Schools", "schools", showSchools(me.schools, can)],
     ["/storefront", "Storefront", "storefront", can("storefront.manage")],
     ["/forms", "Forms", "forms", can("workflow.read")],
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
+    // Other businesses on Taskiem (business links, pages/Links.tsx).
+    ["/chat", "Chat", "chat", true],
     [
       "/approvals",
       "Approvals",
@@ -399,6 +419,7 @@ function SignedIn() {
       can("secret.manage") || can("workflow.read"),
     ],
     ["/policies", "Approval policies", "policies", can("workflow.read")],
+    ["/settings/links", "Linked businesses", "connections", can("link.manage")],
     ["/settings/notifications", "Notifications", "bell", !!me.user],
     ["/alerts", "Alerts", "alerts", can("alert.manage")],
     ["/audit", "Audit log", "audit", can("audit.read")],
@@ -593,6 +614,25 @@ function SignedIn() {
                 element={<StorefrontDeliveries />}
               />
               <Route path="/storefront/stock" element={<StorefrontStock />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route
+                path="/settings/links"
+                element={<LinkedBusinessesPage />}
+              />
+              <Route path="/l/:code" element={<LinkCodePage />} />
+              <Route path="/bills" element={<BillsPage />} />
+              <Route path="/bills/:id" element={<BillPage />} />
+              <Route path="/trade-orders" element={<TradeOrdersPage />} />
+              <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
+              <Route path="/purchases/:id" element={<PurchasePage />} />
+              <Route
+                path="/storefront/price-lists"
+                element={<StorefrontPriceLists />}
+              />
+              <Route
+                path="/storefront/suppliers/:link/prices"
+                element={<SupplierPricesPage />}
+              />
               <Route
                 path="/storefront/suppliers"
                 element={<StorefrontSuppliers />}

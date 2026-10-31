@@ -6,6 +6,8 @@ Invoices follow [decision 0045](decisions/0045-tally-in-taskiem.md): **an invoic
 
 ## Making and sending one
 
+An invoice to a customer who is also a business on Taskiem, and linked to yours, becomes a bill in their business and is matched on both sides when paid: planned in [business links](spec/business-links.md) ([decision 0061](decisions/0061-business-links.md), proposed).
+
 Under **Invoices**, **New invoice** asks for:
 
 - **The customer**: a name, and a phone number or an email (or both) to send it to. Over the API, `customer.key` is the business's own key for them (`student:42`, up to 100 letters, digits and `:._/-`): invoices with the same key are one customer's in [matching](matching.md#customers-own-account-numbers), else invoices to the same phone (else email) are.

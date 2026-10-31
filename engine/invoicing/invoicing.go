@@ -132,9 +132,12 @@ type Invoice struct {
 	PaidAt            *time.Time `json:"paid_at"`
 	VoidedAt          *time.Time `json:"voided_at"`
 	VoidReason        string     `json:"void_reason,omitempty"`
-	CreatedBy         string     `json:"created_by"`
-	CreatedAt         time.Time  `json:"created_at"`
-	Payments          []Payment  `json:"payments,omitempty"`
+	// Disputed: a linked buyer queried it (its bill); oldest-first
+	// matching passes over it (docs/spec/business-links.md §8).
+	Disputed  bool      `json:"disputed,omitempty"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	Payments  []Payment `json:"payments,omitempty"`
 	// Amendments are the changes made to it after it was sent, each also
 	// a line (amendments.go).
 	Amendments []Amendment `json:"amendments,omitempty"`
@@ -220,6 +223,14 @@ type Invoices struct {
 	// Answered is told of a request from chat once it is issued (or
 	// failed), to reply to the customer there.
 	Answered func(ctx context.Context, r Request, a Account, err error)
+	// LinkOffer is a line to add to an invoice sent to a phone that is
+	// another business's own on Taskiem, offering it a link the first time
+	// (docs/spec/business-links.md §5.1); "" for none, and always for an
+	// empty phone (called then to make the business's link code, which
+	// the invoice's page prints). fits says whether a
+	// line still fits the message: a line that does not is left out and
+	// not counted as offered. Nil offers nothing.
+	LinkOffer func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, fits func(line string) bool) (string, error)
 	// OrderRequested issues what a storefront order's status page asked
 	// for (N3): the storefront checks the order and calls IssueForOrder.
 	// OrderReceived counts a payment the checker found into an order's
@@ -349,13 +360,13 @@ func nextNumber(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, Setti
 // --- reading ---
 
 const cols = `id, number, status, customer, subject_id, lines, total_kobo, paid_kobo, currency, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id`
+	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id, disputed`
 
 func scan(r pgx.Row) (Invoice, error) {
 	var x Invoice
 	var cust, lines, token []byte
 	err := r.Scan(&x.ID, &x.Number, &x.Status, &cust, &x.subject, &lines, &x.TotalKobo, &x.PaidKobo, &x.Currency, &x.DueOn,
-		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID)
+		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID, &x.Disputed)
 	if err != nil {
 		return x, err
 	}
@@ -466,7 +477,9 @@ func check(d Draft) ([]Line, int64, error) {
 	if d.Customer.Name == "" || len(d.Customer.Name) > 120 {
 		return nil, 0, invalid("the customer's name is required (up to 120 characters)")
 	}
-	if d.Customer.Phone == "" && d.Customer.Email == "" {
+	// A linked business (link:<its id>) is sent its invoice as a bill, not
+	// a message (docs/spec/business-links.md §6.1).
+	if d.Customer.Phone == "" && d.Customer.Email == "" && !strings.HasPrefix(d.Customer.Key, "link:") {
 		return nil, 0, invalid("give the customer's phone number or email, to send the invoice to")
 	}
 	if d.Customer.Email != "" {
@@ -781,6 +794,26 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 		text := sendText(business, cur, link)
 		if family {
 			text = familySendText(business, cur, link)
+		}
+		if s.LinkOffer != nil {
+			// The SMS must stay within its parts; the invoice goes either
+			// way. A school family's invoice offers nothing (its phone is a
+			// parent's), but the hook still makes sure the business has the
+			// link code its invoice's page prints.
+			phone := cur.Customer.Phone
+			if family {
+				phone = ""
+			}
+			fits := func(line string) bool {
+				return sender.Segments(business+": "+text+" "+line) <= sender.MaxSegments
+			}
+			line, err := s.LinkOffer(ctx, tx, tenant, phone, fits)
+			if err != nil {
+				return err
+			}
+			if line != "" {
+				text += " " + line
+			}
 		}
 		out.Queued, out.SMSOverAllowance, err = s.deliver(ctx, tx, tenant, cur, business, text, "Invoice "+cur.Number+" from "+business, "invoice:"+key)
 		if err != nil {

@@ -150,7 +150,8 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 	if err != nil {
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}
-	var business, addr, link string
+	var business, addr, link, offer string
+	var offerButton *whatsapp.Button
 	var x invoicing.Invoice
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, it.Tenant).Scan(&business); err != nil {
@@ -166,7 +167,12 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 		if link, err = s.Invoices.PageLink(ctx, tx, it.Tenant, x); err != nil {
 			return err
 		}
-		addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, reach.Target{Channel: it.Channel, Contact: *it.Contact})
+		if addr, err = s.Reach.AddressTx(ctx, tx, it.Tenant, reach.Target{Channel: it.Channel, Contact: *it.Contact}); err != nil {
+			return err
+		}
+		// A customer that is a business on Taskiem is offered a link
+		// (business links), unless its SMS or an earlier document did.
+		offer, offerButton, err = s.linkOfferChat(ctx, tx, it.Tenant, it.Channel, addr, s.chooseLang(ctx, it.Tenant, addr, "").Tag)
 		return err
 	})
 	switch {
@@ -178,11 +184,16 @@ func (s *Server) sendInvoiceItem(ctx context.Context, it whatsapp.OutboxItem) er
 	l := s.chooseLang(ctx, it.Tenant, addr, "").Tag
 	b := invoiceButton{Tenant: it.Tenant, Invoice: x.ID, Contact: *it.Contact}
 	buttons := invoiceButtons(l, key, b, invoicePay, invoiceOpen)
+	text := ch.Prefix(business) + tr(l, "invoice.chat.sent", "number", x.Number, "business", business, "amount", invoicing.Naira(x.DueKobo))
+	if offerButton != nil {
+		buttons = append(buttons, *offerButton)
+		text += "\n\n" + offer
+	}
 	tpl := whatsapp.TplInvoice
 	m := whatsapp.Message{Tenant: it.Tenant, Buttons: buttons, Template: &tpl,
 		Vars:     map[string]string{"tenant": business, "number": x.Number, "amount": invoicing.Naira(x.DueKobo), "link": link},
 		Payloads: []string{buttons[0].ID},
-		Text:     ch.Prefix(business) + tr(l, "invoice.chat.sent", "number", x.Number, "business", business, "amount", invoicing.Naira(x.DueKobo))}
+		Text:     text}
 	_, err = ch.Send(ctx, addr, m)
 	switch {
 	case err == nil:

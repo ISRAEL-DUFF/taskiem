@@ -256,3 +256,61 @@ func TestFetchPublic(t *testing.T) {
 		}
 	}
 }
+
+func TestChatFiles(t *testing.T) {
+	for _, c := range []struct {
+		data []byte
+		want string
+	}{
+		{[]byte("OggS\x00\x02rest"), "audio/ogg"},
+		{[]byte{0x1A, 0x45, 0xDF, 0xA3, 0x01}, "audio/webm"},
+		{[]byte("ID3\x04rest"), "audio/mpeg"},
+		{[]byte{0xFF, 0xFB, 0x90, 0x00}, "audio/mpeg"},
+		{[]byte("\x00\x00\x00\x20ftypM4A rest"), "audio/mp4"},
+		{[]byte("%PDF-1.4"), ""},
+		{[]byte("#!/bin/sh"), ""},
+	} {
+		if got := voiceType(c.data); got != c.want {
+			t.Errorf("voiceType(%q) = %q, want %q", c.data, got, c.want)
+		}
+	}
+	for ctype, want := range map[string]string{"image/jpeg": "photo", "audio/ogg": "voice", "application/pdf": "file"} {
+		if got := ChatKind(ctype); got != want {
+			t.Errorf("ChatKind(%s) = %s", ctype, got)
+		}
+	}
+
+	s, f := newService(t)
+	ctx, tenant := context.Background(), uuid.New()
+	voice := append([]byte("OggS\x00\x02"), make([]byte, 1000)...)
+	got, err := s.PutChatFile(ctx, tenant, voice)
+	if err != nil || got.Type != "audio/ogg" || !strings.HasPrefix(got.Path, "chat/") || !strings.HasSuffix(got.Path, ".ogg") {
+		t.Fatalf("a voice note: %+v %v", got, err)
+	}
+	if f.objects[PrivateBucket+"/"+got.Path] != "audio/ogg" {
+		t.Fatalf("stored privately: %v", f.objects)
+	}
+	if b := f.buckets[PrivateBucket]; !strings.Contains(strings.Join(b.AllowedMIMETypes, ","), "audio/ogg") {
+		t.Errorf("the private bucket takes voice notes: %v", b.AllowedMIMETypes)
+	}
+	if got, err := s.PutChatFile(ctx, tenant, encodeJPEG(t, halves(100, 100))); err != nil || got.Type != "image/jpeg" || !strings.HasPrefix(got.Path, "files/") {
+		t.Fatalf("a photo: %+v %v", got, err)
+	}
+	if _, err := s.PutChatFile(ctx, tenant, []byte("#!/bin/sh\necho hi\n")); !errors.Is(err, ErrFile) {
+		t.Fatalf("a script: %v", err)
+	}
+	if _, err := s.PutChatFile(ctx, tenant, append([]byte("OggS"), make([]byte, MaxVoiceBytes)...)); !errors.Is(err, ErrFile) {
+		t.Fatalf("a voice note too long: %v", err)
+	}
+	// A signed URL on a host that is not the tenant's own (the fake signs
+	// on ref.xb.test) is never fetched.
+	creds := s.Credentials
+	s.Credentials = func(ctx context.Context, tenant uuid.UUID) (map[string]string, error) {
+		c, err := creds(ctx, tenant)
+		c["api_url"] = "https://elsewhere.test"
+		return c, err
+	}
+	if _, _, err := s.GetFile(ctx, tenant, "chat/x.ogg"); !errors.Is(err, ErrNotOurs) {
+		t.Fatalf("a signed URL elsewhere: %v", err)
+	}
+}

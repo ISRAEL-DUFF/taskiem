@@ -1,0 +1,37 @@
+# The bills platform connector (docs/spec/business-links.md §6.2): what a
+# workflow records about paying a bill from a linked supplier. It acts on
+# Taskiem's own records, for the run's tenant only, and needs no
+# connection. The pay-linked-bill template calls it once the payment is
+# settled, refused or not approved.
+manifest: connector/v1
+id: bills
+version: 1.0.0
+name: Bills
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  finish_bill_payment:
+    title: Record a linked bill's outcome
+    description: For Taskiem's own linked-bill flow only. Records the outcome it reached for one bill (paid, failed or rejected); the same outcome twice changes nothing.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [payment_id, status]
+      properties:
+        payment_id:   { type: string }
+        status:       { type: string, enum: [paid, failed, rejected] }
+        account_name: { type: string, description: The bank's name for the account }
+    output:
+      type: object
+      properties:
+        payment_id: { type: string }
+        status:     { type: string }
+        bill:       { type: string, description: The bill's invoice number }

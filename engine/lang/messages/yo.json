@@ -3851,6 +3851,618 @@
     "wd.workflow.does": {
       "text": "Lo iṣẹ́ rẹ: {template}, tó {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "Láti so mọ́ ilé-iṣẹ́ míràn lórí Taskiem, fi *link Dangote*, *who sells cement*, tàbí *link 0803 123 4567* ránṣẹ́.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "Kò sí ilé-iṣẹ́ tí ẹ so mọ́ síbẹ̀. Fi *who sells cement* tàbí *link Dangote* ránṣẹ́ láti wá ọ̀kan.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Àwọn ilé-iṣẹ́ lórí Taskiem tí ẹ ń bá ṣòwò:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: ti so pọ̀, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* ń béèrè láti so pọ̀",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: ẹ ti béèrè, ẹ ń dúró dè wọ́n",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: wọn kò gbà",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: ẹ ti dí wọn",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: ìsopọ̀ ti parí",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: a ti fi ìbéèrè ránṣẹ́",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "wọ́n ń pèsè fún yín",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "wọ́n ń rà lọ́wọ́ yín",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "wọ́n ń pèsè fún yín, wọ́n sì ń rà lọ́wọ́ yín",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} ń béèrè láti so pọ̀",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* ń béèrè láti so mọ́ {org} lórí Taskiem ({role}). Tí ẹ bá so pọ̀, ìwé owó àti àṣẹ yín yóò máa dé ọ̀dọ̀ ara yín fúnra wọn. Kò sí ohun tí a ó pín títí ẹ ó fi gbà.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Gbà á",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "Kọ̀ ọ́",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Dí i",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Wọ́n ń pèsè fún wa",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Wọ́n ń rà lọ́wọ́ wa",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Méjèèjì",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Àwọn ilé-iṣẹ́ lórí Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(ti so pọ̀)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(ẹ ti béèrè)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(wọ́n ti béèrè lọ́wọ́ yín)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Fi nọ́mbà èyí tí ẹ fẹ́ bá so pọ̀ ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Ẹni tó ni ilé-iṣẹ́ tàbí alábòójútó ló lè béèrè láti so mọ́ wọn.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "Kò sí ilé-iṣẹ́ lórí Taskiem tí a lè rí tó bá {query} mu.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Fi nọ́mbà kan láti inú àkójọ ránṣẹ́, tàbí *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "Báwo ni ẹ ṣe ń bá *{name}* ṣòwò?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Béèrè lọ́wọ́ ẹnikẹ́ni tó ń lo {shown} lórí Taskiem láti so pọ̀. Báwo ni ẹ ṣe ń bá wọn ṣòwò?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "A ti béèrè lọ́wọ́ *{name}* láti so pọ̀. Ẹ ó gbọ́ nígbà tí wọ́n bá gbà.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "Tí ilé-iṣẹ́ kan lórí Taskiem bá ń lo {shown}, ó ti gba ìbéèrè yín. Ẹ ó gbọ́ kìkì tí wọ́n bá gbà.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "Ẹ ti so mọ́ *{name}* tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "Ẹ ti béèrè lọ́wọ́ *{name}* tẹ́lẹ̀. Ó ń dúró de ìdáhùn wọn.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Ẹni tó ni {org} tàbí alábòójútó nìkan ló lè so mọ́ àwọn ilé-iṣẹ́ míràn.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Ìbéèrè ìsopọ̀ ti tó fún òní. Ẹ gbìyànjú lọ́la.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "Ìbéèrè yẹn kò dúró mọ́.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "Ẹ ti so mọ́ *{name}*. Fi *links* ránṣẹ́ láti rí àwọn ilé-iṣẹ́ tí ẹ so mọ́.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "Ẹ ti kọ̀ ọ́. A kò ní sọ fún *{name}*.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "Ẹ ti dí i. Ìbéèrè láti ọ̀dọ̀ *{name}* kò ní dé ọ̀dọ̀ yín mọ́.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} ti gba ìsopọ̀ yín",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* ti gba ìsopọ̀ pẹ̀lú {org}. Àwọn ilé-iṣẹ́ yín ti so pọ̀ lórí Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} ti parí ìsopọ̀",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* ti parí ìsopọ̀ pẹ̀lú {org}. Ohun tó ti kọjá láàárín yín yóò wà ní ẹ̀gbẹ́ méjèèjì.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* ti béèrè lọ́wọ́ yín tẹ́lẹ̀. Fi *links* ránṣẹ́ láti dáhùn.",
+      "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} wà lórí Taskiem náà. Ẹ so mọ́ wa: {url}",
+      "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "So pọ̀",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Ṣí {url} nígbà tí o bá wọlé sí ilé-iṣẹ́ rẹ lórí Taskiem láti so pọ̀.",
+      "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Àwọn ilé-iṣẹ́ míràn lórí Taskiem lè rí yín láti bá yín ṣòwò, nípa orúkọ yín, ohun tí ẹ ń tà àti agbègbè yín: fi *find us* ránṣẹ́ láti gbà wọ́n láàyè, tàbí *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Àwọn ilé-iṣẹ́ míràn lórí Taskiem lè rí {org} báyìí nípa orúkọ rẹ̀, ohun tí ó ń tà àti agbègbè rẹ̀. Fi *hide us* ránṣẹ́ láti dá a dúró.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Àwọn ilé-iṣẹ́ míràn kò ní rí {org} nínú àwárí mọ́. Ẹni tó ní nọ́mbà fóònù yín tàbí ìjápọ̀ yín ṣì lè béèrè. Fi *find us* ránṣẹ́ láti yí i padà.",
+      "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Ìwé owó láti ọ̀dọ̀ {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* fi ìwé owó {reference} ránṣẹ́: {amount} láti san. Ó wà lábẹ́ Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "Ọjọ́ ìsanwó: {date}.",
+      "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Àwọn tó lè rí ìwé owó {org} nìkan ló lè rí àwọn bill rẹ̀.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "Kò sí bill {reference}. Fi *bills* ránṣẹ́ láti rí wọn.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "Kò sí bill láti san láti ọ̀dọ̀ àwọn olùpèsè tí ẹ so mọ́.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Àwọn bill láti san:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} láti ọ̀dọ̀ {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Lápapọ̀: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* láti ọ̀dọ̀ *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Àpapọ̀ {total} · a ti san {paid} · {due} láti san.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "láti san",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "à ń san án",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "a ti san díẹ̀",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "a ti san",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "ẹ ti bèèrè nípa rẹ̀",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "olùpèsè ti fagilé",
+      "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Sanwó sí {account} ({bank}) pẹ̀lú {reference} nínú àkọsílẹ̀ ìfiránṣẹ́ owó: a ó kà á sí ìwé owó náà fúnra rẹ̀ (láìsí i, sí èyí tó ti pẹ́ jù lọ ní àkọ́kọ́).",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Tàbí sanwó pẹ̀lú káàdì tàbí ìfiránṣẹ́ lórí ojú-ìwé rẹ̀: {link}",
+      "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "nípa ìfiránṣẹ́ owó",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "ní owó ọwọ́",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "ọ̀nà míràn",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} sọ pé òun ti san {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* sọ pé òun ti san {amount} {how} fún {reference}. A ó kà á nígbà tí owó bá dé ọ̀dọ̀ yín tí a sì bá a mu.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} bèèrè nípa {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* bèèrè nípa {reference}: {note}. Owó tí kò dárúkọ rẹ̀ kò ní kà sí i títí ẹ ó fi yanjú ìbéèrè náà lórí ìwé owó.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} ti yanjú ìbéèrè yín lórí {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* ti yanjú ìbéèrè yín lórí {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} fi ọja-ibere {reference} ranṣẹ",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* bere fun {note}. Gba a, yi i pada tabi kọ ọ ni Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* fagile ọja-ibere {reference} ki ẹ to gba a.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} n beere lati fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* n beere ki ẹ fagile ọja-ibere {reference} ti ẹ ti gba. Fagile e, tabi ẹ pa a mọ.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} gba iyipada yin si {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* gba iyipada ti ẹ ṣe si ọja-ibere {reference}. A ti gba ọja-ibere naa.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} gba {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* sọ pe gbogbo ọja-ibere {reference} ti de.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} sọ pe kii ṣe gbogbo {reference} lo de",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* sọ pe kii ṣe gbogbo ọja-ibere {reference} lo de. Ohun ti wọn ka: {note}. Gba iye ti wọn ka, tabi ba wọn sọrọ.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} gba {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* gba ọja-ibere yin {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} kọ {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* kọ ọja-ibere yin {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} fẹ yi {reference} pada",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* le pese ọja-ibere {reference} bayii: {note}. Gba iyipada naa, tabi fagile ọja-ibere naa.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} ti ṣetan",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* sọ pe ọja-ibere yin {reference} ti ṣetan. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} wa loju ọna",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* ti fi ọja-ibere yin {reference} ranṣẹ, o wa loju ọna. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} ti mu {reference} de",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* ti mu ọja-ibere yin {reference} de: {note}. Tẹ All came, tabi Not all came, laarin ọjọ kan; lẹhin naa a o gba iye ti wọn ka.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* fagile ọja-ibere yin {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} fagile {reference} bi ẹ ti beere",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* gba lati fagile ọja-ibere yin {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} ko fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* ko fagile ọja-ibere yin {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} gba iye ti ẹ ka fun {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* gba iye ti ẹ ka ohun to de ninu ọja-ibere {reference}.",
+      "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Gba a",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Kọ ọ",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Gbogbo rẹ de",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "A ti gba {reference}. A ti sọ fun wọn.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "A ti kọ {reference}. A ti sọ fun wọn.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "A ti kọ ọ silẹ: gbogbo {reference} ti de. Ọja yin ti pọ si, a si ti sọ fun olupese.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "Ọja-ibere yẹn ti kọja ibẹ; ṣi i ni Taskiem lati ri ibi ti o de.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Ẹni ti n bojuto ọja-ibere fun {org} nikan lo le dahun eyi.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Ṣi ọja-ibere naa ni Taskiem lati ṣe e.",
+      "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} fi ọja-ibere {reference} ranṣẹ, a ti gba a",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* bere fun {note}. A ti gba a, gẹgẹ bi ẹ ti ṣeto fun wọn.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} ṣe ọja-ibere {reference} silẹ fun yin",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* ṣe ọja-ibere silẹ fun yin: {note}. Fọwọsi i, tabi fagile e, ni Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} fọwọsi {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* fọwọsi ọja-ibere {reference} ti ẹ ṣe silẹ fun wọn. A ti gba a.",
+      "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} nipa {reference}",
+      "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "Nipa {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Ẹni ti n kọwe si awọn iṣowo ti a so pọ fun {org} nikan lo le fi eyi ranṣẹ.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Kini ẹ fẹ sọ fun *{name}*? Fi *ask {name}* ati ọrọ yin ranṣẹ.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "Ko lọ: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "A ti fi ranṣẹ si *{name}*. Esi wọn yoo wa sibi, ati si Chat lori wẹẹbu.",
+      "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Fọto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Ohùn ti a gbasilẹ",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "Fáìlì",
+      "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "Iye owo *{name}* fun ọ:\n{items}\n\nPaṣẹ bayi: *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "fun {unit} kan",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(o kere ju {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(ko si bayi)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… ati {count} si i lori wẹẹbu.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* ko pin iye owo pẹlu rẹ. Beere lọwọ wọn, tabi fi *order from {name}* ranṣẹ.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "Ko si *{item}* ninu iye owo *{name}*. Fi *prices from {name}* ranṣẹ lati ri wọn.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Ewo ninu awọn ọja rẹ ni *{item}* wọn? Sọ lẹẹkan lori wẹẹbu, ni iye owo {name} lori oju-iwe Suppliers, ki o paṣẹ lẹẹkansi.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "A ko kọ ọ: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Sọ iye melo, bii *order 20 bags of rice from Dangote*.",
+      "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "O ko ti sopọ mọ *{name}*. Fi *link with {name}* ranṣẹ lati beere lọwọ wọn, lẹhinna paṣẹ lọwọ wọn.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Sọ iye ati ohun ti o fẹ lati ọdọ *{name}*, bii *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* si *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "Awọn aṣẹ {count}, ọkan fun iṣowo kọọkan:\n{orders}\n\nṢe ki n fi gbogbo wọn ranṣẹ?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} si *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "A ti fi ranṣẹ:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} kọja opin rẹ: oniwun miiran tabi admin yoo fi wọn ranṣẹ, lati oju-iwe Suppliers.",
+      "reviewed": false
     }
   }
 }

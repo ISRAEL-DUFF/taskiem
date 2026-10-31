@@ -54,6 +54,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
@@ -118,6 +119,7 @@ type config struct {
 	ChatSignup         api.ChatSignupConfig
 	Terms              api.TermsConfig
 	BindingDormantDays int
+	ChatHistoryDays    int
 	// Public is the public host for storefronts and forms (public.go).
 	Public publicConfig
 	// Messages are SMS and email to people outside a tenant (messages.go).
@@ -394,6 +396,13 @@ func chatWayIn(c *config) error {
 			return fmt.Errorf("TASKIEM_BINDING_DORMANT_DAYS must be a number of days from 0 (off) to 3650, not %q", v)
 		}
 		c.BindingDormantDays = n
+	}
+	if v := strings.TrimSpace(os.Getenv("TASKIEM_CHAT_HISTORY_DAYS")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 3650 {
+			return fmt.Errorf("TASKIEM_CHAT_HISTORY_DAYS must be a number of days from 1 to 3650, not %q", v)
+		}
+		c.ChatHistoryDays = n
 	}
 	c.Terms = api.TermsConfig{URL: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_URL")), Version: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_VERSION")),
 		PrivacyVersion: strings.TrimSpace(os.Getenv("TASKIEM_PRIVACY_VERSION"))}
@@ -748,6 +757,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Schools = schoolOps
 	copts.Storefront = orders
 	copts.Riders = riderOps
+	copts.Bills = &links.Payments{Pool: pool}
 	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps
@@ -1173,7 +1183,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
-		srv.ChatSignup, srv.Terms, srv.BindingDormantDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays
+		srv.ChatSignup, srv.Terms, srv.BindingDormantDays, srv.ChatHistoryDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays, cfg.ChatHistoryDays
 		if len(cfg.ChatSignup.Channels) > 0 {
 			log.Info("sign-up from chat on", "channels", strings.Join(cfg.ChatSignup.Channels, ","), "terms", cfg.Terms.Version, "privacy", cfg.Terms.PrivacyVersion)
 		}
@@ -1220,6 +1230,11 @@ func serve(ctx context.Context, args []string) error {
 		srv.DomainTarget = storefront.DomainTarget{CNAME: cfg.Public.CNAME, Addresses: cfg.Public.Addresses}
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
+		if e.orders != nil {
+			// A linked business's order tells its buyer in the buyer's own
+			// Taskiem (business links).
+			e.orders.TradeNotify = srv.TradeNotify
+		}
 		srv.Forms = e.forms
 		if e.forms != nil {
 			srv.ReachHost = e.forms.FormHost
@@ -1232,6 +1247,9 @@ func serve(ctx context.Context, args []string) error {
 		// Account numbers asked for with an invoice's chat buttons are
 		// answered in the chat.
 		e.invoices.Answered = srv.InvoiceAnswered
+		// An invoice to another business's own number offers it a link
+		// the first time (business links).
+		e.invoices.LinkOffer = srv.LinkOfferLine
 		srv.MailDomain = cfg.Mail.Domain
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })

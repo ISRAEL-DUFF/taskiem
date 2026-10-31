@@ -4813,6 +4813,771 @@
       "text": "Use your workflow: {template}, which {does}",
       "reviewed": true,
       "context": "Read-back: as wd.workflow, with what it does (wd.effect.*)"
+    },
+    "link.how": {
+      "text": "To link with another business on Taskiem, send *link Dangote*, *who sells cement*, or *link 0803 123 4567*.",
+      "reviewed": true,
+      "context": "How to ask another business to link, in chat"
+    },
+    "link.none": {
+      "text": "No linked businesses yet. Send *who sells cement* or *link Dangote* to find one.",
+      "reviewed": true,
+      "context": "The business has no links or requests"
+    },
+    "link.list_title": {
+      "text": "Businesses on Taskiem you trade with:",
+      "reviewed": true,
+      "context": "Heading of the list of links"
+    },
+    "link.list_active": {
+      "text": "• *{name}*: linked, {role}",
+      "reviewed": true,
+      "context": "A linked business; {role} is a phrase such as 'they supply you'"
+    },
+    "link.list_asked": {
+      "text": "• *{name}* asks to link",
+      "reviewed": true,
+      "context": "A request waiting for this business's answer"
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: asked, waiting for them",
+      "reviewed": true,
+      "context": "A request this business sent, still waiting"
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: not accepted",
+      "reviewed": true,
+      "context": "A request this business sent that was not accepted within 30 days"
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: blocked",
+      "reviewed": true,
+      "context": "A business this business blocked"
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: link ended",
+      "reviewed": true,
+      "context": "A link that was ended"
+    },
+    "link.list_sent": {
+      "text": "• {shown}: request sent",
+      "reviewed": true,
+      "context": "A request sent by phone number or address; {shown} is the masked number"
+    },
+    "link.role.supplier": {
+      "text": "they supply you",
+      "reviewed": true,
+      "context": "How the other business trades with this one"
+    },
+    "link.role.customer": {
+      "text": "they buy from you",
+      "reviewed": true,
+      "context": "How the other business trades with this one"
+    },
+    "link.role.both": {
+      "text": "they supply you and buy from you",
+      "reviewed": true,
+      "context": "How the other business trades with this one"
+    },
+    "link.asked_title": {
+      "text": "{name} asks to link",
+      "reviewed": true,
+      "context": "Notification title: another business asks to link"
+    },
+    "link.asked_body": {
+      "text": "*{name}* asks to link with {org} on Taskiem ({role}). Linked, your invoices and orders reach each other by themselves. Nothing is shared until you accept.",
+      "reviewed": true,
+      "context": "To the owners and admins: another business asks to link; buttons Accept, Decline, Block"
+    },
+    "link.button_accept": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "Button: accept a link request (20 characters at most)"
+    },
+    "link.button_decline": {
+      "text": "Decline",
+      "reviewed": true,
+      "context": "Button: decline a link request (20 characters at most)"
+    },
+    "link.button_block": {
+      "text": "Block",
+      "reviewed": true,
+      "context": "Button: block the business's requests (20 characters at most)"
+    },
+    "link.button_role_supplier": {
+      "text": "They supply us",
+      "reviewed": true,
+      "context": "Button: the other business supplies us (20 characters at most)"
+    },
+    "link.button_role_customer": {
+      "text": "They buy from us",
+      "reviewed": true,
+      "context": "Button: the other business buys from us (20 characters at most)"
+    },
+    "link.button_role_both": {
+      "text": "Both",
+      "reviewed": true,
+      "context": "Button: both ways (20 characters at most)"
+    },
+    "link.found_title": {
+      "text": "Businesses on Taskiem:",
+      "reviewed": true,
+      "context": "Heading of a numbered list of businesses found"
+    },
+    "link.found_linked": {
+      "text": "(linked)",
+      "reviewed": true,
+      "context": "After a business already linked"
+    },
+    "link.found_requested": {
+      "text": "(asked)",
+      "reviewed": true,
+      "context": "After a business asked already"
+    },
+    "link.found_asked_us": {
+      "text": "(asks you)",
+      "reviewed": true,
+      "context": "After a business that asked this one"
+    },
+    "link.found_pick": {
+      "text": "Send the number of the one to ask to link, or *cancel*.",
+      "reviewed": true,
+      "context": "After the list: pick one by its number"
+    },
+    "link.found_owner_only": {
+      "text": "An owner or admin can ask to link with these.",
+      "reviewed": true,
+      "context": "After the list, to someone who may not ask to link"
+    },
+    "link.found_none": {
+      "text": "No business on Taskiem that lets others find it matched {query}.",
+      "reviewed": true,
+      "context": "A search found no business; {query} is what was searched"
+    },
+    "link.pick_number": {
+      "text": "Send a number from the list, or *cancel*.",
+      "reviewed": true,
+      "context": "The reply was not a number from the list"
+    },
+    "link.which_role": {
+      "text": "How do you trade with *{name}*?",
+      "reviewed": true,
+      "context": "Asks the role; buttons They supply us, They buy from us, Both"
+    },
+    "link.which_role_blind": {
+      "text": "Ask whoever uses {shown} on Taskiem to link. How do you trade with them?",
+      "reviewed": true,
+      "context": "A request by phone number or address; asks the role"
+    },
+    "link.sent": {
+      "text": "Asked *{name}* to link. You will hear when they accept.",
+      "reviewed": true,
+      "context": "A request was sent to a business a search listed"
+    },
+    "link.blind_sent": {
+      "text": "If a business on Taskiem uses {shown}, it has your request. You will hear only if it accepts.",
+      "reviewed": true,
+      "context": "A request by phone or address: the same words whether or not a business is behind it"
+    },
+    "link.already": {
+      "text": "You are already linked with *{name}*.",
+      "reviewed": true,
+      "context": "Picked a business already linked"
+    },
+    "link.waiting": {
+      "text": "You asked *{name}* already. It waits for their answer.",
+      "reviewed": true,
+      "context": "Picked a business asked already"
+    },
+    "link.denied": {
+      "text": "Only an owner or admin of {org} can link with other businesses.",
+      "reviewed": true,
+      "context": "The person may not ask or answer for links"
+    },
+    "link.too_many": {
+      "text": "That is enough link requests for today. Try again tomorrow.",
+      "reviewed": true,
+      "context": "The daily limit of link requests"
+    },
+    "link.gone": {
+      "text": "That request is no longer waiting.",
+      "reviewed": true,
+      "context": "A button pressed on a request already answered or gone"
+    },
+    "link.done_accept": {
+      "text": "Linked with *{name}*. Send *links* to see your linked businesses.",
+      "reviewed": true,
+      "context": "Accepted a link request"
+    },
+    "link.done_decline": {
+      "text": "Declined. *{name}* is not told.",
+      "reviewed": true,
+      "context": "Declined a link request; the requester is never told"
+    },
+    "link.done_block": {
+      "text": "Blocked. Requests from *{name}* will not reach you.",
+      "reviewed": true,
+      "context": "Blocked a business's requests"
+    },
+    "link.accepted_title": {
+      "text": "{name} accepted your link",
+      "reviewed": true,
+      "context": "Notification title: the other business accepted"
+    },
+    "link.accepted_body": {
+      "text": "*{name}* accepted the link with {org}. Your businesses are linked on Taskiem.",
+      "reviewed": true,
+      "context": "To the requester's owners and admins: accepted"
+    },
+    "link.ended_title": {
+      "text": "{name} ended the link",
+      "reviewed": true,
+      "context": "Notification title: the other business ended the link"
+    },
+    "link.ended_body": {
+      "text": "*{name}* ended the link with {org}. What passed between you stays on both sides.",
+      "reviewed": true,
+      "context": "To the other side's owners and admins: the link ended"
+    },
+    "link.they_asked": {
+      "text": "*{name}* has asked you already. Send *links* to answer.",
+      "reviewed": true,
+      "context": "A business we tried to ask had asked us first"
+    },
+    "link.offer_line": {
+      "text": "{org} is on Taskiem too. Link with us: {url}",
+      "reviewed": true,
+      "context": "Added to the first invoice or order a business sends to another business on Taskiem; {url} opens the link request"
+    },
+    "link.button_offer": {
+      "text": "Link",
+      "reviewed": true,
+      "context": "Button on a document from a business on Taskiem: ask it to link (20 characters at most)"
+    },
+    "link.offer_open": {
+      "text": "Open {url} signed in to your business on Taskiem to link.",
+      "reviewed": true,
+      "context": "An offer's Link button tapped from a number no one is bound to"
+    },
+    "signup.findable": {
+      "text": "Other businesses on Taskiem can find you to trade with, by your name, what you sell and your area: send *find us* to let them, or *hide us*.",
+      "reviewed": true,
+      "context": "The last line of the sign-up: whether other businesses find this one (business links)"
+    },
+    "link.findable_on": {
+      "text": "Other businesses on Taskiem can now find {org} by its name, what it sells and its area. Send *hide us* to stop.",
+      "reviewed": true,
+      "context": "Turned findability on by chat"
+    },
+    "link.findable_off": {
+      "text": "Other businesses no longer find {org} by search. Someone with your phone number or link can still ask to link. Send *find us* to change it.",
+      "reviewed": true,
+      "context": "Turned findability off by chat"
+    },
+    "bill.arrived_title": {
+      "text": "A bill from {supplier}",
+      "reviewed": true,
+      "context": "Notification: a linked supplier's invoice arrived as a bill"
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* sent invoice {reference}: {amount} to pay. It is under Bills.",
+      "reviewed": true,
+      "context": "A bill arrived; {amount} is what is left to pay"
+    },
+    "bill.due_on": {
+      "text": "Due {date}.",
+      "reviewed": true,
+      "context": "When a bill is due"
+    },
+    "bill.denied": {
+      "text": "Only people who may see the invoices of {org} see its bills.",
+      "reviewed": true,
+      "context": "The person may not read bills"
+    },
+    "bill.not_found": {
+      "text": "No bill {reference}. Send *bills* to see them.",
+      "reviewed": true,
+      "context": "No bill with that number"
+    },
+    "bill.none": {
+      "text": "No bills to pay from linked suppliers.",
+      "reviewed": true,
+      "context": "No open bills"
+    },
+    "bill.list_title": {
+      "text": "Bills to pay:",
+      "reviewed": true,
+      "context": "Heading of the open bills"
+    },
+    "bill.list_line": {
+      "text": "• {reference} from {supplier}: {amount}",
+      "reviewed": true,
+      "context": "One open bill; {amount} is what is left to pay"
+    },
+    "bill.list_total": {
+      "text": "In all: {amount}",
+      "reviewed": true,
+      "context": "The total left to pay"
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* from *{supplier}*: {status}",
+      "reviewed": true,
+      "context": "A bill's first line"
+    },
+    "bill.detail_sums": {
+      "text": "Total {total} · paid {paid} · {due} to pay.",
+      "reviewed": true,
+      "context": "A bill's figures"
+    },
+    "bill.status.open": {
+      "text": "to pay",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.status.paying": {
+      "text": "being paid",
+      "reviewed": true,
+      "context": "A bill's status: a payment from Taskiem is on its way"
+    },
+    "bill.status.part_paid": {
+      "text": "part-paid",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.status.paid": {
+      "text": "paid",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.status.disputed": {
+      "text": "queried",
+      "reviewed": true,
+      "context": "A bill's status: the buyer queried it"
+    },
+    "bill.status.void": {
+      "text": "cancelled by the supplier",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.pay_into": {
+      "text": "Pay into {account} ({bank}) with {reference} in the transfer's note: it is counted towards that invoice by itself (without it, towards your oldest invoice first).",
+      "reviewed": true,
+      "context": "How to pay a bill: the account the supplier issued this business; the invoice number in the note counts it towards that invoice"
+    },
+    "bill.pay_page": {
+      "text": "Or pay by card or transfer on its page: {link}",
+      "reviewed": true,
+      "context": "A bill's payment page"
+    },
+    "bill.how.transfer": {
+      "text": "by transfer",
+      "reviewed": true,
+      "context": "How a payment outside Taskiem was made"
+    },
+    "bill.how.cash": {
+      "text": "in cash",
+      "reviewed": true,
+      "context": "How a payment outside Taskiem was made"
+    },
+    "bill.how.other": {
+      "text": "another way",
+      "reviewed": true,
+      "context": "How a payment outside Taskiem was made"
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} says it paid {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer says it paid outside Taskiem"
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* says it paid {amount} {how} for {reference}. It counts towards the invoice when the money reaches you and is matched.",
+      "reviewed": true,
+      "context": "A linked buyer says it paid outside Taskiem"
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} queried {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer queried an invoice"
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* queried {reference}: {note}. Money that does not name it is not counted towards it until you settle the query on the invoice.",
+      "reviewed": true,
+      "context": "A linked buyer queried an invoice"
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} settled your query on {reference}",
+      "reviewed": true,
+      "context": "Notification title: the seller settled a buyer's query"
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* settled your query on {reference}. {note}",
+      "reviewed": true,
+      "context": "The seller settled a buyer's query; {note} is what they said, or nothing"
+    },
+    "order.link.ordered_title": {
+      "text": "{from} sent order {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer sent the seller an order; {note} is its items and total"
+    },
+    "order.link.ordered": {
+      "text": "*{from}* ordered {note}. Accept, change or decline it in Taskiem.",
+      "reviewed": true,
+      "context": "A linked buyer sent the seller an order; {note} is its items and total"
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} cancelled {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer cancelled an order before the seller accepted it"
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* cancelled order {reference} before you accepted it.",
+      "reviewed": true,
+      "context": "A linked buyer cancelled an order before the seller accepted it"
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} asks to cancel {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer asks the seller to cancel an order already accepted"
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* asks to cancel order {reference}, which you accepted. Cancel it, or keep it.",
+      "reviewed": true,
+      "context": "A linked buyer asks the seller to cancel an order already accepted"
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} accepted your change to {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer accepted the seller's change to an order"
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* accepted your change to order {reference}. The order is accepted.",
+      "reviewed": true,
+      "context": "A linked buyer accepted the seller's change to an order"
+    },
+    "order.link.received_title": {
+      "text": "{from} received {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer confirmed it received all of a delivered order"
+    },
+    "order.link.received": {
+      "text": "*{from}* says all of order {reference} came.",
+      "reviewed": true,
+      "context": "A linked buyer confirmed it received all of a delivered order"
+    },
+    "order.link.short_title": {
+      "text": "{from} says not all of {reference} came",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer says a delivery was short; {note} is what it counted"
+    },
+    "order.link.short": {
+      "text": "*{from}* says not all of order {reference} came. They counted: {note}. Agree their count, or talk to them.",
+      "reviewed": true,
+      "context": "A linked buyer says a delivery was short; {note} is what it counted"
+    },
+    "order.link.accept_title": {
+      "text": "{from} accepted {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller accepted the buyer's order"
+    },
+    "order.link.accept": {
+      "text": "*{from}* accepted your order {reference}.",
+      "reviewed": true,
+      "context": "The linked seller accepted the buyer's order"
+    },
+    "order.link.decline_title": {
+      "text": "{from} declined {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller declined the buyer's order; {note} is their reason, or nothing"
+    },
+    "order.link.decline": {
+      "text": "*{from}* declined your order {reference}. {note}",
+      "reviewed": true,
+      "context": "The linked seller declined the buyer's order; {note} is their reason, or nothing"
+    },
+    "order.link.change_title": {
+      "text": "{from} asks to change {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller proposes a change to the buyer's order; {note} says it"
+    },
+    "order.link.change": {
+      "text": "*{from}* can supply order {reference} like this: {note}. Accept the change, or cancel the order.",
+      "reviewed": true,
+      "context": "The linked seller proposes a change to the buyer's order; {note} says it"
+    },
+    "order.link.ready_title": {
+      "text": "{reference} is ready",
+      "reviewed": true,
+      "context": "Notification title: the linked seller says the buyer's order is ready; {note} is their word, or nothing"
+    },
+    "order.link.ready": {
+      "text": "*{from}* says your order {reference} is ready. {note}",
+      "reviewed": true,
+      "context": "The linked seller says the buyer's order is ready; {note} is their word, or nothing"
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} is on its way",
+      "reviewed": true,
+      "context": "Notification title: the linked seller dispatched the buyer's order"
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* sent your order {reference} on its way. {note}",
+      "reviewed": true,
+      "context": "The linked seller dispatched the buyer's order"
+    },
+    "order.link.delivered_title": {
+      "text": "{from} delivered {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller delivered the buyer's order; {note} is what it delivered"
+    },
+    "order.link.delivered": {
+      "text": "*{from}* delivered your order {reference}: {note}. Tap All came, or Not all came, within a day; after that their count is taken.",
+      "reviewed": true,
+      "context": "The linked seller delivered the buyer's order; {note} is what it delivered"
+    },
+    "order.link.cancel_title": {
+      "text": "{from} cancelled {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller cancelled the buyer's accepted order"
+    },
+    "order.link.cancel": {
+      "text": "*{from}* cancelled your order {reference}. {note}",
+      "reviewed": true,
+      "context": "The linked seller cancelled the buyer's accepted order"
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} cancelled {reference} as you asked",
+      "reviewed": true,
+      "context": "Notification title: the linked seller agreed to the buyer's request to cancel"
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* agreed to cancel your order {reference}.",
+      "reviewed": true,
+      "context": "The linked seller agreed to the buyer's request to cancel"
+    },
+    "order.link.keep_title": {
+      "text": "{from} is keeping {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller declined the buyer's request to cancel"
+    },
+    "order.link.keep": {
+      "text": "*{from}* did not cancel your order {reference}. {note}",
+      "reviewed": true,
+      "context": "The linked seller declined the buyer's request to cancel"
+    },
+    "order.link.agree_title": {
+      "text": "{from} agreed your count for {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller agreed the buyer's count of a short delivery"
+    },
+    "order.link.agree": {
+      "text": "*{from}* agreed to your count of what came of order {reference}.",
+      "reviewed": true,
+      "context": "The linked seller agreed the buyer's count of a short delivery"
+    },
+    "order.link.button_accept": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "Button: accept a linked business's order (at most 20 characters)"
+    },
+    "order.link.button_decline": {
+      "text": "Decline",
+      "reviewed": true,
+      "context": "Button: decline a linked business's order (at most 20 characters)"
+    },
+    "order.link.button_all_came": {
+      "text": "All came",
+      "reviewed": true,
+      "context": "Button: everything a linked supplier delivered came (at most 20 characters)"
+    },
+    "order.link.done_accept": {
+      "text": "Accepted {reference}. They are told.",
+      "reviewed": true,
+      "context": "A linked business's order accepted from chat"
+    },
+    "order.link.done_decline": {
+      "text": "Declined {reference}. They are told.",
+      "reviewed": true,
+      "context": "A linked business's order declined from chat"
+    },
+    "order.link.done_all_came": {
+      "text": "Recorded: all of {reference} came. Your stock is up, and the supplier is told.",
+      "reviewed": true,
+      "context": "A linked delivery recorded as all came from chat"
+    },
+    "order.link.gone": {
+      "text": "That order has moved on; open it in Taskiem to see where it is.",
+      "reviewed": true,
+      "context": "A button pressed on a linked order already answered, or gone"
+    },
+    "order.link.denied": {
+      "text": "Only someone who manages orders for {org} can answer that.",
+      "reviewed": true,
+      "context": "The person may not answer linked orders for the business"
+    },
+    "order.link.open": {
+      "text": "{reason}. Open the order in Taskiem to do it.",
+      "reviewed": true,
+      "context": "A linked order's step needs the web; {reason} says why"
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} sent order {reference}, accepted",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer's order, accepted by itself as the seller set"
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* ordered {note}. It is accepted, as you set for them.",
+      "reviewed": true,
+      "context": "A linked buyer's order accepted by itself; {note} is its items and total"
+    },
+    "order.link.proposed_title": {
+      "text": "{from} drafted order {reference} for you",
+      "reviewed": true,
+      "context": "Notification title: a linked supplier drafted an order for the buyer"
+    },
+    "order.link.proposed": {
+      "text": "*{from}* drafted an order for you: {note}. Confirm it, or cancel it, in Taskiem.",
+      "reviewed": true,
+      "context": "A linked supplier drafted an order for the buyer; {note} is its items and total"
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} confirmed {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer confirmed an order the seller drafted for it"
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* confirmed order {reference}, which you drafted for them. It is accepted.",
+      "reviewed": true,
+      "context": "A linked buyer confirmed an order the seller drafted for it"
+    },
+    "order.link.message_title": {
+      "text": "{from} about {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller's order workflow sends the buyer a message about its order"
+    },
+    "chat.link.about": {
+      "text": "About {reference}:",
+      "reviewed": true,
+      "context": "Before a message replying about a document: \"About INV-0042: …\""
+    },
+    "chat.link.denied": {
+      "text": "Only someone who writes to linked businesses for {org} can send that.",
+      "reviewed": true,
+      "context": "The person may not write in conversations with linked businesses"
+    },
+    "chat.link.ask_what": {
+      "text": "What do you want to say to *{name}*? Send *ask {name}* and your message.",
+      "reviewed": true,
+      "context": "\"ask <business>\" with no message"
+    },
+    "chat.link.not_sent": {
+      "text": "Not sent: {reason}.",
+      "reviewed": true,
+      "context": "A message to a linked business could not be sent; {reason} says why"
+    },
+    "chat.link.sent": {
+      "text": "Sent to *{name}*. Their replies come here, and to Chat on the web.",
+      "reviewed": true,
+      "context": "A message to a linked business was sent from the phone"
+    },
+    "chat.link.photo": {
+      "text": "Photo",
+      "reviewed": true,
+      "context": "A photo sent in a conversation with a linked business, told on the phone"
+    },
+    "chat.link.voice": {
+      "text": "Voice note",
+      "reviewed": true,
+      "context": "A voice note sent in a conversation with a linked business, told on the phone"
+    },
+    "chat.link.file": {
+      "text": "File",
+      "reviewed": true,
+      "context": "A file (a PDF) sent in a conversation with a linked business, told on the phone"
+    },
+    "wa.prices.list": {
+      "text": "*{name}*'s prices for you:\n{items}\n\nOrder with *order 20 bags of rice from {name}*.",
+      "reviewed": true,
+      "context": "A linked supplier's price list in chat; {items} is one item per line"
+    },
+    "wa.prices.per": {
+      "text": "a {unit}",
+      "reviewed": true,
+      "context": "After a price: per unit, like \"a bag\""
+    },
+    "wa.prices.min": {
+      "text": "(at least {count})",
+      "reviewed": true,
+      "context": "After a price: the minimum quantity"
+    },
+    "wa.prices.out": {
+      "text": "(not available now)",
+      "reviewed": true,
+      "context": "After a price: the item cannot be ordered now"
+    },
+    "wa.prices.more": {
+      "text": "… and {count} more on the web.",
+      "reviewed": true,
+      "context": "The price list in chat is cut short"
+    },
+    "wa.prices.none": {
+      "text": "*{name}* shares no price list with you. Ask them to, or send *order from {name}*.",
+      "reviewed": true,
+      "context": "No linked supplier of that name shares prices"
+    },
+    "wa.prices.no_item": {
+      "text": "*{name}*'s prices have no *{item}*. Send *prices from {name}* to see them.",
+      "reviewed": true,
+      "context": "The item named is not on the supplier's price list"
+    },
+    "wa.prices.unlinked": {
+      "text": "Which of your items is their *{item}*? Say it once on the web, on {name}'s prices on the Suppliers page, and order again.",
+      "reviewed": true,
+      "context": "The buyer has not said which of its own items the supplier's item is"
+    },
+    "wa.prices.refused": {
+      "text": "Not drafted: {reason}.",
+      "reviewed": true,
+      "context": "An order from a price list could not be drafted; {reason} says why"
+    },
+    "wa.prices.how": {
+      "text": "Say how many, like *order 20 bags of rice from Dangote*.",
+      "reviewed": true,
+      "context": "How to order from a price list in chat"
+    },
+    "wa.mention.unlinked": {
+      "text": "You are not linked with *{name}*. Send *link with {name}* to ask them, then order from them.",
+      "reviewed": true,
+      "context": "A mention names a business not linked"
+    },
+    "wa.mention.how": {
+      "text": "Say how many of what from *{name}*, like *20 bags of rice from @{name}*.",
+      "reviewed": true,
+      "context": "A mention with nothing to order"
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* to *{supplier}*: {items}, {total}",
+      "reviewed": true,
+      "context": "One order drafted from a message naming several businesses"
+    },
+    "wa.mention.confirm": {
+      "text": "{count} orders, one per business:\n{orders}\n\nSend them all?",
+      "reviewed": true,
+      "context": "The orders drafted from a message naming businesses, asked before sending"
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} to *{supplier}*",
+      "reviewed": true,
+      "context": "One order sent"
+    },
+    "wa.mention.sent": {
+      "text": "Sent:\n{orders}",
+      "reviewed": true,
+      "context": "The orders sent from one yes"
+    },
+    "wa.mention.second": {
+      "text": "{references} are above your limit: another owner or admin sends them, from the Suppliers page.",
+      "reviewed": true,
+      "context": "Orders that need a second person to send them"
     }
   }
 }

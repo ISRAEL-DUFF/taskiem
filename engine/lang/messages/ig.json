@@ -3851,6 +3851,618 @@
     "wd.workflow.does": {
       "text": "Jiri ọrụ gị: {template}, nke {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "Iji jikọọ na azụmahịa ọzọ na Taskiem, ziga *link Dangote*, *who sells cement*, ma ọ bụ *link 0803 123 4567*.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "Ọ dịbeghị azụmahịa ejikọrọ. Ziga *who sells cement* ma ọ bụ *link Dangote* iji chọta otu.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Azụmahịa na Taskiem unu na ha na-azụ ahịa:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: ejikọrọ, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* na-arịọ ka ejikọọ",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: arịọla, na-echere ha",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: ha anabataghị",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: egbochiri ha",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: njikọ akwụsịla",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: ezigala arịrịọ",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "ha na-enye unu ngwaahịa",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "ha na-azụta n'aka unu",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "ha na-enye unu ngwaahịa ma na-azụtakwa n'aka unu",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} na-arịọ ka ejikọọ",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* na-arịọ ka ejikọọ ya na {org} na Taskiem ({role}). Ọ bụrụ na ejikọọ unu, akwụkwọ ụgwọ na ọda unu ga-eru ibe ha n'onwe ha. Ọ dịghị ihe a ga-ekerịta ruo mgbe ị nabatara.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Nabata",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "Jụ",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Gbochie",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Ha na-enye anyị",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Ha na-azụ n'aka anyị",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Ha abụọ",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Azụmahịa na Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(ejikọrọ)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(arịọla)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(ha arịọla gị)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Ziga nọmba nke ị chọrọ ijikọ, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Ọ bụ onye nwe ya ma ọ bụ onye nchịkwa nwere ike ịrịọ ijikọ ha.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "Ọ dịghị azụmahịa na Taskiem a na-achọta kwekọrọ na {query}.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Ziga otu nọmba site na ndepụta, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "Kedu ka unu na *{name}* si azụ ahịa?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Rịọ onye ọ bụla na-eji {shown} na Taskiem ka ejikọọ. Kedu ka unu na ha si azụ ahịa?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "Arịọla *{name}* ka ejikọọ. Ị ga-anụ mgbe ha nabatara.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "Ọ bụrụ na azụmahịa na Taskiem na-eji {shown}, o nwetala arịrịọ gị. Ị ga-anụ naanị ma ọ nabata.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "Unu ejikọọla na *{name}*.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "Ị jụọla *{name}*. Ọ na-echere azịza ha.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Naanị onye nwe {org} ma ọ bụ onye nchịkwa nwere ike ijikọ na azụmahịa ndị ọzọ.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Arịrịọ njikọ ezuola maka taa. Nwaa ọzọ echi.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "Arịrịọ ahụ anaghị echere ọzọ.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "Ejikọọla na *{name}*. Ziga *links* iji hụ azụmahịa ejikọrọ.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "Ajụla. A gaghị agwa *{name}*.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "Egbochiela. Arịrịọ sitere na *{name}* agaghị eru gị.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} anabatala njikọ gị",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* anabatala njikọ ya na {org}. Ejikọọla azụmahịa unu na Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} akwụsịla njikọ",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* akwụsịla njikọ ya na {org}. Ihe gafere n'etiti unu ga-anọ n'akụkụ abụọ.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* ajụọla gị. Ziga *links* iji zaa.",
+      "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} nọkwa na Taskiem. Jikọọ anyị: {url}",
+      "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Jikọọ",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Mepee {url} mgbe ị banyere n'azụmahịa gị na Taskiem iji jikọọ.",
+      "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Azụmahịa ndị ọzọ na Taskiem nwere ike ịchọta unu iji zụọ ahịa, site n'aha unu, ihe unu na-ere na mpaghara unu: ziga *find us* ka ha chọta unu, ma ọ bụ *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Azụmahịa ndị ọzọ na Taskiem nwere ike ịchọta {org} ugbu a site n'aha ya, ihe ọ na-ere na mpaghara ya. Ziga *hide us* iji kwụsị ya.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Azụmahịa ndị ọzọ agaghị ahụ {org} na nchọta ọzọ. Onye nwere nọmba ekwentị gị ma ọ bụ njikọ gị ka nwere ike ịrịọ. Ziga *find us* iji gbanwee ya.",
+      "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Akwụkwọ ụgwọ sitere na {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* zitere akwụkwọ ụgwọ {reference}: {amount} ị ga-akwụ. Ọ dị n'okpuru Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "Ụbọchị ịkwụ ụgwọ: {date}.",
+      "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Naanị ndị nwere ike ịhụ akwụkwọ ụgwọ {org} na-ahụ bills ya.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "Enweghị bill {reference}. Ziga *bills* iji hụ ha.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "Enweghị bill ị ga-akwụ site n'aka ndị na-enye ngwaahịa ejikọrọ.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills ị ga-akwụ:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} sitere na {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Ha niile: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* sitere na *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Ngụkọta {total} · akwụọla {paid} · {due} ị ga-akwụ.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "ị ga-akwụ",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "a na-akwụ ya",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "akwụọla ụfọdụ",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "akwụọla",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "ajụọla ajụjụ",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "onye na-enye ngwaahịa kagburu ya",
+      "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Kwụọ n'ime {account} ({bank}) ma tinye {reference} na ndetu nnyefe: a ga-agụ ya maka akwụkwọ ụgwọ ahụ n'onwe ya (na-enweghị ya, maka nke kacha ochie bụ ụzọ).",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Ma ọ bụ kwụọ site na kaadị ma ọ bụ nnyefe n'ibe ya: {link}",
+      "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "site na nnyefe",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "ụzọ ọzọ",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} kwuru na ọ kwụọla {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* kwuru na ọ kwụọla {amount} {how} maka {reference}. A ga-agụ ya mgbe ego ahụ ruru gị ma jikọọ ya.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} jụrụ ajụjụ maka {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* jụrụ ajụjụ maka {reference}: {note}. Ego na-akpọghị ya aha agaghị agụ maka ya ruo mgbe i doziri ajụjụ ahụ n'akwụkwọ ụgwọ.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} edozila ajụjụ gị maka {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* edozila ajụjụ gị maka {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} zitere iwu {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* nyere iwu {note}. Nabata ya, gbanwee ya ma ọ bụ jụ ya na Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} kagburu {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* kagburu iwu {reference} tupu unu anabata ya.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} na-arịọ ka a kagbuo {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* na-arịọ ka unu kagbuo iwu {reference} unu nabatara. Kagbuo ya, ma ọ bụ debe ya.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} nabatara mgbanwe unu na {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* nabatara mgbanwe unu mere n'iwu {reference}. A nabatala iwu ahụ.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} natara {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* kwuru na ihe niile dị n'iwu {reference} rutere.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} kwuru na ọ bụghị ihe niile dị na {reference} rutere",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* kwuru na ọ bụghị ihe niile dị n'iwu {reference} rutere. Ihe ha gụrụ: {note}. Kwenye na ọnụ ọgụgụ ha, ma ọ bụ gwa ha okwu.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} nabatara {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* nabatara iwu unu {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} jụrụ {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* jụrụ iwu unu {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} chọrọ ịgbanwe {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* nwere ike iweta iwu {reference} otu a: {note}. Nabata mgbanwe ahụ, ma ọ bụ kagbuo iwu ahụ.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} adịla njikere",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* kwuru na iwu unu {reference} adịla njikere. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} nọ n'ụzọ",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* ezipụla iwu unu {reference}, ọ nọ n'ụzọ. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} ebutela {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* ebutela iwu unu {reference}: {note}. Pịa All came, ma ọ bụ Not all came, n'ime otu ụbọchị; mgbe nke ahụ gasịrị, a ga-ewere ọnụ ọgụgụ ha.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} kagburu {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* kagburu iwu unu {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} kagburu {reference} dịka unu rịọrọ",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* kwenyere ịkagbu iwu unu {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} akagbughị {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* akagbughị iwu unu {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} kwenyere ọnụ ọgụgụ unu maka {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* kwenyere ọnụ ọgụgụ unu nke ihe rutere n'iwu {reference}.",
+      "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Nabata",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Jụ",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Ihe niile rutere",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "A nabatala {reference}. A gwala ha.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "A jụla {reference}. A gwala ha.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "Edere ya: ihe niile dị na {reference} rutere. Ngwongwo unu abawanyela, a gwakwala onye na-ebubata ya.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "Iwu ahụ agafeela nke ahụ; mepee ya na Taskiem ka ị hụ ebe ọ dị.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Ọ bụ naanị onye na-elekọta iwu maka {org} nwere ike ịza nke a.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Mepee iwu ahụ na Taskiem ka ị mee ya.",
+      "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} zitere iwu {reference}, a nabatala ya",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* nyere iwu {note}. A nabatala ya, dịka unu siri tọọ ya maka ha.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} deere unu iwu {reference}",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* deere unu iwu: {note}. Kwenye ya, ma ọ bụ kagbuo ya, na Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} kwenyere {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* kwenyere iwu {reference} unu deere ha. A nabatala ya.",
+      "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} gbasara {reference}",
+      "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "Gbasara {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Ọ bụ naanị onye na-edegara azụmahịa ejikọrọ ọnụ maka {org} nwere ike iziga nke a.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Ziga *ask {name}* na ozi gị.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "Ezigaghị ya: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "Ezigala ya *{name}*. Azịza ha ga-abịa ebe a, na Chat na weebụ.",
+      "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Foto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Ozi olu",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "Faịlụ",
+      "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "Ọnụahịa *{name}* maka gị:\n{items}\n\nNye iwu dịka: *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "maka otu {unit}",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(opekata mpe {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(adịghị ugbu a)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… na {count} ọzọ na weebụ.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* ekesaghị ndepụta ọnụahịa gị. Jụọ ha, ma ọ bụ zipu *order from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "*{item}* adịghị na ọnụahịa *{name}*. Zipu *prices from {name}* ka ịhụ ha.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Kedu n'ime ngwa gị bụ *{item}* ha? Kwuo ya otu ugboro na weebụ, n'ọnụahịa {name} na ibe Suppliers, wee nye iwu ọzọ.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "E deghị ya: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Kwuo ole, dịka *order 20 bags of rice from Dangote*.",
+      "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "Ị jikọtaghị na *{name}*. Zipu *link with {name}* ka ịjụ ha, wee nye ha iwu.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Kwuo ole na ihe ị chọrọ n'aka *{name}*, dịka *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* nye *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "Iwu {count}, otu maka azụmahịa ọ bụla:\n{orders}\n\nM ziga ha niile?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} nye *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "E zigara:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} karịrị oke gị: onye nwe ọzọ ma ọ bụ admin ga-eziga ha, site na ibe Suppliers.",
+      "reviewed": false
     }
   }
 }

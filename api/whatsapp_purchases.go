@@ -114,7 +114,8 @@ func (s *Server) sendSupplierItem(ctx context.Context, it whatsapp.OutboxItem) e
 		return fmt.Errorf("%w: %w", whatsapp.ErrNothingToSend, err)
 	}
 	var x stock.Purchase
-	var addr, business string
+	var addr, business, offer string
+	var offerButton *whatsapp.Button
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		var err error
 		if x, err = stock.PurchaseTx(ctx, tx, it.Tenant, *it.Run, false); err != nil {
@@ -123,7 +124,14 @@ func (s *Server) sendSupplierItem(ctx context.Context, it whatsapp.OutboxItem) e
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, it.Tenant).Scan(&business); err != nil {
 			return err
 		}
-		addr, err = s.Purchases.Book.AddressTx(ctx, tx, it.Tenant, reach.Target{Channel: it.Channel, Contact: *it.Contact})
+		if addr, err = s.Purchases.Book.AddressTx(ctx, tx, it.Tenant, reach.Target{Channel: it.Channel, Contact: *it.Contact}); err != nil {
+			return err
+		}
+		// A supplier that is a business on Taskiem is offered a link with
+		// the first order (business links, links.go).
+		if x.Status == stock.Sent {
+			offer, offerButton, err = s.linkOfferChat(ctx, tx, it.Tenant, it.Channel, addr, s.chooseLang(ctx, it.Tenant, addr, "").Tag)
+		}
 		return err
 	})
 	switch {
@@ -137,11 +145,17 @@ func (s *Server) sendSupplierItem(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	l := s.chooseLang(ctx, it.Tenant, addr, "").Tag
 	text := supplierOrderText(l, x)
+	if offer != "" {
+		text += "\n\n" + offer
+	}
 	b := purchaseButton{Tenant: it.Tenant, Purchase: x.ID, Contact: *it.Contact}
-	buttons := make([]whatsapp.Button, 0, 2)
+	buttons := make([]whatsapp.Button, 0, 3)
 	for _, a := range []byte{'c', 'x'} {
 		b.Action = a
 		buttons = append(buttons, whatsapp.Button{ID: signPurchaseButton(key, b), Title: tr(l, "supplier.btn."+purchaseActions[a])})
+	}
+	if offerButton != nil {
+		buttons = append(buttons, *offerButton)
 	}
 	tpl := whatsapp.TplUpdate
 	m := whatsapp.Message{Tenant: it.Tenant, Buttons: buttons, Text: ch.Prefix(business) + text, Template: &tpl,
@@ -340,6 +354,12 @@ func (s *Server) waPurchaseCommand(ctx context.Context, c *chat, text, cmd strin
 	if !s.Purchases.Ready() || !s.Stock.Ready() {
 		return false, nil
 	}
+	// "Buy 400 bags of cement from @Dangote and … from @Cherry" (mentions.go).
+	if strings.Contains(text, "@") {
+		if done, err := s.waMentionOrder(ctx, c, text); done || err != nil {
+			return true, err
+		}
+	}
 	switch {
 	case cmd == "suppliers" || cmd == "my suppliers":
 		return true, s.waSuppliers(ctx, c)
@@ -347,6 +367,10 @@ func (s *Server) waPurchaseCommand(ctx context.Context, c *chat, text, cmd strin
 		return true, s.waAddSupplier(ctx, c, addSupplierRe.FindStringSubmatch(text))
 	case strings.HasPrefix(cmd, "add supplier"):
 		return true, c.say(ctx, s, c.t("wa.supplier.how"))
+	case pricesFromRe.MatchString(text):
+		return true, s.waPricesFrom(ctx, c, pricesFromRe.FindStringSubmatch(text)[1])
+	case orderItemRe.MatchString(text):
+		return true, s.waOrderItem(ctx, c, orderItemRe.FindStringSubmatch(text))
 	case orderFromRe.MatchString(text):
 		return true, s.waOrderFrom(ctx, c, orderFromRe.FindStringSubmatch(text)[1])
 	case receivedRe.MatchString(text):
@@ -667,6 +691,11 @@ func (s *Server) waPurchaseApply(ctx context.Context, c *chat) error {
 			s.Logger.Warn("stock: sending an order", "err", err)
 		}
 		msg = c.t("wa.order.sent", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier))
+	case "stock_orders":
+		var err error
+		if msg, err = s.sendDrafted(ctx, c, pc.Drafted); err != nil {
+			return s.purchaseChatFail(ctx, c, err)
+		}
 	case "stock_receive":
 		x, err := s.Purchases.Receive(s.waTablesCtx(ctx, c), c.tenant.ID, pc.Purchase, map[string]int64{pc.Item: pc.Quantity}, c.p.Actor(), key)
 		if err != nil {

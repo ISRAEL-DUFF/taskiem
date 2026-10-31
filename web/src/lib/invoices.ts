@@ -65,6 +65,8 @@ export interface InvoicePayment {
 
 /** One invoice (CustomerInvoice). */
 export interface CustomerInvoice {
+  /** A linked buyer queried it (business links): oldest-first matching passes over it. */
+  disputed?: boolean;
   id: string;
   number: string;
   status: InvoiceStatus;
@@ -360,6 +362,9 @@ export interface ItemInput {
 
 /** A draft as the form holds it: text as typed. */
 export interface InvoiceForm {
+  /** A linked business the invoice is for (business links): its id. Its
+   * invoice reaches it as a bill, so no phone or email is needed. */
+  linked?: string;
   name: string;
   phone: string;
   email: string;
@@ -394,6 +399,9 @@ export function newInvoiceForm(s?: Pick<InvoiceSettings, "fee_paid_by" | "allow_
   };
 }
 
+/** The key that names a linked business as an invoice's customer. */
+export const LINK_KEY = "link:";
+
 /** A draft's form: one line of quantity 1 is a single amount. */
 export function formFromInvoice(x: CustomerInvoice): InvoiceForm {
   const lines = x.lines ?? [];
@@ -411,6 +419,7 @@ export function formFromInvoice(x: CustomerInvoice): InvoiceForm {
     connection: x.connection ?? "",
     feePaidBy: x.fee_paid_by ?? "business",
     partPayments: !!x.allow_part_payments,
+    ...(x.customer.key?.startsWith(LINK_KEY) ? { linked: x.customer.key.slice(LINK_KEY.length) } : {}),
   };
 }
 
@@ -442,7 +451,7 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export function invoiceProblem(f: InvoiceForm): string | null {
   if (!f.name.trim()) return "Give the customer's name.";
   if (f.name.trim().length > INVOICE_LIMITS.name) return `The customer's name is at most ${INVOICE_LIMITS.name} characters.`;
-  if (!f.phone.trim() && !f.email.trim()) return "Give the customer's phone number or email, or both, so the invoice can be sent.";
+  if (!f.linked && !f.phone.trim() && !f.email.trim()) return "Give the customer's phone number or email, or both, so the invoice can be sent.";
   if (f.email.trim() && !EMAIL.test(f.email.trim())) return "The email does not look right.";
   if (f.mode === "amount") {
     const k = toKobo(f.amount);
@@ -469,8 +478,11 @@ export function invoiceProblem(f: InvoiceForm): string | null {
 /** The POST/PUT body for the form. Call it once invoiceProblem is null. */
 export function draftRequest(f: InvoiceForm): InvoiceDraft {
   const customer: InvoiceCustomer = { name: f.name.trim() };
-  if (f.phone.trim()) customer.phone = f.phone.trim();
-  if (f.email.trim()) customer.email = f.email.trim();
+  if (f.linked) customer.key = LINK_KEY + f.linked;
+  else {
+    if (f.phone.trim()) customer.phone = f.phone.trim();
+    if (f.email.trim()) customer.email = f.email.trim();
+  }
   const d: InvoiceDraft = { customer };
   if (f.mode === "amount") {
     d.amount_kobo = toKobo(f.amount) ?? 0;

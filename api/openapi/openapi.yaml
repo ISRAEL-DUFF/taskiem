@@ -121,6 +121,9 @@ tags:
 - name: Invoices
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
+- name: Links
+  description: Links with other businesses on Taskiem, made with both sides' consent (decision 0061).
+  x-taskiem-guide: spec/business-links
 - name: Schools
   description: "The Schools area: classes, sessions and terms, students, families, enrollments, importing students and promotion."
   x-taskiem-guide: schools
@@ -5122,6 +5125,2206 @@ paths:
                     type: integer
         default:
           $ref: '#/components/responses/Error'
+  /v1/links:
+    get:
+      operationId: listLinks
+      tags:
+      - Links
+      summary: The business's links and link requests
+      description: Linked businesses and requests as this business may see them (docs/spec/business-links.md), requests waiting for its answer first. A request it sent is shown as waiting until accepted, whatever the other side did; one sent blind, by phone number or address, is listed under sent until it is accepted.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The links and the requests sent blind
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [links, sent]
+                properties:
+                  links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BusinessLink'
+                  sent:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BlindLinkRequest'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: requestLink
+      tags:
+      - Links
+      summary: Ask a business to link
+      description: 'Name a business a search listed, or send blind to whoever uses a phone number (an owner''s linked number or a business''s own WhatsApp number) or a storefront address. A blind request answers 202 with the same words whether or not a business is behind it. At most 20 requests a day (409).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                business:
+                  type: [string, 'null']
+                  format: uuid
+                  description: A business from a search
+                code:
+                  type: string
+                  description: A link code a business prints (its link settings' code); the business need not be findable
+                phone:
+                  type: string
+                address:
+                  type: string
+                  description: A storefront's address (its slug)
+                role:
+                  type: string
+                  enum: [supplier, customer, both]
+                  description: 'How we trade with them: supplier (they supply us), customer (they buy from us), or both'
+      responses:
+        '201':
+          description: 'The request, to a business a search listed; sent is false when nothing was sent: already linked, or they asked us first (answer theirs)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkRequestResult'
+        '202':
+          description: A request sent blind
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkRequestResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/search:
+    get:
+      operationId: searchLinks
+      tags:
+      - Links
+      summary: Search businesses on Taskiem
+      description: 'By name, by what they sell or do, and by area, among businesses that let themselves be found, from their published storefront card and catalogue only. A phone number is never searched: it answers one row (blind) that sends a request on a tap and looks the same whether or not a business is behind it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 100
+      responses:
+        '200':
+          description: The businesses found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkCard'
+                  blind:
+                    type: object
+                    additionalProperties: false
+                    required: [kind, shown]
+                    properties:
+                      kind:
+                        type: string
+                        enum: [phone]
+                      shown:
+                        type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/code/{code}:
+    get:
+      operationId: linkByCode
+      tags:
+      - Links
+      summary: The business behind a link code
+      description: What the page a link code opens shows before asking to link. 404 for an unknown code, or our own.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The business
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [business, name, state]
+                properties:
+                  business:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  slug:
+                    type: string
+                  state:
+                    type: string
+                    enum: [none, active, ended, requested, not_accepted, asked_us, blocked]
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/{id}/{answer}:
+    post:
+      operationId: answerLink
+      tags:
+      - Links
+      summary: Accept, decline, block, unblock, cancel or end a link
+      description: 'As the side allowed to: accept and decline a request made to us; block a request or a link (a block is never told); unblock; cancel a request we made; end a link. Audited in both businesses where the other side may know of it. 409 when the link is not in a state for that answer.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: answer
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [accept, decline, block, unblock, cancel, end]
+      responses:
+        '200':
+          description: The link as we now see it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessLink'
+        '204':
+          description: Done, and the link is no longer shown to us (declined, cancelled or unblocked)
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/sent/{id}:
+    delete:
+      operationId: cancelBlindLink
+      tags:
+      - Links
+      summary: Take a request sent blind off the list
+      description: A request that reached a business stays with it until answered or expired; we cannot know whether it did.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills:
+    get:
+      operationId: listBills
+      tags:
+      - Links
+      summary: The business's bills from linked suppliers
+      description: 'Each a linked supplier''s invoice, mirrored: its number, lines, total, due date and what the supplier''s match has counted paid are the supplier''s. Those still to pay first, by due date.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [open, paid, void, all]
+          default: open
+      responses:
+        '200':
+          description: The bills
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [bills]
+                properties:
+                  bills:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/pay:
+    get:
+      operationId: getBillPay
+      tags:
+      - Links
+      summary: How bills are paid from Taskiem
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      responses:
+        '200':
+          description: The settings; workflow_id is null until set up
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [workflow_id, connection, funding_account, approver_role]
+                properties:
+                  workflow_id:
+                    type: [string, 'null']
+                    format: uuid
+                  connection:
+                    type: string
+                  funding_account:
+                    type: string
+                  approver_role:
+                    type: string
+                  waiting:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/pay/setup:
+    put:
+      operationId: setupBillPay
+      tags:
+      - Links
+      summary: Set up paying bills from Taskiem
+      description: The payments account bills are paid from (Taskiem's own wallet when left out) and who approves, written into a managed workflow made from the pay-linked-bill template, under the business's governance.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                rail_connection:
+                  type: string
+                funding_account:
+                  type: string
+                approver_role:
+                  type: string
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [workflow_id, connection, funding_account, approver_role]
+                properties:
+                  workflow_id:
+                    type: [string, 'null']
+                    format: uuid
+                  connection:
+                    type: string
+                  funding_account:
+                    type: string
+                  approver_role:
+                    type: string
+                  waiting:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}/pay:
+    post:
+      operationId: payBill
+      tags:
+      - Links
+      summary: Pay a bill from Taskiem
+      description: 'A payout to the account the supplier issued the business, through the managed workflow: the name on the account found, approved under the business''s policy, paid once carrying the bill''s token (its reference and a short code), which the supplier''s Taskiem reads to count it towards the invoice. The supplier''s bank is found by name among the banks the payments account pays; with no single match it is refused (409). The bill is paying until the bank confirms or refuses, or the payment is rejected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                  description: A part payment, where the supplier takes parts; left out, what is left
+      responses:
+        '202':
+          description: The payment, under way
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [payment, run_id]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/BillPayment'
+                  run_id:
+                    type: string
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}/declare:
+    post:
+      operationId: declareBillPaid
+      tags:
+      - Links
+      summary: Say a bill was paid outside Taskiem
+      description: The business's own word, kept beside what the supplier counted (declared_paid_kobo), never in paid_kobo; the supplier is told.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo, how]
+              properties:
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                how:
+                  type: string
+                  enum: [transfer, cash, other]
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}/query:
+    post:
+      operationId: queryBill
+      tags:
+      - Links
+      summary: Query a bill
+      description: 'The bill is queried: not paid from Taskiem until the query is settled, and the supplier''s invoice is passed over by its oldest-first matching (money that names it still pays it). The supplier is told the reason.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/invoices/{id}/settle-query:
+    post:
+      operationId: settleInvoiceQuery
+      tags:
+      - Invoices
+      summary: Settle a linked buyer's query on an invoice
+      description: As it stands, or with an amount taken off (an amendment of the invoice, which its bill follows); the invoice is matched oldest-first again and the buyer's bill is no longer queried; the buyer is told, and both conversations show it. 409 when it is not queried.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                how:
+                  type: string
+                  enum: [as_it_stands, discount]
+                  description: as_it_stands (the default; note says why), or discount (amount_kobo off the invoice as an amendment, note its reason)
+                amount_kobo:
+                  type: integer
+                  minimum: 1
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Settled
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [number, settled]
+                properties:
+                  number:
+                    type: string
+                  settled:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders:
+    get:
+      operationId: listTradeOrders
+      tags:
+      - Links
+      summary: Orders from linked businesses
+      description: Purchase orders linked businesses sent us, as orders; those still needing us first, then the newest.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: open
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Only those still needing us
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: placeTradeOrder
+      tags:
+      - Links
+      summary: Draft an order for a linked business that buys from us
+      description: It reaches them as a purchase order to us waiting for their Confirm, and goes no further until then. 409 when they have not marked us as their supplier on Taskiem.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [link, lines]
+              properties:
+                link:
+                  type: string
+                  format: uuid
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [quantity]
+                    properties:
+                      item_id:
+                        type: string
+                        description: One of our items, at its price unless price_kobo is given
+                      item:
+                        type: string
+                      unit:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      price_kobo:
+                        type: integer
+                        minimum: 1
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: The order, proposed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders/{id}:
+    get:
+      operationId: getTradeOrder
+      tags:
+      - Links
+      summary: One order from a linked business
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The order's id, or the buyer's reference
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders/{id}/lines/{line}/item:
+    put:
+      operationId: setTradeLineItem
+      tags:
+      - Links
+      summary: Say which of our items a line of a new order is
+      description: Remembered for the link's next orders; the line takes our price. 409 once the order is no longer new.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: line
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [item_id]
+              properties:
+                item_id:
+                  type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders/{id}/{step}:
+    post:
+      operationId: tradeOrderStep
+      tags:
+      - Links
+      summary: Take a step on an order from a linked business
+      description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: step
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [accept, decline, change, ready, dispatched, delivered, cancel, keep, agree]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                lines:
+                  type: array
+                  description: change only, one per line in order (quantity 0 cannot be supplied)
+                  items:
+                    $ref: '#/components/schemas/TradeOrderLine'
+                delivered:
+                  type: array
+                  description: delivered only, what was delivered of each line (default, all of it)
+                  items:
+                    type: integer
+                    minimum: 0
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order, short]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+                  short:
+                    type: array
+                    description: On accept, our items there was too little stock of
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/{id}/trade:
+    get:
+      operationId: getLinkTrade
+      tags:
+      - Links
+      summary: When a linked business's orders are invoiced
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: How we trade with the link's orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [invoice_at, auto_accept]
+                properties:
+                  invoice_at:
+                    type: string
+                    enum: [accepted, delivered]
+                  auto_accept:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLinkTrade
+      tags:
+      - Links
+      summary: Choose how a linked business's orders are handled
+      description: When their invoice is raised, at acceptance or once the delivery is received (the default), and whether they are accepted by themselves when they arrive priced (off by default). A PUT changes only what it names.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                invoice_at:
+                  type: string
+                  enum: [accepted, delivered]
+                auto_accept:
+                  type: boolean
+                  description: Accept its orders by themselves when they arrive priced
+      responses:
+        '200':
+          description: How we trade with the link's orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [invoice_at, auto_accept]
+                properties:
+                  invoice_at:
+                    type: string
+                    enum: [accepted, delivered]
+                  auto_accept:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}:
+    get:
+      operationId: getBill
+      tags:
+      - Links
+      summary: One bill
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The bill's id, or its invoice's number
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats:
+    get:
+      operationId: listLinkChats
+      tags:
+      - Links
+      summary: Conversations with linked businesses
+      description: One per linked business (and per ended link that has messages), the newest first, with its last message, how many are unread, and whether the business muted or archived it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [conversations]
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkConversation'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/search:
+    get:
+      operationId: searchLinkChats
+      tags:
+      - Links
+      summary: Messages that say something, across conversations
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The messages, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/thread:
+    get:
+      operationId: linkThread
+      tags:
+      - Links
+      summary: A document's thread
+      description: The cards of one of our documents (an order, a purchase order, an invoice or a bill) in a conversation, and the replies quoting them.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: doc
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [order, purchase, invoice, bill]
+      - name: reference
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The messages, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}:
+    put:
+      operationId: putLinkChat
+      tags:
+      - Links
+      summary: Mute or archive a conversation
+      description: Muted, the business's people are not told of its messages on their phones; archived, it is off the list until unarchived; pinned, it is at the top of the list (up to three, the last pinned first; a fourth is refused with 409). A PUT changes only what it names.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                muted:
+                  type: boolean
+                archived:
+                  type: boolean
+                pinned:
+                  type: boolean
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [link]
+                properties:
+                  link:
+                    type: string
+                    format: uuid
+                  muted:
+                    type: [boolean, 'null']
+                  archived:
+                    type: [boolean, 'null']
+                  pinned:
+                    type: [boolean, 'null']
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages:
+    get:
+      operationId: linkMessages
+      tags:
+      - Links
+      summary: A page of a conversation
+      description: Oldest first; before (older), after (newer, to follow an open conversation), q (the messages saying it).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: after
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: q
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: The messages, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+                  typing:
+                    type: boolean
+                    description: Someone on the other side is typing now
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: sendLinkMessage
+      tags:
+      - Links
+      summary: Send a message to a linked business
+      description: Written in both businesses at once; its people who write to linked businesses are told on their phones unless they muted the conversation. reply_to quotes a message, and a card's makes it a reply about that card's document.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                reply_to:
+                  type: string
+                  format: uuid
+                mentions:
+                  type: array
+                  maxItems: 10
+                  description: 'Each a business you are linked with ({kind: business, link}) or an item of this conversation''s price list ({kind: item, item_id}), named in the text as @Name or #Name; one the text does not name is left out.'
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [kind]
+                    properties:
+                      kind:
+                        type: string
+                        enum: [business, item]
+                      link:
+                        type: string
+                        format: uuid
+                      item_id:
+                        type: string
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists:
+    get:
+      operationId: listPriceLists
+      tags:
+      - Links
+      summary: Your price lists
+      description: 'Price lists built on your own stock items, with the linked buyers each is shared with.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPriceList
+      tags:
+      - Links
+      summary: Make a price list
+      description: 'An empty list, by name.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [list]
+                properties:
+                  list:
+                    $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists/{id}:
+    patch:
+      operationId: renamePriceList
+      tags:
+      - Links
+      summary: Rename a price list
+      description: 'The buyers it is shared with see the new name.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePriceList
+      tags:
+      - Links
+      summary: Delete a price list
+      description: 'Withdrawn from every buyer it was shared with.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists/{id}/items:
+    put:
+      operationId: putPriceListItems
+      tags:
+      - Links
+      summary: Set a price lists items
+      description: 'Replaces the items: each one of your own stock items, with the price a linked buyer pays, a minimum quantity (1 by default) and whether it is available (yes by default). The buyers it is shared with see the change at once; an open order keeps its prices.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, price_kobo]
+                    properties:
+                      item_id:
+                        type: string
+                      price_kobo:
+                        type: integer
+                        minimum: 1
+                      min_quantity:
+                        type: integer
+                        minimum: 1
+                      available:
+                        type: boolean
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists/{id}/links:
+    put:
+      operationId: sharePriceList
+      tags:
+      - Links
+      summary: Share a price list
+      description: 'Exactly the linked buyers named: a link has one list, so one shared with another moves here, and one not named is withdrawn.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [links]
+              properties:
+                links:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-prices/{link}:
+    get:
+      operationId: getLinkPrices
+      tags:
+      - Links
+      summary: What one linked buyer sees
+      description: 'Its list at its prices, its own prices marked overridden.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [link, items]
+                properties:
+                  link:
+                    type: string
+                    format: uuid
+                  list:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLinkPrices
+      tags:
+      - Links
+      summary: Set one linked buyers own prices
+      description: 'prices maps your item to its price for this buyer; an item not named has the lists price.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prices]
+              properties:
+                prices:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    minimum: 1
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [link, items]
+                properties:
+                  link:
+                    type: string
+                    format: uuid
+                  list:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/supplier-prices:
+    get:
+      operationId: listSupplierPrices
+      tags:
+      - Links
+      summary: Your linked suppliers prices
+      description: 'The price lists linked suppliers share with you, at your prices (?link= for one).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: link
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [suppliers]
+                properties:
+                  suppliers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SupplierPrices'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/supplier-prices/{link}/order:
+    post:
+      operationId: orderFromPrices
+      tags:
+      - Links
+      summary: Order from a suppliers price list
+      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [lines]
+              properties:
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [seller_item_id, quantity]
+                    properties:
+                      seller_item_id:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      item_id:
+                        type: string
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [purchase]
+                properties:
+                  purchase:
+                    type: object
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/item-links/{link}:
+    get:
+      operationId: listItemLinks
+      tags:
+      - Links
+      summary: Your item links with a supplier
+      description: 'Which of your own items each of a linked suppliers items is.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [item_links]
+                properties:
+                  item_links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemLink'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putItemLink
+      tags:
+      - Links
+      summary: Link one of your items to a suppliers
+      description: 'Its orders then reach the supplier as that item. One each way: a link made again replaces the old one.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [item_id, seller_item_id]
+              properties:
+                item_id:
+                  type: string
+                seller_item_id:
+                  type: string
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [item_links]
+                properties:
+                  item_links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemLink'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/item-links/{link}/{item}:
+    delete:
+      operationId: deleteItemLink
+      tags:
+      - Links
+      summary: Unlink one of your items
+      description: ''
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: item
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/taskiem-chat:
+    get:
+      operationId: taskiemHistory
+      tags:
+      - Links
+      summary: Your conversation with Taskiem
+      description: 'The person''s own conversation with Taskiem in this business, on every channel (WhatsApp, Telegram, Slack and the web), oldest first: the newest page, before (older) or after (newer, to follow it). Kept for TASKIEM_CHAT_HISTORY_DAYS (90 by default), sealed; buttons by their titles only; links without their queries; a message that is only a code is never kept. Empty for an API key.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: after
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: The messages, oldest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: taskiemSay
+      tags:
+      - Links
+      summary: Say something to Taskiem on the web
+      description: 'Read as a message typed on WhatsApp (the same words: status, orders, cash in, invoice, building by chat): text, or reply (a button''s id from an answer, with its title as text). The answer is what Taskiem said, its buttons pressable by their ids. A person only: not an API key.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                reply:
+                  type: string
+                  maxLength: 2048
+      responses:
+        '200':
+          description: What was said, and Taskiem's answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/taskiem-chat/files:
+    post:
+      operationId: taskiemSend
+      tags:
+      - Links
+      summary: Send Taskiem a voice note or a photo on the web
+      description: 'A multipart form: file (a voice note in Ogg, WebM, MP3 or MP4 audio, or a JPEG, PNG or WebP photo) and text (a photo''s caption). Read as one sent on WhatsApp: a voice note is transcribed when the business has voice notes on, and read as typed; a photo with a caption adds a product, or is the logo the set-up asked for. The file is held in memory only. A person only: not an API key.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                  maxLength: 4000
+      responses:
+        '200':
+          description: What was said, and Taskiem's answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/files:
+    post:
+      operationId: sendLinkFile
+      tags:
+      - Links
+      summary: Send a photo, a PDF or a voice note to a linked business
+      description: 'A multipart form: `file` (a JPEG, PNG or WebP photo, cleaned of its metadata; a PDF without scripts or actions; or a voice note in Ogg, WebM, MP3 or MP4 audio, up to 16 MB), an optional `text` caption and `reply_to`. Each business keeps its own copy in its own storage: the file is stored in both before the message is written in both, and if either copy cannot be kept, nothing is sent (409).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                  maxLength: 4000
+                reply_to:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/files/{id}:
+    get:
+      operationId: linkFile
+      tags:
+      - Links
+      summary: A message's photo, PDF or voice note
+      description: This business's own copy, by the message's id, streamed through the API (a photo or voice note inline, a PDF as a download).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/items:
+    get:
+      operationId: linkChatItems
+      tags:
+      - Links
+      summary: What "#" names in a conversation
+      description: 'The price list the other business shares with you (whose: theirs), else the one you share with them (ours), each item with its unit and price.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The items
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  whose:
+                    type: string
+                    enum: [theirs, ours]
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/typing:
+    post:
+      operationId: linkTyping
+      tags:
+      - Links
+      summary: Say we are typing
+      description: The other side's typing line shows for six seconds. Not audited; no words are sent.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Told
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/forward:
+    post:
+      operationId: forwardLinkMessage
+      tags:
+      - Links
+      summary: Forward a message to other linked businesses
+      description: 'One of this conversation''s messages, sent to 1 to 5 other conversations, marked Forwarded. A photo, PDF or voice note goes as a copy into each business''s own storage and ours, from our copy; a document''s card is not forwarded (400).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [message, to]
+              properties:
+                message:
+                  type: string
+                  format: uuid
+                to:
+                  type: array
+                  maxItems: 5
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Forwarded, one message per conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+                  typing:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/hide:
+    post:
+      operationId: hideLinkMessage
+      tags:
+      - Links
+      summary: Delete a message for us
+      description: Our copy is hidden from our view; the other business keeps its own, as each keeps the record of the trade. A document's card is never hidden (400).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Hidden
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/read:
+    post:
+      operationId: readLinkChat
+      tags:
+      - Links
+      summary: Read a conversation
+      description: Its messages are read here, and the sender sees the double tick.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: How many were marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [read]
+                properties:
+                  read:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-settings/qr:
+    get:
+      operationId: linkQR
+      tags:
+      - Links
+      summary: The link code as a QR code
+      description: To print or show across the counter. SVG by default.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [svg, png]
+      responses:
+        '200':
+          description: The QR code
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-settings:
+    get:
+      operationId: getLinkSettings
+      tags:
+      - Links
+      summary: Whether other businesses find this one
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLinkSettings
+      tags:
+      - Links
+      summary: Choose whether other businesses find this one
+      description: findable null goes back to the default, on with a published storefront.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                findable:
+                  type: [boolean, 'null']
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkSettings'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoice-settings:
     get:
       operationId: getInvoiceSettings
@@ -5191,7 +7394,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, trade]
       - name: limit
         in: query
         schema:
@@ -6572,6 +8775,54 @@ paths:
                     $ref: '#/components/schemas/StockSupplier'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/deliver-to:
+    get:
+      operationId: getDeliverTo
+      tags:
+      - Stock
+      summary: Where linked suppliers deliver our orders
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The address and the number a rider calls; an empty address, picked up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putDeliverTo
+      tags:
+      - Stock
+      summary: Say where linked suppliers deliver our orders
+      description: Sealed, and carried to each order to a linked supplier (its rider takes it there); an empty address, picked up.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverTo'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/settings:
     get:
       operationId: getStockSettings
@@ -6843,7 +9094,7 @@ paths:
       tags:
       - Stock
       summary: Cancel a purchase order
-      description: Before anything was received on it.
+      description: Before anything was received on it. An order to a linked supplier is cancelled on both sides before the supplier accepts it; after, the supplier is asked (cancel is asked), and answers.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -6858,6 +9109,252 @@ paths:
         schema:
           type: string
           format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+                  cancel:
+                    type: string
+                    enum: [cancelled, asked]
+                    description: For an order to a linked supplier
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}:
+    get:
+      operationId: getPurchase
+      tags:
+      - Stock
+      summary: One purchase order
+      description: With a linked supplier's side of it, when it went through a link.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/suppliers/{id}/link:
+    put:
+      operationId: linkSupplier
+      tags:
+      - Stock
+      summary: Say a supplier is a linked business
+      description: Its orders then go through the link, as orders in its business (business links L2), not by chat; null undoes it. The link must be active.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [link_id]
+              properties:
+                link_id:
+                  type: [string, 'null']
+                  format: uuid
+      responses:
+        '200':
+          description: The supplier
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [supplier]
+                properties:
+                  supplier:
+                    $ref: '#/components/schemas/StockSupplier'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/accept-change:
+    post:
+      operationId: acceptPurchaseChange
+      tags:
+      - Stock
+      summary: Accept a linked supplier's change
+      description: The order takes the supplier's quantities and prices, and is accepted on both sides. 409 when there is no change to accept.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/confirm-proposed:
+    post:
+      operationId: confirmProposed
+      tags:
+      - Stock
+      summary: Confirm an order a linked supplier drafted for us
+      description: Each line is said to be one of our items, in order; the order is then accepted on both sides. 409 when it is not waiting for our Confirm.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/all-came:
+    post:
+      operationId: allCame
+      tags:
+      - Stock
+      summary: All of a linked delivery came
+      description: What the linked supplier delivered is received (stock raised), and the supplier told. 409 when it is not delivered or was answered already.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/not-all-came:
+    post:
+      operationId: notAllCame
+      tags:
+      - Stock
+      summary: Not all of a linked delivery came
+      description: What came of each line, by our count, is received (stock raised), and the supplier is told, who agrees the count or talks to us. Without either, a delivery is received from the supplier's count a day after it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [counts]
+              properties:
+                counts:
+                  type: array
+                  description: What came of each line, in order
+                  items:
+                    type: integer
+                    minimum: 0
       responses:
         '200':
           description: The order
@@ -26038,7 +28535,12 @@ components:
           type: string
         reached:
           type: string
-          enum: [whatsapp, telegram, sms]
+          enum: [whatsapp, telegram, sms, link]
+          description: Where its orders go; link when it is a linked business
+        link_id:
+          type: [string, 'null']
+          format: uuid
+          description: The link with the supplier's business, when it is one (business links L2)
         owed_kobo:
           type: integer
         open:
@@ -26093,6 +28595,9 @@ components:
                 type: integer
               received:
                 type: integer
+              delivered:
+                type: integer
+                description: What a linked supplier says it delivered, mirrored from its order
         total_kobo:
           type: integer
         status:
@@ -26132,6 +28637,469 @@ components:
         owed_kobo:
           type: integer
         created_at:
+          type: string
+          format: date-time
+        link_id:
+          type: string
+          format: uuid
+          description: Sent to a linked supplier, through this link (business links L2)
+        seller_status:
+          type: string
+          enum: [proposed, received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+          description: The linked supplier's side, mirrored from its order; proposed, drafted by the supplier for us, waiting for our Confirm
+        seller_note:
+          type: string
+          description: The linked supplier's word on it
+        change:
+          type: array
+          description: The lines the linked supplier proposes instead, one per line in order (quantity 0 cannot be supplied)
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+              item:
+                type: string
+              unit:
+                type: string
+              quantity:
+                type: integer
+              cost_kobo:
+                type: integer
+              received:
+                type: integer
+        delivered_at:
+          type: string
+          format: date-time
+        short_agreed_at:
+          type: string
+          format: date-time
+          description: The linked supplier agreed our count of what came
+        cancel_asked_at:
+          type: string
+          format: date-time
+          description: We asked the linked supplier to cancel it after it accepted
+        short_at:
+          type: string
+          format: date-time
+          description: We said Not all came
+    DeliverTo:
+      type: object
+      additionalProperties: false
+      required: [address, phone]
+      properties:
+        address:
+          type: string
+          maxLength: 300
+        phone:
+          type: string
+    LinkDocCard:
+      type: object
+      additionalProperties: false
+      required: [doc, event, reference]
+      properties:
+        doc:
+          type: string
+          enum: [order, purchase, invoice, bill]
+          description: Our own document it names
+        event:
+          type: string
+          description: What happened to it (ordered, accept, delivered, bill, queried, resolved, …)
+        reference:
+          type: string
+        id:
+          type: string
+          description: Our document's id or number, to open it
+        amount_kobo:
+          type: integer
+        note:
+          type: string
+    PriceItem:
+      type: object
+      additionalProperties: false
+      required: [item_id, name, price_kobo, min_quantity, available]
+      properties:
+        item_id:
+          type: string
+          description: The seller's own item
+        name:
+          type: string
+        unit:
+          type: string
+        price_kobo:
+          type: integer
+        min_quantity:
+          type: integer
+        available:
+          type: boolean
+        overridden:
+          type: boolean
+          description: This link's own price, not the list's
+    PriceList:
+      type: object
+      additionalProperties: false
+      required: [id, name, items, links, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceItem'
+        links:
+          type: array
+          items:
+            type: string
+            format: uuid
+        updated_at:
+          type: string
+          format: date-time
+    SupplierPrices:
+      type: object
+      additionalProperties: false
+      required: [link, business, name, items, updated_at]
+      properties:
+        link:
+          type: string
+          format: uuid
+        business:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceItem'
+        updated_at:
+          type: string
+          format: date-time
+    ItemLink:
+      type: object
+      additionalProperties: false
+      required: [link, item_id, seller_item_id, seller_item]
+      properties:
+        link:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+        seller_item_id:
+          type: string
+        seller_item:
+          type: string
+    TaskiemChat:
+      type: object
+      additionalProperties: false
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, channel, inbound, kind, text, created_at]
+            properties:
+              id:
+                type: string
+                format: uuid
+              channel:
+                type: string
+                enum: [whatsapp, telegram, slack, web]
+              inbound:
+                type: boolean
+                description: The person said it (else Taskiem did)
+              kind:
+                type: string
+                enum: [text, button, voice, photo, form, location]
+              text:
+                type: string
+              buttons:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [title]
+                  properties:
+                    id:
+                      type: string
+                      description: Only on an answer just given; press it by sending it as reply
+                    title:
+                      type: string
+              created_at:
+                type: string
+                format: date-time
+    LinkMention:
+      type: object
+      additionalProperties: false
+      required: [kind, name]
+      description: A structured reference the composer put in a message
+      properties:
+        kind:
+          type: string
+          enum: [business, item]
+        name:
+          type: string
+        link:
+          type: string
+          format: uuid
+          description: A business, on our copy only
+        item_id:
+          type: string
+        unit:
+          type: string
+        price_kobo:
+          type: integer
+    LinkMessage:
+      type: object
+      additionalProperties: false
+      required: [id, link, mine, kind, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The message, the same in both businesses
+        link:
+          type: string
+          format: uuid
+        mine:
+          type: boolean
+          description: We sent it (a card, we acted)
+        kind:
+          type: string
+          enum: [text, card]
+        body:
+          type: string
+        sender_name:
+          type: string
+          description: The first name of the member who wrote it
+        card:
+          $ref: '#/components/schemas/LinkDocCard'
+        attachment:
+          type: object
+          additionalProperties: false
+          required: [kind, type, size]
+          description: A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id} streams it
+          properties:
+            kind:
+              type: string
+              enum: [photo, file, voice]
+            type:
+              type: string
+            size:
+              type: integer
+              format: int64
+            name:
+              type: string
+        forwarded:
+          type: boolean
+          description: Forwarded from another conversation
+        preview:
+          type: object
+          additionalProperties: false
+          required: [url, host, title]
+          description: The first link's preview, fetched by the sender's side when it was sent
+          properties:
+            url:
+              type: string
+            host:
+              type: string
+            title:
+              type: string
+            description:
+              type: string
+        mentions:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/LinkMention'
+        reply:
+          type: object
+          additionalProperties: false
+          required: [pair_id, mine, kind]
+          properties:
+            pair_id:
+              type: string
+              format: uuid
+            mine:
+              type: boolean
+            kind:
+              type: string
+              enum: [text, card]
+            body:
+              type: string
+            card:
+              $ref: '#/components/schemas/LinkDocCard'
+            attachment:
+              type: object
+              additionalProperties: false
+              required: [kind, type, size]
+              properties:
+                kind:
+                  type: string
+                  enum: [photo, file, voice]
+                type:
+                  type: string
+                size:
+                  type: integer
+                  format: int64
+                name:
+                  type: string
+        read_at:
+          type: string
+          format: date-time
+          description: On theirs, when we read it; on ours, when they did
+        created_at:
+          type: string
+          format: date-time
+    LinkConversation:
+      type: object
+      additionalProperties: false
+      required: [link, business, name, state, unread, muted, archived, pinned, typing]
+      properties:
+        link:
+          type: string
+          format: uuid
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        state:
+          type: string
+          enum: [active, ended]
+        last:
+          $ref: '#/components/schemas/LinkMessage'
+        unread:
+          type: integer
+        muted:
+          type: boolean
+        archived:
+          type: boolean
+        pinned:
+          type: boolean
+        typing:
+          type: boolean
+          description: Someone on the other side is typing now
+    TradeOrderLine:
+      type: object
+      additionalProperties: false
+      required: [item, quantity, price_kobo]
+      properties:
+        item:
+          type: string
+        unit:
+          type: string
+        quantity:
+          type: integer
+          minimum: 0
+        price_kobo:
+          type: integer
+          minimum: 0
+        delivered:
+          type: integer
+          minimum: 0
+        item_id:
+          type: string
+          description: Our own catalogue item it is, when matched
+        matched:
+          type: string
+          enum: [linked, name]
+          description: linked, by a match we confirmed for the link; name, by the same name, for us to confirm
+    TradeOrder:
+      type: object
+      additionalProperties: false
+      required: [id, order_reference, link, buyer, buyer_name, reference, lines, total_kobo, status, order_status, invoice_at, auto_accept, placed_by_seller, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The storefront order's (kind trade), on the Orders page with every order
+        order_reference:
+          type: string
+          description: The storefront order's reference; the buyer's (reference) unless another order had it
+        order_status:
+          type: string
+          description: The storefront order's own status (status says it as a linked order)
+        fulfilment:
+          type: string
+          enum: [pickup, delivery]
+          description: delivery when the buyer said where its orders are delivered
+        ready_at:
+          type: string
+          format: date-time
+        link:
+          type: string
+          format: uuid
+        buyer:
+          type: string
+          format: uuid
+        buyer_name:
+          type: string
+        reference:
+          type: string
+          description: The buyer's purchase order reference
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeOrderLine'
+        total_kobo:
+          type: integer
+        note:
+          type: string
+        status:
+          type: string
+          enum: [proposed, received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+          description: proposed, drafted by us for the buyer and waiting for its Confirm
+        change:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeOrderLine'
+        seller_note:
+          type: string
+        cancel_asked_at:
+          type: string
+          format: date-time
+          description: The buyer asks to cancel it; cancel it or keep it
+        short:
+          type: array
+          items:
+            type: integer
+          description: Not all came, the buyer's count of each line
+        short_at:
+          type: string
+          format: date-time
+        receipt_at:
+          type: string
+          format: date-time
+          description: The buyer's receipt settled (its tap, or a day after delivery)
+        short_agreed_at:
+          type: string
+          format: date-time
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_at:
+          type: string
+          enum: [accepted, delivered]
+        auto_accept:
+          type: boolean
+        placed_by_seller:
+          type: boolean
+        decided_by:
+          type: string
+        accepted_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
     StockItem:
@@ -26477,6 +29445,9 @@ components:
           $ref: '#/components/schemas/NullableTimestamp'
         void_reason:
           type: string
+        disputed:
+          type: boolean
+          description: A linked buyer queried it; oldest-first matching passes over it (docs/spec/business-links.md)
         created_by:
           type: string
         created_at:
@@ -27044,6 +30015,229 @@ components:
                 type: [number, 'null']
               ratings:
                 type: integer
+    BusinessLink:
+      type: object
+      additionalProperties: false
+      required: [id, business, name, state, role, asked_by_us, requested_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        business:
+          type: string
+          format: uuid
+          description: The other business
+        name:
+          type: string
+        slug:
+          type: string
+          description: The other business's storefront address, when it has one
+        state:
+          type: string
+          enum: [active, ended, requested, not_accepted, asked_us, blocked]
+          description: 'As we see it: requested (we asked, waiting as far as we know), not_accepted (we asked after a search, 30 days and no acceptance), asked_us (ours to answer), blocked (by us)'
+        role:
+          type: string
+          enum: [supplier, customer, both]
+          description: How we trade with them
+        asked_by_us:
+          type: boolean
+        requested_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        answered_at:
+          type: string
+          format: date-time
+    BlindLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [id, kind, shown, role, state, created_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [phone, address]
+        shown:
+          type: string
+          description: The address, a phone number masked
+        role:
+          type: string
+          enum: [supplier, customer, both]
+        state:
+          type: string
+          enum: [sent]
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    LinkCard:
+      type: object
+      additionalProperties: false
+      required: [business, name, items, state]
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        area:
+          type: string
+        tagline:
+          type: string
+        items:
+          type: array
+          description: Up to three published items that matched, with the prices their page shows
+          items:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+              name:
+                type: string
+              price_kobo:
+                type: [integer, 'null']
+        state:
+          type: string
+          enum: [none, active, ended, requested, not_accepted, asked_us, blocked]
+    Bill:
+      type: object
+      additionalProperties: false
+      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, mirrored_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        link:
+          type: string
+          format: uuid
+        supplier:
+          type: string
+          format: uuid
+        supplier_name:
+          type: string
+        reference:
+          type: string
+          description: The supplier's invoice number
+        lines:
+          type: array
+          items:
+            type: object
+        amount_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+          description: What the supplier's match has counted paid
+        due_kobo:
+          type: integer
+        due_on:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [open, paying, part_paid, paid, disputed, void]
+        allow_part_payments:
+          type: boolean
+        disputed:
+          type: boolean
+        declared_paid_kobo:
+          type: integer
+          description: What the business says it paid outside Taskiem; its own figure
+        paying_kobo:
+          type: integer
+          description: A payment from Taskiem under way
+        sent_kobo:
+          type: integer
+          description: What the bank confirmed the business sent from Taskiem; the supplier's match counts it in paid_kobo
+        pay_account_number:
+          type: string
+          description: The account number the supplier issued this business; a transfer into it is matched to the supplier's invoices exactly
+        pay_bank_name:
+          type: string
+        pay_link:
+          type: string
+          description: The supplier's invoice page, which takes a card or a transfer
+        mirrored_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    BillPayment:
+      type: object
+      additionalProperties: false
+      required: [id, bill, reference, amount_kobo, token, connection, status, created_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        bill:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        amount_kobo:
+          type: integer
+        token:
+          type: string
+          description: What the payout's narration carries
+        connection:
+          type: string
+        account_name:
+          type: string
+        run_id:
+          type: [string, 'null']
+          format: uuid
+        status:
+          type: string
+          enum: [pending, paid, failed, rejected]
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+    LinkRequestResult:
+      type: object
+      additionalProperties: false
+      required: [sent, message]
+      properties:
+        link:
+          $ref: '#/components/schemas/BusinessLink'
+        sent:
+          type: boolean
+        message:
+          type: string
+    LinkSettings:
+      type: object
+      additionalProperties: false
+      required: [findable, findable_now]
+      properties:
+        findable:
+          type: [boolean, 'null']
+          description: Our choice; null is the default
+        findable_now:
+          type: boolean
+          description: What applies (the default is on with a published storefront)
+        asked_at:
+          type: string
+          format: date-time
+        code:
+          type: string
+          description: The link code the business prints; made the first time the settings are read
+        url:
+          type: string
+          description: Where the code opens a link request, for a signed-in business
     InvoiceSettings:
       type: object
       required: [prefix, next_number, connection, fee_paid_by, allow_part_payments]
@@ -27075,10 +30269,10 @@ components:
           type: string
         kind:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, trade]
         status:
           type: string
-          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived]
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived, proposed, changed]
         customer:
           type: object
           properties:

@@ -3851,6 +3851,618 @@
     "wd.workflow.does": {
       "text": "Yi amfani da aikinka: {template}, wanda {does}",
       "reviewed": false
+    },
+    "link.how": {
+      "text": "Don haɗa da wani kasuwanci a Taskiem, aika *link Dangote*, *who sells cement*, ko *link 0803 123 4567*.",
+      "reviewed": false
+    },
+    "link.none": {
+      "text": "Babu kasuwancin da aka haɗa tukuna. Aika *who sells cement* ko *link Dangote* don nemo ɗaya.",
+      "reviewed": false
+    },
+    "link.list_title": {
+      "text": "Kasuwancin da kuke ciniki da su a Taskiem:",
+      "reviewed": false
+    },
+    "link.list_active": {
+      "text": "• *{name}*: an haɗa, {role}",
+      "reviewed": false
+    },
+    "link.list_asked": {
+      "text": "• *{name}* na neman haɗawa",
+      "reviewed": false
+    },
+    "link.list_requested": {
+      "text": "• *{name}*: an tambaya, ana jiran su",
+      "reviewed": false
+    },
+    "link.list_not_accepted": {
+      "text": "• *{name}*: ba a karɓa ba",
+      "reviewed": false
+    },
+    "link.list_blocked": {
+      "text": "• *{name}*: an toshe",
+      "reviewed": false
+    },
+    "link.list_ended": {
+      "text": "• *{name}*: haɗin ya ƙare",
+      "reviewed": false
+    },
+    "link.list_sent": {
+      "text": "• {shown}: an aika buƙata",
+      "reviewed": false
+    },
+    "link.role.supplier": {
+      "text": "suna kawo muku kaya",
+      "reviewed": false
+    },
+    "link.role.customer": {
+      "text": "suna saya daga gare ku",
+      "reviewed": false
+    },
+    "link.role.both": {
+      "text": "suna kawo muku kaya kuma suna saya daga gare ku",
+      "reviewed": false
+    },
+    "link.asked_title": {
+      "text": "{name} na neman haɗawa",
+      "reviewed": false
+    },
+    "link.asked_body": {
+      "text": "*{name}* na neman haɗawa da {org} a Taskiem ({role}). Idan aka haɗa, takardun kuɗi da odarku za su riƙa isa juna da kansu. Babu abin da za a raba har sai kun karɓa.",
+      "reviewed": false
+    },
+    "link.button_accept": {
+      "text": "Karɓa",
+      "reviewed": false
+    },
+    "link.button_decline": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "link.button_block": {
+      "text": "Toshe",
+      "reviewed": false
+    },
+    "link.button_role_supplier": {
+      "text": "Suna kawo mana",
+      "reviewed": false
+    },
+    "link.button_role_customer": {
+      "text": "Suna saya a wurinmu",
+      "reviewed": false
+    },
+    "link.button_role_both": {
+      "text": "Duka biyun",
+      "reviewed": false
+    },
+    "link.found_title": {
+      "text": "Kasuwanci a Taskiem:",
+      "reviewed": false
+    },
+    "link.found_linked": {
+      "text": "(an haɗa)",
+      "reviewed": false
+    },
+    "link.found_requested": {
+      "text": "(an tambaya)",
+      "reviewed": false
+    },
+    "link.found_asked_us": {
+      "text": "(sun tambaye ku)",
+      "reviewed": false
+    },
+    "link.found_pick": {
+      "text": "Aika lambar wanda kake son haɗawa da shi, ko *cancel*.",
+      "reviewed": false
+    },
+    "link.found_owner_only": {
+      "text": "Mai shi ko mai gudanarwa ne kawai zai iya neman haɗawa da su.",
+      "reviewed": false
+    },
+    "link.found_none": {
+      "text": "Babu kasuwanci a Taskiem da ake iya samu da ya dace da {query}.",
+      "reviewed": false
+    },
+    "link.pick_number": {
+      "text": "Aika lamba daga jerin, ko *cancel*.",
+      "reviewed": false
+    },
+    "link.which_role": {
+      "text": "Yaya kuke ciniki da *{name}*?",
+      "reviewed": false
+    },
+    "link.which_role_blind": {
+      "text": "Nemi duk wanda ke amfani da {shown} a Taskiem ya haɗa. Yaya kuke ciniki da su?",
+      "reviewed": false
+    },
+    "link.sent": {
+      "text": "An nemi *{name}* ya haɗa. Za ka ji idan sun karɓa.",
+      "reviewed": false
+    },
+    "link.blind_sent": {
+      "text": "Idan wani kasuwanci a Taskiem yana amfani da {shown}, ya sami buƙatarka. Za ka ji ne kawai idan ya karɓa.",
+      "reviewed": false
+    },
+    "link.already": {
+      "text": "Kun riga kun haɗa da *{name}*.",
+      "reviewed": false
+    },
+    "link.waiting": {
+      "text": "Ka riga ka tambayi *{name}*. Yana jiran amsarsu.",
+      "reviewed": false
+    },
+    "link.denied": {
+      "text": "Mai {org} ko mai gudanarwa ne kawai zai iya haɗawa da wasu kasuwanci.",
+      "reviewed": false
+    },
+    "link.too_many": {
+      "text": "Buƙatun haɗawa sun isa na yau. Sake gwadawa gobe.",
+      "reviewed": false
+    },
+    "link.gone": {
+      "text": "Wannan buƙatar ba ta jira kuma.",
+      "reviewed": false
+    },
+    "link.done_accept": {
+      "text": "An haɗa da *{name}*. Aika *links* don ganin kasuwancin da aka haɗa.",
+      "reviewed": false
+    },
+    "link.done_decline": {
+      "text": "An ƙi. Ba za a gaya wa *{name}* ba.",
+      "reviewed": false
+    },
+    "link.done_block": {
+      "text": "An toshe. Buƙatun *{name}* ba za su riske ku ba.",
+      "reviewed": false
+    },
+    "link.accepted_title": {
+      "text": "{name} ya karɓi haɗinku",
+      "reviewed": false
+    },
+    "link.accepted_body": {
+      "text": "*{name}* ya karɓi haɗin da {org}. An haɗa kasuwancinku a Taskiem.",
+      "reviewed": false
+    },
+    "link.ended_title": {
+      "text": "{name} ya kawo ƙarshen haɗin",
+      "reviewed": false
+    },
+    "link.ended_body": {
+      "text": "*{name}* ya kawo ƙarshen haɗin da {org}. Abin da ya wuce tsakaninku zai zauna a ɓangarorin biyu.",
+      "reviewed": false
+    },
+    "link.they_asked": {
+      "text": "*{name}* ya riga ya tambaye ku. Aika *links* don amsawa.",
+      "reviewed": false
+    },
+    "link.offer_line": {
+      "text": "{org} ma yana Taskiem. Haɗa da mu: {url}",
+      "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Haɗa",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Buɗe {url} bayan ka shiga kasuwancinka a Taskiem don haɗawa.",
+      "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Wasu kasuwanci a Taskiem za su iya nemo ku don ciniki, ta sunanku, abin da kuke sayarwa da yankinku: aika *find us* don ba su dama, ko *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Yanzu wasu kasuwanci a Taskiem za su iya nemo {org} ta sunanta, abin da take sayarwa da yankinta. Aika *hide us* don dakatarwa.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Wasu kasuwanci ba za su ƙara nemo {org} ta bincike ba. Wanda ke da lambar wayarku ko mahaɗinku zai iya tambaya. Aika *find us* don canzawa.",
+      "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Takardar kuɗi daga {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* ya aiko takardar kuɗi {reference}: {amount} da za a biya. Yana ƙarƙashin Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "Ranar biya: {date}.",
+      "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Waɗanda za su iya ganin takardun kuɗi na {org} ne kawai ke ganin bills ɗinta.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "Babu bill {reference}. Aika *bills* don ganinsu.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "Babu bill da za a biya daga masu kawo kaya da aka haɗa.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills da za a biya:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} daga {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Gaba ɗaya: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* daga *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Jimla {total} · an biya {paid} · {due} da za a biya.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "da za a biya",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "ana biya",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "an biya wani ɓangare",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "an biya",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "an yi tambaya",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "mai kawo kaya ya soke",
+      "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Biya cikin {account} ({bank}) tare da {reference} a bayanin canja kuɗi: za a lissafa shi ga wannan takardar kuɗi da kansa (ba tare da shi ba, ga mafi tsufa da farko).",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Ko ka biya da kati ko canja kuɗi a shafinsa: {link}",
+      "reviewed": false
+    },
+    "bill.how.transfer": {
+      "text": "ta canja kuɗi",
+      "reviewed": false
+    },
+    "bill.how.cash": {
+      "text": "da tsabar kuɗi",
+      "reviewed": false
+    },
+    "bill.how.other": {
+      "text": "ta wata hanya",
+      "reviewed": false
+    },
+    "bill.notice.declared_title": {
+      "text": "{from} ya ce ya biya {reference}",
+      "reviewed": false
+    },
+    "bill.notice.declared": {
+      "text": "*{from}* ya ce ya biya {amount} {how} don {reference}. Za a lissafa shi idan kuɗin ya iso gare ku kuma aka haɗa shi.",
+      "reviewed": false
+    },
+    "bill.notice.queried_title": {
+      "text": "{from} ya yi tambaya kan {reference}",
+      "reviewed": false
+    },
+    "bill.notice.queried": {
+      "text": "*{from}* ya yi tambaya kan {reference}: {note}. Kuɗin da bai ambace shi ba ba za a lissafa shi ba har sai kun warware tambayar a takardar kuɗin.",
+      "reviewed": false
+    },
+    "bill.notice.resolved_title": {
+      "text": "{from} ya warware tambayarku kan {reference}",
+      "reviewed": false
+    },
+    "bill.notice.resolved": {
+      "text": "*{from}* ya warware tambayarku kan {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} ya aika oda {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* ya yi odar {note}. Karɓa, canza ko ƙi shi a Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} ya soke {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* ya soke oda {reference} kafin ku karɓa.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} na neman soke {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* na neman a soke oda {reference} da kuka karɓa. Soke shi, ko ku riƙe shi.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} ya karɓi canjinku a {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* ya karɓi canjin da kuka yi wa oda {reference}. An karɓi odar.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} ya karɓi {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* ya ce duk abin da ke cikin oda {reference} ya iso.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} ya ce ba duka {reference} ya iso ba",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* ya ce ba duk oda {reference} ya iso ba. Abin da suka ƙirga: {note}. Ku amince da ƙidayarsu, ko ku yi magana da su.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} ya karɓi {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* ya karɓi odarku {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} ya ƙi {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* ya ƙi odarku {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} na son canza {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* zai iya kawo oda {reference} kamar haka: {note}. Ku karɓi canjin, ko ku soke odar.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} ya shirya",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* ya ce odarku {reference} ta shirya. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} na kan hanya",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* ya tura odarku {reference}, tana kan hanya. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} ya kawo {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* ya kawo odarku {reference}: {note}. Danna All came, ko Not all came, cikin kwana ɗaya; bayan haka za a ɗauki ƙidayarsu.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} ya soke {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* ya soke odarku {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} ya soke {reference} kamar yadda kuka nema",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* ya amince ya soke odarku {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} bai soke {reference} ba",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* bai soke odarku {reference} ba. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} ya amince da ƙidayarku ta {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* ya amince da ƙidayarku ta abin da ya iso na oda {reference}.",
+      "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Karɓa",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Duka ya iso",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "An karɓi {reference}. An sanar da su.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "An ƙi {reference}. An sanar da su.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "An rubuta: duk {reference} ya iso. Kayanku sun ƙaru, kuma an sanar da mai kawowa.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "Wannan odar ta wuce haka; buɗe ta a Taskiem don ganin inda take.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Sai wanda ke kula da odar {org} ne zai iya amsa wannan.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Buɗe odar a Taskiem don yin hakan.",
+      "reviewed": false
+    },
+    "order.link.auto_accepted_title": {
+      "text": "{from} ya aika oda {reference}, an karɓa",
+      "reviewed": false
+    },
+    "order.link.auto_accepted": {
+      "text": "*{from}* ya yi odar {note}. An karɓe ta, kamar yadda kuka saita musu.",
+      "reviewed": false
+    },
+    "order.link.proposed_title": {
+      "text": "{from} ya tsara muku oda {reference}",
+      "reviewed": false
+    },
+    "order.link.proposed": {
+      "text": "*{from}* ya tsara muku oda: {note}. Tabbatar da ita, ko ku soke ta, a Taskiem.",
+      "reviewed": false
+    },
+    "order.link.confirmed_title": {
+      "text": "{from} ya tabbatar da {reference}",
+      "reviewed": false
+    },
+    "order.link.confirmed": {
+      "text": "*{from}* ya tabbatar da oda {reference} da kuka tsara musu. An karɓe ta.",
+      "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} game da {reference}",
+      "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "Game da {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Sai wanda ke rubuta wa kasuwancin da aka haɗa don {org} ne zai iya aika wannan.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Me kuke so ku faɗa wa *{name}*? Aika *ask {name}* da saƙonku.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "Ba a aika ba: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "An aika wa *{name}*. Amsoshinsu za su zo nan, da kuma Chat a yanar gizo.",
+      "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Hoto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Saƙon murya",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "Fayil",
+      "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "Farashin *{name}* a gare ka:\n{items}\n\nYi oda haka: *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "na {unit} ɗaya",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(akalla {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(babu yanzu)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… da wasu {count} a yanar gizo.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* ba su raba jerin farashi da kai ba. Ka tambaye su, ko ka aika *order from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "Babu *{item}* a jerin farashin *{name}*. Aika *prices from {name}* don ganin su.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Wanne daga cikin kayanka ne *{item}* nasu? Faɗa sau ɗaya a yanar gizo, a farashin {name} a shafin Suppliers, sannan ka sake yin oda.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "Ba a rubuta ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Faɗi adadi, kamar *order 20 bags of rice from Dangote*.",
+      "reviewed": false
+    },
+    "wa.mention.unlinked": {
+      "text": "Ba ka haɗu da *{name}* ba. Aika *link with {name}* don ka tambaye su, sannan ka yi oda daga gare su.",
+      "reviewed": false
+    },
+    "wa.mention.how": {
+      "text": "Faɗi adadi da abin da kake so daga *{name}*, kamar *20 bags of rice from @{name}*.",
+      "reviewed": false
+    },
+    "wa.mention.draft": {
+      "text": "*{reference}* zuwa *{supplier}*: {items}, {total}",
+      "reviewed": false
+    },
+    "wa.mention.confirm": {
+      "text": "Odoji {count}, ɗaya ga kowane kasuwanci:\n{orders}\n\nIn aika duka?",
+      "reviewed": false
+    },
+    "wa.mention.sent_one": {
+      "text": "{reference} zuwa *{supplier}*",
+      "reviewed": false
+    },
+    "wa.mention.sent": {
+      "text": "An aika:\n{orders}",
+      "reviewed": false
+    },
+    "wa.mention.second": {
+      "text": "{references} sun wuce iyakarka: wani mai shi ko admin zai aika su, daga shafin Suppliers.",
+      "reviewed": false
     }
   }
 }

@@ -16,6 +16,7 @@ import {
 import { feeInput, feeKobo } from "../lib/orders";
 import { quantity } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
+import { sellerLine } from "../lib/tradeorders";
 
 /** Orders to suppliers on the Stock page (docs/stock.md "Suppliers and
  * purchase orders"): order what is low, approve and send, mark confirmed,
@@ -114,10 +115,21 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
                         {p.supplier} asked: “{p.counter}”
                       </>
                     )}
+                    {sellerLine(p) && (
+                      <>
+                        <br />
+                        {sellerLine(p)}
+                      </>
+                    )}
                   </span>
                 }
                 testid="purchase"
               >
+                {p.link_id && (
+                  <Link className="button small" to={`/purchases/${p.id}`}>
+                    Open<span className="sr-only"> {p.reference}</span>
+                  </Link>
+                )}
                 {can.send && (
                   <button
                     type="button"

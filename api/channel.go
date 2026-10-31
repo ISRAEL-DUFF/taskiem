@@ -71,6 +71,9 @@ func (s *Server) chatChannelFor(ctx context.Context, channel string, tenant uuid
 		return s.Telegram, nil
 	case channel == "whatsapp" && s.WhatsApp != nil:
 		return s.WhatsApp.ForTenant(ctx, tenant)
+	case channel == "web":
+		// The Chat page's Taskiem conversation: kept in its history.
+		return &webChannel{s: s, tenant: tenant}, nil
 	case channel == "slack" && s.Slack != nil:
 		// The business's own workspace, through its Slack connection.
 		return &slackChannel{s: s, tenant: tenant}, nil
@@ -83,6 +86,22 @@ func (s *Server) chatChannelFor(ctx context.Context, channel string, tenant uuid
 func chatAddrsTx(ctx context.Context, tx pgx.Tx, channel string, users []uuid.UUID) (map[uuid.UUID]string, error) {
 	if channel == "slack" {
 		return slackAddrsTx(ctx, tx, users)
+	}
+	if channel == "web" {
+		// Every member has the web.
+		out := map[uuid.UUID]string{}
+		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE user_id = ANY($1)`, users)
+		if err != nil {
+			return nil, err
+		}
+		got, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return nil, err
+		}
+		for _, u := range got {
+			out[u] = webAddr(u)
+		}
+		return out, nil
 	}
 	q := `SELECT user_id, number FROM taskiem_wa_numbers($1)`
 	if channel == "telegram" {

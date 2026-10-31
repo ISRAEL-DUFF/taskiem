@@ -1,0 +1,204 @@
+{
+  "schema": "wd-test/v1",
+  "template": "pay-linked-bill",
+  "params": {},
+  "cases": [
+    {
+      "name": "an approved bill is paid once with its token, and recorded when the bank confirms",
+      "trigger": {
+        "body": {
+          "payment_id": "pay_1",
+          "supplier": "Dangote Stores",
+          "reference": "INV-0042",
+          "token": "INV-0042/7QX4",
+          "bank_code": "035",
+          "account_number": "8800000001",
+          "amount_kobo": 42500000
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "record_paid": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_settled": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "status": "rejected"
+          }
+        },
+        "pay_bill": {
+          "output": {
+            "payout_id": "po_1",
+            "status": "pending"
+          }
+        },
+        "settle": {
+          "output": {
+            "status": "settled"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "pay_bill": {
+            "amount_kobo": 42500000,
+            "bank_code": "035",
+            "account_number": "8800000001",
+            "account_name": "DANGOTE STORES/ADA",
+            "narration": "INV-0042/7QX4"
+          },
+          "record_settled": {
+            "payment_id": "pay_1",
+            "status": "paid",
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "steps": {
+          "record_paid": "skipped",
+          "record_rejected": "skipped"
+        },
+        "calls": {
+          "pay_bill": 1
+        }
+      }
+    },
+    {
+      "name": "a payment the rail refuses at once is recorded failed",
+      "trigger": {
+        "body": {
+          "payment_id": "pay_1",
+          "supplier": "Dangote Stores",
+          "reference": "INV-0042",
+          "token": "INV-0042/7QX4",
+          "bank_code": "035",
+          "account_number": "8800000001",
+          "amount_kobo": 42500000
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "record_paid": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_settled": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "status": "rejected"
+          }
+        },
+        "pay_bill": {
+          "output": {
+            "payout_id": "po_1",
+            "status": "failed"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record_paid": {
+            "payment_id": "pay_1",
+            "status": "failed"
+          }
+        },
+        "steps": {
+          "settle": "skipped",
+          "record_settled": "skipped",
+          "record_rejected": "skipped"
+        }
+      }
+    },
+    {
+      "name": "a rejected bill pays nothing and is recorded rejected",
+      "trigger": {
+        "body": {
+          "payment_id": "pay_1",
+          "supplier": "Dangote Stores",
+          "reference": "INV-0042",
+          "token": "INV-0042/7QX4",
+          "bank_code": "035",
+          "account_number": "8800000001",
+          "amount_kobo": 42500000
+        }
+      },
+      "mocks": {
+        "check_name": {
+          "output": {
+            "account_name": "DANGOTE STORES/ADA"
+          }
+        },
+        "record_paid": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_settled": {
+          "output": {
+            "status": "paid"
+          }
+        },
+        "record_rejected": {
+          "output": {
+            "status": "rejected"
+          }
+        }
+      },
+      "approvals": {
+        "approve_payment": {
+          "decision": "rejected",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "record_rejected": {
+            "payment_id": "pay_1",
+            "status": "rejected"
+          }
+        },
+        "steps": {
+          "pay_bill": "skipped",
+          "record_paid": "skipped"
+        },
+        "calls": {
+          "pay_bill": 0
+        }
+      }
+    }
+  ]
+}
