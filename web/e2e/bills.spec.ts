@@ -69,6 +69,13 @@ test("a linked supplier's invoice arrives as a bill", async ({ browser }) => {
   await axeBoth(buyer, "a bill");
   expect(await buyer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
+  // What Ada owes Dangote shows on her Suppliers page, from the bill.
+  await buyer.goto("/storefront/suppliers");
+  await expect(buyer.getByTestId("supplier-linked")).toContainText(sellerName);
+  await expect(buyer.getByTestId("supplier-linked")).toContainText("25,000");
+  await axeBoth(buyer, "/storefront/suppliers with a linked supplier");
+  await buyer.goBack();
+
   // Ada queries it; Dangote sees the query on the invoice and settles it.
   await buyer.getByRole("button", { name: "Query this bill" }).click();
   const sheet = buyer.getByRole("dialog");

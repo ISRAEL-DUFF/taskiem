@@ -99,8 +99,9 @@ func billErr(err error) error {
 // RunLinkMirrors mirrors linked invoices into their buyers' bills every
 // few seconds, while ctx lives.
 func (s *Server) runLinkMirrors(ctx context.Context) {
-	tick := time.NewTicker(3 * time.Second)
+	tick, hourly := time.NewTicker(3*time.Second), time.NewTicker(time.Hour)
 	defer tick.Stop()
+	defer hourly.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -109,8 +110,28 @@ func (s *Server) runLinkMirrors(ctx context.Context) {
 			if _, err := s.LinkMirrorTick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("links: mirroring bills", "err", err)
 			}
+		case <-hourly.C:
+			if _, err := s.LinkReconcile(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("links: reconciling bills", "err", err)
+			}
 		}
 	}
+}
+
+// LinkReconcile compares every active link's invoices with their bills
+// and puts each that differs back on its seller's mirror list, for the
+// worker to write again from the invoice; it reports how many, and logs
+// a warning when there are any (a mirror that went wrong, or was changed
+// by hand).
+func (s *Server) LinkReconcile(ctx context.Context) (int, error) {
+	var n int
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_link_reconcile()`).Scan(&n); err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		s.Logger.Warn("links: bills differed from their invoices and are mirrored again", "count", n)
+	}
+	return n, nil
 }
 
 // LinkMirrorTick mirrors the invoices due, and reports how many it

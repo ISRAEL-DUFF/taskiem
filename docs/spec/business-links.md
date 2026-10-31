@@ -344,28 +344,43 @@ The link itself, its search and its words in chat; migration 00275, `engine/link
 
 **Left for later milestones:** a business's card with its documents (L1), and messages in the search (L3).
 
-### 16.2 As built (L1, in progress)
+### 16.2 As built (L1)
 
-Migration 00276, `engine/links/bills.go`, `api/bills.go`, `web/src/pages/Bills.tsx`.
+Migration 00276, `engine/links/bills.go`, `engine/matching/customers.go`, `connectors/bills`, the `pay-linked-bill` template, `api/bills.go`, `web/src/pages/Bills.tsx`.
 
-- **The mirror.** It is not written in the seller's send transaction, as §6.1 has it, but through a durable queue, so the seller's invoice is never refused for the buyer's side and every path that changes an invoice is covered without touching each one.
-  - A trigger on `customer_invoices` notes every sent invoice whose customer key is `link:<buyer>` in the seller's `link_mirrors_due`, on any change: send, amendment, void, a payment counted or undone, overdue.
-  - A worker (`LinkMirrorTick`, every few seconds, under the api role's invoice loop) mirrors each in a transaction of its own. In the seller's scope it reads the invoice, the link and the way to pay, and takes the invoice off the list. It then enters the buyer's side through `taskiem_link_enter` (`link.bill`, audited in both) and writes the bill.
-  - A mirror that cannot be written stays due and is tried again, with back-off. An invoice with no active link to its customer mirrors nothing.
-- **The bill** carries the seller's number, lines, total, due date, what its match counted paid, and void. It also carries the way to pay: the account number issued at acceptance, its bank, and the invoice's page. `disputed` and `declared_paid_kobo` are the buyer's own. Its status is open, part_paid, paid, disputed or void (`paying` comes with paying from Taskiem).
-- **Telling the buyer.** The buyer's people who may pay are told of a new bill, in the bell and in chat, in their own scope.
-- **Choosing a linked customer.** An invoice's customer may be a linked business by its key alone, with no phone or email. New invoice offers the linked businesses that buy from us under "Who is it for?".
-- **Reading bills.**
-  - `GET /v1/bills` and `/v1/bills/{id}` (`invoice.read`).
-  - Chat: `bills`, `my bills` and `bills due` list them; `bill INV-0042` shows one. `bill <name> <amount>` still makes an invoice.
-  - The web: **Bills** leads with what is left to pay; a bill's page leads with what is left, then how to pay and its lines.
-- **Not built yet in L1:**
-  - **Pay** from Taskiem, and its `paying` status;
-  - pairing by token, and the change to matching (the invoice a payment names, skipping disputed ones);
-  - paying outside Taskiem (`declared_paid_kobo`), and **Query this bill**;
-  - the reconciler;
-  - the Suppliers page's owed figure;
-  - asking "Is this invoice for <business>?" when an invoice goes to a linked business's phone.
+- **The mirror.** It is not written in the seller's send transaction, as §6.1 has it, but through a durable queue. The seller's invoice is never refused for the buyer's side, and every path that changes an invoice is covered without touching each one.
+  - A trigger on `customer_invoices` notes every sent invoice whose customer key is `link:<buyer>` in the seller's `link_mirrors_due`, on any change: send, amendment, void, a payment counted or undone, overdue, a query.
+  - A worker (`LinkMirrorTick`, every few seconds) mirrors each in a transaction of its own. In the seller's scope it reads the invoice, the link and the way to pay, and takes the invoice off the list. It then enters the buyer's side through `taskiem_link_enter` (`link.bill`, audited in both) and writes the bill.
+  - A mirror that cannot be written stays due, with back-off. An invoice with no active link mirrors nothing.
+- **The bill.** It carries the seller's figures (number, lines, total, due date, what its match counted paid, void) and the way to pay: the account number issued at acceptance, its bank, and the invoice's page. `disputed` and `declared_paid_kobo` are the buyer's own, and so are `paying_kobo` and `sent_kobo` (a payout under way, and what the bank confirmed was sent). Its status is open, paying, part_paid, paid, disputed or void.
+- **Paying from Taskiem (§6.2).**
+  - `PUT /v1/bills/pay/setup` makes a managed workflow from `pay-linked-bill`, Taskiem's wallet by default: the name on the account found, one approval, `pay_bank` once keyed by the payment with the bill's token `INV-…/CODE` in the narration, the bank's confirmation awaited. The `bills@1` platform connector records the outcome.
+  - `POST /v1/bills/{id}/pay` starts a payment. The supplier's bank is found by name among the banks the payments connection lists, with "Bank", "PLC", "Limited" and punctuation set aside and exactly one match; otherwise it is refused plainly (the decision of 31 October 2026: the rails return a bank's name, not its code, when they issue an account).
+  - A bill is paying while a payment is under way, and a second **Pay** is refused. A payment whose run failed or was cancelled is settled as failed when bills are next paid.
+- **Matching (§6.3), changed.** For a customer keyed `link:`, money into the account the seller issued it goes first to the open invoice it names: an invoice number in the rail's note, or, when the rail dropped the note, the invoice of the buyer's one unpaired payout of that amount in three days. `taskiem_link_payout_token` answers that token, or nothing.
+  - With a token, the buyer's payment is marked paired, entering its side through `taskiem_link_enter` as the transaction's last write.
+  - Oldest-first passes over invoices the buyer queried (`customer_invoices.disputed`). Money that names one still pays it. `docs/matching.md` says so.
+- **What each side says.**
+  - `POST /v1/bills/{id}/declare` records the buyer's own word that it paid outside Taskiem, never in `paid_kobo`.
+  - `POST /v1/bills/{id}/query` queries a bill. The bill is not paid from Taskiem until settled, and the seller's invoice is flagged.
+  - `POST /v1/invoices/{id}/settle-query` is the seller's answer, and clears both.
+  - Each is a `link_notices` row written into the side told through `taskiem_link_enter`, and that side's people are told in their own scope.
+- **The reconciler.** It is not the `taskiem_link_digests` of §5.3 but one function, `taskiem_link_reconcile()`, whose only write is the sellers' mirror list. Hourly, it compares every active link's invoices, sent since the link was accepted, with their bills by the mirrored figures (number, total, paid, due date, void). It puts each that differs or is missing back on its seller's mirror list, answering only a count. The worker then writes it again from the invoice, and the count is logged. Lines are not compared.
+- **Reading and choosing.**
+  - Chat: `bills` and `bill INV-0042`, which includes how to pay.
+  - The web: **Bills** and a bill's page with **Pay**, **Paid outside Taskiem** and **Query this bill**. An invoice's page shows a buyer's query with **Settle the query**.
+  - New invoice offers linked businesses that buy from us.
+  - The Suppliers page shows what is owed to each linked supplier, from its open bills.
+- **Tests.**
+  - `api/bills_test.go`: the mirror, payments and voids followed, the reconciler, chat, Pay and its refusals, matching by note and by token with pairing, a queried invoice passed over, declare, query and settle.
+  - `engine/links/bills_test.go`: bank names.
+  - `templates/tests/pay-linked-bill.test.json`.
+  - `e2e/bills.spec.ts`.
+- **Not built in L1:**
+  - asking "Is this invoice for <business>?" when an invoice goes to a linked business's owner's phone;
+  - the bill's thread opening by itself after seven days of a declared payment the seller has not counted (it needs L3's conversation);
+  - auto-pay (§5.4);
+  - an alert to the buyer for a payout unpaired after three days.
 
 ## 17. Risks and open questions
 

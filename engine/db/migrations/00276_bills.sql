@@ -234,7 +234,47 @@ ALTER FUNCTION taskiem_link_mirrors_claim(int) OWNER TO taskiem_dispatch;
 REVOKE EXECUTE ON FUNCTION taskiem_link_mirrors_claim(int) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_link_mirrors_claim(int) TO taskiem_app;
 
+-- The reconciler (§5.3, §17): every active link's invoices against their
+-- bills, by the mirrored figures (number, total, paid, due date, void).
+-- A bill missing or differing, for an invoice sent since the link was
+-- accepted (earlier invoices are not claimed), is put back on the
+-- seller's mirror list, and the worker writes it again from the invoice.
+-- It answers how many it put back, and nothing of either side.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_reconcile() RETURNS int
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_n int;
+BEGIN
+  WITH sides AS (
+    SELECT l.id AS link, l.answered_at, s.seller, s.buyer FROM business_links l
+      CROSS JOIN LATERAL (VALUES (l.a_tenant, l.b_tenant), (l.b_tenant, l.a_tenant)) s(seller, buyer)
+     WHERE l.status = 'active'
+  ), wrong AS (
+    SELECT i.tenant_id, i.id FROM sides x
+      JOIN customer_invoices i ON i.tenant_id = x.seller AND i.customer_key = 'link:' || x.buyer::text
+                              AND i.sent_at IS NOT NULL AND i.sent_at >= x.answered_at
+      LEFT JOIN bills b ON b.tenant_id = x.buyer AND b.link_id = x.link AND b.source_id = i.id
+     WHERE b.id IS NULL OR b.reference <> i.number OR b.amount_kobo <> i.total_kobo OR b.paid_kobo <> i.paid_kobo
+        OR b.due_on IS DISTINCT FROM i.due_on OR b.voided <> (i.voided_at IS NOT NULL)
+  ), put AS (
+    INSERT INTO link_mirrors_due (tenant_id, invoice_id) SELECT tenant_id, id FROM wrong
+    ON CONFLICT (tenant_id, invoice_id) DO UPDATE SET due_at = now()
+    RETURNING 1
+  )
+  SELECT count(*) INTO v_n FROM put;
+  RETURN v_n;
+END
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_link_reconcile() OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_link_reconcile() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION taskiem_link_reconcile() TO taskiem_app;
+CREATE POLICY dispatch ON bills FOR SELECT TO taskiem_dispatch USING (true);
+GRANT SELECT (id, tenant_id, link_id, source_id, reference, amount_kobo, paid_kobo, due_on, voided) ON bills TO taskiem_dispatch;
+
 -- +goose Down
+DROP FUNCTION taskiem_link_reconcile();
 DROP FUNCTION taskiem_link_mirrors_claim(int);
 DROP FUNCTION taskiem_link_payout_token(text, bigint);
 ALTER TABLE customer_invoices DROP COLUMN disputed;

@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, get, patch, post, put } from "../api";
 import {
   EmptyState,
   ErrorBox,
   Field,
+  Item,
   Items,
   Modal,
   PageHeader,
@@ -21,6 +23,7 @@ import {
   type SupplierForm,
   type SuppliersView,
 } from "../lib/purchases";
+import { owedBySupplier, type Bill } from "../lib/bills";
 import type { StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
@@ -182,6 +185,7 @@ export function StorefrontSuppliers() {
           }}
         />
       )}
+      <LinkedSuppliersOwed />
     </>
   );
 }
@@ -361,5 +365,35 @@ function SupplierModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** What is owed to linked suppliers on Taskiem (business links): the sum
+ * of their open bills, which is what their own records say. */
+function LinkedSuppliersOwed() {
+  const bills = useLoad(() => get<{ bills: Bill[] }>("/v1/bills"), []);
+  const owed = owedBySupplier(bills.data?.bills);
+  if (owed.length === 0) return null;
+  return (
+    <section className="card" aria-labelledby="suppliers-linked" data-testid="suppliers-linked">
+      <h2 id="suppliers-linked">Linked suppliers on Taskiem</h2>
+      <p className="hint">
+        What you owe them is their open bills, as their own records say. <Link to="/bills">All bills</Link>
+      </p>
+      <Items label="Owed to linked suppliers">
+        {owed.map((o) => (
+          <Item
+            key={o.supplier}
+            to="/bills"
+            icon="invoices"
+            tone="warn"
+            title={o.name}
+            side={formatPrice(o.dueKobo)}
+            sub={`${o.bills} ${o.bills === 1 ? "bill" : "bills"} to pay`}
+            testid="supplier-linked"
+          />
+        ))}
+      </Items>
+    </section>
   );
 }

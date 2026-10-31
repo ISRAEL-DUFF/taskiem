@@ -90,6 +90,20 @@ export interface BillPaySettings {
   waiting?: boolean;
 }
 
+/** What is owed to each linked supplier: the open bills' due, by
+ * supplier, most owed first. */
+export function owedBySupplier(list: Bill[] | undefined): { supplier: string; name: string; dueKobo: number; bills: number }[] {
+  const by = new Map<string, { supplier: string; name: string; dueKobo: number; bills: number }>();
+  for (const b of list ?? []) {
+    if (b.status === "void" || b.due_kobo <= 0) continue;
+    const x = by.get(b.supplier) ?? { supplier: b.supplier, name: b.supplier_name, dueKobo: 0, bills: 0 };
+    x.dueKobo += b.due_kobo;
+    x.bills += 1;
+    by.set(b.supplier, x);
+  }
+  return [...by.values()].sort((a, b) => b.dueKobo - a.dueKobo || a.name.localeCompare(b.name));
+}
+
 /** What is left to pay across bills. */
 export function billsDue(list: Bill[] | undefined): number {
   return (list ?? []).reduce((n, b) => n + (b.status === "void" ? 0 : b.due_kobo), 0);

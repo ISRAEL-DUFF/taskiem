@@ -74,6 +74,15 @@ billing_payments.provider
 billing_payments.reference
 billing_payments.status
 billing_payments.tenant_id
+bills.amount_kobo
+bills.due_on
+bills.id
+bills.link_id
+bills.paid_kobo
+bills.reference
+bills.source_id
+bills.tenant_id
+bills.voided
 business_links.a_tenant
 business_links.answered_actor
 business_links.answered_at

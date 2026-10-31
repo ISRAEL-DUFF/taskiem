@@ -46,6 +46,15 @@ describe("bills", () => {
     expect(canPay({ ...bill, status: "disputed", pay_account_number: "8800000001" })).toBe(false);
   });
 
+  it("add up what is owed to each linked supplier", async () => {
+    const { owedBySupplier } = await import("./bills");
+    const list = [bill, { ...bill, id: "b2", due_kobo: 500000 }, { ...bill, id: "b3", supplier: "s2", supplier_name: "Cherry", due_kobo: 900000000 }, { ...bill, id: "b4", status: "void" as const }];
+    expect(owedBySupplier(list)).toEqual([
+      { supplier: "s2", name: "Cherry", dueKobo: 900000000, bills: 1 },
+      { supplier: "s1", name: "Dangote Stores", dueKobo: 33000000, bills: 2 },
+    ]);
+  });
+
   it("add up what is left to pay", () => {
     expect(billsDue([bill, { ...bill, id: "b2", due_kobo: 500000 }, { ...bill, id: "b3", status: "void" }])).toBe(33000000);
     expect(billsDue(undefined)).toBe(0);

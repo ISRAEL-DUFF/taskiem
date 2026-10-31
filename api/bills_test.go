@@ -126,6 +126,21 @@ func TestBillsMirrored(t *testing.T) {
 		t.Errorf("after a void: %v", b)
 	}
 
+	// The reconciler: a bill changed by hand is put back and mirrored again.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bills SET paid_kobo = 1 WHERE id = $1`, b["id"]); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := w.srv.LinkReconcile(ctx); err != nil || n != 1 {
+		t.Fatalf("reconciled %d: %v", n, err)
+	}
+	tick(1)
+	if b := buyer.must(200, "GET", "/v1/bills/"+b["id"].(string), nil); b["paid_kobo"] != float64(10000000) || b["status"] != "void" {
+		t.Errorf("after the reconciler: %v", b)
+	}
+	if n, err := w.srv.LinkReconcile(ctx); err != nil || n != 0 {
+		t.Errorf("reconciled again: %d %v", n, err)
+	}
+
 	// To a business it is not linked with: nothing, and nothing left due.
 	stranger := uuid.Must(uuid.NewV7())
 	y := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Someone", "key": "link:" + stranger.String()},
