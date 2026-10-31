@@ -122,6 +122,15 @@ export function StorefrontSuppliers() {
                         >
                           Change<span className="sr-only"> {s.name}</span>
                         </button>
+                        {s.link_id && (
+                          <Link
+                            className="button small"
+                            to={`/storefront/suppliers/${s.link_id}/prices`}
+                          >
+                            Prices
+                            <span className="sr-only"> from {s.name}</span>
+                          </Link>
+                        )}
                         <button
                           type="button"
                           className="small"
@@ -214,36 +223,78 @@ export function StorefrontSuppliers() {
 /** Where linked suppliers deliver the business's orders: carried to each
  * order to them, where their rider takes it. */
 function DeliverTo() {
-  const cur = useLoad(() => get<{ address: string; phone: string }>("/v1/stock/deliver-to"), []);
+  const cur = useLoad(
+    () => get<{ address: string; phone: string }>("/v1/stock/deliver-to"),
+    [],
+  );
   if (!cur.data) return null;
   return <DeliverToForm initial={cur.data} onSaved={cur.reload} />;
 }
 
-function DeliverToForm({ initial, onSaved }: { initial: { address: string; phone: string }; onSaved: () => void }) {
+function DeliverToForm({
+  initial,
+  onSaved,
+}: {
+  initial: { address: string; phone: string };
+  onSaved: () => void;
+}) {
   const [address, setAddress] = useState(initial.address);
   const [phone, setPhone] = useState(initial.phone);
   const act = useAction();
   return (
-    <section className="card" aria-labelledby="suppliers-deliver" data-testid="deliver-to">
+    <section
+      className="card"
+      aria-labelledby="suppliers-deliver"
+      data-testid="deliver-to"
+    >
       <h2 id="suppliers-deliver">Where linked suppliers deliver</h2>
       <p className="hint">
-        Orders to suppliers on Taskiem carry it, and their rider brings them here. Leave it empty and you pick orders up.
+        Orders to suppliers on Taskiem carry it, and their rider brings them
+        here. Leave it empty and you pick orders up.
       </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => (await put("/v1/stock/deliver-to", { address: address.trim(), phone: phone.trim() }), onSaved()), "Saved");
+          void act.run(
+            async () => (
+              await put("/v1/stock/deliver-to", {
+                address: address.trim(),
+                phone: phone.trim(),
+              }),
+              onSaved()
+            ),
+            "Saved",
+          );
         }}
       >
         <Field label="Address">
-          <input value={address} maxLength={300} placeholder="12 Admiralty Way, Lekki" onChange={(e) => setAddress(e.target.value)} autoComplete="street-address" />
+          <input
+            value={address}
+            maxLength={300}
+            placeholder="12 Admiralty Way, Lekki"
+            onChange={(e) => setAddress(e.target.value)}
+            autoComplete="street-address"
+          />
         </Field>
         <Field label="Number the rider calls at the door">
-          <input value={phone} inputMode="tel" placeholder="0803 123 4567" onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+          <input
+            value={phone}
+            inputMode="tel"
+            placeholder="0803 123 4567"
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+          />
         </Field>
         <ErrorBox error={act.error} />
         <div className="toolbar">
-          <button type="submit" className="primary" disabled={act.busy || (address === initial.address && phone === initial.phone)}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={
+              act.busy ||
+              (address === initial.address && phone === initial.phone)
+            }
+          >
             Save
           </button>
         </div>
@@ -274,8 +325,8 @@ function LinkSupplierModal({
     <Modal title={`${supplier.name} on Taskiem`} onClose={onClose}>
       <p className="hint">
         When {supplier.name} is a business you are linked with, your orders go
-        straight into their business on Taskiem, and their answers, delivery
-        and invoice come back to you, instead of messages.
+        straight into their business on Taskiem, and their answers, delivery and
+        invoice come back to you, instead of messages.
       </p>
       <ErrorBox error={list.error ?? act.error} />
       {list.data && linked.length === 0 ? (
@@ -507,10 +558,15 @@ function LinkedSuppliersOwed() {
   const owed = owedBySupplier(bills.data?.bills);
   if (owed.length === 0) return null;
   return (
-    <section className="card" aria-labelledby="suppliers-linked" data-testid="suppliers-linked">
+    <section
+      className="card"
+      aria-labelledby="suppliers-linked"
+      data-testid="suppliers-linked"
+    >
       <h2 id="suppliers-linked">Linked suppliers on Taskiem</h2>
       <p className="hint">
-        What you owe them is their open bills, as their own records say. <Link to="/bills">All bills</Link>
+        What you owe them is their open bills, as their own records say.{" "}
+        <Link to="/bills">All bills</Link>
       </p>
       <Items label="Owed to linked suppliers">
         {owed.map((o) => (

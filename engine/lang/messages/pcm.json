@@ -4395,6 +4395,46 @@
     "chat.link.file": {
       "text": "File",
       "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "*{name}* price for you:\n{items}\n\nOrder like *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "for one {unit}",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(at least {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(e no dey now)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… and {count} more for web.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* never share price list with you. Ask dem, or send *order from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "*{item}* no dey *{name}* price list. Send *prices from {name}* to see am.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Which of your items be their *{item}*? Talk am once for web, for {name} price for Suppliers page, then order again.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "E no draft: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Talk how many, like *order 20 bags of rice from Dangote*.",
+      "reviewed": false
     }
   }
 }

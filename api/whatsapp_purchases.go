@@ -361,6 +361,10 @@ func (s *Server) waPurchaseCommand(ctx context.Context, c *chat, text, cmd strin
 		return true, s.waAddSupplier(ctx, c, addSupplierRe.FindStringSubmatch(text))
 	case strings.HasPrefix(cmd, "add supplier"):
 		return true, c.say(ctx, s, c.t("wa.supplier.how"))
+	case pricesFromRe.MatchString(text):
+		return true, s.waPricesFrom(ctx, c, pricesFromRe.FindStringSubmatch(text)[1])
+	case orderItemRe.MatchString(text):
+		return true, s.waOrderItem(ctx, c, orderItemRe.FindStringSubmatch(text))
 	case orderFromRe.MatchString(text):
 		return true, s.waOrderFrom(ctx, c, orderFromRe.FindStringSubmatch(text)[1])
 	case receivedRe.MatchString(text):

@@ -1712,3 +1712,7 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .bubble .chat-preview .desc { font-size: 13px; color: var(--muted); }
 .chat-head .typing { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
 .unread-count { background: var(--ok); color: var(--panel); border-radius: 999px; padding: 0 7px; font-size: 12px; font-weight: 600; min-width: 20px; text-align: center; }
+/* A price list's items (business links L4): one per row, its fields below it. */
+.price-rows { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.price-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin: 0; min-width: 0; }
+.price-row .price-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; align-items: end; margin-top: 6px; }

@@ -4395,6 +4395,46 @@
     "chat.link.file": {
       "text": "Fayil",
       "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "Farashin *{name}* a gare ka:\n{items}\n\nYi oda haka: *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "na {unit} ɗaya",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(akalla {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(babu yanzu)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… da wasu {count} a yanar gizo.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* ba su raba jerin farashi da kai ba. Ka tambaye su, ko ka aika *order from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "Babu *{item}* a jerin farashin *{name}*. Aika *prices from {name}* don ganin su.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Wanne daga cikin kayanka ne *{item}* nasu? Faɗa sau ɗaya a yanar gizo, a farashin {name} a shafin Suppliers, sannan ka sake yin oda.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "Ba a rubuta ba: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Faɗi adadi, kamar *order 20 bags of rice from Dangote*.",
+      "reviewed": false
     }
   }
 }

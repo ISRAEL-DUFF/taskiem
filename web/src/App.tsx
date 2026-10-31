@@ -54,9 +54,19 @@ import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
-import { ChatPage, LinkCodePage, LinkCodeSignedOut, LinkedBusinessesPage } from "./pages/Links";
+import {
+  ChatPage,
+  LinkCodePage,
+  LinkCodeSignedOut,
+  LinkedBusinessesPage,
+} from "./pages/Links";
 import { BillPage, BillsPage } from "./pages/Bills";
-import { PurchasePage, TradeOrderPage, TradeOrdersPage } from "./pages/TradeOrders";
+import {
+  PurchasePage,
+  TradeOrderPage,
+  TradeOrdersPage,
+} from "./pages/TradeOrders";
+import { StorefrontPriceLists, SupplierPricesPage } from "./pages/PriceLists";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -230,7 +240,8 @@ function Shell() {
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
     // A business's link code (business links): sign in, or sign up first.
-    if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname)) return alone(<LinkCodeSignedOut />);
+    if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname))
+      return alone(<LinkCodeSignedOut />);
     return loc.pathname === "/login" ? (
       alone(<Login />)
     ) : (
@@ -604,13 +615,24 @@ function SignedIn() {
               />
               <Route path="/storefront/stock" element={<StorefrontStock />} />
               <Route path="/chat" element={<ChatPage />} />
-              <Route path="/settings/links" element={<LinkedBusinessesPage />} />
+              <Route
+                path="/settings/links"
+                element={<LinkedBusinessesPage />}
+              />
               <Route path="/l/:code" element={<LinkCodePage />} />
               <Route path="/bills" element={<BillsPage />} />
               <Route path="/bills/:id" element={<BillPage />} />
               <Route path="/trade-orders" element={<TradeOrdersPage />} />
               <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
               <Route path="/purchases/:id" element={<PurchasePage />} />
+              <Route
+                path="/storefront/price-lists"
+                element={<StorefrontPriceLists />}
+              />
+              <Route
+                path="/storefront/suppliers/:link/prices"
+                element={<SupplierPricesPage />}
+              />
               <Route
                 path="/storefront/suppliers"
                 element={<StorefrontSuppliers />}

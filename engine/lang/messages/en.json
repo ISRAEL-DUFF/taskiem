@@ -5493,6 +5493,56 @@
       "text": "File",
       "reviewed": true,
       "context": "A file (a PDF) sent in a conversation with a linked business, told on the phone"
+    },
+    "wa.prices.list": {
+      "text": "*{name}*'s prices for you:\n{items}\n\nOrder with *order 20 bags of rice from {name}*.",
+      "reviewed": true,
+      "context": "A linked supplier's price list in chat; {items} is one item per line"
+    },
+    "wa.prices.per": {
+      "text": "a {unit}",
+      "reviewed": true,
+      "context": "After a price: per unit, like \"a bag\""
+    },
+    "wa.prices.min": {
+      "text": "(at least {count})",
+      "reviewed": true,
+      "context": "After a price: the minimum quantity"
+    },
+    "wa.prices.out": {
+      "text": "(not available now)",
+      "reviewed": true,
+      "context": "After a price: the item cannot be ordered now"
+    },
+    "wa.prices.more": {
+      "text": "… and {count} more on the web.",
+      "reviewed": true,
+      "context": "The price list in chat is cut short"
+    },
+    "wa.prices.none": {
+      "text": "*{name}* shares no price list with you. Ask them to, or send *order from {name}*.",
+      "reviewed": true,
+      "context": "No linked supplier of that name shares prices"
+    },
+    "wa.prices.no_item": {
+      "text": "*{name}*'s prices have no *{item}*. Send *prices from {name}* to see them.",
+      "reviewed": true,
+      "context": "The item named is not on the supplier's price list"
+    },
+    "wa.prices.unlinked": {
+      "text": "Which of your items is their *{item}*? Say it once on the web, on {name}'s prices on the Suppliers page, and order again.",
+      "reviewed": true,
+      "context": "The buyer has not said which of its own items the supplier's item is"
+    },
+    "wa.prices.refused": {
+      "text": "Not drafted: {reason}.",
+      "reviewed": true,
+      "context": "An order from a price list could not be drafted; {reason} says why"
+    },
+    "wa.prices.how": {
+      "text": "Say how many, like *order 20 bags of rice from Dangote*.",
+      "reviewed": true,
+      "context": "How to order from a price list in chat"
     }
   }
 }

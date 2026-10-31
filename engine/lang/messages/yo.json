@@ -4395,6 +4395,46 @@
     "chat.link.file": {
       "text": "Fáìlì",
       "reviewed": false
+    },
+    "wa.prices.list": {
+      "text": "Iye owo *{name}* fun ọ:\n{items}\n\nPaṣẹ bayi: *order 20 bags of rice from {name}*.",
+      "reviewed": false
+    },
+    "wa.prices.per": {
+      "text": "fun {unit} kan",
+      "reviewed": false
+    },
+    "wa.prices.min": {
+      "text": "(o kere ju {count})",
+      "reviewed": false
+    },
+    "wa.prices.out": {
+      "text": "(ko si bayi)",
+      "reviewed": false
+    },
+    "wa.prices.more": {
+      "text": "… ati {count} si i lori wẹẹbu.",
+      "reviewed": false
+    },
+    "wa.prices.none": {
+      "text": "*{name}* ko pin iye owo pẹlu rẹ. Beere lọwọ wọn, tabi fi *order from {name}* ranṣẹ.",
+      "reviewed": false
+    },
+    "wa.prices.no_item": {
+      "text": "Ko si *{item}* ninu iye owo *{name}*. Fi *prices from {name}* ranṣẹ lati ri wọn.",
+      "reviewed": false
+    },
+    "wa.prices.unlinked": {
+      "text": "Ewo ninu awọn ọja rẹ ni *{item}* wọn? Sọ lẹẹkan lori wẹẹbu, ni iye owo {name} lori oju-iwe Suppliers, ki o paṣẹ lẹẹkansi.",
+      "reviewed": false
+    },
+    "wa.prices.refused": {
+      "text": "A ko kọ ọ: {reason}.",
+      "reviewed": false
+    },
+    "wa.prices.how": {
+      "text": "Sọ iye melo, bii *order 20 bags of rice from Dangote*.",
+      "reviewed": false
     }
   }
 }

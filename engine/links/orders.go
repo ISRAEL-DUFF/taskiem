@@ -567,9 +567,18 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET seller_status = 'received', updated_at = now() WHERE id = $1`, id); err != nil {
 		return nil, err
 	}
+	// A line whose item the buyer linked to one of the seller's (L4)
+	// reaches the seller as that item: no name matching.
+	linked, err := sellerItemsOf(ctx, tx, buyer, *p.Link)
+	if err != nil {
+		return nil, err
+	}
 	lines := make([]OrderLine, len(p.Lines))
 	for i, l := range p.Lines {
 		lines[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: l.Quantity, PriceKobo: l.CostKobo}
+		if id := linked[l.ItemID]; id != "" {
+			lines[i].ItemID, lines[i].Matched = id, "linked"
+		}
 	}
 	detail, _ := json.Marshal(map[string]any{"reference": p.Reference})
 	seller, err := EnterTx(ctx, tx, *p.Link, "link.order.sent", detail, Actor{Type: "system", ID: "link-orders"})

@@ -520,6 +520,10 @@ func (s *Server) LinkOrdersTick(ctx context.Context) (int, error) {
 			err = s.raiseOrderInvoice(ctx, d.Tenant, d.ID)
 		case "receipt":
 			err = s.settleReceiptLater(ctx, d.Tenant, d.ID)
+		case "prices":
+			err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{d.Tenant}, func(tx pgx.Tx) error {
+				return links.MirrorPricesTx(ctx, tx, d.Tenant, d.ID)
+			})
 		}
 		if err != nil {
 			s.Logger.Warn("links: linked-order work", "kind", d.Kind, "tenant", d.Tenant, "id", d.ID, "err", err)

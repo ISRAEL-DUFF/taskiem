@@ -1154,7 +1154,10 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
   const [link, setLink] = useState<{ qr: string; url: string }>();
   useEffect(() => {
     let live = true;
-    Promise.all([get<{ url?: string }>("/v1/link-settings"), getBlob("/v1/link-settings/qr").then(dataURL)]).then(
+    Promise.all([
+      get<{ url?: string }>("/v1/link-settings"),
+      getBlob("/v1/link-settings/qr").then(dataURL),
+    ]).then(
       ([st, linkQr]) => live && st.url && setLink({ qr: linkQr, url: st.url }),
       () => undefined,
     );
@@ -1246,8 +1249,12 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
               <div className="print-link">
                 <img src={link.qr} alt="" className="print-link-qr" />
                 <div>
-                  <div className="print-link-title">Link with us on Taskiem</div>
-                  <div className="print-url">{link.url.replace(/^https?:\/\//, "")}</div>
+                  <div className="print-link-title">
+                    Link with us on Taskiem
+                  </div>
+                  <div className="print-url">
+                    {link.url.replace(/^https?:\/\//, "")}
+                  </div>
                 </div>
               </div>
             )}
@@ -1286,9 +1293,18 @@ function Thumb({ src }: { src?: string }) {
   );
 }
 
-function PrintCard({ children, withLink = false }: { children: ReactNode; withLink?: boolean }) {
+function PrintCard({
+  children,
+  withLink = false,
+}: {
+  children: ReactNode;
+  withLink?: boolean;
+}) {
   return (
-    <div className={withLink ? "print-card with-link" : "print-card"} aria-hidden="true">
+    <div
+      className={withLink ? "print-card with-link" : "print-card"}
+      aria-hidden="true"
+    >
       {children}
     </div>
   );
@@ -1373,6 +1389,7 @@ export function StorefrontTabs() {
       <NavLink to="/storefront/deliveries">Deliveries</NavLink>
       <NavLink to="/storefront/stock">Stock</NavLink>
       <NavLink to="/storefront/suppliers">Suppliers</NavLink>
+      <NavLink to="/storefront/price-lists">Price lists</NavLink>
     </nav>
   );
 }

@@ -6276,6 +6276,568 @@ paths:
                     $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/price-lists:
+    get:
+      operationId: listPriceLists
+      tags:
+      - Links
+      summary: Your price lists
+      description: 'Price lists built on your own stock items, with the linked buyers each is shared with.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPriceList
+      tags:
+      - Links
+      summary: Make a price list
+      description: 'An empty list, by name.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [list]
+                properties:
+                  list:
+                    $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists/{id}:
+    patch:
+      operationId: renamePriceList
+      tags:
+      - Links
+      summary: Rename a price list
+      description: 'The buyers it is shared with see the new name.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePriceList
+      tags:
+      - Links
+      summary: Delete a price list
+      description: 'Withdrawn from every buyer it was shared with.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists/{id}/items:
+    put:
+      operationId: putPriceListItems
+      tags:
+      - Links
+      summary: Set a price lists items
+      description: 'Replaces the items: each one of your own stock items, with the price a linked buyer pays, a minimum quantity (1 by default) and whether it is available (yes by default). The buyers it is shared with see the change at once; an open order keeps its prices.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, price_kobo]
+                    properties:
+                      item_id:
+                        type: string
+                      price_kobo:
+                        type: integer
+                        minimum: 1
+                      min_quantity:
+                        type: integer
+                        minimum: 1
+                      available:
+                        type: boolean
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/price-lists/{id}/links:
+    put:
+      operationId: sharePriceList
+      tags:
+      - Links
+      summary: Share a price list
+      description: 'Exactly the linked buyers named: a link has one list, so one shared with another moves here, and one not named is withdrawn.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [links]
+              properties:
+                links:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [lists]
+                properties:
+                  lists:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-prices/{link}:
+    get:
+      operationId: getLinkPrices
+      tags:
+      - Links
+      summary: What one linked buyer sees
+      description: 'Its list at its prices, its own prices marked overridden.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [link, items]
+                properties:
+                  link:
+                    type: string
+                    format: uuid
+                  list:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLinkPrices
+      tags:
+      - Links
+      summary: Set one linked buyers own prices
+      description: 'prices maps your item to its price for this buyer; an item not named has the lists price.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prices]
+              properties:
+                prices:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    minimum: 1
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [link, items]
+                properties:
+                  link:
+                    type: string
+                    format: uuid
+                  list:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/supplier-prices:
+    get:
+      operationId: listSupplierPrices
+      tags:
+      - Links
+      summary: Your linked suppliers prices
+      description: 'The price lists linked suppliers share with you, at your prices (?link= for one).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: link
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [suppliers]
+                properties:
+                  suppliers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SupplierPrices'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/supplier-prices/{link}/order:
+    post:
+      operationId: orderFromPrices
+      tags:
+      - Links
+      summary: Order from a suppliers price list
+      description: 'A purchase order drafted at the lists prices (each line at least its minimum, while available), sent as any order is. Needs an Idempotency-Key. A line whose item you have not said is one of yours answers 422 with code item_unlinked and the item, unless item_id says which, which then links it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [lines]
+              properties:
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [seller_item_id, quantity]
+                    properties:
+                      seller_item_id:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      item_id:
+                        type: string
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [purchase]
+                properties:
+                  purchase:
+                    type: object
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/item-links/{link}:
+    get:
+      operationId: listItemLinks
+      tags:
+      - Links
+      summary: Your item links with a supplier
+      description: 'Which of your own items each of a linked suppliers items is.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [item_links]
+                properties:
+                  item_links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemLink'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putItemLink
+      tags:
+      - Links
+      summary: Link one of your items to a suppliers
+      description: 'Its orders then reach the supplier as that item. One each way: a link made again replaces the old one.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [item_id, seller_item_id]
+              properties:
+                item_id:
+                  type: string
+                seller_item_id:
+                  type: string
+      responses:
+        '200':
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [item_links]
+                properties:
+                  item_links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemLink'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/item-links/{link}/{item}:
+    delete:
+      operationId: deleteItemLink
+      tags:
+      - Links
+      summary: Unlink one of your items
+      description: ''
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: item
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
   /v1/taskiem-chat:
     get:
       operationId: taskiemHistory
@@ -28097,6 +28659,82 @@ components:
         amount_kobo:
           type: integer
         note:
+          type: string
+    PriceItem:
+      type: object
+      additionalProperties: false
+      required: [item_id, name, price_kobo, min_quantity, available]
+      properties:
+        item_id:
+          type: string
+          description: The seller's own item
+        name:
+          type: string
+        unit:
+          type: string
+        price_kobo:
+          type: integer
+        min_quantity:
+          type: integer
+        available:
+          type: boolean
+        overridden:
+          type: boolean
+          description: This link's own price, not the list's
+    PriceList:
+      type: object
+      additionalProperties: false
+      required: [id, name, items, links, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceItem'
+        links:
+          type: array
+          items:
+            type: string
+            format: uuid
+        updated_at:
+          type: string
+          format: date-time
+    SupplierPrices:
+      type: object
+      additionalProperties: false
+      required: [link, business, name, items, updated_at]
+      properties:
+        link:
+          type: string
+          format: uuid
+        business:
+          type: string
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceItem'
+        updated_at:
+          type: string
+          format: date-time
+    ItemLink:
+      type: object
+      additionalProperties: false
+      required: [link, item_id, seller_item_id, seller_item]
+      properties:
+        link:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+        seller_item_id:
+          type: string
+        seller_item:
           type: string
     TaskiemChat:
       type: object
