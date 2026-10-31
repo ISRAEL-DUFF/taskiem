@@ -4047,6 +4047,18 @@
     "link.offer_open": {
       "text": "Buɗe {url} bayan ka shiga kasuwancinka a Taskiem don haɗawa.",
       "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Wasu kasuwanci a Taskiem za su iya nemo ku don ciniki, ta sunanku, abin da kuke sayarwa da yankinku: aika *find us* don ba su dama, ko *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Yanzu wasu kasuwanci a Taskiem za su iya nemo {org} ta sunanta, abin da take sayarwa da yankinta. Aika *hide us* don dakatarwa.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Wasu kasuwanci ba za su ƙara nemo {org} ta bincike ba. Wanda ke da lambar wayarku ko mahaɗinku zai iya tambaya. Aika *find us* don canzawa.",
+      "reviewed": false
     }
   }
 }

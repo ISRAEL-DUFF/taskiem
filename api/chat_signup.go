@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ai/intent"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -631,6 +632,15 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 	if err := sc.ch.Touch(ctx, sc.addr, false, true, &tenant); err != nil {
 		return err
 	}
+	// The sign-up's last message asks whether other businesses find it
+	// (business links §5.1): asked once, here, so the web does not ask
+	// again. Until it answers, the default holds.
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := links.SetFindableTx(ctx, tx, tenant, nil, "system:signup")
+		return err
+	}); err != nil {
+		s.Logger.Warn("chat sign-up: asking about being found", "err", err)
+	}
 	signupCount(channel, "created")
 	return s.signupDone(ctx, sc, st)
 }
@@ -680,7 +690,8 @@ func (s *Server) signupDone(ctx context.Context, sc *signupChat, st *signupState
 	if s.Billing.On() && s.Billing.Config.TrialDays > 0 {
 		head = sc.t("signup.done_trial", "business", whatsapp.SafeText(st.Business), "days", strconv.Itoa(s.Billing.Config.TrialDays))
 	}
-	text := head + "\n\n" + sc.t("signup.starters") + "\n\n" + strings.TrimSpace(list.String()) + "\n\n" + sc.t("signup.own_words")
+	text := head + "\n\n" + sc.t("signup.starters") + "\n\n" + strings.TrimSpace(list.String()) + "\n\n" + sc.t("signup.own_words") +
+		"\n\n" + sc.t("signup.findable")
 	if sc.ch.Name() == "whatsapp" && sc.user == uuid.Nil {
 		text += "\n\n" + sc.t("signup.pin_hint")
 	}

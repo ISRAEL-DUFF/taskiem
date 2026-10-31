@@ -4047,6 +4047,18 @@
     "link.offer_open": {
       "text": "Ṣí {url} nígbà tí o bá wọlé sí ilé-iṣẹ́ rẹ lórí Taskiem láti so pọ̀.",
       "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Àwọn ilé-iṣẹ́ míràn lórí Taskiem lè rí yín láti bá yín ṣòwò, nípa orúkọ yín, ohun tí ẹ ń tà àti agbègbè yín: fi *find us* ránṣẹ́ láti gbà wọ́n láàyè, tàbí *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Àwọn ilé-iṣẹ́ míràn lórí Taskiem lè rí {org} báyìí nípa orúkọ rẹ̀, ohun tí ó ń tà àti agbègbè rẹ̀. Fi *hide us* ránṣẹ́ láti dá a dúró.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Àwọn ilé-iṣẹ́ míràn kò ní rí {org} nínú àwárí mọ́. Ẹni tó ní nọ́mbà fóònù yín tàbí ìjápọ̀ yín ṣì lè béèrè. Fi *find us* ránṣẹ́ láti yí i padà.",
+      "reviewed": false
     }
   }
 }

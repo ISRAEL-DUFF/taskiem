@@ -4047,6 +4047,18 @@
     "link.offer_open": {
       "text": "Open {url} as you don sign in to your business for Taskiem to link.",
       "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Other businesses for Taskiem fit find you to do business, by your name, wetin you dey sell and your area: send *find us* make dem find you, or *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Other businesses for Taskiem fit find {org} now by im name, wetin e dey sell and im area. Send *hide us* to stop am.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Other businesses no go find {org} for search again. Person wey get your phone number or link fit still ask to link. Send *find us* to change am.",
+      "reviewed": false
     }
   }
 }

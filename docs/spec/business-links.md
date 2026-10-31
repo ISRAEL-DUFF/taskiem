@@ -318,21 +318,31 @@ The link itself, its search and its words in chat; migration 00275, `engine/link
   - `/l/<code>` in the web app names the business and asks with **Request link**. Signed out, it offers to sign in or sign up first.
   - A request by code (`how` `code`) needs no findability, because the business chose to hand the code out. To its requester it reads as a search request does: after 30 days, "not accepted".
   - **Linked businesses** shows the link, **Copy the link** and the QR code (`/v1/link-settings/qr`, SVG or PNG).
+  - **Printed.** An invoice's public page, in every theme, carries "Is your business on Taskiem too? Link with <business>" with the code (`taskiem_public_link_code`, the public role's). A paid invoice's page is the customer's receipt, so receipts carry it too. Sending an invoice makes the business's code if it has none.
+  - The storefront's printable card carries a second, smaller code under the page's, "Link with us on Taskiem".
+  - School receipts, which parents check, do not carry it.
 - **The offer at the first document.**
   - An invoice sent to a phone that is another business's own (`taskiem_link_offer_to`: its owner's linked number or its own WhatsApp number, never a member's, the two neither linked nor asked) carries "<business> is on Taskiem too. Link with us: <link code>". So does a purchase order sent to such a supplier on WhatsApp, in the supplier's language.
   - Each phone is offered once (`link_offers`, a keyed hash on the sender's side).
   - On an invoice, the line is left out, and not counted as offered, when it would take the SMS past its three parts. With a naira amount the SMS is Unicode, so a longer business name often leaves no room, and the line then goes with a later document that has it.
-  - Not built: the offer on an order update, and as a WhatsApp button rather than a line.
-- **Findability, asked once.** The Chat page asks owners and admins once. **Not now** keeps the default; asking in the sign-up chat is not built.
+  - On WhatsApp the offer also comes with a **Link** button (`lk:offer:<code>`), on a purchase order to a supplier, an invoice sent in chat and an order update. A member of the business who taps it is asked how they trade, and the request goes. From a number no one is bound to (a business's own WhatsApp number), it answers the link to open signed in.
+- **Findability, asked once.**
+  - A business made in chat is asked in the sign-up's last message: "send *find us* to let them, or *hide us*". Sign-up records that it was asked, so the web does not ask again.
+  - Any other business is asked once on the Chat page, where **Not now** keeps the default.
+  - `find us` and `hide us` work in chat at any time.
 - **The buyer's account number at acceptance (§6.3).**
   - When a link is accepted, each side the other buys from issues it a customer account number (`IssueAccount`, the key `link:<buyer>`), after the answer and in its own scope.
   - It uses a connection that needs nothing a business cannot give (no email, BVN or wallet to choose), the invoice settings' connection first. Where there is none, nothing is issued.
   - The bill that carries the number is L1's.
 
-**Not built in L0 yet:**
-- the link code printed on the storefront's QR card, invoices and receipts (it is on Linked businesses and in the offer);
-- a business's card with its documents (from L1), and messages in the search (L3);
-- the query-log isolation harness of §14. The database tests assert each function's refusals instead.
+- **The isolation harness (§14), for L0.** `api/links_isolation_test.go` runs the API on a pool whose query tracer logs every statement with its transaction's tenant scope, while two businesses search, ask, accept by chat, open a link code and end the link. It asserts that:
+  - no transaction holds both businesses;
+  - a transaction of one names the other only in a call to the link functions;
+  - no statement reads `business_links` itself.
+
+  A query planted in the accept path, naming the other business, makes it fail. L1 adds the mirror writes' checks: one `taskiem_link_enter` call and two audit entries each.
+
+**Left for later milestones:** a business's card with its documents (L1), and messages in the search (L3).
 
 ## 17. Risks and open questions
 

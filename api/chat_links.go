@@ -59,6 +59,8 @@ func (s *Server) waLinkCommand(ctx context.Context, c *chat, text, cmd string) (
 	switch {
 	case cmd == "links" || cmd == "my links" || cmd == "linked businesses":
 		return true, s.waLinks(ctx, c)
+	case cmd == "find us" || cmd == "hide us":
+		return true, s.waFindable(ctx, c, cmd == "find us")
 	case whoSellsRe.MatchString(text):
 		return true, s.waLinkFind(ctx, c, whoSellsRe.FindStringSubmatch(text)[1])
 	case findBizRe.MatchString(text):
@@ -129,6 +131,26 @@ func (s *Server) waLinks(ctx context.Context, c *chat) error {
 		}
 	}
 	return nil
+}
+
+// waFindable answers "find us" and "hide us": whether other businesses
+// find this one by search.
+func (s *Server) waFindable(ctx context.Context, c *chat, on bool) error {
+	if !c.p.Can(PermLinkManage) {
+		return c.say(ctx, s, c.t("link.denied", "org", c.tenant.Name))
+	}
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		if _, err := links.SetFindableTx(ctx, tx, c.tenant.ID, &on, "user:"+c.p.UserID.String()); err != nil {
+			return err
+		}
+		return waAudit(ctx, tx, c.ch.Name(), c.p, "link.settings", "links", map[string]any{"findable": on})
+	}); err != nil {
+		return err
+	}
+	if on {
+		return c.say(ctx, s, c.t("link.findable_on", "org", c.tenant.Name))
+	}
+	return c.say(ctx, s, c.t("link.findable_off", "org", c.tenant.Name))
 }
 
 // waLinkTo answers "link <who>": a phone number or a storefront address

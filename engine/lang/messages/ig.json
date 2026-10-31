@@ -4047,6 +4047,18 @@
     "link.offer_open": {
       "text": "Mepee {url} mgbe ị banyere n'azụmahịa gị na Taskiem iji jikọọ.",
       "reviewed": false
+    },
+    "signup.findable": {
+      "text": "Azụmahịa ndị ọzọ na Taskiem nwere ike ịchọta unu iji zụọ ahịa, site n'aha unu, ihe unu na-ere na mpaghara unu: ziga *find us* ka ha chọta unu, ma ọ bụ *hide us*.",
+      "reviewed": false
+    },
+    "link.findable_on": {
+      "text": "Azụmahịa ndị ọzọ na Taskiem nwere ike ịchọta {org} ugbu a site n'aha ya, ihe ọ na-ere na mpaghara ya. Ziga *hide us* iji kwụsị ya.",
+      "reviewed": false
+    },
+    "link.findable_off": {
+      "text": "Azụmahịa ndị ọzọ agaghị ahụ {org} na nchọta ọzọ. Onye nwere nọmba ekwentị gị ma ọ bụ njikọ gị ka nwere ike ịrịọ. Ziga *find us* iji gbanwee ya.",
+      "reviewed": false
     }
   }
 }

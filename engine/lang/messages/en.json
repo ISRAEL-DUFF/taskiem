@@ -5058,6 +5058,21 @@
       "text": "Open {url} signed in to your business on Taskiem to link.",
       "reviewed": true,
       "context": "An offer's Link button tapped from a number no one is bound to"
+    },
+    "signup.findable": {
+      "text": "Other businesses on Taskiem can find you to trade with, by your name, what you sell and your area: send *find us* to let them, or *hide us*.",
+      "reviewed": true,
+      "context": "The last line of the sign-up: whether other businesses find this one (business links)"
+    },
+    "link.findable_on": {
+      "text": "Other businesses on Taskiem can now find {org} by its name, what it sells and its area. Send *hide us* to stop.",
+      "reviewed": true,
+      "context": "Turned findability on by chat"
+    },
+    "link.findable_off": {
+      "text": "Other businesses no longer find {org} by search. Someone with your phone number or link can still ask to link. Send *find us* to change it.",
+      "reviewed": true,
+      "context": "Turned findability off by chat"
     }
   }
 }
