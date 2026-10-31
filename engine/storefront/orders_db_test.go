@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -504,5 +505,89 @@ func TestSubmitToAnActionByID(t *testing.T) {
 	}
 	if o := w.order(ref); o.Status != "received" || o.RunID == nil {
 		t.Fatalf("recorded: %+v", o)
+	}
+}
+
+// Fronts F1e (§5.5): the answers to the action's own questions reach the
+// run as trigger.answers, only the questions its form asks, sealed at
+// rest; Taskiem's record of the submission is trigger.submission, and
+// trigger.body is as before. The storefront's publish refuses a form that
+// no longer asks what a deployed workflow reads, or names a question like
+// one of Taskiem's fields.
+func TestAnswersReachTheRunApart(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var got map[string]any
+	start := w.orders.Start
+	w.orders.Start = func(ctx context.Context, req runtime.StartRequest) (runtime.Started, error) {
+		got, _ = req.Trigger.(map[string]any)
+		return start(ctx, req)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_actions SET form = '{"type": "object", "properties": {"size": {"type": "string"}}}'
+		WHERE tenant_id = $1 AND kind = 'order'`, w.env.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	key, hash := storefront.NewStatusKey()
+	sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola Ade", Phone: "+2348031234567"},
+		Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 1, PriceKobo: 150000, LineKobo: 150000}}, TotalKobo: 150000,
+		Fulfilment: "pickup", Payment: "after_accept", Channel: "direct", Submitted: time.Now(), StatusKey: key,
+		Answers: map[string]any{"size": "large", "total": "1"}}
+	ref := w.send("AD-ANSWER", hash, sub)
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("no run started")
+	}
+	if a, _ := got["answers"].(map[string]any); len(a) != 1 || a["size"] != "large" {
+		t.Fatalf("trigger.answers: %v", got["answers"])
+	}
+	s, _ := got["submission"].(map[string]any)
+	action, _ := s["action"].(map[string]any)
+	front, _ := s["front"].(map[string]any)
+	customer, _ := s["customer"].(map[string]any)
+	if s["reference"] != ref || action["kind"] != "order" || action["slug"] != "order" || front["slug"] != "" || customer["name"] != "Bola" ||
+		customer["phone"] != "•••4567" || s["total_kobo"] != float64(150000) || !strings.Contains(s["status_link"].(string), ref) {
+		t.Fatalf("trigger.submission: %v", s)
+	}
+	if b, _ := got["body"].(map[string]any); b["total_kobo"] != float64(150000) || b["size"] != nil {
+		t.Fatalf("trigger.body: %v", b)
+	}
+	var raw string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT answers::text FROM storefront_orders WHERE reference = $1`, ref).Scan(&raw); err != nil || strings.Contains(raw, "large") {
+		t.Fatalf("answers at rest: %q %v", raw, err)
+	}
+
+	// A workflow deployed in dev reads a question the form does not ask.
+	wf := w.env.Publish(t, `{"schema":"wd/v1","id":"wf_colours","version":1,"name":"Colours","trigger":{"type":"storefront","config":{"action":"order"}},
+		"steps":[{"id":"c","type":"transform","config":{"output":{"c":"=trigger.answers.colour"}}}]}`)
+	w.in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action) VALUES ($1, $2, $3, 1, 'dev', 'storefront', 'order')`,
+			uuid.New(), w.env.Tenant, wf)
+		return err
+	})
+	publish := func() error {
+		return db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+			_, err := storefront.Publish(ctx, tx, w.env.Tenant, "shops.test", "user:ada", false)
+			return err
+		})
+	}
+	var inUse *storefront.QuestionInUse
+	if err := publish(); !errors.As(err, &inUse) || inUse.Question != "colour" || inUse.Workflow != wf || !errors.Is(err, storefront.ErrInvalid) {
+		t.Fatalf("a form without the question a workflow reads: %v", err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_actions SET form = '{"type": "object", "properties": {"colour": {"type": "string"}, "total": {"type": "string"}}}'
+		WHERE tenant_id = $1 AND kind = 'order'`, w.env.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	if err := publish(); err == nil || !errors.Is(err, storefront.ErrInvalid) || !strings.Contains(err.Error(), `"total"`) {
+		t.Fatalf("a question named total: %v", err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_actions SET form = '{"type": "object", "properties": {"colour": {"type": "string"}}}'
+		WHERE tenant_id = $1 AND kind = 'order'`, w.env.Tenant); err != nil {
+		t.Fatal(err)
+	}
+	if err := publish(); err != nil {
+		t.Fatalf("the form asks it now: %v", err)
 	}
 }

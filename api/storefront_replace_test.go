@@ -141,3 +141,27 @@ func draftOrder(t *testing.T, c *client, name string) string {
 	}
 	return c.must(201, "POST", "/v1/workflows", map[string]any{"name": name, "definition": json.RawMessage(def)})["id"].(string)
 }
+
+// Fronts F1e (§5.3): publishing a workflow that reads trigger.answers
+// fields its action's form does not ask is refused, naming them; once the
+// form asks them, it publishes.
+func TestPublishRefusesAnswersTheFormDoesNotAsk(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ctx := context.Background()
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	def := `{"schema":"wd/v1","id":"wf_sizes","version":1,"name":"Sizes","trigger":{"type":"storefront","config":{"action":"enquiry"}},
+		"steps":[{"id":"s","type":"transform","config":{"output":{"s":"=trigger.answers.size"}}}]}`
+	id := ada.must(201, "POST", "/v1/workflows", map[string]any{"name": "Sizes", "definition": json.RawMessage(def)})["id"].(string)
+	if e := ada.must(409, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil); !strings.Contains(e["error"].(string), "trigger.answers.size") ||
+		!strings.Contains(e["error"].(string), "question form") {
+		t.Fatalf("an answer the form does not ask: %v", e)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment, form)
+		SELECT id, 'enquiry', tenant_id, false, 'Ask', 'none', '{"type": "object", "properties": {"size": {"type": "string"}}}' FROM storefronts WHERE tenant_id = $1
+		ON CONFLICT (storefront_id, kind) WHERE builtin DO UPDATE SET form = EXCLUDED.form`, w.biz); err != nil {
+		t.Fatal(err)
+	}
+	ada.must(200, "POST", "/v1/workflows/"+id+"/versions/1/publish", nil)
+}

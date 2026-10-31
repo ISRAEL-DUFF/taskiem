@@ -49,6 +49,9 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 	if err := s.formsDeployable(ctx, tx, tenant, d); err != nil {
 		return err
 	}
+	if err := storefrontAnswersDeployable(ctx, tx, d); err != nil {
+		return err
+	}
 	// Capability steps must be able to run on this environment's
 	// connections; the rails they will run on are kept with the deployment.
 	if s.Store != nil {

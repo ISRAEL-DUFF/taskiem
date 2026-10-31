@@ -489,15 +489,28 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 			delivery = &sub.DeliveryKobo
 		}
 	}
+	// The answers to the action's own questions, sealed under the
+	// customer as their details are (fronts §5.5).
+	var answers map[string]any
+	var form []byte
+	if err := tx.QueryRow(ctx, `SELECT a.form FROM storefront_actions a WHERE a.storefront_id = $1 AND `+actionOf("$2", "$3"), x.storefront, x.action, x.kind).
+		Scan(&form); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Order{}, err
+	}
+	if kept := keepAsked(sub.Answers, form); kept != nil {
+		if answers, err = o.Vault.SealUnderTx(ctx, tx, x.tenant, subject, "answers", kept); err != nil {
+			return Order{}, err
+		}
+	}
 	id := uuid.Must(uuid.NewV7())
 	// The submission names its action and front (fronts §5.5).
 	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
-		action_id, front_id)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id
+		action_id, front_id, answers)
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26
 		  FROM storefront_actions a WHERE a.storefront_id = $3 AND `+actionOf("$25", "$4"),
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
-		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action); err != nil {
+		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action, answers); err != nil {
 		return Order{}, err
 	} else if tag.RowsAffected() == 0 {
 		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
@@ -609,9 +622,13 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	var version int
 	var slug, name string
 	var found, autoConfirm bool
+	var rec submissionRecord
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
 		if ord, err = o.GetOrder(ctx, tx, tenant, reference); err != nil {
+			return err
+		}
+		if rec, err = o.recordOf(ctx, tx, tenant, ord); err != nil {
 			return err
 		}
 		var draft []byte
@@ -672,8 +689,14 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	raw, _ := json.Marshal(body)
 	var trig map[string]any
 	_ = json.Unmarshal(raw, &trig)
+	// The run is given trigger.body as before, and Taskiem's record of
+	// the submission and the customer's answers apart (fronts §5.5).
+	extra, _ := json.Marshal(map[string]any{"submission": rec.submission(ord, paymentStatus), "answers": rec.answers})
+	var apart map[string]any
+	_ = json.Unmarshal(extra, &apart)
 	st, err := o.Start(ctx, runtime.StartRequest{TenantID: tenant, WorkflowID: wf, Version: version, Environment: "prod",
-		Trigger:   map[string]any{"type": "storefront", "body": trig, "storefront": map[string]any{"slug": slug, "name": name}},
+		Trigger: map[string]any{"type": "storefront", "body": trig, "storefront": map[string]any{"slug": slug, "name": name},
+			"submission": apart["submission"], "answers": apart["answers"]},
 		StartedBy: "storefront:" + ord.Reference, TriggerID: "storefront/" + ord.Kind, DedupKey: dedup})
 	note := ""
 	if le, ok := runtime.IsLimit(err); ok {

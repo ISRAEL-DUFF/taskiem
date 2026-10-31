@@ -213,6 +213,11 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 	if m.Fronts, err = publicFronts(ctx, tx, tenant, m.Actions); err != nil {
 		return Storefront{}, err
 	}
+	// A form may not drop a question a workflow reads, nor take one of
+	// Taskiem's names (fronts §5.3, §5.5).
+	if err := checkAnswersRead(ctx, tx, s); err != nil {
+		return Storefront{}, err
+	}
 	raw, _ := json.Marshal(m)
 	sum := sha256.Sum256(raw)
 	var ok bool

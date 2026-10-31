@@ -52,6 +52,9 @@ type Submission struct {
 	Booking *Booked `json:"booking,omitempty"`
 	// DepositKobo is what a booking pays online when less than the total.
 	DepositKobo int64 `json:"deposit_kobo,omitempty"`
+	// Answers are the customer's answers to the action's own questions
+	// (fronts §5.5); only the questions its form asks are kept.
+	Answers map[string]any `json:"answers,omitempty"`
 }
 
 // Booked is the slot a booking holds: Until is the end plus the service's

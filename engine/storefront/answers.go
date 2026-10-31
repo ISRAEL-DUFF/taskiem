@@ -1,0 +1,259 @@
+package storefront
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/wd"
+)
+
+// An action's own questions (docs/spec/fronts.md §5.3, §5.5): its form
+// (storefront_actions.form) is a JSON Schema object whose properties are
+// the questions, with x-form hints. A submission's answers to them reach
+// the run as trigger.answers, apart from Taskiem's own record of the
+// submission (trigger.submission), so no answer can pass for a total or a
+// reference.
+
+// ReservedAnswers are the names a question may not take: Taskiem's own
+// fields of a submission, in trigger.submission and trigger.body.
+var ReservedAnswers = []string{"action", "basket", "booking", "customer", "delivery_fee", "delivery_kobo", "event", "front", "fulfilment",
+	"kind", "lines", "payment", "reference", "status_link", "summary", "total", "total_kobo", "zone"}
+
+var answerName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
+
+// FormFields are a form's questions by name, in order.
+func FormFields(form []byte) []string {
+	if len(form) == 0 {
+		return nil
+	}
+	var f struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal(form, &f) != nil {
+		return nil
+	}
+	out := make([]string, 0, len(f.Properties))
+	for k := range f.Properties {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// CheckForm refuses a form that is not an object of questions, and a
+// question named like one of Taskiem's fields of a submission.
+func CheckForm(form []byte) error {
+	if len(form) == 0 {
+		return nil
+	}
+	var f struct {
+		Type       string                     `json:"type"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(form, &f); err != nil || f.Type != "object" {
+		return fmt.Errorf("%w: an action's form is an object of questions", ErrInvalid)
+	}
+	for _, k := range FormFields(form) {
+		if slices.Contains(ReservedAnswers, k) {
+			return fmt.Errorf("%w: a question cannot be called %q: Taskiem gives every workflow the submission's %s itself; name the question something else", ErrInvalid, k, k)
+		}
+		if !answerName.MatchString(k) {
+			return fmt.Errorf("%w: a question's name is lower-case letters, digits and _, up to 40, starting with a letter: %q", ErrInvalid, k)
+		}
+	}
+	return nil
+}
+
+// QuestionInUse refuses a storefront publish whose form no longer asks a
+// question a live workflow reads (§5.3).
+type QuestionInUse struct {
+	Action   string // the action's slug
+	Question string
+	Workflow uuid.UUID
+	Name     string
+}
+
+func (e *QuestionInUse) Error() string {
+	return fmt.Sprintf("%s: your %s form no longer asks %q, which workflow %q reads: keep the question, or change the workflow first", ErrInvalid, e.Action, e.Question, e.Name)
+}
+
+func (e *QuestionInUse) Unwrap() error { return ErrInvalid }
+
+// checkAnswersRead refuses a publish when an action's form refuses (a
+// reserved or bad name) or no longer asks a question a workflow deployed
+// for it, in any environment, reads.
+func checkAnswersRead(ctx context.Context, tx pgx.Tx, sf Storefront) error {
+	rows, err := tx.Query(ctx, `SELECT a.slug, a.form, w.id, w.name, v.definition FROM storefront_actions a
+		JOIN triggers t ON t.type = 'storefront' AND (t.storefront_action_id = a.id OR (t.storefront_action_id IS NULL AND a.builtin AND t.storefront_action = a.kind))
+		JOIN workflow_versions v ON v.workflow_id = t.workflow_id AND v.version = t.version
+		JOIN workflows w ON w.id = t.workflow_id
+		WHERE a.storefront_id = $1 ORDER BY a.position, a.slug, w.name, t.environment`, sf.ID)
+	if err != nil {
+		return err
+	}
+	type held struct {
+		action string
+		form   []byte
+		wf     uuid.UUID
+		name   string
+		def    []byte
+	}
+	var list []held
+	for rows.Next() {
+		var h held
+		if err := rows.Scan(&h.action, &h.form, &h.wf, &h.name, &h.def); err != nil {
+			rows.Close()
+			return err
+		}
+		list = append(list, h)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, h := range list {
+		d, err := wd.Load(h.def)
+		if err != nil {
+			continue // a live definition is valid; nothing to read from one that is not
+		}
+		asked := FormFields(h.form)
+		for _, q := range wd.AnswerFields(d) {
+			if !slices.Contains(asked, q) {
+				return &QuestionInUse{Action: h.action, Question: q, Workflow: h.wf, Name: h.name}
+			}
+		}
+	}
+	forms, err := tx.Query(ctx, `SELECT form FROM storefront_actions WHERE storefront_id = $1 AND form IS NOT NULL`, sf.ID)
+	if err != nil {
+		return err
+	}
+	var all [][]byte
+	for forms.Next() {
+		var f []byte
+		if err := forms.Scan(&f); err != nil {
+			forms.Close()
+			return err
+		}
+		all = append(all, f)
+	}
+	forms.Close()
+	if err := forms.Err(); err != nil {
+		return err
+	}
+	for _, f := range all {
+		if err := CheckForm(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AnswersAsked are the questions of the action a storefront trigger names
+// (nil when it names none the storefront has yet).
+func AnswersAsked(ctx context.Context, tx pgx.Tx, action *uuid.UUID) ([]string, error) {
+	if action == nil {
+		return nil, nil
+	}
+	var form []byte
+	err := tx.QueryRow(ctx, `SELECT form FROM storefront_actions WHERE id = $1`, *action).Scan(&form)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return FormFields(form), err
+}
+
+// keepAsked keeps the answers to the action's questions, and only those.
+func keepAsked(answers map[string]any, form []byte) map[string]any {
+	if len(answers) == 0 {
+		return nil
+	}
+	asked := FormFields(form)
+	out := map[string]any{}
+	for k, v := range answers {
+		if slices.Contains(asked, k) {
+			out[k] = v
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// maskName leaves a name's first word.
+func maskName(n string) string {
+	if f := strings.Fields(n); len(f) > 0 {
+		return f[0]
+	}
+	return ""
+}
+
+// submissionRecord is what a run is given besides trigger.body: Taskiem's
+// record of the submission and the customer's answers, kept apart (§5.5).
+type submissionRecord struct {
+	front, action map[string]any
+	statusLink    string
+	answers       map[string]any
+}
+
+// recordOf reads an order's front, action, status link and answers.
+func (o *Orders) recordOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ord Order) (submissionRecord, error) {
+	r := submissionRecord{answers: map[string]any{}}
+	var fid, aid uuid.UUID
+	var fslug, fname, aslug, akind string
+	var env map[string]any
+	if err := tx.QueryRow(ctx, `SELECT f.id, f.slug, f.name, a.id, a.slug, a.kind, o.answers FROM storefront_orders o
+		JOIN storefront_actions a ON a.id = o.action_id JOIN storefront_fronts f ON f.id = o.front_id
+		WHERE o.tenant_id = $1 AND o.id = $2`, tenant, ord.ID).Scan(&fid, &fslug, &fname, &aid, &aslug, &akind, &env); err != nil {
+		return r, err
+	}
+	r.front = map[string]any{"id": fid.String(), "slug": fslug, "name": fname}
+	r.action = map[string]any{"id": aid.String(), "slug": aslug, "kind": akind}
+	if env != nil {
+		v, err := o.Vault.OpenTx(ctx, tx, tenant, env)
+		switch {
+		case errors.Is(err, pii.ErrErased):
+		case err != nil:
+			return r, err
+		default:
+			if m, ok := v.(map[string]any); ok {
+				r.answers = m
+			}
+		}
+	}
+	link, err := o.linkOf(ctx, tx, tenant, ord)
+	if err != nil {
+		return r, err
+	}
+	r.statusLink = link
+	return r, nil
+}
+
+// submission is trigger.submission: reference, front, action, total,
+// payment, the customer masked, the status link and the lines.
+func (r submissionRecord) submission(ord Order, paymentStatus string) map[string]any {
+	lines := make([]any, 0, len(ord.Basket))
+	for _, l := range ord.Basket {
+		b, _ := json.Marshal(l)
+		var m map[string]any
+		_ = json.Unmarshal(b, &m)
+		lines = append(lines, m)
+	}
+	phone := ""
+	if p := ord.Customer.Phone; len(p) > 4 {
+		phone = "•••" + p[len(p)-4:]
+	}
+	return map[string]any{"reference": ord.Reference, "front": r.front, "action": r.action, "total_kobo": ord.TotalKobo,
+		"payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}, "customer": map[string]any{"name": maskName(ord.Customer.Name), "phone": phone},
+		"status_link": r.statusLink, "lines": lines}
+}

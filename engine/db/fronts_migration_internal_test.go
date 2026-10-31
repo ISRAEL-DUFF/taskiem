@@ -90,7 +90,7 @@ func TestFrontsMigrationUpDownUp(t *testing.T) {
 
 	// 00280 moves the definers to action ids; its Down puts them back.
 	// 00281 gives each snapshot its home front, the actions named by id.
-	if _, err := p.UpTo(ctx, 281); err != nil {
+	if _, err := p.UpTo(ctx, 282); err != nil {
 		t.Fatal(err)
 	}
 	var home struct {
