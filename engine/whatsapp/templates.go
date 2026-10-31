@@ -159,6 +159,14 @@ var (
 			{Type: "url", Text: "Open invoice", Host: HostForms, Path: "/i/{{1}}", Var: "link", Example: "abc123"}},
 		Purpose: "An invoice to a customer who gets the business's updates on WhatsApp, outside the window; the quick reply carries the signed invoice button, the url button opens the invoice's page.",
 	}
+	TplBalance = Template{
+		Name: "taskiem_balance", Category: "UTILITY",
+		Body:     "[{{1}}] You owe {{2}} on {{3}} bill(s). Tap Pay now to see them and pay all or part.",
+		Vars:     []string{"tenant", "amount", "count"},
+		Examples: []string{"Ada Stores", "₦25,000", "2"},
+		Buttons:  []TemplateButton{{Type: "url", Text: "Pay now", Host: HostForms, Path: "/c/{{1}}", Var: "link", Example: "abc123"}},
+		Purpose:  "What a customer owes in all, to a customer who gets the business's updates on WhatsApp, outside the window: their balance sent from chat, or a reminder per customer; the url button opens their payment link's page.",
+	}
 	// Dispatch (docs/dispatch.md): an offer to a business's rider outside
 	// the window; the quick replies carry the signed Accept and Can't.
 	TplDeliveryOffer = Template{
@@ -251,7 +259,7 @@ var (
 
 // AllTemplates lists the library, for documentation, submission and tests.
 var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate,
-	TplInvoice, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
+	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

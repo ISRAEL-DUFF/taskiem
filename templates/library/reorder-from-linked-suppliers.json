@@ -6,7 +6,7 @@
   "category": "operations",
   "tags": ["taskiem trade"],
   "keywords": ["taskiem trade"],
-  "requires": ["linked supplier", "linked suppliers", "taskiem", "price list", "price lists"],
+  "requires": ["linked supplier", "linked suppliers", "linked business", "linked businesses", "price list", "price lists"],
   "connectors": ["link@1", "notify@1"],
   "variables": [],
   "params": [

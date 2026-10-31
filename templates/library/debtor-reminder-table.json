@@ -1,6 +1,7 @@
 {
   "id": "debtor-reminder-table",
   "title": "Weekly SMS reminders from your debtors data table",
+  "superseded_by": "chase-overdue-invoices",
   "summary": "Every week, text each customer in your debtors data table who still has a balance, with no spreadsheet.",
   "description": "Once a week at the day and time you choose, reads your debtors from a data table in Taskiem (columns: name, phone, balance) and sends each customer with a balance above zero a polite SMS reminder with the amount and how to pay. Customers with nothing owed or no phone number are skipped. At most five messages go out at a time. Make the table under Tables first, or let Taskiem make it when you accept the workflow; no Google Sheet is needed.",
   "category": "collections",

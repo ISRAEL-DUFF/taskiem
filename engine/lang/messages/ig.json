@@ -268,6 +268,10 @@
       "text": "Invoice {number} sitere n'aka {business}: {amount} ka a ga-akwụ. Pịa Kwụọ na transfer maka nọmba akaụntụ ị ga-akwụ ego na ya, ma ọ bụ Mepee invoice ka ị hụ ya.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "Ị ji {business} {amount} n'akwụkwọ ụgwọ {count}. Lee ha ma kwụọ niile ma ọ bụ akụkụ: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Nọmba akaụntụ gị maka invoice {number} na-abịa. Ọ bụrụ na ọ bịaghị n'ime otu nkeji, pịa Nọmba akaụntụ ọhụrụ.",
       "reviewed": false
@@ -1316,6 +1320,146 @@
       "text": "Tupu ị bipụta ya, mepụta tebụl ndị ọ chọrọ n'ime ngwa ahụ: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "Ana m edozi ndekọ gị. Ọ ga-ewe otu nkeji ma ọ bụ abụọ.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "Ị nweghị ike ịme ma ọ bụ ịgbanwe tebụl na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Kedu ndepụta ị chọrọ idobe?\n{list}\nZaghachi na nọmba ya.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Ihe ọzọ",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Gịnị bụ aha ndepụta ahụ? Dịka: Ndị ji ụgwọ, Ndị na-ebubata ngwa, Ndị otu.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Nye ya aha dị mkpụmkpụ, n'okpuru mkpụrụedemede 60.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Nye ya aha nwere mkpụrụedemede, dịka Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "Ị nweelarị tebụl a na-akpọ {table}. Zipu *add to {table}* iji tinye na ya.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Gịnị ka ị na-ede maka onye ọ bụla na {table}? Kewaa ha na kọma, dịka: name, phone, ihe ha zụrụ, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "Enweghị m ike ịgụ kọlụm ọ bụla na nke ahụ. Zipu ha na kọma, dịka: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* ga-edebe, maka onye ọ bụla:\n{columns}\n\nZaghachi *yes* ka e mee ya, ma ọ bụ zipu ndepụta ahụ ọzọ iji gbanwee ya.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Ọ dịghị ihe a gbanwere.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "Emeela m *{table}*. Tinye na ya site na *add to {name}*, ma ọ bụ hụ ya na ngwa ahụ{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "Enweghị m ike idozi ndekọ gị ugbu a, ya mere e meghị {table} ma. Zaghachi *try again* mgbe nkeji ole na ole gasịrị (m ga-edobe ya otu ụbọchị), ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Zaghachi *try again* ka e mee {table}, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "E meghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "A na-akpọ {old} ugbu a *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "Iwepụ kọlụm ma ọ bụ tebụl na-ehichapụ ihe niile dị n'ime ya, ya mere a na-eme ya na ngwa ahụ, ebe ị ga-ede aha ya iji kwado{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Kedu nke?\n{list}\nZipu ya ọzọ na aha tebụl ahụ zuru ezu.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "okwu",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "nọmba (ego, ọnụahịa)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "nọmba zuru oke (ọnụ ọgụgụ)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "ee ma ọ bụ mba",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "ụbọchị",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "ụbọchị na oge",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "nọmba ekwentị",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "adreesị email",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "ọtụtụ uru ọnụ",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Gịnị ga-abanye na *{column}*?\n{list}\nZaghachi na nọmba ya.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Tinye kọlụm *{column}* ({type}) na *{table}*? Zaghachi *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Nye kọlụm ahụ aha nwere mkpụrụedemede, dịka phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} nweelarị kọlụm {column}.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "Etinyela m *{column}* na *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Nwaa ọzọ",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "Nke ahụ dị ogologo nke ukwuu; kọwaa ya n'ihe na-erughị mkpụrụedemede {max}.",
       "reviewed": false
@@ -1545,7 +1689,107 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị",
+      "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị, mgbe ahụ *change 1* ma ọ bụ *delete 1*",
+      "reviewed": false
+    },
+    "wa.help.ask": {
+      "text": "• Jụọ maka tebụl gị: *how many customers*, *total balance*, ma ọ bụ ajụjụ ọ bụla dịka *onye ji m karịa 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Gịnị ka ị chọrọ ịma? Dịka: *ask how many customers are in Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "Enweghị m ike ịgụ ajụjụ dị otú ahụ ebe a ugbu a. Ndị a na-arụ ọrụ: *how many customers*, *total balance* (kọlụm nọmba), na *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "Enweghị m ike ịza nke ahụ site na tebụl gị. Nwaa *find*, aha tebụl na otu okwu, ma ọ bụ *tables* iji hụ ha.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "Oke AI nke ọnwa a agwụla, ya mere enweghị m ike ịgụ ajụjụ ahụ. *how many customers*, *total balance* na *find* ka na-arụ ọrụ.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Nke ahụ bụ ajụjụ {count} n'awa a. Jụọ ọzọ obere oge, ma ọ bụ jiri *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Mgbe etinyere ya",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} ebe {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " na ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} bụ {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} abụghị {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} pere mpe karịa {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} agafeghị {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} karịrị {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} ruru {value} ma ọ bụ karịa",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} nwere \"{value}\"",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} tọgbọ chakoo",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} nwere ihe",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} nke kachasị elu buru ụzọ",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} nke kacha nta buru ụzọ",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Ngụkọta {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(n'ahịrị {count} mbụ)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: ọ dịghị.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -2708,6 +2952,10 @@
       "text": "na POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "n'ụgwọ",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Ego aka",
       "reviewed": false
@@ -2718,6 +2966,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Ụgwọ",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2790,6 +3042,18 @@
     },
     "wa.sale.matched": {
       "text": "Ejikọọla ya na ego batara.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} ga-eji {total} n'ozuzu.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} bụ onye ọhụrụ n'akwụkwọ ụgwọ gị.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "Edere ya dị ka ụgwọ: {name} ji ya ({number}), {total} n'ozuzu ugbu a.",
       "reviewed": false
     },
     "wa.sale.short": {
@@ -3105,7 +3369,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… na {count} ọzọ. Mee ka ọchụchọ dị nso, ma ọ bụ mepee Tables na Taskiem.",
+      "text": "… na {count} ọzọ. Ziga *more* maka ise ndị ọzọ.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3118,6 +3382,454 @@
     },
     "wa.table.find_what": {
       "text": "Ziga *find*, aha tebụl na ihe ị na-achọ.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Ziga *change 1* ka idozi ahịrị 1, ma ọ bụ *delete 1* ka iwepụ ya.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Nke ahụ bụ ihe niile dị na {table} maka ọchụchọ ahụ.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "Enweghị ahịrị {n} na ndepụta ahụ. Ziga nọmba site na 1 ruo {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "Ị nweghị ike ịgbanwe ahịrị na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} adịghịzi. Ziga *tables* ka ịhụ ndị dị.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Ahịrị {id} adịghịzi na {table}.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Ahịrị {id} na {table}:\n{row}\n\nKedu nkọwa ị chọrọ ịgbanwe? Ziga nọmba ya.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Ziga nọmba site na 1 ruo {max}, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "Nke ọhụrụ:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: pịa *{cta}* ka itinye nke ọhụrụ; ị ga-akwado tupu echekwa ya. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Echekwa mgbanwe a na ahịrị {id} na {table}?\n{changes}\n\nZaa *yes* ka echekwa ya, nọmba nkọwa ọzọ ka ịgbanwekwa ya, ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Wepụ ahịrị {id} na {table}? A gaghị enwe ike inweta ya ọzọ.\n{row}\n\nZaa *yes* ka iwepụ ya ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Zaa *yes* ka ị gaa n'ihu ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Ọ dịghị ihe a gbanwere. Ahịrị ndị a chọtara ka nwere nọmba ha.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "Ị gbanweela ọtụtụ ahịrị ugbu a. Chere otu nkeji, mgbe ahụ nwaa ọzọ.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "Echekwaghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "O megheke: {reason}\n\nZaa *yes* ka ịnwaa ọzọ ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Ahịrị {id} gbanwere mgbe ị hụchara ya, ya mere e deghị ihe ọ bụla. Lee ya ugbu a.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "Echekwala ahịrị {id} na {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "Ewepụla ahịrị {id} na {table}.",
+      "reviewed": false
+    },
+    "button.file_new": {
+      "text": "Tebụl ọhụrụ",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Tinye na tebụl",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "Ọ bụghị ugbu a",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "Ị nweghị ike iweta ndepụta n'ime tebụl na {org} (ọ chọrọ table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "Enwere m ike ịgụ faịlụ CSV na Excel (.xlsx). Chekwaa ndepụta ahụ dị ka otu n'ime ha ma zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "Ị zigala ọtụtụ faịlụ ugbu a. Chere otu nkeji, mgbe ahụ zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "Faịlụ ahụ karịrị 2 MB. Ziga nke dị obere, ma ọ bụ jiri Import na ibe Tables{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "Faịlụ ahụ nwere ihe karịrị ahịrị {limit}, karịa ihe otu mbubata na-ewe. Kewaa ya n'ime obere faịlụ ma ziga nke ọ bụla.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "Enweghị m ike ịgụ faịlụ ahụ: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "Enweghị m ike inweta faịlụ ahụ. Zigharịa ya n'otu nkeji.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: ahịrị {rows} nwere {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Tinye na tebụl* ga-etinye ha na {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*Tebụl ọhụrụ* ga-eme tebụl site na ya. Iji tinye ahịrị ndị ahụ na tebụl ọzọ, ziga *add to* na aha ya. *Ọ bụghị ugbu a* agaghị edebe ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Pịa *Tebụl ọhụrụ*, ma ọ bụ ziga *add to* na aha tebụl, ma ọ bụ *Ọ bụghị ugbu a*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Ọtụtụ tebụl kwekọrọ:\n{list}\n\nZiga *add to* na aha zuru ezu.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Etinyeghị ihe ọ bụla, edebekwaghị faịlụ ahụ.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "Tebụl ahụ adịghịzi. Zigharịa faịlụ ahụ.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Kọlụm ole nke *{table}* ka *{header}* ga-abanye?\n{list}\n0. Hapụ ya",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Ziga nọmba site na 0 ruo {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "Ọ dịghị nke ọ bụla n'isiokwu faịlụ ahụ bụ kọlụm nke *{table}*, ya mere etinyeghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Etinyeghị ihe ọ bụla: {reason}. Dozie faịlụ ahụ ma zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Mepụta *{table}* nwere kọlụm ndị a:\n{columns}\n\nma tinye ahịrị {rows} ya? Ndị mbụ:\n{first}\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Tinye ahịrị {rows} na *{table}*? Ndị mbụ:\n{first}\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "Enweghị m ike inweta faịlụ ahụ ọzọ dị ka ọ dị. Zigharịa ya.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "O megheke: {reason}\n\nZaa *yes* ka ịnwaa ọzọ ma ọ bụ *cancel*. Ahịrị etinyelarị agaghị abanye ugboro abụọ.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "Emepụtala *{table}* ma tinye ahịrị {rows} site na {file}. Edebeghị faịlụ ahụ. Ziga *find {name}* na otu okwu ka ịchọ ahịrị.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "Etinyela ahịrị {rows} na *{table}* site na {file}. Edebeghị faịlụ ahụ.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "Etinyelarị ahịrị nke {file} na *{table}*, ya mere ọ dịghị ihe etinyere ugboro abụọ.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "Enwebeghị m ike imepe faịlụ e zitere na Slack. Bubata ya na ibe Tables{link}, ma ọ bụ zitere m ya na WhatsApp ma ọ bụ Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Ziga *copy my sheet* na njikọ sheet ahụ (mepee sheet ahụ na browser gị ma depụta adreesị ya).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Buru ụzọ jikọọ Google Sheets: ziga *connect Google Sheets*. Mgbe ahụ zigharịa *copy my sheet* na njikọ ahụ.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "Enweghị m ike ịgụ sheet ahụ: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem enweghị ike imepe sheet ahụ site na akaụntụ Google gị. Lelee njikọ ahụ, na na akaụntụ ị jikọrọ nwere ike imepe ya.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "Sheet ahụ agbanweela kemgbe m gụrụ ya, ya mere etinyeghị ihe ọ bụla. Zigharịa *copy my sheet* na njikọ ahụ.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Nke a bụ mbipụta: mgbanwe e mere na sheet ahụ ma emechaa agaghị abata. Debe ndepụta ahụ na tebụl site ugbu a.",
+      "reviewed": false
+    },
+    "wa.debt.owes_short": {
+      "text": "ji {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Onye ọhụrụ",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} bụ onye ọhụrụ. Ziga nọmba ekwentị {name} ka nnata na ncheta ruo ha aka, ma ọ bụ *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Kedu {name}?\n{list}\n\nZiga nọmba.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "Ogologo oge ole ka ị na-enye ndị ahịa ka ha kwụọ ihe ha ji? Ncheta ga-aga naanị mgbe nke a gachara.\n{list}\n\nZiga nọmba. Ị nwere ike ịgbanwe ya ma emechaa site na *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "Enweghị oge a kara aka (enweghị ncheta)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "Ụbọchị {days}",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "Enweghị ụbọchị ịkwụ ụgwọ.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Onye nwe ya na-edozi ogologo oge ndị ahịa nwere ịkwụ ụgwọ; ruo mgbe ahụ ụgwọ a enweghị ụbọchị ịkwụ ya.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "Ụbọchị ịkwụ ụgwọ: {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Dee na {name} ji {amount}? {due}\n{name} ga-eji {total} n'ozuzu. Agaghị eziga ha ihe ọ bụla.\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "Edeghị ya: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "E dela ya: {name} ji {amount} ({number}). {name} ji {total} n'ozuzu.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "Ị nweghị ike ide ụgwọ ma ọ bụ ịkwụ ụgwọ na {org} (ọ chọrọ invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "Ị nweghị ike ịhụ ndị ji {org} ụgwọ (ọ chọrọ invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Ọ dịghị onye a na-akpọ {name} ji gị ụgwọ. Dee ụgwọ site na *{name} owes* na ego ole.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "Kedu ka {name} si kwụọ?\n1. Ego n'aka\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Akaụntụ {name} gị ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Akaụntụ ọzọ",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Kedu akaụntụ {name} zigara ya?\n{list}\n\nZiga nọmba.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "n'ego aka",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "site na transfer n'ime {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Dee {amount} si n'aka {name} {how}? Ọ ga-ebu ụzọ kwụọ ụgwọ ha kacha ochie. {name} ga-eji {total}.\n\nZaa *yes* ma ọ bụ *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} karịrị ihe ha ji ga-anọ dị ka kredit ha, maka ụgwọ ha ọzọ.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "E dela {amount} si n'aka {name}. {name} ji {total} ugbu a.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Kredit edebere ha: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "Nke ahụ abụghị nọmba ekwentị m nwere ike iji. Ziga ya na koodu obodo (+234…), ma ọ bụ *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "Emechala: ụgwọ {count} meghere ugbu a na-agbaso usoro ndị a.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Ọ dịghị ihe a ga-ede: Taskiem na-ahụ ego na-abata na {account}. Ego {name} ji ga-ebelata mgbe transfer ahụ rutere ma jikọọ ya.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Gịnị ka ị na-akpọ akaụntụ ahụ? Jiri aha ụlọ akụ ya na aha dị mkpụmkpụ, dị ka *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Jiri obere mkpụrụedemede na ọnụọgụgụ, na otu / naanị, dị ka *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "Edeghị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Usoro kredit bụ ụbọchị 1 ruo 365, ma ọ bụ *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Ndị ahịa nwere {terms} ugbu a ịkwụ ihe ha ji. Ụgwọ ọhụrụ ga-agbaso nke a.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Ụgwọ e dere agaghị enwe ụbọchị ịkwụ ụgwọ ma ọ bụ ncheta.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Tinye ha na ụgwọ {count} e derela, nke ọ bụla site n'ụbọchị e dere ya?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Ọ dịghị onye ji gị ihe ọ bụla. Dee ụgwọ site na *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "Ndị ahịa {count} ji gị {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} (ahịrị {lines})",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "ụbọchị ịkwụ {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… na {count} ọzọ.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Ziga *balance* na aha maka ụgwọ otu onye ahịa.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Ihe karịrị otu kwekọrọ:\n{list}\n\nZiga aha zuru ezu.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} ji {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Ịkwụ ụgwọ ikpeazụ {amount} na {date}.",
+      "reviewed": false
+    },
+    "wa.debt.owes_nothing": {
+      "text": "{name} ejighị ihe ọ bụla.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} enweghị nọmba ekwentị ugbu a. Buru ụzọ zipu *{name}'s number is 0803…*.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "nọmba akaụntụ nke ha ka ha kwụọ ụgwọ",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "njikọ iji kwụọ ya, niile ma ọ bụ akụkụ",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "enweghị ụzọ ịkwụ ụgwọ n'ịntanetị (ha ga-ajụ gị)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Ka m zigara {name} ihe ha ji, {amount} ({lines}), na {to}, ya na {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Ahịrị akwụkwọ {count} ha ga-egosi dị ka ezigara.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "Ezigala {name} ego ha ji, {amount}, site na {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Ọ dịghị ihe rutere {name} ugbu a: ozi karịrị akarị n'elekere a, ma ọ bụ SMS atụmatụ gị agwụla. Nwaa ọzọ ma emechaa.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "O zighị: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "Nọmba {name} bụ {phone} ugbu a: nnata na ncheta nwere ike iru ha aka.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: ụgwọ ndị ahịa ji gị",
       "reviewed": false
     },
     "wa.table.form": {
@@ -3185,7 +3897,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} enwebeghị tebụl data. Mepụta otu na Taskiem, n'okpuru Tables{link}.",
+      "text": "{org} enwebeghị tebụl data. Zipu *new table* ka e mee otu ebe a, ma ọ bụ mepụta otu na Taskiem, n'okpuru Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

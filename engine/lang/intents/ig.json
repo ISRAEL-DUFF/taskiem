@@ -3,45 +3,210 @@
   "reviewed": false,
   "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
   "phrases": {
-    "help": ["enyemaka", "nyere m aka", "gịnị ka m nwere ike ime", "kedu", "ndewo"],
-    "status": ["gịnị dara taa", "gịnị dara", "kedu ka ihe si aga", "ọnọdụ"],
-    "approvals": ["nkwado", "gịnị na-eche m"],
-    "cancel": ["kagbuo", "kwụsị", "hapụ ya"],
-    "yes": ["ee", "ọ dị mma", "mee ya"],
-    "no": ["mba", "emela ya"],
-    "tables": ["tebụl m", "tebụl niile", "ndepụta tebụl", "gosi m tebụl m"],
-    "make_page": ["mee peeji m", "mee ụlọ ahịa m"],
-    "my_page": ["peeji m", "ụlọ ahịa m"],
-    "orders": ["iwu m", "ihe e nyere m iwu"],
-    "open_shop": ["mepee ụlọ ahịa m", "mepee ụlọ ahịa"],
-    "qr": ["qr m"],
-    "signup": ["achọrọ m imepe akaụntụ", "mepere m akaụntụ", "achọrọ m ịmalite azụmahịa", "debanye aha"],
-    "plan": ["atụmatụ m", "ego ole ka m ga-akwụ", "ịkwụ ụgwọ taskiem"]
+    "help": [
+      "enyemaka",
+      "nyere m aka",
+      "gịnị ka m nwere ike ime",
+      "kedu",
+      "ndewo"
+    ],
+    "status": [
+      "gịnị dara taa",
+      "gịnị dara",
+      "kedu ka ihe si aga",
+      "ọnọdụ"
+    ],
+    "approvals": [
+      "nkwado",
+      "gịnị na-eche m"
+    ],
+    "cancel": [
+      "kagbuo",
+      "kwụsị",
+      "hapụ ya"
+    ],
+    "yes": [
+      "ee",
+      "ọ dị mma",
+      "mee ya"
+    ],
+    "no": [
+      "mba",
+      "emela ya"
+    ],
+    "tables": [
+      "tebụl m",
+      "tebụl niile",
+      "ndepụta tebụl",
+      "gosi m tebụl m"
+    ],
+    "new_table": [
+      "tebụl ọhụrụ",
+      "mee tebụl",
+      "ndepụta ọhụrụ"
+    ],
+    "make_page": [
+      "mee peeji m",
+      "mee ụlọ ahịa m"
+    ],
+    "my_page": [
+      "peeji m",
+      "ụlọ ahịa m"
+    ],
+    "orders": [
+      "iwu m",
+      "ihe e nyere m iwu"
+    ],
+    "open_shop": [
+      "mepee ụlọ ahịa m",
+      "mepee ụlọ ahịa"
+    ],
+    "qr": [
+      "qr m"
+    ],
+    "signup": [
+      "achọrọ m imepe akaụntụ",
+      "mepere m akaụntụ",
+      "achọrọ m ịmalite azụmahịa",
+      "debanye aha"
+    ],
+    "plan": [
+      "atụmatụ m",
+      "ego ole ka m ga-akwụ",
+      "ịkwụ ụgwọ taskiem"
+    ]
   },
   "prefixes": {
-    "switch": ["gbanwee gaa", "gaa na"],
-    "run": ["malite", "mee"],
-    "build": ["wuo", "mepụta"],
-    "language": ["asụsụ", "gbanwee asụsụ gaa"],
-    "add": ["tinye na", "tinye n'ime", "gbakwunye na", "tinye"],
-    "find": ["chọọ", "chọọ na", "chọta", "chọta na"],
-    "publish": ["bipụta"],
-    "close_shop": ["mechie ụlọ ahịa m", "mechie ụlọ ahịa"],
-    "order_ready": ["adịla njikere"],
-    "order_delivered": ["eruola ha", "ha anatala"],
-    "invoice": ["akwụkwọ ụgwọ", "ziga akwụkwọ ụgwọ nye"],
-    "expense": ["emefuru m", "mmefu"],
-    "cash_in": ["ego batara"],
-    "cash_out": ["ego pụrụ"],
-    "sold": ["erere m", "m rere", "arerela"],
-    "received": ["anatara m", "m natara", "anatala"],
-    "count": ["agụrụ m", "m gụrụ"],
-    "stock": ["ole ka", "ole"],
-    "take_off": ["wepụ", "wepu", "mebiri"],
-    "connect": ["jikọọ", "connect"],
-    "invite": ["kpọọ", "invite"]
+    "switch": [
+      "gbanwee gaa",
+      "gaa na"
+    ],
+    "run": [
+      "malite",
+      "mee"
+    ],
+    "build": [
+      "wuo",
+      "mepụta"
+    ],
+    "language": [
+      "asụsụ",
+      "gbanwee asụsụ gaa"
+    ],
+    "add": [
+      "tinye na",
+      "tinye n'ime",
+      "gbakwunye na",
+      "tinye"
+    ],
+    "find": [
+      "chọọ",
+      "chọọ na",
+      "chọta",
+      "chọta na"
+    ],
+    "new_table": [
+      "tebụl ọhụrụ",
+      "ndepụta ọhụrụ"
+    ],
+    "publish": [
+      "bipụta"
+    ],
+    "close_shop": [
+      "mechie ụlọ ahịa m",
+      "mechie ụlọ ahịa"
+    ],
+    "order_ready": [
+      "adịla njikere"
+    ],
+    "order_delivered": [
+      "eruola ha",
+      "ha anatala"
+    ],
+    "invoice": [
+      "akwụkwọ ụgwọ",
+      "ziga akwụkwọ ụgwọ nye"
+    ],
+    "expense": [
+      "emefuru m",
+      "mmefu"
+    ],
+    "cash_in": [
+      "ego batara"
+    ],
+    "cash_out": [
+      "ego pụrụ"
+    ],
+    "sold": [
+      "erere m",
+      "m rere",
+      "arerela"
+    ],
+    "received": [
+      "anatara m",
+      "m natara",
+      "anatala"
+    ],
+    "count": [
+      "agụrụ m",
+      "m gụrụ"
+    ],
+    "stock": [
+      "ole ka",
+      "ole"
+    ],
+    "take_off": [
+      "wepụ",
+      "wepu",
+      "mebiri"
+    ],
+    "connect": [
+      "jikọọ",
+      "connect"
+    ],
+    "invite": [
+      "kpọọ",
+      "invite"
+    ],
+    "change_row": [
+      "gbanwee",
+      "dozie",
+      "mezie"
+    ],
+    "delete_row": [
+      "hichapụ",
+      "wepụ",
+      "kpochapụ"
+    ]
   },
-  "fillers": ["biko"],
-  "markers": ["biko", "kedu", "ndewo", "ego", "ziga", "enyemaka", "taa", "gịnị", "achọrọ m", "m chọrọ", "nke", "ndị", "kagbuo", "mba", "daalụ", "ụbọchị", "ndị ahịa", "akwụkwọ ụgwọ", "emefuru m", "ego batara", "ego pụrụ", "maka"],
-  "for_words": ["maka"]
+  "fillers": [
+    "biko"
+  ],
+  "markers": [
+    "biko",
+    "kedu",
+    "ndewo",
+    "ego",
+    "ziga",
+    "enyemaka",
+    "taa",
+    "gịnị",
+    "achọrọ m",
+    "m chọrọ",
+    "nke",
+    "ndị",
+    "kagbuo",
+    "mba",
+    "daalụ",
+    "ụbọchị",
+    "ndị ahịa",
+    "akwụkwọ ụgwọ",
+    "emefuru m",
+    "ego batara",
+    "ego pụrụ",
+    "maka"
+  ],
+  "for_words": [
+    "maka"
+  ]
 }

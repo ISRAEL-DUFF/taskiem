@@ -6,7 +6,7 @@
   "category": "operations",
   "tags": ["taskiem trade"],
   "keywords": ["taskiem trade"],
-  "requires": ["linked customer", "linked customers", "taskiem"],
+  "requires": ["linked customer", "linked customers", "linked business", "linked businesses"],
   "connectors": ["notify@1"],
   "variables": [],
   "params": [

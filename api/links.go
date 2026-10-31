@@ -26,7 +26,7 @@ import (
 // Business links, L0 (decision 0061; docs/spec/business-links.md §5):
 // finding another business on Taskiem, asking it to link, and answering.
 // Every read and write of a link goes through engine/links and the
-// definers of migration 00275; the other side's people are told in their
+// definers of migration 00279; the other side's people are told in their
 // own business's scope, from its own view of the link.
 
 // PermLinkManage requests, accepts, declines, blocks and ends links.

@@ -78,7 +78,31 @@ export interface StatementAdded {
   channel: string;
   added: number;
   skipped: number;
+  /** Lines recorded as the bank's confirmation of a transfer entered by hand. */
+  paired?: number;
+  /** Lines waiting for a person to say whether each is such a transfer. */
+  waiting?: number;
   columns: StatementColumns;
+}
+
+/** A transfer entered by hand that a waiting statement line may be. */
+export interface WaitingCandidate {
+  entry_id: string;
+  amount_kobo: number;
+  occurred_at: string;
+  description?: string;
+  entered_by?: string;
+}
+
+/** A statement line waiting for Same money or Different money (GET /v1/money/statement-waiting). */
+export interface WaitingLine {
+  id: string;
+  channel: string;
+  occurred_at: string;
+  amount_kobo: number;
+  description?: string;
+  candidates: WaitingCandidate[];
+  created_at: string;
 }
 
 /** A line of the file Taskiem could not read. */
@@ -98,6 +122,13 @@ export const LEAKS_PATH = "/v1/money/leaks";
 export const FEE_RATES_PATH = "/v1/money/fee-rates";
 export const STATEMENTS_PATH = "/v1/money/statements";
 export const ENTRIES_PATH = "/v1/money/entries";
+export const WAITING_PATH = "/v1/money/statement-waiting";
+export const waitingPath = (id: string) => `${WAITING_PATH}/${encodeURIComponent(id)}`;
+
+/** The decision for a waiting line: the transfer it is, or money of its own. */
+export function waitingDecision(entryID: string | null): { decision: "same" | "different"; entry_id?: string } {
+  return entryID ? { decision: "same", entry_id: entryID } : { decision: "different" };
+}
 export const leakPath = (id: string, action: "assign" | "close") => `${LEAKS_PATH}/${encodeURIComponent(id)}/${action}`;
 export const statementFormatPath = (channel: string) => `/v1/money/statement-format?${new URLSearchParams({ channel })}`;
 
@@ -375,8 +406,11 @@ export function statementRefusal(status: number, body: Record<string, unknown> |
 const lines = (n: number) => `${n} ${n === 1 ? "line" : "lines"}`;
 
 /** What an upload did, in words. */
-export function addedLine(r: Pick<StatementAdded, "added" | "skipped">): string {
-  return `Added ${lines(r.added)}, skipped ${r.skipped} already in the log.`;
+export function addedLine(r: Pick<StatementAdded, "added" | "skipped" | "paired" | "waiting">): string {
+  let s = `Added ${lines(r.added)}, skipped ${r.skipped} already in the log.`;
+  if (r.paired) s += ` ${lines(r.paired)} confirmed ${r.paired === 1 ? "a transfer" : "transfers"} entered by hand.`;
+  if (r.waiting) s += ` ${lines(r.waiting)} ${r.waiting === 1 ? "waits" : "wait"} for you below.`;
+  return s;
 }
 
 // --- cash and expenses ---

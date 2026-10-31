@@ -470,10 +470,10 @@ func (s *Server) billCards(ctx context.Context, link, seller, buyer uuid.UUID, r
 
 // --- from the phone ---
 
-// waAsk answers "ask Dangote …" (a message to a linked business, by its
+// waAskLinked answers "ask Dangote …" (a message to a linked business, by its
 // name) and "ask Dangote about INV-0042 …" (a reply about that document).
 // Words naming no linked business are not its (done false).
-func (s *Server) waAsk(ctx context.Context, c *chat, rest string) (bool, error) {
+func (s *Server) waAskLinked(ctx context.Context, c *chat, rest string) (bool, error) {
 	var list []links.Link
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error

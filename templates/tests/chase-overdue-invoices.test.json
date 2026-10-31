@@ -4,7 +4,8 @@
   "params": {
     "send_time": "09:00",
     "every_days": 3,
-    "reminders": 3
+    "reminders": 3,
+    "per_customer": false
   },
   "cases": [
     {
@@ -76,6 +77,67 @@
         },
         "outputs": {
           "chase_each[0].remind_failed": {"number": "INV-0005", "reason": "invoice INV-0005 is void"}
+        }
+      }
+    },
+    {
+      "name": "one message per customer: what they owe on everything overdue, and the owner once after the last reminder",
+      "params": {"per_customer": true},
+      "mocks": {
+        "overdue_customers": {
+          "output": {
+            "count": 2,
+            "customers": [
+              {"customer": "key:book:1", "number": "INV-0004", "lines": 2, "due_kobo": 800000, "due": "₦8,000", "due_on": "2026-10-22", "days_overdue": 1},
+              {"customer": "subj_x", "number": "INV-0001", "lines": 1, "due_kobo": 500000, "due": "₦5,000", "due_on": "2026-10-13", "days_overdue": 10}
+            ]
+          }
+        },
+        "chase_customers[0].remind_customer": {"output": {"number": "INV-0004", "queued": ["sms"], "sent": true}},
+        "chase_customers[1].tell_owner_customer": {"output": {"people": 1, "chat": 1, "email": 0, "nobody": false}}
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "overdue_customers": {"status": "overdue", "group": "customer", "limit": 200},
+          "chase_customers[0].remind_customer": {
+            "number": "INV-0004",
+            "text": "A reminder: {customer_due} is overdue on {customer_lines} item(s). See what you owe and pay: {customer_link}",
+            "subject": "Overdue: {customer_due}"
+          },
+          "chase_customers[1].tell_owner_customer": {
+            "title": "A customer still owes you",
+            "message": "A customer still owes ₦5,000 on 1 item(s), the oldest INV-0001, 10 days overdue after 3 reminders."
+          }
+        },
+        "steps": {
+          "overdue": "skipped",
+          "chase_each": "skipped",
+          "chase_customers[0].remind_customer": "completed",
+          "chase_customers[0].tell_owner_customer": "skipped",
+          "chase_customers[1].remind_customer": "skipped",
+          "chase_customers[1].tell_owner_customer": "completed"
+        },
+        "calls": {
+          "remind": 0,
+          "remind_customer": 1,
+          "tell_owner_customer": 1
+        }
+      }
+    },
+    {
+      "name": "one message per customer: a customer with no phone yet is not a failure",
+      "params": {"per_customer": true},
+      "mocks": {
+        "overdue_customers": {"output": {"count": 1, "customers": [
+          {"customer": "key:book:2", "number": "INV-0009", "lines": 1, "due_kobo": 300000, "due": "₦3,000", "due_on": "2026-10-20", "days_overdue": 3}
+        ]}},
+        "chase_customers[0].remind_customer": {"output": {"number": "INV-0009", "queued": [], "sent": false, "reason": "no_address"}}
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "chase_customers[0].remind_customer": "completed"
         }
       }
     },

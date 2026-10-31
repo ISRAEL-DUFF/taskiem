@@ -201,6 +201,10 @@ type chat struct {
 	// upload is a file sent on the web (a voice note or a photo), held in
 	// memory while the message is read: fetchMedia answers it.
 	upload []byte
+	// letGo is the list of found rows this message let go, so *change 2*
+	// in another language, by its words or the model's routing, still
+	// finds it (R6).
+	letGo *chatFound
 }
 
 // t is a message in the conversation's language.
@@ -243,6 +247,18 @@ type chatData struct {
 	Invite *chatInvite `json:"invite,omitempty"`
 	// Link is a link to another business being asked for (chat_links.go).
 	Link *chatLink `json:"link,omitempty"`
+	// TableMake is a data table being made, or a column added
+	// (chat_tables_make.go).
+	TableMake *chatTableMake `json:"table_make,omitempty"`
+	// Found is the rows a find showed, and a change or removal being
+	// prepared on one of them (chat_tables_rows.go).
+	Found *chatFound `json:"found,omitempty"`
+	// File is a file sent in chat being brought into a table
+	// (chat_tables_files.go).
+	File *chatFile `json:"file,omitempty"`
+	// Debt is a notebook debt or a customer's payment being recorded
+	// (chat_debtors.go).
+	Debt *chatDebt `json:"debt,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -341,7 +357,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
-	if ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+	if ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && in.Document == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
 		if dm, ok := ch.(*slackDMChannel); ok {
 			// Another business from Slack has the workspace's Slack too.
@@ -424,6 +440,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// (whatsapp_storefront.go).
 	if in.Image != nil {
 		return s.waPhoto(ctx, c)
+	}
+	// A file: a list brought into a table (chat_tables_files.go).
+	if in.Document != nil {
+		return s.waDocument(ctx, c)
 	}
 	// A voice note is transcribed (a beta) and then read as if typed.
 	if in.Media != nil {
@@ -636,6 +656,22 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Link != nil && c.state != stateIdle {
 		return s.waLinkReply(ctx, c, text, cmd)
 	}
+	if c.data.TableMake != nil && c.state != stateIdle {
+		return s.waTableMakeReply(ctx, c, text, cmd)
+	}
+	if c.data.Debt != nil && c.state != stateIdle {
+		return s.waDebtReply(ctx, c, text, cmd)
+	}
+	if c.data.File != nil && c.state != stateIdle {
+		return s.waFileReply(ctx, c, text, cmd)
+	}
+	if c.data.Found != nil && c.state != stateIdle {
+		// A message that is not about the rows found lets them go and is
+		// read as a new one.
+		if done, err := s.waFoundReply(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
+	}
 	table := c.data.Table != uuid.Nil || len(c.data.Pick) > 0
 	switch c.state {
 	case stateCollecting:
@@ -680,17 +716,24 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
 			return err
 		}
+		// A message to a linked business (link_chat.go): "ask Dangote …",
+		// before the tables' "ask …": words naming no linked business pass on.
+		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") {
+			if done, err := s.waAskLinked(ctx, c, strings.Join(f[1:], " ")); done || err != nil {
+				return err
+			}
+		}
+		// Questions over the tables that need no model ("how many
+		// customers", "total balance") and "ask …" (chat_tables_ask.go),
+		// before stock's "how many rice".
+		if done, err := s.waAskCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
 			return err
-		}
-		// A message to a linked business (link_chat.go): "ask Dangote …".
-		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") {
-			if done, err := s.waAsk(ctx, c, strings.Join(f[1:], " ")); done || err != nil {
-				return err
-			}
 		}
 		// A linked supplier's bills (bills.go): "bill INV-0042" before the
 		// invoice words, which need a name and an amount.
@@ -700,10 +743,18 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
+		// The debtor book: owes, paid, who owes me (chat_debtors.go).
+		if done, err := s.waDebtCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 		if done, err := s.waMoneyCommand(ctx, c, text); done || err != nil {
 			return err
 		}
 		if done, err := s.waReceiveCommand(ctx, c, cmd); done || err != nil {
+			return err
+		}
+		// Tables made and changed in chat (chat_tables_make.go).
+		if done, err := s.waTableEditCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
 		// The same in the person's language (English's are read above).
@@ -815,8 +866,15 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
-	// Not recognised: in a language other than English, the model may
-	// route it (engine/ai/intent); it never confirms anything.
+	// Not recognised: in English, a question naming a table goes to the
+	// model as one (chat_tables_ask.go).
+	if c.state == stateIdle && !matched {
+		if done, err := s.waAskFallback(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
+	}
+	// In a language other than English, the model may route it
+	// (engine/ai/intent); it never confirms anything.
 	if c.state == stateIdle && !matched {
 		if m := s.waModelIntent(ctx, c, text); m.Intent != lang.IntentNone {
 			if done, err := s.waIntent(ctx, c, m); done || err != nil {
@@ -889,8 +947,48 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		return true, s.waTableAdd(ctx, c, arg)
 	case lang.IntentFind:
 		return true, s.waTableFind(ctx, c, arg)
+	case lang.IntentNewTable:
+		return true, s.waNewTable(ctx, c, arg)
+	// A row of the list this message let go (chat_tables_rows.go), in any
+	// language.
+	case lang.IntentChangeRow, lang.IntentDeleteRow:
+		n, ok := rowNumber(arg)
+		if !ok || c.letGo == nil {
+			return false, nil
+		}
+		op := "change"
+		if m.Intent == lang.IntentDeleteRow {
+			op = "delete"
+		}
+		return true, s.waRowStart(ctx, c, c.letGo, op, n)
+	// The debtor book and questions over the tables, as the model routes
+	// them: the argument is read as the English words are
+	// (chat_debtors.go, chat_tables_ask.go), and every write still waits
+	// for the person's yes.
+	case lang.IntentOwes, lang.IntentPaid:
+		if c.state != stateIdle || m.Language == lang.EN {
+			return false, nil
+		}
+		if arg == "" {
+			if m.Intent == lang.IntentPaid {
+				return false, nil
+			}
+			arg = "who owes me"
+		}
+		return s.waDebtCommand(ctx, c, arg, normalizeCommand(arg))
+	case lang.IntentAsk:
+		if arg == "" || c.state != stateIdle {
+			return false, nil
+		}
+		return true, s.waAsk(ctx, c, arg)
 	}
 	return false, nil
+}
+
+// rowNumber reads the number of a row in a list ("2", "#2").
+func rowNumber(arg string) (int, bool) {
+	n, err := strconv.Atoi(strings.Trim(arg, " #."))
+	return n, err == nil
 }
 
 func (s *Server) waHelp(c *chat) string {
@@ -911,7 +1009,7 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.add"))
 	}
 	if c.p.Can(PermTableRead) {
-		lines = append(lines, c.t("wa.help.find"))
+		lines = append(lines, c.t("wa.help.find"), c.t("wa.help.ask"))
 	}
 	if c.p.Can(PermStorefrontManage) {
 		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"))
@@ -935,7 +1033,7 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.bookings"))
 	}
 	if c.p.Can(PermInvoiceManage) && s.Invoices != nil {
-		lines = append(lines, c.t("wa.help.invoice"))
+		lines = append(lines, c.t("wa.help.invoice"), c.t("wa.help.debts"))
 	}
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))

@@ -48,7 +48,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
-//go:embed library/*.json
+//go:embed library/*.json tables/*.json
 var files embed.FS
 
 // Param is one parameter a person fills in.
@@ -99,6 +99,14 @@ type Need struct {
 // ({{table}}), so the person may point the template at a table of their
 // own instead.
 type Table struct {
+	// Known names a table shape in the registry (tables/*.json: customers,
+	// staff), which gives the table its name, title, description and
+	// columns where the template leaves them out, so templates, chat and
+	// the AI builder read one definition (decision 0060, known tables).
+	// It is resolved when the template is read and not kept, so a
+	// template that names a known table pins exactly what it would have
+	// written out.
+	Known       string   `json:"known,omitempty"`
 	Name        string   `json:"name"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
@@ -148,12 +156,14 @@ type Template struct {
 	// longer offered, but workflows made from it keep working and are
 	// offered the upgrade.
 	SupersededBy string `json:"superseded_by,omitempty"`
-	// ReplacedWhere names the template that replaces this one for a
-	// business where When holds (stock K5: the sheet-based stock and
-	// sales templates, for a business keeping stock in a table or
-	// recording sales by chat). It is not offered to that business;
-	// everyone else is offered it as before.
-	ReplacedWhere *Replacement `json:"replaced_where,omitempty"`
+	// ReplacedWhere names the templates that replace this one for a
+	// business where their condition holds (stock K5: the sheet-based
+	// stock and sales templates, for a business keeping stock in a table
+	// or recording sales by chat; decision 0060: every sheet template, for
+	// a business with no Google Sheets connection). It is not offered to
+	// that business; everyone else is offered it as before. One
+	// replacement is written as an object, several as a list.
+	ReplacedWhere Replacements `json:"replaced_where,omitempty"`
 	// Product is the product the template works around (payrolla:
 	// decision 0044). Retrieval offers the template only for a goal that
 	// names the product, and then above the rest, so "salaries calculated
@@ -250,9 +260,9 @@ func Load(fsys fs.FS) (*Library, error) {
 		if s := t.SupersededBy; s != "" && (lib.byID[s] == nil || lib.byID[s].SupersededBy != "") {
 			return nil, fmt.Errorf("%s: superseded_by %q is not a template that is offered", t.ID, s)
 		}
-		if r := t.ReplacedWhere; r != nil {
-			if lib.byID[r.By] == nil || lib.byID[r.By].SupersededBy != "" || !slices.Contains(ReplaceWhen, r.When) {
-				return nil, fmt.Errorf("%s: replaced_where %+v names no template offered, or no condition known", t.ID, *r)
+		for _, r := range t.ReplacedWhere {
+			if lib.byID[r.By] == nil || lib.byID[r.By].SupersededBy != "" || r.By == t.ID || !slices.Contains(ReplaceWhen, r.When) {
+				return nil, fmt.Errorf("%s: replaced_where %+v names no template offered, or no condition known", t.ID, r)
 			}
 		}
 		for _, req := range t.Requires {
@@ -271,6 +281,9 @@ func Parse(raw []byte) (*Template, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&t); err != nil {
+		return nil, err
+	}
+	if err := t.resolveKnown(); err != nil {
 		return nil, err
 	}
 	if err := t.check(); err != nil {
@@ -386,23 +399,31 @@ func (t *Template) check() error {
 			return fmt.Errorf("table %q is declared twice", tb.Name)
 		}
 		tables[tb.Name] = true
-		if len(tb.Columns) == 0 {
-			return fmt.Errorf("table %q has no columns", tb.Name)
-		}
-		cols := map[string]bool{}
-		for _, c := range tb.Columns {
-			switch {
-			case !tableName.MatchString(c.Name) || reservedColumns[c.Name]:
-				return fmt.Errorf("table %q: the column name %q is not allowed", tb.Name, c.Name)
-			case cols[c.Name]:
-				return fmt.Errorf("table %q has the column %q twice", tb.Name, c.Name)
-			case !slices.Contains(ColumnTypes, c.Type):
-				return fmt.Errorf("table %q: the column %q has the unknown type %q", tb.Name, c.Name, c.Type)
-			}
-			cols[c.Name] = true
+		if err := checkTable(tb); err != nil {
+			return err
 		}
 	}
 	return t.checkCallable()
+}
+
+// checkTable checks a table's columns.
+func checkTable(tb Table) error {
+	if len(tb.Columns) == 0 {
+		return fmt.Errorf("table %q has no columns", tb.Name)
+	}
+	cols := map[string]bool{}
+	for _, c := range tb.Columns {
+		switch {
+		case !tableName.MatchString(c.Name) || reservedColumns[c.Name]:
+			return fmt.Errorf("table %q: the column name %q is not allowed", tb.Name, c.Name)
+		case cols[c.Name]:
+			return fmt.Errorf("table %q has the column %q twice", tb.Name, c.Name)
+		case !slices.Contains(ColumnTypes, c.Type):
+			return fmt.Errorf("table %q: the column %q has the unknown type %q", tb.Name, c.Name, c.Type)
+		}
+		cols[c.Name] = true
+	}
+	return nil
 }
 
 // TablesFor returns the template's tables with their names resolved from
@@ -985,30 +1006,206 @@ func celLiteral(v any) string {
 	return "null"
 }
 
+// Known tables (decision 0060): table shapes Taskiem knows by name and
+// purpose, defined once in tables/*.json and used by templates, chat and
+// the AI builder. A known table is the business's own ordinary table, not
+// a kept one.
+var (
+	knownOnce sync.Once
+	knownByID map[string]Table
+	knownList []Table
+	knownErr  error
+)
+
+func loadKnown() {
+	knownByID = map[string]Table{}
+	names, err := fs.Glob(files, "tables/*.json")
+	if err != nil {
+		knownErr = err
+		return
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		raw, err := fs.ReadFile(files, n)
+		if err != nil {
+			knownErr = err
+			return
+		}
+		var tb Table
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&tb); err != nil {
+			knownErr = fmt.Errorf("%s: %w", n, err)
+			return
+		}
+		if want := strings.TrimSuffix(path.Base(n), ".json"); tb.Name != want || tb.Known != "" || tb.Title == "" || tb.Description == "" {
+			knownErr = fmt.Errorf("%s: a known table names itself as its file does, with a title and a description", n)
+			return
+		}
+		if err := checkTable(tb); err != nil {
+			knownErr = fmt.Errorf("%s: %w", n, err)
+			return
+		}
+		knownByID[tb.Name] = tb
+		knownList = append(knownList, tb)
+	}
+}
+
+// KnownTable returns a known table's shape by name.
+func KnownTable(name string) (Table, bool) {
+	knownOnce.Do(loadKnown)
+	t, ok := knownByID[name]
+	return t, ok
+}
+
+// KnownTables returns every known table, in name order. It panics if the
+// embedded files are broken, which the package's tests rule out.
+func KnownTables() []Table {
+	knownOnce.Do(loadKnown)
+	if knownErr != nil {
+		panic(knownErr)
+	}
+	return knownList
+}
+
+// resolveKnown fills each table that names a known one: its name, title,
+// description and columns where the template leaves them out. The link is
+// not kept, so a template pins what it would have written out.
+func (t *Template) resolveKnown() error {
+	knownOnce.Do(loadKnown)
+	if knownErr != nil {
+		return knownErr
+	}
+	for i := range t.Tables {
+		tb := &t.Tables[i]
+		if tb.Known == "" {
+			continue
+		}
+		kt, ok := knownByID[tb.Known]
+		if !ok {
+			return fmt.Errorf("table %q: %q is not a known table", tb.Name, tb.Known)
+		}
+		if tb.Name == "" {
+			tb.Name = kt.Name
+		}
+		if tb.Title == "" {
+			tb.Title = kt.Title
+		}
+		if tb.Description == "" {
+			tb.Description = kt.Description
+		}
+		if len(tb.Columns) == 0 {
+			tb.Columns = append([]Column(nil), kt.Columns...)
+		}
+		tb.Known = ""
+	}
+	return nil
+}
+
 // Replacement is a template that replaces another for some businesses.
 type Replacement struct {
 	By   string `json:"by"`
 	When string `json:"when"`
 }
 
+// Replacements are a template's replacements: an object in the file when
+// there is one (as every template had before decision 0060), a list when
+// there are several. Either is read; one is written back as an object, so
+// a template pins the same JSON it always did.
+type Replacements []Replacement
+
+// UnmarshalJSON reads an object or a list.
+func (r *Replacements) UnmarshalJSON(b []byte) error {
+	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '{' {
+		var one Replacement
+		dec := json.NewDecoder(bytes.NewReader(t))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&one); err != nil {
+			return err
+		}
+		*r = Replacements{one}
+		return nil
+	}
+	var list []Replacement
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&list); err != nil {
+		return err
+	}
+	*r = list
+	return nil
+}
+
+// MarshalJSON writes one replacement as an object, several as a list.
+func (r Replacements) MarshalJSON() ([]byte, error) {
+	if len(r) == 1 {
+		return json.Marshal(r[0])
+	}
+	return json.Marshal([]Replacement(r))
+}
+
+// By is the template that replaces t where holds, or "".
+func (r Replacements) By(holds map[string]bool) string {
+	for _, x := range r {
+		if holds[x.When] {
+			return x.By
+		}
+	}
+	return ""
+}
+
 // The conditions a Replacement holds on.
 const (
 	WhenKeepsStock   = "keeps_stock"   // the catalogue keeps stock in a table
 	WhenRecordsSales = "records_sales" // sales are recorded by chat or the web
+	WhenNoSheets     = "no_sheets"     // no Google Sheets connection (decision 0060)
+	// WhenNoSheetsStock is no_sheets where Taskiem's stock is on, for the
+	// sheet templates whose twins are stock's (sales-day-total,
+	// low-stock-alert), which do nothing without it.
+	WhenNoSheetsStock = "no_sheets_stock"
 )
 
 // ReplaceWhen are the conditions known.
-var ReplaceWhen = []string{WhenKeepsStock, WhenRecordsSales}
+var ReplaceWhen = []string{WhenKeepsStock, WhenRecordsSales, WhenNoSheets, WhenNoSheetsStock}
 
 // For is the templates offered to a business for which the conditions in
-// holds: those replaced there are left out.
+// holds: those replaced there are left out, and a twin is listed just
+// before the template it replaces where both are offered (a business with
+// Google Sheets connected sees the sheet template after its table twin).
 func For(list []*Template, holds map[string]bool) []*Template {
 	out := make([]*Template, 0, len(list))
+	byID := map[string]*Template{}
 	for _, t := range list {
-		if r := t.ReplacedWhere; r != nil && holds[r.When] {
+		byID[t.ID] = t
+	}
+	// A twin of a template offered here waits for that template.
+	waits := map[string]bool{}
+	for _, t := range list {
+		if t.ReplacedWhere.By(holds) == "" {
+			for _, r := range t.ReplacedWhere {
+				if tw := byID[r.By]; tw != nil && tw.ReplacedWhere.By(holds) == "" {
+					waits[tw.ID] = true
+					break
+				}
+			}
+		}
+	}
+	placed := map[string]bool{}
+	for _, t := range list {
+		if t.ReplacedWhere.By(holds) != "" || placed[t.ID] || waits[t.ID] {
 			continue
 		}
+		// The first twin offered here goes before the template it
+		// replaces elsewhere, unless it was listed already.
+		for _, r := range t.ReplacedWhere {
+			if tw := byID[r.By]; tw != nil && !placed[tw.ID] && tw.ReplacedWhere.By(holds) == "" {
+				out = append(out, tw)
+				placed[tw.ID] = true
+				break
+			}
+		}
 		out = append(out, t)
+		placed[t.ID] = true
 	}
 	return out
 }

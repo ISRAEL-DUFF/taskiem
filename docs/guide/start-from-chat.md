@@ -21,6 +21,10 @@ When an automation needs Paystack, Google Sheets or another service, Taskiem sen
 - Send **email you@example.com** to add your email. Open the link Taskiem sends to it: your receipts and invoices then come by email, and you can sign in on the website with it.
 - Send **sign in** for a link to choose a password for the website.
 
+## Keep your records
+
+Your customers, your staff, who owes you and any other list live in the chat too: *new table*, *Ada owes 5,000*, *who owes me?*, *how many customers are in Ikeja?* See [Keep your records in chat](keep-your-records-in-chat.md).
+
 ## Already use Taskiem on the website?
 
 Write to the number and press **I already use Taskiem**. Send the email you sign in with, and open the link Taskiem emails you while you are signed in. Your chat is then linked to your account and your businesses.

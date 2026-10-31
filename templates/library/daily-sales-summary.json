@@ -3,7 +3,7 @@
   "title": "Daily sales summary to the owner",
   "summary": "Every evening, add up today's sales from your sales sheet and send the total to the owner.",
   "description": "Every day at the time you choose, reads your sales sheet (columns: date as YYYY-MM-DD, item, amount), adds up today's sales and how many there were, and sends the owner a short message with the total. The owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
-  "replaced_where": {"by": "sales-day-total", "when": "records_sales"},
+  "replaced_where": [{"by": "sales-day-total", "when": "records_sales"}, {"by": "sales-day-total", "when": "no_sheets_stock"}],
   "category": "reporting",
   "tags": ["reporting", "sales", "summary", "daily", "sms", "google sheets", "owner"],
   "keywords": ["sales", "summary", "total", "today", "daily", "evening", "report", "owner", "revenue", "takings"],

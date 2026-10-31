@@ -3,45 +3,215 @@
   "reviewed": false,
   "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
   "phrases": {
-    "help": ["taimako", "ina son taimako", "me zan iya yi", "sannu", "ina kwana", "ina wuni"],
-    "status": ["me ya gaza yau", "me ya gaza", "yaya abubuwa suke", "matsayi"],
-    "approvals": ["amincewa", "me ke jira na"],
-    "cancel": ["soke", "fasa", "a fasa", "tsaya"],
-    "yes": ["eh", "na'am", "to", "yi shi"],
-    "no": ["a'a", "kada", "kar a yi"],
-    "tables": ["teburori", "teburorina", "jerin teburori", "bayanan da nake da su"],
-    "make_page": ["yi shafina", "yi shagona"],
-    "my_page": ["shafina", "shagona"],
-    "orders": ["odar dina", "odar"],
-    "open_shop": ["bude shagona", "bude shago"],
-    "qr": ["qr dina"],
-    "signup": ["ina son buɗe asusu", "buɗe mini asusu", "ina son fara kasuwanci", "yi rajista"],
-    "plan": ["tsarina", "nawa zan biya", "biyan taskiem"]
+    "help": [
+      "taimako",
+      "ina son taimako",
+      "me zan iya yi",
+      "sannu",
+      "ina kwana",
+      "ina wuni"
+    ],
+    "status": [
+      "me ya gaza yau",
+      "me ya gaza",
+      "yaya abubuwa suke",
+      "matsayi"
+    ],
+    "approvals": [
+      "amincewa",
+      "me ke jira na"
+    ],
+    "cancel": [
+      "soke",
+      "fasa",
+      "a fasa",
+      "tsaya"
+    ],
+    "yes": [
+      "eh",
+      "na'am",
+      "to",
+      "yi shi"
+    ],
+    "no": [
+      "a'a",
+      "kada",
+      "kar a yi"
+    ],
+    "tables": [
+      "teburori",
+      "teburorina",
+      "jerin teburori",
+      "bayanan da nake da su"
+    ],
+    "new_table": [
+      "sabon tebur",
+      "yi tebur",
+      "sabon jeri"
+    ],
+    "make_page": [
+      "yi shafina",
+      "yi shagona"
+    ],
+    "my_page": [
+      "shafina",
+      "shagona"
+    ],
+    "orders": [
+      "odar dina",
+      "odar"
+    ],
+    "open_shop": [
+      "bude shagona",
+      "bude shago"
+    ],
+    "qr": [
+      "qr dina"
+    ],
+    "signup": [
+      "ina son buɗe asusu",
+      "buɗe mini asusu",
+      "ina son fara kasuwanci",
+      "yi rajista"
+    ],
+    "plan": [
+      "tsarina",
+      "nawa zan biya",
+      "biyan taskiem"
+    ]
   },
   "prefixes": {
-    "switch": ["koma", "sauya zuwa"],
-    "run": ["fara", "gudanar"],
-    "build": ["gina", "kirkiro"],
-    "language": ["harshe", "canza harshe zuwa"],
-    "add": ["ƙara a", "ƙara zuwa", "saka a", "ƙara"],
-    "find": ["nemo", "nemo a", "nemi", "bincika"],
-    "publish": ["buga"],
-    "close_shop": ["rufe shagona", "rufe shago"],
-    "order_ready": ["ya shirya"],
-    "order_delivered": ["an kai", "an karba"],
-    "invoice": ["takardar kuɗi", "aika takardar kuɗi ga"],
-    "expense": ["na kashe", "kashewa"],
-    "cash_in": ["kuɗi ya shigo"],
-    "cash_out": ["kuɗi ya fita"],
-    "sold": ["na sayar da", "na sayar", "an sayar da", "an sayar"],
-    "received": ["na karɓi", "an karɓi", "na karbi"],
-    "count": ["na ƙirga", "na kirga"],
-    "stock": ["guda nawa", "nawa ne"],
-    "take_off": ["cire", "ya lalace"],
-    "connect": ["haɗa", "connect"],
-    "invite": ["gayyaci", "invite"]
+    "switch": [
+      "koma",
+      "sauya zuwa"
+    ],
+    "run": [
+      "fara",
+      "gudanar"
+    ],
+    "build": [
+      "gina",
+      "kirkiro"
+    ],
+    "language": [
+      "harshe",
+      "canza harshe zuwa"
+    ],
+    "add": [
+      "ƙara a",
+      "ƙara zuwa",
+      "saka a",
+      "ƙara"
+    ],
+    "find": [
+      "nemo",
+      "nemo a",
+      "nemi",
+      "bincika"
+    ],
+    "new_table": [
+      "sabon tebur",
+      "sabon jeri"
+    ],
+    "publish": [
+      "buga"
+    ],
+    "close_shop": [
+      "rufe shagona",
+      "rufe shago"
+    ],
+    "order_ready": [
+      "ya shirya"
+    ],
+    "order_delivered": [
+      "an kai",
+      "an karba"
+    ],
+    "invoice": [
+      "takardar kuɗi",
+      "aika takardar kuɗi ga"
+    ],
+    "expense": [
+      "na kashe",
+      "kashewa"
+    ],
+    "cash_in": [
+      "kuɗi ya shigo"
+    ],
+    "cash_out": [
+      "kuɗi ya fita"
+    ],
+    "sold": [
+      "na sayar da",
+      "na sayar",
+      "an sayar da",
+      "an sayar"
+    ],
+    "received": [
+      "na karɓi",
+      "an karɓi",
+      "na karbi"
+    ],
+    "count": [
+      "na ƙirga",
+      "na kirga"
+    ],
+    "stock": [
+      "guda nawa",
+      "nawa ne"
+    ],
+    "take_off": [
+      "cire",
+      "ya lalace"
+    ],
+    "connect": [
+      "haɗa",
+      "connect"
+    ],
+    "invite": [
+      "gayyaci",
+      "invite"
+    ],
+    "change_row": [
+      "gyara",
+      "canza"
+    ],
+    "delete_row": [
+      "goge",
+      "cire",
+      "share"
+    ]
   },
-  "fillers": ["don allah", "dan allah"],
-  "markers": ["don allah", "sannu", "yaya", "kudi", "aika", "taimako", "yau", "na gode", "ina son", "kuma", "zuwa", "soke", "a'a", "na'am", "abokan ciniki", "gaza", "kwana", "wuni", "ina kwana", "takardar kuɗi", "na kashe", "kuɗi ya shigo", "kuɗi ya fita"],
-  "for_words": ["don"]
+  "fillers": [
+    "don allah",
+    "dan allah"
+  ],
+  "markers": [
+    "don allah",
+    "sannu",
+    "yaya",
+    "kudi",
+    "aika",
+    "taimako",
+    "yau",
+    "na gode",
+    "ina son",
+    "kuma",
+    "zuwa",
+    "soke",
+    "a'a",
+    "na'am",
+    "abokan ciniki",
+    "gaza",
+    "kwana",
+    "wuni",
+    "ina kwana",
+    "takardar kuɗi",
+    "na kashe",
+    "kuɗi ya shigo",
+    "kuɗi ya fita"
+  ],
+  "for_words": [
+    "don"
+  ]
 }

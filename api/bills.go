@@ -28,7 +28,7 @@ import (
 
 // Bills, business links L1 (docs/spec/business-links.md §6): a linked
 // supplier's invoice, mirrored into the buyer's business. The seller's
-// transaction only notes the invoice as due (migration 00276); the
+// transaction only notes the invoice as due (migration 00280); the
 // mirror worker here writes the bill in a transaction of its own, entering
 // the buyer's side through taskiem_link_enter, and tells the buyer's
 // people of a new bill in their own scope.

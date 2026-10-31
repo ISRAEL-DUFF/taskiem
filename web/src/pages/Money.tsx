@@ -20,6 +20,7 @@ import {
   NOTE_LIMIT,
   PERIOD_CHOICES,
   STATEMENTS_PATH,
+  WAITING_PATH,
   addedLine,
   bpToPercent,
   collectedForLine,
@@ -66,6 +67,8 @@ import {
   statementFormatPath,
   statementRefusal,
   statementRequest,
+  waitingDecision,
+  waitingPath,
   whoWords,
   type CloseForm,
   type ColumnsForm,
@@ -77,6 +80,7 @@ import {
   type StatementAdded,
   type StatementColumns,
   type StatementRefusal,
+  type WaitingLine,
 } from "../lib/money";
 
 /** Runs a request and words the server's refusal as a sentence. */
@@ -689,8 +693,10 @@ export function MoneyStatements() {
   const send = (text: string, columns?: StatementColumns) => plainly(post<StatementAdded>(STATEMENTS_PATH, statementRequest(channel, text, columns)));
   const refusalOf = (e: unknown) => (e instanceof ApiError ? statementRefusal(e.status, e.body, e.message) : null);
 
+  const waiting = useLoad(() => get<{ lines: WaitingLine[] | null }>(WAITING_PATH).catch(() => ({ lines: [] })), []);
   const done = (r: StatementAdded) => {
     setSaid(addedLine(r));
+    if (r.waiting) waiting.reload();
     setCols(null);
     setHeaders(null);
     setFile(null);
@@ -750,6 +756,7 @@ export function MoneyStatements() {
       <div role="status" data-testid="statement-status">
         {said && <div className="notice">{said}</div>}
       </div>
+      <WaitingLines lines={waiting.data?.lines ?? []} reload={waiting.reload} />
       <form
         className="card"
         noValidate
@@ -839,6 +846,49 @@ export function MoneyStatements() {
         </div>
       </form>
     </>
+  );
+}
+
+/** Statement lines that may be a transfer someone entered by hand in chat ("Ada paid 2,000 transfer"): each waits for Same money or Different money. */
+function WaitingLines({ lines, reload }: { lines: WaitingLine[]; reload: () => void }) {
+  const act = useAction();
+  if (lines.length === 0) return null;
+  const decide = (id: string, entry: string | null) =>
+    act.run(async () => {
+      await plainly(post(waitingPath(id), waitingDecision(entry)));
+      reload();
+    }, false);
+  return (
+    <section className="card" aria-labelledby="waiting-h" data-testid="statement-waiting">
+      <h2 id="waiting-h">Transfers to confirm</h2>
+      <p className="hint">
+        These lines of your statement may be money someone already recorded by hand. Same money counts it once; Different money adds it as new money.
+      </p>
+      <ErrorBox error={act.error} />
+      <Items label="Transfers to confirm">
+        {lines.map((l) => (
+          <Row
+            key={l.id}
+            icon="money"
+            tone="warn"
+            title={`${naira(l.amount_kobo)} on ${dateLabel(l.occurred_at)}`}
+            side={<span className="hint">{l.channel}</span>}
+            sub={<span className="sub">{l.description || "No description"}</span>}
+            testid="waiting-line"
+          >
+            {l.candidates.map((c) => (
+              <button key={c.entry_id} type="button" disabled={act.busy} onClick={() => void decide(l.id, c.entry_id)}>
+                Same money: {naira(c.amount_kobo)} on {dateLabel(c.occurred_at)}
+                {c.description ? `, ${c.description}` : ""}
+              </button>
+            ))}
+            <button type="button" disabled={act.busy} onClick={() => void decide(l.id, null)}>
+              Different money
+            </button>
+          </Row>
+        ))}
+      </Items>
+    </section>
   );
 }
 

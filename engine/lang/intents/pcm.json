@@ -3,45 +3,239 @@
   "reviewed": false,
   "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
   "phrases": {
-    "help": ["wetin i fit do", "wetin i fit send", "abeg help me", "how far", "oya"],
-    "status": ["wetin fail today", "wetin don fail", "wetin fail", "how tins dey", "how everytin dey"],
-    "approvals": ["wetin dey wait for me", "approval dem", "wetin i go approve"],
-    "cancel": ["comot am", "leave am", "forget am", "no do am again"],
-    "yes": ["yes o", "na so", "do am", "oya do am", "e dey ok", "ehen"],
-    "no": ["no o", "no do am", "abeg no", "no be so"],
-    "tables": ["my tables", "which tables i get", "show me my tables", "tables wey i get", "my records"],
-    "make_page": ["make my page", "make my shop"],
-    "my_page": ["my page", "my shop"],
-    "orders": ["my orders", "wetin people order"],
-    "open_shop": ["open my shop", "open shop"],
-    "qr": ["my qr"],
-    "signup": ["i wan open account", "abeg open account for me", "i wan start business", "make i open account", "i wan register"],
-    "plan": ["my plan", "how much i go pay", "wetin i go pay"]
+    "help": [
+      "wetin i fit do",
+      "wetin i fit send",
+      "abeg help me",
+      "how far",
+      "oya"
+    ],
+    "status": [
+      "wetin fail today",
+      "wetin don fail",
+      "wetin fail",
+      "how tins dey",
+      "how everytin dey"
+    ],
+    "approvals": [
+      "wetin dey wait for me",
+      "approval dem",
+      "wetin i go approve"
+    ],
+    "cancel": [
+      "comot am",
+      "leave am",
+      "forget am",
+      "no do am again"
+    ],
+    "yes": [
+      "yes o",
+      "na so",
+      "do am",
+      "oya do am",
+      "e dey ok",
+      "ehen"
+    ],
+    "no": [
+      "no o",
+      "no do am",
+      "abeg no",
+      "no be so"
+    ],
+    "tables": [
+      "my tables",
+      "which tables i get",
+      "show me my tables",
+      "tables wey i get",
+      "my records"
+    ],
+    "new_table": [
+      "new table",
+      "make new table",
+      "i wan keep list",
+      "new list"
+    ],
+    "make_page": [
+      "make my page",
+      "make my shop"
+    ],
+    "my_page": [
+      "my page",
+      "my shop"
+    ],
+    "orders": [
+      "my orders",
+      "wetin people order"
+    ],
+    "open_shop": [
+      "open my shop",
+      "open shop"
+    ],
+    "qr": [
+      "my qr"
+    ],
+    "signup": [
+      "i wan open account",
+      "abeg open account for me",
+      "i wan start business",
+      "make i open account",
+      "i wan register"
+    ],
+    "plan": [
+      "my plan",
+      "how much i go pay",
+      "wetin i go pay"
+    ]
   },
   "prefixes": {
-    "switch": ["change go", "switch go"],
-    "run": ["run am", "start am", "make e run", "abeg run"],
-    "build": ["build am", "abeg build", "make una build", "help me build"],
-    "language": ["change language"],
-    "add": ["put am for", "put for", "add am for", "add am to", "add for"],
-    "find": ["find am for", "look for", "search for", "check for"],
-    "publish": ["publish"],
-    "close_shop": ["close my shop", "close shop"],
-    "order_ready": ["e don ready", "don ready"],
-    "order_delivered": ["e don reach", "dem don collect"],
-    "invoice": ["send invoice give", "send bill give"],
-    "expense": ["i spend", "i don spend"],
-    "cash_in": ["cash enter", "money enter"],
-    "cash_out": ["cash comot", "money comot"],
-    "sold": ["i don sell", "i sell", "don sell"],
-    "received": ["i don receive", "e don land", "don receive"],
-    "count": ["i don count", "count am"],
-    "stock": ["check stock", "how many", "how much remain"],
-    "take_off": ["comot", "remove", "don spoil"],
-    "connect": ["connect am", "join am to", "connect"],
-    "invite": ["invite", "bring", "add person"]
+    "switch": [
+      "change go",
+      "switch go"
+    ],
+    "run": [
+      "run am",
+      "start am",
+      "make e run",
+      "abeg run"
+    ],
+    "build": [
+      "build am",
+      "abeg build",
+      "make una build",
+      "help me build"
+    ],
+    "language": [
+      "change language"
+    ],
+    "add": [
+      "put am for",
+      "put for",
+      "add am for",
+      "add am to",
+      "add for"
+    ],
+    "find": [
+      "find am for",
+      "look for",
+      "search for",
+      "check for"
+    ],
+    "new_table": [
+      "new table",
+      "make list for",
+      "new list"
+    ],
+    "publish": [
+      "publish"
+    ],
+    "close_shop": [
+      "close my shop",
+      "close shop"
+    ],
+    "order_ready": [
+      "e don ready",
+      "don ready"
+    ],
+    "order_delivered": [
+      "e don reach",
+      "dem don collect"
+    ],
+    "invoice": [
+      "send invoice give",
+      "send bill give"
+    ],
+    "expense": [
+      "i spend",
+      "i don spend"
+    ],
+    "cash_in": [
+      "cash enter",
+      "money enter"
+    ],
+    "cash_out": [
+      "cash comot",
+      "money comot"
+    ],
+    "sold": [
+      "i don sell",
+      "i sell",
+      "don sell"
+    ],
+    "received": [
+      "i don receive",
+      "e don land",
+      "don receive"
+    ],
+    "count": [
+      "i don count",
+      "count am"
+    ],
+    "stock": [
+      "check stock",
+      "how many",
+      "how much remain"
+    ],
+    "take_off": [
+      "comot",
+      "remove",
+      "don spoil"
+    ],
+    "connect": [
+      "connect am",
+      "join am to",
+      "connect"
+    ],
+    "invite": [
+      "invite",
+      "bring",
+      "add person"
+    ],
+    "change_row": [
+      "change",
+      "correct",
+      "edit"
+    ],
+    "delete_row": [
+      "comot",
+      "remove",
+      "delete",
+      "clear"
+    ]
   },
-  "fillers": ["abeg", "abeg o", "please"],
-  "markers": ["abeg", "wetin", "dey", "una", "wahala", "comot", "sabi", "oya", "abi", "sef", "wan", "pikin", "chop", "dem", "wey", "make i", "how far", "no be", "na im", "e don", "go dey", "fit", "dis", "dat", "i spend", "i don spend"],
-  "for_words": ["for"]
+  "fillers": [
+    "abeg",
+    "abeg o",
+    "please"
+  ],
+  "markers": [
+    "abeg",
+    "wetin",
+    "dey",
+    "una",
+    "wahala",
+    "comot",
+    "sabi",
+    "oya",
+    "abi",
+    "sef",
+    "wan",
+    "pikin",
+    "chop",
+    "dem",
+    "wey",
+    "make i",
+    "how far",
+    "no be",
+    "na im",
+    "e don",
+    "go dey",
+    "fit",
+    "dis",
+    "dat",
+    "i spend",
+    "i don spend"
+  ],
+  "for_words": [
+    "for"
+  ]
 }

@@ -268,6 +268,10 @@
       "text": "Invoice {number} from {business}: {amount} to pay. Tap Pay with transfer make you get account number to pay enter, or Open invoice make you see am.",
       "reviewed": false
     },
+    "invoice.chat.balance": {
+      "text": "You dey owe {business} {amount} for {count} bill(s). See dem and pay all or small: {link}",
+      "reviewed": false
+    },
     "invoice.chat.wait": {
       "text": "Your account number for invoice {number} dey come. If e no come for one minute, tap New account number.",
       "reviewed": false
@@ -1316,6 +1320,146 @@
       "text": "Before you publish am, create the tables wey e need for the app: {tables} ({link}).",
       "reviewed": false
     },
+    "wa.build.tables_setting_up": {
+      "text": "I dey set up your records. E go take one or two minutes.",
+      "reviewed": false
+    },
+    "wa.build.table_lacks": {
+      "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
+      "reviewed": false
+    },
+    "wa.tablemake.denied": {
+      "text": "You no fit make or change tables for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.tablemake.pick": {
+      "text": "Which list you wan keep?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.tablemake.something_else": {
+      "text": "Another thing",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_name": {
+      "text": "Wetin be the name of the list? Like: Debtors, Suppliers, Members.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_long": {
+      "text": "Give am shorter name, wey no pass 60 letters.",
+      "reviewed": false
+    },
+    "wa.tablemake.name_bad": {
+      "text": "Give am name wey get letters, like Debtors.",
+      "reviewed": false
+    },
+    "wa.tablemake.exists": {
+      "text": "You don get table wey dem call {table} before. Send *add to {table}* to add to am.",
+      "reviewed": false
+    },
+    "wa.tablemake.ask_columns": {
+      "text": "Wetin you dey write for each one for {table}? Separate dem with comma, like: name, phone, wetin dem buy, date.",
+      "reviewed": false
+    },
+    "wa.tablemake.no_columns": {
+      "text": "I no fit read any column from that one. Send dem with comma, like: name, phone, amount.",
+      "reviewed": false
+    },
+    "wa.tablemake.readback": {
+      "text": "*{table}* go keep, for each one:\n{columns}\n\nReply *yes* make I create am, or send the list again to change am.",
+      "reviewed": false
+    },
+    "wa.tablemake.not_made": {
+      "text": "Nothing change.",
+      "reviewed": false
+    },
+    "wa.tablemake.made": {
+      "text": "I don make *{table}*. Add to am with *add to {name}*, or see am for the app{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.failed": {
+      "text": "I no fit set up your records now, so {table} never make. Reply *try again* after small time (I go keep am for one day), or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.retry_reminder": {
+      "text": "Reply *try again* make I create {table}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablemake.refused": {
+      "text": "E no work: {reason}",
+      "reviewed": false
+    },
+    "wa.tablemake.renamed": {
+      "text": "{old} don change name to *{table}*.",
+      "reviewed": false
+    },
+    "wa.tablemake.drop_web": {
+      "text": "To remove column or table go delete everything wey dey inside, so e dey happen for the app, where you go type the name to confirm{link}.",
+      "reviewed": false
+    },
+    "wa.tablemake.which": {
+      "text": "Which one?\n{list}\nSend am again with the full name of the table.",
+      "reviewed": false
+    },
+    "wa.tablemake.type.text": {
+      "text": "words",
+      "reviewed": false
+    },
+    "wa.tablemake.type.number": {
+      "text": "number (amount, price)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.integer": {
+      "text": "whole number (count)",
+      "reviewed": false
+    },
+    "wa.tablemake.type.boolean": {
+      "text": "yes or no",
+      "reviewed": false
+    },
+    "wa.tablemake.type.date": {
+      "text": "date",
+      "reviewed": false
+    },
+    "wa.tablemake.type.datetime": {
+      "text": "date and time",
+      "reviewed": false
+    },
+    "wa.tablemake.type.phone": {
+      "text": "phone number",
+      "reviewed": false
+    },
+    "wa.tablemake.type.email": {
+      "text": "email address",
+      "reviewed": false
+    },
+    "wa.tablemake.type.json": {
+      "text": "plenty values together",
+      "reviewed": false
+    },
+    "wa.tablecol.ask_type": {
+      "text": "Wetin go dey inside *{column}*?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.tablecol.readback": {
+      "text": "Make I add column *{column}* ({type}) to *{table}*? Reply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.tablecol.name_bad": {
+      "text": "Give the column name wey get letters, like phone.",
+      "reviewed": false
+    },
+    "wa.tablecol.exists": {
+      "text": "{table} don get column {column} before.",
+      "reviewed": false
+    },
+    "wa.tablecol.added": {
+      "text": "I don add *{column}* to *{table}*.",
+      "reviewed": false
+    },
+    "button.try_again": {
+      "text": "Try again",
+      "reviewed": false
+    },
     "wa.build.too_long": {
       "text": "E too long for me; talk am for less than {max} characters.",
       "reviewed": false
@@ -1545,7 +1689,107 @@
       "reviewed": false
     },
     "wa.help.find": {
-      "text": "• *find*, the table name and one word: look for rows",
+      "text": "• *find*, the table name and one word: look for rows, then *change 1* or *delete 1*",
+      "reviewed": false
+    },
+    "wa.help.ask": {
+      "text": "• Ask about your tables: *how many customers*, *total balance*, or any question like *who owe pass 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Wetin you wan know? Like: *ask how many customers dey Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "I no fit read questions like that here yet. These ones dey work: *how many customers*, *total balance* (number column), and *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "I no fit answer that one from your tables. Try *find*, the table name and one word, or *tables* to see them.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "This month AI allowance don finish, so I no fit read that question. *how many customers*, *total balance* and *find* still dey work.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Na {count} questions be that for this hour. Ask again small time later, or use *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Added",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} wey {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " and ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} na {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} no be {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} dey less than {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} no pass {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} pass {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} reach {value} or pass am",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} get \"{value}\" inside",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} empty",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} get something",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} highest first",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} lowest first",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Total {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(for the first {count} rows)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: none.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
       "reviewed": false
     },
     "wa.help.intro": {
@@ -2708,6 +2952,10 @@
       "text": "for POS",
       "reviewed": false
     },
+    "sales.how_credit": {
+      "text": "for credit",
+      "reviewed": false
+    },
     "sales.by_cash": {
       "text": "Cash",
       "reviewed": false
@@ -2718,6 +2966,10 @@
     },
     "sales.by_pos": {
       "text": "POS",
+      "reviewed": false
+    },
+    "sales.by_credit": {
+      "text": "Credit",
       "reviewed": false
     },
     "sales.evening.title": {
@@ -2790,6 +3042,18 @@
     },
     "wa.sale.matched": {
       "text": "E don match di money wey enter.",
+      "reviewed": false
+    },
+    "wa.sale.credit_owes": {
+      "text": "{name} go owe {total} in all.",
+      "reviewed": false
+    },
+    "wa.sale.credit_new": {
+      "text": "{name} new for your debt book.",
+      "reviewed": false
+    },
+    "wa.sale.credit_recorded": {
+      "text": "I don write am as debt: {name} owe am ({number}), {total} in all now.",
       "reviewed": false
     },
     "wa.sale.short": {
@@ -3105,7 +3369,7 @@
       "reviewed": false
     },
     "wa.table.find_more": {
-      "text": "… and {count} more. Find with more words, or open Tables for Taskiem.",
+      "text": "… and {count} more. Send *more* to see the next five.",
       "reviewed": false
     },
     "wa.table.find_no_column": {
@@ -3118,6 +3382,454 @@
     },
     "wa.table.find_what": {
       "text": "Send *find*, the table name and wetin you dey find.",
+      "reviewed": false
+    },
+    "wa.rows.find_tail": {
+      "text": "Send *change 1* to correct row 1, or *delete 1* to comot am.",
+      "reviewed": false
+    },
+    "wa.rows.no_more": {
+      "text": "Na everything wey dey {table} for that search be dat.",
+      "reviewed": false
+    },
+    "wa.rows.no_number": {
+      "text": "No row {n} dey the list. Send number from 1 reach {max}.",
+      "reviewed": false
+    },
+    "wa.rows.denied": {
+      "text": "You no fit change rows for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.rows.table_gone": {
+      "text": "{table} no dey again. Send *tables* to see wetin dey.",
+      "reviewed": false
+    },
+    "wa.rows.gone": {
+      "text": "Row {id} no dey {table} again.",
+      "reviewed": false
+    },
+    "wa.rows.pick_column": {
+      "text": "Row {id} for {table}:\n{row}\n\nWhich one you wan change? Send im number.",
+      "reviewed": false
+    },
+    "wa.rows.pick_again": {
+      "text": "Send number from 1 reach {max}, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.ask_value": {
+      "text": "The new one:\n{prompt}",
+      "reviewed": false
+    },
+    "wa.rows.form": {
+      "text": "{table}: tap *{cta}* to enter the new one; you go confirm before I save am. Send *cancel* to stop.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_change": {
+      "text": "Make I save this change for row {id} for {table}?\n{changes}\n\nReply *yes* to save am, another detail number to change am too, or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.confirm_delete": {
+      "text": "Make I comot row {id} from {table}? You no go fit get am back.\n{row}\n\nReply *yes* to comot am or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.reminder": {
+      "text": "Reply *yes* to continue or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.left": {
+      "text": "Nothing change. The rows wey I find still get dia numbers.",
+      "reviewed": false
+    },
+    "wa.rows.too_many": {
+      "text": "You don change plenty rows just now. Wait small, then try again.",
+      "reviewed": false
+    },
+    "wa.rows.not_saved": {
+      "text": "I no save am: {reason}",
+      "reviewed": false
+    },
+    "wa.rows.failed": {
+      "text": "E no go: {reason}\n\nReply *yes* to try again or *cancel*.",
+      "reviewed": false
+    },
+    "wa.rows.changed_since": {
+      "text": "Row {id} don change after you see am, so I no write anything. See am as e be now.",
+      "reviewed": false
+    },
+    "wa.rows.saved": {
+      "text": "I don save row {id} for {table}.",
+      "reviewed": false
+    },
+    "wa.rows.deleted": {
+      "text": "I don comot row {id} from {table}.",
+      "reviewed": false
+    },
+    "button.file_new": {
+      "text": "New table",
+      "reviewed": false
+    },
+    "button.file_add": {
+      "text": "Add am to table",
+      "reviewed": false
+    },
+    "button.not_now": {
+      "text": "No be now",
+      "reviewed": false
+    },
+    "wa.file.denied": {
+      "text": "You no fit bring list enter tables for {org} (e need table.edit).",
+      "reviewed": false
+    },
+    "wa.file.unsupported": {
+      "text": "I fit read CSV and Excel (.xlsx) files. Save the list as one of dem and send am again.",
+      "reviewed": false
+    },
+    "wa.file.too_many": {
+      "text": "You don send plenty files just now. Wait small, then send am again.",
+      "reviewed": false
+    },
+    "wa.file.too_big": {
+      "text": "That file pass 2 MB. Send smaller one, or use Import for the Tables page{link}.",
+      "reviewed": false
+    },
+    "wa.file.too_many_rows": {
+      "text": "That file get pass {limit} rows, pass wetin one import fit take. Divide am into small files and send each one.",
+      "reviewed": false
+    },
+    "wa.file.unreadable": {
+      "text": "I no fit read that file: {reason}.",
+      "reviewed": false
+    },
+    "wa.file.not_fetched": {
+      "text": "I no fit collect that file. Send am again small time.",
+      "reviewed": false
+    },
+    "wa.file.got": {
+      "text": "*{file}*: {rows} row(s) with {columns}.",
+      "reviewed": false
+    },
+    "wa.file.offer": {
+      "text": "*Add am to table* go add dem to {table}.",
+      "reviewed": false
+    },
+    "wa.file.choose": {
+      "text": "*New table* go make table from am. To add the rows to another table, send *add to* and im name. *No be now* no go keep anything.",
+      "reviewed": false
+    },
+    "wa.file.pick_reminder": {
+      "text": "Tap *New table*, or send *add to* and table name, or *No be now*.",
+      "reviewed": false
+    },
+    "wa.file.which": {
+      "text": "Plenty tables match:\n{list}\n\nSend *add to* and the full name.",
+      "reviewed": false
+    },
+    "wa.file.not_now": {
+      "text": "Nothing enter, and I no keep the file.",
+      "reviewed": false
+    },
+    "wa.file.table_gone": {
+      "text": "That table no dey again. Send the file again.",
+      "reviewed": false
+    },
+    "wa.file.ask_header": {
+      "text": "Which column for *{table}* *{header}* go enter?\n{list}\n0. Leave am out",
+      "reviewed": false
+    },
+    "wa.file.map_again": {
+      "text": "Send number from 0 reach {max}.",
+      "reviewed": false
+    },
+    "wa.file.no_columns": {
+      "text": "None of the file headings be column for *{table}*, so nothing enter.",
+      "reviewed": false
+    },
+    "wa.file.row_bad": {
+      "text": "Nothing enter: {reason}. Correct the file and send am again.",
+      "reviewed": false
+    },
+    "wa.file.confirm_new": {
+      "text": "Make I create *{table}* with these columns:\n{columns}\n\nand add im {rows} row(s)? The first ones:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.confirm_add": {
+      "text": "Make I add {rows} row(s) to *{table}*? The first ones:\n{first}\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.file.again": {
+      "text": "I no fit collect that file again as e be. Send am again.",
+      "reviewed": false
+    },
+    "wa.file.failed": {
+      "text": "E no go: {reason}\n\nReply *yes* to try again or *cancel*. Rows wey don enter no go enter twice.",
+      "reviewed": false
+    },
+    "wa.file.made": {
+      "text": "I don make *{table}* and add {rows} row(s) from {file}. I no keep the file. Send *find {name}* and one word to look for rows.",
+      "reviewed": false
+    },
+    "wa.file.added": {
+      "text": "I don add {rows} row(s) to *{table}* from {file}. I no keep the file.",
+      "reviewed": false
+    },
+    "wa.file.already": {
+      "text": "The rows for {file} don already enter *{table}*, so nothing enter twice.",
+      "reviewed": false
+    },
+    "wa.file.slack": {
+      "text": "I never fit open files wey dem send for Slack. Import am for the Tables page{link}, or send am give me for WhatsApp or Telegram.",
+      "reviewed": false
+    },
+    "wa.sheet.link": {
+      "text": "Send *copy my sheet* and the sheet link (open the sheet for your browser and copy the address).",
+      "reviewed": false
+    },
+    "wa.sheet.connect_first": {
+      "text": "Connect Google Sheets first: send *connect Google Sheets*. Then send *copy my sheet* and the link again.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot": {
+      "text": "I no fit read that sheet: {reason}.",
+      "reviewed": false
+    },
+    "wa.sheet.cannot_open": {
+      "text": "Taskiem no fit open that sheet with your Google account. Check the link, and make sure the account wey you connect fit open am.",
+      "reviewed": false
+    },
+    "wa.sheet.changed": {
+      "text": "The sheet don change since I read am, so nothing enter. Send *copy my sheet* and the link again.",
+      "reviewed": false
+    },
+    "wa.sheet.no_sync": {
+      "text": "Na copy be this: anything wey you change for the sheet later no go enter. Dey keep the list for the table from now.",
+      "reviewed": false
+    },
+    "wa.debt.owes_short": {
+      "text": "dey owe {amount}",
+      "reviewed": false
+    },
+    "wa.debt.someone_new": {
+      "text": "Another person",
+      "reviewed": false
+    },
+    "wa.debt.ask_phone": {
+      "text": "{name} na new person. Send {name} phone number make receipt and reminder fit reach dem, or *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.which": {
+      "text": "Which {name}?\n{list}\n\nSend number.",
+      "reviewed": false
+    },
+    "wa.debt.ask_terms": {
+      "text": "How long you dey give customers to pay wetin dem owe? Reminder go only after this time.\n{list}\n\nSend number. You fit change am later with *credit terms 14 days*.",
+      "reviewed": false
+    },
+    "wa.debt.no_fixed_time": {
+      "text": "No fixed time (no reminder)",
+      "reviewed": false
+    },
+    "wa.debt.days": {
+      "text": "{days} days",
+      "reviewed": false
+    },
+    "wa.debt.no_due": {
+      "text": "No due date.",
+      "reviewed": false
+    },
+    "wa.debt.no_terms_yet": {
+      "text": "Na owner go set how long customers get to pay; until then this debt no get due date.",
+      "reviewed": false
+    },
+    "wa.debt.due_on": {
+      "text": "E due {date}.",
+      "reviewed": false
+    },
+    "wa.debt.confirm_owes": {
+      "text": "Make I write say {name} dey owe {amount}? {due}\n{name} go owe {total} for everything. Nothing go reach dem.\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.refused": {
+      "text": "I no write am: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.recorded": {
+      "text": "I don write am: {name} dey owe {amount} ({number}). {name} dey owe {total} for everything.",
+      "reviewed": false
+    },
+    "wa.debt.denied": {
+      "text": "You no fit write debt or payment for {org} (e need invoice.manage).",
+      "reviewed": false
+    },
+    "wa.debt.denied_read": {
+      "text": "You no fit see who dey owe {org} (e need invoice.read).",
+      "reviewed": false
+    },
+    "wa.debt.no_one": {
+      "text": "Nobody wey dem dey call {name} dey owe you. Write debt with *{name} owes* and the amount.",
+      "reviewed": false
+    },
+    "wa.debt.ask_how": {
+      "text": "How {name} take pay?\n1. Cash\n2. Transfer",
+      "reviewed": false
+    },
+    "wa.debt.account_connected": {
+      "text": "Your {name} account ({connection})",
+      "reviewed": false
+    },
+    "wa.debt.account_new": {
+      "text": "Another account",
+      "reviewed": false
+    },
+    "wa.debt.ask_account": {
+      "text": "Which account {name} send am enter?\n{list}\n\nSend number.",
+      "reviewed": false
+    },
+    "wa.debt.how_cash": {
+      "text": "for cash",
+      "reviewed": false
+    },
+    "wa.debt.how_transfer": {
+      "text": "by transfer enter {account}",
+      "reviewed": false
+    },
+    "wa.debt.confirm_paid": {
+      "text": "Make I write {amount} from {name} {how}? E go first pay their oldest debt. {name} go still owe {total}.\n\nReply *yes* or *cancel*.",
+      "reviewed": false
+    },
+    "wa.debt.extra_credit": {
+      "text": "{amount} wey pass wetin dem owe go stay as their credit, for their next debt.",
+      "reviewed": false
+    },
+    "wa.debt.paid_recorded": {
+      "text": "I don write {amount} from {name}. {name} dey owe {total} now.",
+      "reviewed": false
+    },
+    "wa.debt.credit_held": {
+      "text": "Credit wey dem get: {amount}.",
+      "reviewed": false
+    },
+    "wa.debt.phone_bad": {
+      "text": "I no fit use that phone number. Send am with country code (+234…), or *skip*.",
+      "reviewed": false
+    },
+    "wa.debt.applied": {
+      "text": "E don do: {count} debt(s) wey still dey now follow these terms.",
+      "reviewed": false
+    },
+    "wa.debt.transfer_rail": {
+      "text": "Nothing to write: Taskiem dey see money wey enter {account}. {name} balance go reduce when the transfer land and match.",
+      "reviewed": false
+    },
+    "wa.debt.ask_account_name": {
+      "text": "Wetin you dey call that account? Use the bank and short name, like *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.account_name_bad": {
+      "text": "Use small letters and numbers, and only one /, like *gtbank/shop*.",
+      "reviewed": false
+    },
+    "wa.debt.not_recorded": {
+      "text": "I no write anything.",
+      "reviewed": false
+    },
+    "wa.debt.terms_bad": {
+      "text": "Credit terms na 1 reach 365 days, or *credit terms none*.",
+      "reviewed": false
+    },
+    "wa.debt.terms_set": {
+      "text": "Customers now get {terms} to pay wetin dem owe. New debt go follow am.",
+      "reviewed": false
+    },
+    "wa.debt.terms_none_note": {
+      "text": "Debt wey you write no go get due date or reminder.",
+      "reviewed": false
+    },
+    "wa.debt.ask_apply": {
+      "text": "Make I apply am to the {count} debt(s) wey don dey before, each one from the day dem write am?",
+      "reviewed": false
+    },
+    "wa.debt.nobody": {
+      "text": "Nobody dey owe you. Write debt with *Ada owes 5,000*.",
+      "reviewed": false
+    },
+    "wa.debt.who_head": {
+      "text": "{count} customer(s) dey owe you {total}:",
+      "reviewed": false
+    },
+    "wa.debt.who_line": {
+      "text": "{n}. {name}: {amount} ({lines} line(s))",
+      "reviewed": false
+    },
+    "wa.debt.who_due": {
+      "text": "due {date}",
+      "reviewed": false
+    },
+    "wa.debt.who_more": {
+      "text": "… and {count} more.",
+      "reviewed": false
+    },
+    "wa.debt.who_tail": {
+      "text": "Send *balance* and name to see one customer debt.",
+      "reviewed": false
+    },
+    "wa.debt.which_balance": {
+      "text": "Pass one person match:\n{list}\n\nSend the full name.",
+      "reviewed": false
+    },
+    "wa.debt.statement_head": {
+      "text": "{name} dey owe {amount}:",
+      "reviewed": false
+    },
+    "wa.debt.statement_last": {
+      "text": "Last pay {amount} on {date}.",
+      "reviewed": false
+    },
+    "wa.debt.owes_nothing": {
+      "text": "{name} no owe anything.",
+      "reviewed": false
+    },
+    "wa.debt.send_no_address": {
+      "text": "{name} no get phone number yet. Send *{name}'s number is 0803…* first.",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_account": {
+      "text": "their own account number wey dem go pay enter",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_link": {
+      "text": "link to pay am, all or small small",
+      "reviewed": false
+    },
+    "wa.debt.send_pay_none": {
+      "text": "no way to pay online (dem go ask you how)",
+      "reviewed": false
+    },
+    "wa.debt.send_confirm": {
+      "text": "Make I send {name} wetin dem owe, {amount} ({lines}), to {to}, with {pay}?",
+      "reviewed": false
+    },
+    "wa.debt.send_recorded": {
+      "text": "Their {count} notebook line(s) go show as sent.",
+      "reviewed": false
+    },
+    "wa.debt.sent": {
+      "text": "I don send {name} their balance of {amount} by {channels}.",
+      "reviewed": false
+    },
+    "wa.debt.sent_nothing": {
+      "text": "Nothing reach {name} now: too many messages to dem this hour, or your plan SMS don finish. Try again later.",
+      "reviewed": false
+    },
+    "wa.debt.send_refused": {
+      "text": "E no go: {reason}",
+      "reviewed": false
+    },
+    "wa.debt.phone_set": {
+      "text": "{name} number na {phone} now: receipt and reminder fit reach dem.",
+      "reviewed": false
+    },
+    "wa.help.debts": {
+      "text": "• *Ada owes 5,000*, *Ada paid 2,000 cash*, *who owes me?*, *send Ada her balance*: the debt wey customers dey owe you",
       "reviewed": false
     },
     "wa.table.form": {
@@ -3185,7 +3897,7 @@
       "reviewed": false
     },
     "wa.table.none": {
-      "text": "{org} never get any data table. Create one for Taskiem, under Tables{link}.",
+      "text": "{org} never get any data table. Send *new table* make I create one here, or create one for Taskiem, under Tables{link}.",
       "reviewed": false
     },
     "wa.table.not_added": {

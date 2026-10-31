@@ -34,6 +34,11 @@ func TestTemplatesListAndInstantiate(t *testing.T) {
 	owner.must(201, "POST", "/v1/members", map[string]any{"email": "viewer@acme.test", "password": testPassword, "roles": []string{"viewer"}})
 	viewer := w.login(t, "viewer@acme.test", testPassword)
 
+	// A business that keeps its lists in Google Sheets is offered the sheet
+	// templates (without it, their twins: decision 0060).
+	owner.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "googlesheets@1",
+		"credentials": map[string]string{"client_id": "app.apps.googleusercontent.com", "client_secret": "s", "refresh_token": "1//r"}})
+
 	// Any member browses the library.
 	list := viewer.must(200, "GET", "/v1/templates", nil)["templates"].([]any)
 	if len(list) < 15 {
@@ -58,7 +63,9 @@ func TestTemplatesListAndInstantiate(t *testing.T) {
 		t.Errorf("plain steps: %v", first)
 	}
 	q := viewer.must(200, "GET", "/v1/templates?q=every+Friday+text+my+customers+who+owe+me", nil)["templates"].([]any)
-	if len(q) == 0 || q[0].(map[string]any)["id"] != "debtor-reminder-sms" {
+	// The sheet template comes after its twin, the debtor book's reminder
+	// (decision 0060), unless the words name a sheet.
+	if len(q) < 2 || q[0].(map[string]any)["id"] != "chase-overdue-invoices" || q[1].(map[string]any)["id"] != "debtor-reminder-sms" {
 		t.Errorf("search: %v", q)
 	}
 	one := viewer.must(200, "GET", "/v1/templates/debtor-reminder-sms", nil)
@@ -257,7 +264,7 @@ func TestTemplateServices(t *testing.T) {
 		"mailchimp-unsubscribes-to-customers": `[["mailchimp"]]`,
 		"payrolla-payday-check":               `[["payrolla"]]`,
 		"resend-paid-receipt":                 `null`,
-		"debtor-reminder-sms":                 `null`,
+		"chase-overdue-invoices":              `null`,
 	} {
 		m, ok := byID[id]
 		if !ok {

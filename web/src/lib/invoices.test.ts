@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { postOnce } from "../api";
 import {
   INVOICE_FILTERS,
+  creditChoice,
+  creditProblem,
+  creditRequest,
+  creditTermsWords,
   INVOICE_STATUS,
   dateLabel,
   draftRequest,
@@ -121,19 +125,36 @@ describe("money", () => {
 
 describe("statuses and the list", () => {
   it("words every status for people", () => {
-    expect(Object.values(INVOICE_STATUS).map((s) => s.label)).toEqual(["Draft", "Sent", "Part-paid", "Paid", "Overdue", "Void"]);
+    expect(Object.values(INVOICE_STATUS).map((s) => s.label)).toEqual(["Draft", "Recorded", "Sent", "Part-paid", "Paid", "Overdue", "Void"]);
     expect(invoiceStatus("paid")).toEqual({ label: "Paid", tone: "ok" });
     expect(invoiceStatus("overdue").tone).toBe("danger");
     expect(invoiceStatus("on_hold")).toEqual({ label: "on hold", tone: "muted" });
   });
 
   it("filters by status", () => {
-    expect(INVOICE_FILTERS.map((f) => f.label)).toEqual(["All", "Draft", "Sent", "Part-paid", "Paid", "Overdue", "Void"]);
+    expect(INVOICE_FILTERS.map((f) => f.label)).toEqual(["All", "Notebook debts", "Draft", "Recorded", "Sent", "Part-paid", "Paid", "Overdue", "Void"]);
+    expect(invoicesPath("credit")).toBe("/v1/invoices?kind=credit");
+    expect(invoicesPath("recorded")).toBe("/v1/invoices?status=recorded");
     expect(invoicesPath("")).toBe("/v1/invoices");
     expect(invoicesPath("part_paid")).toBe("/v1/invoices?status=part_paid");
     expect(invoicesPath("void")).toBe("/v1/invoices?status=void");
     // Something the server does not know is all of them, not a refusal.
     expect(invoicesPath("nonsense")).toBe("/v1/invoices");
+  });
+
+  it("words and sends the credit terms", () => {
+    expect(creditTermsWords({ credit_days: 14, credit_terms_at: null })).toContain("Not chosen yet");
+    expect(creditTermsWords({ credit_days: null, credit_terms_at: "2026-10-30T10:00:00Z" })).toContain("never overdue");
+    expect(creditTermsWords({ credit_days: 1, credit_terms_at: "2026-10-30T10:00:00Z" })).toBe("1 day from the day a debt is recorded.");
+    expect(creditChoice(30, true)).toEqual({ choice: "30", other: "" });
+    expect(creditChoice(45, true)).toEqual({ choice: "other", other: "45" });
+    expect(creditChoice(null, true)).toEqual({ choice: "none", other: "" });
+    expect(creditChoice(null, false)).toEqual({ choice: "14", other: "" });
+    expect(creditProblem("other", "400")).toBe("Type a number of days from 1 to 365.");
+    expect(creditProblem("other", "21")).toBeNull();
+    expect(creditRequest("none", "", true)).toEqual({ credit_days: null, apply_open: true });
+    expect(creditRequest("other", " 21 ", false)).toEqual({ credit_days: 21, apply_open: false });
+    expect(invoiceActions("recorded", () => true).send).toBe(true);
   });
 
   it("puts the newest first", () => {

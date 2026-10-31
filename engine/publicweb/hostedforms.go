@@ -202,6 +202,11 @@ func (s *Server) routeForms(w http.ResponseWriter, r *http.Request) {
 		s.serveInvoice(w, r, key, sub)
 		return
 	}
+	// So does a customer's page (customer.go).
+	if !embed && head == "c" {
+		s.serveCustomer(w, r, key, sub)
+		return
+	}
 	// A school receipt's verification page (receipt.go) shares /r/ with
 	// form links and needs no keys either: a receipt's token answers first.
 	if !embed && head == "r" && sub == "" && s.serveReceipt(w, r, key) {

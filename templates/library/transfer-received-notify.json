@@ -3,6 +3,7 @@
   "title": "Tell the owner about each payment received",
   "summary": "When a customer pays, by a payment page or a transfer to their account number, tell the owner and log it in a sheet.",
   "description": "Whenever your payments account reports money received (a customer paying a payment page, or a bank transfer from a customer), tells the owner who paid and how much, and adds a row to a Google Sheet: date, reference, payer and amount. Works with Paystack, Moniepoint or Flutterwave; the owner hears on the WhatsApp or Telegram they linked to Taskiem, or by email.",
+  "replaced_where": {"by": "payment-received-tell-owner", "when": "no_sheets"},
   "category": "collections",
   "tags": [
     "collections",

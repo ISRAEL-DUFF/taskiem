@@ -3,45 +3,220 @@
   "reviewed": false,
   "status": "DRAFT, NOT REVIEWED. Written without a native speaker; do not treat as accurate until reviewed (docs/languages.md).",
   "phrases": {
-    "help": ["ìrànlọ́wọ́", "ẹ ràn mí lọ́wọ́", "kí ni mo lè ṣe", "báwo", "ẹ kú àárọ̀", "ẹ kú ọ̀sán", "ẹ kú alẹ́"],
-    "status": ["kí ló kùnà lónìí", "kí ló kùnà", "báwo ni nǹkan ṣe ń lọ", "ipò"],
-    "approvals": ["àwọn ìfọwọ́sí", "kí ló ń dúró dè mí"],
-    "cancel": ["fagilé", "fagilé e", "dúró", "ẹ dúró"],
-    "yes": ["bẹ́ẹ̀ni", "bẹ́ẹ̀ ni", "ó dáa", "ṣe é"],
-    "no": ["rárá", "bẹ́ẹ̀kọ́", "má ṣe é"],
-    "tables": ["àwọn tábìlì", "àwọn tábìlì mi", "tábìlì mi", "fi àwọn tábìlì mi hàn"],
-    "make_page": ["ṣe ojú-ìwé mi", "ṣe ṣọ́ọ̀bù mi"],
-    "my_page": ["ojú-ìwé mi", "ṣọ́ọ̀bù mi"],
-    "orders": ["àwọn àṣẹ mi", "àwọn ọjà tí wọ́n bèèrè"],
-    "open_shop": ["ṣí ṣọ́ọ̀bù mi", "ṣí ṣọ́ọ̀bù"],
-    "qr": ["kóòdù qr mi"],
-    "signup": ["mo fẹ́ ṣí àkọọ́lẹ̀", "ṣí àkọọ́lẹ̀ fún mi", "mo fẹ́ bẹ̀rẹ̀ iṣẹ́", "forúkọsílẹ̀"],
-    "plan": ["ètò mi", "elo ni màá san", "ìsanwó taskiem"]
+    "help": [
+      "ìrànlọ́wọ́",
+      "ẹ ràn mí lọ́wọ́",
+      "kí ni mo lè ṣe",
+      "báwo",
+      "ẹ kú àárọ̀",
+      "ẹ kú ọ̀sán",
+      "ẹ kú alẹ́"
+    ],
+    "status": [
+      "kí ló kùnà lónìí",
+      "kí ló kùnà",
+      "báwo ni nǹkan ṣe ń lọ",
+      "ipò"
+    ],
+    "approvals": [
+      "àwọn ìfọwọ́sí",
+      "kí ló ń dúró dè mí"
+    ],
+    "cancel": [
+      "fagilé",
+      "fagilé e",
+      "dúró",
+      "ẹ dúró"
+    ],
+    "yes": [
+      "bẹ́ẹ̀ni",
+      "bẹ́ẹ̀ ni",
+      "ó dáa",
+      "ṣe é"
+    ],
+    "no": [
+      "rárá",
+      "bẹ́ẹ̀kọ́",
+      "má ṣe é"
+    ],
+    "tables": [
+      "àwọn tábìlì",
+      "àwọn tábìlì mi",
+      "tábìlì mi",
+      "fi àwọn tábìlì mi hàn"
+    ],
+    "new_table": [
+      "tábìlì tuntun",
+      "ṣe tábìlì",
+      "àkọsílẹ̀ tuntun"
+    ],
+    "make_page": [
+      "ṣe ojú-ìwé mi",
+      "ṣe ṣọ́ọ̀bù mi"
+    ],
+    "my_page": [
+      "ojú-ìwé mi",
+      "ṣọ́ọ̀bù mi"
+    ],
+    "orders": [
+      "àwọn àṣẹ mi",
+      "àwọn ọjà tí wọ́n bèèrè"
+    ],
+    "open_shop": [
+      "ṣí ṣọ́ọ̀bù mi",
+      "ṣí ṣọ́ọ̀bù"
+    ],
+    "qr": [
+      "kóòdù qr mi"
+    ],
+    "signup": [
+      "mo fẹ́ ṣí àkọọ́lẹ̀",
+      "ṣí àkọọ́lẹ̀ fún mi",
+      "mo fẹ́ bẹ̀rẹ̀ iṣẹ́",
+      "forúkọsílẹ̀"
+    ],
+    "plan": [
+      "ètò mi",
+      "elo ni màá san",
+      "ìsanwó taskiem"
+    ]
   },
   "prefixes": {
-    "switch": ["yí padà sí", "lọ sí"],
-    "run": ["bẹ̀rẹ̀", "ṣe iṣẹ́"],
-    "build": ["kọ́", "ṣẹ̀dá"],
-    "language": ["èdè", "yí èdè padà sí"],
-    "add": ["fi kún", "fi sí", "ṣàfikún sí", "fi sínú"],
-    "find": ["wá nínú", "wá", "ṣàwárí", "ṣàwárí nínú"],
-    "publish": ["tẹ̀ jáde"],
-    "close_shop": ["ti ṣọ́ọ̀bù mi", "ti ṣọ́ọ̀bù"],
-    "order_ready": ["ti ṣetán"],
-    "order_delivered": ["ti dé ọ̀dọ̀ wọn", "wọ́n ti gbà á"],
-    "invoice": ["ìwé owó", "ìwé ìsanwó", "fi ìwé owó ránṣẹ́ sí"],
-    "expense": ["mo ná", "mo ti ná", "ìnáwó"],
-    "cash_in": ["owó wọlé"],
-    "cash_out": ["owó jáde"],
-    "sold": ["mo ti ta", "mo ta", "a ta"],
-    "received": ["mo ti gba", "a ti gba"],
-    "count": ["mo ka", "mo ti ka"],
-    "stock": ["mélòó ni", "melo ni", "ọjà mélòó"],
-    "take_off": ["yọ kúrò", "yo kuro", "bàjẹ́"],
-    "connect": ["so pọ̀ mọ́", "connect"],
-    "invite": ["pe", "invite"]
+    "switch": [
+      "yí padà sí",
+      "lọ sí"
+    ],
+    "run": [
+      "bẹ̀rẹ̀",
+      "ṣe iṣẹ́"
+    ],
+    "build": [
+      "kọ́",
+      "ṣẹ̀dá"
+    ],
+    "language": [
+      "èdè",
+      "yí èdè padà sí"
+    ],
+    "add": [
+      "fi kún",
+      "fi sí",
+      "ṣàfikún sí",
+      "fi sínú"
+    ],
+    "find": [
+      "wá nínú",
+      "wá",
+      "ṣàwárí",
+      "ṣàwárí nínú"
+    ],
+    "new_table": [
+      "tábìlì tuntun",
+      "àkọsílẹ̀ tuntun"
+    ],
+    "publish": [
+      "tẹ̀ jáde"
+    ],
+    "close_shop": [
+      "ti ṣọ́ọ̀bù mi",
+      "ti ṣọ́ọ̀bù"
+    ],
+    "order_ready": [
+      "ti ṣetán"
+    ],
+    "order_delivered": [
+      "ti dé ọ̀dọ̀ wọn",
+      "wọ́n ti gbà á"
+    ],
+    "invoice": [
+      "ìwé owó",
+      "ìwé ìsanwó",
+      "fi ìwé owó ránṣẹ́ sí"
+    ],
+    "expense": [
+      "mo ná",
+      "mo ti ná",
+      "ìnáwó"
+    ],
+    "cash_in": [
+      "owó wọlé"
+    ],
+    "cash_out": [
+      "owó jáde"
+    ],
+    "sold": [
+      "mo ti ta",
+      "mo ta",
+      "a ta"
+    ],
+    "received": [
+      "mo ti gba",
+      "a ti gba"
+    ],
+    "count": [
+      "mo ka",
+      "mo ti ka"
+    ],
+    "stock": [
+      "mélòó ni",
+      "melo ni",
+      "ọjà mélòó"
+    ],
+    "take_off": [
+      "yọ kúrò",
+      "yo kuro",
+      "bàjẹ́"
+    ],
+    "connect": [
+      "so pọ̀ mọ́",
+      "connect"
+    ],
+    "invite": [
+      "pe",
+      "invite"
+    ],
+    "change_row": [
+      "ṣàtúnṣe",
+      "yí padà",
+      "tún ṣe"
+    ],
+    "delete_row": [
+      "pa rẹ́",
+      "yọ kúrò",
+      "yọ"
+    ]
   },
-  "fillers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "ẹ jọ̀ọ́"],
-  "markers": ["ẹ jọ̀wọ́", "jọ̀wọ́", "mo fẹ́", "kí ni", "báwo", "owó", "ọjọ́", "lónìí", "ṣé", "àwọn", "fún", "ẹ kú", "ìrànlọ́wọ́", "kùnà", "fagilé", "bẹ́ẹ̀ni", "rárá", "ẹ ṣé", "oníbàárà", "ìwé owó", "mo ná", "owó wọlé", "owó jáde"],
-  "for_words": ["fún"]
+  "fillers": [
+    "ẹ jọ̀wọ́",
+    "jọ̀wọ́",
+    "ẹ jọ̀ọ́"
+  ],
+  "markers": [
+    "ẹ jọ̀wọ́",
+    "jọ̀wọ́",
+    "mo fẹ́",
+    "kí ni",
+    "báwo",
+    "owó",
+    "ọjọ́",
+    "lónìí",
+    "ṣé",
+    "àwọn",
+    "fún",
+    "ẹ kú",
+    "ìrànlọ́wọ́",
+    "kùnà",
+    "fagilé",
+    "bẹ́ẹ̀ni",
+    "rárá",
+    "ẹ ṣé",
+    "oníbàárà",
+    "ìwé owó",
+    "mo ná",
+    "owó wọlé",
+    "owó jáde"
+  ],
+  "for_words": [
+    "fún"
+  ]
 }

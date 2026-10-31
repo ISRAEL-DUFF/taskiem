@@ -420,3 +420,14 @@ func Callback(updateID, userID, messageID int64, queryID, data string) []byte {
 	}})
 	return body
 }
+
+// DocumentMessage is an update with a file (fileID, as SetFile made it
+// known) of a name and type in the private chat of user id.
+func DocumentMessage(updateID, userID int64, fileID, name, mime string) []byte {
+	msg := map[string]any{
+		"message_id": updateID, "from": from(userID, ""), "chat": private(userID), "date": 1759800000,
+		"document": map[string]any{"file_id": fileID, "file_unique_id": "u" + fileID, "file_name": name, "mime_type": mime},
+	}
+	body, _ := json.Marshal(map[string]any{"update_id": updateID, "message": msg})
+	return body
+}

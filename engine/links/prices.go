@@ -1,7 +1,7 @@
 package links
 
 // Price lists and item links between linked businesses (L4;
-// docs/spec/business-links.md §9; migration 00280). The seller's list is
+// docs/spec/business-links.md §9; migration 00284). The seller's list is
 // built on its own stock items: per item the price a linked buyer pays, a
 // minimum quantity and whether it is available. It is shared with links,
 // one list per link, and a link may override a price. The buyer's view of

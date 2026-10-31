@@ -256,7 +256,7 @@ In order, one PR each; L0 and L1 together if the first linked pair is waiting. L
 
 ### 16.1 As built (L0, first slice)
 
-The link itself, its search and its words in chat; migration 00275, `engine/links`, `api/links.go`, `api/chat_links.go`.
+The link itself, its search and its words in chat; migration 00279, `engine/links`, `api/links.go`, `api/chat_links.go`.
 
 - **The link record.** `business_links` is a platform table that no business reads: its policy for `taskiem_app` admits nothing, and each side reads it through `taskiem_links_of`. Its statuses are `requested`, `active`, `declined`, `blocked`, `cancelled` and `ended`; `paused` waits for a setting that needs it.
 - **What each side sees.** `taskiem_link_view` decides it, in one place:
@@ -346,7 +346,7 @@ The link itself, its search and its words in chat; migration 00275, `engine/link
 
 ### 16.2 As built (L1)
 
-Migration 00276, `engine/links/bills.go`, `engine/matching/customers.go`, `connectors/bills`, the `pay-linked-bill` template, `api/bills.go`, `web/src/pages/Bills.tsx`.
+Migration 00280, `engine/links/bills.go`, `engine/matching/customers.go`, `connectors/bills`, the `pay-linked-bill` template, `api/bills.go`, `web/src/pages/Bills.tsx`.
 
 - **The mirror.** It is not written in the seller's send transaction, as §6.1 has it, but through a durable queue. The seller's invoice is never refused for the buyer's side, and every path that changes an invoice is covered without touching each one.
   - A trigger on `customer_invoices` notes every sent invoice whose customer key is `link:<buyer>` in the seller's `link_mirrors_due`, on any change: send, amendment, void, a payment counted or undone, overdue, a query.
@@ -384,7 +384,7 @@ Migration 00276, `engine/links/bills.go`, `engine/matching/customers.go`, `conne
 
 ### 16.3 As built (L2)
 
-Migration 00277, `engine/links/orders.go`, `engine/stock/purchases.go` (`LinkSupplierTx`, the send), `engine/storefront` (the kind `trade`), `api/link_orders.go`, `web/src/pages/TradeOrders.tsx`.
+Migration 00281, `engine/links/orders.go`, `engine/stock/purchases.go` (`LinkSupplierTx`, the send), `engine/storefront` (the kind `trade`), `api/link_orders.go`, `web/src/pages/TradeOrders.tsx`.
 
 - **A linked supplier.** A supplier record says which linked business it is (`suppliers.link_id`, **On Taskiem** on the Suppliers page, `PUT /v1/stock/suppliers/{id}/link`), one supplier per link. It is chosen by the buyer, not inferred from a phone number. Its orders then go through the link while the link is active, and by chat as before otherwise.
 - **The order is a storefront order** of the kind `trade`, as §7 has it, the buyer its customer: on the seller's **Orders** page with every order, starting its order workflow (the one deployed for orders), lowering its stock on acceptance, and delivered by its riders. It is not a submission (no form, no status page, no payment: its money is the invoice, L1), and needs no storefront. What a linked order has beyond a storefront order is in `link_orders` beside it: its lines with units, matches and what was delivered of each (the order's basket and total are kept from them), the buyer's reference and note, the seller's change and word, ready, the buyer's cancel request and count, the invoice. Its own statuses are `proposed` and `changed`; a rider's on the way and at the door read as dispatched, completed as delivered.
@@ -404,7 +404,7 @@ Migration 00277, `engine/links/orders.go`, `engine/stock/purchases.go` (`LinkSup
 
 ### 16.4 As built (L3)
 
-Migration 00278, `engine/links/messages.go`, `api/link_chat.go`, `web/src/pages/Conversation.tsx` and the Chat page (`Links.tsx`).
+Migration 00282, `engine/links/messages.go`, `api/link_chat.go`, `web/src/pages/Conversation.tsx` and the Chat page (`Links.tsx`).
 
 - **The conversation** with each linked business, on the Chat page: the list on the left (the last message, its time, an unread count, muted and archived), the open conversation on the right (`/chat?with=<link>`), one at a time on a phone. Bubbles theirs on the left and ours on the right, grouped by day, the clock in the corner and the ticks (delivered, and read when any member of the other side opened it), a quoted reply with **Reply**, Enter to send, search in the conversation, mute and archive. It follows itself every few seconds while open. The page's search also finds messages.
 - **Each side keeps the whole of it** (`link_messages`): a message is the sender's own copy, then, through `taskiem_link_enter` (`link.message`) in the same transaction, the other side's, the two sharing an id; reading marks the other side's copies read the same way (`link.read`). Neither side deletes it; an ended link keeps it and takes no more.
@@ -423,7 +423,7 @@ Migration 00278, `engine/links/messages.go`, `api/link_chat.go`, `web/src/pages/
 
 ### 16.5 As built (L4)
 
-Migration 00280, `engine/links/prices.go`, `api/price_lists.go`, `api/price_lists_chat.go`, `web/src/pages/PriceLists.tsx`.
+Migration 00284, `engine/links/prices.go`, `api/price_lists.go`, `api/price_lists_chat.go`, `web/src/pages/PriceLists.tsx`.
 
 - **Built on stock items, not fronts.** §9 puts a price list on a front's list block; fronts are in PR 135, not on this branch, so the owner decided a price list is built on the seller's own stock items (the ones L2 matches orders to). When fronts merge, a front's list can feed the same lists.
 - **The seller's lists** (**Storefront > Price lists**; `/v1/price-lists`): items from its own stock, each with the price a linked buyer pays, a minimum quantity and whether it is available; a list is shared with any number of links, a link has at most one (sharing it moves the link), and one buyer's own prices override the list's (`/v1/link-prices/{link}`). Withdrawn (unshared, or the list deleted), it is gone from the buyer.
@@ -439,7 +439,7 @@ Migration 00280, `engine/links/prices.go`, `api/price_lists.go`, `api/price_list
 
 ### 16.6 As built (L5)
 
-Migration 00281, `engine/links/credit.go`, `api/link_credit.go`, `web/src/pages/Statement.tsx`.
+Migration 00285, `engine/links/credit.go`, `api/link_credit.go`, `web/src/pages/Statement.tsx`.
 
 - **The statement is computed here, not PR 135's.** §10 makes it the customer statement PR 135 adds; that is not on this branch, so the owner decided to compute it here from what is kept (the seller's open invoices to the buyer, the buyer's open bills from the seller): nothing new is stored, as §10 wants. When PR 135 merges, its customer statement can take over for a customer whose key is the link (`GET /v1/links/{id}/statement`; **Statement** on a linked supplier, and on a linked buyer's orders). Each side shows what they owe us and what we owe them, with the terms, the limit, what is left to use and the open documents, oldest due first; both sides add up to the same numbers.
 - **Terms and limits** are the seller's trade settings for the link (`PUT /v1/links/{id}/trade`: `terms_days`, `credit_limit_kobo`; **Days to pay** and **Credit limit** with the buyer's orders). An invoice to a linked buyer that names no due date is due that many days after it is raised (`invoicing.Invoices.DueFor`), whether raised by an order or by hand. The buyer sees its terms and limit as a mirror (`supplier_terms`), written through the door with its prices.
@@ -450,12 +450,12 @@ Migration 00281, `engine/links/credit.go`, `api/link_credit.go`, `web/src/pages/
 
 ### 16.7 As built (L6)
 
-Migration 00282, `engine/links/events.go`, `connectors/link/`, `api/link_connector.go`, `api/link_events.go`, four templates.
+Migration 00286, `engine/links/events.go`, `connectors/link/`, `api/link_connector.go`, `api/link_events.go`, four templates.
 
 - **The trigger is its own type, `link`** (`{"type": "link", "config": {"event": …}}`), as `invoice` is, not a `connector_event` of `link@1`: the events are Taskiem's own, and need no connection or delivery. Each event is queued in the business it happens to, in the transaction that makes it happen (the bill mirrored, the order written, the order first delivered, the message's other copy written, the link accepted), one row per prod workflow of that business that starts on it (`link_starts`, once per workflow and event); the link worker starts the runs (kind `start`; a plan limit is noted, not retried). The trigger reaches only the business the event happened to: the other side's workflows never see it. `trigger.body` carries the link, the other business's name, the document's reference and the amounts (and the lines of an order, the words and sender of a message), never contact details.
 - **`link@1`** acts for the run's own business, as the system (`workflow:<run>`, audited), under the checks a person meets: `pay_bill` starts a payment through the business's bill payments (`PUT /v1/bills/pay/setup`), whose approver approves it, so the approval is the policy's and a template puts none before it; `place_order` drafts at the supplier's listed prices and sends, and an order above the business's own limit stays drafted for a person; `order_step` accepts, declines, readies or dispatches an order from a linked customer, and refuses to accept one over the customer's credit limit (checked again at that moment). `get_bill`, `get_order`, `price_of` and `reply` are §11's. Two reads were added for the templates: `list_bills` (bills still to pay, with whether each can be paid now) and `low_orders` (what the low items would order from each linked supplier at its prices). Every write is idempotent on the step's key. In a deployment whose worker runs apart from the api, the worker builds a server of its own for these actions.
 - **Templates.** `pay-bills-on-approval` is weekly on the day chosen (default Friday): the bills due within the week, up to an amount (and optionally one supplier's), each sent to be paid after its one approval; the rest held and named. `reorder-from-linked-suppliers`, `tell-me-when-a-linked-customer-orders` and `linked-order-to-delivery` (accepted and dispatched up to an amount and within the credit limit; the invoice follows the link's settings) are §11's. Each needs a goal naming a linked supplier or customer, or Taskiem, to be offered.
-- **The builder** gets the business's linked businesses (names and roles) in its context and a rule for the trigger and `link@1`; a goal naming one of them is matched as one saying "on Taskiem", so "pay Dangote's bills every Friday after I approve" meets `pay-bills-on-approval`. The editor offers **A linked business does something** with the event; the SDK has `linkTrigger`.
+- **The builder** gets the business's linked businesses (names and roles) in its context and a rule for the trigger and `link@1`; a goal naming one of them is matched as one saying "a linked business", so "pay Dangote's bills every Friday after I approve" meets `pay-bills-on-approval`. **A deviation from line 191:** the four templates need a goal saying a linked supplier, customer or business (or naming one), not "on Taskiem": "Taskiem" alone is in goals about anything ("the address Taskiem gives this workflow"), and it took a Telegram goal in the builder's evals. "Reorder from my linked suppliers" meets the reorder template; "reorder from my suppliers on Taskiem" does not. The editor offers **A linked business does something** with the event; the SDK has `linkTrigger`.
 - **Tests.** `api/link_automation_test.go` (a buyer's run prices and orders at the supplier's list; the order starts the seller's workflow, which accepts it and answers on its card, audited as the run; a bystander with the same trigger starts nothing; a refusal fails plainly; a bill starts the buyer's workflow, which reads it), the four templates' own tests, `TestMatch`, `TestNamesLinked`.
 
 ## 17. Risks and open questions

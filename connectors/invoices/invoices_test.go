@@ -45,6 +45,11 @@ func (o *ops) ListFor(_ context.Context, _ uuid.UUID, status string, within time
 	return []invoicing.Listed{{Number: "INV-0007", Status: "overdue", TotalKobo: 2500000, DueKobo: 500000, DueOn: "2026-10-01", DaysOverdue: 22}}, nil
 }
 
+func (o *ops) ListCustomersOverdue(_ context.Context, _ uuid.UUID, limit int) ([]invoicing.ListedCustomer, error) {
+	o.listed = fmt.Sprintf("customers %d", limit)
+	return []invoicing.ListedCustomer{{Customer: "key:book:1", Number: "INV-0003", Lines: 2, DueKobo: 800000, DueOn: "2026-10-01", DaysOverdue: 22}}, nil
+}
+
 func (o *ops) GiveAccount(_ context.Context, _ uuid.UUID, in invoicing.AccountRequest, _ string) (invoicing.CustomerAccount, error) {
 	o.account = in
 	if in.Channel == "nope/main" {
@@ -53,7 +58,29 @@ func (o *ops) GiveAccount(_ context.Context, _ uuid.UUID, in invoicing.AccountRe
 	return invoicing.CustomerAccount{Channel: in.Channel, AccountNumber: "9900000001", BankName: "Wema Bank", Reference: "tsk_abc", Customer: in.Customer}, nil
 }
 
+func (o *ops) CustomerLinkFor(_ context.Context, _ uuid.UUID, number, _ string) (string, int64, error) {
+	if number == "INV-0009" {
+		return "", 0, invoicing.ErrState
+	}
+	return "https://forms.test/c/abc", 650000, nil
+}
+
 var _ invoices.Ops = invoicing.Service{}
+
+// customer_link: the customer's link and what they owe in all; a
+// customer who owes nothing fails the step.
+func TestCustomerLink(t *testing.T) {
+	c := invoices.New(&ops{})
+	ctx := connector.WithCaller(context.Background(), connector.Caller{Tenant: uuid.New(), Run: uuid.New(), Step: "link"})
+	r, err := c.Actions["customer_link"].Execute(ctx, connector.Request{Input: map[string]any{"number": "INV-0003"}})
+	out, _ := r.Output.(map[string]any)
+	if err != nil || out["link"] != "https://forms.test/c/abc" || out["due_kobo"] != int64(650000) || out["due"] != "₦6,500" {
+		t.Fatalf("link: %+v %v", r.Output, err)
+	}
+	if _, err := c.Actions["customer_link"].Execute(ctx, connector.Request{Input: map[string]any{"number": "INV-0009"}}); !errors.Is(err, effects.ErrFatal) {
+		t.Errorf("owes nothing: %v", err)
+	}
+}
 
 // register_account: issued on the connection, or the one the business
 // has; by hand needs the number and reference; a connection that cannot
@@ -113,7 +140,16 @@ func TestList(t *testing.T) {
 		o.listed != "paid 6h0m0s 10" {
 		t.Errorf("paid: %v %s", err, o.listed)
 	}
-	for _, in := range []map[string]any{{"status": "draft"}, {"status": "overdue", "limit": float64(500)}} {
+	// One row per customer: what they owe on everything overdue.
+	r, err = c.Actions["list"].Execute(ctx, connector.Request{Input: map[string]any{"status": "overdue", "group": "customer", "limit": float64(20)}})
+	if err != nil || o.listed != "customers 20" {
+		t.Fatalf("customers: %v %s", err, o.listed)
+	}
+	if out := r.Output.(map[string]any); out["count"] != 1 || out["customers"].([]any)[0].(map[string]any)["due"] != "₦8,000" ||
+		out["customers"].([]any)[0].(map[string]any)["number"] != "INV-0003" {
+		t.Errorf("customers: %v", out)
+	}
+	for _, in := range []map[string]any{{"status": "draft"}, {"status": "overdue", "limit": float64(500)}, {"status": "paid", "group": "customer"}} {
 		if _, err := c.Actions["list"].Execute(ctx, connector.Request{Input: in}); !errors.Is(err, effects.ErrFatal) {
 			t.Errorf("%v: %v", in, err)
 		}

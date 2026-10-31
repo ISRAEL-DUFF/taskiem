@@ -1,6 +1,7 @@
 {
   "id": "debtor-reminder-whatsapp",
   "title": "Weekly WhatsApp reminders to customers who owe you",
+  "replaced_where": {"by": "chase-overdue-invoices", "when": "no_sheets"},
   "summary": "Every week, send each customer on your debtors sheet an approved WhatsApp reminder.",
   "description": "Once a week, reads your debtors list from a Google Sheet (columns: name, whatsapp, amount_owed) and sends each customer who still owes money your approved WhatsApp reminder template, filled with their name, the amount and your business name. WhatsApp only allows approved templates for messages a customer did not start, so create the template in WhatsApp Manager first. At most five messages go out at a time.",
   "category": "collections",

@@ -41,7 +41,7 @@ func TestTemplateFirst(t *testing.T) {
 	f := &ai.Fake{Script: []ai.Response{templateAnswer(t, "debtor-reminder-sms",
 		map[string]any{"business_name": "Ada Stores", "day": "Friday", "send_time": "9am", "spreadsheet_id": "not a spreadsheet id", "nonsense": 1})}}
 	b := &builder.Builder{Provider: f, Connectors: fullRegistry(t), Templates: templates.Default()}
-	p, err := b.Build(context.Background(), builder.Request{Goal: "Every Friday at 9am, text my customers who owe me. My shop is Ada Stores."})
+	p, err := b.Build(context.Background(), builder.Request{Goal: "Every Friday at 9am, text the customers on my debtors sheet who owe me. My shop is Ada Stores."})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,6 +71,20 @@ const (
 	IntentTakeOff Intent = "take_off"
 	// The ways in (docs/spec/chat-way-in.md 11): starting a business,
 	// connecting a service, inviting someone, the plan.
+	// A data table made in chat (decision 0060, R3).
+	IntentNewTable Intent = "new_table"
+	// A row of the list just found changed or removed (R4), by its number
+	// ("change 2"): English's words are read by the API, so en.json lists
+	// none (R6).
+	IntentChangeRow Intent = "change_row"
+	IntentDeleteRow Intent = "delete_row"
+	// The debtor book (R5) and questions over the tables (R6), as the model
+	// routes them: their words in each language are read by the API
+	// (chat_debtors.go, chat_tables_ask.go), so no list names them.
+	IntentOwes Intent = "owes"
+	IntentPaid Intent = "paid"
+	IntentAsk  Intent = "ask"
+
 	IntentSignup  Intent = "signup"
 	IntentConnect Intent = "connect"
 	IntentInvite  Intent = "invite"
@@ -81,7 +95,7 @@ const (
 var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, IntentYes, IntentNo, IntentSwitch, IntentRun, IntentBuild, IntentLanguage,
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
 	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff,
-	IntentSignup, IntentConnect, IntentInvite, IntentPlan}
+	IntentSignup, IntentConnect, IntentInvite, IntentPlan, IntentNewTable, IntentChangeRow, IntentDeleteRow, IntentOwes, IntentPaid, IntentAsk}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is
@@ -111,7 +125,8 @@ type Words struct {
 
 // prefixIntents take what follows them; the others are whole messages.
 var prefixIntents = []Intent{IntentSwitch, IntentRun, IntentBuild, IntentLanguage, IntentAdd, IntentFind, IntentPublish, IntentCloseShop, IntentReady, IntentDelivered,
-	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff, IntentConnect, IntentInvite}
+	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff, IntentConnect, IntentInvite, IntentNewTable,
+	IntentChangeRow, IntentDeleteRow}
 
 var (
 	wordsOnce sync.Once

@@ -331,42 +331,44 @@ func TestCoerce(t *testing.T) {
 func TestMatch(t *testing.T) {
 	lib := templates.Default()
 	for goal, want := range map[string]string{
-		"Every Friday, text my customers who owe me":                         "debtor-reminder-sms",
-		"remind my debtors on whatsapp every week":                           "debtor-reminder-whatsapp",
-		"send me a summary of today's sales every evening":                   "daily-sales-summary",
-		"when a customer pays on paystack send them a thank you sms":         "payment-thank-you-sms",
-		"alert me when my paystack balance is low":                           "low-balance-alert",
-		"pay my suppliers after I approve":                                   "supplier-payment-approval",
-		"remind me before salaries are due every month":                      "payroll-reminder",
-		"tell me when stock is running low on my inventory sheet":            "stock-reorder-alert",
-		"verify a new customer's BVN before onboarding them":                 "kyc-bvn-check",
-		"pay staff salaries from the payroll sheet once the owner approves":  "run-payroll",
-		"pay a list of commissions once I approve the batch":                 "pay-a-list",
-		"send the customer a payment link for their order":                   "payment-link-per-order",
-		"give each customer their own account number to pay into":            "virtual-account-per-customer",
-		"refund a customer's payment after a supervisor approves":            "refund-with-approval",
-		"tell me when a payment I send fails or comes back":                  "failed-transfer-alert",
-		"tell my staff on WhatsApp when Payrolla pays them":                  "payrolla-tell-staff",
-		"when Payrolla finishes paying, tell me who was not paid":            "payrolla-payroll-summary",
-		"our salaries run in Payrolla: send the approvers the approval link": "payrolla-approve-by-chat",
-		"warn me when a salary Payrolla paid is returned by the bank":        "payrolla-reversal-alert",
-		"keep Payrolla's finished payroll in tables for the accountant":      "payrolla-record-payroll",
-		"check there is enough money before a Payrolla payday":               "payrolla-payday-check",
-		"remind the payroll admin to lock the payroll in Payrolla":           "payrolla-lock-reminder",
-		"send an invoice to a customer":                                      "send-invoice",
-		"bill a customer for 5 bags of rice":                                 "send-invoice",
-		"chase an unpaid invoice":                                            "chase-overdue-invoices",
-		"remind customers about overdue invoices":                            "chase-overdue-invoices",
-		"send a receipt when an invoice is paid":                             "invoice-paid-receipt",
-		"every morning tell me which items in my stock are running low":      "low-stock-alert",
-		"order from my supplier when rice is low, after I approve":           "reorder-from-supplier",
-		"remind me every Saturday to count the shelf":                        "stock-count-reminder",
-		"send me the takings from the sales I record in chat each night":     "sales-day-total",
-		"pay bills from my linked suppliers every Friday after I approve":    "pay-bills-on-approval",
-		"reorder from my suppliers on Taskiem":                               "reorder-from-linked-suppliers",
-		"tell me when a linked customer orders":                              "tell-me-when-a-linked-customer-orders",
-		"accept and dispatch orders from linked customers without a tap":     "linked-order-to-delivery",
-		"pay Dangote's bills every Friday after I approve on Taskiem":        "pay-bills-on-approval",
+		"Every Friday, text my customers who owe me": "debtor-reminder-sms",
+		// The debtor book's reminder (decision 0060) ranks above the sheet
+		// one, which a business with Google Sheets is still offered.
+		"remind my debtors on whatsapp every week":                            "chase-overdue-invoices",
+		"send me a summary of today's sales every evening":                    "daily-sales-summary",
+		"when a customer pays on paystack send them a thank you sms":          "payment-thank-you-sms",
+		"alert me when my paystack balance is low":                            "low-balance-alert",
+		"pay my suppliers after I approve":                                    "supplier-payment-approval",
+		"remind me before salaries are due every month":                       "payroll-reminder",
+		"tell me when stock is running low on my inventory sheet":             "stock-reorder-alert",
+		"verify a new customer's BVN before onboarding them":                  "kyc-bvn-check",
+		"pay staff salaries from the payroll sheet once the owner approves":   "run-payroll",
+		"pay a list of commissions once I approve the batch":                  "pay-a-list",
+		"send the customer a payment link for their order":                    "payment-link-per-order",
+		"give each customer their own account number to pay into":             "virtual-account-per-customer",
+		"refund a customer's payment after a supervisor approves":             "refund-with-approval",
+		"tell me when a payment I send fails or comes back":                   "failed-transfer-alert",
+		"tell my staff on WhatsApp when Payrolla pays them":                   "payrolla-tell-staff",
+		"when Payrolla finishes paying, tell me who was not paid":             "payrolla-payroll-summary",
+		"our salaries run in Payrolla: send the approvers the approval link":  "payrolla-approve-by-chat",
+		"warn me when a salary Payrolla paid is returned by the bank":         "payrolla-reversal-alert",
+		"keep Payrolla's finished payroll in tables for the accountant":       "payrolla-record-payroll",
+		"check there is enough money before a Payrolla payday":                "payrolla-payday-check",
+		"remind the payroll admin to lock the payroll in Payrolla":            "payrolla-lock-reminder",
+		"send an invoice to a customer":                                       "send-invoice",
+		"bill a customer for 5 bags of rice":                                  "send-invoice",
+		"chase an unpaid invoice":                                             "chase-overdue-invoices",
+		"remind customers about overdue invoices":                             "chase-overdue-invoices",
+		"send a receipt when an invoice is paid":                              "invoice-paid-receipt",
+		"every morning tell me which items in my stock are running low":       "low-stock-alert",
+		"order from my supplier when rice is low, after I approve":            "reorder-from-supplier",
+		"remind me every Saturday to count the shelf":                         "stock-count-reminder",
+		"send me the takings from the sales I record in chat each night":      "sales-day-total",
+		"pay bills from my linked suppliers every Friday after I approve":     "pay-bills-on-approval",
+		"reorder from my linked suppliers":                                    "reorder-from-linked-suppliers",
+		"tell me when a linked customer orders":                               "tell-me-when-a-linked-customer-orders",
+		"accept and dispatch orders from linked customers without a tap":      "linked-order-to-delivery",
+		"pay Dangote's bills every Friday after I approve, a linked business": "pay-bills-on-approval",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {
@@ -384,8 +386,10 @@ func TestMatch(t *testing.T) {
 
 // The invoice templates are offered strongly enough for the offline
 // builder to start from them (its threshold is 20), and only for goals
-// about invoices: not for loans overdue in a database, nor for paying a
-// bill. The template they supersede is never offered.
+// about invoices or customers who owe (by phrase, never the bare word
+// "owe": decision 0060): not for loans overdue in a database, nor for
+// paying a bill or the suppliers the business owes. The templates they
+// supersede are never offered.
 func TestMatchInvoices(t *testing.T) {
 	lib := templates.Default()
 	for goal, want := range map[string]string{
@@ -397,6 +401,8 @@ func TestMatchInvoices(t *testing.T) {
 		"three days after I send an invoice, remind them if unpaid": "chase-overdue-invoices",
 		"send a receipt when an invoice is paid":                    "invoice-paid-receipt",
 		"when a customer pays an invoice, send them a receipt":      "invoice-paid-receipt",
+		"remind my customers who owe me":                            "chase-overdue-invoices",
+		"chase my debtors":                                          "chase-overdue-invoices",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want || m[0].Score < 20 {
@@ -406,7 +412,8 @@ func TestMatchInvoices(t *testing.T) {
 	for _, goal := range []string{
 		"Every morning, find loans that are 7 days overdue in Postgres and text each borrower",
 		"Pay a customer's electricity bill through Interswitch and text them the token",
-		"Every Friday, text my customers who owe me",
+		"pay the suppliers I owe every Friday",
+		"remind me what I owe my landlord",
 	} {
 		for _, m := range lib.Match(goal, 3) {
 			if len(m.Template.Requires) > 0 {

@@ -21,10 +21,26 @@ import (
 
 // invoiceCustomer is what GET /v1/invoices/{id}/customer answers.
 type invoiceCustomer struct {
+	// Open is the customer's statement: their open invoices and notebook
+	// debts, oldest first (what their money pays first), and OwedKobo what
+	// is due on them in all.
+	Open       []customerLine              `json:"open"`
+	OwedKobo   int64                       `json:"owed_kobo"`
 	CreditKobo int64                       `json:"credit_kobo"`
 	Accounts   []invoicing.CustomerAccount `json:"accounts"`
 	Payers     []matching.Payer            `json:"payers"`
 	Revealed   bool                        `json:"revealed"`
+}
+
+// customerLine is one open invoice or notebook debt on a customer's
+// statement.
+type customerLine struct {
+	ID      uuid.UUID `json:"id"`
+	Number  string    `json:"number"`
+	Kind    string    `json:"kind"`
+	Status  string    `json:"status"`
+	DueKobo int64     `json:"due_kobo"`
+	DueOn   string    `json:"due_on,omitempty"`
 }
 
 // maskPayer leaves a payer's first letter, or an account's last four
@@ -57,6 +73,15 @@ func (s *Server) getInvoiceCustomer(w http.ResponseWriter, r *http.Request) {
 		}
 		if out.CreditKobo, err = invoicing.CreditOf(r.Context(), tx, tenant, x.CustomerID()); err != nil {
 			return err
+		}
+		open, err := s.Invoices.OpenInvoicesOf(r.Context(), tx, tenant, x.CustomerID())
+		if err != nil {
+			return err
+		}
+		out.Open = make([]customerLine, 0, len(open))
+		for _, o := range open {
+			out.Open = append(out.Open, customerLine{ID: o.ID, Number: o.Number, Kind: o.Kind, Status: o.Status, DueKobo: o.DueKobo, DueOn: o.DueOn})
+			out.OwedKobo += o.DueKobo
 		}
 		if out.Accounts, err = s.Invoices.AccountsOf(r.Context(), tx, tenant, x.CustomerID()); err != nil {
 			return err

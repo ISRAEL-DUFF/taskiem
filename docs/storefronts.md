@@ -91,11 +91,11 @@ Pages load the size the screen needs, lazily.
 
 ## Orders, questions and call-backs
 
-The page offers up to four **forms**: **order** (the catalogue as a basket), **enquiry** (a question), **call-back** (a request to be called) and **booking** (a time for a service, [below](#bookings)). Each starts a workflow.
+The page offers up to four **forms**: **order** (the catalogue as a basket), **enquiry** (a question), **call-back** (a request to be called) and **booking** (a time for a service, [below](#bookings)). Each starts a workflow. A storefront with more than one kind of thing on it, each with its own actions and workflows, is planned in [fronts](spec/fronts.md) ([decision 0059](decisions/0059-fronts.md), proposed).
 
 ### Setting up
 
-Under Storefront > Forms, **Set up** adds the form's default workflow from the template library (`storefront-order`, `storefront-enquiry`, `storefront-callback`) and publishes it. A form can be switched on only once a workflow with a storefront trigger for it (`{"type": "storefront", "config": {"action": "order"}}`) is deployed to prod, and only one workflow per form and environment. The owner can edit the workflow like any other.
+Under Storefront > Forms, **Set up** adds the form's default workflow from the template library (`storefront-order`, `storefront-enquiry`, `storefront-callback`) and publishes it. A form can be switched on only once a workflow with a storefront trigger for it (`{"type": "storefront", "config": {"action": "order"}}`) is deployed to prod, and only one workflow per form and environment. Publishing another workflow for a form that already starts one is refused with the form and that workflow named, and the editor offers **Replace it with this one**: the other workflow is taken out of use and this one published in one change, so the form never starts none or two (refused under four-eyes publishing, with the reason; [fronts F0](spec/fronts.md#131-as-built-f0)). The owner can edit the workflow like any other.
 
 **Order settings:**
 - **Payment:**

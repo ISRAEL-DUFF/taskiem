@@ -1,6 +1,7 @@
 {
   "id": "debtor-reminder-sms",
   "title": "Weekly SMS reminders to customers who owe you",
+  "replaced_where": {"by": "chase-overdue-invoices", "when": "no_sheets"},
   "summary": "Every week, text each customer on your debtors sheet how much they still owe.",
   "description": "Once a week at the day and time you choose, reads your debtors list from a Google Sheet (columns: name, phone, amount_owed) and sends each customer who still owes money a polite SMS reminder with the amount and how to pay. Customers with nothing owed or no phone number are skipped. At most five messages go out at a time.",
   "category": "collections",

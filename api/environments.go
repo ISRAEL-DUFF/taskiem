@@ -85,6 +85,10 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			return fmt.Errorf("%w: another workflow already uses this webhook path in %s", errConflict, env)
 		}
+		var held *ingest.ActionTaken
+		if errors.As(err, &held) {
+			return actionTaken{ActionTaken: held}
+		}
 		if errors.Is(err, ingest.ErrTriggerTaken) {
 			return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), ingest.ErrTriggerTaken.Error()+": "))
 		}

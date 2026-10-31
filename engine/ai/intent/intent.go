@@ -27,7 +27,11 @@ import (
 // Allowed are the intents the model may return for a person in a
 // business. Confirmations (yes, no) and cancel are deliberately absent.
 var Allowed = []lang.Intent{lang.IntentHelp, lang.IntentStatus, lang.IntentApprovals, lang.IntentSwitch, lang.IntentRun, lang.IntentBuild, lang.IntentLanguage,
-	lang.IntentConnect, lang.IntentPlan}
+	lang.IntentConnect, lang.IntentPlan,
+	// The tables and the debtor book (decision 0060, R6): each still waits
+	// for the person's own yes before anything is written.
+	lang.IntentTables, lang.IntentAdd, lang.IntentFind, lang.IntentNewTable, lang.IntentChangeRow, lang.IntentDeleteRow,
+	lang.IntentOwes, lang.IntentPaid, lang.IntentAsk}
 
 // Stranger is what the model may return for someone no business knows
 // yet, writing to the shared number or bot: whether they ask to start
@@ -46,6 +50,15 @@ var described = map[lang.Intent]string{
 	lang.IntentConnect:   `"connect" (connect a service such as Paystack, Google Sheets or a bank; argument: the service's name)`,
 	lang.IntentPlan:      `"plan" (their Taskiem plan, its trial, or paying for Taskiem)`,
 	lang.IntentSignup:    `"signup" (open an account, register, or start their business on Taskiem)`,
+	lang.IntentTables:    `"tables" (list the business's own tables or lists)`,
+	lang.IntentAdd:       `"add" (add one entry to one of their tables; argument: the table's name)`,
+	lang.IntentFind:      `"find" (look entries up in a table; argument: the table's name, then the words to look for)`,
+	lang.IntentNewTable:  `"new_table" (make a new table or list to keep; argument: what it is a list of, if said)`,
+	lang.IntentChangeRow: `"change_row" (change an entry of a list just shown; argument: its number in that list, digits only)`,
+	lang.IntentDeleteRow: `"delete_row" (remove an entry of a list just shown; argument: its number in that list, digits only)`,
+	lang.IntentOwes:      `"owes" (a customer owes the business money, or who owes it; argument: in English, "<name> owes <amount>" with " for <what>" when said, the name as written; empty for who owes)`,
+	lang.IntentPaid:      `"paid" (a customer paid money they owed; argument: in English, "<name> paid <amount>", then " cash" or " transfer" when said, the name as written)`,
+	lang.IntentAsk:       `"ask" (a question about their tables or lists, such as how many customers are in a place or who owes the most; argument: the question in English, names and values as written)`,
 }
 
 // Unknown is the model's answer when no command fits.

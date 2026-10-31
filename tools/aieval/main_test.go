@@ -283,6 +283,7 @@ func TestBaselinesHold(t *testing.T) {
 	for _, args := range [][]string{
 		{"-suite", "../../evals/builder", "-compare", "../../evals/builder/baseline.json", "-tolerance", "0"},
 		{"-mode", "repair", "-suite", "../../evals/repair", "-compare", "../../evals/repair/baseline.json", "-tolerance", "0"},
+		{"-mode", "chat", "-suite", "../../evals/chat", "-compare", "../../evals/chat/baseline.json", "-tolerance", "0"},
 	} {
 		var out strings.Builder
 		if err := run(args, &out); err != nil {
@@ -508,7 +509,7 @@ func TestCIRunsTheSuitesForTheAILayer(t *testing.T) {
 	filter := regexp.MustCompile(string(m[1]))
 	for _, p := range []string{"engine/ai/builder/builder.go", "evals/builder/payouts.jsonl", "templates/library.go", "tools/aieval/main.go",
 		"api/ai.go", "api/repair.go", "engine/shadow/shadow.go", "engine/pii/mask.go", "engine/wd/model.go", "engine/wdcheck/check.go",
-		"engine/expansion/template.go", "connectors/paystack/manifest.yaml"} {
+		"engine/expansion/template.go", "connectors/paystack/manifest.yaml", "engine/datatables/query.go", "engine/lang/intents.go", "engine/lang/intents/yo.json"} {
 		if !filter.MatchString(p) {
 			t.Errorf("a change to %s does not run the AI evaluation", p)
 		}

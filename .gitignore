@@ -28,3 +28,6 @@ connector.wasm
 deploy/vm/.env
 deploy/vm/*.env
 .DS_Store
+
+# Built by "go build ./tools/aieval" in the repository root.
+/aieval

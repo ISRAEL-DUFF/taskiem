@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/wd"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 // The data tables a draft needs (rule 12): the model describes the new
@@ -49,8 +50,13 @@ func checkTableShape(t TableSpec) error {
 // neither exists nor is proposed.
 func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check func(TableSpec) error) ([]TableSpec, []Warning) {
 	have := map[string]bool{}
+	haveCols := map[string]map[string]bool{}
 	for _, t := range existing {
 		have[t.Name] = true
+		haveCols[t.Name] = map[string]bool{}
+		for _, c := range t.Columns {
+			haveCols[t.Name][c.Name] = true
+		}
 	}
 	used := tablesUsed(doc)
 	keep := []TableSpec{}
@@ -62,6 +68,18 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 		case named[t.Name]:
 			continue
 		case have[t.Name]:
+			named[t.Name] = true
+			var missing []string
+			for _, c := range t.Columns {
+				if !haveCols[t.Name][c.Name] {
+					missing = append(missing, c.Name)
+				}
+			}
+			if len(missing) > 0 {
+				warns = append(warns, Warning{Kind: "table", Message: fmt.Sprintf("the table %q exists already without the column(s) %s the draft uses: add them on the Tables page, or the steps that use them will fail",
+					t.Name, strings.Join(missing, ", "))})
+				continue
+			}
 			warns = append(warns, Warning{Kind: "table", Message: fmt.Sprintf("the table %q exists already: the draft uses it as it is", t.Name)})
 			continue
 		case !used[t.Name]:
@@ -253,6 +271,17 @@ func tablesUsed(doc []byte) map[string]bool {
 						out[name] = true
 					}
 				}
+				// A row_changed trigger's tables are used too: a workflow
+				// started by a new customer needs the customers table.
+				if opts, ok := n["options"].(map[string]any); ok && n["trigger"] == "row_changed" {
+					if names, ok := opts["tables"].([]any); ok {
+						for _, x := range names {
+							if name, ok := x.(string); ok && name != "" && !strings.HasPrefix(name, "=") {
+								out[name] = true
+							}
+						}
+					}
+				}
 			}
 			for _, c := range n {
 				walk(c)
@@ -369,4 +398,26 @@ func columnType(v any, props map[string]any) string {
 		}
 	}
 	return "text"
+}
+
+// TemplateTableSpecs are the tables a template declares, named from the
+// parameter values, as proposed tables: a draft made from the template
+// (by the model, or picked in chat) makes them when it is saved.
+func TemplateTableSpecs(t *templates.Template, params map[string]any) []TableSpec {
+	out := []TableSpec{}
+	for _, tb := range t.TablesFor(params) {
+		spec := TableSpec{Name: tb.Name, Title: tb.Title, Columns: []ColumnSpec{}}
+		if spec.Title == "" {
+			spec.Title = tb.Name
+		}
+		for _, c := range tb.Columns {
+			title := c.Title
+			if title == "" {
+				title = c.Name
+			}
+			spec.Columns = append(spec.Columns, ColumnSpec{Name: c.Name, Title: title, Type: c.Type, Required: c.Required, Personal: c.Personal})
+		}
+		out = append(out, spec)
+	}
+	return out
 }

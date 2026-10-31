@@ -64,7 +64,7 @@ func (l *scopeLog) take() []loggedQuery {
 }
 
 // crossing are the functions through which one business may name another
-// (migration 00275): a request names its target, and the door enters it.
+// (migration 00279): a request names its target, and the door enters it.
 var crossing = regexp.MustCompile(`\btaskiem_link_(request|enter|answer|by_code|offer_to|search)\(|\btaskiem_links_of\(`)
 
 // TestLinkIsolation is the isolation harness of §14 for L0: two

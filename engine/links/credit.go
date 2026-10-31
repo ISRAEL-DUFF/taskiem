@@ -1,7 +1,7 @@
 package links
 
 // Statements, credit terms and limits between linked businesses (L5;
-// docs/spec/business-links.md §10; migration 00281). The seller's terms
+// docs/spec/business-links.md §10; migration 00285). The seller's terms
 // and limit for a link are its trade settings; the buyer sees them as a
 // mirror (supplier_terms, written with its prices). An order that would
 // take the buyer's open balance past the limit is flagged at the seller:

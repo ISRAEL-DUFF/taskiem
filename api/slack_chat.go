@@ -119,6 +119,9 @@ func (s *Server) slackEvents(w http.ResponseWriter, r *http.Request) {
 			BotID       string `json:"bot_id"`
 			User        string `json:"user"`
 			Text        string `json:"text"`
+			Files       []struct {
+				Name string `json:"name"`
+			} `json:"files"`
 		} `json:"event"`
 	}
 	_ = json.Unmarshal(body, &ev)
@@ -128,7 +131,8 @@ func (s *Server) slackEvents(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte(ev.Challenge))
 		return
-	case ev.Type == "event_callback" && ev.Event.Type == "message" && ev.Event.ChannelType == "im" && ev.Event.Subtype == "" && ev.Event.BotID == "" && ev.Event.User != "":
+	case ev.Type == "event_callback" && ev.Event.Type == "message" && ev.Event.ChannelType == "im" && (ev.Event.Subtype == "" || ev.Event.Subtype == "file_share") &&
+		ev.Event.BotID == "" && ev.Event.User != "":
 		// A person writing to the bot. Slack retries what it thinks was
 		// missed: each event once.
 		fresh := true
@@ -141,8 +145,17 @@ func (s *Server) slackEvents(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if fresh {
 			team, user, text := ev.TeamID, ev.Event.User, ev.Event.Text
+			in := whatsapp.Inbound{ID: ev.EventID, Type: "text", Text: strings.TrimSpace(text)}
+			if ev.Event.Subtype == "file_share" {
+				// A file: not read without the files:read scope, so the
+				// conversation answers with the web's import (no-sheet R2).
+				in.Type, in.Document = "document", &whatsapp.Media{}
+				if len(ev.Event.Files) > 0 {
+					in.Document.Name = ev.Event.Files[0].Name
+				}
+			}
 			s.background(r.Context(), "slack message", func(ctx context.Context) {
-				s.slackDM(ctx, team, user, whatsapp.Inbound{ID: ev.EventID, Type: "text", Text: strings.TrimSpace(text)})
+				s.slackDM(ctx, team, user, in)
 			})
 		}
 		return

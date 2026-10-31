@@ -1,0 +1,29 @@
+// Synthetic seeds pending review by people (needs-people AI2): written by engineering; every message outside English is a draft until a native speaker reviews it.
+{"id": "en-route-tables", "kind": "route", "language": "en", "message": "what lists do I keep here?", "expect": {"intent": "tables"}, "tags": ["tables", "en"]}
+{"id": "en-route-ask-ikeja", "kind": "route", "language": "en", "message": "how many of my customers live in Ikeja", "expect": {"intent": "ask", "arg": "ikeja"}, "tags": ["ask", "en"]}
+{"id": "en-route-owes", "kind": "route", "language": "en", "message": "Ada still owes me 5000 for the rice", "expect": {"intent": "owes", "arg": "ada owes 5000"}, "tags": ["owes", "en"]}
+{"id": "en-route-new-table", "kind": "route", "language": "en", "message": "I want to start a new list for my suppliers", "expect": {"intent": "new_table"}, "tags": ["new_table", "en"]}
+{"id": "pcm-route-tables", "kind": "route", "language": "pcm", "message": "show me all my table dem", "expect": {"intent": "tables"}, "tags": ["tables", "pcm"]}
+{"id": "pcm-route-ask", "kind": "route", "language": "pcm", "message": "how many customers dey for Ikeja?", "expect": {"intent": "ask", "arg": "ikeja"}, "tags": ["ask", "pcm"]}
+{"id": "pcm-route-owes", "kind": "route", "language": "pcm", "message": "Emeka dey owe me 3000 for shoe", "expect": {"intent": "owes", "arg": "emeka owes 3000"}, "tags": ["owes", "pcm"]}
+{"id": "pcm-route-paid", "kind": "route", "language": "pcm", "message": "Emeka don pay 2000 cash", "expect": {"intent": "paid", "arg": "emeka paid 2000"}, "tags": ["paid", "pcm"]}
+{"id": "pcm-route-delete", "kind": "route", "language": "pcm", "message": "comot number 2", "expect": {"intent": "delete_row", "arg": "2"}, "tags": ["delete_row", "pcm"]}
+{"id": "pcm-route-who-owes", "kind": "route", "language": "pcm", "message": "who dey owe me money?", "expect": {"intent": "owes"}, "tags": ["owes", "pcm"]}
+{"id": "yo-route-tables", "kind": "route", "language": "yo", "message": "fi àwọn tábìlì mi hàn mí", "expect": {"intent": "tables"}, "tags": ["tables", "yo"]}
+{"id": "yo-route-ask", "kind": "route", "language": "yo", "message": "oníbàárà mélòó ló wà ní Ikeja?", "expect": {"intent": "ask", "arg": "ikeja"}, "tags": ["ask", "yo"]}
+{"id": "yo-route-owes", "kind": "route", "language": "yo", "message": "Tunde jẹ mí 4000", "expect": {"intent": "owes", "arg": "tunde owes 4000"}, "tags": ["owes", "yo"]}
+{"id": "yo-route-paid", "kind": "route", "language": "yo", "message": "Tunde ti san 1500", "expect": {"intent": "paid", "arg": "tunde paid 1500"}, "tags": ["paid", "yo"]}
+{"id": "yo-route-change", "kind": "route", "language": "yo", "message": "ṣàtúnṣe nọ́mbà 3", "expect": {"intent": "change_row", "arg": "3"}, "tags": ["change_row", "yo"]}
+{"id": "yo-route-new", "kind": "route", "language": "yo", "message": "ṣe tábìlì tuntun fún àwọn olùpèsè mi", "expect": {"intent": "new_table"}, "tags": ["new_table", "yo"]}
+{"id": "ha-route-tables", "kind": "route", "language": "ha", "message": "nuna min teburori na", "expect": {"intent": "tables"}, "tags": ["tables", "ha"]}
+{"id": "ha-route-ask", "kind": "route", "language": "ha", "message": "kwastomomi nawa ne a Kano?", "expect": {"intent": "ask", "arg": "kano"}, "tags": ["ask", "ha"]}
+{"id": "ha-route-owes", "kind": "route", "language": "ha", "message": "Musa yana bina 6000", "expect": {"intent": "owes", "arg": "musa owes 6000"}, "tags": ["owes", "ha"]}
+{"id": "ha-route-paid", "kind": "route", "language": "ha", "message": "Musa ya biya 2000", "expect": {"intent": "paid", "arg": "musa paid 2000"}, "tags": ["paid", "ha"]}
+{"id": "ha-route-delete", "kind": "route", "language": "ha", "message": "cire na 1", "expect": {"intent": "delete_row", "arg": "1"}, "tags": ["delete_row", "ha"]}
+{"id": "ha-route-new", "kind": "route", "language": "ha", "message": "ina so sabon tebur na masu kawo kaya", "expect": {"intent": "new_table"}, "tags": ["new_table", "ha"]}
+{"id": "ig-route-tables", "kind": "route", "language": "ig", "message": "gosi m tebụl m niile", "expect": {"intent": "tables"}, "tags": ["tables", "ig"]}
+{"id": "ig-route-ask", "kind": "route", "language": "ig", "message": "ndị ahịa ole nọ na Enugu?", "expect": {"intent": "ask", "arg": "enugu"}, "tags": ["ask", "ig"]}
+{"id": "ig-route-owes", "kind": "route", "language": "ig", "message": "Chika ji m 2500", "expect": {"intent": "owes", "arg": "chika owes 2500"}, "tags": ["owes", "ig"]}
+{"id": "ig-route-paid", "kind": "route", "language": "ig", "message": "Chika kwụrụ 1000", "expect": {"intent": "paid", "arg": "chika paid 1000"}, "tags": ["paid", "ig"]}
+{"id": "ig-route-change", "kind": "route", "language": "ig", "message": "gbanwee nke 2", "expect": {"intent": "change_row", "arg": "2"}, "tags": ["change_row", "ig"]}
+{"id": "ig-route-unknown", "kind": "route", "language": "ig", "message": "kedu ka ụbọchị gị dị?", "expect": {"intent": "unknown"}, "tags": ["unknown", "ig"]}

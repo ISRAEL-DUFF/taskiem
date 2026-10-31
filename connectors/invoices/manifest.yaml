@@ -93,7 +93,7 @@ actions:
       type: object
       properties:
         number:     { type: string }
-        status:     { type: string, enum: [draft, sent, part_paid, paid, overdue, void] }
+        status:     { type: string, enum: [draft, recorded, sent, part_paid, paid, overdue, void] }
         total_kobo: { type: integer }
         paid_kobo:  { type: integer }
         due_kobo:   { type: integer }
@@ -126,7 +126,7 @@ actions:
         status: { type: string }
   list:
     title: List overdue or paid invoices
-    description: The business's overdue invoices (oldest due first, with the days past the due date, Lagos time), or those paid in the last hours (oldest paid first). No customer details; message a customer with notify_customer.
+    description: "The business's overdue invoices (oldest due first, with the days past the due date, Lagos time), or those paid in the last hours (oldest paid first). With group customer (overdue only), one row per customer instead: what they owe on everything overdue, notebook debts included, and the number of their oldest overdue invoice to reach them through. No customer details; message a customer with notify_customer."
     class: read
     input:
       type: object
@@ -135,10 +135,24 @@ actions:
         status:            { type: string, enum: [overdue, paid] }
         paid_within_hours: { type: integer, minimum: 1, maximum: 168, description: For paid, how far back (default 24) }
         limit:             { type: integer, minimum: 1, maximum: 200, description: At most this many (default 50) }
+        group:             { type: string, enum: [customer], description: "customer: one row per customer with something overdue (status overdue only)" }
     output:
       type: object
       properties:
         count: { type: integer }
+        customers:
+          type: array
+          description: With group customer
+          items:
+            type: object
+            properties:
+              customer:     { type: string, description: An opaque id for the customer, never their details }
+              number:       { type: string, description: Their oldest overdue invoice or debt; notify_customer reaches them through it }
+              lines:        { type: integer, description: How many of theirs are overdue }
+              due_kobo:     { type: integer }
+              due:          { type: string, description: What they owe on everything overdue }
+              due_on:       { type: string, description: The oldest due date }
+              days_overdue: { type: integer }
         invoices:
           type: array
           items:
@@ -155,7 +169,7 @@ actions:
               paid_at:      { type: string }
   notify_customer:
     title: Message the invoice's customer
-    description: An SMS, and an email when there is one, to the invoice's customer. {link} becomes the invoice's page link, {number} its number, {due} what is still due and {fee_line} a sentence on the bank's fee (what was sent and what reached the business) when the rail reported it, else nothing.
+    description: An SMS, and an email when there is one, to the invoice's customer. {link} becomes the invoice's page link, {number} its number, {due} what is still due, {customer_due} and {customer_lines} what the customer owes on everything overdue and on how many, {customer_link} the customer's own payment link (one page of all they owe, paid whole or in part; see customer_link), and {fee_line} a sentence on the bank's fee (what was sent and what reached the business) when the rail reported it, else nothing. A notebook debt whose customer has no phone or email sends nothing and answers sent false.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -175,6 +189,23 @@ actions:
       properties:
         number: { type: string }
         queued: { type: array, items: { type: string } }
+        sent: { type: boolean, description: "false when the customer has no phone or email yet (a notebook debt): nothing was sent, and that is not a failure" }
+        reason: { type: string, description: "why nothing was sent: no_address" }
+  customer_link:
+    title: The customer's payment link
+    description: "The payment link of an invoice's customer: one page listing all they owe on their open invoices and notebook debts, oldest first, where they pay the total or any part of it from 1,000 naira; money paid through it is counted to their invoices oldest first and the rest kept as their credit. Made the first time and the same link after. Fails when the customer owes nothing. In a message, notify_customer's {customer_link} puts it in for you."
+    class: read
+    input:
+      type: object
+      required: [number]
+      properties:
+        number: { type: string, description: Any open invoice or notebook debt of the customer's }
+    output:
+      type: object
+      properties:
+        link: { type: string }
+        due_kobo: { type: integer, description: What the customer owes on all their open invoices }
+        due: { type: string }
   register_account:
     title: Give a customer their own account number
     description: "A permanent account number of the customer's own: money paid into it is matched to their open invoices, oldest first, and the rest kept as their credit. Either issue one (issue true) on a connection that can issue account numbers, or register one the business already has for them (account_number and reference). The same customer and connection again answers the account already issued. One per customer, never one per invoice: an invoice's page offers its own. The customer is as their invoices have them: by key when given, else phone, else email."

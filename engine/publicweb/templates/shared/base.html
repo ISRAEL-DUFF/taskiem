@@ -26,7 +26,7 @@ link preview, and a form's hidden fields. Each theme draws the rest. */}}
 {{/* An invoice's ways to pay (decision 0045, T4); the same in every
 theme. Forms only: the page refreshes itself, with no script. */}}
 {{define "invoicepay"}}<section class="inv-pay" aria-labelledby="inv-pay-h">
-<h2 id="inv-pay-h">Pay this invoice</h2>
+<h2 id="inv-pay-h">{{.Heading}}</h2>
 {{with .Own}}<div class="inv-acct">
 <p class="hint">Transfer {{.Amount}} to your own account number</p>
 <p class="inv-acct-no">{{.Number}}</p>
