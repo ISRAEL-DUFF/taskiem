@@ -145,6 +145,8 @@ channel_languages.language
 channel_languages.number
 channel_languages.source
 channel_languages.updated_at
+chat_history.expires_at
+chat_history.id
 chat_invites.address
 chat_invites.answered_at
 chat_invites.channel

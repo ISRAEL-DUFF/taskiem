@@ -177,6 +177,7 @@ func maskCustomer(c *storefront.Customer) {
 // 15 applies customers' and owners' changes, sweeps bookings and moves
 // riders' deliveries on (offers that ran out, quiet riders).
 func (s *Server) RunStorefrontOrders(ctx context.Context) error {
+	s.chatHooks()
 	if s.Orders == nil {
 		<-ctx.Done()
 		return nil

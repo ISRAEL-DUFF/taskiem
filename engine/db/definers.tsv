@@ -290,6 +290,7 @@ taskiem_tg_unbind(uuid)	@ISRAEL-DUFF (messaging)	Removes a person's binding (001
 taskiem_tg_user_of(bigint)	@ISRAEL-DUFF (messaging)	Who a Telegram account speaks for, if it is bound to an active person (00175)
 taskiem_ussd_tenants()	@ISRAEL-DUFF (messaging)	part of: USSD fast path (spec 8.4, docs/ussd.md) (00065)
 taskiem_voice_transcripts_purge()	@ISRAEL-DUFF (messaging)	part of: Voice notes transcribed on WhatsApp (spec 11.6, decision 0029) (00146)
+taskiem_chat_history_purge()	@ISRAEL-DUFF (business links)	The Taskiem conversation's history past its retention, reading only the expiry (§5.5) (00279)
 taskiem_wa_binding(uuid)	@ISRAEL-DUFF (messaging)	A person's binding and pending code, for their account page (00035)
 taskiem_wa_contact(text)	@ISRAEL-DUFF (messaging)	A number's conversation (00035)
 taskiem_wa_contact_touch(text,boolean,boolean,uuid)	@ISRAEL-DUFF (messaging)	Records that a number wrote (p_inbound) and, with p_set_tenant, the tenant it now speaks to (00035)

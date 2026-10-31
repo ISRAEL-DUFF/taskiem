@@ -134,3 +134,28 @@ test("a bill's card, its query, and the query settled by taking an amount off", 
   await expect(seller.getByTestId("doc-thread")).toContainText("Took ₦5,000 off: Ten blocks broke", { timeout: 15_000 });
   await axeBoth(seller, "an invoice's messages");
 });
+
+test("the Taskiem conversation on the web", async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  await signUp(page, `Chioma Cakes ${letters()}`);
+  await page.goto("/chat");
+  await page.getByTestId("taskiem-chat").click();
+  const pane = page.getByTestId("taskiem-pane");
+  await expect(pane.getByRole("heading", { name: "Taskiem" })).toBeVisible();
+  await axeBoth(page, "the Taskiem conversation, empty");
+
+  // The words of the phone: a question with buttons, answered by a press.
+  await pane.getByLabel("Message to Taskiem").fill("cash in 5,000 till");
+  await pane.getByLabel("Message to Taskiem").press("Enter");
+  const theirs = pane.locator('[data-testid="taskiem-message"][data-mine="false"]');
+  await expect(theirs.last()).toContainText("₦5,000");
+  await axeBoth(page, "Taskiem asking");
+  await theirs.last().getByRole("button").first().click();
+  await expect(theirs.last()).toContainText("Recorded");
+
+  // Kept: the same conversation after a reload, its old buttons no longer pressable.
+  await page.reload();
+  await expect(page.getByTestId("taskiem-message")).toHaveCount(4);
+  await expect(page.getByTestId("taskiem-pane").getByRole("button", { name: "Yes" })).toHaveCount(0);
+  await axeBoth(page, "the Taskiem conversation's history");
+});

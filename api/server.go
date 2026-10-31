@@ -82,6 +82,9 @@ type Server struct {
 	// is dormant: sent nothing, acting on nothing until proven again, and
 	// removed after as long again (TASKIEM_BINDING_DORMANT_DAYS); 0 is off.
 	BindingDormantDays int
+	// ChatHistoryDays is how long the Taskiem conversation's history is
+	// kept (TASKIEM_CHAT_HISTORY_DAYS; DefaultChatHistoryDays when 0).
+	ChatHistoryDays int
 	// termsAsked are the people asked about, or agreed to, the current
 	// terms since start: chat does not look them up again.
 	termsAsked sync.Map
@@ -270,6 +273,7 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
+	s.chatHooks()      // what the channels send is kept in the history (chat_history.go)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
@@ -461,11 +465,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
 			s.invoiceRoutes(r)
-			s.linkRoutes(r)      // business links (links.go)
-			s.billRoutes(r)      // their bills (bills.go)
-			s.linkOrderRoutes(r) // their orders (link_orders.go)
-			s.linkChatRoutes(r)  // their conversations (link_chat.go)
-			s.schoolRoutes(r)    // the Schools area (schools.go)
+			s.linkRoutes(r)        // business links (links.go)
+			s.billRoutes(r)        // their bills (bills.go)
+			s.linkOrderRoutes(r)   // their orders (link_orders.go)
+			s.linkChatRoutes(r)    // their conversations (link_chat.go)
+			s.taskiemChatRoutes(r) // the Taskiem conversation on the web (chat_history.go)
+			s.schoolRoutes(r)      // the Schools area (schools.go)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)

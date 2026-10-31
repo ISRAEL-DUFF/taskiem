@@ -6269,6 +6269,70 @@ paths:
                     $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/taskiem-chat:
+    get:
+      operationId: taskiemHistory
+      tags:
+      - Links
+      summary: Your conversation with Taskiem
+      description: 'The person''s own conversation with Taskiem in this business, on every channel (WhatsApp, Telegram, Slack and the web), oldest first: the newest page, before (older) or after (newer, to follow it). Kept for TASKIEM_CHAT_HISTORY_DAYS (90 by default), sealed; buttons by their titles only; links without their queries; a message that is only a code is never kept. Empty for an API key.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: after
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: The messages, oldest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: taskiemSay
+      tags:
+      - Links
+      summary: Say something to Taskiem on the web
+      description: 'Read as a message typed on WhatsApp (the same words: status, orders, cash in, invoice, building by chat): text, or reply (a button''s id from an answer, with its title as text). The answer is what Taskiem said, its buttons pressable by their ids. A person only: not an API key.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                reply:
+                  type: string
+                  maxLength: 2048
+      responses:
+        '200':
+          description: What was said, and Taskiem's answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/files:
     post:
       operationId: sendLinkFile
@@ -27881,6 +27945,47 @@ components:
           type: integer
         note:
           type: string
+    TaskiemChat:
+      type: object
+      additionalProperties: false
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, channel, inbound, kind, text, created_at]
+            properties:
+              id:
+                type: string
+                format: uuid
+              channel:
+                type: string
+                enum: [whatsapp, telegram, slack, web]
+              inbound:
+                type: boolean
+                description: The person said it (else Taskiem did)
+              kind:
+                type: string
+                enum: [text, button, voice, photo, form, location]
+              text:
+                type: string
+              buttons:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [title]
+                  properties:
+                    id:
+                      type: string
+                      description: Only on an answer just given; press it by sending it as reply
+                    title:
+                      type: string
+              created_at:
+                type: string
+                format: date-time
     LinkMessage:
       type: object
       additionalProperties: false

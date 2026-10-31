@@ -132,6 +132,9 @@ type Platform struct {
 	// OwnApp: the own number is on the tenant's own Meta app (its own app
 	// secret and webhook path), not on Taskiem's.
 	OwnApp bool
+	// Sent, when set, is told of every message sent, after it was sent
+	// (the Taskiem conversation's history; business links L3).
+	Sent SentHook
 	// WABA is the number's WhatsApp Business Account: Config.WABAID for
 	// the platform number, whatsapp_numbers.waba_id for an own number.
 	// Its templates are submitted and tracked there (registry.go).
@@ -206,10 +209,22 @@ type LinkButton struct {
 	WebApp     bool
 }
 
+// SentHook is told of a message a channel sent: the channel's name, the
+// address and the message.
+type SentHook func(ctx context.Context, channel, addr string, m Message)
+
 // Send delivers m to a number: as text when the number wrote in the last
 // 24 hours, else as its template. A message with no template can only be
 // a reply, inside the window.
 func (p *Platform) Send(ctx context.Context, number string, m Message) (string, error) {
+	id, err := p.send(ctx, number, m)
+	if err == nil && p.Sent != nil {
+		p.Sent(ctx, "whatsapp", number, m)
+	}
+	return id, err
+}
+
+func (p *Platform) send(ctx context.Context, number string, m Message) (string, error) {
 	open := false
 	if m.Text != "" || m.Image != "" {
 		c, err := p.Contact(ctx, number)

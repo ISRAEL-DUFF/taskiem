@@ -119,6 +119,7 @@ type config struct {
 	ChatSignup         api.ChatSignupConfig
 	Terms              api.TermsConfig
 	BindingDormantDays int
+	ChatHistoryDays    int
 	// Public is the public host for storefronts and forms (public.go).
 	Public publicConfig
 	// Messages are SMS and email to people outside a tenant (messages.go).
@@ -395,6 +396,13 @@ func chatWayIn(c *config) error {
 			return fmt.Errorf("TASKIEM_BINDING_DORMANT_DAYS must be a number of days from 0 (off) to 3650, not %q", v)
 		}
 		c.BindingDormantDays = n
+	}
+	if v := strings.TrimSpace(os.Getenv("TASKIEM_CHAT_HISTORY_DAYS")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 3650 {
+			return fmt.Errorf("TASKIEM_CHAT_HISTORY_DAYS must be a number of days from 1 to 3650, not %q", v)
+		}
+		c.ChatHistoryDays = n
 	}
 	c.Terms = api.TermsConfig{URL: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_URL")), Version: strings.TrimSpace(os.Getenv("TASKIEM_TERMS_VERSION")),
 		PrivacyVersion: strings.TrimSpace(os.Getenv("TASKIEM_PRIVACY_VERSION"))}
@@ -1175,7 +1183,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.SignupPerAddress, srv.SignupBlockedDomains, srv.DocsURL = cfg.SignupPerAddress, cfg.SignupBlockedDomains, cfg.DocsURL
-		srv.ChatSignup, srv.Terms, srv.BindingDormantDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays
+		srv.ChatSignup, srv.Terms, srv.BindingDormantDays, srv.ChatHistoryDays = cfg.ChatSignup, cfg.Terms, cfg.BindingDormantDays, cfg.ChatHistoryDays
 		if len(cfg.ChatSignup.Channels) > 0 {
 			log.Info("sign-up from chat on", "channels", strings.Join(cfg.ChatSignup.Channels, ","), "terms", cfg.Terms.Version, "privacy", cfg.Terms.PrivacyVersion)
 		}

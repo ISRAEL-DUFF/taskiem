@@ -148,7 +148,7 @@ func (p *Platform) build(ctx context.Context, tenant uuid.UUID, pnid, display st
 			return nil, err
 		}
 	}
-	return &Platform{Pool: p.Pool, Config: cfg, Logger: p.Logger, Now: p.Now, Signer: p.Signer, Meter: p.Meter, Tenant: tenant, OwnApp: ownApp,
+	return &Platform{Pool: p.Pool, Config: cfg, Logger: p.Logger, Now: p.Now, Signer: p.Signer, Meter: p.Meter, Sent: p.Sent, Tenant: tenant, OwnApp: ownApp,
 		Client: &Client{BaseURL: p.Client.BaseURL, PhoneNumberID: pnid, Token: cfg.AccessToken, Egress: p.Client.Egress, HTTP: p.Client.HTTP, Hosts: p.Client.Hosts}}, nil
 }
 

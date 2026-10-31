@@ -338,7 +338,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	// Another business, or one when none is left (chat_signup.go).
 	// Only words and its own buttons: an approval tapped or a form sent
 	// meanwhile goes where it always went.
-	if in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
+	if ch.Name() != "web" && in.Flow == "" && in.Media == nil && in.Image == nil && (in.Reply == "" || strings.HasPrefix(in.Reply, "su:")) {
 		sc := &signupChat{ch: ch, addr: number, user: user, lang: c.lang.Tag}
 		if dm, ok := ch.(*slackDMChannel); ok {
 			// Another business from Slack has the workspace's Slack too.
@@ -383,6 +383,10 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if c.p, err = s.principalOf(ctx, c.tenant.ID, user); err != nil {
 		return s.waSay(ctx, ch, number, "", c.t("wa.cannot_act", "org", c.tenant.Name))
 	}
+	// From here the conversation is with this business: what is said is
+	// kept in its history (chat_history.go), and so are the replies.
+	ctx = withChatTenant(ctx, c.tenant.ID)
+	s.recordHeard(ctx, c)
 	// The language of this tenant's conversation: chosen, detected from
 	// what is written, or the tenant's default (languages.go).
 	c.lang = s.chooseLang(ctx, c.tenant.ID, number, text)

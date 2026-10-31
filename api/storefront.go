@@ -333,6 +333,7 @@ func (s *Server) readAllRows(ctx context.Context, tenant uuid.UUID, t datatables
 // RunStorefronts refreshes published storefronts' catalogue copies every
 // 15 minutes, catching changes made to the tables outside Taskiem.
 func (s *Server) RunStorefronts(ctx context.Context) error {
+	s.chatHooks()
 	for {
 		rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_storefronts_due($1)`, time.Now().Add(-15*time.Minute))
 		if err == nil {

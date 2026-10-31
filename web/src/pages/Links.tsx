@@ -33,6 +33,7 @@ import {
   type LinkMessage,
 } from "../lib/linkchat";
 import { ConversationPane } from "./Conversation";
+import { TaskiemPane } from "./TaskiemChat";
 import {
   EmptyState,
   ErrorBox,
@@ -260,6 +261,8 @@ export function ChatPage() {
   const all = convs.data?.conversations ?? [];
   const openID = params.get("with");
   const open = all.find((c) => c.link === openID);
+  // The person's own conversation with Taskiem, pinned at the top (§5.5).
+  const taskiemOpen = openID === "taskiem";
   const listed = all.filter((c) => c.archived === archived);
   const nameOf = (link: string) =>
     all.find((c) => c.link === link)?.name ?? "They";
@@ -283,7 +286,7 @@ export function ChatPage() {
           </Link>
         }
       />
-      <div className={`chat-layout${open ? " open" : ""}`}>
+      <div className={`chat-layout${open || taskiemOpen ? " open" : ""}`}>
         <div className="chat-list-pane">
           <div className="filters" role="search" aria-label="Find a business">
             <label className="search">
@@ -313,6 +316,17 @@ export function ChatPage() {
                 )
               }
             />
+          )}
+          {!searching && !archived && (
+            <Items label="Your conversation with Taskiem">
+              <Item
+                to="/chat?with=taskiem"
+                icon="sparkle"
+                title="Taskiem"
+                sub="Your own conversation with Taskiem, as on your phone"
+                testid="taskiem-chat"
+              />
+            </Items>
           )}
           {searching ? (
             <section aria-label="Search results" data-testid="link-results">
@@ -545,6 +559,7 @@ export function ChatPage() {
             />
           )}
         </div>
+        {taskiemOpen && <TaskiemPane onBack={() => setParams({})} />}
         {open && (
           <ConversationPane
             conv={open}
