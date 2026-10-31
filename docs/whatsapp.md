@@ -304,7 +304,7 @@ What a member says to Taskiem and what Taskiem says to them, on WhatsApp, Telegr
 - **Who reads it.** Only the person, in each business, their own: `GET /v1/taskiem-chat`. A member does not read another's; the business's owner does not read its members'.
 - **How long.** `TASKIEM_CHAT_HISTORY_DAYS` (90 by default), then a definer function that sees only the expiry deletes it, as voice-note transcripts are deleted.
 
-**The web as a channel.** The Chat page's Taskiem conversation is a fourth channel on the one conversation engine: `POST /v1/taskiem-chat` reads a message as one typed on WhatsApp (the same words, in the business the page is in), and Taskiem's answer comes back with its buttons pressable. A run started there, and the approvals and notices addressed to the web channel, are told in the same conversation. Its address is `web:<person>`; a half-made invoice on the phone stays on the phone, as each channel keeps its own place in a conversation.
+**The web as a channel.** The Chat page's Taskiem conversation is a fourth channel on the one conversation engine: `POST /v1/taskiem-chat` reads a message as one typed on WhatsApp (the same words, in the business the page is in), and Taskiem's answer comes back with its buttons pressable. A run started there, and the approvals and notices addressed to the web channel, are told in the same conversation. A voice note recorded there, or a photo sent there (`POST /v1/taskiem-chat/files`), is read as one sent on WhatsApp: the file comes with the message and is held in memory only. Its address is `web:<person>`; a half-made invoice on the phone stays on the phone, as each channel keeps its own place in a conversation.
 
 ## Security model
 

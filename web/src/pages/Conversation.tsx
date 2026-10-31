@@ -26,6 +26,7 @@ import {
   type LinkPreview,
 } from "../lib/linkchat";
 import { Icon } from "../icons";
+import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
@@ -36,86 +37,12 @@ import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 // the clock, as WhatsApp's does, with the time in words on hover.
 
 const EVERY_MS = 3000;
+/** A swipe this far right replies. */
+const SWIPE_REPLY_PX = 60;
 
 /** What can be attached: a photo or a PDF (a voice note is recorded). */
 const ATTACH = "image/jpeg,image/png,image/webp,application/pdf";
 const MAX_FILE = 25 * 1024 * 1024;
-const MAX_VOICE_SECONDS = 600;
-
-/** Records a voice note with the browser's microphone: secs counts up
- * while recording; stop(true) hands the note to onDone, stop(false)
- * throws it away. Unavailable where the browser cannot record. */
-function useVoiceNote(
-  onDone: (f: File) => void,
-  onError: (e: unknown) => void,
-) {
-  const [secs, setSecs] = useState<number>();
-  const rec = useRef<MediaRecorder | null>(null);
-  const keep = useRef(false);
-  const can =
-    typeof window !== "undefined" &&
-    typeof window.MediaRecorder !== "undefined" &&
-    !!navigator.mediaDevices?.getUserMedia;
-  const stop = useCallback((keepIt: boolean) => {
-    keep.current = keepIt;
-    if (rec.current && rec.current.state !== "inactive") rec.current.stop();
-  }, []);
-  useEffect(() => () => stop(false), [stop]);
-  useEffect(() => {
-    if (secs === undefined) return;
-    if (secs >= MAX_VOICE_SECONDS) {
-      stop(true);
-      return;
-    }
-    const t = setTimeout(() => setSecs((s) => (s ?? 0) + 1), 1000);
-    return () => clearTimeout(t);
-  }, [secs, stop]);
-  const start = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const type = [
-        "audio/ogg;codecs=opus",
-        "audio/webm;codecs=opus",
-        "audio/mp4",
-      ].find((t) => MediaRecorder.isTypeSupported(t));
-      const r = new MediaRecorder(
-        stream,
-        type ? { mimeType: type } : undefined,
-      );
-      const chunks: Blob[] = [];
-      r.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-      r.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setSecs(undefined);
-        rec.current = null;
-        if (!keep.current || chunks.length === 0) return;
-        const mime = (r.mimeType || "audio/webm").split(";")[0] ?? "audio/webm";
-        const ext = mime.includes("ogg")
-          ? "ogg"
-          : mime.includes("mp4")
-            ? "m4a"
-            : "webm";
-        onDone(new File(chunks, `voice-note.${ext}`, { type: mime }));
-      };
-      keep.current = false;
-      rec.current = r;
-      r.start();
-      setSecs(0);
-    } catch {
-      onError(
-        new Error(
-          "The microphone could not be used. Allow it for this page and try again.",
-        ),
-      );
-    }
-  };
-  return { can, secs, start, stop };
-}
-
-const minsSecs = (s: number) =>
-  `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 /** What can be done from a card, while it is its document's newest:
  * accept or decline a new order, accept a change, say all came, settle a
@@ -378,12 +305,45 @@ function Bubble({
   const card = m.kind === "card" ? m.card : undefined;
   const [more, setMore] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Swipe right to reply, on a touch screen, as WhatsApp's.
+  const drag = useRef<{ x: number; y: number; id: number } | null>(null);
+  const [dx, setDx] = useState(0);
+  const swipe = canReply
+    ? {
+        onPointerDown: (e: React.PointerEvent) => {
+          if (e.pointerType === "touch")
+            drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+        },
+        onPointerMove: (e: React.PointerEvent) => {
+          const d = drag.current;
+          if (!d || e.pointerId !== d.id) return;
+          const x = e.clientX - d.x;
+          if (Math.abs(e.clientY - d.y) > 30 && x < 20) {
+            drag.current = null;
+            setDx(0);
+            return;
+          }
+          setDx(Math.max(0, Math.min(x, 80)));
+        },
+        onPointerUp: () => {
+          if (drag.current && dx >= SWIPE_REPLY_PX) onReply(m);
+          drag.current = null;
+          setDx(0);
+        },
+        onPointerCancel: () => {
+          drag.current = null;
+          setDx(0);
+        },
+      }
+    : {};
   const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
   return (
     <div
       className={`bubble${m.mine ? " mine" : ""}${card ? " card-bubble" : ""}`}
       data-testid={card ? "chat-card" : "chat-message"}
       data-mine={m.mine}
+      style={dx ? { transform: `translateX(${dx}px)` } : undefined}
+      {...swipe}
     >
       {!m.mine && !card && m.sender_name && (
         <span className="who">{m.sender_name}</span>
@@ -516,11 +476,17 @@ export function ConversationPane({
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
   const [reply, setReply] = useState<LinkMessage>();
-  const [file, setFile] = useState<File>();
+  const [pending, setFile] = useState<File>();
+  const file = pending;
   const [fileError, setFileError] = useState<unknown>();
   const pick = useRef<HTMLInputElement>(null);
   const snap = useRef<HTMLInputElement>(null);
-  const voice = useVoiceNote(setFile, setFileError);
+  // A voice note held and released goes at once; one tapped waits for Send.
+  const sendRef = useRef<(f?: File) => void>(() => undefined);
+  const voice = useVoiceNote(
+    (f, now) => (now ? sendRef.current(f) : setFile(f)),
+    setFileError,
+  );
   const [q, setQ] = useState("");
   const [found, setFound] = useState<LinkMessage[]>();
   const act = useAction();
@@ -586,8 +552,9 @@ export function ConversationPane({
     }
     setFile(f);
   };
-  const send = () => {
-    const body = text.trim();
+  const send = (held?: File) => {
+    const file = held ?? pending;
+    const body = held ? "" : text.trim();
     if (!body && !file) return;
     void act
       .run(async () => {
@@ -605,13 +572,16 @@ export function ConversationPane({
           });
         }
         setMessages((cur) => merge(cur ?? [], [out.message]));
-        setText("");
-        setFile(undefined);
+        if (!held) {
+          setText("");
+          setFile(undefined);
+        }
         setReply(undefined);
         onChanged();
       }, false)
       .then(() => undefined);
   };
+  sendRef.current = send;
   const settings = (
     body: { muted?: boolean; archived?: boolean; pinned?: boolean },
     done: string,
@@ -824,27 +794,8 @@ export function ConversationPane({
               e.target.value = "";
             }}
           />
-          {voice.secs !== undefined ? (
-            <div className="composer" data-testid="chat-recording">
-              <span className="recording" role="status">
-                <span className="dot" aria-hidden="true" />
-                Recording {minsSecs(voice.secs)}
-              </span>
-              <button
-                type="button"
-                className="small"
-                onClick={() => voice.stop(false)}
-              >
-                Cancel<span className="sr-only"> the voice note</span>
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => voice.stop(true)}
-              >
-                Done
-              </button>
-            </div>
+          {voice.secs !== undefined || voice.holding ? (
+            <RecordingBar voice={voice} />
           ) : (
             <form
               className="composer"
@@ -889,18 +840,10 @@ export function ConversationPane({
                 }}
               />
               {!text.trim() && !file && voice.can ? (
-                <button
-                  type="button"
-                  className="icon-button primary"
-                  aria-label="Record a voice note"
-                  title="Record a voice note"
-                  onClick={() => {
-                    setFileError(undefined);
-                    void voice.start();
-                  }}
-                >
-                  <Icon name="mic" />
-                </button>
+                <MicButton
+                  voice={voice}
+                  onStart={() => setFileError(undefined)}
+                />
               ) : (
                 <button
                   type="submit"

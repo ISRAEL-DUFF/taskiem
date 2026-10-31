@@ -101,5 +101,55 @@ test("a photo with a caption, a PDF and a voice note", async ({ browser }) => {
   await pane.getByRole("button", { name: "Send" }).click();
   await expect(mine.getByLabel("Your voice note")).toBeVisible();
   expect(sent[2]).toMatch(/filename="voice-note\.(webm|ogg|m4a)"/);
+
+  // Held, released: sent at once, with no Done to press.
+  const mic = pane.getByTestId("chat-mic");
+  await mic.hover();
+  await buyer.mouse.down();
+  await expect(pane.getByTestId("chat-recording")).toContainText("release to send", { timeout: 5_000 });
+  await buyer.waitForTimeout(1200);
+  await buyer.mouse.up();
+  await expect(mine.getByLabel("Your voice note")).toHaveCount(2);
+  expect(sent).toHaveLength(4);
+  // Held, slid left: cancelled, nothing sent.
+  await mic.hover();
+  const box = (await mic.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  await buyer.mouse.down();
+  await expect(pane.getByTestId("chat-recording")).toBeVisible({ timeout: 5_000 });
+  await buyer.waitForTimeout(600);
+  await buyer.mouse.move(box.x - 120, box.y + box.height / 2, { steps: 4 });
+  await buyer.mouse.up();
+  await expect(pane.getByTestId("chat-recording")).toHaveCount(0);
+  await buyer.waitForTimeout(500);
+  expect(sent).toHaveLength(4);
   await axeBoth(buyer, "a photo, a PDF and a voice note");
+});
+
+test("a voice note and a photo to Taskiem on the web", async ({ browser }) => {
+  const ctx = await browser.newContext({ permissions: ["microphone"] });
+  const page = await ctx.newPage();
+  await signUp(page, `Hauwa Hair ${letters()}`);
+  await page.goto("/chat?with=taskiem");
+  const pane = page.getByTestId("taskiem-pane");
+  const mic = pane.getByTestId("chat-mic");
+  await mic.hover();
+  await page.mouse.down();
+  await expect(pane.getByTestId("chat-recording")).toBeVisible({ timeout: 5_000 });
+  await page.waitForTimeout(1200);
+  await page.mouse.up();
+  // Voice notes are off on this server: Taskiem says so, as on WhatsApp.
+  const mine = pane.locator('[data-testid="taskiem-message"][data-mine="true"]');
+  await expect(mine.last()).toContainText("Voice note");
+  await expect(pane.locator('[data-testid="taskiem-message"][data-mine="false"]').last()).toContainText("Voice notes are not available");
+
+  // A photo with a caption.
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+  await pane.getByTestId("taskiem-file").setInputFiles({ name: "braids.png", mimeType: "image/png", buffer: png });
+  await expect(pane.getByTestId("taskiem-attaching")).toContainText("Photo: braids.png");
+  await pane.getByLabel("Message to Taskiem").fill("Box braids 15000");
+  await axeBoth(page, "a photo to Taskiem");
+  await pane.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(mine.last()).toContainText("Photo Box braids 15000");
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(4);
+  await axeBoth(page, "Taskiem's answers to a voice note and a photo");
 });

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { get, post } from "../api";
+import { get, post, upload } from "../api";
+import { Icon } from "../icons";
+import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { clock, dayLabel } from "../lib/linkchat";
 import {
   boldParts,
@@ -26,6 +28,16 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const [live, setLive] = useState<string>(); // the answer whose buttons press
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
+  // A photo waiting for its caption, or a voice note tapped (not held).
+  const [file, setFile] = useState<File>();
+  const [fileError, setFileError] = useState<unknown>();
+  const pick = useRef<HTMLInputElement>(null);
+  const snap = useRef<HTMLInputElement>(null);
+  const sendFileRef = useRef<(f: File) => void>(() => undefined);
+  const voice = useVoiceNote(
+    (f, now) => (now ? sendFileRef.current(f) : setFile(f)),
+    setFileError,
+  );
   const act = useAction();
   const end = useRef<HTMLDivElement>(null);
   const last = messages?.[messages.length - 1]?.created_at;
@@ -66,9 +78,37 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         if (body.text !== undefined && !body.reply) setText("");
       }, false)
       .then(() => undefined);
+  // A voice note or a photo: read as one sent on WhatsApp.
+  const sendFile = (f: File, caption = "") =>
+    void act
+      .run(async () => {
+        const form = new FormData();
+        form.append("file", f, f.name);
+        if (caption) form.append("text", caption);
+        const out = await upload<{ messages: TaskiemMessage[] }>(
+          "/v1/taskiem-chat/files",
+          form,
+        );
+        setMessages((cur) => mergeTaskiem(cur ?? [], out.messages));
+        const answer = [...out.messages]
+          .reverse()
+          .find((m) => !m.inbound && m.buttons?.some((b) => b.id));
+        setLive(answer ? `${answer.id}@${answer.created_at}` : undefined);
+        setFile(undefined);
+        if (caption) setText("");
+      }, false)
+      .then(() => undefined);
+  sendFileRef.current = (f) => sendFile(f);
   const send = () => {
     const body = text.trim();
-    if (body) say({ text: body });
+    if (file) sendFile(file, body);
+    else if (body) say({ text: body });
+  };
+  const choose = (f: File | undefined) => {
+    setFileError(undefined);
+    if (f && f.size > 10 * 1024 * 1024)
+      return setFileError(new Error(`${f.name} is larger than 10 MB.`));
+    if (f) setFile(f);
   };
 
   return (
@@ -87,7 +127,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         The same conversation you have with Taskiem on your phone: say{" "}
         <strong>help</strong> to see what it can do.
       </p>
-      <ErrorBox error={error ?? act.error} />
+      <ErrorBox error={error ?? act.error ?? fileError} />
       <div
         className="chat-stream"
         aria-live="polite"
@@ -161,38 +201,102 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         )}
         <div ref={end} />
       </div>
-      <form
-        className="composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
+      {file && (
+        <div className="composer-reply" data-testid="taskiem-attaching">
+          <span className="quote">
+            {file.type.startsWith("audio/")
+              ? "Voice note"
+              : `Photo: ${file.name}`}
+          </span>
+          <button
+            type="button"
+            className="small"
+            onClick={() => setFile(undefined)}
+          >
+            Remove<span className="sr-only"> the file</span>
+          </button>
+        </div>
+      )}
+      <input
+        ref={pick}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        data-testid="taskiem-file"
+        onChange={(e) => {
+          choose(e.target.files?.[0]);
+          e.target.value = "";
         }}
-      >
-        <label className="sr-only" htmlFor="taskiem-text">
-          Message to Taskiem
-        </label>
-        <textarea
-          id="taskiem-text"
-          rows={1}
-          maxLength={4000}
-          placeholder="Type a message"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
+      />
+      <input
+        ref={snap}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          choose(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      {voice.secs !== undefined || voice.holding ? (
+        <RecordingBar voice={voice} />
+      ) : (
+        <form
+          className="composer"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
           }}
-        />
-        <button
-          type="submit"
-          className="primary"
-          disabled={act.busy || !text.trim()}
         >
-          Send
-        </button>
-      </form>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Send a photo"
+            title="Send a photo: with its name and price as the caption, it is added as a product"
+            onClick={() => pick.current?.click()}
+          >
+            <Icon name="attach" />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Take a photo"
+            title="Take a photo"
+            onClick={() => snap.current?.click()}
+          >
+            <Icon name="camera" />
+          </button>
+          <label className="sr-only" htmlFor="taskiem-text">
+            Message to Taskiem
+          </label>
+          <textarea
+            id="taskiem-text"
+            rows={1}
+            maxLength={4000}
+            placeholder={file ? "Add a caption" : "Type a message"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+          />
+          {!text.trim() && !file && voice.can ? (
+            <MicButton voice={voice} onStart={() => setFileError(undefined)} />
+          ) : (
+            <button
+              type="submit"
+              className="primary"
+              disabled={act.busy || (!text.trim() && !file)}
+            >
+              Send
+            </button>
+          )}
+        </form>
+      )}
     </section>
   );
 }

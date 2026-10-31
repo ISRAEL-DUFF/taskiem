@@ -6340,6 +6340,40 @@ paths:
                 $ref: '#/components/schemas/TaskiemChat'
         default:
           $ref: '#/components/responses/Error'
+  /v1/taskiem-chat/files:
+    post:
+      operationId: taskiemSend
+      tags:
+      - Links
+      summary: Send Taskiem a voice note or a photo on the web
+      description: 'A multipart form: file (a voice note in Ogg, WebM, MP3 or MP4 audio, or a JPEG, PNG or WebP photo) and text (a photo''s caption). Read as one sent on WhatsApp: a voice note is transcribed when the business has voice notes on, and read as typed; a photo with a caption adds a product, or is the logo the set-up asked for. The file is held in memory only. A person only: not an API key.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                  maxLength: 4000
+      responses:
+        '200':
+          description: What was said, and Taskiem's answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/files:
     post:
       operationId: sendLinkFile

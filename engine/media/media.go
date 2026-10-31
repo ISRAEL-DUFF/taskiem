@@ -183,6 +183,10 @@ func voiceType(data []byte) string {
 	return ""
 }
 
+// AudioType is an audio file's type by its header (Ogg, WebM, MP3 or
+// MP4), "" for anything else.
+func AudioType(data []byte) string { return voiceType(data) }
+
 // ChatKind is what a file sent in a conversation is: a photo, a PDF, or a
 // voice note.
 func ChatKind(ctype string) string {

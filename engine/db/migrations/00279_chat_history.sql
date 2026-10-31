@@ -82,8 +82,14 @@ ALTER TABLE whatsapp_run_watches DROP CONSTRAINT whatsapp_run_watches_channel_ch
 ALTER TABLE whatsapp_run_watches ADD CONSTRAINT whatsapp_run_watches_channel_check CHECK (channel IN ('whatsapp', 'telegram', 'slack', 'web'));
 ALTER TABLE whatsapp_tokens DROP CONSTRAINT whatsapp_tokens_channel_check;
 ALTER TABLE whatsapp_tokens ADD CONSTRAINT whatsapp_tokens_channel_check CHECK (channel IN ('whatsapp', 'telegram', 'slack', 'web'));
+-- A voice note recorded on the web is transcribed as one sent on WhatsApp.
+ALTER TABLE voice_transcripts DROP CONSTRAINT voice_transcripts_channel_check;
+ALTER TABLE voice_transcripts ADD CONSTRAINT voice_transcripts_channel_check CHECK (channel IN ('whatsapp', 'telegram', 'web'));
 
 -- +goose Down
+DELETE FROM voice_transcripts WHERE channel = 'web';
+ALTER TABLE voice_transcripts DROP CONSTRAINT voice_transcripts_channel_check;
+ALTER TABLE voice_transcripts ADD CONSTRAINT voice_transcripts_channel_check CHECK (channel IN ('whatsapp', 'telegram'));
 DELETE FROM whatsapp_tokens WHERE channel = 'web';
 ALTER TABLE whatsapp_tokens DROP CONSTRAINT whatsapp_tokens_channel_check;
 ALTER TABLE whatsapp_tokens ADD CONSTRAINT whatsapp_tokens_channel_check CHECK (channel IN ('whatsapp', 'telegram', 'slack'));

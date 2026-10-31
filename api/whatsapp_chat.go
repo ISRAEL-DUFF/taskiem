@@ -198,6 +198,9 @@ type chat struct {
 	// blocked is the draft waiting for a connection, while this message is
 	// read (connect_links.go).
 	blocked uuid.UUID
+	// upload is a file sent on the web (a voice note or a photo), held in
+	// memory while the message is read: fetchMedia answers it.
+	upload []byte
 }
 
 // t is a message in the conversation's language.

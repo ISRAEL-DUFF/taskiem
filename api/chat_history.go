@@ -14,6 +14,8 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -28,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -382,7 +385,11 @@ func (w *webChannel) Send(ctx context.Context, addr string, m whatsapp.Message) 
 func (s *Server) taskiemChatRoutes(r chi.Router) {
 	r.Get("/taskiem-chat", s.taskiemHistory)
 	r.Post("/taskiem-chat", s.taskiemSay)
+	r.Post("/taskiem-chat/files", s.taskiemSend)
 }
+
+// webMediaID names a file that came with a web message (chat.upload).
+const webMediaID = "web"
 
 type taskiemChatOut struct {
 	Messages []TaskiemMessage `json:"messages"`
@@ -411,6 +418,16 @@ func (s *Server) taskiemSay(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, errBadRequest)
 		return
 	}
+	msg := whatsapp.Inbound{Type: "text", Text: in.Text, Reply: in.Reply}
+	if in.Reply != "" {
+		msg.Type = "interactive"
+	}
+	s.taskiemAnswer(w, r, p, msg, nil)
+}
+
+// taskiemAnswer reads a message on the web as one typed on WhatsApp, and
+// answers what Taskiem said.
+func (s *Server) taskiemAnswer(w http.ResponseWriter, r *http.Request, p *Principal, msg whatsapp.Inbound, upload []byte) {
 	if !s.limiter("web-chat:"+p.UserID.String(), 3*time.Second, 20).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
 		return
@@ -418,12 +435,10 @@ func (s *Server) taskiemSay(w http.ResponseWriter, r *http.Request) {
 	s.chatHooks()
 	live := &webLive{user: p.UserID}
 	ctx := context.WithValue(r.Context(), webLiveKey{}, live)
-	msg := whatsapp.Inbound{Type: "text", Text: in.Text, Reply: in.Reply}
-	if in.Reply != "" {
-		msg.Type = "interactive"
-	}
-	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg}
-	if err := s.converse(ctx, c, p.UserID); err != nil {
+	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg, upload: upload}
+	err := s.converse(ctx, c, p.UserID)
+	clear(upload) // the file is not kept
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -431,6 +446,53 @@ func (s *Server) taskiemSay(w http.ResponseWriter, r *http.Request) {
 	out := slices.Clone(live.msgs)
 	live.mu.Unlock()
 	writeJSON(w, http.StatusOK, taskiemChatOut{Messages: out})
+}
+
+// taskiemSend is POST /v1/taskiem-chat/files: a voice note or a photo
+// sent to Taskiem on the web, as a multipart form (file; text, a photo's
+// caption). Read as one sent on WhatsApp: a voice note is transcribed
+// (when the business has voice notes on) and read as typed; a photo with
+// a caption adds a product, or is the logo the set-up asked for. The file
+// is held in memory only.
+func (s *Server) taskiemSend(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil {
+		s.fail(w, r, errForbidden)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, media.MaxVoiceBytes+(1<<20))
+	if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // the body is bounded by MaxBytesReader above
+		s.fail(w, r, fmt.Errorf("%w: send the file as a multipart form with a file field", errBadRequest))
+		return
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	f, _, err := r.FormFile("file")
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: the form has no file", errBadRequest))
+		return
+	}
+	data, err := io.ReadAll(f)
+	_ = f.Close()
+	if err != nil || len(data) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: the file could not be read", errBadRequest))
+		return
+	}
+	caption := strings.TrimSpace(r.FormValue("text"))
+	if utf8.RuneCountInString(caption) > maxHistoryText {
+		s.fail(w, r, errBadRequest)
+		return
+	}
+	msg := whatsapp.Inbound{}
+	switch ctype := http.DetectContentType(data); {
+	case media.AudioType(data) != "":
+		msg.Type, msg.Media = "audio", &whatsapp.Media{ID: webMediaID, MimeType: media.AudioType(data), Voice: true}
+	case ctype == "image/jpeg" || ctype == "image/png" || ctype == "image/webp":
+		msg.Type, msg.Image, msg.Text = "image", &whatsapp.Media{ID: webMediaID, MimeType: ctype}, caption
+	default:
+		s.fail(w, r, fmt.Errorf("%w: send a voice note or a photo (JPEG, PNG or WebP)", errBadRequest))
+		return
+	}
+	s.taskiemAnswer(w, r, p, msg, data)
 }
 
 // taskiemHistory is GET /v1/taskiem-chat: the person's own conversation

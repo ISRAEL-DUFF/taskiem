@@ -65,6 +65,18 @@ test("two linked businesses talk", async ({ browser }) => {
     expect(out.messages[0].read_at).toBeTruthy();
   }).toPass({ timeout: 10_000 });
 
+  // Swiped right on a phone: replying to it; cancelled.
+  const bubble = pane.getByTestId("chat-message").first();
+  const at = (await bubble.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  const touch = { pointerType: "touch", pointerId: 7, isPrimary: true, clientY: at.y + 10 };
+  await bubble.dispatchEvent("pointerdown", { ...touch, clientX: at.x + 10 });
+  await bubble.dispatchEvent("pointermove", { ...touch, clientX: at.x + 50 });
+  await bubble.dispatchEvent("pointermove", { ...touch, clientX: at.x + 90 });
+  await bubble.dispatchEvent("pointerup", { ...touch, clientX: at.x + 90 });
+  await expect(pane.getByTestId("chat-replying")).toContainText("Good morning");
+  await pane.getByRole("button", { name: /^Cancel/ }).click();
+  await expect(pane.getByTestId("chat-replying")).toHaveCount(0);
+
   // A reply quoting it, sent with Enter.
   await pane.getByRole("button", { name: /^Reply/ }).click();
   await expect(pane.getByTestId("chat-replying")).toContainText("Good morning");

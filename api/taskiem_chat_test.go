@@ -1,10 +1,36 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"mime/multipart"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/voice"
 )
+
+// taskiemFile sends a file to Taskiem on the web.
+func (c *client) taskiemFile(t *testing.T, name string, data []byte, text string) (int, map[string]any) {
+	t.Helper()
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	fw, _ := mw.CreateFormFile("file", name)
+	_, _ = fw.Write(data)
+	if text != "" {
+		_ = mw.WriteField("text", text)
+	}
+	_ = mw.Close()
+	return c.rawPost(t, "/v1/taskiem-chat/files", mw.FormDataContentType(), b.Bytes())
+}
+
+func jsonText(v any) string {
+	raw, _ := json.Marshal(v)
+	return string(raw)
+}
 
 // The Taskiem conversation on the web, with its history on every channel
 // (L3, §5.5; migration 00279): what the owner says on WhatsApp and
@@ -92,6 +118,30 @@ func TestTaskiemConversation(t *testing.T) {
 		t.Errorf("another business: %v", got)
 	}
 	owner.must(400, "POST", "/v1/taskiem-chat", map[string]any{"text": " "})
+
+	// A voice note recorded on the web: transcribed and read as typed.
+	w.srv.Voice = &api.VoiceSettings{Provider: &voice.Fake{Text: "status"}, Limits: voice.Limits{MaxBytes: 64 << 10, MaxDuration: 30 * time.Second}, Retention: time.Hour}
+	owner.must(200, "PUT", "/v1/languages", map[string]any{"voice_notes": true})
+	code, said := owner.taskiemFile(t, "voice-note.ogg", voice.TestOgg(3, 50), "")
+	if code != 200 {
+		t.Fatalf("a voice note: %d %v", code, said)
+	}
+	vm := said["messages"].([]any)
+	if vm[0].(map[string]any)["kind"] != "voice" || !strings.Contains(vm[len(vm)-1].(map[string]any)["text"].(string), `I heard: "status"`) {
+		t.Fatalf("heard on the web: %v", vm)
+	}
+	var webVoice int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM voice_transcripts WHERE channel = 'web' AND status = 'transcribed'`).Scan(&webVoice); err != nil || webVoice != 1 {
+		t.Errorf("transcribed on the web: %d %v", webVoice, err)
+	}
+	// A photo with no caption: asked what it is, as on WhatsApp.
+	code, said = owner.taskiemFile(t, "cake.jpg", photo(t), "")
+	if code != 200 || !strings.Contains(jsonText(said), "caption") {
+		t.Fatalf("a photo: %d %v", code, said)
+	}
+	if code, _ := owner.taskiemFile(t, "run.sh", []byte("#!/bin/sh\necho\n"), ""); code != 400 {
+		t.Errorf("a script: %d", code)
+	}
 
 	// Past its retention: purged.
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE chat_history SET expires_at = now() - interval '1 minute'`); err != nil {
