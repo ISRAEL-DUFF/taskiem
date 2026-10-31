@@ -82,7 +82,7 @@ wd/v1 needs at least one step in each list. When an If's **No** has nothing in i
 
 ## Saving and publishing
 
-**Save draft** saves a new version. Someone else's version saved meanwhile is merged, or its conflicts are shown to choose from. **Publish** saves, checks the version and publishes it; what it still needs is listed, each with its fix. **Start run** appears once a version is published. The problems the last save found are listed under the bar. A step with a problem has a red border, and opening it shows the problem.
+**Save draft** saves a new version. Someone else's version saved meanwhile is merged, or its conflicts are shown to choose from. **Publish** saves, checks the version and publishes it; what it still needs is listed, each with its fix. A workflow that starts from a storefront form another workflow already starts is not published: the builder says which workflow runs the form and offers **Replace it with this one**, which takes that one out of use and publishes this one in one change ([storefronts](storefronts.md)); under four-eyes publishing it says why it cannot. **Start run** appears once a version is published. The problems the last save found are listed under the bar. A step with a problem has a red border, and opening it shows the problem.
 
 ## Tabs
 

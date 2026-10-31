@@ -19583,6 +19583,10 @@ paths:
       description: Makes a valid version the one new runs use. With four-eyes publishing a person's request waits
         for approval (202). An invalid definition answers 422 with its problems; a version missing something a run
         would fail on at once (a connection, a secret, a table) answers 422 with `code` `not_ready` and its `needs`.
+        A version whose storefront trigger names a form another workflow already starts answers 409 with `code`
+        `action_taken` (docs/spec/fronts.md F0); with `replace` the other workflow is taken out of the environments
+        this one deploys to and this one published, in one change. Under four-eyes publishing `replace` is refused,
+        with `can_replace` false and the reason in `refused`, and no request is made.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19604,6 +19608,17 @@ paths:
         schema:
           type: integer
         description: Version number
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                replace:
+                  type: boolean
+                  description: Take the workflow that starts this version's storefront form out of use, in the same change
       responses:
         '200':
           description: Published
@@ -19617,6 +19632,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublishResult'
+        '409':
+          description: The storefront form this version starts on already starts another workflow (`code` `action_taken`), or another conflict
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - error
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  action:
+                    type: string
+                    description: The storefront action (order, enquiry, callback, booking)
+                  action_words:
+                    type: string
+                    description: The action as people name it ("order form")
+                  environment:
+                    type: string
+                  workflow:
+                    type: object
+                    description: The workflow that starts the form now
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                  can_replace:
+                    type: boolean
+                  refused:
+                    type: string
+                    description: Why replace is not offered (four-eyes publishing), when it is not
         default:
           $ref: '#/components/responses/Error'
   /v1/workflows/{wf}/versions/{v}/publish/approve:

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -698,6 +699,17 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	var in struct {
+		// Replace takes the workflow that holds this one's storefront
+		// action out of use, in the same change (storefront_replace.go).
+		Replace bool `json:"replace"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil && !errors.Is(err, io.EOF) {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	p := principalFrom(r.Context())
 	var probs []problem
 	published, pending := false, false
@@ -727,6 +739,16 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 			if state == "published" {
 				return nil
 			}
+			// A storefront action another workflow holds would refuse the
+			// publish once approved: said now, with why Replace is not
+			// offered here.
+			held, err := actionHolders(r.Context(), tx, wf, v)
+			if err != nil {
+				return err
+			}
+			if len(held) > 0 {
+				return actionTaken{ActionTaken: held[0], Refused: fourEyesRefusal(held[0].Name)}
+			}
 			// A person asks, or an embed app's end user (docs/embedding.md):
 			// a platform person approves. API keys do not ask.
 			if p.UserID == uuid.Nil && p.EndUser == nil {
@@ -739,6 +761,13 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			return auditTx(r, tx, "publish_request.create", fmt.Sprintf("%s/%d", wf, v), nil)
+		}
+		if in.Replace {
+			if err := s.replaceActionHolders(r.Context(), tx, wf, v, func(action, target string, detail map[string]any) error {
+				return auditTx(r, tx, action, target, detail)
+			}); err != nil {
+				return err
+			}
 		}
 		by := p.id()
 		var digest string
@@ -760,6 +789,10 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	var notReady *errNotReady
 	if errors.As(err, &notReady) {
 		writeNotReady(w, notReady.needs)
+		return
+	}
+	if at, ok := asActionTaken(err); ok {
+		writeActionTaken(w, at)
 		return
 	}
 	if err != nil {

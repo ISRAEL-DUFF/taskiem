@@ -29,6 +29,37 @@ import (
 // address in the environment (a USSD service code).
 var ErrTriggerTaken = errors.New("trigger taken")
 
+// ActionTaken is ErrTriggerTaken for a storefront action: the workflow
+// that holds it in the environment, so the editor can offer to replace it
+// (docs/spec/fronts.md F0).
+type ActionTaken struct {
+	Action      string
+	Workflow    uuid.UUID
+	Name        string
+	Environment string
+}
+
+func (e *ActionTaken) Error() string {
+	return fmt.Sprintf("%s: the storefront's %s form already starts workflow %q in %s", ErrTriggerTaken, e.Action, e.Name, e.Environment)
+}
+
+func (e *ActionTaken) Unwrap() error { return ErrTriggerTaken }
+
+// StorefrontActionHolder is the workflow other than wf that holds a
+// storefront action in env (nil when none does).
+func StorefrontActionHolder(ctx context.Context, tx pgx.Tx, env, action string, wf uuid.UUID) (*ActionTaken, error) {
+	t := &ActionTaken{Action: action, Environment: env}
+	err := tx.QueryRow(ctx, `SELECT w.id, w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
+		WHERE t.type = 'storefront' AND t.environment = $1 AND t.storefront_action = $2 AND t.workflow_id <> $3`, env, action, wf).Scan(&t.Workflow, &t.Name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 // DefaultTimezone is where schedules run unless they name another (spec 8.1).
 const DefaultTimezone = "Africa/Lagos"
 
@@ -295,14 +326,12 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			// One workflow per storefront form in an environment: a
 			// submission starts the one deployed for its form.
 			action := str(c, "action")
-			var other string
-			e := tx.QueryRow(ctx, `SELECT w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
-				WHERE t.type = 'storefront' AND t.environment = $1 AND t.storefront_action = $2 AND t.workflow_id <> $3`, env, action, wf).Scan(&other)
-			if e == nil {
-				return fmt.Errorf("%w: the storefront's %s form already starts workflow %q in %s", ErrTriggerTaken, action, other, env)
-			}
-			if !errors.Is(e, pgx.ErrNoRows) {
+			held, e := StorefrontActionHolder(ctx, tx, env, action, wf)
+			if e != nil {
 				return e
+			}
+			if held != nil {
+				return held
 			}
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action)
 				VALUES ($1, $2, $3, $4, $5, 'storefront', $6)`, id, tenant, wf, version, env, action)
