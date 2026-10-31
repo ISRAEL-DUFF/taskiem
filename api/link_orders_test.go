@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -666,7 +668,12 @@ func TestLinkedOrderLikeAnyOrder(t *testing.T) {
 	if p["seller_status"] != "delivered" || p["lines"].([]any)[0].(map[string]any)["delivered"] != float64(6) || p["delivered_at"] == nil {
 		t.Fatalf("delivered by the rider: %v", p)
 	}
-	if told := w.lastTo(t, buyerOn, before); len(told) == 0 || !strings.Contains(told[len(told)-1].Text, "delivered your order "+ref+": 6 Rice") {
+	// (The seller's workflow, running, may tell the buyer things of its own
+	// meanwhile: the delivery is among what the buyer was told.)
+	told := w.lastTo(t, buyerOn, before)
+	if !slices.ContainsFunc(told, func(m whatsapptest.Sent) bool {
+		return strings.Contains(m.Text, "delivered your order "+ref+": 6 Rice")
+	}) {
 		t.Errorf("the buyer told of the delivery: %+v", told)
 	}
 	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po+"/all-came", nil)["purchase"].(map[string]any); p["status"] != "received" {
