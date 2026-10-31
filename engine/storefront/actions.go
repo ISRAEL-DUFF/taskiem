@@ -100,7 +100,7 @@ func CleanZones(in []Zone) ([]Zone, error) {
 // Zones are the order form's delivery areas, in its order.
 func Zones(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Zone, error) {
 	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT options->'zones' FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order'`, tenant).Scan(&raw)
+	err := tx.QueryRow(ctx, `SELECT options->'zones' FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order' AND builtin`, tenant).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) || raw == nil {
 		return []Zone{}, nil
 	}
@@ -159,6 +159,16 @@ func builtinPosition(kind string) int {
 	return 0
 }
 
+// BuiltinTriggerSQL is the SQL condition on a triggers row t for a
+// storefront trigger on the business's built-in action of a kind (the kind
+// a parameter or a literal), read in its tenant's transaction: by the
+// action's id, or by the kind for a trigger deployed before the storefront
+// had that action (linked when the action is made, 00280).
+func BuiltinTriggerSQL(t, kind string) string {
+	return `(` + t + `.storefront_action_id = (SELECT b.id FROM storefront_actions b WHERE b.kind = ` + kind + ` AND b.builtin)
+		OR (` + t + `.storefront_action_id IS NULL AND ` + t + `.storefront_action = ` + kind + `))`
+}
+
 // Actions reads the storefront's forms, every kind present (unset ones
 // disabled with their default label), with the workflow deployed for each.
 func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error) {
@@ -167,7 +177,7 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 		return nil, err
 	}
 	have := map[string]Action{}
-	rows, err := tx.Query(ctx, `SELECT kind, enabled, label, payment, options FROM storefront_actions WHERE storefront_id = $1`, sf.ID)
+	rows, err := tx.Query(ctx, `SELECT kind, enabled, label, payment, options FROM storefront_actions WHERE storefront_id = $1 AND builtin`, sf.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +204,7 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 			}
 		}
 		var wf uuid.UUID
-		err := tx.QueryRow(ctx, `SELECT workflow_id FROM triggers WHERE type = 'storefront' AND storefront_action = $1 AND environment = 'prod'`, k).Scan(&wf)
+		err := tx.QueryRow(ctx, `SELECT workflow_id FROM triggers t WHERE type = 'storefront' AND `+BuiltinTriggerSQL("t", "$1")+` AND environment = 'prod'`, k).Scan(&wf)
 		if err == nil {
 			a.Workflow = &wf
 		} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -268,7 +278,7 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 	}
 	if a.Enabled {
 		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM triggers WHERE type = 'storefront' AND storefront_action = $1 AND environment = 'prod'`, a.Kind).Scan(&n); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM triggers t WHERE type = 'storefront' AND `+BuiltinTriggerSQL("t", "$1")+` AND environment = 'prod'`, a.Kind).Scan(&n); err != nil {
 			return Action{}, err
 		}
 		if n == 0 {

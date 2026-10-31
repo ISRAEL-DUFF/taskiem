@@ -58,8 +58,8 @@ func (o *Orders) TransferRequested(ctx context.Context, tenant, order uuid.UUID)
 		if ord.Status != "awaiting_payment" || ord.ExpiresAt != nil && !ord.ExpiresAt.After(now) {
 			return fmt.Errorf("%w: %s is not waiting for its payment", ErrDecision, ord.Reference)
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND kind = $2`,
-			ord.storefront, ord.Kind).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND id = $2`,
+			ord.storefront, ord.action).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		least := transferOrderMinutes
@@ -232,8 +232,8 @@ func (o *Orders) DoorTransfer(ctx context.Context, tenant, order uuid.UUID) erro
 		if ord.Payment != "on_delivery" || ord.PaidAt != nil || ord.Status != "arrived" {
 			return fmt.Errorf("%w: %s is not waiting for its payment at the door", ErrDecision, ord.Reference)
 		}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND kind = $2`,
-			ord.storefront, ord.Kind).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND id = $2`,
+			ord.storefront, ord.action).Scan(&connection); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		return o.open(ctx, tx, tenant, &ord)

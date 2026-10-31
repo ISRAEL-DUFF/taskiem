@@ -338,7 +338,7 @@ func (o *Orders) applyChange(ctx context.Context, c change) error {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(s.published_slug, s.slug), COALESCE(a.options->>'connection', '') FROM storefronts s
-			LEFT JOIN storefront_actions a ON a.storefront_id = s.id AND a.kind = $2 WHERE s.id = $1`, ord.storefront, ord.Kind).Scan(&slug, &connection); err != nil {
+			LEFT JOIN storefront_actions a ON a.storefront_id = s.id AND a.id = $2 WHERE s.id = $1`, ord.storefront, ord.action).Scan(&slug, &connection); err != nil {
 			return err
 		}
 		if c.action == "price_accept" {

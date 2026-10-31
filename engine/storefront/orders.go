@@ -157,6 +157,7 @@ type Order struct {
 	PriceChange *PriceChange `json:"price_change,omitempty"`
 	subject     string
 	storefront  uuid.UUID
+	action      uuid.UUID
 	paymentRef  string
 	customerEnv map[string]any
 }
@@ -171,7 +172,7 @@ func (x Order) CustomerID() string { return x.subject }
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
-	COALESCE(zone, ''), COALESCE(delivery_kobo, 0),
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id,
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -184,7 +185,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	var basket, change []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
-		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.PaidBy)
+		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -260,23 +261,32 @@ func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st
 
 // --- the inbox ---
 
+// actionOf is the SQL condition on storefront_actions a for the action
+// id (a nil id: the built-in action of the kind).
+func actionOf(id, kind string) string {
+	return `(a.id = ` + id + `::uuid OR (` + id + `::uuid IS NULL AND a.kind = ` + kind + ` AND a.builtin))`
+}
+
 type inboxRow struct {
 	id, storefront, tenant uuid.UUID
 	kind, reference        string
 	statusHash, payload    []byte
+	// action is the action submitted to (nil only for a row an older
+	// public host wrote for a kind with no built-in action).
+	action *uuid.UUID
 }
 
 // Drain takes waiting submissions from the inbox and processes each. A
 // submission is removed from the inbox only when processed: one that
 // fails is retried after its claim lapses.
 func (o *Orders) Drain(ctx context.Context) error {
-	rows, err := o.Pool.Query(ctx, `SELECT id, storefront_id, tenant_id, kind, reference, status_hash, payload FROM taskiem_storefront_inbox_claim(20)`)
+	rows, err := o.Pool.Query(ctx, `SELECT id, storefront_id, tenant_id, kind, reference, status_hash, payload, action_id FROM taskiem_storefront_inbox_claim(20)`)
 	if err != nil {
 		return err
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (inboxRow, error) {
 		var x inboxRow
-		return x, r.Scan(&x.id, &x.storefront, &x.tenant, &x.kind, &x.reference, &x.statusHash, &x.payload)
+		return x, r.Scan(&x.id, &x.storefront, &x.tenant, &x.kind, &x.reference, &x.statusHash, &x.payload, &x.action)
 	})
 	if err != nil {
 		return err
@@ -311,7 +321,7 @@ func (o *Orders) process(ctx context.Context, x inboxRow) error {
 	err = db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
 		var raw []byte
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(s.published_slug, s.slug), a.options FROM storefronts s
-			JOIN storefront_actions a ON a.storefront_id = s.id AND a.kind = $2 WHERE s.id = $1`, x.storefront, x.kind).Scan(&slug, &raw); err != nil {
+			JOIN storefront_actions a ON a.storefront_id = s.id AND `+actionOf("$2", "$3")+` WHERE s.id = $1`, x.storefront, x.action, x.kind).Scan(&slug, &raw); err != nil {
 			return err
 		}
 		_ = json.Unmarshal(raw, &opts)
@@ -480,15 +490,14 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 		}
 	}
 	id := uuid.Must(uuid.NewV7())
-	// The submission names its action and front: the built-in action of its
-	// kind (fronts §5.5).
+	// The submission names its action and front (fronts §5.5).
 	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
 		action_id, front_id)
 		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id
-		  FROM storefront_actions a WHERE a.storefront_id = $3 AND a.kind = $4 AND a.builtin`,
+		  FROM storefront_actions a WHERE a.storefront_id = $3 AND `+actionOf("$25", "$4"),
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
-		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery); err != nil {
+		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action); err != nil {
 		return Order{}, err
 	} else if tag.RowsAffected() == 0 {
 		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
@@ -619,7 +628,7 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 			}
 			autoConfirm = sf.Availability.AutoConfirm
 		}
-		err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action = $1 AND environment = 'prod'`, ord.Kind).Scan(&wf, &version)
+		err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, ord.action).Scan(&wf, &version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			_, err = tx.Exec(ctx, `UPDATE storefront_orders SET note = 'No workflow is deployed for this form: set it up under Storefront.', updated_at = now()
 				WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID)
@@ -730,7 +739,7 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []due
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, COALESCE(o.payment_ref, ''), COALESCE(a.options->>'connection', ''), COALESCE(o.deposit_kobo, o.total_kobo), o.expires_at, o.status, o.kind, o.run_id
-			FROM storefront_orders o JOIN storefront_actions a ON a.storefront_id = o.storefront_id AND a.kind = o.kind
+			FROM storefront_orders o JOIN storefront_actions a ON a.id = o.action_id
 			WHERE o.tenant_id = $1 AND o.status = 'awaiting_payment' ORDER BY o.created_at LIMIT 100`, tenant)
 		if err != nil {
 			return err
@@ -978,7 +987,7 @@ func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference st
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT COALESCE(s.published_slug, s.slug), COALESCE(a.options->>'connection', '') FROM storefronts s
-			JOIN storefront_actions a ON a.storefront_id = s.id AND a.kind = $2 WHERE s.id = $1`, ord.storefront, ord.Kind).Scan(&slug, &connection)
+			JOIN storefront_actions a ON a.storefront_id = s.id AND a.id = $2 WHERE s.id = $1`, ord.storefront, ord.action).Scan(&slug, &connection)
 	})
 	if err != nil {
 		return nil, err

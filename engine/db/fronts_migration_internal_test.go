@@ -85,12 +85,23 @@ func TestFrontsMigrationUpDownUp(t *testing.T) {
 		t.Fatalf("an older binary's order: %v %v", filled, err)
 	}
 
+	// 00280 moves the definers to action ids; its Down puts them back.
+	if _, err := p.UpTo(ctx, 280); err != nil {
+		t.Fatal(err)
+	}
+	var claimCols int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.parameters WHERE specific_name LIKE 'taskiem_storefront_inbox_claim%' AND parameter_mode = 'OUT'`).Scan(&claimCols); err != nil || claimCols != 9 {
+		t.Fatalf("the claim's columns at 280: %d %v", claimCols, err)
+	}
 	if _, err := p.DownTo(ctx, 278); err != nil {
 		t.Fatal(err)
 	}
 	var n int
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM storefront_orders`).Scan(&n); err != nil || n != 3 {
 		t.Fatalf("down kept %d orders: %v", n, err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM information_schema.parameters WHERE specific_name LIKE 'taskiem_storefront_inbox_claim%' AND parameter_mode = 'OUT'`).Scan(&claimCols); err != nil || claimCols != 8 {
+		t.Fatalf("the claim's columns after down: %d %v", claimCols, err)
 	}
 	var key string
 	if err := conn.QueryRow(ctx, `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'storefront_actions_pkey'`).Scan(&key); err != nil ||

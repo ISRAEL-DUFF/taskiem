@@ -42,8 +42,8 @@ func (o *Orders) Refund(ctx context.Context, tenant uuid.UUID, reference, actor 
 		if ord, err = o.GetOrder(ctx, tx, tenant, reference); err != nil {
 			return err
 		}
-		return tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND kind = $2`,
-			ord.storefront, ord.Kind).Scan(&connection)
+		return tx.QueryRow(ctx, `SELECT COALESCE(options->>'connection', '') FROM storefront_actions WHERE storefront_id = $1 AND id = $2`,
+			ord.storefront, ord.action).Scan(&connection)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil // no form settings: the main connection

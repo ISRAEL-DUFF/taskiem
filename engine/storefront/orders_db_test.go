@@ -441,3 +441,61 @@ func TestOrderToADeliveryArea(t *testing.T) {
 		t.Errorf("body %v", body)
 	}
 }
+
+// Fronts F1c (§5.3): the public host submits to an action by its id, the
+// inbox and the order keep it, and the run starts from the workflow whose
+// trigger names that action; a trigger deployed before its storefront had
+// the action is linked to it when the action is made. An unknown action
+// takes nothing.
+func TestSubmitToAnActionByID(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var action uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM storefront_actions WHERE tenant_id = $1 AND kind = 'order' AND builtin`, w.env.Tenant).Scan(&action); err != nil {
+		t.Fatal(err)
+	}
+	var linked *uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT storefront_action_id FROM triggers WHERE workflow_id = $1`, w.wfs["order"]).Scan(&linked); err != nil ||
+		linked == nil || *linked != action {
+		t.Fatalf("the trigger deployed first: %v %v", linked, err)
+	}
+	submit := func(to uuid.UUID, ref string) *string {
+		t.Helper()
+		key, hash := storefront.NewStatusKey()
+		sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567"},
+			Basket: []storefront.Line{{ID: "1", Name: "Jollof rice", Quantity: 1, PriceKobo: 150000, LineKobo: 150000}}, TotalKobo: 150000,
+			Fulfilment: "pickup", Payment: "after_accept", Channel: "direct", Submitted: time.Now(), StatusKey: key}
+		ct, err := storefront.SealSubmission(w.key, w.sf.ID, ref, sub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		idem := make([]byte, 32)
+		copy(idem, ref)
+		var got *string
+		if err := w.env.DB.PublicPool(t, 1).QueryRow(ctx, `SELECT taskiem_public_submit_action($1, $2, $3, $4, $5)`, to, ref, idem, hash, ct).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := submit(uuid.New(), "AD-NOWHER"); got != nil {
+		t.Fatalf("an unknown action took %q", *got)
+	}
+	ref := "AD-BYID01"
+	if got := submit(action, ref); got == nil || *got != ref {
+		t.Fatalf("submit: %v", got)
+	}
+	var inbox uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT action_id FROM storefront_inbox WHERE reference = $1`, ref).Scan(&inbox); err != nil || inbox != action {
+		t.Fatalf("the inbox's action: %v %v", inbox, err)
+	}
+	if err := w.orders.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var kept uuid.UUID
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT action_id FROM storefront_orders WHERE reference = $1`, ref).Scan(&kept); err != nil || kept != action {
+		t.Fatalf("the order's action: %v %v", kept, err)
+	}
+	if o := w.order(ref); o.Status != "received" || o.RunID == nil {
+		t.Fatalf("recorded: %+v", o)
+	}
+}

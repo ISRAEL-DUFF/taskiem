@@ -246,7 +246,7 @@ func ForCheckout(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, ref 
 	}
 	var reference string
 	err := tx.QueryRow(ctx, `SELECT o.reference FROM storefront_orders o
-		LEFT JOIN storefront_actions a ON a.storefront_id = o.storefront_id AND a.kind = o.kind
+		LEFT JOIN storefront_actions a ON a.id = o.action_id
 		WHERE o.tenant_id = $1 AND o.payment_ref = $2 AND `+channelSQL+` = $3`, tenant, ref, channel).Scan(&reference)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNoOrder
