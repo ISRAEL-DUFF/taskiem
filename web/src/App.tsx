@@ -56,6 +56,7 @@ import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
 import { ChatPage, LinkCodePage, LinkCodeSignedOut, LinkedBusinessesPage } from "./pages/Links";
 import { BillPage, BillsPage } from "./pages/Bills";
+import { PurchasePage, TradeOrderPage, TradeOrdersPage } from "./pages/TradeOrders";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -607,6 +608,9 @@ function SignedIn() {
               <Route path="/l/:code" element={<LinkCodePage />} />
               <Route path="/bills" element={<BillsPage />} />
               <Route path="/bills/:id" element={<BillPage />} />
+              <Route path="/trade-orders" element={<TradeOrdersPage />} />
+              <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
+              <Route path="/purchases/:id" element={<PurchasePage />} />
               <Route
                 path="/storefront/suppliers"
                 element={<StorefrontSuppliers />}

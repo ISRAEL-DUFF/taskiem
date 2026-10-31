@@ -542,11 +542,98 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 		if note == "" || told.Event == "change" || told.Event == "delivered" || told.Event == "short" {
 			note = s.orderNote(ctx, told, in)
 		}
-		s.tellHolders(ctx, told.Tenant, []string{PermStorefrontManage}, "order:"+told.Reference+":"+told.Event, link, func(l lang.Tag) (string, string) {
+		perms := []string{PermStorefrontManage}
+		if told.Event == "delivered" {
+			perms = []string{PermTableEdit} // who records what came
+		}
+		s.tellHoldersWith(ctx, told.Tenant, perms, "order:"+told.Reference+":"+told.Event, link, func(l lang.Tag) (string, string) {
 			return tr(l, "order.link."+told.Event+"_title", "from", told.From, "reference", told.Reference),
 				strings.TrimSpace(tr(l, "order.link."+told.Event, "from", whatsapp.SafeText(told.From), "reference", told.Reference, "note", whatsapp.SafeText(note)))
-		})
+		}, func(l lang.Tag) []whatsapp.Button { return orderButtons(l, told) })
 	})
+}
+
+// orderPrefix starts a linked order's buttons in chat: lo:<step>:<id>,
+// the seller's order for accept and decline, the buyer's purchase order
+// for all_came.
+const orderPrefix = "lo:"
+
+// orderButtons are the buttons a linked order's message carries: Accept
+// and Decline on a new order, All came on a delivery.
+func orderButtons(l lang.Tag, t links.Told) []whatsapp.Button {
+	switch t.Event {
+	case "ordered":
+		return []whatsapp.Button{
+			{ID: orderPrefix + links.StepAccept + ":" + t.Order.String(), Title: tr(l, "order.link.button_accept")},
+			{ID: orderPrefix + links.StepDecline + ":" + t.Order.String(), Title: tr(l, "order.link.button_decline")},
+		}
+	case "delivered":
+		return []whatsapp.Button{{ID: orderPrefix + "all_came:" + t.Purchase.String(), Title: tr(l, "order.link.button_all_came")}}
+	}
+	return nil
+}
+
+// waOrderPress takes a linked order's button: Accept or Decline on a new
+// order, by the seller's people; All came on a delivery, by the buyer's;
+// for whichever of the person's businesses holds it.
+func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error {
+	step, idText, _ := strings.Cut(strings.TrimPrefix(reply, orderPrefix), ":")
+	id, err := uuid.Parse(idText)
+	if err != nil || !slices.Contains([]string{links.StepAccept, links.StepDecline, "all_came"}, step) {
+		return c.say(ctx, s, c.t("order.link.gone"))
+	}
+	tenants := append([]tenantRef{c.tenant}, slices.DeleteFunc(slices.Clone(c.tenants), func(t tenantRef) bool { return t.ID == c.tenant.ID })...)
+	for _, t := range tenants {
+		var ref string
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+			if step == "all_came" {
+				x, err := stock.PurchaseTx(ctx, tx, t.ID, id, false)
+				ref = x.Reference
+				return err
+			}
+			o, err := links.GetOrderTx(ctx, tx, id.String(), false)
+			ref = o.Reference
+			return err
+		}); errors.Is(err, links.ErrNotFound) || errors.Is(err, stock.ErrNoPurchase) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		perm := PermStorefrontManage
+		if step == "all_came" {
+			perm = PermTableEdit
+		}
+		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
+		if err != nil || !p.Can(perm) {
+			return c.say(ctx, s, c.t("order.link.denied", "org", t.Name))
+		}
+		var told *links.Told
+		if step == "all_came" {
+			told, err = s.settleReceipt(ctx, t.ID, id, nil, actorOf(p), p.Actor(), func(tx pgx.Tx, ref string) error {
+				return waAudit(ctx, tx, c.ch.Name(), p, "purchase.all_came", ref, map[string]any{"purchase_id": id})
+			})
+		} else {
+			err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+				if err := waAudit(ctx, tx, c.ch.Name(), p, "trade_order."+step, ref, map[string]any{"order_id": id}); err != nil {
+					return err
+				}
+				var err error
+				_, told, err = links.DecideTx(ctx, tx, t.ID, id.String(), step, links.StepIn{}, actorOf(p))
+				return err
+			})
+		}
+		switch {
+		case errors.Is(err, links.ErrState):
+			return c.say(ctx, s, c.t("order.link.gone"))
+		case errors.Is(err, links.ErrInvalid):
+			return c.say(ctx, s, c.t("order.link.open", "reason", strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": ")))
+		case err != nil:
+			return err
+		}
+		s.tellOrder(ctx, told, links.StepIn{})
+		return c.say(ctx, s, c.t("order.link.done_"+step, "reference", ref))
+	}
+	return c.say(ctx, s, c.t("order.link.gone"))
 }
 
 // sellerTold reports whether an event is told to the seller (else to the

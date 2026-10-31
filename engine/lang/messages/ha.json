@@ -4299,6 +4299,42 @@
     "order.link.agree": {
       "text": "*{from}* ya amince da ƙidayarku ta abin da ya iso na oda {reference}.",
       "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Karɓa",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Ƙi",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Duka ya iso",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "An karɓi {reference}. An sanar da su.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "An ƙi {reference}. An sanar da su.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "An rubuta: duk {reference} ya iso. Kayanku sun ƙaru, kuma an sanar da mai kawowa.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "Wannan odar ta wuce haka; buɗe ta a Taskiem don ganin inda take.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Sai wanda ke kula da odar {org} ne zai iya amsa wannan.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Buɗe odar a Taskiem don yin hakan.",
+      "reviewed": false
     }
   }
 }

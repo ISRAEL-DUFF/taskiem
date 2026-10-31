@@ -4299,6 +4299,42 @@
     "order.link.agree": {
       "text": "*{from}* agree with your count of wetin land for order {reference}.",
       "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Accept",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Decline",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Everything land",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "You don accept {reference}. We don tell dem.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "You don decline {reference}. We don tell dem.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "We don write am: everything for {reference} don land. Your stock don go up, and we don tell the supplier.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "That order don move pass that one; open am for Taskiem to see where e reach.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Na only person wey dey manage orders for {org} fit answer that one.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Open the order for Taskiem to do am.",
+      "reviewed": false
     }
   }
 }

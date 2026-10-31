@@ -41,6 +41,7 @@ const PAGES = [
   "/chat",
   "/settings/links",
   "/bills",
+  "/trade-orders",
   "/invoices",
   "/invoices/match",
   "/invoices/settings",
@@ -415,6 +416,7 @@ test.describe("on a phone-sized screen", () => {
       "/storefront/suppliers",
       "/chat",
       "/settings/links",
+      "/trade-orders",
       "/schools",
       "/schools/classes",
     ]) {

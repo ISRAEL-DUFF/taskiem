@@ -4299,6 +4299,42 @@
     "order.link.agree": {
       "text": "*{from}* kwenyere ọnụ ọgụgụ unu nke ihe rutere n'iwu {reference}.",
       "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Nabata",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Jụ",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Ihe niile rutere",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "A nabatala {reference}. A gwala ha.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "A jụla {reference}. A gwala ha.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "Edere ya: ihe niile dị na {reference} rutere. Ngwongwo unu abawanyela, a gwakwala onye na-ebubata ya.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "Iwu ahụ agafeela nke ahụ; mepee ya na Taskiem ka ị hụ ebe ọ dị.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Ọ bụ naanị onye na-elekọta iwu maka {org} nwere ike ịza nke a.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Mepee iwu ahụ na Taskiem ka ị mee ya.",
+      "reviewed": false
     }
   }
 }

@@ -265,6 +265,13 @@ func (s *Server) tellPeople(ctx context.Context, tenant uuid.UUID, group, link s
 // tellHolders tells the people of a business whose role holds every one of
 // perms, in the bell and in chat, in that business's own scope.
 func (s *Server) tellHolders(ctx context.Context, tenant uuid.UUID, perms []string, group, link string, words func(lang.Tag) (string, string)) {
+	s.tellHoldersWith(ctx, tenant, perms, group, link, words, nil)
+}
+
+// tellHoldersWith is tellHolders, the chat message with buttons in the
+// reader's language.
+func (s *Server) tellHoldersWith(ctx context.Context, tenant uuid.UUID, perms []string, group, link string, words func(lang.Tag) (string, string),
+	buttons func(lang.Tag) []whatsapp.Button) {
 	var to []linkTold
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(perms...))
@@ -301,8 +308,13 @@ func (s *Server) tellHolders(ctx context.Context, tenant uuid.UUID, perms []stri
 		if err != nil {
 			continue
 		}
-		title, body := words(s.chooseLang(ctx, tenant, t.addr, "").Tag)
-		if err := s.waSay(ctx, ch, t.addr, "", title+"\n"+body); err != nil {
+		l := s.chooseLang(ctx, tenant, t.addr, "").Tag
+		title, body := words(l)
+		var bs []whatsapp.Button
+		if buttons != nil {
+			bs = buttons(l)
+		}
+		if err := s.waSay(ctx, ch, t.addr, "", title+"\n"+body, bs...); err != nil {
 			s.Logger.Warn("links: a chat message", "tenant", tenant, "err", err)
 		}
 	}

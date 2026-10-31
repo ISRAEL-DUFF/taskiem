@@ -7721,6 +7721,38 @@ paths:
                     description: For an order to a linked supplier
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}:
+    get:
+      operationId: getPurchase
+      tags:
+      - Stock
+      summary: One purchase order
+      description: With a linked supplier's side of it, when it went through a link.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/suppliers/{id}/link:
     put:
       operationId: linkSupplier

@@ -408,6 +408,29 @@ func (s *Server) draftLowPurchases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"purchases": drafted, "no_supplier": skipped})
 }
 
+// getPurchase is GET /v1/stock/purchases/{id}: one order, with a linked
+// supplier's side of it.
+func (s *Server) getPurchase(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := idParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var x stock.Purchase
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		x, err = stock.PurchaseTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id, false)
+		return err
+	}); err != nil {
+		s.purchaseFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
+}
+
 // purchaseStep runs a step on an order by its id.
 func (s *Server) purchaseStep(w http.ResponseWriter, r *http.Request, action string, do func(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (stock.Purchase, error)) {
 	if !s.purchasesReady(w) {

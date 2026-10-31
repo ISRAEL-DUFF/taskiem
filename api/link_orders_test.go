@@ -68,13 +68,7 @@ func TestLinkedOrders(t *testing.T) {
 	}
 	purchase := func(id string) map[string]any {
 		t.Helper()
-		for _, x := range buyer.must(200, "GET", "/v1/stock/purchases", nil)["purchases"].([]any) {
-			if p := x.(map[string]any); p["id"] == id {
-				return p
-			}
-		}
-		t.Fatalf("no purchase %s", id)
-		return nil
+		return buyer.must(200, "GET", "/v1/stock/purchases/"+id, nil)["purchase"].(map[string]any)
 	}
 	orderOf := func(ref string) map[string]any {
 		t.Helper()
@@ -95,7 +89,8 @@ func TestLinkedOrders(t *testing.T) {
 	if o["status"] != "received" || o["buyer_name"] != "Ada's Kitchen" || o["total_kobo"] != float64(44250000) || o["buyer"] != buyerID {
 		t.Fatalf("the order: %v", o)
 	}
-	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* ordered 10 bags Rice, 5 cartons Indomie, ₦442,500") {
+	if told := w.lastTo(t, sellerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* ordered 10 bags Rice, 5 cartons Indomie, ₦442,500") ||
+		len(told[0].Buttons) != 2 || told[0].Buttons[0].ID != "lo:accept:"+orderOf(ref)["id"].(string) {
 		t.Errorf("the seller told: %+v", told)
 	}
 	if p := purchase(po); p["seller_status"] != "received" {
@@ -105,6 +100,7 @@ func TestLinkedOrders(t *testing.T) {
 	if got := buyer.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any); len(got) != 0 {
 		t.Errorf("the buyer's orders: %v", got)
 	}
+	seller.must(404, "GET", "/v1/stock/purchases/"+po, nil)
 
 	// The seller's change, accepted by the buyer.
 	seller.must(409, "POST", "/v1/trade-orders/"+ref+"/ready", nil)
@@ -267,6 +263,37 @@ func TestLinkedOrders(t *testing.T) {
 	}
 	if o := orderOf(ref6); o["receipt_at"] == nil {
 		t.Errorf("the seller's: %v", o)
+	}
+
+	// By chat: Accept on the new order, All came on its delivery; a button
+	// pressed again, or by someone who may not, answers so.
+	before = len(w.graph.Sent(sellerOn))
+	po7, ref7 := send("po-7", map[string]any{"item_id": rice, "quantity": 1})
+	asked := w.lastTo(t, sellerOn, before)
+	if len(asked) != 1 || len(asked[0].Buttons) != 2 {
+		t.Fatalf("the order in chat: %+v", asked)
+	}
+	if r := w.press(t, sellerOn, asked[0].Buttons[0].ID); len(r) != 1 || !strings.Contains(r[0].Text, "Accepted "+ref7+". They are told.") {
+		t.Fatalf("accepted by chat: %+v", r)
+	}
+	if r := w.press(t, sellerOn, asked[0].Buttons[1].ID); len(r) != 1 || !strings.Contains(r[0].Text, "That order has moved on") {
+		t.Errorf("declined after accepting: %+v", r)
+	}
+	if r := w.press(t, buyerOn, asked[0].Buttons[0].ID); len(r) != 1 || !strings.Contains(r[0].Text, "That order has moved on") {
+		t.Errorf("the buyer pressing the seller's button: %+v", r)
+	}
+	tick(1) // its invoice (at acceptance)
+	before = len(w.graph.Sent(buyerOn))
+	seller.must(200, "POST", "/v1/trade-orders/"+ref7+"/delivered", nil)
+	came := w.lastTo(t, buyerOn, before)
+	if len(came) != 1 || len(came[0].Buttons) != 1 || came[0].Buttons[0].ID != "lo:all_came:"+po7 {
+		t.Fatalf("the delivery in chat: %+v", came)
+	}
+	if r := w.press(t, buyerOn, came[0].Buttons[0].ID); len(r) != 1 || !strings.Contains(r[0].Text, "Recorded: all of "+ref7+" came.") {
+		t.Fatalf("all came by chat: %+v", r)
+	}
+	if p := purchase(po7); p["status"] != "received" {
+		t.Errorf("received by chat: %v", p)
 	}
 
 	// Each step is audited in both businesses.

@@ -4299,6 +4299,42 @@
     "order.link.agree": {
       "text": "*{from}* gba iye ti ẹ ka ohun to de ninu ọja-ibere {reference}.",
       "reviewed": false
+    },
+    "order.link.button_accept": {
+      "text": "Gba a",
+      "reviewed": false
+    },
+    "order.link.button_decline": {
+      "text": "Kọ ọ",
+      "reviewed": false
+    },
+    "order.link.button_all_came": {
+      "text": "Gbogbo rẹ de",
+      "reviewed": false
+    },
+    "order.link.done_accept": {
+      "text": "A ti gba {reference}. A ti sọ fun wọn.",
+      "reviewed": false
+    },
+    "order.link.done_decline": {
+      "text": "A ti kọ {reference}. A ti sọ fun wọn.",
+      "reviewed": false
+    },
+    "order.link.done_all_came": {
+      "text": "A ti kọ ọ silẹ: gbogbo {reference} ti de. Ọja yin ti pọ si, a si ti sọ fun olupese.",
+      "reviewed": false
+    },
+    "order.link.gone": {
+      "text": "Ọja-ibere yẹn ti kọja ibẹ; ṣi i ni Taskiem lati ri ibi ti o de.",
+      "reviewed": false
+    },
+    "order.link.denied": {
+      "text": "Ẹni ti n bojuto ọja-ibere fun {org} nikan lo le dahun eyi.",
+      "reviewed": false
+    },
+    "order.link.open": {
+      "text": "{reason}. Ṣi ọja-ibere naa ni Taskiem lati ṣe e.",
+      "reviewed": false
     }
   }
 }

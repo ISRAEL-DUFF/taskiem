@@ -5373,6 +5373,51 @@
       "text": "*{from}* agreed to your count of what came of order {reference}.",
       "reviewed": true,
       "context": "The linked seller agreed the buyer's count of a short delivery"
+    },
+    "order.link.button_accept": {
+      "text": "Accept",
+      "reviewed": true,
+      "context": "Button: accept a linked business's order (at most 20 characters)"
+    },
+    "order.link.button_decline": {
+      "text": "Decline",
+      "reviewed": true,
+      "context": "Button: decline a linked business's order (at most 20 characters)"
+    },
+    "order.link.button_all_came": {
+      "text": "All came",
+      "reviewed": true,
+      "context": "Button: everything a linked supplier delivered came (at most 20 characters)"
+    },
+    "order.link.done_accept": {
+      "text": "Accepted {reference}. They are told.",
+      "reviewed": true,
+      "context": "A linked business's order accepted from chat"
+    },
+    "order.link.done_decline": {
+      "text": "Declined {reference}. They are told.",
+      "reviewed": true,
+      "context": "A linked business's order declined from chat"
+    },
+    "order.link.done_all_came": {
+      "text": "Recorded: all of {reference} came. Your stock is up, and the supplier is told.",
+      "reviewed": true,
+      "context": "A linked delivery recorded as all came from chat"
+    },
+    "order.link.gone": {
+      "text": "That order has moved on; open it in Taskiem to see where it is.",
+      "reviewed": true,
+      "context": "A button pressed on a linked order already answered, or gone"
+    },
+    "order.link.denied": {
+      "text": "Only someone who manages orders for {org} can answer that.",
+      "reviewed": true,
+      "context": "The person may not answer linked orders for the business"
+    },
+    "order.link.open": {
+      "text": "{reason}. Open the order in Taskiem to do it.",
+      "reviewed": true,
+      "context": "A linked order's step needs the web; {reason} says why"
     }
   }
 }

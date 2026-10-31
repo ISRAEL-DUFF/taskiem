@@ -601,6 +601,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if strings.HasPrefix(text, linkPrefix) && !strings.HasPrefix(text, linkPrefix+"role:") {
 		return s.waLinkPress(ctx, c, text)
 	}
+	// Accept or Decline on a linked business's order, All came on its
+	// delivery (link_orders.go).
+	if strings.HasPrefix(text, orderPrefix) {
+		return s.waOrderPress(ctx, c, text)
+	}
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}

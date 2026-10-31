@@ -24,6 +24,7 @@ import {
   type SuppliersView,
 } from "../lib/purchases";
 import { owedBySupplier, type Bill } from "../lib/bills";
+import type { LinksView } from "../lib/links";
 import type { StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
@@ -41,6 +42,7 @@ export function StorefrontSuppliers() {
     [retired],
   );
   const [editing, setEditing] = useState<Supplier | "new" | null>(null);
+  const [linking, setLinking] = useState<Supplier | null>(null);
   const act = useAction();
   const v = view.data;
   const off = view.error instanceof ApiError && view.error.status === 503;
@@ -120,6 +122,14 @@ export function StorefrontSuppliers() {
                         >
                           Change<span className="sr-only"> {s.name}</span>
                         </button>
+                        <button
+                          type="button"
+                          className="small"
+                          onClick={() => setLinking(s)}
+                        >
+                          On Taskiem
+                          <span className="sr-only"> for {s.name}</span>
+                        </button>
                         {s.reached === "sms" && (
                           <button
                             type="button"
@@ -185,8 +195,88 @@ export function StorefrontSuppliers() {
           }}
         />
       )}
+      {linking && (
+        <LinkSupplierModal
+          supplier={linking}
+          onClose={() => setLinking(null)}
+          onSaved={() => {
+            setLinking(null);
+            view.reload();
+          }}
+        />
+      )}
       <LinkedSuppliersOwed />
     </>
+  );
+}
+
+/** Says a supplier is a business we are linked with on Taskiem: its
+ * orders then go straight into its business, and come back with its
+ * answers (business links L2). */
+function LinkSupplierModal({
+  supplier,
+  onClose,
+  onSaved,
+}: {
+  supplier: Supplier;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const list = useLoad(() => get<LinksView>("/v1/links"), []);
+  const [link, setLink] = useState(supplier.link_id ?? "");
+  const act = useAction();
+  const linked = (list.data?.links ?? []).filter(
+    (l) => l.state === "active" && (l.role === "supplier" || l.role === "both"),
+  );
+  return (
+    <Modal title={`${supplier.name} on Taskiem`} onClose={onClose}>
+      <p className="hint">
+        When {supplier.name} is a business you are linked with, your orders go
+        straight into their business on Taskiem, and their answers, delivery
+        and invoice come back to you, instead of messages.
+      </p>
+      <ErrorBox error={list.error ?? act.error} />
+      {list.data && linked.length === 0 ? (
+        <p className="hint">
+          You are not linked with a business that supplies you yet.{" "}
+          <Link to="/chat">Find them</Link>
+        </p>
+      ) : (
+        <Field label="Which business is it?">
+          <select value={link} onChange={(e) => setLink(e.target.value)}>
+            <option value="">Not on Taskiem (orders by message)</option>
+            {linked.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <div className="toolbar">
+        <button
+          type="button"
+          className="primary"
+          disabled={act.busy || link === (supplier.link_id ?? "")}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await put(`/v1/stock/suppliers/${supplier.id}/link`, {
+                  link_id: link || null,
+                }),
+                onSaved()
+              ),
+              "Saved",
+            )
+          }
+        >
+          Save
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
   );
 }
 

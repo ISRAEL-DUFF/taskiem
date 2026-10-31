@@ -504,6 +504,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/stock/settings", s.getStockSettings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/settings", s.putStockSettings)
 			r.With(s.need(PermTableRead)).Get("/stock/purchases", s.listPurchases)
+			r.With(s.need(PermTableRead)).Get("/stock/purchases/{id}", s.getPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases", s.draftPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/low", s.draftLowPurchases)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/send", s.sendPurchase)

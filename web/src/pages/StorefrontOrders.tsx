@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { TradeOrdersCard } from "./TradeOrders";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
@@ -167,6 +168,7 @@ export function StorefrontOrders() {
       {header}
       <StorefrontTabs />
       <DecideWhere />
+      <TradeOrdersCard />
       <div className="filters" role="search" aria-label="Filter orders">
         <label>
           Show{" "}
