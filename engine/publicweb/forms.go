@@ -131,6 +131,40 @@ type formItem struct {
 	Max       int // the most one order may take: maxQuantity, or the stock left
 	Orderable bool
 	SoldOut   bool
+	// Options are a Food dish's groups, a choice each (fronts F3).
+	Options []formOption
+}
+
+// formOption is one group of a dish's choices as the form asks it.
+type formOption struct {
+	Input, Name string
+	Choices     []formChoice
+}
+
+type formChoice struct {
+	Value, Label string
+	Selected     bool
+}
+
+// optionInput is the name of a dish's choice in one of its groups.
+func optionInput(id string, group int) string { return fmt.Sprintf("o.%s.%d", id, group) }
+
+// formOptions are an item's groups for the form, the first choice of each
+// taken.
+func formOptions(it storefront.Item) []formOption {
+	var out []formOption
+	for gi, g := range it.Options {
+		o := formOption{Input: optionInput(it.ID, gi), Name: g.Name}
+		for ci, c := range g.Choices {
+			label := c.Name
+			if c.PriceKobo > 0 {
+				label += " (+" + storefront.FormatNaira(c.PriceKobo) + ")"
+			}
+			o.Choices = append(o.Choices, formChoice{Value: strconv.Itoa(ci), Label: label, Selected: ci == 0})
+		}
+		out = append(out, o)
+	}
+	return out
 }
 
 // closedData is the page a form answers with when it takes nothing.
@@ -166,7 +200,13 @@ func most(it storefront.Item) int {
 	return maxQuantity
 }
 
+// serveForm serves an action's form: one of the home page's at /a/<ref>,
+// or one of a front's at /<front>/a/<ref> (fronts F3).
 func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ref string, embed bool) {
+	s.serveFrontForm(w, r, site, "", ref, embed)
+}
+
+func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Site, frontSlug, ref string, embed bool) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "GET, HEAD, POST")
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
@@ -180,13 +220,25 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, re
 		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 		return
 	}
-	act, enabled := findAction(p.Model.Home().Actions, ref)
+	actions, base := p.Model.Home().Actions, ""
+	if frontSlug != "" {
+		f, found := frontOf(p, frontSlug)
+		if !found {
+			s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+			return
+		}
+		// A front's basket draws on its own list.
+		actions, base = f.Actions, "/"+f.Slug
+		p.Items = p.Lists[f.ListTable()]
+		p.Model.HasServices = false
+	}
+	act, enabled := findAction(actions, ref)
 	kind := act.Kind
 	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	f := formView(p, act, site, embed)
+	f := formView(p, act, site, embed, base)
 	f.Look = s.lookFor(r.Context(), site.Tenant, f.Business)
 	refuse := http.StatusOK
 	if r.Method == http.MethodPost {
@@ -238,16 +290,19 @@ func (s *Server) formsOpen() bool {
 	return s.guard != nil && len(s.InboxKey) == 32 && s.Submit != nil
 }
 
-func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool) formData {
+func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool, base string) formData {
 	c := p.Model.Card
 	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Kind: act.Kind, Label: act.Label,
-		Action: "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
-		form: formID(site.ID, act.Ref())}
+		Action: base + "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
+		form: formID(site.ID, strings.TrimPrefix(base+"/"+act.Ref(), "/"))}
+	if base != "" {
+		f.Home = base
+	}
 	if f.Lang == "" {
 		f.Lang = "en"
 	}
 	if embed {
-		f.Action, f.Home = "/embed/a/"+act.Ref(), ""
+		f.Action, f.Home = "/embed"+base+"/a/"+act.Ref(), ""
 	}
 	// The page is drawn from the action's form (fronts F1): the basket
 	// where it has one, then its questions.
@@ -316,7 +371,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		s.showForm(w, r, http.StatusBadRequest, f, "")
 		return
 	}
-	claims, err := s.guard.Verify(v.Get(tokenField), formID(site.ID, act.Ref()), s.now())
+	claims, err := s.guard.Verify(v.Get(tokenField), f.form, s.now())
 	switch {
 	case errors.Is(err, formguard.ErrTooFast):
 		// A fast typist must not lose an order: the same token works in a
@@ -407,6 +462,13 @@ func (f *formData) keep(v url.Values) {
 	for i := range f.Items {
 		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
+		}
+		for _, o := range f.Items[i].Options {
+			if picked := v.Get(o.Input); picked != "" {
+				for c := range o.Choices {
+					o.Choices[c].Selected = o.Choices[c].Value == picked
+				}
+			}
 		}
 	}
 }
@@ -590,7 +652,21 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 		if len(sub.Basket) == maxLines {
 			return fmt.Sprintf("An order can have up to %d different items.", maxLines)
 		}
-		line := storefront.Line{ID: it.ID, Name: it.Name, Quantity: n, PriceKobo: *it.PriceKobo, LineKobo: *it.PriceKobo * int64(n)}
+		// A dish's choices, one per group, priced from the copy.
+		picked := make([]int, len(it.Options))
+		for gi := range it.Options {
+			if raw := v.Get(optionInput(it.ID, gi)); raw != "" {
+				if picked[gi], err = strconv.Atoi(raw); err != nil {
+					picked[gi] = -1
+				}
+			}
+		}
+		opts, add, ok := it.Choose(picked)
+		if !ok {
+			return "Please choose from the options for " + it.Name + "."
+		}
+		unit := *it.PriceKobo + add
+		line := storefront.Line{ID: it.ID, Name: it.Name, Quantity: n, PriceKobo: unit, LineKobo: unit * int64(n), Options: opts}
 		sub.Basket = append(sub.Basket, line)
 		sub.TotalKobo += line.LineKobo
 	}
@@ -701,7 +777,7 @@ func basketItems(items []storefront.Item) []formItem {
 			continue
 		}
 		seen[it.ID] = true
-		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut()}
+		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it)}
 		if it.PriceKobo != nil {
 			x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
 		}

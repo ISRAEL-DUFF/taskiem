@@ -155,6 +155,8 @@ type Order struct {
 	// PriceChange is the basket at the table's prices, while the customer
 	// is asked to confirm it (status price_changed).
 	PriceChange *PriceChange `json:"price_change,omitempty"`
+	// FrontID is the front the submission came from (fronts F3).
+	FrontID     *uuid.UUID `json:"front_id,omitempty"`
 	subject     string
 	storefront  uuid.UUID
 	action      uuid.UUID
@@ -172,7 +174,7 @@ func (x Order) CustomerID() string { return x.subject }
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
-	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id,
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -185,7 +187,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	var basket, change []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
-		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.PaidBy)
+		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -229,8 +231,18 @@ func (o *Orders) GetOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, refe
 // ListOrders reads the newest orders, with the customer opened. Status
 // "open" is every order still needing the owner; kind narrows to one form.
 func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status, kind string, limit int) ([]Order, error) {
+	return o.ListOrdersOn(ctx, tx, tenant, nil, status, kind, limit)
+}
+
+// ListOrdersOn is ListOrders for one front's submissions (fronts F3; nil
+// for every front's).
+func (o *Orders) ListOrdersOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, front *uuid.UUID, status, kind string, limit int) ([]Order, error) {
 	q := `SELECT ` + orderCols + ` FROM storefront_orders WHERE tenant_id = $1`
 	args := []any{tenant}
+	if front != nil {
+		args = append(args, *front)
+		q += fmt.Sprintf(` AND front_id = $%d`, len(args))
+	}
 	if kind != "" {
 		args = append(args, kind)
 		q += fmt.Sprintf(` AND kind = $%d`, len(args))
@@ -389,7 +401,24 @@ func (o *Orders) checkPrices(ctx context.Context, x inboxRow, sub Submission, op
 	for _, l := range sub.Basket {
 		ids = append(ids, l.ID)
 	}
-	live, err := o.Live.Items(ctx, x.tenant, sub.Booking != nil, ids)
+	from := Source{Services: sub.Booking != nil}
+	if sub.Booking == nil {
+		// An order on a front other than the home page draws on its
+		// front's list (fronts F3).
+		var raw []byte
+		err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{x.tenant}, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT b.config FROM storefront_actions a JOIN storefront_fronts f ON f.id = a.front_id AND f.slug <> ''
+				JOIN storefront_blocks b ON b.front_id = f.id AND b.kind = 'list' WHERE a.id = $1 ORDER BY b.position LIMIT 1`, x.action).Scan(&raw)
+		})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return PriceChange{}, false, "", err
+		}
+		var lc ListConfig
+		if raw != nil && json.Unmarshal(raw, &lc) == nil && lc.Table != nil {
+			from.Table, from.Columns = lc.Table, lc.Columns
+		}
+	}
+	live, err := o.Live.Items(ctx, x.tenant, from, ids)
 	if err != nil {
 		if o.now().Sub(sub.Submitted) < PriceCheckGrace {
 			return PriceChange{}, false, "", fmt.Errorf("price check: %w", err)
@@ -721,7 +750,7 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 func Summary(lines []Line) string {
 	parts := make([]string, len(lines))
 	for i, l := range lines {
-		parts[i] = fmt.Sprintf("%d × %s", l.Quantity, l.Name)
+		parts[i] = fmt.Sprintf("%d × %s", l.Quantity, l.LineName())
 	}
 	return strings.Join(parts, ", ")
 }

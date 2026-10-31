@@ -457,6 +457,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/image", s.storefrontImage)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/actions", s.listStorefrontActions)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
+			// Fronts (storefront_fronts.go, docs/spec/fronts.md F3).
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/fronts", s.listFronts)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts", s.addFront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}", s.patchFront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}", s.deleteFront)
+			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
 			s.schoolRoutes(r) // the Schools area (schools.go)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)

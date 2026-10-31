@@ -54,6 +54,7 @@ import { RidersPayPage, StorefrontDeliveries } from "./pages/Dispatch";
 import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
+import { StorefrontFront, StorefrontFronts } from "./pages/StorefrontFronts";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -574,6 +575,11 @@ function SignedIn() {
               <Route path="/tables/:id" element={<TablePage />} />
               <Route path="/storefront" element={<Storefront />} />
               <Route path="/storefront/look" element={<Look />} />
+              <Route path="/storefront/fronts" element={<StorefrontFronts />} />
+              <Route
+                path="/storefront/fronts/:id"
+                element={<StorefrontFront />}
+              />
               <Route path="/storefront/orders" element={<StorefrontOrders />} />
               <Route
                 path="/storefront/orders/:reference"

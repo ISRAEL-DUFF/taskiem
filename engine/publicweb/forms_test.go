@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -216,7 +217,7 @@ func TestOrderSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []storefront.Line{{ID: "2", Name: "Dish number 2", Quantity: 2, PriceKobo: 150050, LineKobo: 300100}, {ID: "3", Name: "Dish number 3", Quantity: 1, PriceKobo: 150100, LineKobo: 150100}}
-	if len(sub.Basket) != 2 || sub.Basket[0] != want[0] || sub.Basket[1] != want[1] || sub.TotalKobo != 450200 {
+	if !reflect.DeepEqual(sub.Basket, want) || sub.TotalKobo != 450200 {
 		t.Fatalf("basket %+v total %d", sub.Basket, sub.TotalKobo)
 	}
 	c := sub.Customer
@@ -823,5 +824,110 @@ func TestCopiedActionServed(t *testing.T) {
 	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
 	if row := e.inbox.rows[ref]; row.action == nil || *row.action != copied || row.kind != "order" {
 		t.Fatalf("sent to %+v", row)
+	}
+}
+
+// Fronts F3 (§7.3): a front is its own page at /<slug>: the business's
+// card, the front's header, its own list and its buttons; its order form
+// at /<slug>/a/order takes its basket from that list and sends the order
+// to its action. The home page lists the other fronts; an address the
+// page does not have answers 404.
+func TestFrontPages(t *testing.T) {
+	order := uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's <Kitchen>"}
+	for _, a := range p.Model.Actions {
+		a.Slug, a.Form = a.Kind, storefront.BuiltinForm(a.Kind)
+		home.Actions = append(home.Actions, a)
+	}
+	snacks := storefront.PublicFront{Slug: "snacks", Kind: "food", Name: "Snacks", Tagline: "Fried fresh",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order snacks", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, snacks}
+	p.Lists = map[string][]storefront.Item{"menu": {{ID: "1", Name: "Puff puff", PriceKobo: kobo(50000), Available: true}}}
+	e := formServer(t, p)
+
+	if page := get(e.h, "GET", sfHost, "/").Body.String(); !strings.Contains(page, `<a href="/snacks">Snacks</a>`) || !strings.Contains(page, "Fried fresh") {
+		t.Fatalf("the home page's other fronts: %s", page)
+	}
+	w := get(e.h, "GET", sfHost, "/snacks")
+	page := w.Body.String()
+	if w.Code != 200 || !strings.Contains(page, `<h2 id="front-h">Snacks</h2>`) || !strings.Contains(page, "Puff puff") || strings.Contains(page, "Dish number") ||
+		!strings.Contains(page, `href="/snacks/a/order"`) || !strings.Contains(page, `href="/snacks/a/order?item=1"`) || strings.Contains(page, `href="/a/enquiry"`) {
+		t.Fatalf("the front's page: %d %s", w.Code, page)
+	}
+	body, tok := e.form(t, "/snacks/a/order")
+	if !strings.Contains(body, `action="/snacks/a/order"`) || !strings.Contains(body, `name="q.1"`) || strings.Contains(body, `name="q.2"`) {
+		t.Fatal("the front's order form")
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"3"}}
+	if w = e.post("/snacks/a/order", v); w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	row := e.inbox.rows[ref]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, row.payload)
+	if err != nil || row.action == nil || *row.action != order || sub.TotalKobo != 150000 || sub.Basket[0].Name != "Puff puff" {
+		t.Fatalf("sent: %+v %+v %v", row, sub, err)
+	}
+	for _, path := range []string{"/nothing", "/snacks/a/enquiry", "/nothing/a/order"} {
+		if w := get(e.h, "GET", sfHost, path); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d", path, w.Code)
+		}
+	}
+}
+
+// No route the public host has itself is an address a front can take.
+func TestFrontSlugsMissTheRoutes(t *testing.T) {
+	for _, route := range []string{"a", "o", "f", "r", "report", "embed", "pay", "static"} {
+		if err := storefront.CheckFrontSlug(route); err == nil {
+			t.Errorf("a front may take /%s", route)
+		}
+	}
+	for _, route := range []string{"qr.png", "_static"} {
+		if frontPath.MatchString("/" + route) {
+			t.Errorf("/%s reads as a front", route)
+		}
+	}
+}
+
+// Fronts F3, Food: a dish with options asks a choice from each group
+// under its quantity, the price of each choice shown; the order is priced
+// as the dish plus the choices taken, from the copy; the page shows how
+// long a dish takes.
+func TestFoodOptionsOnTheForm(t *testing.T) {
+	order := uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada's <Kitchen>"}
+	snacks := storefront.PublicFront{Slug: "food", Kind: "food", Name: "Food",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table": "00000000-0000-0000-0000-000000000001", "table_name": "menu", "columns": {"name": "name"}}`)}},
+		Actions: []storefront.PublicAction{{ID: &order, Slug: "order", Kind: "order", Label: "Order food", Payment: "after_accept", Pickup: true, Form: storefront.BuiltinForm("order")}}}
+	p.Model.Fronts = []storefront.PublicFront{home, snacks}
+	rice := storefront.Item{ID: "1", Name: "Jollof rice", PriceKobo: kobo(150000), Available: true, ReadyIn: 25,
+		Options: storefront.ParseOptions(`[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`)}
+	p.Lists = map[string][]storefront.Item{"menu": {rice}}
+	e := formServer(t, p)
+	if page := get(e.h, "GET", sfHost, "/food").Body.String(); !strings.Contains(page, "Ready in 25 min") {
+		t.Fatal("the dish's time")
+	}
+	body, tok := e.form(t, "/food/a/order")
+	if !strings.Contains(body, `<select class="opt" name="o.1.0" aria-label="Size">`) || !strings.Contains(body, `<option value="1">Large (&#43;₦500)</option>`) {
+		t.Fatalf("the dish's choices: %s", body)
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Ada Obi"}, "phone": {"0803 123 4567"}, "q.1": {"2"}, "o.1.0": {"7"}}
+	if w := e.post("/food/a/order", v); w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), "Please choose from the options for Jollof rice") {
+		t.Fatalf("a choice the dish has not: %d", w.Code)
+	}
+	v.Set("o.1.0", "1")
+	w := e.post("/food/a/order", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	ref := regexp.MustCompile(`^/o/(AD-[A-Z2-9]{6})`).FindStringSubmatch(w.Header().Get("Location"))[1]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, e.inbox.rows[ref].payload)
+	if err != nil || len(sub.Basket) != 1 || sub.Basket[0].PriceKobo != 200000 || sub.TotalKobo != 400000 || sub.Basket[0].LineName() != "Jollof rice (Large)" {
+		t.Fatalf("priced: %+v %v", sub.Basket, err)
 	}
 }

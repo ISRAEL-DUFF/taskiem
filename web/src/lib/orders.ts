@@ -101,6 +101,8 @@ export interface Customer {
 export interface Order {
   id: string;
   reference: string;
+  /** The front the submission came from (fronts F3). */
+  front_id?: string;
   kind: FormKind;
   status: OrderStatus;
   customer: Customer;
@@ -455,11 +457,14 @@ export const ORDER_FILTERS: { value: string; label: string }[] = [
 ];
 
 /** The GET /v1/storefront/orders call for a filter: "all" asks with no status. */
-export function ordersPath(filter: string): string {
+export function ordersPath(filter: string, front = ""): string {
   const status = filter === "all" ? "" : filter || "open";
-  return status
-    ? `/v1/storefront/orders?${new URLSearchParams({ status })}`
-    : "/v1/storefront/orders";
+  const q = new URLSearchParams();
+  if (status) q.set("status", status);
+  // One front's submissions (fronts F3).
+  if (front) q.set("front", front);
+  const qs = q.toString();
+  return qs ? `/v1/storefront/orders?${qs}` : "/v1/storefront/orders";
 }
 
 export const KIND_LABEL: Record<FormKind, string> = {

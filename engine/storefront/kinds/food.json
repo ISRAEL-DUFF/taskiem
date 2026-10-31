@@ -1,0 +1,10 @@
+{
+  "name": "food",
+  "title": "Food",
+  "line": "A kitchen, a restaurant, snacks and baked goods: a menu with options and how long each dish takes.",
+  "table": "menu",
+  "mapping": {"name": "name", "price": "price", "price_unit": "naira", "photo": "photo", "description": "description", "category": "category", "available": "available", "options": "options", "ready_in": "ready_in"},
+  "actions": [
+    {"kind": "order", "label": "Order now", "template": "storefront-order", "options": {"pickup": true, "delivery": true}}
+  ]
+}

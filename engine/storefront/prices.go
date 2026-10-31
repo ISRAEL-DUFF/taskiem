@@ -17,10 +17,19 @@ import (
 // a price moved or an item went, the order waits (price_changed) for the
 // customer to confirm the new total from their status link.
 
-// Live reads rows of a tenant's catalogue table (services false) or
-// services table at Xenibase, mapped to items by id. A row gone is absent.
+// Live reads rows of a tenant's table at Xenibase, mapped to items by id:
+// the catalogue's, the services', or a front's list's (fronts F3). A row
+// gone is absent.
 type Live interface {
-	Items(ctx context.Context, tenant uuid.UUID, services bool, ids []string) (map[string]Item, error)
+	Items(ctx context.Context, tenant uuid.UUID, from Source, ids []string) (map[string]Item, error)
+}
+
+// Source is where a submission's items come from: a front's list's table
+// and mapping when set, else the services (Services) or the catalogue.
+type Source struct {
+	Services bool
+	Table    *uuid.UUID
+	Columns  Columns
 }
 
 // PriceChange is an order at the table's prices: Gone names what can no
@@ -68,7 +77,13 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 			continue
 		}
 		n := l
-		n.PriceKobo = *it.PriceKobo
+		add, ok := it.rechoose(l.Options)
+		if !ok {
+			pc.Gone = append(pc.Gone, l.LineName())
+			changed = true
+			continue
+		}
+		n.PriceKobo = *it.PriceKobo + add
 		n.LineKobo = n.PriceKobo * int64(n.Quantity)
 		if n.PriceKobo != l.PriceKobo {
 			changed = true
@@ -84,7 +99,7 @@ func reprice(sub Submission, live map[string]Item, opts ActionOptions) (PriceCha
 
 // Items reads rows of the catalogue or services table through the
 // tenant's data tables connection, mapped as the copy is (without photos).
-func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, services bool, ids []string) (map[string]Item, error) {
+func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, from Source, ids []string) (map[string]Item, error) {
 	var table string
 	var m Columns
 	err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -93,7 +108,10 @@ func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, services bo
 			return err
 		}
 		id, cols := sf.CatalogueTable, sf.CatalogueColumns
-		if services {
+		switch {
+		case from.Table != nil:
+			id, cols = from.Table, from.Columns
+		case from.Services:
 			id, cols = sf.ServicesTable, sf.ServicesColumns
 		}
 		if id == nil {

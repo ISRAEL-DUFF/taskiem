@@ -22,9 +22,11 @@ var ErrNoWorkflow = errors.New("storefront: no workflow is deployed for this for
 type Action struct {
 	// ID and Slug name the action (fronts F1); Builtin is one of the four
 	// found by kind, the others copies made for a workflow (F2).
-	ID      *uuid.UUID    `json:"id,omitempty"`
-	Slug    string        `json:"slug,omitempty"`
-	Builtin bool          `json:"builtin"`
+	ID      *uuid.UUID `json:"id,omitempty"`
+	Slug    string     `json:"slug,omitempty"`
+	Builtin bool       `json:"builtin"`
+	// FrontID is the front the action is on (fronts F3).
+	FrontID *uuid.UUID    `json:"front_id,omitempty"`
 	Kind    string        `json:"kind"`
 	Enabled bool          `json:"enabled"`
 	Label   string        `json:"label"`
@@ -189,8 +191,9 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 		return nil, err
 	}
 	have := map[string]Action{}
-	rows, err := tx.Query(ctx, `SELECT id, slug, builtin, kind, enabled, label, payment, options FROM storefront_actions WHERE storefront_id = $1
-		ORDER BY NOT builtin, position, slug`, sf.ID)
+	rows, err := tx.Query(ctx, `SELECT a.id, a.slug, a.builtin, a.front_id, a.kind, a.enabled, a.label, a.payment, a.options FROM storefront_actions a
+		LEFT JOIN storefront_fronts f ON f.id = a.front_id WHERE a.storefront_id = $1
+		ORDER BY NOT a.builtin, f.slug <> '', f.position, a.position, a.slug`, sf.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +201,7 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 		var a Action
 		var id uuid.UUID
 		var opts []byte
-		err := r.Scan(&id, &a.Slug, &a.Builtin, &a.Kind, &a.Enabled, &a.Label, &a.Payment, &opts)
+		err := r.Scan(&id, &a.Slug, &a.Builtin, &a.FrontID, &a.Kind, &a.Enabled, &a.Label, &a.Payment, &opts)
 		a.ID = &id
 		_ = json.Unmarshal(opts, &a.Options)
 		return a, err

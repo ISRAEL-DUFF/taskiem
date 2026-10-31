@@ -382,6 +382,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 		s.serveReport(w, r, site)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/a/") && actionRef.MatchString(path[len("/a/"):]):
 		s.serveForm(w, r, site, path[len("/a/"):], embed)
+	case site.Kind == "storefront" && frontActionPath.MatchString(path):
+		// An action on a front, /<front>/a/<ref> (fronts F3).
+		m := frontActionPath.FindStringSubmatch(path)
+		s.serveFrontForm(w, r, site, m[1], m[2], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && !strings.Contains(path[len("/o/"):], "/"):
 		s.serveStatus(w, r, site, path[len("/o/"):], embed)
 	case site.Kind == "storefront" && strings.HasPrefix(path, "/o/") && strings.HasSuffix(path, "/pay") && strings.Count(path, "/") == 3:
@@ -399,6 +403,9 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request, site Site) {
 	case embed:
 		// The other embedded views arrive with S6.
 		s.page(w, r, http.StatusOK, "embedsetup", pageData{Title: "Coming soon"})
+	case site.Kind == "storefront" && !embed && frontPath.MatchString(path):
+		// A front's page, /<front> (fronts F3).
+		s.serveFront(w, r, site, path[1:])
 	case path != "/":
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 	case site.Kind == "storefront":
@@ -425,6 +432,14 @@ func redirects(r *http.Request, host string, site Site) bool {
 // or another action's slug (fronts F2); the page answers 404 for one the
 // storefront does not have on.
 var actionRef = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`)
+
+// frontPath and frontActionPath are a front's page and one of its
+// actions; a front's address never takes one of the page's own routes
+// (storefront.ReservedFrontSlugs).
+var (
+	frontPath       = regexp.MustCompile(`^/([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)$`)
+	frontActionPath = regexp.MustCompile(`^/([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)/a/([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)$`)
+)
 
 // changePages are a status link's pages for changing what was sent:
 // /o/{reference}/{page}.

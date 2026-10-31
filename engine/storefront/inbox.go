@@ -91,6 +91,9 @@ type Line struct {
 	Quantity  int    `json:"quantity"`
 	PriceKobo int64  `json:"price_kobo"`
 	LineKobo  int64  `json:"line_kobo"`
+	// Options are the choices a Food dish took (fronts F3); PriceKobo is
+	// the dish's price with them.
+	Options []LineOption `json:"options,omitempty"`
 }
 
 // SealSubmission encrypts a submission for the inbox, bound to its

@@ -113,6 +113,9 @@ type Item struct {
 	DurationMinutes int `json:"duration_minutes,omitempty"`
 	Capacity        int `json:"capacity,omitempty"`
 	BufferMinutes   int `json:"buffer_minutes,omitempty"`
+	// A Food dish's options and the minutes it takes (fronts F3).
+	Options []ItemOption `json:"options,omitempty"`
+	ReadyIn int          `json:"ready_in,omitempty"`
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
@@ -386,6 +389,14 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 				it.Stock = &n
 			}
 		}
+		if m.Options != "" {
+			it.Options = ParseOptions(r[m.Options])
+		}
+		if m.ReadyIn != "" {
+			if n, ok := num(r[m.ReadyIn]); ok && n >= 1 && n <= 600 {
+				it.ReadyIn = int(n)
+			}
+		}
 		for _, f := range []struct {
 			col      string
 			v        *int
@@ -448,7 +459,9 @@ func SyncCatalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Ite
 			return err
 		}
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1`, s.ID); err != nil {
+	// Only the catalogue's own copy is replaced: a front's list from
+	// another table keeps its copy (fronts F3, SyncList).
+	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1 AND table_name = $2`, s.ID, table); err != nil {
 		return err
 	}
 	for i, it := range items {
@@ -474,8 +487,10 @@ func CatalogueFailed(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cause err
 
 // Catalogue reads the copy, for the owner's preview.
 func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error) {
+	// The catalogue's own copy: a front's list from another table is read
+	// with ListItems.
 	rows, err := tx.Query(ctx, `SELECT c.item FROM storefront_catalogue c JOIN storefronts s ON s.id = c.storefront_id
-		WHERE s.tenant_id = $1 ORDER BY c.position`, tenant)
+		WHERE s.tenant_id = $1 AND c.table_name = COALESCE((SELECT d.name FROM data_tables d WHERE d.id = s.catalogue_table), '') ORDER BY c.position`, tenant)
 	if err != nil {
 		return nil, err
 	}
@@ -536,3 +551,10 @@ func FormatNaira(kobo int64) string {
 	}
 	return "₦" + s
 }
+
+// CatalogueTableSQL is the name of the table a catalogue copy row c of the
+// storefront is kept by, as SyncCatalogue names it (” when the table is
+// not found): stock is kept on the catalogue's table only (fronts §5.2).
+const CatalogueTableSQL = `COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`
+
+const catalogueTableSQL = CatalogueTableSQL

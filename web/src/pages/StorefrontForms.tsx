@@ -76,7 +76,7 @@ export function StorefrontForms({
   );
 }
 
-function FormCard({
+export function FormCard({
   action,
   previewURL,
   published,
@@ -147,10 +147,22 @@ function FormCard({
   const setUp = () =>
     setup.run(async () => {
       setNotice("");
-      const req = setupRequest(kind);
-      const wf = await tidy(post<{ id: string }>(req.path, req.body));
+      // A built-in form's workflow from its template; any other action's
+      // from its kind's, its trigger naming the action (fronts F3).
+      let wfID: string;
+      if (copy) {
+        const made = await tidy(
+          post<{ workflow_id: string }>(
+            `/v1/storefront/actions/${action.id ?? ""}/setup`,
+          ),
+        );
+        wfID = made.workflow_id;
+      } else {
+        const req = setupRequest(kind);
+        wfID = (await tidy(post<{ id: string }>(req.path, req.body))).id;
+      }
       const p = await tidy(
-        post<{ state: string }>(`/v1/workflows/${wf.id}/versions/1/publish`),
+        post<{ state: string }>(`/v1/workflows/${wfID}/versions/1/publish`),
       );
       if (p.state !== "published") {
         setNotice(
@@ -161,7 +173,7 @@ function FormCard({
       onReload();
     }, false);
 
-  const showSetup = !copy && (!saved.workflow_id || noWorkflow);
+  const showSetup = !saved.workflow_id || noWorkflow;
   return (
     <article className="sf-form" aria-labelledby={id}>
       <div className="toolbar" style={{ marginBottom: 6 }}>

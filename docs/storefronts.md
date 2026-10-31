@@ -253,6 +253,18 @@ A **moved** booking's run is ended and a new one started with the new time (`tri
 
 A booking run's `trigger.body` also holds `booking` (`service_id`, `service`, `starts_at`, `ends_at` in Lagos time, `when`, `auto_confirm`, the reminder times) and `event` (`new` or `rescheduled`).
 
+## Fronts
+
+A storefront can have more pages beside its home page: **fronts** ([plan](spec/fronts.md#134-as-built-f3)), such as a kitchen's menu on a shop's page. Under Storefront > **Fronts**, **Add a front** asks a name and a kind:
+- **Shop**: products to order, with a `products` table, an order form and a question form.
+- **Food**: a menu with prices, options (sizes, extras, each with its price) and how long each dish takes, with a `menu` table and an order form that delivers by default.
+- **Questions** and **Call-backs**: a page with that one form.
+- **Custom**: nothing to start with.
+
+A front is made off. Add its items in its table (**Add your first item**), set up its forms (**Set up** makes each one's workflow), then **Turn on**: the page is published again, with its checks. A front's address is its name (`/small-chops`), changeable on its page, and its forms are at `/small-chops/a/order`. The home page lists the other fronts. Each front's list is copied for the page as the catalogue is, and its orders start its own forms' workflows; Orders can be filtered by front. A front with no orders or workflow can be removed; otherwise turn it off.
+
+A Food dish's options go in its `options` cell as a list of groups: `[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`. The customer picks one choice in each group, and the dish is priced with its choices, checked again from the table before the order goes on.
+
 ## Your own domain
 
 A business that already owns a domain can serve its page there instead of the preview address ([spec 6.6](spec/storefronts.md#66-addresses-domains-and-sharing)): `adakitchen.ng`, or a part of a domain it uses for something else, such as `shop.example.com`. This is Phase 5, S6. Buying a domain through the domain platform waits for its contract; embedding the page on a website comes later.

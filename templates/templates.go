@@ -106,7 +106,11 @@ type Table struct {
 	// It is resolved when the template is read and not kept, so a
 	// template that names a known table pins exactly what it would have
 	// written out.
-	Known       string   `json:"known,omitempty"`
+	Known string `json:"known,omitempty"`
+	// Front marks a known table a storefront's front makes (products,
+	// menu: docs/spec/fronts.md §6). It is filled where the front is, so
+	// chat does not offer it as a new table.
+	Front       bool     `json:"front,omitempty"`
 	Name        string   `json:"name"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`

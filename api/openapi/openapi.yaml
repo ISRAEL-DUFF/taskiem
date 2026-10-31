@@ -1126,6 +1126,183 @@ paths:
                 $ref: '#/components/schemas/StorefrontAction'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{kind}/setup:
+    post:
+      operationId: setupStorefrontAction
+      tags:
+      - Storefront
+      summary: Set up an action's workflow
+      description: Makes the action's default workflow from its kind's template, its storefront trigger naming the action by id (fronts F3), as version 1 to publish. An action a workflow is deployed for already is answered with that workflow (200).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage,workflow.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: kind
+        in: path
+        required: true
+        description: The action's id
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '201':
+          description: The workflow, saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontActionSetup'
+        '200':
+          description: The workflow deployed for it already
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontActionSetup'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts:
+    get:
+      operationId: listStorefrontFronts
+      tags:
+      - Storefront
+      summary: The storefront's fronts and the kinds to add
+      description: Each front with its blocks, its actions and how many items its list shows; the home page first (fronts F3).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The fronts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [kinds, fronts]
+                properties:
+                  kinds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontFrontKind'
+                  fronts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StorefrontFront'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addStorefrontFront
+      tags:
+      - Storefront
+      summary: Add a front of a kind
+      description: Makes the kind's table for the business (needs table.edit), then the front, off, with a list of the table and the kind's actions, off.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, kind]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                kind:
+                  type: string
+      responses:
+        '201':
+          description: The front
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontFront'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}:
+    patch:
+      operationId: patchStorefrontFront
+      tags:
+      - Storefront
+      summary: Change a front
+      description: Its name, line, address, place or switch. On a published page the page is published again with its checks, so a front is turned on only when the page may show it. The home page keeps its address and stays on.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                tagline:
+                  type: string
+                slug:
+                  type: string
+                enabled:
+                  type: boolean
+                position:
+                  type: integer
+      responses:
+        '200':
+          description: The front
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorefrontFront'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteStorefrontFront
+      tags:
+      - Storefront
+      summary: Remove a front
+      description: Only a front that has taken nothing (no submissions, no workflow deployed for its actions); the home page stays.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/invoices:
     get:
       operationId: listInvoices
@@ -5343,6 +5520,13 @@ paths:
         schema:
           type: string
         description: A status, or open for every order still needing the business
+      - name: front
+        in: query
+        required: false
+        description: One front's submissions, by the front's id (fronts F3)
+        schema:
+          type: string
+          format: uuid
       - name: kind
         in: query
         schema:
@@ -26525,6 +26709,77 @@ components:
           type: integer
         auto_confirm:
           type: boolean
+    StorefrontActionSetup:
+      type: object
+      required: [workflow_id, state]
+      properties:
+        workflow_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [draft, published]
+        version:
+          type: integer
+    StorefrontFrontKind:
+      type: object
+      required: [name, title, line]
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        line:
+          type: string
+    StorefrontFront:
+      type: object
+      required: [id, slug, kind, name, position, enabled, blocks, actions, table_id, items]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          description: Its address, /<slug>; empty for the home page
+        kind:
+          type: string
+        name:
+          type: string
+        tagline:
+          type: string
+        photo:
+          type: string
+        position:
+          type: integer
+        enabled:
+          type: boolean
+        blocks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              position:
+                type: integer
+              kind:
+                type: string
+                enum: [text, photos, list]
+              config:
+                type: object
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorefrontAction'
+        table_id:
+          type:
+          - string
+          - 'null'
+          description: The table its list shows
+        items:
+          type: integer
+          description: How many items its list shows
     StorefrontAction:
       type: object
       required: [kind, enabled, label, payment, options, workflow_id]
@@ -26539,6 +26794,10 @@ components:
         builtin:
           type: boolean
           description: One of the four forms found by kind; the others are copies made for a workflow (fronts F2), saved by id
+        front_id:
+          type: string
+          format: uuid
+          description: The front the action is on (fronts F3)
         kind:
           type: string
           enum: [order, enquiry, callback, booking]
@@ -27370,6 +27629,10 @@ components:
         id:
           type: string
           format: uuid
+        front_id:
+          type: string
+          format: uuid
+          description: The front the submission came from (fronts F3)
         reference:
           type: string
         kind:

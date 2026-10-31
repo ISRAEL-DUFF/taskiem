@@ -186,6 +186,42 @@ test("a second workflow on a form can have a new form of its own", async ({ page
   expect(vs, describe("/storefront (a second question form)", vs)).toEqual([]);
 });
 
+test("an owner adds a front of questions with its own form", async ({ page }) => {
+  // Fronts (docs/spec/fronts.md F3): a Questions front, made from its kind
+  // with its form, off; its form is set up with a workflow of its own and
+  // the front turned on. (A Food front makes its menu table, which needs
+  // the data tables this test server has not: TestFronts covers it.)
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("owner@e2e.test");
+  await page.getByLabel("Password").fill("correct horse battery");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).not.toHaveURL(/login/);
+
+  await page.goto("/storefront/fronts");
+  await expect(page.getByTestId("front").first()).toContainText("Your home page");
+  await page.getByRole("button", { name: "Add a front" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a front" });
+  await dialog.getByLabel("Name").fill("Ask the baker");
+  await dialog.getByRole("radio", { name: /Questions/ }).check();
+  await dialog.getByRole("button", { name: "Add the front" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Ask the baker" })).toBeVisible();
+  await expect(page.getByText("This front has no list of items")).toBeVisible();
+
+  const vs = await axe(page);
+  expect(vs, describe("/storefront/fronts/:id", vs)).toEqual([]);
+
+  const forms = page.getByRole("region", { name: "Forms" });
+  await forms.getByRole("button", { name: /^Set up/ }).click();
+  await expect(forms.getByRole("link", { name: /Open its workflow/ })).toBeVisible();
+  await page.getByRole("button", { name: "Turn on" }).click();
+  await expect(page.getByRole("button", { name: "Turn off" })).toBeVisible();
+
+  await page.getByRole("link", { name: "All fronts" }).click();
+  const row = page.getByTestId("front").filter({ hasText: "Ask the baker" });
+  await expect(row).toContainText("/ask-the-baker");
+  await expect(row).toContainText("On");
+});
+
 test("an owner sets booking hours and the booking form", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");

@@ -107,6 +107,10 @@ type Columns struct {
 	ReorderLevel string `json:"reorder_level,omitempty"`
 	TargetLevel  string `json:"target_level,omitempty"`
 	Supplier     string `json:"supplier,omitempty"`
+	// A Food menu's (fronts F3): a dish's options (sizes, extras, each
+	// with its price) and the minutes it takes.
+	Options string `json:"options,omitempty"`
+	ReadyIn string `json:"ready_in,omitempty"`
 }
 
 var hhmm = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)

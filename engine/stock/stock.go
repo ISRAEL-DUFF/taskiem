@@ -348,8 +348,10 @@ func (s *Stock) done(ctx context.Context, tenant, id uuid.UUID, from int64) (Mov
 // copyCount puts an item's new count into the storefront's catalogue copy,
 // so the page and forms show it at once rather than at the next refresh.
 func copyCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string, n int64) error {
-	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
-		WHERE tenant_id = $1 AND row_id = $2 AND item ? 'stock'`, tenant, item, n)
+	// Stock is kept on the catalogue's table only (fronts §5.2): a front's
+	// list from another table may share a row's id.
+	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
+		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.item ? 'stock' AND c.table_name = COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`, tenant, item, n)
 	return err
 }
 

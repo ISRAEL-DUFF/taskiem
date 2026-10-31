@@ -105,7 +105,16 @@ func (s *Server) listStorefrontOrders(w http.ResponseWriter, r *http.Request) {
 	var list []storefront.Order
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		list, err = s.Orders.ListOrders(r.Context(), tx, principalFrom(r.Context()).TenantID, r.URL.Query().Get("status"), r.URL.Query().Get("kind"), limit)
+		// One front's, with ?front= (fronts F3).
+		var front *uuid.UUID
+		if f := r.URL.Query().Get("front"); f != "" {
+			id, err := uuid.Parse(f)
+			if err != nil {
+				return fmt.Errorf("%w: front is a front's id", errBadRequest)
+			}
+			front = &id
+		}
+		list, err = s.Orders.ListOrdersOn(r.Context(), tx, principalFrom(r.Context()).TenantID, front, r.URL.Query().Get("status"), r.URL.Query().Get("kind"), limit)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
