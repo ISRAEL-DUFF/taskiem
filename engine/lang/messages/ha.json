@@ -4071,6 +4071,62 @@
     "bill.due_on": {
       "text": "Ranar biya: {date}.",
       "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Waɗanda za su iya ganin takardun kuɗi na {org} ne kawai ke ganin bills ɗinta.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "Babu bill {reference}. Aika *bills* don ganinsu.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "Babu bill da za a biya daga masu kawo kaya da aka haɗa.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills da za a biya:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} daga {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Gaba ɗaya: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* daga *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Jimla {total} · an biya {paid} · {due} da za a biya.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "da za a biya",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "ana biya",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "an biya wani ɓangare",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "an biya",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "an yi tambaya",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "mai kawo kaya ya soke",
+      "reviewed": false
     }
   }
 }

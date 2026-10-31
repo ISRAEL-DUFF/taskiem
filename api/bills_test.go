@@ -77,6 +77,17 @@ func TestBillsMirrored(t *testing.T) {
 	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Stores* sent invoice "+x["number"].(string)+": ₦425,000 to pay") {
 		t.Errorf("the buyer told: %+v", told)
 	}
+	// In chat: the bills to pay, and one bill.
+	if r := w.say(t, buyerOn, "bills"); !strings.Contains(r, "• "+x["number"].(string)+" from Dangote Stores: ₦425,000 Due 31 Jan 2099.") || !strings.Contains(r, "In all: ₦425,000") {
+		t.Errorf("bills: %q", r)
+	}
+	if r := w.say(t, buyerOn, "bill "+strings.ToLower(x["number"].(string))); !strings.Contains(r, "*"+x["number"].(string)+"* from *Dangote Stores*: to pay") ||
+		!strings.Contains(r, "• Rice, 50kg: ₦425,000") || !strings.Contains(r, "Total ₦425,000 · paid ₦0 · ₦425,000 to pay.") {
+		t.Errorf("bill: %q", r)
+	}
+	if r := w.say(t, buyerOn, "bill INV-9999"); !strings.Contains(r, "No bill INV-9999") {
+		t.Errorf("no bill: %q", r)
+	}
 	// The seller sees nothing of it: bills are the buyer's.
 	if got := seller.must(200, "GET", "/v1/bills", nil)["bills"].([]any); len(got) != 0 {
 		t.Errorf("the seller's bills: %v", got)

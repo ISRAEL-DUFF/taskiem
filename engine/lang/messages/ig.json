@@ -4071,6 +4071,62 @@
     "bill.due_on": {
       "text": "Ụbọchị ịkwụ ụgwọ: {date}.",
       "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Naanị ndị nwere ike ịhụ akwụkwọ ụgwọ {org} na-ahụ bills ya.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "Enweghị bill {reference}. Ziga *bills* iji hụ ha.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "Enweghị bill ị ga-akwụ site n'aka ndị na-enye ngwaahịa ejikọrọ.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills ị ga-akwụ:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} sitere na {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Ha niile: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* sitere na *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Ngụkọta {total} · akwụọla {paid} · {due} ị ga-akwụ.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "ị ga-akwụ",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "a na-akwụ ya",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "akwụọla ụfọdụ",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "akwụọla",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "ajụọla ajụjụ",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "onye na-enye ngwaahịa kagburu ya",
+      "reviewed": false
     }
   }
 }

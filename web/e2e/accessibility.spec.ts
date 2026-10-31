@@ -40,6 +40,7 @@ const PAGES = [
   "/storefront/suppliers",
   "/chat",
   "/settings/links",
+  "/bills",
   "/invoices",
   "/invoices/match",
   "/invoices/settings",

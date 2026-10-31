@@ -669,6 +669,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
+		// A linked supplier's bills (bills.go): "bill INV-0042" before the
+		// invoice words, which need a name and an amount.
+		if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 		if done, err := s.waInvoiceCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}

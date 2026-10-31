@@ -5088,6 +5088,76 @@
       "text": "Due {date}.",
       "reviewed": true,
       "context": "When a bill is due"
+    },
+    "bill.denied": {
+      "text": "Only people who may see the invoices of {org} see its bills.",
+      "reviewed": true,
+      "context": "The person may not read bills"
+    },
+    "bill.not_found": {
+      "text": "No bill {reference}. Send *bills* to see them.",
+      "reviewed": true,
+      "context": "No bill with that number"
+    },
+    "bill.none": {
+      "text": "No bills to pay from linked suppliers.",
+      "reviewed": true,
+      "context": "No open bills"
+    },
+    "bill.list_title": {
+      "text": "Bills to pay:",
+      "reviewed": true,
+      "context": "Heading of the open bills"
+    },
+    "bill.list_line": {
+      "text": "• {reference} from {supplier}: {amount}",
+      "reviewed": true,
+      "context": "One open bill; {amount} is what is left to pay"
+    },
+    "bill.list_total": {
+      "text": "In all: {amount}",
+      "reviewed": true,
+      "context": "The total left to pay"
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* from *{supplier}*: {status}",
+      "reviewed": true,
+      "context": "A bill's first line"
+    },
+    "bill.detail_sums": {
+      "text": "Total {total} · paid {paid} · {due} to pay.",
+      "reviewed": true,
+      "context": "A bill's figures"
+    },
+    "bill.status.open": {
+      "text": "to pay",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.status.paying": {
+      "text": "being paid",
+      "reviewed": true,
+      "context": "A bill's status: a payment from Taskiem is on its way"
+    },
+    "bill.status.part_paid": {
+      "text": "part-paid",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.status.paid": {
+      "text": "paid",
+      "reviewed": true,
+      "context": "A bill's status"
+    },
+    "bill.status.disputed": {
+      "text": "queried",
+      "reviewed": true,
+      "context": "A bill's status: the buyer queried it"
+    },
+    "bill.status.void": {
+      "text": "cancelled by the supplier",
+      "reviewed": true,
+      "context": "A bill's status"
     }
   }
 }

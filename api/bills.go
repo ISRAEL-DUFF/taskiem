@@ -259,3 +259,79 @@ func billWords(l lang.Tag, b links.Mirror) (string, string) {
 		strings.TrimSpace(tr(l, "bill.arrived_body", "supplier", whatsapp.SafeText(b.SupplierName), "reference", b.Reference,
 			"amount", invoicing.Naira(b.AmountKobo-b.PaidKobo)) + " " + due)
 }
+
+// --- chat ---
+
+// waBillCommand answers the buyer's bill words: "bills" (also "my bills",
+// "bills due"), the bills still to pay; "bill INV-0042", one bill. False
+// when text is neither ("bill Ada 5,000" makes an invoice, as before).
+func (s *Server) waBillCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
+	f := strings.Fields(text)
+	switch {
+	case cmd == "bills" || cmd == "my bills" || cmd == "bills due":
+	case len(f) == 2 && strings.EqualFold(f[0], "bill"):
+	default:
+		return false, nil
+	}
+	if !c.p.Can(PermInvoiceRead) {
+		return true, c.say(ctx, s, c.t("bill.denied", "org", c.tenant.Name))
+	}
+	if len(f) == 2 && strings.EqualFold(f[0], "bill") {
+		var b links.Bill
+		err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+			var err error
+			b, err = links.GetBillTx(ctx, tx, f[1])
+			return err
+		})
+		if errors.Is(err, links.ErrNotFound) {
+			return true, c.say(ctx, s, c.t("bill.not_found", "reference", whatsapp.SafeText(f[1])))
+		}
+		if err != nil {
+			return true, err
+		}
+		return true, c.say(ctx, s, billDetail(c.lang.Tag, b))
+	}
+	var list []links.Bill
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		list, err = links.ListBillsTx(ctx, tx, "open", 20)
+		return err
+	}); err != nil {
+		return true, err
+	}
+	if len(list) == 0 {
+		return true, c.say(ctx, s, c.t("bill.none"))
+	}
+	lines := []string{c.t("bill.list_title")}
+	var total int64
+	for _, b := range list {
+		lines = append(lines, c.t("bill.list_line", "reference", b.Reference, "supplier", whatsapp.SafeText(b.SupplierName), "amount", invoicing.Naira(b.DueKobo))+billDue(c.lang.Tag, b))
+		total += b.DueKobo
+	}
+	lines = append(lines, c.t("bill.list_total", "amount", invoicing.Naira(total)))
+	return true, c.say(ctx, s, strings.Join(lines, "\n"))
+}
+
+func billDue(l lang.Tag, b links.Bill) string {
+	if b.DueOn == "" {
+		return ""
+	}
+	d, err := time.Parse("2006-01-02", b.DueOn)
+	if err != nil {
+		return ""
+	}
+	return " " + tr(l, "bill.due_on", "date", d.Format("2 Jan 2006"))
+}
+
+// billDetail is one bill in chat: who sent it, its lines, what is paid and
+// what is left.
+func billDetail(l lang.Tag, b links.Bill) string {
+	var lines []invoicing.Line
+	_ = json.Unmarshal(b.Lines, &lines)
+	out := []string{tr(l, "bill.detail_head", "reference", b.Reference, "supplier", whatsapp.SafeText(b.SupplierName), "status", tr(l, "bill.status."+b.Status))}
+	for _, x := range lines {
+		out = append(out, "• "+whatsapp.SafeText(x.Description)+": "+invoicing.Naira(x.AmountKobo()))
+	}
+	out = append(out, tr(l, "bill.detail_sums", "total", invoicing.Naira(b.AmountKobo), "paid", invoicing.Naira(b.PaidKobo), "due", invoicing.Naira(b.DueKobo))+billDue(l, b))
+	return strings.Join(out, "\n")
+}

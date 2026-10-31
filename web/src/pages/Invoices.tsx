@@ -101,6 +101,7 @@ import {
   issuerWords,
   newAccountForm,
 } from "../lib/invoices";
+import type { LinksView } from "../lib/links";
 import { isMasked, telLink } from "../lib/orders";
 import type { Claim } from "../lib/schoolFamily";
 import { ClaimsToMatch } from "./SchoolFamily";
@@ -796,6 +797,9 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
   const setItem = (i: number, patch: Partial<ItemInput>) => setForm((f) => ({ ...f, items: f.items.map((it, n) => (n === i ? { ...it, ...patch } : it)) }));
   const problem = invoiceProblem(form);
   const total = formTotal(form);
+  // Linked businesses that buy from us come first as customers (business links).
+  const linked = useLoad(() => get<LinksView>("/v1/links"), []);
+  const buyers = (linked.data?.links ?? []).filter((l) => l.state === "active" && (l.role === "customer" || l.role === "both"));
 
   const save = (andSend: boolean) => {
     setTried(true);
@@ -822,20 +826,42 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
       }}
     >
       <h2>Customer</h2>
-      <Field label="Name">
-        <input value={form.name} maxLength={INVOICE_LIMITS.name} autoComplete="off" onChange={(e) => set({ name: e.target.value })} required />
-      </Field>
-      <div className="row">
-        <Field label="Phone number" hint="For the SMS.">
-          <input type="tel" inputMode="tel" value={form.phone} autoComplete="off" onChange={(e) => set({ phone: e.target.value })} />
+      {buyers.length > 0 && (
+        <Field label="Who is it for?" hint={form.linked ? "A linked business: the invoice reaches it as a bill in its business." : undefined}>
+          <select
+            value={form.linked ?? ""}
+            onChange={(e) => {
+              const b = buyers.find((l) => l.business === e.target.value);
+              set(b ? { linked: b.business, name: b.name, phone: "", email: "" } : { linked: undefined, name: "" });
+            }}
+          >
+            <option value="">Someone else</option>
+            {buyers.map((l) => (
+              <option key={l.business} value={l.business}>
+                {l.name} (linked)
+              </option>
+            ))}
+          </select>
         </Field>
-        <Field label="Email" hint="For the email.">
-          <input type="email" value={form.email} autoComplete="off" onChange={(e) => set({ email: e.target.value })} />
-        </Field>
-      </div>
-      <p className="hint" style={{ marginTop: -8 }}>
-        Give a phone number or an email, or both.
-      </p>
+      )}
+      {!form.linked && (
+        <>
+          <Field label="Name">
+            <input value={form.name} maxLength={INVOICE_LIMITS.name} autoComplete="off" onChange={(e) => set({ name: e.target.value })} required />
+          </Field>
+          <div className="row">
+            <Field label="Phone number" hint="For the SMS.">
+              <input type="tel" inputMode="tel" value={form.phone} autoComplete="off" onChange={(e) => set({ phone: e.target.value })} />
+            </Field>
+            <Field label="Email" hint="For the email.">
+              <input type="email" value={form.email} autoComplete="off" onChange={(e) => set({ email: e.target.value })} />
+            </Field>
+          </div>
+          <p className="hint" style={{ marginTop: -8 }}>
+            Give a phone number or an email, or both.
+          </p>
+        </>
+      )}
 
       <h2>What it is for</h2>
       <fieldset className="sf-choices">
@@ -918,7 +944,11 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
           Save and send
         </button>
       </div>
-      <p className="hint">Sending sends it to the customer by SMS and email, with a link to its page. Once sent, it cannot be changed.</p>
+      <p className="hint">
+        {form.linked
+          ? `Sending puts it in ${form.name}'s bills on Taskiem. Once sent, it cannot be changed.`
+          : "Sending sends it to the customer by SMS and email, with a link to its page. Once sent, it cannot be changed."}
+      </p>
     </form>
   );
 }

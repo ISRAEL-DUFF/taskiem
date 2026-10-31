@@ -4071,6 +4071,62 @@
     "bill.due_on": {
       "text": "Ọjọ́ ìsanwó: {date}.",
       "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Àwọn tó lè rí ìwé owó {org} nìkan ló lè rí àwọn bill rẹ̀.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "Kò sí bill {reference}. Fi *bills* ránṣẹ́ láti rí wọn.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "Kò sí bill láti san láti ọ̀dọ̀ àwọn olùpèsè tí ẹ so mọ́.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Àwọn bill láti san:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} láti ọ̀dọ̀ {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Lápapọ̀: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* láti ọ̀dọ̀ *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Àpapọ̀ {total} · a ti san {paid} · {due} láti san.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "láti san",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "à ń san án",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "a ti san díẹ̀",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "a ti san",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "ẹ ti bèèrè nípa rẹ̀",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "olùpèsè ti fagilé",
+      "reviewed": false
     }
   }
 }

@@ -55,6 +55,7 @@ import { StorefrontRiders } from "./pages/StorefrontRiders";
 import { StorefrontStock } from "./pages/StorefrontStock";
 import { StorefrontSuppliers } from "./pages/StorefrontSuppliers";
 import { ChatPage, LinkCodePage, LinkCodeSignedOut, LinkedBusinessesPage } from "./pages/Links";
+import { BillPage, BillsPage } from "./pages/Bills";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -363,6 +364,8 @@ function SignedIn() {
     ["/storefront/orders", "Orders", "orders", can("storefront.manage")],
     ["/invoices", "Invoices", "invoices", invoiceAccess(can).see],
     ["/money", "Money", "money", invoiceAccess(can).see],
+    // Linked suppliers' invoices (business links, pages/Bills.tsx).
+    ["/bills", "Bills", "invoices", invoiceAccess(can).see],
     ["/schools", "Schools", "schools", showSchools(me.schools, can)],
     ["/storefront", "Storefront", "storefront", can("storefront.manage")],
     ["/forms", "Forms", "forms", can("workflow.read")],
@@ -602,6 +605,8 @@ function SignedIn() {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/settings/links" element={<LinkedBusinessesPage />} />
               <Route path="/l/:code" element={<LinkCodePage />} />
+              <Route path="/bills" element={<BillsPage />} />
+              <Route path="/bills/:id" element={<BillPage />} />
               <Route
                 path="/storefront/suppliers"
                 element={<StorefrontSuppliers />}

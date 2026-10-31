@@ -4071,6 +4071,62 @@
     "bill.due_on": {
       "text": "E due {date}.",
       "reviewed": false
+    },
+    "bill.denied": {
+      "text": "Na only people wey fit see {org} invoice fit see im bills.",
+      "reviewed": false
+    },
+    "bill.not_found": {
+      "text": "No bill {reference}. Send *bills* to see dem.",
+      "reviewed": false
+    },
+    "bill.none": {
+      "text": "No bill to pay from linked suppliers.",
+      "reviewed": false
+    },
+    "bill.list_title": {
+      "text": "Bills to pay:",
+      "reviewed": false
+    },
+    "bill.list_line": {
+      "text": "• {reference} from {supplier}: {amount}",
+      "reviewed": false
+    },
+    "bill.list_total": {
+      "text": "Everything: {amount}",
+      "reviewed": false
+    },
+    "bill.detail_head": {
+      "text": "*{reference}* from *{supplier}*: {status}",
+      "reviewed": false
+    },
+    "bill.detail_sums": {
+      "text": "Total {total} · paid {paid} · {due} to pay.",
+      "reviewed": false
+    },
+    "bill.status.open": {
+      "text": "to pay",
+      "reviewed": false
+    },
+    "bill.status.paying": {
+      "text": "dey pay",
+      "reviewed": false
+    },
+    "bill.status.part_paid": {
+      "text": "part-paid",
+      "reviewed": false
+    },
+    "bill.status.paid": {
+      "text": "paid",
+      "reviewed": false
+    },
+    "bill.status.disputed": {
+      "text": "you don query am",
+      "reviewed": false
+    },
+    "bill.status.void": {
+      "text": "supplier don cancel am",
+      "reviewed": false
     }
   }
 }
