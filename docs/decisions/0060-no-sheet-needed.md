@@ -1,6 +1,6 @@
 # 0060 — No sheet needed: data tables are the default record, and they are kept from chat
 
-Date: 2026-10-30 · Status: Proposed · Plan: [no sheet needed](../spec/no-sheet-needed.md)
+Date: 2026-10-30 · Status: **Accepted** (built 30 and 31 October 2026) · Plan: [no sheet needed](../spec/no-sheet-needed.md)
 
 ## Context
 
@@ -48,10 +48,23 @@ Data tables exist for this ([0033](0033-data-tables-on-xenibase.md)), but in cha
    - Code writes the answer, with personal values masked and the reading of the question shown.
 8. **The model routes table commands in every language**, under the existing rule: it returns an intent and an argument, never `yes`, `no` or `cancel`, so every write waits for the person's own reply.
 
+## As built
+
+Built in seven milestones on one branch (the plan's §8.1 to §8.7 say what each became). Where the build differs from the decision above:
+
+- **Known tables** (point 2) are `customers` and `staff`. The storefront's `products` and `services` join the registry with fronts ([0059](0059-fronts.md)), not here.
+- **Dropping a column or deleting a table** (point 5) is answered with the Tables page's link: the plan's Q1 (in chat, with the name typed back and the PIN) is the founder's to decide, and the web fallback needs nothing new.
+- **A personal value when changing a row** comes in a one-field form on WhatsApp and is asked in the chat on Telegram and Slack, since Telegram's row form is not built.
+- **A list from elsewhere** (point 4): **Copy into a table** after a sheet template is picked is not built; `copy my sheet <link>` and files sent in the chat are.
+- **Customers of the debtor book** (point 6): one recorded with a phone, or chosen from a sent invoice in the name lookup, is that phone's customer, as the decision now says; one recorded with no phone keeps their record's key even when a phone is added later, so invoices sent to that number before stay apart. A notebook debt takes the customer's credit when it is recorded. The customer's balance and reminders also go on WhatsApp or Telegram to a customer who asked for updates there, as a template outside the window, and the SMS still goes too while that template waits for Meta.
+- **A sum** (point 7) is read in pages of 1,000 rows, up to 5,000, rather than one query, since the data API has no sum; the answer says when it stopped. A count is one read.
+- **The model's routing** (point 8) includes a `delete_row` intent beside `change_row`. `owes` and `paid` carry the English sentence, read by the debtor book's words, which live in the chat's code rather than the word lists. An English question the model says the tables cannot answer, in a message nothing else recognised, gets the chat's usual answer rather than *I couldn't answer that*.
+- **The evaluation suite** for the routing and the specs (`evals/chat`) has 44 synthetic cases across the five languages, pending review by people.
+
 ## Consequences
 
 - "Remind my customers who owe me" works for a phone-only trader with no sheet and no database in sight, through invoices, with nothing new to make. This is the strategy's [§3.3](../strategy/chat-first-nigeria.md#33-xenibase-under-the-agent) goal.
 - Records live in one place, the business's Xenibase project, whether they arrive from chat, a file, the web or a workflow.
-- More of chat writes data. Each write path has a **yes**, an idempotency key and the guard on the values shown, and destructive changes need the PIN.
+- More of chat writes data. Each write path has a **yes**, an idempotency key and the guard on the values shown; destructive changes to a table's shape stay on the web until Q1 is decided.
 - The model sees more kinds of request but no more data. Its output is a routing or a spec that code checks, and it runs with the person's permissions.
 - Sheet templates are offered to fewer businesses. Their twins carry the library's tests and their own `wd-test/v1` cases.

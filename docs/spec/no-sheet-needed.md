@@ -1,6 +1,6 @@
 # No sheet needed: records kept in chat, and the templates that use them
 
-Status: **Building**: R1 to R6 built 30 and 31 October 2026 (§8.1 to §8.6); the rest planned, 30 October 2026 (revised the same day after a review against the code) · Decision: [0060](../decisions/0060-no-sheet-needed.md) (proposed) · Builds on: [data tables](../data-tables.md) ([0033](../decisions/0033-data-tables-on-xenibase.md)), [templates](../templates.md), [WhatsApp: data tables](../whatsapp.md#data-tables), [chat as the way in](chat-way-in.md) ([0058](../decisions/0058-chat-as-a-way-in.md)), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [the money log](../money-log.md) ([0045](../decisions/0045-tally-in-taskiem.md)), [languages](../languages.md) ([0029](../decisions/0029-languages-and-voice-notes.md)) · Strategy: [chat-first](../strategy/chat-first-nigeria.md#33-xenibase-under-the-agent) §3.3, the "Xenibase underneath" row of §4
+Status: **Built**: R1 to R7, 30 and 31 October 2026 (§8.1 to §8.7); the rest planned, 30 October 2026 (revised the same day after a review against the code) · Decision: [0060](../decisions/0060-no-sheet-needed.md) (accepted) · Builds on: [data tables](../data-tables.md) ([0033](../decisions/0033-data-tables-on-xenibase.md)), [templates](../templates.md), [WhatsApp: data tables](../whatsapp.md#data-tables), [chat as the way in](chat-way-in.md) ([0058](../decisions/0058-chat-as-a-way-in.md)), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [the money log](../money-log.md) ([0045](../decisions/0045-tally-in-taskiem.md)), [languages](../languages.md) ([0029](../decisions/0029-languages-and-voice-notes.md)) · Strategy: [chat-first](../strategy/chat-first-nigeria.md#33-xenibase-under-the-agent) §3.3, the "Xenibase underneath" row of §4
 
 ## 1. Summary
 
@@ -443,6 +443,13 @@ R1 comes first and stands alone. It carries provisioning from chat, since it is 
 - **Word lists:** `change` and `delete` gain prefixes in Pidgin, Yoruba, Hausa and Igbo (drafts). `new table` had them from R3, and `owes`, `paid` and `who owes me` from R5f, in the debtor book's own words (`api/chat_debtors.go`), not in the lists, which only the API's matching reads.
 - **The evaluation suite** (`evals/chat`, `tools/aieval -mode chat`): 28 routing cases and 16 questions across the five languages (specs expected, and five that must be refused), graded on routing, spec and refusal accuracy; an offline baseline in CI and the real model nightly. The cases are synthetic drafts pending review.
 - Tests: `TestCheckQuery`, `TestQueryReadFilters` (datatables), `TestAskSendsColumnsNotRows`, `TestParse` (tablequery), `TestChatQuestionsOverTables`, `TestChatTablesRoutedByModel`, and the chat suite's baseline in `TestBaselinesHold`.
+
+### 8.7 As built (R7)
+
+- **Docs.** [Data tables](../data-tables.md) (the debtor book is invoices, not the retired `debtors` table; questions over rows), [WhatsApp](../whatsapp.md#data-tables) (R2 to R6 and [the debtor book](../whatsapp.md#the-debtor-book)), [Telegram](../telegram.md) (the same commands, files as documents), [templates](../templates.md) (twins and `replaced_where`, from R1), [invoices](../invoices.md#the-debtor-book), [AI](../ai.md#evaluation) (the chat suite) and the [threat model](../security/threat-model.md) (the searchable name and what the model is sent).
+- **The owners' guide** gains [Keep your records in chat](../guide/keep-your-records-in-chat.md): lists, bringing a list in, who owes you, questions, other languages. [Your tables](../guide/tables.md) no longer gives debtors as a table's example.
+- **The strategy's** "Xenibase underneath" row and §3.3 say what is built: everything but Xenibase's own operations as Taskiem workflows (P4-T4), which this plan never covered.
+- **[Decision 0060](../decisions/0060-no-sheet-needed.md) is accepted**, with an As built section listing where the build differs from it.
 
 ## 9. Details
 
