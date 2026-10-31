@@ -400,3 +400,24 @@ func CardForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, doc, reference 
 	}
 	return &m, err
 }
+
+// RecordSentTx keeps the chat app's id of a conversation's message told
+// to a person's phone (by the keyed hash of their address), so their
+// reply quoting it there goes into the conversation.
+func RecordSentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel string, addrHash []byte, id string, link, pair uuid.UUID) error {
+	_, err := tx.Exec(ctx, `INSERT INTO link_chat_sent (tenant_id, channel, address_hash, message_id, link_id, pair_id) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT DO NOTHING`, tenant, channel, addrHash, id, link, pair)
+	return err
+}
+
+// SentTx is the conversation's message a chat app's message to this
+// address was, in the business in scope: its link and id; ok false when
+// it was none.
+func SentTx(ctx context.Context, tx pgx.Tx, channel string, addrHash []byte, id string) (uuid.UUID, uuid.UUID, bool, error) {
+	var link, pair uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT link_id, pair_id FROM link_chat_sent WHERE channel = $1 AND address_hash = $2 AND message_id = $3`, channel, addrHash, id).Scan(&link, &pair)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return link, pair, false, nil
+	}
+	return link, pair, err == nil, err
+}

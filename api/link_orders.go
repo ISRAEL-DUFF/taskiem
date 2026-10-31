@@ -716,7 +716,10 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 	}
 	told := *t
 	s.background(ctx, "linked order", func(ctx context.Context) {
-		s.orderCards(ctx, told)
+		var sent func(channel, addr, id string)
+		if card := s.orderCards(ctx, told); card != uuid.Nil {
+			sent = s.keepSent(ctx, told.Tenant, told.Link, card)
+		}
 		note := in.Note
 		if note == "" || told.Event == "change" || told.Event == "delivered" || told.Event == "short" {
 			note = s.orderNote(ctx, told, in)
@@ -725,10 +728,10 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 		if told.Event == "delivered" {
 			perms = []string{PermTableEdit} // who records what came
 		}
-		s.tellHoldersWith(ctx, told.Tenant, perms, "order:"+told.Reference+":"+told.Event, link, func(l lang.Tag) (string, string) {
+		s.tellHoldersSent(ctx, told.Tenant, perms, "order:"+told.Reference+":"+told.Event, link, func(l lang.Tag) (string, string) {
 			return tr(l, "order.link."+told.Event+"_title", "from", told.From, "reference", told.Reference),
 				strings.TrimSpace(tr(l, "order.link."+told.Event, "from", whatsapp.SafeText(told.From), "reference", told.Reference, "note", whatsapp.SafeText(note)))
-		}, func(l lang.Tag) []whatsapp.Button { return orderButtons(l, told) })
+		}, func(l lang.Tag) []whatsapp.Button { return orderButtons(l, told) }, sent)
 	})
 }
 

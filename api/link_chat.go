@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -236,7 +239,7 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 		}); err != nil || muted {
 			return
 		}
-		s.tellHolders(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), func(l lang.Tag) (string, string) {
+		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), func(l lang.Tag) (string, string) {
 			body := m.Body
 			if m.SenderName != "" {
 				body = m.SenderName + ": " + body
@@ -245,8 +248,63 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 				body = tr(l, "chat.link.about", "reference", m.Reply.Card.Reference) + " " + body
 			}
 			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(body)
-		})
+		}, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
+}
+
+// chatAddrHash is the keyed hash a person's chat address is kept by.
+func (s *Server) chatAddrHash(tenant uuid.UUID, channel, addr string) []byte {
+	m := hmac.New(sha256.New, s.linkKey(tenant))
+	m.Write([]byte("taskiem/chat-sent/v1\x00" + channel + "\x00" + addr))
+	return m.Sum(nil)
+}
+
+// waQuotedReply takes a reply quoting a conversation's message on the
+// phone into that conversation, quoting it, for whichever of the person's
+// businesses it was told to (done false when the quoted message is none).
+func (s *Server) waQuotedReply(ctx context.Context, c *chat) (bool, error) {
+	text := strings.TrimSpace(c.in.Text)
+	if c.in.Quoted == "" || c.in.Reply != "" || text == "" {
+		return false, nil
+	}
+	tenants := append([]tenantRef{c.tenant}, slices.DeleteFunc(slices.Clone(c.tenants), func(t tenantRef) bool { return t.ID == c.tenant.ID })...)
+	for _, t := range tenants {
+		if t.ID == uuid.Nil {
+			continue
+		}
+		var link, pair uuid.UUID
+		var ok bool
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+			var err error
+			link, pair, ok, err = links.SentTx(ctx, tx, c.ch.Name(), s.chatAddrHash(t.ID, c.ch.Name(), c.addr), c.in.Quoted)
+			return err
+		}); err != nil {
+			return true, err
+		}
+		if !ok {
+			continue
+		}
+		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
+		if err != nil || !p.Can(PermChatTrade) {
+			return true, c.say(ctx, s, c.t("chat.link.denied", "org", t.Name))
+		}
+		var name string
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+			l, err := links.GetTx(ctx, tx, link)
+			name = l.Name
+			return err
+		}); err != nil {
+			return true, err
+		}
+		if _, err := s.sendLink(ctx, p, link, text, &pair); err != nil {
+			if errors.Is(err, links.ErrInvalid) || errors.Is(err, links.ErrState) {
+				return true, c.say(ctx, s, c.t("chat.link.not_sent", "reason", strings.TrimPrefix(strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": "), links.ErrState.Error()+": ")))
+			}
+			return true, err
+		}
+		return true, c.say(ctx, s, c.t("chat.link.sent", "name", whatsapp.SafeText(name)))
+	}
+	return false, nil
 }
 
 // readLinkChat is POST /v1/link-chats/{link}/read: the conversation's
@@ -309,8 +367,9 @@ type cardSide struct {
 }
 
 // postCards writes a document event as a card into both sides'
-// conversations, each in its own scope, the same message on both.
-func (s *Server) postCards(ctx context.Context, link uuid.UUID, sides ...cardSide) {
+// conversations, each in its own scope, the same message on both; it
+// answers the card's id.
+func (s *Server) postCards(ctx context.Context, link uuid.UUID, sides ...cardSide) uuid.UUID {
 	pair := uuid.Must(uuid.NewV7())
 	for _, c := range sides {
 		if c.tenant == uuid.Nil {
@@ -322,27 +381,41 @@ func (s *Server) postCards(ctx context.Context, link uuid.UUID, sides ...cardSid
 			s.Logger.Warn("links: a card in the conversation", "tenant", c.tenant, "err", err)
 		}
 	}
+	return pair
+}
+
+// keepSent is a tellHoldersSent hearing that keeps what was sent as the
+// conversation's message pair, so a reply quoting it on the phone goes
+// into the conversation.
+func (s *Server) keepSent(ctx context.Context, tenant, link, pair uuid.UUID) func(channel, addr, id string) {
+	return func(channel, addr, id string) {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			return links.RecordSentTx(ctx, tx, tenant, channel, s.chatAddrHash(tenant, channel, addr), id, link, pair)
+		}); err != nil {
+			s.Logger.Warn("links: keeping a message sent to a phone", "tenant", tenant, "err", err)
+		}
+	}
 }
 
 // orderCards writes an order's event into both sides' conversations: the
-// seller's order, the buyer's purchase order.
-func (s *Server) orderCards(ctx context.Context, t links.Told) {
+// seller's order, the buyer's purchase order. It answers the card's id.
+func (s *Server) orderCards(ctx context.Context, t links.Told) uuid.UUID {
 	if t.Link == uuid.Nil {
-		return
+		return uuid.Nil
 	}
 	seller, buyer := t.Tenant, t.FromTenant
 	if !sellerTold(t.Event) {
 		seller, buyer = t.FromTenant, t.Tenant
 	}
-	s.postCards(ctx, t.Link,
+	return s.postCards(ctx, t.Link,
 		cardSide{tenant: seller, mine: seller == t.FromTenant, card: links.DocCard{Doc: links.DocOrder, Event: t.Event, Reference: t.Reference, ID: t.Order.String()}},
 		cardSide{tenant: buyer, mine: buyer == t.FromTenant, card: links.DocCard{Doc: links.DocPurchase, Event: t.Event, Reference: t.Reference, ID: t.Purchase.String()}})
 }
 
 // billCards writes a bill's event into both sides' conversations: the
 // seller's invoice, the buyer's bill (each opened by its number).
-func (s *Server) billCards(ctx context.Context, link, seller, buyer uuid.UUID, reference, event string, sellerActed bool, amount *int64, note string) {
-	s.postCards(ctx, link,
+func (s *Server) billCards(ctx context.Context, link, seller, buyer uuid.UUID, reference, event string, sellerActed bool, amount *int64, note string) uuid.UUID {
+	return s.postCards(ctx, link,
 		cardSide{tenant: seller, mine: sellerActed, card: links.DocCard{Doc: links.DocInvoice, Event: event, Reference: reference, ID: reference, AmountKobo: amount, Note: note}},
 		cardSide{tenant: buyer, mine: !sellerActed, card: links.DocCard{Doc: links.DocBill, Event: event, Reference: reference, ID: reference, AmountKobo: amount, Note: note}})
 }

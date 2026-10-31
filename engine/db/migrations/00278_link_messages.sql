@@ -60,6 +60,27 @@ CREATE POLICY tenant_isolation ON link_conversations TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON link_conversations TO taskiem_app;
 
+-- A message of the conversation told to a person's phone: the chat
+-- app's id of what was sent (to whom, by the hash of the address, never
+-- the address), so a reply quoting it there goes into the conversation,
+-- quoting that message.
+CREATE TABLE link_chat_sent (
+  tenant_id     uuid NOT NULL REFERENCES tenants(id),
+  channel       text NOT NULL CHECK (channel IN ('whatsapp', 'telegram', 'slack')),
+  address_hash  bytea NOT NULL CHECK (length(address_hash) = 32),
+  message_id    text NOT NULL CHECK (length(message_id) BETWEEN 1 AND 200),
+  link_id       uuid NOT NULL REFERENCES business_links(id),
+  pair_id       uuid NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (channel, address_hash, message_id)
+);
+ALTER TABLE link_chat_sent ENABLE ROW LEVEL SECURITY;
+ALTER TABLE link_chat_sent FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON link_chat_sent TO taskiem_app
+  USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
+GRANT SELECT, INSERT ON link_chat_sent TO taskiem_app;
+
 -- +goose Down
+DROP TABLE link_chat_sent;
 DROP TABLE link_conversations;
 DROP TABLE link_messages;

@@ -91,3 +91,46 @@ test("two linked businesses talk", async ({ browser }) => {
   await expect(buyer.getByRole("button", { name: "Archived (1)" })).toBeVisible();
   await expect(buyer.getByTestId("link-linked")).toHaveCount(0);
 });
+
+test("a bill's card, its query, and the query settled by taking an amount off", async ({ browser }) => {
+  const stamp = letters();
+  const sellerName = `Cherry Blocks ${stamp}`;
+  const seller = await (await browser.newContext()).newPage();
+  await signUp(seller, sellerName);
+  const buyer = await (await browser.newContext()).newPage();
+  await signUp(buyer, `Bola Builders ${stamp}`);
+  expect((await seller.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
+  const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(`cherry blocks ${stamp}`)}`, { headers: H })).json();
+  expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
+  const link = (await (await seller.request.get("/v1/links", { headers: H })).json()).links[0].id as string;
+  expect((await seller.request.post(`/v1/links/${link}/accept`, { headers: H })).status()).toBe(200);
+  const buyerID = (await (await buyer.request.get("/v1/me", { headers: H })).json()).tenant_id as string;
+
+  // Cherry invoices Bola as a linked business: a card in both conversations.
+  const inv = await seller.request.post("/v1/invoices", {
+    headers: { ...H, "Idempotency-Key": `inv-${stamp}` },
+    data: { customer: { name: "Bola Builders", key: `link:${buyerID}` }, lines: [{ description: "Blocks", quantity: 100, unit_kobo: 45000 }] },
+  });
+  expect(inv.status(), await inv.text()).toBe(201);
+  const x = await inv.json();
+  expect((await seller.request.post(`/v1/invoices/${x.id}/send`, { headers: { ...H, "Idempotency-Key": `send-${stamp}` } })).status()).toBe(200);
+  await buyer.goto(`/chat?with=${link}`);
+  const card = buyer.getByTestId("chat-card");
+  await expect(card).toContainText(`${sellerName} sent invoice ${x.number}`, { timeout: 20_000 });
+  await expect(card.getByRole("link", { name: `Pay ${x.number}` })).toBeVisible();
+  await axeBoth(buyer, "a bill's card");
+
+  // Bola queries it; on Cherry's invoice, the query is settled with ₦5,000 off.
+  expect((await buyer.request.post(`/v1/bills/${x.number}/query`, { headers: H, data: { reason: "Ten blocks broke" } })).status()).toBe(200);
+  await seller.goto(`/invoices/${x.id}`);
+  const q = seller.getByTestId("invoice-query");
+  await expect(q).toBeVisible();
+  await q.getByLabel("Take an amount off").check();
+  await q.getByLabel("Amount off (₦)").fill("5,000");
+  await q.getByLabel("Why").fill("Ten blocks broke");
+  await axeBoth(seller, "settling a query");
+  await q.getByRole("button", { name: "Settle the query" }).click();
+  await expect(q).toHaveCount(0);
+  await expect(seller.getByTestId("doc-thread")).toContainText("Took ₦5,000 off: Ten blocks broke");
+  await axeBoth(seller, "an invoice's messages");
+});

@@ -5613,7 +5613,7 @@ paths:
       tags:
       - Invoices
       summary: Settle a linked buyer's query on an invoice
-      description: The invoice is matched oldest-first again and the buyer's bill is no longer queried; the buyer is told. 409 when it is not queried.
+      description: As it stands, or with an amount taken off (an amendment of the invoice, which its bill follows); the invoice is matched oldest-first again and the buyer's bill is no longer queried; the buyer is told, and both conversations show it. 409 when it is not queried.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -5634,6 +5634,13 @@ paths:
               type: object
               additionalProperties: false
               properties:
+                how:
+                  type: string
+                  enum: [as_it_stands, discount]
+                  description: as_it_stands (the default; note says why), or discount (amount_kobo off the invoice as an amendment, note its reason)
+                amount_kobo:
+                  type: integer
+                  minimum: 1
                 note:
                   type: string
                   maxLength: 500

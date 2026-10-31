@@ -601,6 +601,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if strings.HasPrefix(text, linkPrefix) && !strings.HasPrefix(text, linkPrefix+"role:") {
 		return s.waLinkPress(ctx, c, text)
 	}
+	// A reply quoting a linked business's message, into its conversation
+	// (link_chat.go), whatever else the conversation is in the middle of.
+	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
+		return err
+	}
 	// Accept or Decline on a linked business's order, All came on its
 	// delivery (link_orders.go).
 	if strings.HasPrefix(text, orderPrefix) {

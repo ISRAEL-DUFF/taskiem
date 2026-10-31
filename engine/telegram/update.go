@@ -48,6 +48,9 @@ type Update struct {
 	Contact *Contact
 	// Location is a shared location (message.location) as a maps link.
 	Location string
+	// ReplyTo is the message this one replies to, quoting it
+	// (message.reply_to_message), 0 for none.
+	ReplyTo int64
 }
 
 // Contact is a shared phone contact.
@@ -120,6 +123,9 @@ type tgMessage struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
 	} `json:"location"`
+	ReplyTo *struct {
+		MessageID int64 `json:"message_id"`
+	} `json:"reply_to_message"`
 }
 
 // imageTypes are the files read as photos when sent uncompressed.
@@ -160,6 +166,9 @@ func Parse(body []byte) (Update, error) {
 			return u, nil
 		}
 		u.Kind, u.ChatID, u.ChatType, u.MessageID = "message", m.Chat.ID, m.Chat.Type, m.MessageID
+		if m.ReplyTo != nil {
+			u.ReplyTo = m.ReplyTo.MessageID
+		}
 		u.Text = m.Text
 		if u.Text == "" {
 			u.Text = m.Caption

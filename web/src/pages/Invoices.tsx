@@ -1,9 +1,28 @@
 import { Fragment, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
 import { DocThread } from "./Conversation";
-import { EmptyState, ErrorBox, Field, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Item,
+  Items,
+  PageHeader,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLiveRefresh,
+  useLoad,
+} from "../ui";
 import {
   amendmentProblem,
   amendmentRequest,
@@ -101,6 +120,7 @@ import {
   issuerOf,
   issuerWords,
   newAccountForm,
+  toKobo,
 } from "../lib/invoices";
 import type { LinksView } from "../lib/links";
 import { isMasked, telLink } from "../lib/orders";
@@ -113,7 +133,8 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
   try {
     return await p;
   } catch (e) {
-    if (e instanceof ApiError && (e.status === 400 || e.status === 409)) e.message = plainMessage(e.message);
+    if (e instanceof ApiError && (e.status === 400 || e.status === 409))
+      e.message = plainMessage(e.message);
     throw e;
   }
 }
@@ -126,8 +147,15 @@ function StatusPill({ status }: { status: string }) {
 /** Invoices, To match (with the number of payments waiting), Settings. */
 export function InvoiceTabs({ waiting }: { waiting?: number }) {
   // The pages that know the number pass it; the others ask (a refusal leaves the tab without one).
-  const own = useLoad(() => (waiting === undefined ? get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH) : Promise.resolve(undefined)), [waiting === undefined]);
-  const n = waiting ?? (own.data ? groupSuggestions(own.data.suggestions).length : 0);
+  const own = useLoad(
+    () =>
+      waiting === undefined
+        ? get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH)
+        : Promise.resolve(undefined),
+    [waiting === undefined],
+  );
+  const n =
+    waiting ?? (own.data ? groupSuggestions(own.data.suggestions).length : 0);
   return (
     <nav className="tabs" aria-label="Invoices">
       <NavLink to="/invoices" end>
@@ -138,7 +166,10 @@ export function InvoiceTabs({ waiting }: { waiting?: number }) {
         {n > 0 && (
           <span className="tab-count" data-testid="to-match-count">
             {n}
-            <span className="sr-only"> {n === 1 ? "payment waiting" : "payments waiting"}</span>
+            <span className="sr-only">
+              {" "}
+              {n === 1 ? "payment waiting" : "payments waiting"}
+            </span>
           </span>
         )}
       </NavLink>
@@ -153,14 +184,33 @@ export function InvoiceTabs({ waiting }: { waiting?: number }) {
 export function InvoiceMatch() {
   const { can } = useAuth();
   const manage = invoiceAccess(can).manage;
-  const list = useLoad(() => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH), []);
-  const left = useLoad(() => get<{ payments: UnmatchedMoney[] | null; orders?: MoneyOpenOrder[] | null; claims?: Claim[] | null }>(UNMATCHED_PATH), []);
+  const list = useLoad(
+    () => get<{ suggestions: MoneySuggestion[] | null }>(SUGGESTIONS_PATH),
+    [],
+  );
+  const left = useLoad(
+    () =>
+      get<{
+        payments: UnmatchedMoney[] | null;
+        orders?: MoneyOpenOrder[] | null;
+        claims?: Claim[] | null;
+      }>(UNMATCHED_PATH),
+    [],
+  );
   useLiveRefresh(list.reload);
   useLiveRefresh(left.reload);
   // The invoices a payment can be matched to by hand.
-  const invoices = useLoad(() => (manage ? get<{ invoices: CustomerInvoice[] | null }>("/v1/invoices") : Promise.resolve({ invoices: [] })), [manage]);
+  const invoices = useLoad(
+    () =>
+      manage
+        ? get<{ invoices: CustomerInvoice[] | null }>("/v1/invoices")
+        : Promise.resolve({ invoices: [] }),
+    [manage],
+  );
   const [said, setSaid] = useState("");
-  const waiting = list.data ? groupSuggestions(list.data.suggestions) : undefined;
+  const waiting = list.data
+    ? groupSuggestions(list.data.suggestions)
+    : undefined;
   const unmatched = unmatchedPayments(left.data?.payments);
   const done = (line: string) => {
     setSaid(line);
@@ -179,25 +229,59 @@ export function InvoiceMatch() {
         {said && <div className="notice">{said}</div>}
       </div>
       <ErrorBox error={list.error} />
-      {waiting === undefined && !list.error && <Skeleton rows={3} label="Loading payments to match…" />}
-      {waiting && waiting.length === 0 && unmatched.length === 0 && (left.data?.claims ?? []).length === 0 && (
-        <EmptyState icon="invoices">Nothing to match. Payments into the accounts Taskiem gave are matched to their invoice as they come in.</EmptyState>
+      {waiting === undefined && !list.error && (
+        <Skeleton rows={3} label="Loading payments to match…" />
       )}
+      {waiting &&
+        waiting.length === 0 &&
+        unmatched.length === 0 &&
+        (left.data?.claims ?? []).length === 0 && (
+          <EmptyState icon="invoices">
+            Nothing to match. Payments into the accounts Taskiem gave are
+            matched to their invoice as they come in.
+          </EmptyState>
+        )}
       {waiting?.map((p) => (
-        <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} orders={left.data?.orders} onDone={done} />
+        <WaitingCard
+          key={p.entry_id}
+          payment={p}
+          manage={manage}
+          open={openInvoices(invoices.data?.invoices)}
+          orders={left.data?.orders}
+          onDone={done}
+        />
       ))}
       <ErrorBox error={left.error} />
       {unmatched.length > 0 && (
         <>
           <h2>No invoice suggested</h2>
-          <p className="hint">Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice or order.</p>
+          <p className="hint">
+            Money that came in with nothing to suggest, or whose suggestions
+            were all turned down. Match it by hand if you know the invoice or
+            order.
+          </p>
           {unmatched.map((p) => (
-            <WaitingCard key={p.entry_id} payment={p} manage={manage} open={openInvoices(invoices.data?.invoices)} orders={left.data?.orders} onDone={done} />
+            <WaitingCard
+              key={p.entry_id}
+              payment={p}
+              manage={manage}
+              open={openInvoices(invoices.data?.invoices)}
+              orders={left.data?.orders}
+              onDone={done}
+            />
           ))}
         </>
       )}
-      <ClaimsToMatch claims={left.data?.claims} manage={can("school.manage")} onChange={() => left.reload()} />
-      {!manage && waiting && waiting.length > 0 && <p className="hint">You can see these. Someone who manages invoices can match them.</p>}
+      <ClaimsToMatch
+        claims={left.data?.claims}
+        manage={can("school.manage")}
+        onChange={() => left.reload()}
+      />
+      {!manage && waiting && waiting.length > 0 && (
+        <p className="hint">
+          You can see these. Someone who manages invoices can match them.
+        </p>
+      )}
     </>
   );
 }
@@ -227,12 +311,21 @@ function WaitingCard({
       const held = heldMatchLine(r);
       if (held) return onDone(held);
       const kind = isOrder(c) ? "order" : "invoice";
-      onDone(action === "confirm" ? matchedLine(p.amount_kobo, c.number, kind) : rejectedLine(c.number, kind));
+      onDone(
+        action === "confirm"
+          ? matchedLine(p.amount_kobo, c.number, kind)
+          : rejectedLine(c.number, kind),
+      );
     }, false);
   return (
-    <section className="card match-card" aria-labelledby={`${title} ${title}-when ${title}-ref`} data-testid="waiting-payment">
+    <section
+      className="card match-card"
+      aria-labelledby={`${title} ${title}-when ${title}-ref`}
+      data-testid="waiting-payment"
+    >
       <h2 id={title}>
-        <span className="sf-price">{amountWords(p.amount_kobo)}</span> <span className="hint">{kindWords(p.kind)}</span>
+        <span className="sf-price">{amountWords(p.amount_kobo)}</span>{" "}
+        <span className="hint">{kindWords(p.kind)}</span>
       </h2>
       <dl className="kv">
         <dt>Received</dt>
@@ -240,7 +333,9 @@ function WaitingCard({
         <dt>Where</dt>
         <dd>{channelWords(p.channel)}</dd>
         <dt>Reference</dt>
-        <dd id={`${title}-ref`}>{p.reference || <span className="hint">None</span>}</dd>
+        <dd id={`${title}-ref`}>
+          {p.reference || <span className="hint">None</span>}
+        </dd>
       </dl>
       {p.held_reason && (
         <div className="notice" data-testid="held-reason">
@@ -260,18 +355,25 @@ function WaitingCard({
             <li key={c.id} data-testid="candidate">
               <div className="match-head">
                 <Link to={targetPath(c)}>{targetLabel(c)}</Link>{" "}
-                <span className={`badge sf-status ${w.tone}`} title={`Score ${c.score} of 100`}>
+                <span
+                  className={`badge sf-status ${w.tone}`}
+                  title={`Score ${c.score} of 100`}
+                >
                   {w.label}
                 </span>
                 {isOrder(c) && (
                   <span className="hint">
                     {" "}
-                    {naira(c.due_kobo ?? 0)} to pay{c.customer ? ` · ${c.customer}` : ""}
+                    {naira(c.due_kobo ?? 0)} to pay
+                    {c.customer ? ` · ${c.customer}` : ""}
                   </span>
                 )}
               </div>
               {(c.reasons ?? []).length > 0 && (
-                <ul className="match-reasons" aria-label={`Why ${targetLabel(c)}`}>
+                <ul
+                  className="match-reasons"
+                  aria-label={`Why ${targetLabel(c)}`}
+                >
                   {(c.reasons ?? []).map((r) => (
                     <li key={r}>{r}</li>
                   ))}
@@ -279,16 +381,31 @@ function WaitingCard({
               )}
               {manage && (
                 <div className="toolbar">
-                  <button type="button" className="primary" disabled={act.busy} onClick={() => decide(c, "confirm")} aria-label={`Match to ${targetLabel(c)}`}>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={act.busy}
+                    onClick={() => decide(c, "confirm")}
+                    aria-label={`Match to ${targetLabel(c)}`}
+                  >
                     Match
                   </button>
-                  <button type="button" disabled={act.busy} onClick={() => decide(c, "reject")} aria-label={`Not this one: ${targetLabel(c)}`}>
+                  <button
+                    type="button"
+                    disabled={act.busy}
+                    onClick={() => decide(c, "reject")}
+                    aria-label={`Not this one: ${targetLabel(c)}`}
+                  >
                     Not this one
                   </button>
                 </div>
               )}
               {manage && c.split && (c.split.parts ?? []).length > 0 && (
-                <SplitForm suggestion={c} leftKobo={c.left_kobo ?? p.amount_kobo ?? 0} onDone={onDone} />
+                <SplitForm
+                  suggestion={c}
+                  leftKobo={c.left_kobo ?? p.amount_kobo ?? 0}
+                  onDone={onDone}
+                />
               )}
             </li>
           );
@@ -309,16 +426,30 @@ function WaitingCard({
                   if (!other) return;
                   const chosen = choices.find((x) => x.value === other);
                   void act.run(async () => {
-                    const r = await plainly(post<unknown>(entryMatchPath(p.entry_id), matchRequest(other)));
+                    const r = await plainly(
+                      post<unknown>(
+                        entryMatchPath(p.entry_id),
+                        matchRequest(other),
+                      ),
+                    );
                     const held = heldMatchLine(r);
                     if (held) return onDone(held);
-                    onDone(matchedLine(p.amount_kobo, chosen?.number ?? other, chosen?.kind));
+                    onDone(
+                      matchedLine(
+                        p.amount_kobo,
+                        chosen?.number ?? other,
+                        chosen?.kind,
+                      ),
+                    );
                   }, false);
                 }}
               >
                 <div className="row match-other-row">
                   <Field label={words.label} hint={words.hint}>
-                    <select value={other} onChange={(e) => setOther(e.target.value)}>
+                    <select
+                      value={other}
+                      onChange={(e) => setOther(e.target.value)}
+                    >
                       <option value="">{words.empty}</option>
                       {choices.map((x) => (
                         <option key={x.value} value={x.value}>
@@ -337,7 +468,11 @@ function WaitingCard({
                   </div>
                 )}
               </form>
-              <HandSplit payment={p} choices={matchChoices(open, orders, [])} onDone={onDone} />
+              <HandSplit
+                payment={p}
+                choices={matchChoices(open, orders, [])}
+                onDone={onDone}
+              />
             </>
           )}
         </details>
@@ -348,7 +483,15 @@ function WaitingCard({
 }
 
 /** Split a payment by hand: pick invoices and orders, give each its part; the rest waits to be matched. */
-function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; choices: MatchChoice[]; onDone: (line: string) => void }) {
+function HandSplit({
+  payment: p,
+  choices,
+  onDone,
+}: {
+  payment: WaitingPayment;
+  choices: MatchChoice[];
+  onDone: (line: string) => void;
+}) {
   const act = useAction();
   const [rows, setRows] = useState<HandRow[]>(() => handRows(choices));
   const [tried, setTried] = useState(false);
@@ -356,13 +499,16 @@ function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; c
   const problem = handProblem(rows, leftKobo);
   const rest = handRest(rows, leftKobo);
   const id = `hand-${p.entry_id}`;
-  const set = (i: number, patch: Partial<HandRow>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const set = (i: number, patch: Partial<HandRow>) =>
+    setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   return (
     <details className="match-split" data-testid="hand-split">
       <summary>Split by hand across several…</summary>
       <p className="hint">
-        Tick each invoice or order this payment is for and give it its part. The parts can add up to at most what is left of the payment; what they leave waits here to be
-        matched. Each part is a match of its own, and can be undone on its own.
+        Tick each invoice or order this payment is for and give it its part. The
+        parts can add up to at most what is left of the payment; what they leave
+        waits here to be matched. Each part is a match of its own, and can be
+        undone on its own.
       </p>
       <form
         noValidate
@@ -372,7 +518,9 @@ function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; c
           setTried(true);
           if (problem) return;
           void act.run(async () => {
-            const r = await plainly(post<MoneySplit>(entryMatchPath(p.entry_id), handRequest(rows)));
+            const r = await plainly(
+              post<MoneySplit>(entryMatchPath(p.entry_id), handRequest(rows)),
+            );
             onDone(heldMatchLine(r) ?? splitLine(r));
           }, false);
         }}
@@ -383,12 +531,23 @@ function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; c
         {rows.map((r, i) => (
           <div key={r.value} className="row match-other-row">
             <label className="row">
-              <input type="checkbox" checked={r.picked} onChange={(e) => set(i, { picked: e.target.checked })} />
+              <input
+                type="checkbox"
+                checked={r.picked}
+                onChange={(e) => set(i, { picked: e.target.checked })}
+              />
               <span>{r.label}</span>
             </label>
             {r.picked && (
-              <Field label={`Part for ${r.kind === "order" ? `order ${r.number}` : r.number}`}>
-                <input inputMode="decimal" value={r.amount} onChange={(e) => set(i, { amount: e.target.value })} aria-describedby={`${id}-rest`} />
+              <Field
+                label={`Part for ${r.kind === "order" ? `order ${r.number}` : r.number}`}
+              >
+                <input
+                  inputMode="decimal"
+                  value={r.amount}
+                  onChange={(e) => set(i, { amount: e.target.value })}
+                  aria-describedby={`${id}-rest`}
+                />
               </Field>
             )}
           </div>
@@ -413,7 +572,15 @@ function HandSplit({ payment: p, choices, onDone }: { payment: WaitingPayment; c
 }
 
 /** Split a payment across the customer's open invoices as offered (the suggested one first, then oldest first; siblings' where the school shares family credit), amounts editable. */
-function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySuggestion; leftKobo: number; onDone: (line: string) => void }) {
+function SplitForm({
+  suggestion: c,
+  leftKobo,
+  onDone,
+}: {
+  suggestion: MoneySuggestion;
+  leftKobo: number;
+  onDone: (line: string) => void;
+}) {
   const act = useAction();
   const [rows, setRows] = useState<SplitRow[]>(() => splitRows(c.split));
   const [creditRest, setCreditRest] = useState(true);
@@ -425,7 +592,10 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
   return (
     <details className="match-split" data-testid="split">
       <summary>Split across the customer's invoices…</summary>
-      <p className="hint">{splitHint(c.split, c.number)} Each part is a match of its own, and can be undone on its own.</p>
+      <p className="hint">
+        {splitHint(c.split, c.number)} Each part is a match of its own, and can
+        be undone on its own.
+      </p>
       <form
         noValidate
         aria-labelledby={id}
@@ -434,7 +604,12 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
           setTried(true);
           if (problem) return;
           void act.run(async () => {
-            const r = await plainly(post<MoneySplit>(suggestionPath(c.id, "confirm"), splitRequest(rows, creditRest && rest > 0)));
+            const r = await plainly(
+              post<MoneySplit>(
+                suggestionPath(c.id, "confirm"),
+                splitRequest(rows, creditRest && rest > 0),
+              ),
+            );
             onDone(heldMatchLine(r) ?? splitLine(r));
           }, false);
         }}
@@ -447,19 +622,33 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
             <input
               inputMode="decimal"
               value={r.amount}
-              onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
+              onChange={(e) =>
+                setRows(
+                  rows.map((x, j) =>
+                    j === i ? { ...x, amount: e.target.value } : x,
+                  ),
+                )
+              }
               aria-describedby={`${id}-rest`}
             />
           </Field>
         ))}
         <p className="hint" id={`${id}-rest`} data-testid="split-rest">
-          {rest > 0 ? `${naira(rest)} not counted towards these invoices.` : "All of the payment counts towards these invoices."}
+          {rest > 0
+            ? `${naira(rest)} not counted towards these invoices.`
+            : "All of the payment counts towards these invoices."}
         </p>
         {rest > 0 && (
           <label className="row">
-            <input type="checkbox" checked={creditRest} onChange={(e) => setCreditRest(e.target.checked)} />
-            <span>Keep the rest as the customer's credit, for their next invoice
-            (otherwise it waits here to be matched)</span>
+            <input
+              type="checkbox"
+              checked={creditRest}
+              onChange={(e) => setCreditRest(e.target.checked)}
+            />
+            <span>
+              Keep the rest as the customer's credit, for their next invoice
+              (otherwise it waits here to be matched)
+            </span>
           </label>
         )}
         {tried && problem && (
@@ -479,15 +668,30 @@ function SplitForm({ suggestion: c, leftKobo, onDone }: { suggestion: MoneySugge
 }
 
 /** The invoice's customer in matching: their credit, permanent account numbers and remembered payers (GET /v1/invoices/{id}/customer). */
-function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manage: boolean }) {
-  const view = useLoad(() => get<InvoiceCustomerView>(invoiceCustomerPath(invoice.id)), [invoice.id, invoice.paid_kobo]);
+function CustomerMatching({
+  invoice,
+  manage,
+}: {
+  invoice: CustomerInvoice;
+  manage: boolean;
+}) {
+  const view = useLoad(
+    () => get<InvoiceCustomerView>(invoiceCustomerPath(invoice.id)),
+    [invoice.id, invoice.paid_kobo],
+  );
   const forget = useAction();
   const v = view.data;
   return (
-    <section className="card" aria-labelledby="inv-customer-money" data-testid="customer-money">
+    <section
+      className="card"
+      aria-labelledby="inv-customer-money"
+      data-testid="customer-money"
+    >
       <h2 id="inv-customer-money">The customer's money</h2>
       <ErrorBox error={view.error} />
-      {!v && !view.error && <Skeleton rows={2} label="Loading the customer's credit…" />}
+      {!v && !view.error && (
+        <Skeleton rows={2} label="Loading the customer's credit…" />
+      )}
       {v && (
         <>
           <dl className="kv">
@@ -496,9 +700,15 @@ function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manag
             <dt>Account numbers</dt>
             <dd>
               {(v.accounts ?? []).length === 0 ? (
-                <span className="hint">None. Money into an account number of the customer's own is matched to their oldest open invoice first.</span>
+                <span className="hint">
+                  None. Money into an account number of the customer's own is
+                  matched to their oldest open invoice first.
+                </span>
               ) : (
-                <ul className="plain-list" aria-label="The customer's account numbers">
+                <ul
+                  className="plain-list"
+                  aria-label="The customer's account numbers"
+                >
                   {(v.accounts ?? []).map((a) => (
                     <li key={a.id} data-testid="customer-account">
                       {accountWords(a)}
@@ -511,9 +721,16 @@ function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manag
           </dl>
           <h3>Payers remembered</h3>
           {(v.payers ?? []).length === 0 ? (
-            <p className="hint">None yet. When someone pays for this customer and you match it, Taskiem remembers the payer and suggests this customer first next time.</p>
+            <p className="hint">
+              None yet. When someone pays for this customer and you match it,
+              Taskiem remembers the payer and suggests this customer first next
+              time.
+            </p>
           ) : (
-            <ul className="plain-list" aria-label="Payers remembered for this customer">
+            <ul
+              className="plain-list"
+              aria-label="Payers remembered for this customer"
+            >
               {(v.payers ?? []).map((p) => (
                 <li key={p.id} data-testid="payer">
                   {payerWords(p)}{" "}
@@ -550,9 +767,21 @@ function CustomerMatching({ invoice, manage }: { invoice: CustomerInvoice; manag
  * details are typed again; the account and its reference show on the
  * panel once registered (docs/matching.md "Customers' own account numbers").
  */
-function GiveAccount({ invoice, onDone }: { invoice: CustomerInvoice; onDone: () => void }) {
+function GiveAccount({
+  invoice,
+  onDone,
+}: {
+  invoice: CustomerInvoice;
+  onDone: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const issuers = useLoad(() => (open ? get<{ issuers: AccountIssuer[] }>(ISSUERS_PATH) : Promise.resolve(undefined)), [open]);
+  const issuers = useLoad(
+    () =>
+      open
+        ? get<{ issuers: AccountIssuer[] }>(ISSUERS_PATH)
+        : Promise.resolve(undefined),
+    [open],
+  );
   const [form, setForm] = useState<AccountForm>();
   const [tried, setTried] = useState(false);
   const act = useAction();
@@ -579,7 +808,9 @@ function GiveAccount({ invoice, onDone }: { invoice: CustomerInvoice; onDone: ()
         setTried(true);
         if (problem) return;
         void act.run(async () => {
-          await plainly(post(customerAccountsPath(invoice.id), accountRequest(f)));
+          await plainly(
+            post(customerAccountsPath(invoice.id), accountRequest(f)),
+          );
           setOpen(false);
           setForm(undefined);
           setTried(false);
@@ -587,13 +818,33 @@ function GiveAccount({ invoice, onDone }: { invoice: CustomerInvoice; onDone: ()
         }, "Account number registered");
       }}
     >
-      {!issuers.data && !issuers.error && <Skeleton rows={1} label="Looking for connections that can issue account numbers…" />}
+      {!issuers.data && !issuers.error && (
+        <Skeleton
+          rows={1}
+          label="Looking for connections that can issue account numbers…"
+        />
+      )}
       {issuers.data && (
         <>
-          {list.length === 0 && <p className="hint">None of your connections can issue account numbers; enter one your payments provider gave you for this customer.</p>}
+          {list.length === 0 && (
+            <p className="hint">
+              None of your connections can issue account numbers; enter one your
+              payments provider gave you for this customer.
+            </p>
+          )}
           {list.length > 0 && (
             <Field label="Where from">
-              <select aria-label="Where from" value={f.by_hand ? "by_hand" : f.connection} onChange={(e) => set(e.target.value === "by_hand" ? { by_hand: true, connection: "" } : { by_hand: false, connection: e.target.value })}>
+              <select
+                aria-label="Where from"
+                value={f.by_hand ? "by_hand" : f.connection}
+                onChange={(e) =>
+                  set(
+                    e.target.value === "by_hand"
+                      ? { by_hand: true, connection: "" }
+                      : { by_hand: false, connection: e.target.value },
+                  )
+                }
+              >
                 {list.map((i) => (
                   <option key={i.connection} value={i.connection}>
                     Issue one with {i.rail} ({i.connection})
@@ -606,32 +857,68 @@ function GiveAccount({ invoice, onDone }: { invoice: CustomerInvoice; onDone: ()
           {issuer && <p className="hint">{issuerWords(issuer)}</p>}
           {issuer?.needs_account && (
             <Field label="Wallet the number pays into">
-              <input value={f.account} onChange={(e) => set({ account: e.target.value })} />
+              <input
+                value={f.account}
+                onChange={(e) => set({ account: e.target.value })}
+              />
             </Field>
           )}
           {issuer?.needs_bvn && (
             <>
-              <Field label="The customer's BVN" hint="11 digits; sent to the provider, never kept.">
-                <input inputMode="numeric" autoComplete="off" value={f.bvn} onChange={(e) => set({ bvn: e.target.value })} />
+              <Field
+                label="The customer's BVN"
+                hint="11 digits; sent to the provider, never kept."
+              >
+                <input
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={f.bvn}
+                  onChange={(e) => set({ bvn: e.target.value })}
+                />
               </Field>
               <Field label="Or their NIN">
-                <input inputMode="numeric" autoComplete="off" value={f.nin} onChange={(e) => set({ nin: e.target.value })} />
+                <input
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={f.nin}
+                  onChange={(e) => set({ nin: e.target.value })}
+                />
               </Field>
             </>
           )}
           {f.by_hand && (
             <>
-              <Field label="Connection" hint="The connection the account is on, as the money log names it: paystack/main.">
-                <input value={f.connection} onChange={(e) => set({ connection: e.target.value })} placeholder="paystack/main" />
+              <Field
+                label="Connection"
+                hint="The connection the account is on, as the money log names it: paystack/main."
+              >
+                <input
+                  value={f.connection}
+                  onChange={(e) => set({ connection: e.target.value })}
+                  placeholder="paystack/main"
+                />
               </Field>
               <Field label="Account number">
-                <input inputMode="numeric" value={f.account_number} onChange={(e) => set({ account_number: e.target.value })} />
+                <input
+                  inputMode="numeric"
+                  value={f.account_number}
+                  onChange={(e) => set({ account_number: e.target.value })}
+                />
               </Field>
-              <Field label="Reference" hint="The provider's reference for the account, which its payments carry.">
-                <input value={f.reference} onChange={(e) => set({ reference: e.target.value })} />
+              <Field
+                label="Reference"
+                hint="The provider's reference for the account, which its payments carry."
+              >
+                <input
+                  value={f.reference}
+                  onChange={(e) => set({ reference: e.target.value })}
+                />
               </Field>
               <Field label="Bank">
-                <input value={f.bank_name} onChange={(e) => set({ bank_name: e.target.value })} />
+                <input
+                  value={f.bank_name}
+                  onChange={(e) => set({ bank_name: e.target.value })}
+                />
               </Field>
             </>
           )}
@@ -642,9 +929,21 @@ function GiveAccount({ invoice, onDone }: { invoice: CustomerInvoice; onDone: ()
           )}
           <div className="toolbar">
             <button type="submit" className="primary small" disabled={act.busy}>
-              {act.busy ? "Registering…" : f.by_hand ? "Register this account" : "Issue the account number"}
+              {act.busy
+                ? "Registering…"
+                : f.by_hand
+                  ? "Register this account"
+                  : "Issue the account number"}
             </button>
-            <button type="button" className="small" onClick={() => (setOpen(false), setForm(undefined), setTried(false))}>
+            <button
+              type="button"
+              className="small"
+              onClick={() => (
+                setOpen(false),
+                setForm(undefined),
+                setTried(false)
+              )}
+            >
               Cancel
             </button>
           </div>
@@ -662,7 +961,10 @@ export function Invoices() {
   const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const status = params.get("status") ?? "";
-  const list = useLoad(() => get<{ invoices: CustomerInvoice[] | null }>(invoicesPath(status)), [status]);
+  const list = useLoad(
+    () => get<{ invoices: CustomerInvoice[] | null }>(invoicesPath(status)),
+    [status],
+  );
   useLiveRefresh(list.reload);
   const invoices = list.data ? (list.data.invoices ?? []) : undefined;
   const newButton = invoiceAccess(can).manage ? (
@@ -672,12 +974,23 @@ export function Invoices() {
   ) : undefined;
   return (
     <>
-      <PageHeader title="Invoices" description="What you ask your customers to pay, newest first. Each one is marked paid only by the payments counted towards it." actions={newButton} />
+      <PageHeader
+        title="Invoices"
+        description="What you ask your customers to pay, newest first. Each one is marked paid only by the payments counted towards it."
+        actions={newButton}
+      />
       <InvoiceTabs />
       <div className="filters" role="search" aria-label="Filter invoices">
         <label>
           Show{" "}
-          <select value={status} onChange={(e) => setParams(e.target.value ? { status: e.target.value } : {}, { replace: true })}>
+          <select
+            value={status}
+            onChange={(e) =>
+              setParams(e.target.value ? { status: e.target.value } : {}, {
+                replace: true,
+              })
+            }
+          >
             {INVOICE_FILTERS.map((f) => (
               <option key={f.label} value={f.value}>
                 {f.label}
@@ -690,7 +1003,9 @@ export function Invoices() {
         </button>
       </div>
       <ErrorBox error={list.error} />
-      {invoices === undefined && !list.error && <Skeleton rows={5} label="Loading invoices…" />}
+      {invoices === undefined && !list.error && (
+        <Skeleton rows={5} label="Loading invoices…" />
+      )}
       {invoices && invoices.length === 0 && (
         <EmptyState icon="invoices" action={status ? undefined : newButton}>
           {status
@@ -706,14 +1021,26 @@ export function Invoices() {
               testid="invoice"
               to={`/invoices/${encodeURIComponent(x.number)}`}
               icon="invoices"
-              tone={x.status === "overdue" ? "danger" : x.status === "paid" ? "ok" : x.status === "void" || x.status === "draft" ? "muted" : undefined}
+              tone={
+                x.status === "overdue"
+                  ? "danger"
+                  : x.status === "paid"
+                    ? "ok"
+                    : x.status === "void" || x.status === "draft"
+                      ? "muted"
+                      : undefined
+              }
               title={invoiceCustomerLine(x.customer)}
               side={naira(x.total_kobo)}
               sub={
                 <>
                   {x.number}
                   {x.due_on ? ` · due ${dateLabel(x.due_on)}` : ""}
-                  {x.status !== "void" && x.status !== "paid" && x.due_kobo !== x.total_kobo ? ` · ${naira(x.due_kobo)} still due` : ""}
+                  {x.status !== "void" &&
+                  x.status !== "paid" &&
+                  x.due_kobo !== x.total_kobo
+                    ? ` · ${naira(x.due_kobo)} still due`
+                    : ""}
                 </>
               }
               sideSub={<StatusPill status={x.status} />}
@@ -730,13 +1057,22 @@ export function Invoices() {
 /** A new invoice: its form, with the business's settings as the defaults. */
 export function InvoiceNew() {
   const { can } = useAuth();
-  const settings = useLoad(() => get<InvoiceSettings>("/v1/invoice-settings"), []);
+  const settings = useLoad(
+    () => get<InvoiceSettings>("/v1/invoice-settings"),
+    [],
+  );
   const ready = settings.data !== undefined || !!settings.error;
   return (
     <>
-      <PageHeader title="New invoice" actions={<Link to="/invoices">All invoices</Link>} />
+      <PageHeader
+        title="New invoice"
+        actions={<Link to="/invoices">All invoices</Link>}
+      />
       {!can("invoice.manage") ? (
-        <p className="hint">You can see invoices, but not make them. Someone who manages invoices can.</p>
+        <p className="hint">
+          You can see invoices, but not make them. Someone who manages invoices
+          can.
+        </p>
       ) : ready ? (
         <InvoiceEditor initial={newInvoiceForm(settings.data ?? null)} />
       ) : (
@@ -752,9 +1088,17 @@ export function InvoiceEdit() {
   const { can } = useAuth();
   // The customer's details are needed in full to change them: shown to those who may see them (recorded in the audit log).
   const reveal = can("pii.reveal");
-  const { data, error } = useLoad(() => get<{ invoice: CustomerInvoice; revealed: boolean }>(invoicePath(id, reveal ? "?reveal=true" : "")), [id, reveal]);
+  const { data, error } = useLoad(
+    () =>
+      get<{ invoice: CustomerInvoice; revealed: boolean }>(
+        invoicePath(id, reveal ? "?reveal=true" : ""),
+      ),
+    [id, reveal],
+  );
   const x = data?.invoice;
-  const back = <Link to={`/invoices/${encodeURIComponent(id)}`}>Back to the invoice</Link>;
+  const back = (
+    <Link to={`/invoices/${encodeURIComponent(id)}`}>Back to the invoice</Link>
+  );
   if (!can("invoice.manage"))
     return (
       <>
@@ -769,22 +1113,39 @@ export function InvoiceEdit() {
       {!x && !error && <Skeleton rows={4} label="Loading the invoice…" />}
       {x && x.status !== "draft" && (
         <div className="notice" role="status">
-          Only a draft can be changed. This invoice has been sent: to correct it, void it with the reason and send a new one.
+          Only a draft can be changed. This invoice has been sent: to correct
+          it, void it with the reason and send a new one.
         </div>
       )}
       {x && x.status === "draft" && (
         <>
           {!data?.revealed && (
-            <p className="hint">The customer's details are hidden from you. Enter them again to save your changes.</p>
+            <p className="hint">
+              The customer's details are hidden from you. Enter them again to
+              save your changes.
+            </p>
           )}
-          <InvoiceEditor initial={data?.revealed ? formFromInvoice(x) : { ...formFromInvoice(x), name: "", phone: "", email: "" }} existing={x} />
+          <InvoiceEditor
+            initial={
+              data?.revealed
+                ? formFromInvoice(x)
+                : { ...formFromInvoice(x), name: "", phone: "", email: "" }
+            }
+            existing={x}
+          />
         </>
       )}
     </>
   );
 }
 
-function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?: CustomerInvoice }) {
+function InvoiceEditor({
+  initial,
+  existing,
+}: {
+  initial: InvoiceForm;
+  existing?: CustomerInvoice;
+}) {
   const navigate = useNavigate();
   const [form, setForm] = useState(initial);
   const [tried, setTried] = useState(false);
@@ -794,27 +1155,44 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
   // A draft this form has saved already (a send that then failed): later saves change it.
   const [saved, setSaved] = useState<CustomerInvoice | undefined>(existing);
   const act = useAction();
-  const set = (patch: Partial<InvoiceForm>) => setForm((f) => ({ ...f, ...patch }));
-  const setItem = (i: number, patch: Partial<ItemInput>) => setForm((f) => ({ ...f, items: f.items.map((it, n) => (n === i ? { ...it, ...patch } : it)) }));
+  const set = (patch: Partial<InvoiceForm>) =>
+    setForm((f) => ({ ...f, ...patch }));
+  const setItem = (i: number, patch: Partial<ItemInput>) =>
+    setForm((f) => ({
+      ...f,
+      items: f.items.map((it, n) => (n === i ? { ...it, ...patch } : it)),
+    }));
   const problem = invoiceProblem(form);
   const total = formTotal(form);
   // Linked businesses that buy from us come first as customers (business links).
   const linked = useLoad(() => get<LinksView>("/v1/links"), []);
-  const buyers = (linked.data?.links ?? []).filter((l) => l.state === "active" && (l.role === "customer" || l.role === "both"));
+  const buyers = (linked.data?.links ?? []).filter(
+    (l) => l.state === "active" && (l.role === "customer" || l.role === "both"),
+  );
 
   const save = (andSend: boolean) => {
     setTried(true);
     if (problem) return;
-    void act.run(async () => {
-      const body = draftRequest(form);
-      const x = saved
-        ? await plainly(put<CustomerInvoice>(invoicePath(saved.id), body))
-        : await plainly(postOnce<CustomerInvoice>("/v1/invoices", createKey, body));
-      setSaved(x);
-      let sent: InvoiceSent | undefined;
-      if (andSend) sent = await plainly(postOnce<InvoiceSent>(invoicePath(x.id, "/send"), sendKey));
-      navigate(`/invoices/${encodeURIComponent(x.number)}`, { state: sent ? { sent } : undefined });
-    }, andSend ? "Invoice sent" : "Draft saved");
+    void act.run(
+      async () => {
+        const body = draftRequest(form);
+        const x = saved
+          ? await plainly(put<CustomerInvoice>(invoicePath(saved.id), body))
+          : await plainly(
+              postOnce<CustomerInvoice>("/v1/invoices", createKey, body),
+            );
+        setSaved(x);
+        let sent: InvoiceSent | undefined;
+        if (andSend)
+          sent = await plainly(
+            postOnce<InvoiceSent>(invoicePath(x.id, "/send"), sendKey),
+          );
+        navigate(`/invoices/${encodeURIComponent(x.number)}`, {
+          state: sent ? { sent } : undefined,
+        });
+      },
+      andSend ? "Invoice sent" : "Draft saved",
+    );
   };
 
   return (
@@ -828,12 +1206,23 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
     >
       <h2>Customer</h2>
       {buyers.length > 0 && (
-        <Field label="Who is it for?" hint={form.linked ? "A linked business: the invoice reaches it as a bill in its business." : undefined}>
+        <Field
+          label="Who is it for?"
+          hint={
+            form.linked
+              ? "A linked business: the invoice reaches it as a bill in its business."
+              : undefined
+          }
+        >
           <select
             value={form.linked ?? ""}
             onChange={(e) => {
               const b = buyers.find((l) => l.business === e.target.value);
-              set(b ? { linked: b.business, name: b.name, phone: "", email: "" } : { linked: undefined, name: "" });
+              set(
+                b
+                  ? { linked: b.business, name: b.name, phone: "", email: "" }
+                  : { linked: undefined, name: "" },
+              );
             }}
           >
             <option value="">Someone else</option>
@@ -848,14 +1237,31 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
       {!form.linked && (
         <>
           <Field label="Name">
-            <input value={form.name} maxLength={INVOICE_LIMITS.name} autoComplete="off" onChange={(e) => set({ name: e.target.value })} required />
+            <input
+              value={form.name}
+              maxLength={INVOICE_LIMITS.name}
+              autoComplete="off"
+              onChange={(e) => set({ name: e.target.value })}
+              required
+            />
           </Field>
           <div className="row">
             <Field label="Phone number" hint="For the SMS.">
-              <input type="tel" inputMode="tel" value={form.phone} autoComplete="off" onChange={(e) => set({ phone: e.target.value })} />
+              <input
+                type="tel"
+                inputMode="tel"
+                value={form.phone}
+                autoComplete="off"
+                onChange={(e) => set({ phone: e.target.value })}
+              />
             </Field>
             <Field label="Email" hint="For the email.">
-              <input type="email" value={form.email} autoComplete="off" onChange={(e) => set({ email: e.target.value })} />
+              <input
+                type="email"
+                value={form.email}
+                autoComplete="off"
+                onChange={(e) => set({ email: e.target.value })}
+              />
             </Field>
           </div>
           <p className="hint" style={{ marginTop: -8 }}>
@@ -868,29 +1274,55 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
       <fieldset className="sf-choices">
         <legend>Charge</legend>
         <label className="row">
-          <input type="radio" name="mode" checked={form.mode === "amount"} onChange={() => set({ mode: "amount" })} />
+          <input
+            type="radio"
+            name="mode"
+            checked={form.mode === "amount"}
+            onChange={() => set({ mode: "amount" })}
+          />
           <span>One amount</span>
         </label>
         <label className="row">
-          <input type="radio" name="mode" checked={form.mode === "items"} onChange={() => set({ mode: "items" })} />
+          <input
+            type="radio"
+            name="mode"
+            checked={form.mode === "items"}
+            onChange={() => set({ mode: "items" })}
+          />
           <span>A list of items</span>
         </label>
       </fieldset>
       {form.mode === "amount" ? (
         <div className="row">
           <Field label="Amount (₦)">
-            <input inputMode="decimal" value={form.amount} placeholder="25,000" onChange={(e) => set({ amount: e.target.value })} />
+            <input
+              inputMode="decimal"
+              value={form.amount}
+              placeholder="25,000"
+              onChange={(e) => set({ amount: e.target.value })}
+            />
           </Field>
-          <Field label="Description" hint="What it is for, such as Catering for 12 October. Optional.">
-            <input value={form.description} maxLength={INVOICE_LIMITS.description} onChange={(e) => set({ description: e.target.value })} />
+          <Field
+            label="Description"
+            hint="What it is for, such as Catering for 12 October. Optional."
+          >
+            <input
+              value={form.description}
+              maxLength={INVOICE_LIMITS.description}
+              onChange={(e) => set({ description: e.target.value })}
+            />
           </Field>
         </div>
       ) : (
         <ItemsEditor
           items={form.items}
           onChange={setItem}
-          onAdd={() => setForm((f) => ({ ...f, items: [...f.items, emptyItem()] }))}
-          onRemove={(i) => setForm((f) => ({ ...f, items: f.items.filter((_, n) => n !== i) }))}
+          onAdd={() =>
+            setForm((f) => ({ ...f, items: [...f.items, emptyItem()] }))
+          }
+          onRemove={(i) =>
+            setForm((f) => ({ ...f, items: f.items.filter((_, n) => n !== i) }))
+          }
         />
       )}
       <p className="sf-price" aria-live="polite">
@@ -900,24 +1332,45 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
       <h2>When and a note</h2>
       <div className="row">
         <Field label="Due date" hint="Optional. It is overdue the day after.">
-          <input type="date" value={form.dueOn} onChange={(e) => set({ dueOn: e.target.value })} />
+          <input
+            type="date"
+            value={form.dueOn}
+            onChange={(e) => set({ dueOn: e.target.value })}
+          />
         </Field>
         <Field label="Note for the customer" hint="Optional.">
-          <textarea value={form.note} maxLength={INVOICE_LIMITS.note} rows={2} onChange={(e) => set({ note: e.target.value })} />
+          <textarea
+            value={form.note}
+            maxLength={INVOICE_LIMITS.note}
+            rows={2}
+            onChange={(e) => set({ note: e.target.value })}
+          />
         </Field>
       </div>
 
       <details style={{ marginBottom: 16 }}>
         <summary>More payment options</summary>
         <div style={{ marginTop: 12 }}>
-          <Field label="Payments connection" hint="The connection that takes payments for this invoice. Leave it empty for your usual one.">
-            <input value={form.connection} placeholder="main" onChange={(e) => set({ connection: e.target.value })} />
+          <Field
+            label="Payments connection"
+            hint="The connection that takes payments for this invoice. Leave it empty for your usual one."
+          >
+            <input
+              value={form.connection}
+              placeholder="main"
+              onChange={(e) => set({ connection: e.target.value })}
+            />
           </Field>
           <fieldset className="sf-choices">
             <legend>Who pays the transfer fee</legend>
             {FEE_CHOICES.map((c) => (
               <label className="row" key={c.value}>
-                <input type="radio" name="fee" checked={form.feePaidBy === c.value} onChange={() => set({ feePaidBy: c.value })} />
+                <input
+                  type="radio"
+                  name="fee"
+                  checked={form.feePaidBy === c.value}
+                  onChange={() => set({ feePaidBy: c.value })}
+                />
                 <span>
                   {c.label} <span className="hint">{c.help}</span>
                 </span>
@@ -925,7 +1378,11 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
             ))}
           </fieldset>
           <label className="row">
-            <input type="checkbox" checked={form.partPayments} onChange={(e) => set({ partPayments: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={form.partPayments}
+              onChange={(e) => set({ partPayments: e.target.checked })}
+            />
             <span>The customer may pay part of it</span>
           </label>
         </div>
@@ -941,7 +1398,12 @@ function InvoiceEditor({ initial, existing }: { initial: InvoiceForm; existing?:
         <button type="submit" disabled={act.busy}>
           Save draft
         </button>
-        <button type="button" className="primary" disabled={act.busy} onClick={() => save(true)}>
+        <button
+          type="button"
+          className="primary"
+          disabled={act.busy}
+          onClick={() => save(true)}
+        >
           Save and send
         </button>
       </div>
@@ -971,21 +1433,42 @@ function ItemsEditor({
         <fieldset key={i} className="sf-choices" aria-label={`Item ${i + 1}`}>
           <div className="row" style={{ alignItems: "flex-end" }}>
             <Field label="Description">
-              <input value={it.description} maxLength={INVOICE_LIMITS.description} onChange={(e) => onChange(i, { description: e.target.value })} />
+              <input
+                value={it.description}
+                maxLength={INVOICE_LIMITS.description}
+                onChange={(e) => onChange(i, { description: e.target.value })}
+              />
             </Field>
             <Field label="Quantity">
-              <input inputMode="numeric" value={it.quantity} onChange={(e) => onChange(i, { quantity: e.target.value })} />
+              <input
+                inputMode="numeric"
+                value={it.quantity}
+                onChange={(e) => onChange(i, { quantity: e.target.value })}
+              />
             </Field>
             <Field label="Price each (₦)">
-              <input inputMode="decimal" value={it.price} placeholder="1,500" onChange={(e) => onChange(i, { price: e.target.value })} />
+              <input
+                inputMode="decimal"
+                value={it.price}
+                placeholder="1,500"
+                onChange={(e) => onChange(i, { price: e.target.value })}
+              />
             </Field>
             <Field label="Amount">
-              <output className="sf-price" style={{ display: "block", paddingTop: 8 }}>
+              <output
+                className="sf-price"
+                style={{ display: "block", paddingTop: 8 }}
+              >
                 {naira(itemTotal(it))}
               </output>
             </Field>
             {items.length > 1 && (
-              <button type="button" className="danger" aria-label={`Remove item ${i + 1}`} onClick={() => onRemove(i)}>
+              <button
+                type="button"
+                className="danger"
+                aria-label={`Remove item ${i + 1}`}
+                onClick={() => onRemove(i)}
+              >
                 Remove
               </button>
             )}
@@ -1008,7 +1491,9 @@ export function InvoicePage() {
   const { id = "" } = useParams();
   const { can, me } = useAuth();
   const location = useLocation();
-  const [sent, setSent] = useState<InvoiceSent | undefined>(() => (location.state as { sent?: InvoiceSent } | null)?.sent);
+  const [sent, setSent] = useState<InvoiceSent | undefined>(
+    () => (location.state as { sent?: InvoiceSent } | null)?.sent,
+  );
   const [sendKey, setSendKey] = useState(newRequestKey);
   const [voiding, setVoiding] = useState(false);
   const [reason, setReason] = useState("");
@@ -1019,12 +1504,20 @@ export function InvoicePage() {
   const voidAct = useAction();
   const undo = useAction();
   const reveal = useAction();
-  const { data, error, reload } = useLoad(() => get<{ invoice: CustomerInvoice; revealed: boolean }>(invoicePath(id)), [id]);
+  const { data, error, reload } = useLoad(
+    () => get<{ invoice: CustomerInvoice; revealed: boolean }>(invoicePath(id)),
+    [id],
+  );
   useLiveRefresh(reload);
   const x = data?.invoice;
   // A school's receipts for the payments counted (docs/schools.md#receipts).
   const receipts = useLoad(
-    () => (me?.schools && x && x.status !== "draft" ? get<{ receipts: Receipt[] }>(`/v1/schools/receipts?invoice=${encodeURIComponent(x.id)}`) : Promise.resolve(undefined)),
+    () =>
+      me?.schools && x && x.status !== "draft"
+        ? get<{ receipts: Receipt[] }>(
+            `/v1/schools/receipts?invoice=${encodeURIComponent(x.id)}`,
+          )
+        : Promise.resolve(undefined),
     [id, me?.schools, x?.status, x?.paid_kobo, x?.payments?.length],
   );
   const receiptOf: Record<string, Receipt> = {};
@@ -1034,7 +1527,9 @@ export function InvoicePage() {
 
   const doSend = (inv: CustomerInvoice) =>
     void send.run(async () => {
-      const r = await plainly(postOnce<InvoiceSent>(invoicePath(inv.id, "/send"), sendKey));
+      const r = await plainly(
+        postOnce<InvoiceSent>(invoicePath(inv.id, "/send"), sendKey),
+      );
       setSent(r);
       setSendKey(newRequestKey());
       reload();
@@ -1054,7 +1549,9 @@ export function InvoicePage() {
         <>
           <InvoiceHero invoice={x} />
           {x.disputed && <SettleQuery number={x.number} onDone={reload} />}
-          {x.customer.key?.startsWith("link:") && <DocThread doc="invoice" reference={x.number} />}
+          {x.customer.key?.startsWith("link:") && (
+            <DocThread doc="invoice" reference={x.number} />
+          )}
           {sent && (
             <div className="notice" role="status" data-testid="sent">
               {sentLines(sent).map((l) => (
@@ -1074,12 +1571,19 @@ export function InvoicePage() {
           {(may.edit || may.send || may.sendAgain || may.void) && (
             <div className="toolbar">
               {may.edit && (
-                <Link className="button" to={`/invoices/${encodeURIComponent(x.number)}/edit`}>
+                <Link
+                  className="button"
+                  to={`/invoices/${encodeURIComponent(x.number)}/edit`}
+                >
                   Edit
                 </Link>
               )}
               {may.send && (
-                <button className="primary" disabled={send.busy} onClick={() => doSend(x)}>
+                <button
+                  className="primary"
+                  disabled={send.busy}
+                  onClick={() => doSend(x)}
+                >
                   Send
                 </button>
               )}
@@ -1100,9 +1604,19 @@ export function InvoicePage() {
           {voiding && may.void && (
             <section className="card" aria-labelledby="void-title">
               <h2 id="void-title">Void {x.number}?</h2>
-              <p>A void invoice takes no new payment, and its page tells the customer why. It cannot be undone: to ask for the money again, send a new invoice.</p>
+              <p>
+                A void invoice takes no new payment, and its page tells the
+                customer why. It cannot be undone: to ask for the money again,
+                send a new invoice.
+              </p>
               <Field label="Reason">
-                <textarea value={reason} rows={2} maxLength={INVOICE_LIMITS.note} onChange={(e) => setReason(e.target.value)} autoFocus />
+                <textarea
+                  value={reason}
+                  rows={2}
+                  maxLength={INVOICE_LIMITS.note}
+                  onChange={(e) => setReason(e.target.value)}
+                  autoFocus
+                />
               </Field>
               {voidTried && reasonProblem && (
                 <div className="error" role="alert">
@@ -1118,7 +1632,11 @@ export function InvoicePage() {
                     setVoidTried(true);
                     if (reasonProblem) return;
                     void voidAct.run(async () => {
-                      await plainly(post(invoicePath(x.id, "/void"), { reason: reason.trim() }));
+                      await plainly(
+                        post(invoicePath(x.id, "/void"), {
+                          reason: reason.trim(),
+                        }),
+                      );
                       setVoiding(false);
                       setReason("");
                       setVoidTried(false);
@@ -1158,11 +1676,17 @@ export function InvoicePage() {
                     <tr key={i}>
                       <td>
                         {l.description}
-                        {lineNote(l) && <div className="hint">{lineNote(l)}</div>}
+                        {lineNote(l) && (
+                          <div className="hint">{lineNote(l)}</div>
+                        )}
                       </td>
                       <td>{l.quantity}</td>
-                      <td className="sf-price">{l.kind ? "" : naira(l.unit_kobo)}</td>
-                      <td className="sf-price">{naira(l.quantity * l.unit_kobo)}</td>
+                      <td className="sf-price">
+                        {l.kind ? "" : naira(l.unit_kobo)}
+                      </td>
+                      <td className="sf-price">
+                        {naira(l.quantity * l.unit_kobo)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1186,11 +1710,19 @@ export function InvoicePage() {
                 <StatusPill status={x.status} />
               </dd>
               <dt>Due date</dt>
-              <dd>{dateLabel(x.due_on) || <span className="hint">None</span>}</dd>
+              <dd>
+                {dateLabel(x.due_on) || <span className="hint">None</span>}
+              </dd>
               <dt>Made</dt>
               <dd>{fmtTime(x.created_at)}</dd>
               <dt>Sent</dt>
-              <dd>{x.sent_at ? fmtTime(x.sent_at) : <span className="hint">Not yet</span>}</dd>
+              <dd>
+                {x.sent_at ? (
+                  fmtTime(x.sent_at)
+                ) : (
+                  <span className="hint">Not yet</span>
+                )}
+              </dd>
               {x.paid_at && (
                 <>
                   <dt>Paid</dt>
@@ -1215,7 +1747,11 @@ export function InvoicePage() {
               <dt>Payments connection</dt>
               <dd>{x.connection}</dd>
               <dt>Transfer fee</dt>
-              <dd>{x.fee_paid_by === "customer" ? "Paid by the customer" : "Paid by the business"}</dd>
+              <dd>
+                {x.fee_paid_by === "customer"
+                  ? "Paid by the customer"
+                  : "Paid by the business"}
+              </dd>
               <dt>Part payments</dt>
               <dd>{x.allow_part_payments ? "Allowed" : "Not allowed"}</dd>
             </dl>
@@ -1231,20 +1767,32 @@ export function InvoicePage() {
                   disabled={reveal.busy}
                   onClick={() =>
                     void reveal.run(async () => {
-                      const r = await get<{ invoice: CustomerInvoice; revealed: boolean }>(invoicePath(x.id, "?reveal=true"));
+                      const r = await get<{
+                        invoice: CustomerInvoice;
+                        revealed: boolean;
+                      }>(invoicePath(x.id, "?reveal=true"));
                       setRevealed(r.invoice);
                     }, false)
                   }
                 >
                   Show customer details
                 </button>
-                <p className="hint">Showing them is recorded in the audit log.</p>
+                <p className="hint">
+                  Showing them is recorded in the audit log.
+                </p>
               </>
             )}
-            {!revealed && !may.reveal && <p className="hint">The customer's details are hidden. Someone who may see personal data can show them.</p>}
+            {!revealed && !may.reveal && (
+              <p className="hint">
+                The customer's details are hidden. Someone who may see personal
+                data can show them.
+              </p>
+            )}
           </section>
 
-          {x.status !== "draft" && <CustomerMatching invoice={x} manage={invoiceAccess(can).manage} />}
+          {x.status !== "draft" && (
+            <CustomerMatching invoice={x} manage={invoiceAccess(can).manage} />
+          )}
 
           <section className="card" aria-labelledby="inv-payments">
             <h2 id="inv-payments">Payments</h2>
@@ -1260,7 +1808,14 @@ export function InvoicePage() {
               busy={undo.busy}
               onUndo={(pid) =>
                 void undo.run(async () => {
-                  await plainly(post(invoicePath(x.id, `/payments/${encodeURIComponent(pid)}/undo`)));
+                  await plainly(
+                    post(
+                      invoicePath(
+                        x.id,
+                        `/payments/${encodeURIComponent(pid)}/undo`,
+                      ),
+                    ),
+                  );
                   setUndoing(undefined);
                   reload();
                 }, "Payment undone")
@@ -1280,7 +1835,11 @@ function InvoiceHero({ invoice: x }: { invoice: CustomerInvoice }) {
   const h = invoiceHero(x);
   const pct = Math.round(h.paid * 100);
   return (
-    <section className="hero" aria-label="What is due" data-testid="invoice-hero">
+    <section
+      className="hero"
+      aria-label="What is due"
+      data-testid="invoice-hero"
+    >
       <div className="hero-top">
         <span className="hero-label">{h.label}</span>
         <span className="hero-tag">{invoiceStatus(x.status).label}</span>
@@ -1307,7 +1866,13 @@ function InvoiceHero({ invoice: x }: { invoice: CustomerInvoice }) {
 }
 
 /** Amendments to a sent invoice: each a recorded change with a reason, a line of its own. */
-function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () => void }) {
+function Amend({
+  invoice: x,
+  onDone,
+}: {
+  invoice: CustomerInvoice;
+  onDone: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState<AmendmentForm>(emptyAmendment);
   const [tried, setTried] = useState(false);
@@ -1327,14 +1892,17 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
         )}
       </div>
       <p className="hint">
-        A sent invoice is not edited: it is amended, with a reason, and each amendment shows as its own line to the customer. The total never goes below what was paid; a paid invoice whose total rises
-        is part-paid again.
+        A sent invoice is not edited: it is amended, with a reason, and each
+        amendment shows as its own line to the customer. The total never goes
+        below what was paid; a paid invoice whose total rises is part-paid
+        again.
       </p>
       {done.length > 0 && (
         <ul data-testid="amendments">
           {done.map((a) => (
             <li key={a.id}>
-              {a.line.description}: {naira(a.amount_kobo)}. {a.reason} <span className="hint">({fmtTime(a.created_at)})</span>
+              {a.line.description}: {naira(a.amount_kobo)}. {a.reason}{" "}
+              <span className="hint">({fmtTime(a.created_at)})</span>
             </li>
           ))}
         </ul>
@@ -1351,7 +1919,12 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
             setTried(true);
             if (problem) return;
             void act.run(async () => {
-              const out = await plainly(post<Record<string, unknown>>(invoicePath(x.id, "/amendments"), amendmentRequest(f)));
+              const out = await plainly(
+                post<Record<string, unknown>>(
+                  invoicePath(x.id, "/amendments"),
+                  amendmentRequest(f),
+                ),
+              );
               // A school's discount or line taken out at or above its
               // threshold is recorded for a second person (202), not made yet.
               setWaiting(
@@ -1367,7 +1940,12 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
           }}
         >
           <Field label="Change">
-            <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as AmendmentForm["kind"] })}>
+            <select
+              value={f.kind}
+              onChange={(e) =>
+                setF({ ...f, kind: e.target.value as AmendmentForm["kind"] })
+              }
+            >
               <option value="add">Add a line</option>
               <option value="discount">Give a discount</option>
               <option value="remove" disabled={removable.length === 0}>
@@ -1377,7 +1955,10 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
           </Field>
           {f.kind === "remove" ? (
             <Field label="Line to take out">
-              <select value={f.line} onChange={(e) => setF({ ...f, line: e.target.value })}>
+              <select
+                value={f.line}
+                onChange={(e) => setF({ ...f, line: e.target.value })}
+              >
                 <option value="">Choose…</option>
                 {removable.map((l) => (
                   <option key={l.index} value={String(l.index)}>
@@ -1388,21 +1969,47 @@ function Amend({ invoice: x, onDone }: { invoice: CustomerInvoice; onDone: () =>
             </Field>
           ) : (
             <>
-              <Field label={f.kind === "add" ? "What it is for" : "Description (optional)"}>
-                <input value={f.description} maxLength={INVOICE_LIMITS.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+              <Field
+                label={
+                  f.kind === "add" ? "What it is for" : "Description (optional)"
+                }
+              >
+                <input
+                  value={f.description}
+                  maxLength={INVOICE_LIMITS.description}
+                  onChange={(e) => setF({ ...f, description: e.target.value })}
+                />
               </Field>
               <Field label="Amount (₦)">
-                <input inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+                <input
+                  inputMode="decimal"
+                  value={f.amount}
+                  onChange={(e) => setF({ ...f, amount: e.target.value })}
+                />
               </Field>
               {f.kind === "add" && (
-                <Field label="Collected on behalf of (optional)" hint="For money passed on to someone else, such as an exam body.">
-                  <input value={f.passThroughFor} maxLength={60} onChange={(e) => setF({ ...f, passThroughFor: e.target.value })} />
+                <Field
+                  label="Collected on behalf of (optional)"
+                  hint="For money passed on to someone else, such as an exam body."
+                >
+                  <input
+                    value={f.passThroughFor}
+                    maxLength={60}
+                    onChange={(e) =>
+                      setF({ ...f, passThroughFor: e.target.value })
+                    }
+                  />
                 </Field>
               )}
             </>
           )}
           <Field label="Reason">
-            <textarea value={f.reason} rows={2} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} />
+            <textarea
+              value={f.reason}
+              rows={2}
+              maxLength={300}
+              onChange={(e) => setF({ ...f, reason: e.target.value })}
+            />
           </Field>
           {tried && problem && (
             <div className="error" role="alert">
@@ -1451,7 +2058,13 @@ function Payments({
 }) {
   const rows = paymentRows(invoice.payments);
   if (rows.length === 0)
-    return <p className="hint">No payments yet. Payments are counted here as they come in from your payments connection, or when money received is matched to this invoice on To match. Nobody marks an invoice paid without a payment.</p>;
+    return (
+      <p className="hint">
+        No payments yet. Payments are counted here as they come in from your
+        payments connection, or when money received is matched to this invoice
+        on To match. Nobody marks an invoice paid without a payment.
+      </p>
+    );
   return (
     <table className="cards">
       <thead>
@@ -1468,7 +2081,9 @@ function Payments({
       </thead>
       <tbody>
         {rows.map(({ payment: p, undoneBy }) => {
-          const struck = undoneBy ? { textDecoration: "line-through" } : undefined;
+          const struck = undoneBy
+            ? { textDecoration: "line-through" }
+            : undefined;
           const rc = receipts[p.id];
           return (
             <Fragment key={p.id}>
@@ -1480,7 +2095,12 @@ function Payments({
                     <div className="hint" data-testid="payment-receipt">
                       Receipt {rc.number}
                       {rc.voided ? " (voided)" : ""}{" "}
-                      <a href={receiptPDF(rc)} target="_blank" rel="noopener" aria-label={`Open PDF of receipt ${rc.number}`}>
+                      <a
+                        href={receiptPDF(rc)}
+                        target="_blank"
+                        rel="noopener"
+                        aria-label={`Open PDF of receipt ${rc.number}`}
+                      >
                         PDF
                       </a>
                     </div>
@@ -1494,7 +2114,10 @@ function Payments({
                     {howMatched(p.how, p.by)}
                   </span>
                   {(p.reasons ?? []).length > 0 && (
-                    <ul className="match-reasons" aria-label="Why it was matched">
+                    <ul
+                      className="match-reasons"
+                      aria-label="Why it was matched"
+                    >
                       {(p.reasons ?? []).map((r) => (
                         <li key={r}>{r}</li>
                       ))}
@@ -1515,7 +2138,11 @@ function Payments({
                 </td>
                 <td data-label="">
                   {canUndo && !undoneBy && undoing !== p.id && (
-                    <button type="button" onClick={() => setUndoing(p.id)} aria-label={`Undo the payment ${p.payment_id}`}>
+                    <button
+                      type="button"
+                      onClick={() => setUndoing(p.id)}
+                      aria-label={`Undo the payment ${p.payment_id}`}
+                    >
                       Undo
                     </button>
                   )}
@@ -1526,13 +2153,23 @@ function Payments({
                   <td colSpan={6} className="primary">
                     <div role="group" aria-label="Undo this payment">
                       <p style={{ marginTop: 0 }}>
-                        Take {naira(p.amount_kobo)} out of this invoice? Do this when it was matched to the wrong invoice. The payment and its undoing both stay in the history.
+                        Take {naira(p.amount_kobo)} out of this invoice? Do this
+                        when it was matched to the wrong invoice. The payment
+                        and its undoing both stay in the history.
                       </p>
                       <div className="toolbar" style={{ marginBottom: 0 }}>
-                        <button type="button" className="danger" disabled={busy} onClick={() => onUndo(p.id)}>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={busy}
+                          onClick={() => onUndo(p.id)}
+                        >
                           Undo payment
                         </button>
-                        <button type="button" onClick={() => setUndoing(undefined)}>
+                        <button
+                          type="button"
+                          onClick={() => setUndoing(undefined)}
+                        >
                           Keep it
                         </button>
                       </div>
@@ -1555,9 +2192,29 @@ function CustomerDetails({ c }: { c: CustomerInvoice["customer"] }) {
       <dt>Name</dt>
       <dd>{c.name || <span className="hint">—</span>}</dd>
       <dt>Phone</dt>
-      <dd>{c.phone ? tel ? <a href={tel}>{c.phone}</a> : c.phone : <span className="hint">—</span>}</dd>
+      <dd>
+        {c.phone ? (
+          tel ? (
+            <a href={tel}>{c.phone}</a>
+          ) : (
+            c.phone
+          )
+        ) : (
+          <span className="hint">—</span>
+        )}
+      </dd>
       <dt>Email</dt>
-      <dd>{c.email ? isMasked(c.email) ? c.email : <a href={`mailto:${c.email}`}>{c.email}</a> : <span className="hint">—</span>}</dd>
+      <dd>
+        {c.email ? (
+          isMasked(c.email) ? (
+            c.email
+          ) : (
+            <a href={`mailto:${c.email}`}>{c.email}</a>
+          )
+        ) : (
+          <span className="hint">—</span>
+        )}
+      </dd>
     </dl>
   );
 }
@@ -1566,7 +2223,10 @@ function CustomerDetails({ c }: { c: CustomerInvoice["customer"] }) {
 
 /** Invoices > Settings (GET/PUT /v1/invoice-settings). */
 export function InvoiceSettingsPage() {
-  const settings = useLoad(() => get<InvoiceSettings>("/v1/invoice-settings"), []);
+  const settings = useLoad(
+    () => get<InvoiceSettings>("/v1/invoice-settings"),
+    [],
+  );
   return (
     <>
       <PageHeader
@@ -1575,7 +2235,9 @@ export function InvoiceSettingsPage() {
       />
       <InvoiceTabs />
       <ErrorBox error={settings.error} />
-      {!settings.data && !settings.error && <Skeleton rows={4} label="Loading the settings…" />}
+      {!settings.data && !settings.error && (
+        <Skeleton rows={4} label="Loading the settings…" />
+      )}
       {settings.data && <SettingsEditor saved={settings.data} />}
     </>
   );
@@ -1588,7 +2250,8 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
   const [form, setForm] = useState<SettingsForm>(() => settingsForm(initial));
   const [tried, setTried] = useState(false);
   const act = useAction();
-  const set = (patch: Partial<SettingsForm>) => setForm((f) => ({ ...f, ...patch }));
+  const set = (patch: Partial<SettingsForm>) =>
+    setForm((f) => ({ ...f, ...patch }));
   const problem = settingsProblem(form, saved);
   return (
     <form
@@ -1599,31 +2262,67 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
         setTried(true);
         if (problem || !manage) return;
         void act.run(async () => {
-          const s = await plainly(put<InvoiceSettings>("/v1/invoice-settings", settingsRequest(form)));
+          const s = await plainly(
+            put<InvoiceSettings>("/v1/invoice-settings", settingsRequest(form)),
+          );
           setSaved(s);
           setForm(settingsForm(s));
           setTried(false);
         }, "Settings saved");
       }}
     >
-      {!manage && <p className="hint">You can see these settings. Someone who manages invoices can change them.</p>}
+      {!manage && (
+        <p className="hint">
+          You can see these settings. Someone who manages invoices can change
+          them.
+        </p>
+      )}
       <fieldset disabled={!manage} className="sf-choices">
         <div className="row">
-          <Field label="Number prefix" hint="Up to 12 letters, digits, -, _ or /.">
-            <input value={form.prefix} maxLength={INVOICE_LIMITS.prefix} onChange={(e) => set({ prefix: e.target.value })} />
+          <Field
+            label="Number prefix"
+            hint="Up to 12 letters, digits, -, _ or /."
+          >
+            <input
+              value={form.prefix}
+              maxLength={INVOICE_LIMITS.prefix}
+              onChange={(e) => set({ prefix: e.target.value })}
+            />
           </Field>
-          <Field label="Next number" hint={`Can move forward, never back, so no number is given twice. The next invoice is ${numberPreview(form.prefix, Number(form.nextNumber))}.`}>
-            <input type="number" inputMode="numeric" min={saved.next_number} step={1} value={form.nextNumber} onChange={(e) => set({ nextNumber: e.target.value })} />
+          <Field
+            label="Next number"
+            hint={`Can move forward, never back, so no number is given twice. The next invoice is ${numberPreview(form.prefix, Number(form.nextNumber))}.`}
+          >
+            <input
+              type="number"
+              inputMode="numeric"
+              min={saved.next_number}
+              step={1}
+              value={form.nextNumber}
+              onChange={(e) => set({ nextNumber: e.target.value })}
+            />
           </Field>
         </div>
-        <Field label="Payments connection" hint="The connection (Paystack, Flutterwave, OPay, …) that takes payments for invoices.">
-          <input value={form.connection} placeholder="main" onChange={(e) => set({ connection: e.target.value })} />
+        <Field
+          label="Payments connection"
+          hint="The connection (Paystack, Flutterwave, OPay, …) that takes payments for invoices."
+        >
+          <input
+            value={form.connection}
+            placeholder="main"
+            onChange={(e) => set({ connection: e.target.value })}
+          />
         </Field>
         <fieldset className="sf-choices">
           <legend>Who pays the transfer fee</legend>
           {FEE_CHOICES.map((c) => (
             <label className="row" key={c.value}>
-              <input type="radio" name="settings-fee" checked={form.feePaidBy === c.value} onChange={() => set({ feePaidBy: c.value })} />
+              <input
+                type="radio"
+                name="settings-fee"
+                checked={form.feePaidBy === c.value}
+                onChange={() => set({ feePaidBy: c.value })}
+              />
               <span>
                 {c.label} <span className="hint">{c.help}</span>
               </span>
@@ -1631,15 +2330,25 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
           ))}
         </fieldset>
         <label className="row">
-          <input type="checkbox" checked={form.partPayments} onChange={(e) => set({ partPayments: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={form.partPayments}
+            onChange={(e) => set({ partPayments: e.target.checked })}
+          />
           <span>Customers may pay part of an invoice</span>
         </label>
         <label className="row">
-          <input type="checkbox" checked={form.autoMatch} onChange={(e) => set({ autoMatch: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={form.autoMatch}
+            onChange={(e) => set({ autoMatch: e.target.checked })}
+          />
           <span>
             Match strong suggestions automatically{" "}
             <span className="hint">
-              Off by default. A payment that clearly fits one invoice is matched without asking; each automatic match lists its reasons on the invoice and can be undone there.
+              Off by default. A payment that clearly fits one invoice is matched
+              without asking; each automatic match lists its reasons on the
+              invoice and can be undone there.
             </span>
           </span>
         </label>
@@ -1661,25 +2370,99 @@ function SettingsEditor({ saved: initial }: { saved: InvoiceSettings }) {
 
 /** A linked buyer's query on this invoice (business links): money that
  * does not name it is not counted towards it until the query is settled. */
-function SettleQuery({ number, onDone }: { number: string; onDone: () => void }) {
+function SettleQuery({
+  number,
+  onDone,
+}: {
+  number: string;
+  onDone: () => void;
+}) {
   const { can } = useAuth();
+  const [how, setHow] = useState<"as_it_stands" | "discount">("as_it_stands");
+  const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const act = useAction();
+  const kobo = toKobo(amount);
+  const ready =
+    how === "as_it_stands" || (!!kobo && kobo > 0 && note.trim() !== "");
   return (
-    <section className="card" aria-labelledby="inv-query" data-testid="invoice-query">
+    <section
+      className="card"
+      aria-labelledby="inv-query"
+      data-testid="invoice-query"
+    >
       <h2 id="inv-query">Queried by the customer</h2>
-      <p className="hint">Money that does not name this invoice is not counted towards it until you settle the query. Their message is in your notifications.</p>
+      <p className="hint">
+        Money that does not name this invoice is not counted towards it until
+        you settle the query. Their reason is in your conversation with them,
+        below.
+      </p>
       <ErrorBox error={act.error} />
       {can("invoice.manage") && (
         <>
-          <Field label="What you tell them" hint="Optional, such as a credit note on its way.">
-            <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+          <fieldset className="choice">
+            <legend>How do you settle it?</legend>
+            <label className="inline">
+              <input
+                type="radio"
+                name="settle-how"
+                checked={how === "as_it_stands"}
+                onChange={() => setHow("as_it_stands")}
+              />
+              The invoice stands as it is
+            </label>
+            <label className="inline">
+              <input
+                type="radio"
+                name="settle-how"
+                checked={how === "discount"}
+                onChange={() => setHow("discount")}
+              />
+              Take an amount off
+            </label>
+          </fieldset>
+          {how === "discount" && (
+            <Field label="Amount off (₦)">
+              <input
+                inputMode="decimal"
+                value={amount}
+                placeholder="9,000"
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </Field>
+          )}
+          <Field
+            label={how === "discount" ? "Why" : "What you tell them"}
+            hint={
+              how === "discount"
+                ? "Shown on the invoice, and to them."
+                : "Optional."
+            }
+          >
+            <input
+              value={note}
+              maxLength={500}
+              onChange={(e) => setNote(e.target.value)}
+            />
           </Field>
           <button
             type="button"
             className="primary"
-            disabled={act.busy}
-            onClick={() => void act.run(async () => (await post(invoicePath(number, "/settle-query"), { note: note.trim() }), onDone()), "Query settled")}
+            disabled={act.busy || !ready}
+            onClick={() =>
+              void act.run(
+                async () => (
+                  await post(
+                    invoicePath(number, "/settle-query"),
+                    how === "discount"
+                      ? { how, amount_kobo: kobo, note: note.trim() }
+                      : { how, note: note.trim() },
+                  ),
+                  onDone()
+                ),
+                "Query settled",
+              )
+            }
           >
             Settle the query
           </button>

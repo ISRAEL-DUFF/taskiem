@@ -246,8 +246,8 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	if created {
 		s.background(ctx, "bill arrived", func(ctx context.Context) {
 			amount := bill.AmountKobo
-			s.billCards(ctx, link, seller, buyer, bill.Reference, "bill", true, &amount, "")
-			s.tellBill(ctx, buyer, bill)
+			card := s.billCards(ctx, link, seller, buyer, bill.Reference, "bill", true, &amount, "")
+			s.tellBill(ctx, buyer, bill, s.keepSent(ctx, buyer, link, card))
 		})
 	}
 	return true, nil
@@ -255,15 +255,9 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 
 // tellBill tells the buyer's people who may pay of a new bill, in the bell
 // and in chat, in the buyer's own scope.
-func (s *Server) tellBill(ctx context.Context, buyer uuid.UUID, b links.Mirror) {
-	s.tellPeople(ctx, buyer, "bill:"+b.Source.String(), "/bills", func(l lang.Tag) (string, string) { return billWords(l, b) })
-}
-
-// tellPeople tells the people of a business who may pay and answer for
-// its links (invoice.manage and link.manage), in the bell and in chat, in
-// that business's own scope.
-func (s *Server) tellPeople(ctx context.Context, tenant uuid.UUID, group, link string, words func(lang.Tag) (string, string)) {
-	s.tellHolders(ctx, tenant, []string{PermInvoiceManage, PermLinkManage}, group, link, words)
+func (s *Server) tellBill(ctx context.Context, buyer uuid.UUID, b links.Mirror, sent func(channel, addr, id string)) {
+	s.tellHoldersSent(ctx, buyer, []string{PermInvoiceManage, PermLinkManage}, "bill:"+b.Source.String(), "/bills",
+		func(l lang.Tag) (string, string) { return billWords(l, b) }, nil, sent)
 }
 
 // tellHolders tells the people of a business whose role holds every one of
@@ -276,6 +270,13 @@ func (s *Server) tellHolders(ctx context.Context, tenant uuid.UUID, perms []stri
 // reader's language.
 func (s *Server) tellHoldersWith(ctx context.Context, tenant uuid.UUID, perms []string, group, link string, words func(lang.Tag) (string, string),
 	buttons func(lang.Tag) []whatsapp.Button) {
+	s.tellHoldersSent(ctx, tenant, perms, group, link, words, buttons, nil)
+}
+
+// tellHoldersSent is tellHoldersWith, hearing of each chat message sent:
+// its channel, the address and the chat app's id for it.
+func (s *Server) tellHoldersSent(ctx context.Context, tenant uuid.UUID, perms []string, group, link string, words func(lang.Tag) (string, string),
+	buttons func(lang.Tag) []whatsapp.Button, sent func(channel, addr, id string)) {
 	var to []linkTold
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(perms...))
@@ -318,8 +319,13 @@ func (s *Server) tellHoldersWith(ctx context.Context, tenant uuid.UUID, perms []
 		if buttons != nil {
 			bs = buttons(l)
 		}
-		if err := s.waSay(ctx, ch, t.addr, "", title+"\n"+body, bs...); err != nil {
+		id, err := ch.Send(ctx, t.addr, whatsapp.Message{Text: ch.Prefix("") + title + "\n" + body, Buttons: bs})
+		if err != nil {
 			s.Logger.Warn("links: a chat message", "tenant", tenant, "err", err)
+			continue
+		}
+		if sent != nil && id != "" {
+			sent(t.channel, t.addr, id)
 		}
 	}
 }
@@ -333,8 +339,8 @@ func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links
 		if n.Kind == "resolved" {
 			seller, buyer = from, tenant
 		}
-		s.billCards(ctx, n.Link, seller, buyer, n.Reference, n.Kind, n.Kind == "resolved", n.AmountKobo, n.Note)
-		s.tellPeople(ctx, tenant, "notice:"+n.ID.String(), link, func(l lang.Tag) (string, string) {
+		card := s.billCards(ctx, n.Link, seller, buyer, n.Reference, n.Kind, n.Kind == "resolved", n.AmountKobo, n.Note)
+		s.tellHoldersSent(ctx, tenant, []string{PermInvoiceManage, PermLinkManage}, "notice:"+n.ID.String(), link, func(l lang.Tag) (string, string) {
 			amount := ""
 			if n.AmountKobo != nil {
 				amount = invoicing.Naira(*n.AmountKobo)
@@ -342,7 +348,7 @@ func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links
 			return tr(l, "bill.notice."+n.Kind+"_title", "from", n.From, "reference", n.Reference),
 				strings.TrimSpace(tr(l, "bill.notice."+n.Kind, "from", whatsapp.SafeText(n.From), "reference", n.Reference, "amount", amount,
 					"how", tr(l, "bill.how."+n.How), "note", whatsapp.SafeText(n.Note)))
-		})
+		}, nil, s.keepSent(ctx, tenant, n.Link, card))
 	})
 }
 
@@ -807,7 +813,12 @@ func (s *Server) queryBill(w http.ResponseWriter, r *http.Request) {
 }
 
 type settleQueryIn struct {
-	Note string `json:"note"`
+	// How the query is settled (§8): as_it_stands (the invoice stays, Note
+	// says why), or discount (AmountKobo off the invoice, an amendment
+	// with Note as its reason). Empty is as_it_stands.
+	How        string `json:"how"`
+	AmountKobo int64  `json:"amount_kobo"`
+	Note       string `json:"note"`
 }
 
 // settleInvoiceQuery is POST /v1/invoices/{id}/settle-query, the seller's
@@ -825,24 +836,56 @@ func (s *Server) settleInvoiceQuery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	in.Note = strings.TrimSpace(in.Note)
+	switch in.How {
+	case "", "as_it_stands":
+		in.How = "as_it_stands"
+	case "discount":
+		if in.AmountKobo <= 0 || in.Note == "" {
+			s.fail(w, r, fmt.Errorf("%w: taking an amount off needs the amount and the reason", errBadRequest))
+			return
+		}
+	default:
+		s.fail(w, r, fmt.Errorf("%w: how is as_it_stands or discount", errBadRequest))
+		return
+	}
 	p := principalFrom(r.Context())
 	var n links.Notice
 	var buyer uuid.UUID
 	var number string
+	var amended invoicing.Amended
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		x, err := s.Invoices.Get(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
 		if err != nil {
 			return invoiceErr(err)
 		}
 		number = x.Number
-		if err := auditTx(r, tx, "invoice.settle_query", x.Number, nil); err != nil {
+		if err := auditTx(r, tx, "invoice.settle_query", x.Number, map[string]any{"how": in.How, "amount_kobo": in.AmountKobo}); err != nil {
 			return err
 		}
-		n, buyer, err = links.ResolveQueryTx(r.Context(), tx, p.TenantID, x.ID, x.Number, x.Customer.Key, in.Note, links.Actor{Type: p.ActorType(), ID: p.Actor()})
+		note := in.Note
+		if in.How == "discount" {
+			// The amount off is the invoice's own amendment, made before the
+			// buyer's side is written.
+			if !x.Disputed {
+				return fmt.Errorf("%w: the invoice is not queried", links.ErrState)
+			}
+			if amended, err = s.Invoices.Amend(r.Context(), tx, p.TenantID, x.ID.String(), invoicing.AmendmentIn{Kind: invoicing.AmendDiscount,
+				Description: "Settled query", AmountKobo: in.AmountKobo, Reason: in.Note}, p.Actor()); err != nil {
+				return invoiceErr(err)
+			}
+			note = "Took " + invoicing.Naira(in.AmountKobo) + " off: " + in.Note
+		}
+		n, buyer, err = links.ResolveQueryTx(r.Context(), tx, p.TenantID, x.ID, x.Number, x.Customer.Key, note, links.Actor{Type: p.ActorType(), ID: p.Actor()})
 		return err
 	}); err != nil {
 		s.fail(w, r, billErr(err))
 		return
+	}
+	if amended.Became {
+		if err := s.Invoices.Paid(r.Context(), p.TenantID, amended.Invoice); err != nil {
+			s.Logger.Warn("links: an invoice paid by settling a query", "err", err)
+		}
 	}
 	if n.ID != uuid.Nil {
 		s.tellNotice(r.Context(), buyer, p.TenantID, n, "/bills")

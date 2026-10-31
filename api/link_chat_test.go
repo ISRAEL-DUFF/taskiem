@@ -8,6 +8,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
 // The conversation between linked businesses (L3, §5.5, §8): a message is
@@ -53,6 +54,27 @@ func TestLinkConversation(t *testing.T) {
 		t.Fatalf("the buyer's copy: %v", got)
 	}
 
+	// A reply quoting it on WhatsApp goes into the conversation, quoting it.
+	var wamid string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT message_id FROM link_chat_sent WHERE pair_id = $1 AND channel = 'whatsapp'`, m["id"]).Scan(&wamid); err != nil {
+		t.Fatalf("the message sent to the phone was not kept: %v", err)
+	}
+	quoted := whatsapptest.Text("Lovely, keep 20 for us")
+	quoted["context"] = map[string]any{"from": "15550001111", "id": wamid}
+	if got := w.send(t, buyerOn, quoted); len(got) != 1 || !strings.Contains(got[0].Text, "Sent to *Dangote Stores*") {
+		t.Fatalf("a quoted reply on WhatsApp: %+v", got)
+	}
+	if got := seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any); len(got) != 2 ||
+		got[1].(map[string]any)["body"] != "Lovely, keep 20 for us" || got[1].(map[string]any)["reply"].(map[string]any)["pair_id"] != m["id"] {
+		t.Fatalf("the quoted reply on the seller's side: %v", got)
+	}
+	// A reply quoting anything else is not taken for one.
+	other := whatsapptest.Text("links")
+	other["context"] = map[string]any{"from": "15550001111", "id": "wamid.unknown"}
+	if got := w.send(t, buyerOn, other); len(got) != 1 || strings.Contains(got[0].Text, "Sent to") {
+		t.Errorf("an unknown quote: %+v", got)
+	}
+
 	// Read: the seller's double tick.
 	if r := viewer.must(200, "POST", "/v1/link-chats/"+link+"/read", nil); r["read"] != float64(1) {
 		t.Fatalf("read: %v", r)
@@ -68,8 +90,8 @@ func TestLinkConversation(t *testing.T) {
 	if q := r["reply"].(map[string]any); q["pair_id"] != m["id"] || q["mine"] != false || q["body"] != "Good morning, rice is back in stock" {
 		t.Fatalf("quoted: %v", r)
 	}
-	if got := seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any); len(got) != 2 ||
-		got[1].(map[string]any)["reply"].(map[string]any)["mine"] != true {
+	if got := seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any); len(got) != 3 ||
+		got[2].(map[string]any)["reply"].(map[string]any)["mine"] != true {
 		t.Fatalf("the reply on the seller's side: %v", got)
 	}
 
@@ -132,6 +154,26 @@ func TestLinkConversation(t *testing.T) {
 		t.Errorf("ask nobody: %q", r)
 	}
 
+	// The seller settles the query by taking an amount off: the invoice is
+	// amended, the bill follows, and the thread says so.
+	seller.must(400, "POST", "/v1/invoices/"+x["id"].(string)+"/settle-query", map[string]any{"how": "discount", "amount_kobo": 900000})
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/settle-query", map[string]any{"how": "discount", "amount_kobo": 900000, "note": "Two bags were torn"})
+	seller.must(409, "POST", "/v1/invoices/"+x["id"].(string)+"/settle-query", map[string]any{"how": "discount", "amount_kobo": 900000, "note": "again"})
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.srv.WaitBackground()
+	if b := buyer.must(200, "GET", "/v1/bills/"+number, nil); b["due_kobo"] != float64(89100000) || b["disputed"] != false {
+		t.Errorf("the bill after the query was settled: %v", b)
+	}
+	if got := thread(buyer, "bill"); len(got) != 5 || got[4] != "card:resolved" {
+		t.Errorf("the thread after settling: %v", got)
+	}
+	last := buyer.must(200, "GET", "/v1/link-chats/thread?doc=bill&reference="+number, nil)["messages"].([]any)
+	if c := last[len(last)-1].(map[string]any)["card"].(map[string]any); c["note"] != "Took ₦9,000 off: Two bags were torn" {
+		t.Errorf("the settled card: %v", c)
+	}
+
 	// Muted, the seller's phone is not told; archived, it says so.
 	seller.must(200, "PUT", "/v1/link-chats/"+link, map[string]any{"muted": true, "archived": true})
 	before = len(w.graph.Sent(sellerOn))
@@ -148,7 +190,7 @@ func TestLinkConversation(t *testing.T) {
 	if got := seller.must(200, "GET", "/v1/link-chats/"+link+"/messages?q=half", nil)["messages"].([]any); len(got) != 2 {
 		t.Errorf("search in: %v", got)
 	}
-	if got := buyer.must(200, "GET", "/v1/link-chats/search?q=torn", nil)["messages"].([]any); len(got) != 1 {
+	if got := buyer.must(200, "GET", "/v1/link-chats/search?q=torn", nil)["messages"].([]any); len(got) != 2 { // the query, and its settling
 		t.Errorf("search across: %v", got)
 	}
 
