@@ -4059,6 +4059,18 @@
     "link.findable_off": {
       "text": "Other businesses no go find {org} for search again. Person wey get your phone number or link fit still ask to link. Send *find us* to change am.",
       "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Bill from {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* send invoice {reference}: {amount} to pay. E dey under Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "E due {date}.",
+      "reviewed": false
     }
   }
 }

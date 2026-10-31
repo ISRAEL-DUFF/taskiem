@@ -5353,6 +5353,69 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/bills:
+    get:
+      operationId: listBills
+      tags:
+      - Links
+      summary: The business's bills from linked suppliers
+      description: 'Each a linked supplier''s invoice, mirrored: its number, lines, total, due date and what the supplier''s match has counted paid are the supplier''s. Those still to pay first, by due date.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [open, paid, void, all]
+          default: open
+      responses:
+        '200':
+          description: The bills
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [bills]
+                properties:
+                  bills:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/bills/{id}:
+    get:
+      operationId: getBill
+      tags:
+      - Links
+      summary: One bill
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The bill's id, or its invoice's number
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-settings/qr:
     get:
       operationId: linkQR
@@ -27449,6 +27512,55 @@ components:
         state:
           type: string
           enum: [none, active, ended, requested, not_accepted, asked_us, blocked]
+    Bill:
+      type: object
+      additionalProperties: false
+      required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, mirrored_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        link:
+          type: string
+          format: uuid
+        supplier:
+          type: string
+          format: uuid
+        supplier_name:
+          type: string
+        reference:
+          type: string
+          description: The supplier's invoice number
+        lines:
+          type: array
+          items:
+            type: object
+        amount_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+          description: What the supplier's match has counted paid
+        due_kobo:
+          type: integer
+        due_on:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [open, paying, part_paid, paid, disputed, void]
+        allow_part_payments:
+          type: boolean
+        disputed:
+          type: boolean
+        declared_paid_kobo:
+          type: integer
+          description: What the business says it paid outside Taskiem; its own figure
+        mirrored_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     LinkRequestResult:
       type: object
       additionalProperties: false

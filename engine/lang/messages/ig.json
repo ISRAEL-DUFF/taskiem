@@ -4059,6 +4059,18 @@
     "link.findable_off": {
       "text": "Azụmahịa ndị ọzọ agaghị ahụ {org} na nchọta ọzọ. Onye nwere nọmba ekwentị gị ma ọ bụ njikọ gị ka nwere ike ịrịọ. Ziga *find us* iji gbanwee ya.",
       "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Akwụkwọ ụgwọ sitere na {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* zitere akwụkwọ ụgwọ {reference}: {amount} ị ga-akwụ. Ọ dị n'okpuru Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "Ụbọchị ịkwụ ụgwọ: {date}.",
+      "reviewed": false
     }
   }
 }

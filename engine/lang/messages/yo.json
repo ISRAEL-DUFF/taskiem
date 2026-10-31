@@ -4059,6 +4059,18 @@
     "link.findable_off": {
       "text": "Àwọn ilé-iṣẹ́ míràn kò ní rí {org} nínú àwárí mọ́. Ẹni tó ní nọ́mbà fóònù yín tàbí ìjápọ̀ yín ṣì lè béèrè. Fi *find us* ránṣẹ́ láti yí i padà.",
       "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Ìwé owó láti ọ̀dọ̀ {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* fi ìwé owó {reference} ránṣẹ́: {amount} láti san. Ó wà lábẹ́ Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "Ọjọ́ ìsanwó: {date}.",
+      "reviewed": false
     }
   }
 }

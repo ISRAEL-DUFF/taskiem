@@ -306,6 +306,7 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 		return nil
 	}
 	go s.runInvoicePayments(ctx)
+	go s.runLinkMirrors(ctx) // linked invoices into their buyers' bills (bills.go)
 	go s.runSchoolAccounts(ctx)
 	go s.runSchoolFamilyInbox(ctx)
 	tick := time.NewTicker(time.Hour)

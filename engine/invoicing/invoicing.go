@@ -474,7 +474,9 @@ func check(d Draft) ([]Line, int64, error) {
 	if d.Customer.Name == "" || len(d.Customer.Name) > 120 {
 		return nil, 0, invalid("the customer's name is required (up to 120 characters)")
 	}
-	if d.Customer.Phone == "" && d.Customer.Email == "" {
+	// A linked business (link:<its id>) is sent its invoice as a bill, not
+	// a message (docs/spec/business-links.md §6.1).
+	if d.Customer.Phone == "" && d.Customer.Email == "" && !strings.HasPrefix(d.Customer.Key, "link:") {
 		return nil, 0, invalid("give the customer's phone number or email, to send the invoice to")
 	}
 	if d.Customer.Email != "" {

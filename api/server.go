@@ -459,6 +459,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{kind}", s.putStorefrontAction)
 			s.invoiceRoutes(r)
 			s.linkRoutes(r)   // business links (links.go)
+			s.billRoutes(r)   // their bills (bills.go)
 			s.schoolRoutes(r) // the Schools area (schools.go)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)

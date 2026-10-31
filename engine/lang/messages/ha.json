@@ -4059,6 +4059,18 @@
     "link.findable_off": {
       "text": "Wasu kasuwanci ba za su ƙara nemo {org} ta bincike ba. Wanda ke da lambar wayarku ko mahaɗinku zai iya tambaya. Aika *find us* don canzawa.",
       "reviewed": false
+    },
+    "bill.arrived_title": {
+      "text": "Takardar kuɗi daga {supplier}",
+      "reviewed": false
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* ya aiko takardar kuɗi {reference}: {amount} da za a biya. Yana ƙarƙashin Bills.",
+      "reviewed": false
+    },
+    "bill.due_on": {
+      "text": "Ranar biya: {date}.",
+      "reviewed": false
     }
   }
 }

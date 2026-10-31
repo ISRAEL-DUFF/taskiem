@@ -5073,6 +5073,21 @@
       "text": "Other businesses no longer find {org} by search. Someone with your phone number or link can still ask to link. Send *find us* to change it.",
       "reviewed": true,
       "context": "Turned findability off by chat"
+    },
+    "bill.arrived_title": {
+      "text": "A bill from {supplier}",
+      "reviewed": true,
+      "context": "Notification: a linked supplier's invoice arrived as a bill"
+    },
+    "bill.arrived_body": {
+      "text": "*{supplier}* sent invoice {reference}: {amount} to pay. It is under Bills.",
+      "reviewed": true,
+      "context": "A bill arrived; {amount} is what is left to pay"
+    },
+    "bill.due_on": {
+      "text": "Due {date}.",
+      "reviewed": true,
+      "context": "When a bill is due"
     }
   }
 }
