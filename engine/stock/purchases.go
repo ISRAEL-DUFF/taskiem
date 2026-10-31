@@ -43,6 +43,9 @@ var (
 	ErrSecondApproval = errors.New("stock: a second person approves this order")
 	// ErrTooSoon: the tap-in link was sent a moment ago.
 	ErrTooSoon = errors.New("stock: the link was sent a moment ago")
+	// ErrLinked: the order went through a link; the link's own steps
+	// cancel it (engine/links).
+	ErrLinked = errors.New("stock: the order went to a linked business")
 )
 
 // Purchase order statuses.
@@ -123,8 +126,11 @@ type Supplier struct {
 	Name  string    `json:"name"`
 	Phone string    `json:"phone"`
 	// Reached is where an order goes: the chat app they tapped in on, or
-	// sms until they do.
+	// sms until they do; link when the supplier is a linked business
+	// (docs/spec/business-links.md §7), whose orders go through the link.
 	Reached string `json:"reached"`
+	// LinkID is the link with the supplier's business, when it is one.
+	LinkID *uuid.UUID `json:"link_id"`
 	// OwedKobo is what was received from them and not yet paid.
 	OwedKobo int64 `json:"owed_kobo"`
 	// Open is how many of their orders are not yet received or cancelled.
@@ -146,9 +152,9 @@ func cleanSupplierName(s string) string {
 }
 
 const supplierCols = `s.id, s.name, s.phone, s.invited_at, s.created_at, s.retired_at,
-	COALESCE((SELECT ch.channel FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
+	CASE WHEN s.link_id IS NOT NULL THEN 'link' ELSE COALESCE((SELECT ch.channel FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
 	  WHERE c.tenant_id = s.tenant_id AND c.phone_hash = s.phone_hash AND ch.stopped_at IS NULL
-	  ORDER BY ch.linked_at DESC LIMIT 1), 'sms'),
+	  ORDER BY ch.linked_at DESC LIMIT 1), 'sms') END, s.link_id,
 	COALESCE((SELECT sum(GREATEST(o.received_kobo - o.paid_kobo, 0)) FROM purchase_orders o WHERE o.supplier_id = s.id), 0)::bigint,
 	(SELECT count(*) FROM purchase_orders o WHERE o.supplier_id = s.id AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received'))::int`
 
@@ -159,7 +165,7 @@ func (p *Purchases) scanSuppliers(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	}
 	list, err := pgx.CollectRows(rows, func(c pgx.CollectableRow) (row, error) {
 		var v row
-		return v, c.Scan(&v.x.ID, &v.x.Name, &v.phone, &v.x.InvitedAt, &v.x.CreatedAt, &v.x.RetiredAt, &v.x.Reached, &v.x.OwedKobo, &v.x.Open)
+		return v, c.Scan(&v.x.ID, &v.x.Name, &v.phone, &v.x.InvitedAt, &v.x.CreatedAt, &v.x.RetiredAt, &v.x.Reached, &v.x.LinkID, &v.x.OwedKobo, &v.x.Open)
 	})
 	if err != nil {
 		return nil, err
@@ -347,6 +353,58 @@ func (p *Purchases) RetireSupplierTx(ctx context.Context, tx pgx.Tx, tenant, id 
 	return x, stockAudit(ctx, tx, tenant, "supplier.retired", x.Name, map[string]any{"supplier_id": id, "by": actor})
 }
 
+// LinkSupplierTx says a current supplier is a linked business (link), or
+// no longer (nil): its orders then go through the link
+// (docs/spec/business-links.md §7). The link must be active, and one
+// supplier at a time names it.
+func (p *Purchases) LinkSupplierTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, link *uuid.UUID, actor string) (Supplier, error) {
+	x, err := p.SupplierTx(ctx, tx, tenant, id)
+	if err != nil {
+		return Supplier{}, err
+	}
+	if x.RetiredAt != nil {
+		return Supplier{}, fmt.Errorf("%w: %s is retired", ErrPurchase, x.Name)
+	}
+	if link != nil {
+		var ok bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_links_of() WHERE id = $1 AND state = 'active')`, *link).Scan(&ok); err != nil {
+			return Supplier{}, err
+		}
+		if !ok {
+			return Supplier{}, fmt.Errorf("%w: that is not one of your linked businesses", ErrPurchase)
+		}
+		var other string
+		err := tx.QueryRow(ctx, `SELECT name FROM suppliers WHERE tenant_id = $1 AND link_id = $2 AND retired_at IS NULL AND id <> $3`, tenant, *link, id).Scan(&other)
+		if err == nil {
+			return Supplier{}, fmt.Errorf("%w: %s is that business already", ErrSupplierExists, other)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return Supplier{}, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE suppliers SET link_id = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, id, link); err != nil {
+		return Supplier{}, err
+	}
+	if err := stockAudit(ctx, tx, tenant, "supplier.linked", x.Name, map[string]any{"supplier_id": id, "link": link, "by": actor}); err != nil {
+		return Supplier{}, err
+	}
+	return p.SupplierTx(ctx, tx, tenant, id)
+}
+
+// activeLinkTx is the link a supplier's orders go through: the one it
+// names, while active; nil otherwise.
+func activeLinkTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID) (*uuid.UUID, error) {
+	var link *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT link_id FROM suppliers WHERE tenant_id = $1 AND id = $2`, tenant, supplier).Scan(&link); err != nil || link == nil {
+		return nil, err
+	}
+	var ok bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_links_of() WHERE id = $1 AND state = 'active')`, *link).Scan(&ok); err != nil || !ok {
+		return nil, err
+	}
+	return link, nil
+}
+
 // InviteSupplierTx sends a current supplier the tap-in link again (at most
 // once in InviteEvery).
 func (p *Purchases) InviteSupplierTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string) (Supplier, error) {
@@ -466,6 +524,9 @@ type PurchaseLine struct {
 	// CostKobo is the price of one, the item's last cost when drafted.
 	CostKobo int64 `json:"cost_kobo"`
 	Received int64 `json:"received"`
+	// Delivered is what a linked supplier says it delivered, mirrored
+	// from its order (docs/spec/business-links.md §7); nil otherwise.
+	Delivered *int64 `json:"delivered,omitempty"`
 }
 
 // Purchase is a purchase order.
@@ -492,6 +553,17 @@ type Purchase struct {
 	// OwedKobo is what was received and not yet paid.
 	OwedKobo  int64     `json:"owed_kobo"`
 	CreatedAt time.Time `json:"created_at"`
+	// An order to a linked supplier (docs/spec/business-links.md §7): the
+	// link, and the seller's side as mirrored (its status, a word, the
+	// lines it proposes instead, when it delivered); a cancel asked after
+	// acceptance, and Not all came, are ours.
+	LinkID        *uuid.UUID     `json:"link_id,omitempty"`
+	SellerStatus  *string        `json:"seller_status,omitempty"`
+	SellerNote    *string        `json:"seller_note,omitempty"`
+	Change        []PurchaseLine `json:"change,omitempty"`
+	DeliveredAt   *time.Time     `json:"delivered_at,omitempty"`
+	CancelAskedAt *time.Time     `json:"cancel_asked_at,omitempty"`
+	ShortAt       *time.Time     `json:"short_at,omitempty"`
 }
 
 // Open reports whether the order may still be received.
@@ -509,13 +581,15 @@ func (x Purchase) Words() string {
 }
 
 const purchaseCols = `o.id, o.reference, o.supplier_id, s.name, o.lines, o.total_kobo, o.status, o.note, o.drafted_by, o.approved_by, o.sent_at,
-	o.confirmed_at, o.confirmed_how, o.counter, o.counter_at, o.received_at, o.cancelled_at, o.received_kobo, o.paid_kobo, o.created_at`
+	o.confirmed_at, o.confirmed_how, o.counter, o.counter_at, o.received_at, o.cancelled_at, o.received_kobo, o.paid_kobo, o.created_at,
+	o.link_id, o.seller_status, o.seller_note, o.change, o.delivered_at, o.cancel_asked_at, o.short_at`
 
 func scanPurchase(r pgx.Row) (Purchase, error) {
 	var x Purchase
-	var lines []byte
+	var lines, change []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.SupplierID, &x.Supplier, &lines, &x.TotalKobo, &x.Status, &x.Note, &x.DraftedBy, &x.ApprovedBy, &x.SentAt,
-		&x.ConfirmedAt, &x.ConfirmedHow, &x.Counter, &x.CounterAt, &x.ReceivedAt, &x.CancelledAt, &x.ReceivedKobo, &x.PaidKobo, &x.CreatedAt)
+		&x.ConfirmedAt, &x.ConfirmedHow, &x.Counter, &x.CounterAt, &x.ReceivedAt, &x.CancelledAt, &x.ReceivedKobo, &x.PaidKobo, &x.CreatedAt,
+		&x.LinkID, &x.SellerStatus, &x.SellerNote, &change, &x.DeliveredAt, &x.CancelAskedAt, &x.ShortAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNoPurchase
 	}
@@ -523,6 +597,11 @@ func scanPurchase(r pgx.Row) (Purchase, error) {
 		return x, err
 	}
 	x.OwedKobo = max(0, x.ReceivedKobo-x.PaidKobo)
+	if change != nil {
+		if err := json.Unmarshal(change, &x.Change); err != nil {
+			return x, err
+		}
+	}
 	return x, json.Unmarshal(lines, &x.Lines)
 }
 
@@ -756,15 +835,26 @@ func (p *Purchases) SendTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID,
 			return x, fmt.Errorf("%w: %s is above your limit of %s, and you drafted it", ErrSecondApproval, x.Reference, storefront.FormatNaira(*s.PurchaseLimitKobo))
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'sent', approved_by = $3, sent_at = now(), updated_at = now() WHERE tenant_id = $1 AND id = $2`,
-		tenant, id, approver); err != nil {
+	// A linked supplier's order goes through the link: the send notes it,
+	// and the link worker writes it into the supplier's business
+	// (docs/spec/business-links.md §7). A link no longer active sends it
+	// by chat as before.
+	link, err := activeLinkTx(ctx, tx, tenant, x.SupplierID)
+	if err != nil {
 		return x, err
 	}
-	if err := stockAudit(ctx, tx, tenant, "purchase.sent", x.Reference, map[string]any{"purchase_id": id, "total_kobo": x.TotalKobo, "by": approver}); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'sent', approved_by = $3, sent_at = now(), link_id = $4, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2`, tenant, id, approver, link); err != nil {
 		return x, err
 	}
-	if err := p.queueTx(ctx, tx, tenant, x); err != nil {
+	if err := stockAudit(ctx, tx, tenant, "purchase.sent", x.Reference, map[string]any{"purchase_id": id, "total_kobo": x.TotalKobo, "by": approver,
+		"linked": link != nil}); err != nil {
 		return x, err
+	}
+	if link == nil {
+		if err := p.queueTx(ctx, tx, tenant, x); err != nil {
+			return x, err
+		}
 	}
 	return PurchaseTx(ctx, tx, tenant, id, false)
 }
@@ -887,6 +977,9 @@ func CancelTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, actor string
 	case Drafted, Sent, Confirmed:
 	default:
 		return x, fmt.Errorf("%w: %s is %s; goods came in on it", ErrPurchase, x.Reference, StatusWords[x.Status])
+	}
+	if x.LinkID != nil && x.Status != Drafted {
+		return x, ErrLinked
 	}
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'cancelled', cancelled_at = now(), updated_at = now() WHERE tenant_id = $1 AND id = $2`,
 		tenant, id); err != nil {
@@ -1013,6 +1106,12 @@ func (p *Purchases) Receive(ctx context.Context, tenant, id uuid.UUID, got map[s
 	}
 	p.after(ctx, tenant, moves, costs, key)
 	return x, nil
+}
+
+// Apply is after for a receipt made in a caller's own transaction
+// (ReceiveTx), once it commits.
+func (p *Purchases) Apply(ctx context.Context, tenant uuid.UUID, moves []Movement, costs []Cost, key string) {
+	p.after(ctx, tenant, moves, costs, key)
 }
 
 // after sends movements recorded and sets cost prices; failures are left

@@ -5653,6 +5653,213 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/trade-orders:
+    get:
+      operationId: listTradeOrders
+      tags:
+      - Links
+      summary: Orders from linked businesses
+      description: Purchase orders linked businesses sent us, as orders; those still needing us first, then the newest.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: open
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Only those still needing us
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders/{id}:
+    get:
+      operationId: getTradeOrder
+      tags:
+      - Links
+      summary: One order from a linked business
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The order's id, or the buyer's reference
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/trade-orders/{id}/{step}:
+    post:
+      operationId: tradeOrderStep
+      tags:
+      - Links
+      summary: Take a step on an order from a linked business
+      description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: step
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [accept, decline, change, ready, dispatched, delivered, cancel, keep, agree]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                lines:
+                  type: array
+                  description: change only, one per line in order (quantity 0 cannot be supplied)
+                  items:
+                    $ref: '#/components/schemas/TradeOrderLine'
+                delivered:
+                  type: array
+                  description: delivered only, what was delivered of each line (default, all of it)
+                  items:
+                    type: integer
+                    minimum: 0
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/TradeOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/{id}/trade:
+    get:
+      operationId: getLinkTrade
+      tags:
+      - Links
+      summary: When a linked business's orders are invoiced
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: When the invoice is raised
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [invoice_at]
+                properties:
+                  invoice_at:
+                    type: string
+                    enum: [accepted, delivered]
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putLinkTrade
+      tags:
+      - Links
+      summary: Choose when a linked business's orders are invoiced
+      description: At acceptance, or once the delivery is received (the default).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [invoice_at]
+              properties:
+                invoice_at:
+                  type: string
+                  enum: [accepted, delivered]
+      responses:
+        '200':
+          description: When the invoice is raised
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [invoice_at]
+                properties:
+                  invoice_at:
+                    type: string
+                    enum: [accepted, delivered]
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills/{id}:
     get:
       operationId: getBill
@@ -7482,7 +7689,7 @@ paths:
       tags:
       - Stock
       summary: Cancel a purchase order
-      description: Before anything was received on it.
+      description: Before anything was received on it. An order to a linked supplier is cancelled on both sides before the supplier accepts it; after, the supplier is asked (cancel is asked), and answers.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -7497,6 +7704,173 @@ paths:
         schema:
           type: string
           format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+                  cancel:
+                    type: string
+                    enum: [cancelled, asked]
+                    description: For an order to a linked supplier
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/suppliers/{id}/link:
+    put:
+      operationId: linkSupplier
+      tags:
+      - Stock
+      summary: Say a supplier is a linked business
+      description: Its orders then go through the link, as orders in its business (business links L2), not by chat; null undoes it. The link must be active.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [link_id]
+              properties:
+                link_id:
+                  type: [string, 'null']
+                  format: uuid
+      responses:
+        '200':
+          description: The supplier
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [supplier]
+                properties:
+                  supplier:
+                    $ref: '#/components/schemas/StockSupplier'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/accept-change:
+    post:
+      operationId: acceptPurchaseChange
+      tags:
+      - Stock
+      summary: Accept a linked supplier's change
+      description: The order takes the supplier's quantities and prices, and is accepted on both sides. 409 when there is no change to accept.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/all-came:
+    post:
+      operationId: allCame
+      tags:
+      - Stock
+      summary: All of a linked delivery came
+      description: What the linked supplier delivered is received (stock raised), and the supplier told. 409 when it is not delivered or was answered already.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchase]
+                properties:
+                  purchase:
+                    $ref: '#/components/schemas/PurchaseOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/not-all-came:
+    post:
+      operationId: notAllCame
+      tags:
+      - Stock
+      summary: Not all of a linked delivery came
+      description: What came of each line, by our count, is received (stock raised), and the supplier is told, who agrees the count or talks to us. Without either, a delivery is received from the supplier's count a day after it.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [counts]
+              properties:
+                counts:
+                  type: array
+                  description: What came of each line, in order
+                  items:
+                    type: integer
+                    minimum: 0
       responses:
         '200':
           description: The order
@@ -26677,7 +27051,12 @@ components:
           type: string
         reached:
           type: string
-          enum: [whatsapp, telegram, sms]
+          enum: [whatsapp, telegram, sms, link]
+          description: Where its orders go; link when it is a linked business
+        link_id:
+          type: [string, 'null']
+          format: uuid
+          description: The link with the supplier's business, when it is one (business links L2)
         owed_kobo:
           type: integer
         open:
@@ -26732,6 +27111,9 @@ components:
                 type: integer
               received:
                 type: integer
+              delivered:
+                type: integer
+                description: What a linked supplier says it delivered, mirrored from its order
         total_kobo:
           type: integer
         status:
@@ -26771,6 +27153,139 @@ components:
         owed_kobo:
           type: integer
         created_at:
+          type: string
+          format: date-time
+        link_id:
+          type: string
+          format: uuid
+          description: Sent to a linked supplier, through this link (business links L2)
+        seller_status:
+          type: string
+          enum: [received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+          description: The linked supplier's side, mirrored from its order
+        seller_note:
+          type: string
+          description: The linked supplier's word on it
+        change:
+          type: array
+          description: The lines the linked supplier proposes instead, one per line in order (quantity 0 cannot be supplied)
+          items:
+            type: object
+            properties:
+              item_id:
+                type: string
+              item:
+                type: string
+              unit:
+                type: string
+              quantity:
+                type: integer
+              cost_kobo:
+                type: integer
+              received:
+                type: integer
+        delivered_at:
+          type: string
+          format: date-time
+        cancel_asked_at:
+          type: string
+          format: date-time
+          description: We asked the linked supplier to cancel it after it accepted
+        short_at:
+          type: string
+          format: date-time
+          description: We said Not all came
+    TradeOrderLine:
+      type: object
+      additionalProperties: false
+      required: [item, quantity, price_kobo]
+      properties:
+        item:
+          type: string
+        unit:
+          type: string
+        quantity:
+          type: integer
+          minimum: 0
+        price_kobo:
+          type: integer
+          minimum: 0
+        delivered:
+          type: integer
+          minimum: 0
+    TradeOrder:
+      type: object
+      additionalProperties: false
+      required: [id, link, buyer, buyer_name, reference, lines, total_kobo, status, invoice_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        link:
+          type: string
+          format: uuid
+        buyer:
+          type: string
+          format: uuid
+        buyer_name:
+          type: string
+        reference:
+          type: string
+          description: The buyer's purchase order reference
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeOrderLine'
+        total_kobo:
+          type: integer
+        note:
+          type: string
+        status:
+          type: string
+          enum: [received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
+        change:
+          type: array
+          items:
+            $ref: '#/components/schemas/TradeOrderLine'
+        seller_note:
+          type: string
+        cancel_asked_at:
+          type: string
+          format: date-time
+          description: The buyer asks to cancel it; cancel it or keep it
+        short:
+          type: array
+          items:
+            type: integer
+          description: Not all came, the buyer's count of each line
+        short_at:
+          type: string
+          format: date-time
+        receipt_at:
+          type: string
+          format: date-time
+          description: The buyer's receipt settled (its tap, or a day after delivery)
+        short_agreed_at:
+          type: string
+          format: date-time
+        invoice_id:
+          type: string
+          format: uuid
+        invoice_at:
+          type: string
+          enum: [accepted, delivered]
+        decided_by:
+          type: string
+        accepted_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
     StockItem:

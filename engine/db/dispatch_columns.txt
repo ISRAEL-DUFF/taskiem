@@ -529,6 +529,11 @@ link_mirrors_due.due_at
 link_mirrors_due.invoice_id
 link_mirrors_due.tenant_id
 link_mirrors_due.tries
+link_orders_due.due_at
+link_orders_due.kind
+link_orders_due.object_id
+link_orders_due.tenant_id
+link_orders_due.tries
 link_settings.code
 link_settings.findable
 link_settings.tenant_id

@@ -4171,6 +4171,134 @@
     "bill.notice.resolved": {
       "text": "*{from}* ti yanjú ìbéèrè yín lórí {reference}. {note}",
       "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} fi ọja-ibere {reference} ranṣẹ",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* bere fun {note}. Gba a, yi i pada tabi kọ ọ ni Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* fagile ọja-ibere {reference} ki ẹ to gba a.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} n beere lati fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* n beere ki ẹ fagile ọja-ibere {reference} ti ẹ ti gba. Fagile e, tabi ẹ pa a mọ.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} gba iyipada yin si {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* gba iyipada ti ẹ ṣe si ọja-ibere {reference}. A ti gba ọja-ibere naa.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} gba {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* sọ pe gbogbo ọja-ibere {reference} ti de.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} sọ pe kii ṣe gbogbo {reference} lo de",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* sọ pe kii ṣe gbogbo ọja-ibere {reference} lo de. Ohun ti wọn ka: {note}. Gba iye ti wọn ka, tabi ba wọn sọrọ.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} gba {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* gba ọja-ibere yin {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} kọ {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* kọ ọja-ibere yin {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} fẹ yi {reference} pada",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* le pese ọja-ibere {reference} bayii: {note}. Gba iyipada naa, tabi fagile ọja-ibere naa.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} ti ṣetan",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* sọ pe ọja-ibere yin {reference} ti ṣetan. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} wa loju ọna",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* ti fi ọja-ibere yin {reference} ranṣẹ, o wa loju ọna. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} ti mu {reference} de",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* ti mu ọja-ibere yin {reference} de: {note}. Tẹ All came, tabi Not all came, laarin ọjọ kan; lẹhin naa a o gba iye ti wọn ka.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* fagile ọja-ibere yin {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} fagile {reference} bi ẹ ti beere",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* gba lati fagile ọja-ibere yin {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} ko fagile {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* ko fagile ọja-ibere yin {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} gba iye ti ẹ ka fun {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* gba iye ti ẹ ka ohun to de ninu ọja-ibere {reference}.",
+      "reviewed": false
     }
   }
 }

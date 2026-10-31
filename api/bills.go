@@ -96,8 +96,9 @@ func billErr(err error) error {
 
 // --- the mirror worker ---
 
-// RunLinkMirrors mirrors linked invoices into their buyers' bills every
-// few seconds, while ctx lives.
+// RunLinkMirrors mirrors linked invoices into their buyers' bills, and
+// does the linked orders' work (link_orders.go), every few seconds, while
+// ctx lives.
 func (s *Server) runLinkMirrors(ctx context.Context) {
 	tick, hourly := time.NewTicker(3*time.Second), time.NewTicker(time.Hour)
 	defer tick.Stop()
@@ -109,6 +110,9 @@ func (s *Server) runLinkMirrors(ctx context.Context) {
 		case <-tick.C:
 			if _, err := s.LinkMirrorTick(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("links: mirroring bills", "err", err)
+			}
+			if _, err := s.LinkOrdersTick(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("links: linked orders", "err", err)
 			}
 		case <-hourly.C:
 			if _, err := s.LinkReconcile(ctx); err != nil && ctx.Err() == nil {
@@ -255,9 +259,15 @@ func (s *Server) tellBill(ctx context.Context, buyer uuid.UUID, b links.Mirror) 
 // its links (invoice.manage and link.manage), in the bell and in chat, in
 // that business's own scope.
 func (s *Server) tellPeople(ctx context.Context, tenant uuid.UUID, group, link string, words func(lang.Tag) (string, string)) {
+	s.tellHolders(ctx, tenant, []string{PermInvoiceManage, PermLinkManage}, group, link, words)
+}
+
+// tellHolders tells the people of a business whose role holds every one of
+// perms, in the bell and in chat, in that business's own scope.
+func (s *Server) tellHolders(ctx context.Context, tenant uuid.UUID, perms []string, group, link string, words func(lang.Tag) (string, string)) {
 	var to []linkTold
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(PermInvoiceManage, PermLinkManage))
+		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(perms...))
 		if err != nil {
 			return err
 		}

@@ -4171,6 +4171,134 @@
     "bill.notice.resolved": {
       "text": "*{from}* ya warware tambayarku kan {reference}. {note}",
       "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} ya aika oda {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* ya yi odar {note}. Karɓa, canza ko ƙi shi a Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} ya soke {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* ya soke oda {reference} kafin ku karɓa.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} na neman soke {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* na neman a soke oda {reference} da kuka karɓa. Soke shi, ko ku riƙe shi.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} ya karɓi canjinku a {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* ya karɓi canjin da kuka yi wa oda {reference}. An karɓi odar.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} ya karɓi {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* ya ce duk abin da ke cikin oda {reference} ya iso.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} ya ce ba duka {reference} ya iso ba",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* ya ce ba duk oda {reference} ya iso ba. Abin da suka ƙirga: {note}. Ku amince da ƙidayarsu, ko ku yi magana da su.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} ya karɓi {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* ya karɓi odarku {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} ya ƙi {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* ya ƙi odarku {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} na son canza {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* zai iya kawo oda {reference} kamar haka: {note}. Ku karɓi canjin, ko ku soke odar.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} ya shirya",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* ya ce odarku {reference} ta shirya. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} na kan hanya",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* ya tura odarku {reference}, tana kan hanya. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} ya kawo {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* ya kawo odarku {reference}: {note}. Danna All came, ko Not all came, cikin kwana ɗaya; bayan haka za a ɗauki ƙidayarsu.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} ya soke {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* ya soke odarku {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} ya soke {reference} kamar yadda kuka nema",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* ya amince ya soke odarku {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} bai soke {reference} ba",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* bai soke odarku {reference} ba. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} ya amince da ƙidayarku ta {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* ya amince da ƙidayarku ta abin da ya iso na oda {reference}.",
+      "reviewed": false
     }
   }
 }

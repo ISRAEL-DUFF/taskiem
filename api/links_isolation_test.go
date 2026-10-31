@@ -41,8 +41,17 @@ func (l *scopeLog) TraceQueryStart(ctx context.Context, conn *pgx.Conn, d pgx.Tr
 		l.scope[conn] = fmt.Sprint(d.Args[0])
 	}
 	l.seen = append(l.seen, loggedQuery{scope: l.scope[conn], sql: sql, args: d.Args})
+	// The door narrows the transaction to the other business, inside the
+	// function: what follows is that business's, which only the database
+	// knows (its policies hold it to that scope).
+	if strings.Contains(sql, "taskiem_link_enter(") {
+		l.scope[conn] = entered
+	}
 	return ctx
 }
+
+// entered is the scope the log gives a transaction after the door.
+const entered = "entered"
 
 func (l *scopeLog) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
@@ -101,18 +110,36 @@ func TestLinkIsolation(t *testing.T) {
 	ada.must(200, "POST", "/v1/links/"+l["id"].(string)+"/end", nil)
 	w.srv.WaitBackground()
 
+	ofEach := checkIsolation(t, log.take(), adaID, dangoteID)
+	// Both sides ran their own transactions: the requester's, and the
+	// other's people told in its own.
+	if ofEach[adaID] == 0 || ofEach[dangoteID] == 0 {
+		t.Errorf("statements by business: %v", ofEach)
+	}
+}
+
+// checkIsolation reads the statements logged while two businesses traded
+// through their link: no statement reads business_links; no transaction
+// holds both; a transaction of one names the other only in a call to the
+// link functions, as its own customer key link:<the other> (§6.1), or
+// after the door, in the other's scope. It answers how
+// many statements each ran in its own scope.
+func checkIsolation(t *testing.T, seen []loggedQuery, a, b string) map[string]int {
+	t.Helper()
 	names := func(q loggedQuery, id string) bool {
 		if strings.Contains(q.sql, id) {
 			return true
 		}
-		for _, a := range q.args {
-			switch v := a.(type) {
+		for _, arg := range q.args {
+			switch v := arg.(type) {
 			case uuid.UUID:
 				if v.String() == id {
 					return true
 				}
 			case string:
-				if strings.Contains(v, id) {
+				// A seller's own key for its linked customer, link:<the
+				// buyer> (§6.1), is its record, in its own scope.
+				if strings.Contains(strings.ReplaceAll(v, "link:"+id, ""), id) {
 					return true
 				}
 			case []uuid.UUID:
@@ -125,7 +152,6 @@ func TestLinkIsolation(t *testing.T) {
 		}
 		return false
 	}
-	seen := log.take()
 	if len(seen) < 20 {
 		t.Fatalf("only %d statements logged", len(seen))
 	}
@@ -137,7 +163,7 @@ func TestLinkIsolation(t *testing.T) {
 		if strings.Contains(q.scope, ",") {
 			t.Errorf("a transaction holds more than one business (%s): %s", q.scope, q.sql)
 		}
-		for _, pair := range [][2]string{{adaID, dangoteID}, {dangoteID, adaID}} {
+		for _, pair := range [][2]string{{a, b}, {b, a}} {
 			mine, other := pair[0], pair[1]
 			if !strings.Contains(q.scope, mine) {
 				continue
@@ -148,9 +174,5 @@ func TestLinkIsolation(t *testing.T) {
 			}
 		}
 	}
-	// Both sides ran their own transactions: the requester's, and the
-	// other's people told in its own.
-	if ofEach[adaID] == 0 || ofEach[dangoteID] == 0 {
-		t.Errorf("statements by business: %v", ofEach)
-	}
+	return ofEach
 }

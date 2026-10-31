@@ -5213,6 +5213,166 @@
       "text": "*{from}* settled your query on {reference}. {note}",
       "reviewed": true,
       "context": "The seller settled a buyer's query; {note} is what they said, or nothing"
+    },
+    "order.link.ordered_title": {
+      "text": "{from} sent order {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer sent the seller an order; {note} is its items and total"
+    },
+    "order.link.ordered": {
+      "text": "*{from}* ordered {note}. Accept, change or decline it in Taskiem.",
+      "reviewed": true,
+      "context": "A linked buyer sent the seller an order; {note} is its items and total"
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} cancelled {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer cancelled an order before the seller accepted it"
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* cancelled order {reference} before you accepted it.",
+      "reviewed": true,
+      "context": "A linked buyer cancelled an order before the seller accepted it"
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} asks to cancel {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer asks the seller to cancel an order already accepted"
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* asks to cancel order {reference}, which you accepted. Cancel it, or keep it.",
+      "reviewed": true,
+      "context": "A linked buyer asks the seller to cancel an order already accepted"
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} accepted your change to {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer accepted the seller's change to an order"
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* accepted your change to order {reference}. The order is accepted.",
+      "reviewed": true,
+      "context": "A linked buyer accepted the seller's change to an order"
+    },
+    "order.link.received_title": {
+      "text": "{from} received {reference}",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer confirmed it received all of a delivered order"
+    },
+    "order.link.received": {
+      "text": "*{from}* says all of order {reference} came.",
+      "reviewed": true,
+      "context": "A linked buyer confirmed it received all of a delivered order"
+    },
+    "order.link.short_title": {
+      "text": "{from} says not all of {reference} came",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer says a delivery was short; {note} is what it counted"
+    },
+    "order.link.short": {
+      "text": "*{from}* says not all of order {reference} came. They counted: {note}. Agree their count, or talk to them.",
+      "reviewed": true,
+      "context": "A linked buyer says a delivery was short; {note} is what it counted"
+    },
+    "order.link.accept_title": {
+      "text": "{from} accepted {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller accepted the buyer's order"
+    },
+    "order.link.accept": {
+      "text": "*{from}* accepted your order {reference}.",
+      "reviewed": true,
+      "context": "The linked seller accepted the buyer's order"
+    },
+    "order.link.decline_title": {
+      "text": "{from} declined {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller declined the buyer's order; {note} is their reason, or nothing"
+    },
+    "order.link.decline": {
+      "text": "*{from}* declined your order {reference}. {note}",
+      "reviewed": true,
+      "context": "The linked seller declined the buyer's order; {note} is their reason, or nothing"
+    },
+    "order.link.change_title": {
+      "text": "{from} asks to change {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller proposes a change to the buyer's order; {note} says it"
+    },
+    "order.link.change": {
+      "text": "*{from}* can supply order {reference} like this: {note}. Accept the change, or cancel the order.",
+      "reviewed": true,
+      "context": "The linked seller proposes a change to the buyer's order; {note} says it"
+    },
+    "order.link.ready_title": {
+      "text": "{reference} is ready",
+      "reviewed": true,
+      "context": "Notification title: the linked seller says the buyer's order is ready; {note} is their word, or nothing"
+    },
+    "order.link.ready": {
+      "text": "*{from}* says your order {reference} is ready. {note}",
+      "reviewed": true,
+      "context": "The linked seller says the buyer's order is ready; {note} is their word, or nothing"
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} is on its way",
+      "reviewed": true,
+      "context": "Notification title: the linked seller dispatched the buyer's order"
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* sent your order {reference} on its way. {note}",
+      "reviewed": true,
+      "context": "The linked seller dispatched the buyer's order"
+    },
+    "order.link.delivered_title": {
+      "text": "{from} delivered {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller delivered the buyer's order; {note} is what it delivered"
+    },
+    "order.link.delivered": {
+      "text": "*{from}* delivered your order {reference}: {note}. Tap All came, or Not all came, within a day; after that their count is taken.",
+      "reviewed": true,
+      "context": "The linked seller delivered the buyer's order; {note} is what it delivered"
+    },
+    "order.link.cancel_title": {
+      "text": "{from} cancelled {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller cancelled the buyer's accepted order"
+    },
+    "order.link.cancel": {
+      "text": "*{from}* cancelled your order {reference}. {note}",
+      "reviewed": true,
+      "context": "The linked seller cancelled the buyer's accepted order"
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} cancelled {reference} as you asked",
+      "reviewed": true,
+      "context": "Notification title: the linked seller agreed to the buyer's request to cancel"
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* agreed to cancel your order {reference}.",
+      "reviewed": true,
+      "context": "The linked seller agreed to the buyer's request to cancel"
+    },
+    "order.link.keep_title": {
+      "text": "{from} is keeping {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller declined the buyer's request to cancel"
+    },
+    "order.link.keep": {
+      "text": "*{from}* did not cancel your order {reference}. {note}",
+      "reviewed": true,
+      "context": "The linked seller declined the buyer's request to cancel"
+    },
+    "order.link.agree_title": {
+      "text": "{from} agreed your count for {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller agreed the buyer's count of a short delivery"
+    },
+    "order.link.agree": {
+      "text": "*{from}* agreed to your count of what came of order {reference}.",
+      "reviewed": true,
+      "context": "The linked seller agreed the buyer's count of a short delivery"
     }
   }
 }

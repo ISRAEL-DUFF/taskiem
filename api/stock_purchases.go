@@ -451,8 +451,26 @@ func (s *Server) confirmPurchase(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// cancelPurchase is POST /v1/stock/purchases/{id}/cancel.
+// cancelPurchase is POST /v1/stock/purchases/{id}/cancel. An order sent
+// to a linked supplier is cancelled through the link (link_orders.go).
 func (s *Server) cancelPurchase(w http.ResponseWriter, r *http.Request) {
+	if id, err := idParam(r); err == nil && s.purchasesReady(w) {
+		var linked bool
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			x, err := stock.PurchaseTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id, false)
+			linked = err == nil && x.LinkID != nil && x.Status != stock.Drafted
+			return nil
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if linked {
+			s.cancelLinkedPurchase(w, r, id)
+			return
+		}
+	} else if err == nil {
+		return
+	}
 	s.purchaseStep(w, r, "purchase.cancel", stock.CancelTx)
 }
 

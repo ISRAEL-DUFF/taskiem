@@ -4171,6 +4171,134 @@
     "bill.notice.resolved": {
       "text": "*{from}* edozila ajụjụ gị maka {reference}. {note}",
       "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} zitere iwu {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* nyere iwu {note}. Nabata ya, gbanwee ya ma ọ bụ jụ ya na Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} kagburu {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* kagburu iwu {reference} tupu unu anabata ya.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} na-arịọ ka a kagbuo {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* na-arịọ ka unu kagbuo iwu {reference} unu nabatara. Kagbuo ya, ma ọ bụ debe ya.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} nabatara mgbanwe unu na {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* nabatara mgbanwe unu mere n'iwu {reference}. A nabatala iwu ahụ.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} natara {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* kwuru na ihe niile dị n'iwu {reference} rutere.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} kwuru na ọ bụghị ihe niile dị na {reference} rutere",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* kwuru na ọ bụghị ihe niile dị n'iwu {reference} rutere. Ihe ha gụrụ: {note}. Kwenye na ọnụ ọgụgụ ha, ma ọ bụ gwa ha okwu.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} nabatara {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* nabatara iwu unu {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} jụrụ {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* jụrụ iwu unu {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} chọrọ ịgbanwe {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* nwere ike iweta iwu {reference} otu a: {note}. Nabata mgbanwe ahụ, ma ọ bụ kagbuo iwu ahụ.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} adịla njikere",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* kwuru na iwu unu {reference} adịla njikere. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} nọ n'ụzọ",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* ezipụla iwu unu {reference}, ọ nọ n'ụzọ. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} ebutela {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* ebutela iwu unu {reference}: {note}. Pịa All came, ma ọ bụ Not all came, n'ime otu ụbọchị; mgbe nke ahụ gasịrị, a ga-ewere ọnụ ọgụgụ ha.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} kagburu {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* kagburu iwu unu {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} kagburu {reference} dịka unu rịọrọ",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* kwenyere ịkagbu iwu unu {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} akagbughị {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* akagbughị iwu unu {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} kwenyere ọnụ ọgụgụ unu maka {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* kwenyere ọnụ ọgụgụ unu nke ihe rutere n'iwu {reference}.",
+      "reviewed": false
     }
   }
 }

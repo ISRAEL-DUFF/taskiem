@@ -4171,6 +4171,134 @@
     "bill.notice.resolved": {
       "text": "*{from}* don settle your query for {reference}. {note}",
       "reviewed": false
+    },
+    "order.link.ordered_title": {
+      "text": "{from} send order {reference}",
+      "reviewed": false
+    },
+    "order.link.ordered": {
+      "text": "*{from}* order {note}. Accept am, change am or decline am for Taskiem.",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer_title": {
+      "text": "{from} cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancelled_by_buyer": {
+      "text": "*{from}* cancel order {reference} before you accept am.",
+      "reviewed": false
+    },
+    "order.link.cancel_asked_title": {
+      "text": "{from} wan cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel_asked": {
+      "text": "*{from}* dey ask make you cancel order {reference} wey you don accept. Cancel am, or keep am.",
+      "reviewed": false
+    },
+    "order.link.change_accepted_title": {
+      "text": "{from} accept your change for {reference}",
+      "reviewed": false
+    },
+    "order.link.change_accepted": {
+      "text": "*{from}* accept your change for order {reference}. The order don dey accepted.",
+      "reviewed": false
+    },
+    "order.link.received_title": {
+      "text": "{from} receive {reference}",
+      "reviewed": false
+    },
+    "order.link.received": {
+      "text": "*{from}* talk say everything for order {reference} don land.",
+      "reviewed": false
+    },
+    "order.link.short_title": {
+      "text": "{from} talk say no be everything for {reference} land",
+      "reviewed": false
+    },
+    "order.link.short": {
+      "text": "*{from}* talk say no be everything for order {reference} land. Wetin dem count: {note}. Agree with their count, or talk to dem.",
+      "reviewed": false
+    },
+    "order.link.accept_title": {
+      "text": "{from} accept {reference}",
+      "reviewed": false
+    },
+    "order.link.accept": {
+      "text": "*{from}* accept your order {reference}.",
+      "reviewed": false
+    },
+    "order.link.decline_title": {
+      "text": "{from} decline {reference}",
+      "reviewed": false
+    },
+    "order.link.decline": {
+      "text": "*{from}* decline your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.change_title": {
+      "text": "{from} wan change {reference}",
+      "reviewed": false
+    },
+    "order.link.change": {
+      "text": "*{from}* fit supply order {reference} like this: {note}. Accept the change, or cancel the order.",
+      "reviewed": false
+    },
+    "order.link.ready_title": {
+      "text": "{reference} don ready",
+      "reviewed": false
+    },
+    "order.link.ready": {
+      "text": "*{from}* talk say your order {reference} don ready. {note}",
+      "reviewed": false
+    },
+    "order.link.dispatched_title": {
+      "text": "{reference} dey come",
+      "reviewed": false
+    },
+    "order.link.dispatched": {
+      "text": "*{from}* don send your order {reference}, e dey come. {note}",
+      "reviewed": false
+    },
+    "order.link.delivered_title": {
+      "text": "{from} deliver {reference}",
+      "reviewed": false
+    },
+    "order.link.delivered": {
+      "text": "*{from}* don deliver your order {reference}: {note}. Tap All came, or Not all came, before one day pass; after that, na their count we go use.",
+      "reviewed": false
+    },
+    "order.link.cancel_title": {
+      "text": "{from} cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.cancel": {
+      "text": "*{from}* cancel your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed_title": {
+      "text": "{from} cancel {reference} as you ask",
+      "reviewed": false
+    },
+    "order.link.cancel_agreed": {
+      "text": "*{from}* agree to cancel your order {reference}.",
+      "reviewed": false
+    },
+    "order.link.keep_title": {
+      "text": "{from} no cancel {reference}",
+      "reviewed": false
+    },
+    "order.link.keep": {
+      "text": "*{from}* no cancel your order {reference}. {note}",
+      "reviewed": false
+    },
+    "order.link.agree_title": {
+      "text": "{from} agree your count for {reference}",
+      "reviewed": false
+    },
+    "order.link.agree": {
+      "text": "*{from}* agree with your count of wetin land for order {reference}.",
+      "reviewed": false
     }
   }
 }
