@@ -113,29 +113,3 @@ func (s Start) Trigger() map[string]any {
 	body["event"] = s.Event
 	return map[string]any{"type": TriggerType, "event": s.Event, "body": body}
 }
-
-// SampleTrigger is a link event as a run sees it, with sample values: for
-// the builder's dry run and its happy path.
-func SampleTrigger(event string) map[string]any {
-	const link = "00000000-0000-7000-8000-00000000a11c"
-	lines := []any{map[string]any{"item": "Rice 50kg", "unit": "bag", "quantity": 10, "price_kobo": 4500000}}
-	body := map[string]any{"link": link, "business": "Dangote Stores"}
-	switch event {
-	case EventBillReceived, EventBillPaid:
-		body["reference"], body["amount_kobo"], body["due_on"] = "INV-0042", 45000000, "2026-01-15"
-		body["paid_kobo"], body["due_kobo"] = 0, 45000000
-		if event == EventBillPaid {
-			body["paid_kobo"], body["due_kobo"] = 45000000, 0
-		}
-	case EventOrderReceived:
-		body["business"] = "Ada's Kitchen"
-		body["reference"], body["total_kobo"], body["lines"], body["note"] = "P-7QX4KD", 45000000, lines, ""
-	case EventOrderDelivered:
-		body["reference"], body["purchase_id"], body["total_kobo"], body["lines"] = "P-7QX4KD", "00000000-0000-7000-8000-000000000001", 45000000, lines
-	case EventThreadMessage:
-		body["text"], body["sender"], body["message_id"] = "Is the rice ready?", "Musa", "00000000-0000-7000-8000-000000000002"
-	case EventLinkAccepted:
-		body["role"] = RoleSupplier
-	}
-	return Start{Event: event, Body: body}.Trigger()
-}

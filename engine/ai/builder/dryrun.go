@@ -10,7 +10,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
-	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 	"github.com/israel-duff/taskiem/templates"
@@ -98,10 +97,10 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			body["payment"] = map[string]any{"id": "00000000-0000-7000-8000-000000000001", "amount_kobo": 2500000, "amount": "₦25,000", "how": "exact", "paid_at": "2026-01-01T09:00:00Z"}
 		}
 	}
-	if def.Trigger.Type == links.TriggerType {
+	if def.Trigger.Type == "link" {
 		// A link event between linked businesses (business links L6).
 		ev, _ := def.Trigger.Config["event"].(string)
-		trig = links.SampleTrigger(ev)
+		trig = linkSample(ev)
 	}
 	if def.Trigger.Type == "form" {
 		// What a submission carries beside the answers (forms 8.2).
@@ -455,4 +454,31 @@ func TryDraft(doc []byte, reg connector.Lookup, policies map[string]json.RawMess
 		}
 	}
 	return c, runCase(def, reg, usedPolicies(def, policies), find, c), nil
+}
+
+// linkSample is a link event as a run sees it, with sample values: for
+// the builder's dry run and its happy path.
+func linkSample(event string) map[string]any {
+	const link = "00000000-0000-7000-8000-00000000a11c"
+	lines := []any{map[string]any{"item": "Rice 50kg", "unit": "bag", "quantity": 10, "price_kobo": 4500000}}
+	body := map[string]any{"link": link, "business": "Dangote Stores"}
+	switch event {
+	case "bill.received", "bill.paid":
+		body["reference"], body["amount_kobo"], body["due_on"] = "INV-0042", 45000000, "2026-01-15"
+		body["paid_kobo"], body["due_kobo"] = 0, 45000000
+		if event == "bill.paid" {
+			body["paid_kobo"], body["due_kobo"] = 45000000, 0
+		}
+	case "order.received":
+		body["business"] = "Ada's Kitchen"
+		body["reference"], body["total_kobo"], body["lines"], body["note"] = "P-7QX4KD", 45000000, lines, ""
+	case "order.delivered":
+		body["reference"], body["purchase_id"], body["total_kobo"], body["lines"] = "P-7QX4KD", "00000000-0000-7000-8000-000000000001", 45000000, lines
+	case "thread.message":
+		body["text"], body["sender"], body["message_id"] = "Is the rice ready?", "Musa", "00000000-0000-7000-8000-000000000002"
+	case "link.accepted":
+		body["role"] = "supplier"
+	}
+	body["event"] = event
+	return map[string]any{"type": "link", "event": event, "body": body}
 }
