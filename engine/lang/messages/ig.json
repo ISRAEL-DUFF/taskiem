@@ -4363,6 +4363,26 @@
     "order.link.message_title": {
       "text": "{from} gbasara {reference}",
       "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "Gbasara {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Ọ bụ naanị onye na-edegara azụmahịa ejikọrọ ọnụ maka {org} nwere ike iziga nke a.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Gịnị ka ị chọrọ ịgwa *{name}*? Ziga *ask {name}* na ozi gị.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "Ezigaghị ya: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "Ezigala ya *{name}*. Azịza ha ga-abịa ebe a, na Chat na weebụ.",
+      "reviewed": false
     }
   }
 }

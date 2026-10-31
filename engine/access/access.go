@@ -66,6 +66,9 @@ const (
 	// LinkManage requests, accepts, declines, blocks and ends links with
 	// other businesses on Taskiem (decision 0061; docs/spec/business-links.md).
 	LinkManage = "link.manage"
+	// ChatTrade writes in the conversations with linked businesses (their
+	// messages are readable by every member).
+	ChatTrade = "chat.trade"
 )
 
 // All are every permission, in the order the role editor lists them.
@@ -73,7 +76,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -110,6 +113,7 @@ var Descriptions = map[string]string{
 	SchoolApprove:    "Schools: approve cash postings and discounts above the thresholds, decide payment plans, override clearance",
 	SchoolGate:       "Schools: the gate screen only (cleared or see the bursar, never an amount)",
 	LinkManage:       "Link with other businesses on Taskiem: ask, accept, decline, block and end links (audited in both businesses)",
+	ChatTrade:        "Write to linked businesses in their conversations, as the business",
 }
 
 // Gate is the built-in role of the person at the school gate: the gate
@@ -121,9 +125,9 @@ const Gate = "gate"
 var Roles = map[string][]string{
 	"owner": All,
 	"admin": {WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStart, RunCancel, RunResolve, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage,
-		ConnectorManage, RoleManage, SCIM, AlertManage, TableRead, TableEdit, StorefrontManage, FormLinks, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, LinkManage},
+		ConnectorManage, RoleManage, SCIM, AlertManage, TableRead, TableEdit, StorefrontManage, FormLinks, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, LinkManage, ChatTrade},
 	"builder":  {WorkflowRead, WorkflowEdit, RunRead, RunStart, TableRead, TableEdit},
-	"operator": {WorkflowRead, RunRead, RunStart, RunCancel, RunResolve, TableRead, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage},
+	"operator": {WorkflowRead, RunRead, RunStart, RunCancel, RunResolve, TableRead, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, ChatTrade},
 	"approver": {WorkflowRead, RunRead, ApprovalDecide},
 	"auditor":  {WorkflowRead, RunRead, AuditRead, TableRead, InvoiceRead, SchoolRead},
 	"viewer":   {WorkflowRead, RunRead, TableRead, InvoiceRead, SchoolRead},

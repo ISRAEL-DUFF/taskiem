@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DocThread } from "./Conversation";
 import { Link, useParams } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
@@ -176,6 +177,7 @@ export function TradeOrderPage() {
             </p>
           )}
           {can("storefront.manage") && <SellerActions o={o} onDone={reload} />}
+          <DocThread doc="order" reference={o.reference} />
           {can("link.manage") && <TradeSettings o={o} onDone={reload} />}
         </>
       )}
@@ -617,6 +619,7 @@ export function PurchasePage() {
           )}
           {can("storefront.manage") && buyerSteps(p).confirmProposed && <ConfirmProposed p={p} onDone={reload} />}
           <BuyerActions p={p} onDone={reload} manage={can("storefront.manage")} receive={can("table.edit")} />
+          {p.link_id && <DocThread doc="purchase" reference={p.reference} />}
         </>
       )}
     </>

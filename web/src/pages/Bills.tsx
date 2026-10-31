@@ -4,6 +4,7 @@ import { useAuth } from "../auth";
 import { billHero, billPath, billsDue, billStatus, canPay, sentLine, type Bill, type BillPaySettings } from "../lib/bills";
 import { dateLabel, naira, toKobo } from "../lib/invoices";
 import { useState } from "react";
+import { DocThread } from "./Conversation";
 import { EmptyState, ErrorBox, Field, fmtTime, Item, Items, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 
 // Bills (business links L1; docs/spec/business-links.md §6): linked
@@ -182,6 +183,7 @@ export function BillPage() {
             <p className="hint">Brought up to date {fmtTime(b.mirrored_at)}. The supplier's invoice is the record: a change to it shows here.</p>
           </section>
           {can("invoice.manage") && b.status !== "void" && b.status !== "paid" && <BillActions bill={b} onDone={reload} />}
+          <DocThread doc="bill" reference={b.reference} />
         </>
       )}
     </>

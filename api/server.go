@@ -464,6 +464,7 @@ func (s *Server) Handler() http.Handler {
 			s.linkRoutes(r)      // business links (links.go)
 			s.billRoutes(r)      // their bills (bills.go)
 			s.linkOrderRoutes(r) // their orders (link_orders.go)
+			s.linkChatRoutes(r)  // their conversations (link_chat.go)
 			s.schoolRoutes(r)    // the Schools area (schools.go)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)

@@ -107,6 +107,10 @@ func TestLinkIsolation(t *testing.T) {
 	ada.must(200, "GET", "/v1/links", nil)
 	code := dangote.must(200, "GET", "/v1/link-settings", nil)["code"].(string)
 	ada.must(200, "GET", "/v1/links/code/"+code, nil)
+	// They talk (L3): a message in both, read with the double tick.
+	ada.must(201, "POST", "/v1/link-chats/"+l["id"].(string)+"/messages", map[string]any{"text": "Hello from Ada"})
+	dangote.must(200, "POST", "/v1/link-chats/"+l["id"].(string)+"/read", nil)
+	w.srv.WaitBackground()
 	ada.must(200, "POST", "/v1/links/"+l["id"].(string)+"/end", nil)
 	w.srv.WaitBackground()
 

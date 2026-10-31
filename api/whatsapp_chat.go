@@ -674,6 +674,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waRidersCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
+		// A message to a linked business (link_chat.go): "ask Dangote …".
+		if f := strings.Fields(text); len(f) > 1 && strings.EqualFold(f[0], "ask") {
+			if done, err := s.waAsk(ctx, c, strings.Join(f[1:], " ")); done || err != nil {
+				return err
+			}
+		}
 		// A linked supplier's bills (bills.go): "bill INV-0042" before the
 		// invoice words, which need a name and an amount.
 		if done, err := s.waBillCommand(ctx, c, text, cmd); done || err != nil {

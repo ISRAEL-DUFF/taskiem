@@ -244,7 +244,11 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		return false, err
 	}
 	if created {
-		s.background(ctx, "bill arrived", func(ctx context.Context) { s.tellBill(ctx, buyer, bill) })
+		s.background(ctx, "bill arrived", func(ctx context.Context) {
+			amount := bill.AmountKobo
+			s.billCards(ctx, link, seller, buyer, bill.Reference, "bill", true, &amount, "")
+			s.tellBill(ctx, buyer, bill)
+		})
 	}
 	return true, nil
 }
@@ -320,9 +324,16 @@ func (s *Server) tellHoldersWith(ctx context.Context, tenant uuid.UUID, perms []
 	}
 }
 
-// tellNotice tells the other side's people what a notice says.
-func (s *Server) tellNotice(ctx context.Context, tenant uuid.UUID, n links.Notice, link string) {
+// tellNotice tells the other side's people what a notice says, and puts
+// it in both sides' conversation as a card on the bill (L3); from is the
+// business that said it.
+func (s *Server) tellNotice(ctx context.Context, tenant, from uuid.UUID, n links.Notice, link string) {
 	s.background(ctx, "link notice", func(ctx context.Context) {
+		seller, buyer := tenant, from // the buyer declared or queried
+		if n.Kind == "resolved" {
+			seller, buyer = from, tenant
+		}
+		s.billCards(ctx, n.Link, seller, buyer, n.Reference, n.Kind, n.Kind == "resolved", n.AmountKobo, n.Note)
 		s.tellPeople(ctx, tenant, "notice:"+n.ID.String(), link, func(l lang.Tag) (string, string) {
 			amount := ""
 			if n.AmountKobo != nil {
@@ -759,7 +770,7 @@ func (s *Server) declareBillPaid(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, billErr(err))
 		return
 	}
-	s.tellNotice(r.Context(), seller, n, "/invoices/"+b.Reference)
+	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -791,7 +802,7 @@ func (s *Server) queryBill(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, billErr(err))
 		return
 	}
-	s.tellNotice(r.Context(), seller, n, "/invoices/"+b.Reference)
+	s.tellNotice(r.Context(), seller, p.TenantID, n, "/invoices/"+b.Reference)
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -834,7 +845,7 @@ func (s *Server) settleInvoiceQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n.ID != uuid.Nil {
-		s.tellNotice(r.Context(), buyer, n, "/bills")
+		s.tellNotice(r.Context(), buyer, p.TenantID, n, "/bills")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"number": number, "settled": true})
 }

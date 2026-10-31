@@ -4363,6 +4363,26 @@
     "order.link.message_title": {
       "text": "{from} about {reference}",
       "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "About {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Na only person wey dey write to linked businesses for {org} fit send that one.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Wetin you wan tell *{name}*? Send *ask {name}* and your message.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "E no send: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
+      "reviewed": false
     }
   }
 }

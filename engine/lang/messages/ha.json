@@ -4363,6 +4363,26 @@
     "order.link.message_title": {
       "text": "{from} game da {reference}",
       "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "Game da {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Sai wanda ke rubuta wa kasuwancin da aka haɗa don {org} ne zai iya aika wannan.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Me kuke so ku faɗa wa *{name}*? Aika *ask {name}* da saƙonku.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "Ba a aika ba: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "An aika wa *{name}*. Amsoshinsu za su zo nan, da kuma Chat a yanar gizo.",
+      "reviewed": false
     }
   }
 }

@@ -716,6 +716,7 @@ func (s *Server) tellOrder(ctx context.Context, t *links.Told, in links.StepIn) 
 	}
 	told := *t
 	s.background(ctx, "linked order", func(ctx context.Context) {
+		s.orderCards(ctx, told)
 		note := in.Note
 		if note == "" || told.Event == "change" || told.Event == "delivered" || told.Event == "short" {
 			note = s.orderNote(ctx, told, in)

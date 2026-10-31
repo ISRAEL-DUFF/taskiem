@@ -4363,6 +4363,26 @@
     "order.link.message_title": {
       "text": "{from} nipa {reference}",
       "reviewed": false
+    },
+    "chat.link.about": {
+      "text": "Nipa {reference}:",
+      "reviewed": false
+    },
+    "chat.link.denied": {
+      "text": "Ẹni ti n kọwe si awọn iṣowo ti a so pọ fun {org} nikan lo le fi eyi ranṣẹ.",
+      "reviewed": false
+    },
+    "chat.link.ask_what": {
+      "text": "Kini ẹ fẹ sọ fun *{name}*? Fi *ask {name}* ati ọrọ yin ranṣẹ.",
+      "reviewed": false
+    },
+    "chat.link.not_sent": {
+      "text": "Ko lọ: {reason}.",
+      "reviewed": false
+    },
+    "chat.link.sent": {
+      "text": "A ti fi ranṣẹ si *{name}*. Esi wọn yoo wa sibi, ati si Chat lori wẹẹbu.",
+      "reviewed": false
     }
   }
 }

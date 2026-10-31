@@ -170,6 +170,10 @@ type Told struct {
 	// side opens.
 	Order    uuid.UUID
 	Purchase uuid.UUID
+	// Link is the link it went through, FromTenant the business that
+	// acted: the conversation both sides' cards go in (L3).
+	Link       uuid.UUID
+	FromTenant uuid.UUID
 }
 
 const orderCols = `s.id, s.reference, o.source_id, o.link_id, o.buyer_tenant, o.buyer_name, o.purchase_reference, o.lines, s.total_kobo, o.note,
@@ -577,7 +581,7 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
-	return &Told{Tenant: seller, Event: "ordered", Reference: p.Reference, From: name, Order: order, Purchase: p.ID}, nil
+	return &Told{Tenant: seller, Event: "ordered", Reference: p.Reference, From: name, Order: order, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }
 
 // StepIn is what a step carries: the lines a change proposes, what was
@@ -920,7 +924,7 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 	if event == "" {
 		return nil, nil
 	}
-	return &Told{Tenant: buyer, Event: event, Reference: o.Reference, From: name, Order: o.ID, Purchase: p.ID}, nil
+	return &Told{Tenant: buyer, Event: event, Reference: o.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: o.LinkID, FromTenant: seller}, nil
 }
 
 // checkChange checks the lines a seller proposes: one per line of the
@@ -1125,7 +1129,7 @@ func CancelOrderTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, by Actor
 		return "", nil, err
 	}
 	event := map[string]string{CancelDone: "cancelled_by_buyer", CancelAsked: "cancel_asked"}[how]
-	return how, &Told{Tenant: seller, Event: event, Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID}, nil
+	return how, &Told{Tenant: seller, Event: event, Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }
 
 // AcceptChangeTx takes the seller's change on a purchase order, in the
@@ -1200,7 +1204,7 @@ func AcceptChangeTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, by Acto
 		o.ID, "link:"+name); err != nil {
 		return nil, err
 	}
-	return &Told{Tenant: seller, Event: "change_accepted", Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID}, nil
+	return &Told{Tenant: seller, Event: "change_accepted", Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }
 
 // Receipt is the buyer's word on a delivery: all came (Short nil), or Not
@@ -1307,7 +1311,7 @@ func ReceiptTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, r Receipt, b
 			}
 		}
 	}
-	return &Told{Tenant: seller, Event: event, Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID}, nil
+	return &Told{Tenant: seller, Event: event, Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }
 
 // InvoiceLines is what an order's invoice charges: what was agreed when it
@@ -1574,7 +1578,7 @@ func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUI
 		po, buyer, ref, supplier, rawPL, total, note, "link:"+name, "link-proposed:"+id.String(), link); err != nil {
 		return o, nil, err
 	}
-	return o, &Told{Tenant: buyer, Event: "proposed", Reference: ref, From: name, Order: id, Purchase: po}, nil
+	return o, &Told{Tenant: buyer, Event: "proposed", Reference: ref, From: name, Order: id, Purchase: po, Link: link, FromTenant: seller}, nil
 }
 
 // BuyerItem is one of the buyer's own items a proposed order's line is.
@@ -1654,5 +1658,5 @@ func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.U
 		WHERE id = $1`, o.ID, customer, subject, fulfilment(deliver)); err != nil {
 		return nil, err
 	}
-	return &Told{Tenant: seller, Event: "confirmed", Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID}, nil
+	return &Told{Tenant: seller, Event: "confirmed", Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }

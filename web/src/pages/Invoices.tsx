@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, del, get, postOnce, put, post } from "../api";
 import { useAuth } from "../auth";
+import { DocThread } from "./Conversation";
 import { EmptyState, ErrorBox, Field, Item, Items, PageHeader, Skeleton, fmtTime, useAction, useLiveRefresh, useLoad } from "../ui";
 import {
   amendmentProblem,
@@ -1053,6 +1054,7 @@ export function InvoicePage() {
         <>
           <InvoiceHero invoice={x} />
           {x.disputed && <SettleQuery number={x.number} onDone={reload} />}
+          {x.customer.key?.startsWith("link:") && <DocThread doc="invoice" reference={x.number} />}
           {sent && (
             <div className="notice" role="status" data-testid="sent">
               {sentLines(sent).map((l) => (

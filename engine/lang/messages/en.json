@@ -5453,6 +5453,31 @@
       "text": "{from} about {reference}",
       "reviewed": true,
       "context": "Notification title: the linked seller's order workflow sends the buyer a message about its order"
+    },
+    "chat.link.about": {
+      "text": "About {reference}:",
+      "reviewed": true,
+      "context": "Before a message replying about a document: \"About INV-0042: …\""
+    },
+    "chat.link.denied": {
+      "text": "Only someone who writes to linked businesses for {org} can send that.",
+      "reviewed": true,
+      "context": "The person may not write in conversations with linked businesses"
+    },
+    "chat.link.ask_what": {
+      "text": "What do you want to say to *{name}*? Send *ask {name}* and your message.",
+      "reviewed": true,
+      "context": "\"ask <business>\" with no message"
+    },
+    "chat.link.not_sent": {
+      "text": "Not sent: {reason}.",
+      "reviewed": true,
+      "context": "A message to a linked business could not be sent; {reason} says why"
+    },
+    "chat.link.sent": {
+      "text": "Sent to *{name}*. Their replies come here, and to Chat on the web.",
+      "reviewed": true,
+      "context": "A message to a linked business was sent from the phone"
     }
   }
 }
