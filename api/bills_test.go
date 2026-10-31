@@ -39,6 +39,7 @@ func TestBillsMirrored(t *testing.T) {
 	w := newWAWorld(t)
 	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{} // the seller issues the buyer an account at acceptance
 	seller, buyer, sellerID, buyerID := linkedPair(t, w)
 	const buyerOn = "+2348010000351"
 	w.bind(t, buyer, buyerOn)
@@ -67,7 +68,8 @@ func TestBillsMirrored(t *testing.T) {
 	}
 	b := bills[0].(map[string]any)
 	if b["reference"] != x["number"] || b["supplier_name"] != "Dangote Stores" || b["amount_kobo"] != float64(42500000) || b["due_kobo"] != float64(42500000) ||
-		b["status"] != "open" || b["due_on"] != "2099-01-31" || b["supplier"] != sellerID {
+		b["status"] != "open" || b["due_on"] != "2099-01-31" || b["supplier"] != sellerID ||
+		b["pay_account_number"] != "8800000001" || b["pay_bank_name"] != "Wema Bank" || !strings.Contains(b["pay_link"].(string), "/i/") {
 		t.Fatalf("the bill: %v", b)
 	}
 	if got := buyer.must(200, "GET", "/v1/bills/"+x["number"].(string), nil); got["id"] != b["id"] {
@@ -82,7 +84,8 @@ func TestBillsMirrored(t *testing.T) {
 		t.Errorf("bills: %q", r)
 	}
 	if r := w.say(t, buyerOn, "bill "+strings.ToLower(x["number"].(string))); !strings.Contains(r, "*"+x["number"].(string)+"* from *Dangote Stores*: to pay") ||
-		!strings.Contains(r, "• Rice, 50kg: ₦425,000") || !strings.Contains(r, "Total ₦425,000 · paid ₦0 · ₦425,000 to pay.") {
+		!strings.Contains(r, "• Rice, 50kg: ₦425,000") || !strings.Contains(r, "Total ₦425,000 · paid ₦0 · ₦425,000 to pay.") ||
+		!strings.Contains(r, "Pay into 8800000001 (Wema Bank): money paid into it is counted towards your invoices from this supplier, oldest first.") || !strings.Contains(r, "pay by card or transfer on its page: https://forms.taskiem.test/i/") {
 		t.Errorf("bill: %q", r)
 	}
 	if r := w.say(t, buyerOn, "bill INV-9999"); !strings.Contains(r, "No bill INV-9999") {

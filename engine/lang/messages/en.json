@@ -5158,6 +5158,16 @@
       "text": "cancelled by the supplier",
       "reviewed": true,
       "context": "A bill's status"
+    },
+    "bill.pay_into": {
+      "text": "Pay into {account} ({bank}): money paid into it is counted towards your invoices from this supplier, oldest first.",
+      "reviewed": true,
+      "context": "How to pay a bill: the account the supplier issued this business, matched to its invoices oldest first"
+    },
+    "bill.pay_page": {
+      "text": "Or pay by card or transfer on its page: {link}",
+      "reviewed": true,
+      "context": "A bill's payment page"
     }
   }
 }

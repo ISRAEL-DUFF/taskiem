@@ -24,6 +24,11 @@ export interface Bill {
   disputed: boolean;
   /** What the business says it paid outside Taskiem: its own figure. */
   declared_paid_kobo: number;
+  /** The account number the supplier issued this business, and its bank. */
+  pay_account_number?: string;
+  pay_bank_name?: string;
+  /** The supplier's invoice page: a card or a transfer. */
+  pay_link?: string;
   mirrored_at: string;
   created_at: string;
 }

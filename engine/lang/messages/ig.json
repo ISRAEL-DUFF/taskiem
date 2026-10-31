@@ -4127,6 +4127,14 @@
     "bill.status.void": {
       "text": "onye na-enye ngwaahịa kagburu ya",
       "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Kwụọ n'ime {account} ({bank}): ego a kwụnyere n'ime ya ka a na-agụ maka akwụkwọ ụgwọ unu sitere n'aka onye a, nke kacha ochie bụ ụzọ.",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Ma ọ bụ kwụọ site na kaadị ma ọ bụ nnyefe n'ibe ya: {link}",
+      "reviewed": false
     }
   }
 }

@@ -166,6 +166,20 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		}
 		bill = links.Mirror{Link: link, Supplier: seller, SupplierName: name, Source: x.ID, Reference: x.Number, Lines: lines,
 			AmountKobo: x.TotalKobo, PaidKobo: x.PaidKobo, DueOn: x.DueOn, Voided: x.VoidedAt != nil, AllowParts: x.AllowPartPayments}
+		// The way to pay: the account number issued to this buyer (the
+		// first, when there are several), and the invoice's page.
+		accounts, err := s.Invoices.AccountsOf(ctx, tx, seller, x.CustomerID())
+		if err != nil {
+			return err
+		}
+		if len(accounts) > 0 {
+			bill.PayAccountNumber, bill.PayBankName = accounts[0].AccountNumber, accounts[0].BankName
+		}
+		if x.VoidedAt == nil {
+			if bill.PayLink, err = s.Invoices.PageLink(ctx, tx, seller, x); err != nil {
+				return err
+			}
+		}
 		if err := clear(); err != nil {
 			return err
 		}
@@ -333,5 +347,11 @@ func billDetail(l lang.Tag, b links.Bill) string {
 		out = append(out, "• "+whatsapp.SafeText(x.Description)+": "+invoicing.Naira(x.AmountKobo()))
 	}
 	out = append(out, tr(l, "bill.detail_sums", "total", invoicing.Naira(b.AmountKobo), "paid", invoicing.Naira(b.PaidKobo), "due", invoicing.Naira(b.DueKobo))+billDue(l, b))
+	if b.DueKobo > 0 && b.PayAccountNumber != "" {
+		out = append(out, tr(l, "bill.pay_into", "account", b.PayAccountNumber, "bank", b.PayBankName))
+	}
+	if b.DueKobo > 0 && b.PayLink != "" {
+		out = append(out, tr(l, "bill.pay_page", "link", b.PayLink))
+	}
 	return strings.Join(out, "\n")
 }

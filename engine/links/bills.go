@@ -47,8 +47,13 @@ type Bill struct {
 	AllowParts       bool            `json:"allow_part_payments"`
 	Disputed         bool            `json:"disputed"`
 	DeclaredPaidKobo int64           `json:"declared_paid_kobo"`
-	MirroredAt       time.Time       `json:"mirrored_at"`
-	CreatedAt        time.Time       `json:"created_at"`
+	// The way to pay, the seller's: the account number it issued us, and
+	// the invoice's page.
+	PayAccountNumber string    `json:"pay_account_number,omitempty"`
+	PayBankName      string    `json:"pay_bank_name,omitempty"`
+	PayLink          string    `json:"pay_link,omitempty"`
+	MirroredAt       time.Time `json:"mirrored_at"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // Mirror is what a bill takes from its invoice.
@@ -64,6 +69,9 @@ type Mirror struct {
 	DueOn        string // YYYY-MM-DD, or ""
 	Voided       bool
 	AllowParts   bool
+	// The way to pay: the account the seller issued the buyer, and the
+	// invoice's page.
+	PayAccountNumber, PayBankName, PayLink string
 }
 
 // MirrorBillTx writes a bill from its invoice into the business in scope
@@ -74,26 +82,34 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 	if m.DueOn != "" {
 		due = &m.DueOn
 	}
+	null := func(s string) *string {
+		if s == "" {
+			return nil
+		}
+		return &s
+	}
 	var inserted bool
 	err := tx.QueryRow(ctx, `INSERT INTO bills (id, tenant_id, link_id, supplier_tenant, supplier_name, source_id, reference, lines, amount_kobo, paid_kobo,
-			due_on, voided, allow_part_payments)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13)
+			due_on, voided, allow_part_payments, pay_account_number, pay_bank_name, pay_link)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16)
 		ON CONFLICT (tenant_id, link_id, source_id) DO UPDATE SET supplier_name = EXCLUDED.supplier_name, reference = EXCLUDED.reference,
 			lines = EXCLUDED.lines, amount_kobo = EXCLUDED.amount_kobo, paid_kobo = EXCLUDED.paid_kobo, due_on = EXCLUDED.due_on,
-			voided = EXCLUDED.voided, allow_part_payments = EXCLUDED.allow_part_payments, mirrored_at = now()
+			voided = EXCLUDED.voided, allow_part_payments = EXCLUDED.allow_part_payments, pay_account_number = EXCLUDED.pay_account_number,
+			pay_bank_name = EXCLUDED.pay_bank_name, pay_link = EXCLUDED.pay_link, mirrored_at = now()
 		RETURNING xmax = 0`,
 		uuid.Must(uuid.NewV7()), buyer, m.Link, m.Supplier, m.SupplierName, m.Source, m.Reference, m.Lines, m.AmountKobo, m.PaidKobo,
-		due, m.Voided, m.AllowParts).Scan(&inserted)
+		due, m.Voided, m.AllowParts, null(m.PayAccountNumber), null(m.PayBankName), null(m.PayLink)).Scan(&inserted)
 	return inserted, err
 }
 
 const billCols = `id, link_id, supplier_tenant, supplier_name, reference, lines, amount_kobo, paid_kobo, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	status, allow_part_payments, disputed, declared_paid_kobo, mirrored_at, created_at`
+	status, allow_part_payments, disputed, declared_paid_kobo, COALESCE(pay_account_number, ''), COALESCE(pay_bank_name, ''), COALESCE(pay_link, ''),
+	mirrored_at, created_at`
 
 func scanBill(r pgx.Row) (Bill, error) {
 	var b Bill
 	err := r.Scan(&b.ID, &b.LinkID, &b.Supplier, &b.SupplierName, &b.Reference, &b.Lines, &b.AmountKobo, &b.PaidKobo, &b.DueOn,
-		&b.Status, &b.AllowParts, &b.Disputed, &b.DeclaredPaidKobo, &b.MirroredAt, &b.CreatedAt)
+		&b.Status, &b.AllowParts, &b.Disputed, &b.DeclaredPaidKobo, &b.PayAccountNumber, &b.PayBankName, &b.PayLink, &b.MirroredAt, &b.CreatedAt)
 	if b.Status != "void" && b.AmountKobo > b.PaidKobo {
 		b.DueKobo = b.AmountKobo - b.PaidKobo
 	}

@@ -27,6 +27,11 @@ CREATE TABLE bills (
   due_on             date,
   voided             boolean NOT NULL DEFAULT false,
   allow_part_payments boolean NOT NULL DEFAULT true,
+  -- The way to pay, the seller's: the account number it issued this buyer
+  -- (§6.3), and the invoice's own page, which takes a card or a transfer.
+  pay_account_number text CHECK (pay_account_number ~ '^[0-9A-Za-z-]{4,40}$'),
+  pay_bank_name      text CHECK (length(pay_bank_name) <= 120),
+  pay_link           text CHECK (length(pay_link) <= 500),
   -- The buyer's own: a query on the bill, and what it says it paid
   -- outside Taskiem (never compared with paid_kobo by the reconciler).
   disputed           boolean NOT NULL DEFAULT false,

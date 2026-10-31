@@ -4127,6 +4127,14 @@
     "bill.status.void": {
       "text": "supplier don cancel am",
       "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Pay into {account} ({bank}): money wey you pay enter am go count for your invoices from this supplier, the oldest first.",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Or pay with card or transfer for im page: {link}",
+      "reviewed": false
     }
   }
 }

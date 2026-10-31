@@ -27555,6 +27555,14 @@ components:
         declared_paid_kobo:
           type: integer
           description: What the business says it paid outside Taskiem; its own figure
+        pay_account_number:
+          type: string
+          description: The account number the supplier issued this business; a transfer into it is matched to the supplier's invoices exactly
+        pay_bank_name:
+          type: string
+        pay_link:
+          type: string
+          description: The supplier's invoice page, which takes a card or a transfer
         mirrored_at:
           type: string
           format: date-time

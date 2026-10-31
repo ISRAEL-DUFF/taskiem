@@ -4127,6 +4127,14 @@
     "bill.status.void": {
       "text": "olùpèsè ti fagilé",
       "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Sanwó sí {account} ({bank}): owó tí ẹ bá san sínú rẹ̀ ni a ó kà sí àwọn ìwé owó yín láti ọ̀dọ̀ olùpèsè yìí, èyí tó ti pẹ́ jù lọ ní àkọ́kọ́.",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Tàbí sanwó pẹ̀lú káàdì tàbí ìfiránṣẹ́ lórí ojú-ìwé rẹ̀: {link}",
+      "reviewed": false
     }
   }
 }

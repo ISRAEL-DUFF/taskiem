@@ -344,6 +344,29 @@ The link itself, its search and its words in chat; migration 00275, `engine/link
 
 **Left for later milestones:** a business's card with its documents (L1), and messages in the search (L3).
 
+### 16.2 As built (L1, in progress)
+
+Migration 00276, `engine/links/bills.go`, `api/bills.go`, `web/src/pages/Bills.tsx`.
+
+- **The mirror.** It is not written in the seller's send transaction, as §6.1 has it, but through a durable queue, so the seller's invoice is never refused for the buyer's side and every path that changes an invoice is covered without touching each one.
+  - A trigger on `customer_invoices` notes every sent invoice whose customer key is `link:<buyer>` in the seller's `link_mirrors_due`, on any change: send, amendment, void, a payment counted or undone, overdue.
+  - A worker (`LinkMirrorTick`, every few seconds, under the api role's invoice loop) mirrors each in a transaction of its own. In the seller's scope it reads the invoice, the link and the way to pay, and takes the invoice off the list. It then enters the buyer's side through `taskiem_link_enter` (`link.bill`, audited in both) and writes the bill.
+  - A mirror that cannot be written stays due and is tried again, with back-off. An invoice with no active link to its customer mirrors nothing.
+- **The bill** carries the seller's number, lines, total, due date, what its match counted paid, and void. It also carries the way to pay: the account number issued at acceptance, its bank, and the invoice's page. `disputed` and `declared_paid_kobo` are the buyer's own. Its status is open, part_paid, paid, disputed or void (`paying` comes with paying from Taskiem).
+- **Telling the buyer.** The buyer's people who may pay are told of a new bill, in the bell and in chat, in their own scope.
+- **Choosing a linked customer.** An invoice's customer may be a linked business by its key alone, with no phone or email. New invoice offers the linked businesses that buy from us under "Who is it for?".
+- **Reading bills.**
+  - `GET /v1/bills` and `/v1/bills/{id}` (`invoice.read`).
+  - Chat: `bills`, `my bills` and `bills due` list them; `bill INV-0042` shows one. `bill <name> <amount>` still makes an invoice.
+  - The web: **Bills** leads with what is left to pay; a bill's page leads with what is left, then how to pay and its lines.
+- **Not built yet in L1:**
+  - **Pay** from Taskiem, and its `paying` status;
+  - pairing by token, and the change to matching (the invoice a payment names, skipping disputed ones);
+  - paying outside Taskiem (`declared_paid_kobo`), and **Query this bill**;
+  - the reconciler;
+  - the Suppliers page's owed figure;
+  - asking "Is this invoice for <business>?" when an invoice goes to a linked business's phone.
+
 ## 17. Risks and open questions
 
 | Risk or question | What we do |

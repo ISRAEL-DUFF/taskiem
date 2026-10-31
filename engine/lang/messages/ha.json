@@ -4127,6 +4127,14 @@
     "bill.status.void": {
       "text": "mai kawo kaya ya soke",
       "reviewed": false
+    },
+    "bill.pay_into": {
+      "text": "Biya cikin {account} ({bank}): kuɗin da aka biya a ciki ana lissafa su ga takardun kuɗinku daga wannan mai kawo kaya, tsoffi da farko.",
+      "reviewed": false
+    },
+    "bill.pay_page": {
+      "text": "Ko ka biya da kati ko canja kuɗi a shafinsa: {link}",
+      "reviewed": false
     }
   }
 }

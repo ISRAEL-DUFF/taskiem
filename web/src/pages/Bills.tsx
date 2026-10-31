@@ -119,6 +119,25 @@ export function BillPage() {
               </div>
             </dl>
           </section>
+          {b.due_kobo > 0 && (b.pay_account_number || b.pay_link) && (
+            <section className="card" aria-labelledby="bill-pay" data-testid="bill-pay">
+              <h2 id="bill-pay">How to pay</h2>
+              {b.pay_account_number && (
+                <p>
+                  Transfer to <strong className="mono">{b.pay_account_number}</strong>
+                  {b.pay_bank_name ? ` (${b.pay_bank_name})` : ""}, the account {b.supplier_name} gave your business. What you pay into it is counted towards your
+                  invoices from {b.supplier_name}, oldest first.
+                </p>
+              )}
+              {b.pay_link && (
+                <p>
+                  <a className="button" href={b.pay_link} target="_blank" rel="noreferrer">
+                    Pay on the invoice's page
+                  </a>
+                </p>
+              )}
+            </section>
+          )}
           <section className="card" aria-labelledby="bill-lines">
             <h2 id="bill-lines">What it is for</h2>
             <table>
