@@ -15,3 +15,31 @@
 
 /* Respect a reader who asks for less motion. */
 @media (prefers-reduced-motion: reduce) { .tk .btn, .tk details.faq .plus { transition: none; } .tk .btn:hover { transform: none; } }
+
+/* ---------- Motion (site.js adds .motion to <html> when the reader allows it) ----------
+   Calm and true to the product: things arrive the way they do in Taskiem.
+   Without JavaScript, or with reduced motion asked for, every page reads as drawn. */
+@media (prefers-reduced-motion: no-preference) {
+  .motion .tk .rv { opacity: 0; transform: translateY(20px); transition: opacity .6s cubic-bezier(.2, .7, .2, 1), transform .6s cubic-bezier(.2, .7, .2, 1); transition-delay: var(--d, 0ms); }
+  .motion .tk .rv.in { opacity: 1; transform: none; }
+
+  /* Chats: each message pops in; Taskiem types first. */
+  .motion .tk .wait { display: none; }
+  .motion .tk .pop { animation: tk-pop .34s cubic-bezier(.2, .8, .3, 1.15) both; }
+  .tk .bub.typing { display: inline-flex; gap: 5px; align-items: center; padding: 15px 16px; }
+  .tk .bub.typing i { width: 7px; height: 7px; border-radius: 50%; background: #5b6b64; animation: tk-dot 1s infinite ease-in-out; }
+  .tk .bub.typing i:nth-child(2) { animation-delay: .15s; }
+  .tk .bub.typing i:nth-child(3) { animation-delay: .3s; }
+
+  /* The hero's phone floats, slowly. */
+  .motion .tk [data-float] { animation: tk-float 7s ease-in-out infinite; }
+
+  /* A status that changes, and a button that is pressed. */
+  .tk .status.flip, .tk .num.flip { animation: tk-flip .45s cubic-bezier(.2, .8, .3, 1.2) both; }
+  .tk .press { animation: tk-press .32s ease both; }
+}
+@keyframes tk-pop { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes tk-dot { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+@keyframes tk-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes tk-flip { 0% { transform: scale(.82); opacity: .3; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }
+@keyframes tk-press { 50% { transform: scale(.93); } }
