@@ -25,6 +25,10 @@ CREATE TABLE link_messages (
   -- A card: {doc: order|bill|invoice|purchase, event, reference, id
   -- (this side's own document), amount_kobo, note}.
   card         jsonb CHECK (card IS NULL OR jsonb_typeof(card) = 'object'),
+  -- A photo, a PDF or a voice note sent with it, in this side's own
+  -- storage (each business keeps its own copy): {kind: photo|file|voice,
+  -- path, type, size, name}.
+  attachment   jsonb CHECK (attachment IS NULL OR jsonb_typeof(attachment) = 'object'),
   -- The message it quotes (its pair_id): a reply, and to a card, a reply
   -- about that card's document.
   reply_to     uuid,

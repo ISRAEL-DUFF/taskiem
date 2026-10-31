@@ -4383,6 +4383,18 @@
     "chat.link.sent": {
       "text": "Ezigala ya *{name}*. Azịza ha ga-abịa ebe a, na Chat na weebụ.",
       "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Foto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Ozi olu",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "Faịlụ",
+      "reviewed": false
     }
   }
 }

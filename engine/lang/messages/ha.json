@@ -4383,6 +4383,18 @@
     "chat.link.sent": {
       "text": "An aika wa *{name}*. Amsoshinsu za su zo nan, da kuma Chat a yanar gizo.",
       "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Hoto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Saƙon murya",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "Fayil",
+      "reviewed": false
     }
   }
 }

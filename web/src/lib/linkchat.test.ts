@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { byDay, cardHref, cardLine, cardSub, dayLabel, listTime, merge, previewLine, type LinkMessage } from "./linkchat";
+import { attachmentLabel, byDay, cardHref, cardLine, cardSub, dayLabel, fileSize, fileURL, listTime, merge, previewLine, type LinkMessage } from "./linkchat";
 
 const msg = (id: string, at: string, extra: Partial<LinkMessage> = {}): LinkMessage => ({ id, link: "l1", mine: false, kind: "text", body: id, created_at: at, ...extra });
 
@@ -40,5 +40,21 @@ describe("the conversation with a linked business", () => {
     const m = merge(a, b);
     expect(m.map((x) => x.id)).toEqual(["a", "b", "c"]);
     expect(m[1]?.read_at).toBe("x");
+  });
+});
+
+describe("files in the conversation", () => {
+  it("says what came, in a word, with the caption", () => {
+    expect(attachmentLabel({ kind: "photo", type: "image/jpeg", size: 1 })).toBe("Photo");
+    expect(attachmentLabel({ kind: "voice", type: "audio/ogg", size: 1 })).toBe("Voice note");
+    expect(attachmentLabel({ kind: "file", type: "application/pdf", size: 1, name: "waybill.pdf" })).toBe("waybill.pdf");
+    expect(previewLine({ mine: false, kind: "text", attachment: { kind: "photo", type: "image/jpeg", size: 1 } }, "D")).toBe("Photo");
+    expect(previewLine({ mine: true, kind: "text", body: "The bags", attachment: { kind: "photo", type: "image/jpeg", size: 1 } }, "D")).toBe("You: Photo: The bags");
+  });
+  it("sizes and streams it", () => {
+    expect(fileSize(300)).toBe("1 KB");
+    expect(fileSize(820 * 1024)).toBe("820 KB");
+    expect(fileSize(1.4 * 1024 * 1024)).toBe("1.4 MB");
+    expect(fileURL({ link: "L1", id: "M1" })).toBe("/v1/link-chats/L1/files/M1");
   });
 });

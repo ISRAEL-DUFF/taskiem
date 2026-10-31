@@ -4383,6 +4383,18 @@
     "chat.link.sent": {
       "text": "A ti fi ranṣẹ si *{name}*. Esi wọn yoo wa sibi, ati si Chat lori wẹẹbu.",
       "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Fọto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Ohùn ti a gbasilẹ",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "Fáìlì",
+      "reviewed": false
     }
   }
 }

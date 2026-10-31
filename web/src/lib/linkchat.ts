@@ -22,6 +22,16 @@ export interface Quote {
   kind: "text" | "card";
   body?: string;
   card?: DocCard;
+  attachment?: Attachment;
+}
+
+/** A photo, a PDF or a voice note sent with a message; each business
+ * keeps its own copy, streamed by fileURL. */
+export interface Attachment {
+  kind: "photo" | "file" | "voice";
+  type: string;
+  size: number;
+  name?: string;
 }
 
 export interface LinkMessage {
@@ -32,6 +42,7 @@ export interface LinkMessage {
   body?: string;
   sender_name?: string;
   card?: DocCard;
+  attachment?: Attachment;
   reply?: Quote;
   read_at?: string;
   created_at: string;
@@ -101,10 +112,29 @@ export function cardSub(card: DocCard): string {
   return [card.amount_kobo !== undefined ? naira(card.amount_kobo) : "", card.note ? `“${card.note}”` : ""].filter(Boolean).join(" · ");
 }
 
+/** What an attachment is, in a word: "Photo", "Voice note", or the file's name. */
+export function attachmentLabel(a: Attachment): string {
+  if (a.kind === "photo") return "Photo";
+  if (a.kind === "voice") return "Voice note";
+  return a.name || "File";
+}
+
+/** A file's size: 820 KB, 1.4 MB. */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Where this business's own copy of a message's file is streamed from. */
+export function fileURL(m: Pick<LinkMessage, "link" | "id">): string {
+  return `/v1/link-chats/${encodeURIComponent(m.link)}/files/${encodeURIComponent(m.id)}`;
+}
+
 /** A message as one line: the list's preview, and a quote. */
-export function previewLine(m: Pick<LinkMessage, "mine" | "kind" | "body" | "card">, other: string): string {
+export function previewLine(m: Pick<LinkMessage, "mine" | "kind" | "body" | "card" | "attachment">, other: string): string {
   if (m.kind === "card" && m.card) return cardLine(m.card, m.mine, other);
-  return (m.mine ? "You: " : "") + (m.body ?? "");
+  const words = m.attachment ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ") : (m.body ?? "");
+  return (m.mine ? "You: " : "") + words;
 }
 
 /** The day a message falls in, as the stream's divider says it. */

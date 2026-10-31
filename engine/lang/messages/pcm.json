@@ -4383,6 +4383,18 @@
     "chat.link.sent": {
       "text": "E don reach *{name}*. Their reply go come here, and for Chat for the web.",
       "reviewed": false
+    },
+    "chat.link.photo": {
+      "text": "Foto",
+      "reviewed": false
+    },
+    "chat.link.voice": {
+      "text": "Voice note",
+      "reviewed": false
+    },
+    "chat.link.file": {
+      "text": "File",
+      "reviewed": false
     }
   }
 }

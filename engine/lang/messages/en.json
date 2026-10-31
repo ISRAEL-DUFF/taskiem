@@ -5478,6 +5478,21 @@
       "text": "Sent to *{name}*. Their replies come here, and to Chat on the web.",
       "reviewed": true,
       "context": "A message to a linked business was sent from the phone"
+    },
+    "chat.link.photo": {
+      "text": "Photo",
+      "reviewed": true,
+      "context": "A photo sent in a conversation with a linked business, told on the phone"
+    },
+    "chat.link.voice": {
+      "text": "Voice note",
+      "reviewed": true,
+      "context": "A voice note sent in a conversation with a linked business, told on the phone"
+    },
+    "chat.link.file": {
+      "text": "File",
+      "reviewed": true,
+      "context": "A file (a PDF) sent in a conversation with a linked business, told on the phone"
     }
   }
 }

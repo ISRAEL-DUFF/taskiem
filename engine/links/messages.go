@@ -50,6 +50,17 @@ const (
 	DocBill     = "bill"
 )
 
+// Attachment is a photo, a PDF or a voice note sent with a message, in
+// this side's own storage: each business keeps its own copy.
+type Attachment struct {
+	Kind string `json:"kind"` // photo, file or voice
+	Type string `json:"type"`
+	Size int64  `json:"size"`
+	Name string `json:"name,omitempty"`
+	// Path is where this side's copy is stored; never shown.
+	Path string `json:"-"`
+}
+
 // Quote is the message a reply quotes, as the reply shows it.
 type Quote struct {
 	PairID uuid.UUID `json:"pair_id"`
@@ -57,20 +68,23 @@ type Quote struct {
 	Kind   string    `json:"kind"`
 	Body   string    `json:"body,omitempty"`
 	Card   *DocCard  `json:"card,omitempty"`
+	// Attachment is what the quoted message carried, without its path.
+	Attachment *Attachment `json:"attachment,omitempty"`
 }
 
 // Message is one message of a conversation, as this side sees it.
 type Message struct {
-	PairID     uuid.UUID  `json:"id"`
-	LinkID     uuid.UUID  `json:"link"`
-	Mine       bool       `json:"mine"`
-	Kind       string     `json:"kind"`
-	Body       string     `json:"body,omitempty"`
-	SenderName string     `json:"sender_name,omitempty"`
-	Card       *DocCard   `json:"card,omitempty"`
-	Reply      *Quote     `json:"reply,omitempty"`
-	ReadAt     *time.Time `json:"read_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	PairID     uuid.UUID   `json:"id"`
+	LinkID     uuid.UUID   `json:"link"`
+	Mine       bool        `json:"mine"`
+	Kind       string      `json:"kind"`
+	Body       string      `json:"body,omitempty"`
+	SenderName string      `json:"sender_name,omitempty"`
+	Card       *DocCard    `json:"card,omitempty"`
+	Attachment *Attachment `json:"attachment,omitempty"`
+	Reply      *Quote      `json:"reply,omitempty"`
+	ReadAt     *time.Time  `json:"read_at,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 // Conversation is one linked business's conversation, as the list shows
@@ -87,19 +101,19 @@ type Conversation struct {
 	Archived bool      `json:"archived"`
 }
 
-const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.read_at, m.created_at,
-	q.pair_id, q.mine, q.kind, q.body, q.card`
+const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.attachment, m.read_at, m.created_at,
+	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
 func scanMessage(r pgx.Row) (Message, error) {
 	var m Message
-	var card, qcard []byte
+	var card, qcard, att, qatt []byte
 	var qPair *uuid.UUID
 	var qMine *bool
 	var qKind, qBody *string
-	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &m.ReadAt, &m.CreatedAt,
-		&qPair, &qMine, &qKind, &qBody, &qcard); err != nil {
+	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &att, &m.ReadAt, &m.CreatedAt,
+		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt); err != nil {
 		return m, err
 	}
 	if card != nil {
@@ -108,11 +122,23 @@ func scanMessage(r pgx.Row) (Message, error) {
 			return m, err
 		}
 	}
+	if att != nil {
+		m.Attachment = &Attachment{}
+		if err := json.Unmarshal(att, m.Attachment); err != nil {
+			return m, err
+		}
+	}
 	if qPair != nil {
 		q := &Quote{PairID: *qPair, Mine: *qMine, Kind: *qKind, Body: cutRunes(*qBody, 160)}
 		if qcard != nil {
 			q.Card = &DocCard{}
 			if err := json.Unmarshal(qcard, q.Card); err != nil {
+				return m, err
+			}
+		}
+		if qatt != nil {
+			q.Attachment = &Attachment{}
+			if err := json.Unmarshal(qatt, q.Attachment); err != nil {
 				return m, err
 			}
 		}
@@ -245,9 +271,25 @@ type Sender struct {
 // transaction (the caller's last writes). replyTo quotes a message of the
 // conversation (its id). It answers the message and the business told.
 func SendTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, replyTo *uuid.UUID, from Sender, by Actor) (Message, uuid.UUID, error) {
+	return SendWithTx(ctx, tx, tenant, link, body, replyTo, from, by, nil, nil)
+}
+
+// SendWithTx is SendTx with a photo, a PDF or a voice note: ours is our
+// copy, theirs the other side's, each already in that side's own storage.
+// The words are then a caption, and may be empty.
+func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, replyTo *uuid.UUID, from Sender, by Actor, ours, theirs *Attachment) (Message, uuid.UUID, error) {
 	body = strings.TrimSpace(body)
-	if body == "" || len([]rune(body)) > MaxMessage {
+	if (body == "" && ours == nil) || len([]rune(body)) > MaxMessage || (ours == nil) != (theirs == nil) {
 		return Message{}, uuid.Nil, fmt.Errorf("%w: a message says something, in up to %d characters", ErrInvalid, MaxMessage)
+	}
+	// The stored attachment keeps its path, which the API never shows.
+	jsonOf := func(a *Attachment) []byte {
+		if a == nil {
+			return nil
+		}
+		a.Name = cutRunes(strings.TrimSpace(a.Name), 120)
+		raw, _ := json.Marshal(map[string]any{"kind": a.Kind, "type": a.Type, "size": a.Size, "name": a.Name, "path": a.Path})
+		return raw
 	}
 	l, err := GetTx(ctx, tx, link)
 	if err != nil {
@@ -267,8 +309,8 @@ func SendTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string,
 	}
 	name := cutRunes(strings.TrimSpace(from.FirstName), 80)
 	pair := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to)
-		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment)
+		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ours)); err != nil {
 		return Message{}, uuid.Nil, err
 	}
 	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.pair_id = $2`, tenant, pair))
@@ -280,8 +322,8 @@ func SendTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string,
 	if err != nil {
 		return m, uuid.Nil, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at)
-		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt)
+	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment)
+		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirs))
 	return m, other, err
 }
 
@@ -420,4 +462,26 @@ func SentTx(ctx context.Context, tx pgx.Tx, channel string, addrHash []byte, id 
 		return link, pair, false, nil
 	}
 	return link, pair, err == nil, err
+}
+
+// AttachmentTx is this side's copy of a message's attachment, by the
+// message's id, in the business in scope's conversation with a link.
+func AttachmentTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) (Attachment, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `SELECT attachment FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3`, tenant, link, pair).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && raw == nil) {
+		return Attachment{}, fmt.Errorf("%w: no such file", ErrNotFound)
+	}
+	if err != nil {
+		return Attachment{}, err
+	}
+	var a struct {
+		Attachment
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(raw, &a); err != nil {
+		return Attachment{}, err
+	}
+	a.Attachment.Path = a.Path
+	return a.Attachment, nil
 }

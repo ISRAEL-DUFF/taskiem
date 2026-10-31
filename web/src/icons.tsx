@@ -58,6 +58,11 @@ const paths: Record<string, string> = {
   pencil: "M4 20h4L19 9l-4-4L4 16z",
   check: "M5 12l5 5 9-10",
   minus: "M5 12h14",
+  // The conversation's composer and its files.
+  attach: "M20 11.5l-8.1 8.1a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.5 8.5a1.7 1.7 0 01-2.4-2.4L15 7",
+  camera: "M3 8h4l2-3h6l2 3h4v12H3zM12 10a4 4 0 100 8 4 4 0 000-8z",
+  mic: "M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3",
+  file: "M6 3h9l4 4v14H6zM14 3v5h5",
 };
 
 export function Icon({ name, className }: { name: string; className?: string }) {

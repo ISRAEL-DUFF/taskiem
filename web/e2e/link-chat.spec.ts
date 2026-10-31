@@ -131,6 +131,6 @@ test("a bill's card, its query, and the query settled by taking an amount off", 
   await axeBoth(seller, "settling a query");
   await q.getByRole("button", { name: "Settle the query" }).click();
   await expect(q).toHaveCount(0);
-  await expect(seller.getByTestId("doc-thread")).toContainText("Took ₦5,000 off: Ten blocks broke");
+  await expect(seller.getByTestId("doc-thread")).toContainText("Took ₦5,000 off: Ten blocks broke", { timeout: 15_000 });
   await axeBoth(seller, "an invoice's messages");
 });

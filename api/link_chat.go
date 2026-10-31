@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
 	"slices"
 	"strconv"
@@ -20,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -39,6 +42,8 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.Get("/link-chats/thread", s.linkThread)
 	r.Get("/link-chats/{link}/messages", s.linkMessages)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages", s.sendLinkMessage)
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
+	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
 	r.With(write, s.tenantWide).Put("/link-chats/{link}", s.putLinkChat)
 }
@@ -172,7 +177,7 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	m, err := s.sendLink(r.Context(), p, link, in.Text, in.ReplyTo)
+	m, err := s.sendLink(r.Context(), p, link, in.Text, in.ReplyTo, nil, nil)
 	if err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return
@@ -194,7 +199,7 @@ func linkMessageErr(err error) error {
 
 // sendLink sends a message as the person (the web, the API, chat) and
 // tells the other side's people on their phones.
-func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, text string, replyTo *uuid.UUID) (links.Message, error) {
+func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, text string, replyTo *uuid.UUID, ours, theirs *links.Attachment) (links.Message, error) {
 	var m links.Message
 	var other uuid.UUID
 	var from string
@@ -209,7 +214,7 @@ func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, tex
 			return err
 		}
 		var err error
-		m, other, err = links.SendTx(ctx, tx, p.TenantID, link, text, replyTo, links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, actorOf(p))
+		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, replyTo, links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, actorOf(p), ours, theirs)
 		return err
 	})
 	if err != nil {
@@ -241,6 +246,13 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 		}
 		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), func(l lang.Tag) (string, string) {
 			body := m.Body
+			if a := m.Attachment; a != nil {
+				what := tr(l, "chat.link."+a.Kind)
+				if a.Kind == "file" && a.Name != "" {
+					what = a.Name
+				}
+				body = strings.TrimSpace("(" + what + ") " + body)
+			}
 			if m.SenderName != "" {
 				body = m.SenderName + ": " + body
 			}
@@ -296,7 +308,7 @@ func (s *Server) waQuotedReply(ctx context.Context, c *chat) (bool, error) {
 		}); err != nil {
 			return true, err
 		}
-		if _, err := s.sendLink(ctx, p, link, text, &pair); err != nil {
+		if _, err := s.sendLink(ctx, p, link, text, &pair, nil, nil); err != nil {
 			if errors.Is(err, links.ErrInvalid) || errors.Is(err, links.ErrState) {
 				return true, c.say(ctx, s, c.t("chat.link.not_sent", "reason", strings.TrimPrefix(strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": "), links.ErrState.Error()+": ")))
 			}
@@ -482,11 +494,159 @@ func (s *Server) waAsk(ctx context.Context, c *chat, rest string) (bool, error) 
 	if strings.TrimSpace(text) == "" {
 		return true, c.say(ctx, s, c.t("chat.link.ask_what", "name", whatsapp.SafeText(to.Name)))
 	}
-	if _, err := s.sendLink(ctx, c.p, to.ID, text, replyTo); err != nil {
+	if _, err := s.sendLink(ctx, c.p, to.ID, text, replyTo, nil, nil); err != nil {
 		if errors.Is(err, links.ErrInvalid) || errors.Is(err, links.ErrState) {
 			return true, c.say(ctx, s, c.t("chat.link.not_sent", "reason", strings.TrimPrefix(strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": "), links.ErrState.Error()+": ")))
 		}
 		return true, err
 	}
 	return true, c.say(ctx, s, c.t("chat.link.sent", "name", whatsapp.SafeText(to.Name)))
+}
+
+// sendLinkFile is POST /v1/link-chats/{link}/files: a photo, a PDF or a
+// voice note to a linked business, as a multipart form (file; text, a
+// caption; reply_to). Each business keeps its own copy in its own
+// storage: the file is stored in ours and in theirs before the message is
+// written in both, and if either copy cannot be stored, nothing is sent.
+func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if s.Media == nil {
+		s.fail(w, r, fmt.Errorf("%w: storage for files is not set up", errConflict))
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, media.MaxFileBytes+(1<<20))
+	if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // the body is bounded by MaxBytesReader above
+		s.fail(w, r, fmt.Errorf("%w: send the file as a multipart form with a file field (at most %d MB)", errBadRequest, media.MaxFileBytes>>20))
+		return
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	f, hdr, err := r.FormFile("file")
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: the form has no file", errBadRequest))
+		return
+	}
+	data, err := io.ReadAll(f)
+	_ = f.Close()
+	if err != nil || len(data) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: the file could not be read", errBadRequest))
+		return
+	}
+	var replyTo *uuid.UUID
+	if v := r.FormValue("reply_to"); v != "" {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: reply_to is a message's id", errBadRequest))
+			return
+		}
+		replyTo = &id
+	}
+	p := principalFrom(r.Context())
+	ctx := r.Context()
+	// The other side, before anything is stored: only an active link.
+	var other uuid.UUID
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		l, err := links.GetTx(ctx, tx, link)
+		if err != nil {
+			return err
+		}
+		if l.State != "active" {
+			return fmt.Errorf("%w: files are sent to a linked business", links.ErrState)
+		}
+		other = l.Business
+		return nil
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	mine, err := s.Media.PutChatFile(ctx, p.TenantID, data)
+	if errors.Is(err, media.ErrFile) || errors.Is(err, media.ErrImage) {
+		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, plainError(err)))
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	drop := func(t uuid.UUID, path string) {
+		if err := s.Media.Delete(context.WithoutCancel(ctx), t, media.PrivateBucket, []string{path}); err != nil {
+			s.Logger.Warn("link chat: a file copy not removed", "tenant", t, "err", err)
+		}
+	}
+	theirs, err := s.Media.PutChatFile(ctx, other, data)
+	if err != nil {
+		drop(p.TenantID, mine.Path)
+		s.fail(w, r, fmt.Errorf("%w: the file could not be kept for the other business; nothing was sent", errConflict))
+		return
+	}
+	name := hdr.Filename
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
+	att := func(f media.File) *links.Attachment {
+		return &links.Attachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: f.Size, Name: name, Path: f.Path}
+	}
+	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), replyTo, att(mine), att(theirs))
+	if err != nil {
+		drop(p.TenantID, mine.Path)
+		drop(other, theirs.Path)
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+}
+
+// linkFile is GET /v1/link-chats/{link}/files/{id}: this side's copy of a
+// message's photo, PDF or voice note, by the message's id, streamed
+// through the API (the web app shows files from its own origin only).
+func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	pair, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	if s.Media == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	p := principalFrom(r.Context())
+	var a links.Attachment
+	if err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		var err error
+		a, err = links.AttachmentTx(r.Context(), tx, p.TenantID, link, pair)
+		return err
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	data, ctype, err := s.Media.GetFile(r.Context(), p.TenantID, a.Path)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if a.Type != "" {
+		ctype = a.Type
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	disp := "inline"
+	if a.Kind == "file" {
+		disp = "attachment"
+	}
+	if a.Name != "" {
+		w.Header().Set("Content-Disposition", mime.FormatMediaType(disp, map[string]string{"filename": a.Name}))
+	} else {
+		w.Header().Set("Content-Disposition", disp)
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
 }

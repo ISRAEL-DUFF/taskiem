@@ -6269,6 +6269,115 @@ paths:
                     $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/files:
+    post:
+      operationId: sendLinkFile
+      tags:
+      - Links
+      summary: Send a photo, a PDF or a voice note to a linked business
+      description: 'A multipart form: `file` (a JPEG, PNG or WebP photo, cleaned of its metadata; a PDF without scripts or actions; or a voice note in Ogg, WebM, MP3 or MP4 audio, up to 16 MB), an optional `text` caption and `reply_to`. Each business keeps its own copy in its own storage: the file is stored in both before the message is written in both, and if either copy cannot be kept, nothing is sent (409).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                  maxLength: 4000
+                reply_to:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  message:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/files/{id}:
+    get:
+      operationId: linkFile
+      tags:
+      - Links
+      summary: A message's photo, PDF or voice note
+      description: This business's own copy, by the message's id, streamed through the API (a photo or voice note inline, a PDF as a download).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
     post:
       operationId: readLinkChat
@@ -27797,6 +27906,22 @@ components:
           description: The first name of the member who wrote it
         card:
           $ref: '#/components/schemas/LinkDocCard'
+        attachment:
+          type: object
+          additionalProperties: false
+          required: [kind, type, size]
+          description: A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id} streams it
+          properties:
+            kind:
+              type: string
+              enum: [photo, file, voice]
+            type:
+              type: string
+            size:
+              type: integer
+              format: int64
+            name:
+              type: string
         reply:
           type: object
           additionalProperties: false
@@ -27814,6 +27939,21 @@ components:
               type: string
             card:
               $ref: '#/components/schemas/LinkDocCard'
+            attachment:
+              type: object
+              additionalProperties: false
+              required: [kind, type, size]
+              properties:
+                kind:
+                  type: string
+                  enum: [photo, file, voice]
+                type:
+                  type: string
+                size:
+                  type: integer
+                  format: int64
+                name:
+                  type: string
         read_at:
           type: string
           format: date-time

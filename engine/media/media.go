@@ -58,7 +58,8 @@ var (
 var wantBuckets = []bucketInfo{
 	{ID: PublicBucket, Public: true, FileSizeLimit: ptr(int64(MaxImageBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png"},
 		CacheSeconds: ptr(int64(365 * 24 * 3600))},
-	{ID: PrivateBucket, Public: false, FileSizeLimit: ptr(int64(MaxFileBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png", "application/pdf"},
+	{ID: PrivateBucket, Public: false, FileSizeLimit: ptr(int64(MaxFileBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png", "application/pdf",
+		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4"},
 		CacheSeconds: ptr(int64(0))},
 }
 
@@ -160,6 +161,125 @@ func (s *Service) PutFile(ctx context.Context, tenant uuid.UUID, data []byte) (F
 		size = int64(len(data))
 	}
 	return File{Path: path, Type: ctype, Size: size}, nil
+}
+
+// MaxVoiceBytes caps a voice note (several minutes of speech).
+const MaxVoiceBytes = 16 << 20
+
+// voiceType is an audio file's type, by its header: Ogg (WhatsApp's and
+// Telegram's voice notes, Firefox's recordings), WebM (Chrome's), MP3, or
+// MP4/M4A (Safari's); "" for anything else.
+func voiceType(data []byte) string {
+	switch {
+	case len(data) >= 4 && string(data[:4]) == "OggS":
+		return "audio/ogg"
+	case len(data) >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3:
+		return "audio/webm"
+	case len(data) >= 3 && string(data[:3]) == "ID3", len(data) >= 2 && data[0] == 0xFF && data[1]&0xE0 == 0xE0:
+		return "audio/mpeg"
+	case len(data) >= 12 && string(data[4:8]) == "ftyp":
+		return "audio/mp4"
+	}
+	return ""
+}
+
+// ChatKind is what a file sent in a conversation is: a photo, a PDF, or a
+// voice note.
+func ChatKind(ctype string) string {
+	switch {
+	case strings.HasPrefix(ctype, "image/"):
+		return "photo"
+	case strings.HasPrefix(ctype, "audio/"):
+		return "voice"
+	}
+	return "file"
+}
+
+// PutChatFile checks and stores a file sent in a conversation between
+// businesses (business links L3) in the tenant's private bucket: a photo
+// (cleaned as PutImage cleans it), a PDF (refused with scripts or
+// actions), or a voice note (Ogg, WebM, MP3 or MP4 audio, by its header).
+// Each business keeps its own copy, in its own storage.
+func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte) (File, error) {
+	ctype := voiceType(data)
+	if ctype == "" {
+		return s.PutFile(ctx, tenant, data)
+	}
+	if len(data) > MaxVoiceBytes {
+		return File{}, fmt.Errorf("%w: a voice note larger than %d MB", ErrFile, MaxVoiceBytes>>20)
+	}
+	c, _, err := s.client(ctx, tenant)
+	if err != nil {
+		return File{}, err
+	}
+	ext := map[string]string{"audio/ogg": ".ogg", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/mp4": ".m4a"}[ctype]
+	path := "chat/" + uuid.Must(uuid.NewV7()).String() + ext
+	o, err := c.put(ctx, PrivateBucket, path, ctype, data)
+	if err != nil {
+		return File{}, err
+	}
+	size := o.Size
+	if size == 0 {
+		size = int64(len(data))
+	}
+	return File{Path: path, Type: ctype, Size: size}, nil
+}
+
+// GetFile downloads one of the tenant's private files, for the web app to
+// show through the API (its Content-Security-Policy allows images and
+// sound from its own origin only): through a signed URL a minute long,
+// from the tenant's own project host, through the egress guard.
+func (s *Service) GetFile(ctx context.Context, tenant uuid.UUID, path string) ([]byte, string, error) {
+	c, creds, err := s.client(ctx, tenant)
+	if err != nil {
+		return nil, "", err
+	}
+	signed, _, err := c.sign(ctx, PrivateBucket, path, time.Minute)
+	if err != nil {
+		return nil, "", err
+	}
+	u, err := url.Parse(signed)
+	if err != nil {
+		return nil, "", err
+	}
+	if !u.IsAbs() {
+		base, _ := url.Parse(strings.TrimRight(creds["api_url"], "/"))
+		u = base.ResolveReference(u)
+	}
+	hosts := []string{}
+	for _, k := range []string{"api_url", "base_url"} {
+		if h, err := url.Parse(creds[k]); err == nil && h.Hostname() != "" {
+			hosts = append(hosts, h.Hostname())
+		}
+	}
+	if !slices.Contains(hosts, u.Hostname()) || u.User != nil {
+		return nil, "", ErrNotOurs
+	}
+	hc := s.guard().Client(egress.Policy{Tenant: tenant.String(), Hosts: []string{u.Hostname()}, Purpose: "xenibase:storage"}, 60*time.Second)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := hc.Do(req) //nolint:gosec // the tenant's own project host, checked above, through the egress guard
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("media: the file answered %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxFileBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(data) > MaxFileBytes {
+		return nil, "", ErrNotOurs
+	}
+	ctype := voiceType(data)
+	if ctype == "" {
+		ctype = http.DetectContentType(data)
+	}
+	return data, ctype, nil
 }
 
 // SignURL returns a URL that downloads a private file until it expires.
