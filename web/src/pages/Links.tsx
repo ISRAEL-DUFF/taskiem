@@ -487,11 +487,13 @@ export function ChatPage() {
                         tone={c.state === "active" ? "ok" : "muted"}
                         title={c.name}
                         sub={
-                          c.last
-                            ? previewLine(c.last, c.name)
-                            : c.state === "active"
-                              ? `Linked · ${roleOf(c.link)}`
-                              : "The link has ended"
+                          c.typing
+                            ? "typing…"
+                            : c.last
+                              ? previewLine(c.last, c.name)
+                              : c.state === "active"
+                                ? `Linked · ${roleOf(c.link)}`
+                                : "The link has ended"
                         }
                         side={c.last ? listTime(c.last.created_at) : undefined}
                         sideSub={
@@ -502,6 +504,8 @@ export function ChatPage() {
                             >
                               {c.unread}
                             </span>
+                          ) : c.pinned ? (
+                            <span className="hint">Pinned</span>
                           ) : c.muted ? (
                             <span className="hint">Muted</span>
                           ) : undefined
@@ -563,6 +567,7 @@ export function ChatPage() {
         {open && (
           <ConversationPane
             conv={open}
+            others={all}
             onBack={() => setParams({})}
             onChanged={reloadConvs}
           />

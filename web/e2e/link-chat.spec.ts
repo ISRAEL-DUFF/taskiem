@@ -159,3 +159,64 @@ test("the Taskiem conversation on the web", async ({ browser }) => {
   await expect(page.getByTestId("taskiem-pane").getByRole("button", { name: "Yes" })).toHaveCount(0);
   await axeBoth(page, "the Taskiem conversation's history");
 });
+
+test("pin, the typing line, forward and delete for me", async ({ browser }) => {
+  const stamp = letters();
+  const make = async (name: string) => {
+    const p = await (await browser.newContext()).newPage();
+    await signUp(p, name);
+    return p;
+  };
+  const seller = await make(`Eko Rice ${stamp}`);
+  const buyer = await make(`Femi Foods ${stamp}`);
+  const third = await make(`Gbenga Gas ${stamp}`);
+  const link = async (to: Page, name: string) => {
+    expect((await to.request.put("/v1/link-settings", { headers: H, data: { findable: true } })).status()).toBe(200);
+    const found = await (await buyer.request.get(`/v1/links/search?q=${encodeURIComponent(name.toLowerCase())}`, { headers: H })).json();
+    expect((await buyer.request.post("/v1/links", { headers: H, data: { business: found.results[0].business, role: "supplier" } })).status()).toBe(201);
+    const id = (await (await to.request.get("/v1/links", { headers: H })).json()).links[0].id as string;
+    expect((await to.request.post(`/v1/links/${id}/accept`, { headers: H })).status()).toBe(200);
+    return id;
+  };
+  const withSeller = await link(seller, `Eko Rice ${stamp}`);
+  const withThird = await link(third, `Gbenga Gas ${stamp}`);
+  const sent = await seller.request.post(`/v1/link-chats/${withSeller}/messages`, { headers: H, data: { text: "Rice is ₦45,000 a bag this week" } });
+  expect(sent.status()).toBe(201);
+
+  await buyer.goto(`/chat?with=${withSeller}`);
+  const pane = buyer.getByTestId("chat-pane");
+  await expect(pane.getByTestId("chat-message")).toContainText("Rice is ₦45,000");
+
+  // The seller types: the buyer sees it.
+  await expect(async () => {
+    await seller.request.post(`/v1/link-chats/${withSeller}/typing`, { headers: H });
+    await expect(pane.getByTestId("chat-typing")).toBeVisible({ timeout: 4_000 });
+  }).toPass({ timeout: 20_000 });
+
+  // Pinned.
+  await pane.getByRole("button", { name: "Pin" }).click();
+  await expect(pane.getByRole("button", { name: "Unpin" })).toBeVisible();
+
+  // Forwarded to Gbenga.
+  const msg = pane.getByTestId("chat-message").first();
+  await msg.getByRole("button", { name: /^More/ }).click();
+  await axeBoth(buyer, "a message's options");
+  await msg.getByRole("button", { name: "Forward" }).click();
+  const sheet = buyer.getByRole("dialog");
+  await sheet.getByLabel(`Gbenga Gas ${stamp}`).check();
+  await axeBoth(buyer, "forwarding a message");
+  await sheet.getByRole("button", { name: "Forward" }).click();
+  await expect(sheet).toHaveCount(0);
+  const theirs = await (await third.request.get(`/v1/link-chats/${withThird}/messages`, { headers: H })).json();
+  expect(theirs.messages[0].body).toBe("Rice is ₦45,000 a bag this week");
+  expect(theirs.messages[0].forwarded).toBe(true);
+
+  // Deleted for the buyer; the seller keeps it.
+  buyer.once("dialog", (d) => void d.accept());
+  await msg.getByRole("button", { name: /^More/ }).click();
+  await msg.getByRole("button", { name: "Delete for me" }).click();
+  await expect(pane.getByTestId("chat-message")).toHaveCount(0);
+  const kept = await (await seller.request.get(`/v1/link-chats/${withSeller}/messages`, { headers: H })).json();
+  expect(kept.messages).toHaveLength(1);
+  await axeBoth(buyer, "after delete for me");
+});

@@ -132,6 +132,8 @@ taskiem_lang_set(text,text,text)	@ISRAEL-DUFF (messaging)	Sets a number's langua
 taskiem_link_answer(uuid,text,text,text)	@ISRAEL-DUFF (business links)	Accept, decline, block, unblock, cancel or end a link, as the side allowed to; audited in both chains (docs/spec/business-links.md §5.1) (00275)
 taskiem_link_by_code(text)	@ISRAEL-DUFF (business links)	The business behind a link code it prints: name, address and our link with it; nothing for our own (§5.1) (00275)
 taskiem_link_enter(uuid,text,text,text,jsonb)	@ISRAEL-DUFF (business links)	The one door into a linked business: link active, caller a side, both chains audited, scope narrowed (§5.3) (00275)
+taskiem_link_typing(uuid)	@ISRAEL-DUFF (business links)	Marks the caller's side typing in an active link's conversation for six seconds; no words, not audited (§5.5) (00278)
+taskiem_link_typing_of(uuid)	@ISRAEL-DUFF (business links)	Whether the other side of an active link the caller is in is typing (§5.5) (00278)
 taskiem_link_mirrors_claim(integer)	@ISRAEL-DUFF (business links)	The mirror worker's claim: sellers' invoices due to be mirrored into bills, tenant and invoice ids only (docs/spec/business-links.md §6) (00276)
 taskiem_link_offer_to(text)	@ISRAEL-DUFF (business links)	Whether a document to a phone offers its recipient a link: a business's own number, not linked; the answer only adds a line to the message (§5.1) (00275)
 taskiem_link_orders_claim(integer)	@ISRAEL-DUFF (business links)	The linked-order worker's claim: orders to write into a seller's business, invoices to raise, receipts to settle after a day; tenant, kind and ids only (docs/spec/business-links.md §7) (00277)

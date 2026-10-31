@@ -45,6 +45,9 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
+	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages/{id}/hide", s.hideLinkMessage)
 	r.With(write, s.tenantWide).Put("/link-chats/{link}", s.putLinkChat)
 }
 
@@ -77,6 +80,8 @@ func (s *Server) listLinkChats(w http.ResponseWriter, r *http.Request) {
 
 type linkMessagesOut struct {
 	Messages []links.Message `json:"messages"`
+	// Typing: someone on the other side is typing now.
+	Typing bool `json:"typing,omitempty"`
 }
 
 // linkMessages is GET /v1/link-chats/{link}/messages: a page of the
@@ -109,7 +114,10 @@ func (s *Server) linkMessages(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var err error
-		out.Messages, err = links.MessagesTx(r.Context(), tx, principalFrom(r.Context()).TenantID, link, p)
+		if out.Messages, err = links.MessagesTx(r.Context(), tx, principalFrom(r.Context()).TenantID, link, p); err != nil {
+			return err
+		}
+		out.Typing, err = links.TypingOfTx(r.Context(), tx, link)
 		return err
 	}); err != nil {
 		s.fail(w, r, linkErr(err))
@@ -177,7 +185,7 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	m, err := s.sendLink(r.Context(), p, link, in.Text, in.ReplyTo, nil, nil)
+	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo})
 	if err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return
@@ -199,7 +207,12 @@ func linkMessageErr(err error) error {
 
 // sendLink sends a message as the person (the web, the API, chat) and
 // tells the other side's people on their phones.
-func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, text string, replyTo *uuid.UUID, ours, theirs *links.Attachment) (links.Message, error) {
+func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, text string, o links.SendOpts) (links.Message, error) {
+	// The first link's preview, fetched by our side before the message is
+	// written (link_preview.go); a page that does not answer has none.
+	if o.Preview == nil {
+		o.Preview = s.linkPreview(ctx, p.TenantID, text)
+	}
 	var m links.Message
 	var other uuid.UUID
 	var from string
@@ -214,7 +227,7 @@ func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, tex
 			return err
 		}
 		var err error
-		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, replyTo, links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, actorOf(p), ours, theirs)
+		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, actorOf(p), o)
 		return err
 	})
 	if err != nil {
@@ -308,7 +321,7 @@ func (s *Server) waQuotedReply(ctx context.Context, c *chat) (bool, error) {
 		}); err != nil {
 			return true, err
 		}
-		if _, err := s.sendLink(ctx, p, link, text, &pair, nil, nil); err != nil {
+		if _, err := s.sendLink(ctx, p, link, text, links.SendOpts{ReplyTo: &pair}); err != nil {
 			if errors.Is(err, links.ErrInvalid) || errors.Is(err, links.ErrState) {
 				return true, c.say(ctx, s, c.t("chat.link.not_sent", "reason", strings.TrimPrefix(strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": "), links.ErrState.Error()+": ")))
 			}
@@ -361,12 +374,12 @@ func (s *Server) putLinkChat(w http.ResponseWriter, r *http.Request) {
 		if err := links.SetConversationTx(r.Context(), tx, p.TenantID, link, in, p.Actor()); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "link.conversation", link.String(), map[string]any{"muted": in.Muted, "archived": in.Archived})
+		return auditTx(r, tx, "link.conversation", link.String(), map[string]any{"muted": in.Muted, "archived": in.Archived, "pinned": in.Pinned})
 	}); err != nil {
-		s.fail(w, r, linkErr(err))
+		s.fail(w, r, linkMessageErr(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"link": link, "muted": in.Muted, "archived": in.Archived})
+	writeJSON(w, http.StatusOK, map[string]any{"link": link, "muted": in.Muted, "archived": in.Archived, "pinned": in.Pinned})
 }
 
 // --- cards ---
@@ -494,7 +507,7 @@ func (s *Server) waAsk(ctx context.Context, c *chat, rest string) (bool, error) 
 	if strings.TrimSpace(text) == "" {
 		return true, c.say(ctx, s, c.t("chat.link.ask_what", "name", whatsapp.SafeText(to.Name)))
 	}
-	if _, err := s.sendLink(ctx, c.p, to.ID, text, replyTo, nil, nil); err != nil {
+	if _, err := s.sendLink(ctx, c.p, to.ID, text, links.SendOpts{ReplyTo: replyTo}); err != nil {
 		if errors.Is(err, links.ErrInvalid) || errors.Is(err, links.ErrState) {
 			return true, c.say(ctx, s, c.t("chat.link.not_sent", "reason", strings.TrimPrefix(strings.TrimPrefix(err.Error(), links.ErrInvalid.Error()+": "), links.ErrState.Error()+": ")))
 		}
@@ -589,7 +602,7 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 	att := func(f media.File) *links.Attachment {
 		return &links.Attachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: f.Size, Name: name, Path: f.Path}
 	}
-	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), replyTo, att(mine), att(theirs))
+	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), Theirs: att(theirs)})
 	if err != nil {
 		drop(p.TenantID, mine.Path)
 		drop(other, theirs.Path)
@@ -649,4 +662,154 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	_, _ = w.Write(data)
+}
+
+// linkTyping is POST /v1/link-chats/{link}/typing: we are typing in the
+// conversation, for the other side's typing line, for a few seconds.
+func (s *Server) linkTyping(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error { return links.TypingTx(r.Context(), tx, link) }); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// hideLinkMessage is POST /v1/link-chats/{link}/messages/{id}/hide:
+// delete for me. Our copy is hidden from our view; the other side's
+// stays, and a document's card is never hidden.
+func (s *Server) hideLinkMessage(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	pair, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := links.HideTx(r.Context(), tx, p.TenantID, link, pair); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "link.message.hide", link.String(), map[string]any{"message": pair})
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// maxForward is how many conversations a message is forwarded to at once,
+// as WhatsApp's.
+const maxForward = 5
+
+// forwardLinkMessage is POST /v1/link-chats/{link}/forward: one of our
+// messages in this conversation, forwarded to other linked businesses'
+// conversations ({message, to: [link ids]}), marked Forwarded. A file
+// goes as a copy into each one's own storage and ours, from our copy; a
+// document's card is not forwarded.
+func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var in struct {
+		Message uuid.UUID   `json:"message"`
+		To      []uuid.UUID `json:"to"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	slices.SortFunc(in.To, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
+	in.To = slices.Compact(in.To)
+	if len(in.To) == 0 || len(in.To) > maxForward || slices.Contains(in.To, link) {
+		s.fail(w, r, fmt.Errorf("%w: forward to 1 to %d other conversations", errBadRequest, maxForward))
+		return
+	}
+	p := principalFrom(r.Context())
+	ctx := r.Context()
+	var m links.Message
+	var file *links.Attachment
+	targets := map[uuid.UUID]uuid.UUID{} // link -> its business
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		var err error
+		if m, file, err = links.ForwardableTx(ctx, tx, p.TenantID, link, in.Message); err != nil {
+			return err
+		}
+		for _, to := range in.To {
+			l, err := links.GetTx(ctx, tx, to)
+			if err != nil {
+				return err
+			}
+			if l.State != links.Active {
+				return fmt.Errorf("%w: you are no longer linked with %s", links.ErrState, l.Name)
+			}
+			targets[to] = l.Business
+		}
+		return nil
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	var data []byte
+	if file != nil {
+		if s.Media == nil {
+			s.fail(w, r, fmt.Errorf("%w: storage for files is not set up", errConflict))
+			return
+		}
+		if data, _, err = s.Media.GetFile(ctx, p.TenantID, file.Path); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	out := []links.Message{}
+	for _, to := range in.To {
+		o := links.SendOpts{Forwarded: true, Preview: m.Preview}
+		var kept []func()
+		if file != nil {
+			att := func(t uuid.UUID) (*links.Attachment, error) {
+				f, err := s.Media.PutChatFile(ctx, t, data)
+				if err != nil {
+					return nil, err
+				}
+				kept = append(kept, func() {
+					if err := s.Media.Delete(context.WithoutCancel(ctx), t, media.PrivateBucket, []string{f.Path}); err != nil {
+						s.Logger.Warn("link chat: a forwarded copy not removed", "tenant", t, "err", err)
+					}
+				})
+				return &links.Attachment{Kind: file.Kind, Type: f.Type, Size: f.Size, Name: file.Name, Path: f.Path}, nil
+			}
+			var err1, err2 error
+			o.Ours, err1 = att(p.TenantID)
+			if err1 == nil {
+				o.Theirs, err2 = att(targets[to])
+			}
+			if err1 != nil || err2 != nil {
+				for _, undo := range kept {
+					undo()
+				}
+				s.fail(w, r, fmt.Errorf("%w: the file could not be kept for every business; forwarded to %d of %d", errConflict, len(out), len(in.To)))
+				return
+			}
+		}
+		sent, err := s.sendLink(ctx, p, to, m.Body, o)
+		if err != nil {
+			for _, undo := range kept {
+				undo()
+			}
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
+		out = append(out, sent)
+	}
+	writeJSON(w, http.StatusCreated, linkMessagesOut{Messages: out})
 }

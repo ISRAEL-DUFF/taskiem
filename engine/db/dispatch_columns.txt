@@ -539,6 +539,9 @@ link_orders_due.tries
 link_settings.code
 link_settings.findable
 link_settings.tenant_id
+link_typing.link_id
+link_typing.tenant_id
+link_typing.until
 member_invitations.tenant_id
 member_invitations.user_id
 memberships.role

@@ -23,9 +23,10 @@ import {
   type Conversation,
   type DocCard,
   type LinkMessage,
+  type LinkPreview,
 } from "../lib/linkchat";
 import { Icon } from "../icons";
-import { ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
+import { ErrorBox, fmtTime, Modal, Skeleton, useAction, useLoad } from "../ui";
 
 // The conversation with a linked business (business links L3; §5.5): the
 // stream of bubbles, theirs on the left and ours on the right, grouped by
@@ -266,6 +267,95 @@ function AttachmentView({
   );
 }
 
+/** Forward a message to other linked businesses (up to five), marked
+ * Forwarded; a file goes as a copy into each one's own storage. */
+function ForwardSheet({
+  from,
+  m,
+  to,
+  onClose,
+  onSent,
+}: {
+  from: Conversation;
+  m: LinkMessage;
+  to: Conversation[];
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const act = useAction();
+  const toggle = (link: string) =>
+    setPicked((cur) =>
+      cur.includes(link)
+        ? cur.filter((x) => x !== link)
+        : cur.length < 5
+          ? [...cur, link]
+          : cur,
+    );
+  const send = () =>
+    void act
+      .run(
+        async () => {
+          await post(`/v1/link-chats/${from.link}/forward`, {
+            message: m.id,
+            to: picked,
+          });
+          onSent();
+        },
+        `Forwarded to ${picked.length === 1 ? (to.find((c) => c.link === picked[0])?.name ?? "1 chat") : `${picked.length} chats`}`,
+      )
+      .then((ok) => ok !== false && onClose());
+  return (
+    <Modal title="Forward to" onClose={onClose}>
+      <p className="hint">“{previewLine(m, from.name)}”</p>
+      <fieldset className="choice">
+        <legend>Linked businesses (up to five)</legend>
+        {to.map((c) => (
+          <label key={c.link} className="inline">
+            <input
+              type="checkbox"
+              checked={picked.includes(c.link)}
+              onChange={() => toggle(c.link)}
+            />
+            {c.name}
+          </label>
+        ))}
+      </fieldset>
+      <ErrorBox error={act.error} />
+      <div className="row-actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={act.busy || picked.length === 0}
+          onClick={send}
+        >
+          Forward
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** A link's preview in its bubble: the page's host, title and words. */
+function PreviewCard({ p }: { p: LinkPreview }) {
+  return (
+    <a
+      className="chat-preview"
+      href={p.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-testid="chat-preview"
+    >
+      <span className="host">{p.host}</span>
+      <span className="title">{p.title}</span>
+      {p.description && <span className="desc">{p.description}</span>}
+    </a>
+  );
+}
+
 function Bubble({
   m,
   other,
@@ -273,6 +363,8 @@ function Bubble({
   canReply,
   latest = false,
   onDone = () => undefined,
+  onForward,
+  onHide,
 }: {
   m: LinkMessage;
   other: string;
@@ -280,8 +372,13 @@ function Bubble({
   canReply: boolean;
   latest?: boolean;
   onDone?: () => void;
+  onForward?: (m: LinkMessage) => void;
+  onHide?: (m: LinkMessage) => void;
 }) {
   const card = m.kind === "card" ? m.card : undefined;
+  const [more, setMore] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
   return (
     <div
       className={`bubble${m.mine ? " mine" : ""}${card ? " card-bubble" : ""}`}
@@ -290,6 +387,11 @@ function Bubble({
     >
       {!m.mine && !card && m.sender_name && (
         <span className="who">{m.sender_name}</span>
+      )}
+      {m.forwarded && (
+        <span className="forwarded" data-testid="chat-forwarded">
+          Forwarded
+        </span>
       )}
       {m.reply && (
         <span className="quote" data-testid="chat-quote">
@@ -314,7 +416,44 @@ function Bubble({
             <AttachmentView m={m} a={m.attachment} other={other} />
           )}
           {m.body && <span className="text">{m.body}</span>}
+          {m.preview && <PreviewCard p={m.preview} />}
         </>
+      )}
+      {more && (
+        <span className="row-actions bubble-more" data-testid="chat-more">
+          {!card && m.body && (
+            <button
+              type="button"
+              className="small"
+              onClick={() =>
+                void navigator.clipboard?.writeText(m.body ?? "").then(
+                  () => setCopied(true),
+                  () => undefined,
+                )
+              }
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+          )}
+          {!card && onForward && (
+            <button
+              type="button"
+              className="small"
+              onClick={() => (setMore(false), onForward(m))}
+            >
+              Forward
+            </button>
+          )}
+          {!card && onHide && (
+            <button
+              type="button"
+              className="small danger"
+              onClick={() => (setMore(false), onHide(m))}
+            >
+              Delete for me
+            </button>
+          )}
+        </span>
       )}
       <span className="meta">
         {canReply && (
@@ -324,10 +463,17 @@ function Bubble({
             onClick={() => onReply(m)}
           >
             Reply
-            <span className="sr-only">
-              {" "}
-              to {card ? cardLine(card, m.mine, other) : previewLine(m, other)}
-            </span>
+            <span className="sr-only"> to {what}</span>
+          </button>
+        )}
+        {!card && (onForward || onHide || m.body) && (
+          <button
+            type="button"
+            className="reply-btn"
+            aria-expanded={more}
+            onClick={() => (setMore(!more), setCopied(false))}
+          >
+            More<span className="sr-only"> for {what}</span>
           </button>
         )}
         <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
@@ -353,14 +499,20 @@ export function ConversationPane({
   conv,
   onBack,
   onChanged,
+  others = [],
 }: {
   conv: Conversation;
   onBack: () => void;
   onChanged: () => void;
+  /** The other conversations, to forward to. */
+  others?: Conversation[];
 }) {
   const { can } = useAuth();
   const write = can("chat.trade") && conv.state === "active";
   const [messages, setMessages] = useState<LinkMessage[]>();
+  const [typing, setTyping] = useState(false);
+  const [forwarding, setForwarding] = useState<LinkMessage>();
+  const typedAt = useRef(0);
   const [error, setError] = useState<unknown>();
   const [text, setText] = useState("");
   const [reply, setReply] = useState<LinkMessage>();
@@ -379,9 +531,10 @@ export function ConversationPane({
   // The newest page, then what is newer every few seconds; read while seen.
   const pull = useCallback(
     async (after?: string) => {
-      const out = await get<{ messages: LinkMessage[] }>(
+      const out = await get<{ messages: LinkMessage[]; typing?: boolean }>(
         `${path}/messages${after ? `?after=${encodeURIComponent(after)}` : ""}`,
       );
+      setTyping(!!out.typing);
       if (after && out.messages.length === 0) return;
       setMessages((cur) => merge(cur ?? [], out.messages));
       if (
@@ -460,9 +613,27 @@ export function ConversationPane({
       .then(() => undefined);
   };
   const settings = (
-    body: { muted?: boolean; archived?: boolean },
+    body: { muted?: boolean; archived?: boolean; pinned?: boolean },
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
+  // We are typing: the other side's typing line, told at most every 3 s.
+  const typed = (v: string) => {
+    setText(v);
+    const now = Date.now();
+    if (v.trim() && now - typedAt.current > 3000) {
+      typedAt.current = now;
+      post(`${path}/typing`).catch(() => undefined);
+    }
+  };
+  const hide = (m: LinkMessage) => {
+    if (!confirm("Delete this message for your business? They keep theirs."))
+      return;
+    void act.run(async () => {
+      await post(`${path}/messages/${m.id}/hide`);
+      setMessages((cur) => cur?.filter((x) => x.id !== m.id));
+      onChanged();
+    }, "Deleted for you");
+  };
   const search = (v: string) => {
     setQ(v);
     if (v.trim().length < 2) return setFound(undefined);
@@ -491,9 +662,29 @@ export function ConversationPane({
         <button type="button" className="small chat-back" onClick={onBack}>
           Back<span className="sr-only"> to the chats</span>
         </button>
-        <h2>{conv.name}</h2>
+        <h2>
+          {conv.name}
+          {typing && (
+            <span className="typing" data-testid="chat-typing">
+              typing…
+            </span>
+          )}
+        </h2>
         {can("chat.trade") && (
           <>
+            <button
+              type="button"
+              className="small"
+              disabled={act.busy}
+              onClick={() =>
+                settings(
+                  { pinned: !conv.pinned },
+                  conv.pinned ? "Unpinned" : "Pinned",
+                )
+              }
+            >
+              {conv.pinned ? "Unpin" : "Pin"}
+            </button>
             <button
               type="button"
               className="small"
@@ -563,6 +754,12 @@ export function ConversationPane({
                   onReply={setReply}
                   latest={newest.has(m.id)}
                   onDone={() => pull(last).catch(setError)}
+                  onForward={
+                    write && others.some((o) => o.state === "active")
+                      ? setForwarding
+                      : undefined
+                  }
+                  onHide={can("chat.trade") ? hide : undefined}
                 />
               ))}
             </div>
@@ -683,7 +880,7 @@ export function ConversationPane({
                 maxLength={4000}
                 placeholder={file ? "Add a caption" : "Type a message"}
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => typed(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -722,6 +919,17 @@ export function ConversationPane({
             ? "You can read this conversation. Someone who writes to linked businesses for your business can reply."
             : "This link has ended. The conversation stays."}
         </p>
+      )}
+      {forwarding && (
+        <ForwardSheet
+          from={conv}
+          m={forwarding}
+          to={others.filter(
+            (o) => o.state === "active" && o.link !== conv.link,
+          )}
+          onClose={() => setForwarding(undefined)}
+          onSent={onChanged}
+        />
       )}
     </section>
   );

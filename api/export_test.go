@@ -16,3 +16,6 @@ func (s *Server) WaitBackground() { s.bg.Wait() }
 func (s *Server) SetUSSDStart(fn func(context.Context, runtime.StartRequest) (runtime.RunRef, bool, error)) {
 	s.ussd.start = fn
 }
+
+// PreviewAnyPort lets link previews reach a test's local page.
+func (s *Server) PreviewAnyPort() { s.previewAnyPort = true }

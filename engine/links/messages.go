@@ -61,6 +61,15 @@ type Attachment struct {
 	Path string `json:"-"`
 }
 
+// Preview is a link's preview in a message: the page's host, title and
+// description, fetched by the sender's side when it was sent.
+type Preview struct {
+	URL         string `json:"url"`
+	Host        string `json:"host"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+}
+
 // Quote is the message a reply quotes, as the reply shows it.
 type Quote struct {
 	PairID uuid.UUID `json:"pair_id"`
@@ -82,6 +91,8 @@ type Message struct {
 	SenderName string      `json:"sender_name,omitempty"`
 	Card       *DocCard    `json:"card,omitempty"`
 	Attachment *Attachment `json:"attachment,omitempty"`
+	Forwarded  bool        `json:"forwarded,omitempty"`
+	Preview    *Preview    `json:"preview,omitempty"`
 	Reply      *Quote      `json:"reply,omitempty"`
 	ReadAt     *time.Time  `json:"read_at,omitempty"`
 	CreatedAt  time.Time   `json:"created_at"`
@@ -99,20 +110,24 @@ type Conversation struct {
 	Unread   int       `json:"unread"`
 	Muted    bool      `json:"muted"`
 	Archived bool      `json:"archived"`
+	Pinned   bool      `json:"pinned"`
+	// Typing: someone on the other side is typing now.
+	Typing   bool `json:"typing"`
+	pinnedAt *time.Time
 }
 
-const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.attachment, m.read_at, m.created_at,
+const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.read_at, m.created_at,
 	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
 
 func scanMessage(r pgx.Row) (Message, error) {
 	var m Message
-	var card, qcard, att, qatt []byte
+	var card, qcard, att, qatt, prev []byte
 	var qPair *uuid.UUID
 	var qMine *bool
 	var qKind, qBody *string
-	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &att, &m.ReadAt, &m.CreatedAt,
+	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &att, &m.Forwarded, &prev, &m.ReadAt, &m.CreatedAt,
 		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt); err != nil {
 		return m, err
 	}
@@ -125,6 +140,12 @@ func scanMessage(r pgx.Row) (Message, error) {
 	if att != nil {
 		m.Attachment = &Attachment{}
 		if err := json.Unmarshal(att, m.Attachment); err != nil {
+			return m, err
+		}
+	}
+	if prev != nil {
+		m.Preview = &Preview{}
+		if err := json.Unmarshal(prev, m.Preview); err != nil {
 			return m, err
 		}
 	}
@@ -170,11 +191,14 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 		c := Conversation{LinkID: l.ID, Business: l.Business, Name: l.Name, State: l.State}
 		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT muted FROM link_conversations WHERE tenant_id = $1 AND link_id = $2), false),
 			COALESCE((SELECT archived FROM link_conversations WHERE tenant_id = $1 AND link_id = $2), false),
-			(SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND NOT mine AND read_at IS NULL)::int`,
-			tenant, l.ID).Scan(&c.Muted, &c.Archived, &c.Unread); err != nil {
+			(SELECT pinned_at FROM link_conversations WHERE tenant_id = $1 AND link_id = $2),
+			(SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND NOT mine AND read_at IS NULL AND hidden_at IS NULL)::int,
+			$3 AND taskiem_link_typing_of($2)`,
+			tenant, l.ID, l.State == Active).Scan(&c.Muted, &c.Archived, &c.pinnedAt, &c.Unread, &c.Typing); err != nil {
 			return nil, err
 		}
-		last, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = $2
+		c.Pinned = c.pinnedAt != nil
+		last, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL
 			ORDER BY m.created_at DESC, m.id DESC LIMIT 1`, tenant, l.ID))
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
@@ -189,6 +213,15 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 		out = append(out, c)
 	}
 	slices.SortStableFunc(out, func(a, b Conversation) int {
+		// The pinned first, the last pinned at the top, as WhatsApp's.
+		switch {
+		case a.pinnedAt != nil && b.pinnedAt != nil:
+			return b.pinnedAt.Compare(*a.pinnedAt)
+		case a.pinnedAt != nil:
+			return -1
+		case b.pinnedAt != nil:
+			return 1
+		}
 		at, bt := time.Time{}, time.Time{}
 		if a.Last != nil {
 			at = a.Last.CreatedAt
@@ -218,7 +251,7 @@ func MessagesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, p Page) 
 	}
 	q := strings.TrimSpace(p.Q)
 	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+`
-		WHERE m.tenant_id = $1 AND m.link_id = $2 AND ($3::timestamptz IS NULL OR m.created_at < $3) AND ($4::timestamptz IS NULL OR m.created_at > $4)
+		WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL AND ($3::timestamptz IS NULL OR m.created_at < $3) AND ($4::timestamptz IS NULL OR m.created_at > $4)
 		  AND ($5 = '' OR m.body ILIKE '%' || $5 || '%' OR m.card ->> 'reference' ILIKE '%' || $5 || '%' OR m.card ->> 'note' ILIKE '%' || $5 || '%')
 		ORDER BY m.created_at DESC, m.id DESC LIMIT $6`, tenant, link, p.Before, p.After, likeSafe(q), p.Limit)
 	if err != nil {
@@ -247,7 +280,7 @@ func SearchMessagesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, q string
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
-	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND (m.body ILIKE '%' || $2 || '%' OR m.card ->> 'reference' ILIKE '%' || $2 || '%' OR m.card ->> 'note' ILIKE '%' || $2 || '%')
+	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.hidden_at IS NULL AND (m.body ILIKE '%' || $2 || '%' OR m.card ->> 'reference' ILIKE '%' || $2 || '%' OR m.card ->> 'note' ILIKE '%' || $2 || '%')
 		ORDER BY m.created_at DESC LIMIT $3`, tenant, q, limit)
 	if err != nil {
 		return nil, err
@@ -271,13 +304,30 @@ type Sender struct {
 // transaction (the caller's last writes). replyTo quotes a message of the
 // conversation (its id). It answers the message and the business told.
 func SendTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, replyTo *uuid.UUID, from Sender, by Actor) (Message, uuid.UUID, error) {
-	return SendWithTx(ctx, tx, tenant, link, body, replyTo, from, by, nil, nil)
+	return SendWithTx(ctx, tx, tenant, link, body, from, by, SendOpts{ReplyTo: replyTo})
 }
 
-// SendWithTx is SendTx with a photo, a PDF or a voice note: ours is our
-// copy, theirs the other side's, each already in that side's own storage.
-// The words are then a caption, and may be empty.
-func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, replyTo *uuid.UUID, from Sender, by Actor, ours, theirs *Attachment) (Message, uuid.UUID, error) {
+// SendOpts is what a message carries besides its words.
+type SendOpts struct {
+	// ReplyTo quotes a message of the conversation (its id).
+	ReplyTo *uuid.UUID
+	// Ours and Theirs are a photo, a PDF or a voice note: our copy and
+	// the other side's, each already in that side's own storage. The words
+	// are then a caption, and may be empty.
+	Ours, Theirs *Attachment
+	// Forwarded marks a message forwarded from another conversation.
+	Forwarded bool
+	// Preview is the first link's preview, on both copies.
+	Preview *Preview
+}
+
+// SendWithTx is SendTx with what o carries.
+func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender, by Actor, o SendOpts) (Message, uuid.UUID, error) {
+	replyTo, ours, theirs := o.ReplyTo, o.Ours, o.Theirs
+	var preview []byte
+	if o.Preview != nil {
+		preview, _ = json.Marshal(o.Preview)
+	}
 	body = strings.TrimSpace(body)
 	if (body == "" && ours == nil) || len([]rune(body)) > MaxMessage || (ours == nil) != (theirs == nil) {
 		return Message{}, uuid.Nil, fmt.Errorf("%w: a message says something, in up to %d characters", ErrInvalid, MaxMessage)
@@ -309,8 +359,8 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	name := cutRunes(strings.TrimSpace(from.FirstName), 80)
 	pair := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment)
-		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ours)); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, sender_id, reply_to, attachment, forwarded, preview)
+		VALUES ($1, $2, $3, $4, true, 'text', $5, $6, $7, $8, $9, $10, $11)`, uuid.Must(uuid.NewV7()), tenant, link, pair, body, name, from.ID, replyTo, jsonOf(ours), o.Forwarded, preview); err != nil {
 		return Message{}, uuid.Nil, err
 	}
 	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.pair_id = $2`, tenant, pair))
@@ -322,8 +372,8 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	if err != nil {
 		return m, uuid.Nil, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment)
-		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirs))
+	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview)
+		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirs), o.Forwarded, preview)
 	return m, other, err
 }
 
@@ -363,7 +413,11 @@ func MarkReadTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, by Actor
 type ConversationSettings struct {
 	Muted    *bool `json:"muted"`
 	Archived *bool `json:"archived"`
+	Pinned   *bool `json:"pinned"`
 }
+
+// MaxPinned is how many conversations may be pinned, as WhatsApp's.
+const MaxPinned = 3
 
 // SetConversationTx mutes or archives the business in scope's
 // conversation with a link (what it names).
@@ -371,9 +425,20 @@ func SetConversationTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, s
 	if _, err := GetTx(ctx, tx, link); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO link_conversations (tenant_id, link_id, muted, archived, updated_by) VALUES ($1, $2, COALESCE($3, false), COALESCE($4, false), $5)
+	if s.Pinned != nil && *s.Pinned {
+		var n int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM link_conversations WHERE tenant_id = $1 AND pinned_at IS NOT NULL AND link_id <> $2`, tenant, link).Scan(&n); err != nil {
+			return err
+		}
+		if n >= MaxPinned {
+			return fmt.Errorf("%w: up to %d chats can be pinned; unpin one first", ErrState, MaxPinned)
+		}
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO link_conversations (tenant_id, link_id, muted, archived, pinned_at, updated_by)
+		VALUES ($1, $2, COALESCE($3, false), COALESCE($4, false), CASE WHEN $5 THEN now() END, $6)
 		ON CONFLICT (tenant_id, link_id) DO UPDATE SET muted = COALESCE($3, link_conversations.muted), archived = COALESCE($4, link_conversations.archived),
-			updated_by = EXCLUDED.updated_by, updated_at = now()`, tenant, link, s.Muted, s.Archived, by)
+			pinned_at = CASE WHEN $5 IS NULL THEN link_conversations.pinned_at WHEN $5 THEN COALESCE(link_conversations.pinned_at, now()) END,
+			updated_by = EXCLUDED.updated_by, updated_at = now()`, tenant, link, s.Muted, s.Archived, s.Pinned, by)
 	return err
 }
 
@@ -403,7 +468,7 @@ func CardTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID, mine b
 // the document (doc and reference, ours), and the messages quoting them,
 // oldest first.
 func ThreadTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, doc, reference string) ([]Message, error) {
-	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND (
+	rows, err := tx.Query(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.hidden_at IS NULL AND (
 			(m.kind = 'card' AND m.card ->> 'doc' = $2 AND m.card ->> 'reference' = $3)
 			OR m.reply_to IN (SELECT c.pair_id FROM link_messages c WHERE c.tenant_id = $1 AND c.kind = 'card' AND c.card ->> 'doc' = $2 AND c.card ->> 'reference' = $3))
 		ORDER BY m.created_at, m.pair_id LIMIT 200`, tenant, doc, reference)
@@ -484,4 +549,63 @@ func AttachmentTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) 
 	}
 	a.Attachment.Path = a.Path
 	return a.Attachment, nil
+}
+
+// HideTx deletes a message for the business in scope: its own copy is
+// hidden from its view, the other side's copy stays (each side keeps the
+// record of the trade). A document's card is never hidden.
+func HideTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) error {
+	var kind string
+	err := tx.QueryRow(ctx, `UPDATE link_messages SET hidden_at = COALESCE(hidden_at, now()) WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3
+		RETURNING kind`, tenant, link, pair).Scan(&kind)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: no such message", ErrNotFound)
+	}
+	if err != nil {
+		return err
+	}
+	if kind == "card" {
+		return fmt.Errorf("%w: a document's card stays in the conversation", ErrInvalid)
+	}
+	return nil
+}
+
+// ForwardableTx is a message of the business in scope's conversation
+// with a link that can be forwarded: its words, this side's copy of its
+// file, and its preview. A card is not forwarded (its document is this
+// business's).
+func ForwardableTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) (Message, *Attachment, error) {
+	m, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.pair_id = $3 AND m.hidden_at IS NULL`, tenant, link, pair))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return m, nil, fmt.Errorf("%w: no such message", ErrNotFound)
+	}
+	if err != nil {
+		return m, nil, err
+	}
+	if m.Kind == "card" {
+		return m, nil, fmt.Errorf("%w: a document's card is not forwarded; open the document instead", ErrInvalid)
+	}
+	if m.Attachment == nil {
+		return m, nil, nil
+	}
+	a, err := AttachmentTx(ctx, tx, tenant, link, pair)
+	if err != nil {
+		return m, nil, err
+	}
+	return m, &a, nil
+}
+
+// TypingTx says the business in scope is typing in its conversation with
+// a link, for a few seconds (not through the door: no words, not
+// audited).
+func TypingTx(ctx context.Context, tx pgx.Tx, link uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT taskiem_link_typing($1)`, link)
+	return err
+}
+
+// TypingOfTx reports whether the other side of a link is typing now.
+func TypingOfTx(ctx context.Context, tx pgx.Tx, link uuid.UUID) (bool, error) {
+	var typing bool
+	err := tx.QueryRow(ctx, `SELECT taskiem_link_typing_of($1)`, link).Scan(&typing)
+	return typing, err
 }

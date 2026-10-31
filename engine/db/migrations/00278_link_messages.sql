@@ -32,6 +32,14 @@ CREATE TABLE link_messages (
   -- The message it quotes (its pair_id): a reply, and to a card, a reply
   -- about that card's document.
   reply_to     uuid,
+  -- Forwarded from another conversation (WhatsApp's "Forwarded").
+  forwarded    boolean NOT NULL DEFAULT false,
+  -- The first link's preview, fetched by the sender's side when sent:
+  -- {url, host, title, description} (no image; nothing more of the page).
+  preview      jsonb CHECK (preview IS NULL OR jsonb_typeof(preview) = 'object'),
+  -- Deleted for me: hidden from this side's view, never from the other's
+  -- (each side keeps the record of the trade; a card is never hidden).
+  hidden_at    timestamptz,
   -- The read mark: on the other side's message, when this side read it;
   -- on our own, when the other side did (mirrored).
   read_at      timestamptz,
@@ -54,6 +62,8 @@ CREATE TABLE link_conversations (
   link_id     uuid NOT NULL REFERENCES business_links(id),
   muted       boolean NOT NULL DEFAULT false,
   archived    boolean NOT NULL DEFAULT false,
+  -- Pinned to the top of the list (up to three, as WhatsApp's).
+  pinned_at   timestamptz,
   updated_by  text NOT NULL,
   updated_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, link_id)
@@ -84,7 +94,60 @@ CREATE POLICY tenant_isolation ON link_chat_sent TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT ON link_chat_sent TO taskiem_app;
 
+-- Who is typing in a conversation, for the other side's typing line: a
+-- moment's state, no words, so it does not go through the door (whose
+-- every entry is audited). No business reads the table: one definer
+-- marks the caller's side typing for a few seconds, and another answers
+-- whether the other side is.
+CREATE TABLE link_typing (
+  link_id    uuid NOT NULL REFERENCES business_links(id),
+  tenant_id  uuid NOT NULL REFERENCES tenants(id),
+  until      timestamptz NOT NULL,
+  PRIMARY KEY (link_id, tenant_id)
+);
+ALTER TABLE link_typing ENABLE ROW LEVEL SECURITY;
+ALTER TABLE link_typing FORCE ROW LEVEL SECURITY;
+CREATE POLICY no_app ON link_typing TO taskiem_app USING (false) WITH CHECK (false);
+CREATE POLICY dispatch_all ON link_typing TO taskiem_dispatch USING (true) WITH CHECK (true);
+REVOKE ALL ON link_typing FROM PUBLIC;
+GRANT SELECT (link_id, tenant_id, until), INSERT, UPDATE ON link_typing TO taskiem_dispatch;
+
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_typing(p_link uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_me uuid := taskiem_link_self();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM business_links WHERE id = p_link AND status = 'active' AND v_me IN (a_tenant, b_tenant)) THEN
+    RETURN;
+  END IF;
+  INSERT INTO link_typing (link_id, tenant_id, until) VALUES (p_link, v_me, now() + interval '6 seconds')
+    ON CONFLICT (link_id, tenant_id) DO UPDATE SET until = EXCLUDED.until;
+END
+$$;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_typing_of(p_link uuid) RETURNS boolean
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_me uuid := taskiem_link_self();
+BEGIN
+  RETURN EXISTS (SELECT 1 FROM business_links l JOIN link_typing t ON t.link_id = l.id
+    WHERE l.id = p_link AND l.status = 'active' AND v_me IN (l.a_tenant, l.b_tenant) AND t.tenant_id <> v_me AND t.until > now());
+END
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_link_typing(uuid) OWNER TO taskiem_dispatch;
+ALTER FUNCTION taskiem_link_typing_of(uuid) OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_link_typing(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION taskiem_link_typing_of(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION taskiem_link_typing(uuid) TO taskiem_app;
+GRANT EXECUTE ON FUNCTION taskiem_link_typing_of(uuid) TO taskiem_app;
+
 -- +goose Down
+DROP FUNCTION taskiem_link_typing_of(uuid);
+DROP FUNCTION taskiem_link_typing(uuid);
+DROP TABLE link_typing;
 DROP TABLE link_chat_sent;
 DROP TABLE link_conversations;
 DROP TABLE link_messages;

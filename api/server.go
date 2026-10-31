@@ -38,6 +38,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
@@ -263,8 +264,11 @@ type Server struct {
 	hosts        hostCache                           // custom domains: Host to embed app
 	defs         lru.Cache[string, *wd.Definition]   // "workflow/version"; versions are immutable, bounded (S34)
 	stockLow     lru.Cache[uuid.UUID, lowSeen]       // businesses' low items, for the evening and morning messages (stock_sales.go)
-	bg           sync.WaitGroup
-	bgActive     atomic.Int64 // work running after its request was answered (reset emails)
+	previews     lru.Cache[string, *links.Preview]   // link previews by URL (link_preview.go)
+	// previewAnyPort lets a link preview reach any port (tests' local pages).
+	previewAnyPort bool
+	bg             sync.WaitGroup
+	bgActive       atomic.Int64 // work running after its request was answered (reset emails)
 }
 
 // Handler builds the router.

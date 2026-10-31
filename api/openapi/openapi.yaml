@@ -6122,7 +6122,7 @@ paths:
       tags:
       - Links
       summary: Mute or archive a conversation
-      description: Muted, the business's people are not told of its messages on their phones; archived, it is off the list until unarchived. A PUT changes only what it names.
+      description: Muted, the business's people are not told of its messages on their phones; archived, it is off the list until unarchived; pinned, it is at the top of the list (up to three, the last pinned first; a fourth is refused with 409). A PUT changes only what it names.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -6148,6 +6148,8 @@ paths:
                   type: boolean
                 archived:
                   type: boolean
+                pinned:
+                  type: boolean
       responses:
         '200':
           description: Saved
@@ -6164,6 +6166,8 @@ paths:
                   muted:
                     type: [boolean, 'null']
                   archived:
+                    type: [boolean, 'null']
+                  pinned:
                     type: [boolean, 'null']
         default:
           $ref: '#/components/responses/Error'
@@ -6219,6 +6223,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/LinkMessage'
+                  typing:
+                    type: boolean
+                    description: Someone on the other side is typing now
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -6440,6 +6447,118 @@ paths:
               schema:
                 type: string
                 format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/typing:
+    post:
+      operationId: linkTyping
+      tags:
+      - Links
+      summary: Say we are typing
+      description: The other side's typing line shows for six seconds. Not audited; no words are sent.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Told
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/forward:
+    post:
+      operationId: forwardLinkMessage
+      tags:
+      - Links
+      summary: Forward a message to other linked businesses
+      description: 'One of this conversation''s messages, sent to 1 to 5 other conversations, marked Forwarded. A photo, PDF or voice note goes as a copy into each business''s own storage and ours, from our copy; a document''s card is not forwarded (400).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [message, to]
+              properties:
+                message:
+                  type: string
+                  format: uuid
+                to:
+                  type: array
+                  maxItems: 5
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Forwarded, one message per conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+                  typing:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/messages/{id}/hide:
+    post:
+      operationId: hideLinkMessage
+      tags:
+      - Links
+      summary: Delete a message for us
+      description: Our copy is hidden from our view; the other business keeps its own, as each keeps the record of the trade. A document's card is never hidden (400).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Hidden
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
@@ -28027,6 +28146,23 @@ components:
               format: int64
             name:
               type: string
+        forwarded:
+          type: boolean
+          description: Forwarded from another conversation
+        preview:
+          type: object
+          additionalProperties: false
+          required: [url, host, title]
+          description: The first link's preview, fetched by the sender's side when it was sent
+          properties:
+            url:
+              type: string
+            host:
+              type: string
+            title:
+              type: string
+            description:
+              type: string
         reply:
           type: object
           additionalProperties: false
@@ -28069,7 +28205,7 @@ components:
     LinkConversation:
       type: object
       additionalProperties: false
-      required: [link, business, name, state, unread, muted, archived]
+      required: [link, business, name, state, unread, muted, archived, pinned, typing]
       properties:
         link:
           type: string
@@ -28090,6 +28226,11 @@ components:
           type: boolean
         archived:
           type: boolean
+        pinned:
+          type: boolean
+        typing:
+          type: boolean
+          description: Someone on the other side is typing now
     TradeOrderLine:
       type: object
       additionalProperties: false

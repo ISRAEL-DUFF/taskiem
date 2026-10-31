@@ -34,6 +34,14 @@ export interface Attachment {
   name?: string;
 }
 
+/** A link's preview: the page's host, title and description. */
+export interface LinkPreview {
+  url: string;
+  host: string;
+  title: string;
+  description?: string;
+}
+
 export interface LinkMessage {
   id: string;
   link: string;
@@ -43,6 +51,8 @@ export interface LinkMessage {
   sender_name?: string;
   card?: DocCard;
   attachment?: Attachment;
+  forwarded?: boolean;
+  preview?: LinkPreview;
   reply?: Quote;
   read_at?: string;
   created_at: string;
@@ -57,6 +67,8 @@ export interface Conversation {
   unread: number;
   muted: boolean;
   archived: boolean;
+  pinned: boolean;
+  typing: boolean;
 }
 
 const VERB: Record<string, string> = {
