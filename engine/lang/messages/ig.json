@@ -4129,7 +4129,7 @@
       "reviewed": false
     },
     "bill.pay_into": {
-      "text": "Kwụọ n'ime {account} ({bank}): ego a kwụnyere n'ime ya ka a na-agụ maka akwụkwọ ụgwọ unu sitere n'aka onye a, nke kacha ochie bụ ụzọ.",
+      "text": "Kwụọ n'ime {account} ({bank}) ma tinye {reference} na ndetu nnyefe: a ga-agụ ya maka akwụkwọ ụgwọ ahụ n'onwe ya (na-enweghị ya, maka nke kacha ochie bụ ụzọ).",
       "reviewed": false
     },
     "bill.pay_page": {

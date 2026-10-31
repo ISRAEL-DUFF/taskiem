@@ -4129,7 +4129,7 @@
       "reviewed": false
     },
     "bill.pay_into": {
-      "text": "Biya cikin {account} ({bank}): kuɗin da aka biya a ciki ana lissafa su ga takardun kuɗinku daga wannan mai kawo kaya, tsoffi da farko.",
+      "text": "Biya cikin {account} ({bank}) tare da {reference} a bayanin canja kuɗi: za a lissafa shi ga wannan takardar kuɗi da kansa (ba tare da shi ba, ga mafi tsufa da farko).",
       "reviewed": false
     },
     "bill.pay_page": {

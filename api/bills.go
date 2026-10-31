@@ -368,7 +368,7 @@ func billDetail(l lang.Tag, b links.Bill) string {
 	}
 	out = append(out, tr(l, "bill.detail_sums", "total", invoicing.Naira(b.AmountKobo), "paid", invoicing.Naira(b.PaidKobo), "due", invoicing.Naira(b.DueKobo))+billDue(l, b))
 	if b.DueKobo > 0 && b.PayAccountNumber != "" {
-		out = append(out, tr(l, "bill.pay_into", "account", b.PayAccountNumber, "bank", b.PayBankName))
+		out = append(out, tr(l, "bill.pay_into", "account", b.PayAccountNumber, "bank", b.PayBankName, "reference", b.Reference))
 	}
 	if b.DueKobo > 0 && b.PayLink != "" {
 		out = append(out, tr(l, "bill.pay_page", "link", b.PayLink))

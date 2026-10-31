@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/matching"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/sender"
 )
 
@@ -89,7 +92,7 @@ func TestBillsMirrored(t *testing.T) {
 	}
 	if r := w.say(t, buyerOn, "bill "+strings.ToLower(x["number"].(string))); !strings.Contains(r, "*"+x["number"].(string)+"* from *Dangote Stores*: to pay") ||
 		!strings.Contains(r, "• Rice, 50kg: ₦425,000") || !strings.Contains(r, "Total ₦425,000 · paid ₦0 · ₦425,000 to pay.") ||
-		!strings.Contains(r, "Pay into 8800000001 (Wema Bank): money paid into it is counted towards your invoices from this supplier, oldest first.") || !strings.Contains(r, "pay by card or transfer on its page: https://forms.taskiem.test/i/") {
+		!strings.Contains(r, "Pay into 8800000001 (Wema Bank) with "+x["number"].(string)+" in the transfer's note: it is counted towards that invoice by itself") || !strings.Contains(r, "pay by card or transfer on its page: https://forms.taskiem.test/i/") {
 		t.Errorf("bill: %q", r)
 	}
 	if r := w.say(t, buyerOn, "bill INV-9999"); !strings.Contains(r, "No bill INV-9999") {
@@ -215,4 +218,93 @@ func TestBillPay(t *testing.T) {
 	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/pay", nil); !strings.Contains(e["error"].(string), "does not list Wema Bank as one bank") {
 		t.Errorf("unknown bank: %v", e)
 	}
+}
+
+// Matching a linked buyer's money (§6.3): money into the account the
+// seller issued it goes first to the invoice its note names; with no
+// note, to the invoice of the buyer's one payout of that amount from
+// Taskiem (its pairing token, through taskiem_link_payout_token), which is
+// then marked paired on the buyer's side; oldest-first passes over an
+// invoice the buyer queried.
+func TestLinkedMoneyNamesItsInvoice(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	mlog := &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test", MoneyLog: mlog,
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	sellerT, buyerT := uuid.MustParse(sellerID), uuid.MustParse(buyerID)
+	m := &matching.Matcher{Invoices: w.srv.Invoices, PII: w.env.Vault}
+	n := 0
+	invoice := func(kobo int, due string) string {
+		n++
+		x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+			"amount_kobo": kobo, "due_on": due}, "Idempotency-Key", fmt.Sprintf("i-%d", n))
+		seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", fmt.Sprintf("s-%d", n))
+		return x["number"].(string)
+	}
+	queried := invoice(3000000, "2099-01-01")
+	oldest := invoice(1000000, "2099-02-01")
+	newest := invoice(2000000, "2099-03-01")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_invoices SET disputed = true WHERE tenant_id = $1 AND number = $2`, sellerID, queried); err != nil {
+		t.Fatal(err)
+	}
+	credit := func(kobo int64, note, event string) {
+		t.Helper()
+		if _, _, err := mlog.Record(ctx, sellerT, moneylog.Entry{Direction: "in", Kind: "account_credit", Status: "settled", Channel: "iswallet/main",
+			Reference: "lnk_1", AccountNumber: "8800000001", Event: event, Source: "event", AmountKobo: &kobo, Description: note}); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	paid := func(number string) float64 {
+		return seller.must(200, "GET", "/v1/invoices/"+number, nil)["invoice"].(map[string]any)["paid_kobo"].(float64)
+	}
+
+	// Named in the note: the newest, not the oldest.
+	credit(2000000, "Transfer from ADA KITCHEN "+newest+" thanks", "credit-1")
+	if paid(newest) != 2000000 || paid(oldest) != 0 || paid(queried) != 0 {
+		t.Fatalf("named: newest %v, oldest %v, queried %v", paid(newest), paid(oldest), paid(queried))
+	}
+
+	// A payout from Taskiem whose rail dropped the note: its token, by
+	// amount, names the oldest; the buyer's payment is marked paired.
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var pay links.BillPayment
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{buyerT}, func(tx pgx.Tx) error {
+		b, err := links.GetBillTx(ctx, tx, oldest)
+		if err != nil {
+			return err
+		}
+		pay, err = links.StartBillPaymentTx(ctx, tx, buyerT, links.PayIn{Bill: b.ID, AmountKobo: 1000000, Connection: "main", BankCode: "035", AccountNumber: "8800000001", By: "user:ada"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	credit(1000000, "", "credit-2")
+	if paid(oldest) != 1000000 {
+		t.Fatalf("by the token: oldest %v", paid(oldest))
+	}
+	var paired bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT paired_at IS NOT NULL FROM bill_payments WHERE id = $1`, pay.ID).Scan(&paired); err != nil || !paired {
+		t.Errorf("the buyer's payment paired: %v %v", paired, err)
+	}
+
+	// Naming nothing, matching no payout: oldest first, passing over the
+	// queried invoice; what is left is the buyer's credit.
+	credit(500000, "", "credit-3")
+	if paid(queried) != 0 {
+		t.Errorf("a queried invoice was paid oldest-first: %v", paid(queried))
+	}
+	// Named, a queried invoice is still paid.
+	credit(3000000, queried, "credit-4")
+	if paid(queried) != 3000000 {
+		t.Errorf("a queried invoice named: %v", paid(queried))
+	}
+	_ = buyer
 }

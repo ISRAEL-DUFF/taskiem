@@ -4129,7 +4129,7 @@
       "reviewed": false
     },
     "bill.pay_into": {
-      "text": "Sanwó sí {account} ({bank}): owó tí ẹ bá san sínú rẹ̀ ni a ó kà sí àwọn ìwé owó yín láti ọ̀dọ̀ olùpèsè yìí, èyí tó ti pẹ́ jù lọ ní àkọ́kọ́.",
+      "text": "Sanwó sí {account} ({bank}) pẹ̀lú {reference} nínú àkọsílẹ̀ ìfiránṣẹ́ owó: a ó kà á sí ìwé owó náà fúnra rẹ̀ (láìsí i, sí èyí tó ti pẹ́ jù lọ ní àkọ́kọ́).",
       "reviewed": false
     },
     "bill.pay_page": {

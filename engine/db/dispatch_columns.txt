@@ -61,6 +61,12 @@ auth_challenges.expires_at
 auth_challenges.purpose
 auth_challenges.scope
 auth_challenges.user_id
+bill_payments.amount_kobo
+bill_payments.created_at
+bill_payments.paired_at
+bill_payments.status
+bill_payments.tenant_id
+bill_payments.token
 billing_invoice_counters.last
 billing_invoice_counters.year
 billing_payments.created_at

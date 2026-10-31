@@ -5160,9 +5160,9 @@
       "context": "A bill's status"
     },
     "bill.pay_into": {
-      "text": "Pay into {account} ({bank}): money paid into it is counted towards your invoices from this supplier, oldest first.",
+      "text": "Pay into {account} ({bank}) with {reference} in the transfer's note: it is counted towards that invoice by itself (without it, towards your oldest invoice first).",
       "reviewed": true,
-      "context": "How to pay a bill: the account the supplier issued this business, matched to its invoices oldest first"
+      "context": "How to pay a bill: the account the supplier issued this business; the invoice number in the note counts it towards that invoice"
     },
     "bill.pay_page": {
       "text": "Or pay by card or transfer on its page: {link}",

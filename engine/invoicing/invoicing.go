@@ -132,9 +132,12 @@ type Invoice struct {
 	PaidAt            *time.Time `json:"paid_at"`
 	VoidedAt          *time.Time `json:"voided_at"`
 	VoidReason        string     `json:"void_reason,omitempty"`
-	CreatedBy         string     `json:"created_by"`
-	CreatedAt         time.Time  `json:"created_at"`
-	Payments          []Payment  `json:"payments,omitempty"`
+	// Disputed: a linked buyer queried it (its bill); oldest-first
+	// matching passes over it (docs/spec/business-links.md §8).
+	Disputed  bool      `json:"disputed,omitempty"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	Payments  []Payment `json:"payments,omitempty"`
 	// Amendments are the changes made to it after it was sent, each also
 	// a line (amendments.go).
 	Amendments []Amendment `json:"amendments,omitempty"`
@@ -357,13 +360,13 @@ func nextNumber(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, Setti
 // --- reading ---
 
 const cols = `id, number, status, customer, subject_id, lines, total_kobo, paid_kobo, currency, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),
-	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id`
+	COALESCE(note, ''), connection, fee_paid_by, allow_part_payments, sent_at, paid_at, voided_at, COALESCE(void_reason, ''), created_by, created_at, page_token, customer_id, disputed`
 
 func scan(r pgx.Row) (Invoice, error) {
 	var x Invoice
 	var cust, lines, token []byte
 	err := r.Scan(&x.ID, &x.Number, &x.Status, &cust, &x.subject, &lines, &x.TotalKobo, &x.PaidKobo, &x.Currency, &x.DueOn,
-		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID)
+		&x.Note, &x.Connection, &x.FeePaidBy, &x.AllowPartPayments, &x.SentAt, &x.PaidAt, &x.VoidedAt, &x.VoidReason, &x.CreatedBy, &x.CreatedAt, &token, &x.customerID, &x.Disputed)
 	if err != nil {
 		return x, err
 	}

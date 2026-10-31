@@ -4129,7 +4129,7 @@
       "reviewed": false
     },
     "bill.pay_into": {
-      "text": "Pay into {account} ({bank}): money wey you pay enter am go count for your invoices from this supplier, the oldest first.",
+      "text": "Pay into {account} ({bank}) and put {reference} for the transfer note: e go count for that invoice by itself (without am, e go count for your oldest invoice first).",
       "reviewed": false
     },
     "bill.pay_page": {

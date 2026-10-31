@@ -134,8 +134,8 @@ export function BillPage() {
               {b.pay_account_number && (
                 <p>
                   Transfer to <strong className="mono">{b.pay_account_number}</strong>
-                  {b.pay_bank_name ? ` (${b.pay_bank_name})` : ""}, the account {b.supplier_name} gave your business. What you pay into it is counted towards your
-                  invoices from {b.supplier_name}, oldest first.
+                  {b.pay_bank_name ? ` (${b.pay_bank_name})` : ""}, the account {b.supplier_name} gave your business, with <strong>{b.reference}</strong> in the
+                  transfer's note: it is counted towards this invoice by itself. Without it, it counts towards your oldest invoice from {b.supplier_name} first.
                 </p>
               )}
               {b.pay_link && (

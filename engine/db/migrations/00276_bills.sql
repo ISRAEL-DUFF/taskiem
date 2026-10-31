@@ -91,6 +91,8 @@ CREATE TABLE bill_payments (
   created_by      text NOT NULL,
   created_at      timestamptz NOT NULL DEFAULT now(),
   finished_at     timestamptz,
+  -- When the seller's matching paired the payout with its credit (§6.3).
+  paired_at       timestamptz,
   UNIQUE (tenant_id, token)
 );
 CREATE INDEX bill_payments_bill ON bill_payments (tenant_id, bill_id);
@@ -99,6 +101,46 @@ ALTER TABLE bill_payments FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON bill_payments TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
 GRANT SELECT, INSERT, UPDATE ON bill_payments TO taskiem_app;
+CREATE POLICY dispatch ON bill_payments FOR SELECT TO taskiem_dispatch USING (true);
+GRANT SELECT (tenant_id, amount_kobo, token, status, created_at, paired_at) ON bill_payments TO taskiem_dispatch;
+
+-- An invoice the buyer queried (§8): its bill is disputed, and oldest-first
+-- matching passes over it (money that names it still pays it).
+ALTER TABLE customer_invoices ADD COLUMN disputed boolean NOT NULL DEFAULT false;
+
+-- Pairing (§5.3): the token of the one unpaired payout of an amount the
+-- linked buyer started in the last three days, for a credit into the
+-- buyer's account that carried no token. Nothing when there is none or
+-- more than one. Called by the seller's matching alone, once per credit,
+-- with that credit's amount; it answers a token and nothing else.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_link_payout_token(p_customer text, p_amount bigint) RETURNS text
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_me uuid := taskiem_link_self();
+  v_buyer uuid;
+  v_tokens text[];
+BEGIN
+  IF p_customer !~ '^key:link:[0-9a-f-]{36}$' OR p_amount <= 0 THEN
+    RETURN NULL;
+  END IF;
+  v_buyer := substr(p_customer, 10)::uuid;
+  IF NOT EXISTS (SELECT 1 FROM business_links l WHERE l.a_tenant = LEAST(v_me, v_buyer) AND l.b_tenant = GREATEST(v_me, v_buyer) AND l.status = 'active') THEN
+    RETURN NULL;
+  END IF;
+  SELECT array_agg(p.token) INTO v_tokens FROM bill_payments p
+   WHERE p.tenant_id = v_buyer AND p.amount_kobo = p_amount AND p.status IN ('pending', 'paid') AND p.paired_at IS NULL
+     AND p.created_at > now() - interval '3 days';
+  IF cardinality(v_tokens) = 1 THEN
+    RETURN v_tokens[1];
+  END IF;
+  RETURN NULL;
+END
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_link_payout_token(text, bigint) OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_link_payout_token(text, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION taskiem_link_payout_token(text, bigint) TO taskiem_app;
 
 -- How a business pays its bills: the managed workflow made from the
 -- pay-linked-bill template, and what it was made with.
@@ -170,6 +212,8 @@ GRANT EXECUTE ON FUNCTION taskiem_link_mirrors_claim(int) TO taskiem_app;
 
 -- +goose Down
 DROP FUNCTION taskiem_link_mirrors_claim(int);
+DROP FUNCTION taskiem_link_payout_token(text, bigint);
+ALTER TABLE customer_invoices DROP COLUMN disputed;
 DROP TRIGGER customer_invoice_link_mirror ON customer_invoices;
 DROP FUNCTION taskiem_link_mirror_note();
 DROP TABLE link_mirrors_due;

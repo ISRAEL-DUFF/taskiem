@@ -26984,6 +26984,9 @@ components:
           $ref: '#/components/schemas/NullableTimestamp'
         void_reason:
           type: string
+        disputed:
+          type: boolean
+          description: A linked buyer queried it; oldest-first matching passes over it (docs/spec/business-links.md)
         created_by:
           type: string
         created_at:

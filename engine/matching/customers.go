@@ -2,6 +2,10 @@ package matching
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -72,7 +76,8 @@ func (m *Matcher) permanent(ctx context.Context, tenant uuid.UUID, e entry) (boo
 			return err
 		}
 		var err error
-		done, err = m.CountCustomer(ctx, tx, tenant, e.ID, acct.CustomerID(), CustomerCounting{Connection: e.Channel, How: "exact", By: "system:" + e.Channel, Reasons: []string{ReasonOwnAccount}})
+		done, err = m.CountCustomer(ctx, tx, tenant, e.ID, acct.CustomerID(), CustomerCounting{Connection: e.Channel, How: "exact", By: "system:" + e.Channel,
+			Reasons: []string{ReasonOwnAccount}, Note: e.Description, AmountKobo: e.AmountKobo})
 		return err
 	})
 	if err != nil {
@@ -90,6 +95,12 @@ type CustomerCounting struct {
 	How        string
 	By         string
 	Reasons    []string
+	// Note is what the payment carried (the rail's note), and AmountKobo
+	// what it was: for a linked business (link:<its id>), the invoice
+	// named in the note, or by the pairing token of its payout of that
+	// amount, is counted first (docs/spec/business-links.md §6.3).
+	Note       string
+	AmountKobo int64
 }
 
 // CountedPart is one part CountCustomer counted: the invoice as it is
@@ -134,12 +145,43 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 	if err != nil {
 		return nil, err
 	}
+	// A linked business's money goes first to the invoice it names: in the
+	// note, or by its payout's pairing token when the rail dropped the
+	// note. Oldest-first then passes over invoices it queried.
+	linked := strings.HasPrefix(customer, "key:link:")
+	var token string
+	if linked {
+		named := -1
+		if named, token = namedInvoice(list, c.Note); named < 0 && c.AmountKobo > 0 {
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(taskiem_link_payout_token($1, $2), '')`, customer, c.AmountKobo).Scan(&token); err != nil {
+				return nil, err
+			}
+			named, _ = namedInvoice(list, token)
+		}
+		if named >= 0 {
+			if err := count(list[named], ReasonNamed); err != nil {
+				return nil, err
+			}
+			list = slices.Delete(slices.Clone(list), named, named+1)
+		}
+		list = slices.DeleteFunc(list, func(x invoicing.Invoice) bool { return x.Disputed })
+	}
 	reason := ReasonOldest
 	for _, x := range list {
 		if err := count(x, reason); err != nil {
 			return nil, err
 		}
 		reason = ReasonNext
+	}
+	if linked && token != "" {
+		// The buyer's payout and this credit are one transfer: the buyer's
+		// payment is marked paired, through the one door into its side,
+		// after everything here is written (the scope is the buyer's
+		// from then on).
+		if err := matched(ctx, tx, tenant, entryID, m.now()); err != nil {
+			return nil, err
+		}
+		return done, pairPayout(ctx, tx, customer, token)
 	}
 	// Where the school shares family credit, what is left counts towards
 	// the siblings' open invoices, each sibling's oldest first.
@@ -160,6 +202,63 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 	}
 	// Matched: what is left is the customer's credit.
 	return done, matched(ctx, tx, tenant, entryID, m.now())
+}
+
+// ReasonNamed: the invoice a linked business's payment named, in its note
+// or by its payout's pairing token.
+const ReasonNamed = "the invoice the payment named"
+
+// namedInvoice is the open invoice whose number note carries as a word of
+// its own ("INV-0042/7QX4", "for inv-0042"), and the token it was found
+// in; -1 when none, or more than one, is named.
+func namedInvoice(list []invoicing.Invoice, note string) (int, string) {
+	if note == "" {
+		return -1, ""
+	}
+	words := strings.FieldsFunc(strings.ToUpper(note), func(r rune) bool { return r == ' ' || r == '/' || r == ',' || r == ';' || r == ':' })
+	found := -1
+	for i, x := range list {
+		if slices.Contains(words, strings.ToUpper(x.Number)) {
+			if found >= 0 {
+				return -1, ""
+			}
+			found = i
+		}
+	}
+	if found < 0 {
+		return -1, ""
+	}
+	// A payout from Taskiem carries NUMBER/CODE, its pairing token.
+	up, num := strings.ToUpper(note), strings.ToUpper(list[found].Number)
+	if i := strings.Index(up, num+"/"); i >= 0 {
+		rest := up[i+len(num)+1:]
+		if n := strings.IndexFunc(rest, func(r rune) bool { return !(r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') }); n != 0 {
+			if n < 0 {
+				n = len(rest)
+			}
+			return found, num + "/" + rest[:n]
+		}
+	}
+	return found, ""
+}
+
+// pairPayout marks the linked buyer's payment that carried token as
+// paired with this credit, entering the buyer's side (link:<buyer>)
+// through taskiem_link_enter: the last write of the transaction.
+func pairPayout(ctx context.Context, tx pgx.Tx, customer, token string) error {
+	var link *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT id FROM taskiem_links_of() WHERE business = $1 AND state = 'active'`, strings.TrimPrefix(customer, "key:link:")).Scan(&link); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	detail, _ := json.Marshal(map[string]any{"token": token})
+	if _, err := tx.Exec(ctx, `SELECT taskiem_link_enter($1, 'system', 'matching', 'link.paired', $2)`, link, detail); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE bill_payments SET paired_at = now() WHERE token = $1 AND paired_at IS NULL`, token)
+	return err
 }
 
 // TellPaid tells the runs waiting on the invoices that CountCustomer's
