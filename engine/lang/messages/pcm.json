@@ -4039,6 +4039,14 @@
     "link.offer_line": {
       "text": "{org} dey Taskiem too. Link with us: {url}",
       "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Link",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Open {url} as you don sign in to your business for Taskiem to link.",
+      "reviewed": false
     }
   }
 }

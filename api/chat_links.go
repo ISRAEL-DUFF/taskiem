@@ -33,9 +33,11 @@ import (
 type chatLink struct {
 	Found []chatLinkFound `json:"found,omitempty"`
 	Pick  *chatLinkFound  `json:"pick,omitempty"`
-	Phone string          `json:"phone,omitempty"`
-	Slug  string          `json:"slug,omitempty"`
-	Shown string          `json:"shown,omitempty"`
+	// Code is the link code of an offer's Link button.
+	Code  string `json:"code,omitempty"`
+	Phone string `json:"phone,omitempty"`
+	Slug  string `json:"slug,omitempty"`
+	Shown string `json:"shown,omitempty"`
 }
 
 type chatLinkFound struct {
@@ -281,9 +283,12 @@ func (s *Server) waLinkReply(ctx context.Context, c *chat, text, cmd string) err
 	var told uuid.UUID
 	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error
-		if cl.Pick != nil {
+		switch {
+		case cl.Pick != nil:
 			told, err = links.RequestTx(ctx, tx, cl.Pick.Business, role, by)
-		} else {
+		case cl.Code != "":
+			told, err = links.RequestByCodeTx(ctx, tx, cl.Code, role, by)
+		default:
 			told, err = links.RequestBlindTx(ctx, tx, c.tenant.ID, links.Blind{Phone: cl.Phone, Slug: cl.Slug, Shown: cl.Shown}, role, by, s.linkKey(c.tenant.ID))
 		}
 		return err
@@ -297,10 +302,13 @@ func (s *Server) waLinkReply(ctx context.Context, c *chat, text, cmd string) err
 		return err
 	}
 	s.tellLinkAsked(ctx, told, c.tenant.ID)
-	if cl.Pick == nil {
-		return c.say(ctx, s, c.t("link.blind_sent", "shown", cl.Shown))
+	switch {
+	case cl.Pick != nil:
+		return c.say(ctx, s, c.t("link.sent", "name", whatsapp.SafeText(cl.Pick.Name)))
+	case cl.Code != "":
+		return c.say(ctx, s, c.t("link.sent", "name", cl.Shown))
 	}
-	return c.say(ctx, s, c.t("link.sent", "name", whatsapp.SafeText(cl.Pick.Name)))
+	return c.say(ctx, s, c.t("link.blind_sent", "shown", cl.Shown))
 }
 
 func (s *Server) waLinkDone(ctx context.Context, c *chat, text string) error {
@@ -308,6 +316,36 @@ func (s *Server) waLinkDone(ctx context.Context, c *chat, text string) error {
 		return err
 	}
 	return c.say(ctx, s, text)
+}
+
+// waLinkOffer takes an offer's Link button: the business behind the code,
+// then how we trade with it, then the request.
+func (s *Server) waLinkOffer(ctx context.Context, c *chat, code string) error {
+	if !c.p.Can(PermLinkManage) {
+		return c.say(ctx, s, c.t("link.denied", "org", c.tenant.Name))
+	}
+	var card links.CodeCard
+	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		card, err = links.ByCodeTx(ctx, tx, code)
+		return err
+	})
+	switch {
+	case errors.Is(err, links.ErrNotFound):
+		return c.say(ctx, s, c.t("link.gone"))
+	case err != nil:
+		return err
+	}
+	name := whatsapp.SafeText(card.Name)
+	switch card.State {
+	case links.Active:
+		return c.say(ctx, s, c.t("link.already", "name", name))
+	case links.Requested:
+		return c.say(ctx, s, c.t("link.waiting", "name", name))
+	case links.AskedUs:
+		return s.waLinks(ctx, c)
+	}
+	return s.waLinkAskRole(ctx, c, &chatLink{Code: code, Shown: name}, c.t("link.which_role", "name", name))
 }
 
 // waLinkPress takes Accept, Decline or Block on a request: for whichever

@@ -20,6 +20,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -463,6 +464,11 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.supplierWord(ctx, wa, reach.WhatsApp, number, text); done || err != nil {
 		return err
 	}
+	// An offer's Link button tapped from a number no one is bound to (a
+	// business's own WhatsApp number): the link to open signed in.
+	if code, ok := strings.CutPrefix(in.Reply, linkOfferPrefix); ok && links.ValidCode(code) {
+		return s.waSay(ctx, wa, number, "", tr(l, "link.offer_open", "url", s.linkCodeURL(code)))
+	}
 	// A key typed into the chat is never acted on or kept (connect_links.go).
 	if done, err := s.keyGuard(ctx, &chat{ch: wa, wa: wa, addr: number, lang: langChoice{Tag: l}}, text); done || err != nil {
 		return err
@@ -589,6 +595,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	// Accept, Decline or Block on a link request (chat_links.go), whatever
 	// else the conversation is in the middle of.
+	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
+		return s.waLinkOffer(ctx, c, code)
+	}
 	if strings.HasPrefix(text, linkPrefix) && !strings.HasPrefix(text, linkPrefix+"role:") {
 		return s.waLinkPress(ctx, c, text)
 	}

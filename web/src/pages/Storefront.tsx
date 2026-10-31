@@ -1149,6 +1149,19 @@ function CatalogueCopy({
 function Share({ sf, form }: { sf: SF; form: Form }) {
   const [qr, setQr] = useState<string>();
   const [error, setError] = useState<unknown>();
+  // The card's second code: the business's link code, for businesses on
+  // Taskiem (business links); left off the card when it cannot be read.
+  const [link, setLink] = useState<{ qr: string; url: string }>();
+  useEffect(() => {
+    let live = true;
+    Promise.all([get<{ url?: string }>("/v1/link-settings"), getBlob("/v1/link-settings/qr").then(dataURL)]).then(
+      ([st, linkQr]) => live && st.url && setLink({ qr: linkQr, url: st.url }),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
   useEffect(() => {
     let live = true;
     // A data: URL, not a blob: one: the console's Content Security Policy allows only data: images besides its own.
@@ -1217,7 +1230,7 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
       </div>
       {qr &&
         createPortal(
-          <PrintCard>
+          <PrintCard withLink={!!link}>
             <div className="print-name">{name}</div>
             {card.tagline && (
               <div className="print-tagline">{card.tagline}</div>
@@ -1229,6 +1242,15 @@ function Share({ sf, form }: { sf: SF; form: Form }) {
             </div>
             {where && <div className="print-where">{where}</div>}
             {card.phone && <div className="print-phone">{card.phone}</div>}
+            {link && (
+              <div className="print-link">
+                <img src={link.qr} alt="" className="print-link-qr" />
+                <div>
+                  <div className="print-link-title">Link with us on Taskiem</div>
+                  <div className="print-url">{link.url.replace(/^https?:\/\//, "")}</div>
+                </div>
+              </div>
+            )}
           </PrintCard>,
           document.body,
         )}
@@ -1264,9 +1286,9 @@ function Thumb({ src }: { src?: string }) {
   );
 }
 
-function PrintCard({ children }: { children: ReactNode }) {
+function PrintCard({ children, withLink = false }: { children: ReactNode; withLink?: boolean }) {
   return (
-    <div className="print-card" aria-hidden="true">
+    <div className={withLink ? "print-card with-link" : "print-card"} aria-hidden="true">
       {children}
     </div>
   );

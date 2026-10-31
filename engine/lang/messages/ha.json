@@ -4039,6 +4039,14 @@
     "link.offer_line": {
       "text": "{org} ma yana Taskiem. Haɗa da mu: {url}",
       "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Haɗa",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Buɗe {url} bayan ka shiga kasuwancinka a Taskiem don haɗawa.",
+      "reviewed": false
     }
   }
 }

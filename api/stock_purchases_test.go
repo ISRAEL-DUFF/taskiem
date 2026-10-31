@@ -250,7 +250,25 @@ func TestPurchaseOrderOffersALink(t *testing.T) {
 	w.yes(t, on)
 	got := w.lastTo(t, supplier, before)
 	if len(got) != 1 || !strings.Contains(got[0].Text, "Order P-") || !strings.Contains(got[0].Text, "Mama Put Stores is on Taskiem too. Link with us: ") ||
-		!strings.Contains(got[0].Text, "/l/") || len(got[0].Buttons) != 2 {
+		!strings.Contains(got[0].Text, "/l/") || len(got[0].Buttons) != 3 || !strings.HasPrefix(got[0].Buttons[2].ID, "lk:offer:") || got[0].Buttons[2].Title != "Link" {
 		t.Fatalf("to the supplier: %+v", got)
+	}
+	// From a number no one is bound to (a business's own WhatsApp number),
+	// Link answers the link to open signed in.
+	if r := w.press(t, "+2348010000399", got[0].Buttons[2].ID); len(r) != 1 || !strings.Contains(r[0].Text, "/l/"+strings.TrimPrefix(got[0].Buttons[2].ID, "lk:offer:")) {
+		t.Errorf("unbound Link: %+v", r)
+	}
+	// Dangote's owner taps Link: how they trade, then the request, which
+	// reaches Mama Put's owner.
+	ask := w.press(t, supplier, got[0].Buttons[2].ID)
+	if len(ask) != 1 || !strings.Contains(ask[0].Text, "How do you trade with *Mama Put Stores*?") || len(ask[0].Buttons) != 3 {
+		t.Fatalf("Link: %+v", ask)
+	}
+	before = len(w.graph.Sent(on))
+	if r := w.press(t, supplier, "lk:role:customer"); len(r) != 1 || !strings.Contains(r[0].Text, "Asked *Mama Put Stores* to link") {
+		t.Fatalf("asked: %+v", r)
+	}
+	if told := w.lastTo(t, on, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Depot* asks to link with Mama Put Stores on Taskiem (they supply you)") {
+		t.Errorf("Mama Put told: %+v", told)
 	}
 }

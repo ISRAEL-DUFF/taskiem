@@ -222,7 +222,9 @@ type Invoices struct {
 	Answered func(ctx context.Context, r Request, a Account, err error)
 	// LinkOffer is a line to add to an invoice sent to a phone that is
 	// another business's own on Taskiem, offering it a link the first time
-	// (docs/spec/business-links.md §5.1); "" for none. fits says whether a
+	// (docs/spec/business-links.md §5.1); "" for none, and always for an
+	// empty phone (called then to make the business's link code, which
+	// the invoice's page prints). fits says whether a
 	// line still fits the message: a line that does not is left out and
 	// not counted as offered. Nil offers nothing.
 	LinkOffer func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, fits func(line string) bool) (string, error)
@@ -787,12 +789,20 @@ func (s *Invoices) Send(ctx context.Context, tenant uuid.UUID, idOrNumber, by, k
 		text := sendText(business, cur, link)
 		if family {
 			text = familySendText(business, cur, link)
-		} else if s.LinkOffer != nil && cur.Customer.Phone != "" {
-			// The SMS must stay within its parts; the invoice goes either way.
+		}
+		if s.LinkOffer != nil {
+			// The SMS must stay within its parts; the invoice goes either
+			// way. A school family's invoice offers nothing (its phone is a
+			// parent's), but the hook still makes sure the business has the
+			// link code its invoice's page prints.
+			phone := cur.Customer.Phone
+			if family {
+				phone = ""
+			}
 			fits := func(line string) bool {
 				return sender.Segments(business+": "+text+" "+line) <= sender.MaxSegments
 			}
-			line, err := s.LinkOffer(ctx, tx, tenant, cur.Customer.Phone, fits)
+			line, err := s.LinkOffer(ctx, tx, tenant, phone, fits)
 			if err != nil {
 				return err
 			}

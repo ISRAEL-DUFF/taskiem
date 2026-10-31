@@ -543,15 +543,16 @@ func (s *Server) LinkOfferLine(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 }
 
 func (s *Server) linkOfferLineIn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, l lang.Tag, fits func(string) bool) (string, error) {
+	// Every document's business has the code its pages print.
+	code, err := links.EnsureCodeTx(ctx, tx, tenant, "system:link-offer")
+	if err != nil || phone == "" {
+		return "", err
+	}
 	key := s.linkKey(tenant)
 	if done, err := links.OfferedTx(ctx, tx, phone, key); err != nil || done {
 		return "", err
 	}
 	if offer, err := links.OfferToTx(ctx, tx, phone); err != nil || !offer {
-		return "", err
-	}
-	code, err := links.EnsureCodeTx(ctx, tx, tenant, "system:link-offer")
-	if err != nil {
 		return "", err
 	}
 	var business string
@@ -564,6 +565,28 @@ func (s *Server) linkOfferLineIn(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	}
 	return line, links.RecordOfferTx(ctx, tx, tenant, phone, key)
 }
+
+// linkOfferChat is the offer for a document sent on WhatsApp to a phone
+// that is another business's own: the line, and a Link button
+// (lk:offer:<code>) that asks the sender to link from the recipient's
+// chat. Nothing on another channel, or when there is nothing to offer.
+func (s *Server) linkOfferChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, addr string, l lang.Tag) (string, *whatsapp.Button, error) {
+	if channel != "whatsapp" {
+		return "", nil, nil
+	}
+	line, err := s.linkOfferLineIn(ctx, tx, tenant, addr, l, nil)
+	if err != nil || line == "" {
+		return "", nil, err
+	}
+	code, err := links.EnsureCodeTx(ctx, tx, tenant, "system:link-offer")
+	if err != nil {
+		return "", nil, err
+	}
+	return line, &whatsapp.Button{ID: linkOfferPrefix + code, Title: tr(l, "link.button_offer")}, nil
+}
+
+// linkOfferPrefix starts the Link button of an offer: lk:offer:<code>.
+const linkOfferPrefix = linkPrefix + "offer:"
 
 // issueLinkAccounts gives, when a link is accepted, each side that sells
 // to the other a customer account number for it (§6.3): issued on one of

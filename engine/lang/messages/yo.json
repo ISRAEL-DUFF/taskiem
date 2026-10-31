@@ -4039,6 +4039,14 @@
     "link.offer_line": {
       "text": "{org} wà lórí Taskiem náà. Ẹ so mọ́ wa: {url}",
       "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "So pọ̀",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Ṣí {url} nígbà tí o bá wọlé sí ilé-iṣẹ́ rẹ lórí Taskiem láti so pọ̀.",
+      "reviewed": false
     }
   }
 }

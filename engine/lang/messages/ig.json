@@ -4039,6 +4039,14 @@
     "link.offer_line": {
       "text": "{org} nọkwa na Taskiem. Jikọọ anyị: {url}",
       "reviewed": false
+    },
+    "link.button_offer": {
+      "text": "Jikọọ",
+      "reviewed": false
+    },
+    "link.offer_open": {
+      "text": "Mepee {url} mgbe ị banyere n'azụmahịa gị na Taskiem iji jikọọ.",
+      "reviewed": false
     }
   }
 }

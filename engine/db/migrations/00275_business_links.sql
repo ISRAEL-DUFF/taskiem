@@ -314,6 +314,19 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 $$;
 -- +goose StatementEnd
 
+-- A business's link code, for its public pages: an invoice's page prints
+-- it (§5.1, "Link with us on Taskiem"). NULL until the code is made, or
+-- for a business that is not active. The public role's.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_public_link_code(p_tenant uuid) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT ls.code FROM link_settings ls JOIN tenants t ON t.id = ls.tenant_id AND t.status = 'active' WHERE ls.tenant_id = p_tenant
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_public_link_code(uuid) OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_public_link_code(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION taskiem_public_link_code(uuid) TO taskiem_public;
+
 -- Request a link (or ask again). By search, p_target is a business the
 -- search listed: refused unless it lets itself be found. Blind, the
 -- target is resolved here from a phone number (the owner's linked number
@@ -524,6 +537,7 @@ DROP FUNCTION taskiem_link_enter(uuid, text, text, text, jsonb);
 DROP FUNCTION taskiem_link_answer(uuid, text, text, text);
 DROP FUNCTION taskiem_link_request(uuid, text, text, text, text, text, text);
 DROP FUNCTION taskiem_link_offer_to(text);
+DROP FUNCTION taskiem_public_link_code(uuid);
 DROP FUNCTION taskiem_link_by_code(text);
 DROP FUNCTION taskiem_link_phone_business(text);
 DROP FUNCTION taskiem_link_search(text, int);

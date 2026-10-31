@@ -17,4 +17,5 @@
 </div>
 {{with .Note}}<p class="notice inv-note">{{.}}</p>{{end}}
 {{if .Payable}}{{with .Pay}}{{template "invoicepay" .}}{{else}}<p class="hint center">Ask {{.Business}} how to pay.</p>{{end}}{{end}}
-{{template "ffoot" .}}
+{{with .LinkURL}}<p class="hint center">Is your business on Taskiem too? <a href="{{.}}">Link with {{$.Business}}</a>, and your invoices and orders reach each other by themselves.</p>
+{{end}}{{template "ffoot" .}}

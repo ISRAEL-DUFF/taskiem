@@ -781,6 +781,11 @@ table.cards tr.sf-refund td:first-child { box-shadow: none; }
   .print-scan { font-size: 14pt; font-weight: 700; }
   .print-url, .print-where, .print-phone { font-size: 10pt; }
   .print-phone { font-weight: 600; }
+  /* The business's link code under the page's (business links): a second, smaller code. */
+  .print-card.with-link .print-qr { width: 48mm; height: 48mm; }
+  .print-link { display: flex; align-items: center; gap: 3mm; text-align: left; border-top: 0.3mm solid #000; padding-top: 3mm; margin-top: 1mm; }
+  .print-link-qr { width: 20mm; height: 20mm; image-rendering: pixelated; }
+  .print-link-title { font-size: 10pt; font-weight: 700; }
 }
 
 /* Forms (docs/forms.md): the editor, the renderer, the Forms page. */

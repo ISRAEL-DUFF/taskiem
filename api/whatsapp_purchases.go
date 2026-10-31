@@ -115,6 +115,7 @@ func (s *Server) sendSupplierItem(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	var x stock.Purchase
 	var addr, business, offer string
+	var offerButton *whatsapp.Button
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
 		var err error
 		if x, err = stock.PurchaseTx(ctx, tx, it.Tenant, *it.Run, false); err != nil {
@@ -128,8 +129,8 @@ func (s *Server) sendSupplierItem(ctx context.Context, it whatsapp.OutboxItem) e
 		}
 		// A supplier that is a business on Taskiem is offered a link with
 		// the first order (business links, links.go).
-		if it.Channel == "whatsapp" && x.Status == stock.Sent {
-			offer, err = s.linkOfferLineIn(ctx, tx, it.Tenant, addr, s.chooseLang(ctx, it.Tenant, addr, "").Tag, nil)
+		if x.Status == stock.Sent {
+			offer, offerButton, err = s.linkOfferChat(ctx, tx, it.Tenant, it.Channel, addr, s.chooseLang(ctx, it.Tenant, addr, "").Tag)
 		}
 		return err
 	})
@@ -148,10 +149,13 @@ func (s *Server) sendSupplierItem(ctx context.Context, it whatsapp.OutboxItem) e
 		text += "\n\n" + offer
 	}
 	b := purchaseButton{Tenant: it.Tenant, Purchase: x.ID, Contact: *it.Contact}
-	buttons := make([]whatsapp.Button, 0, 2)
+	buttons := make([]whatsapp.Button, 0, 3)
 	for _, a := range []byte{'c', 'x'} {
 		b.Action = a
 		buttons = append(buttons, whatsapp.Button{ID: signPurchaseButton(key, b), Title: tr(l, "supplier.btn."+purchaseActions[a])})
+	}
+	if offerButton != nil {
+		buttons = append(buttons, *offerButton)
 	}
 	tpl := whatsapp.TplUpdate
 	m := whatsapp.Message{Tenant: it.Tenant, Buttons: buttons, Text: ch.Prefix(business) + text, Template: &tpl,

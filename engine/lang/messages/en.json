@@ -5048,6 +5048,16 @@
       "text": "{org} is on Taskiem too. Link with us: {url}",
       "reviewed": true,
       "context": "Added to the first invoice or order a business sends to another business on Taskiem; {url} opens the link request"
+    },
+    "link.button_offer": {
+      "text": "Link",
+      "reviewed": true,
+      "context": "Button on a document from a business on Taskiem: ask it to link (20 characters at most)"
+    },
+    "link.offer_open": {
+      "text": "Open {url} signed in to your business on Taskiem to link.",
+      "reviewed": true,
+      "context": "An offer's Link button tapped from a number no one is bound to"
     }
   }
 }
