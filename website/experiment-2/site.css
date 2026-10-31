@@ -1,0 +1,17 @@
+
+/* site.css: what a real website needs beyond the static design (README.md). */
+
+/* The phone menu: the header's menu button opens the same links as a panel. */
+.tk header { position: relative; }
+.tk header.menu-open .nav-wide:not(.btn) {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  position: absolute; z-index: 20; top: calc(100% - 8px); left: clamp(20px, 5vw, 48px); right: clamp(20px, 5vw, 48px);
+  padding: 8px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .14);
+}
+.tk header.menu-open .nav-wide:not(.btn) a { border-bottom: 1px solid var(--line); }
+.tk header.menu-open .nav-wide:not(.btn) a:last-child { border-bottom: 0; }
+@media (min-width: 901px) { .tk header.menu-open .nav-wide:not(.btn) { position: static; flex-direction: row; padding: 0; border: 0; box-shadow: none; background: none; } }
+
+/* Respect a reader who asks for less motion. */
+@media (prefers-reduced-motion: reduce) { .tk .btn, .tk details.faq .plus { transition: none; } .tk .btn:hover { transform: none; } }
