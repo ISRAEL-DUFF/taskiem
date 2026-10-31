@@ -4463,6 +4463,50 @@
     "wa.mention.second": {
       "text": "{references} karịrị oke gị: onye nwe ọzọ ma ọ bụ admin ga-eziga ha, site na ibe Suppliers.",
       "reviewed": false
+    },
+    "bill.reminder_title": {
+      "text": "{from}: ncheta maka {reference}",
+      "reviewed": false
+    },
+    "bill.reminder": {
+      "text": "*{from}* gbasara ụgwọ {reference} ({amount} fọdụrụ): {note}",
+      "reviewed": false
+    },
+    "order.link.over_limit_note": {
+      "text": "Ọ na-eche: iwu a gafere kredit {limit} {business} na-enye gị (ị ji {owed}). Kwụọ ụgwọ gị, ma ọ bụ rịọ ha ka ha nabata ya.",
+      "reviewed": false
+    },
+    "order.link.over_limit_title": {
+      "text": "Iwu {reference} na-eche: ọ gafere oke kredit gị",
+      "reviewed": false
+    },
+    "order.link.over_limit": {
+      "text": "Iwu {reference} nye *{business}* gafere kredit {limit} ha na-enye gị (ị ji {owed}). Ọ ga-eche ruo mgbe ị kwụrụ ụgwọ gị ma ọ bụ ha nabatara ya. Kwụọ ugbu a site na Bills.",
+      "reviewed": false
+    },
+    "order.link.within_limit_title": {
+      "text": "Iwu {reference} dị n'ime oke kredit gị",
+      "reviewed": false
+    },
+    "order.link.within_limit": {
+      "text": "Iwu {reference} nye *{business}* anaghị eche ọzọ: ị nọ n'ime oke kredit gị.",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller_title": {
+      "text": "Iwu {reference} nke {buyer} gafere oke ha",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller": {
+      "text": "Iwu {reference} sitere na *{buyer}* gafere {limit} ị kwere (ha ji {owed}). A naghị anabata ya n'onwe ya; ị ka nwere ike ịnabata ya.",
+      "reviewed": false
+    },
+    "money.daily.bills_due": {
+      "text": "Ụgwọ ruru: {n}, {amount}. Zipu *bills due* ka ịhụ ha.",
+      "reviewed": false
+    },
+    "money.daily.bills_due_overdue": {
+      "text": "Ụgwọ ruru: {n}, {amount}, {overdue} gafere ụbọchị. Zipu *bills due* ka ịhụ ha.",
+      "reviewed": false
     }
   }
 }

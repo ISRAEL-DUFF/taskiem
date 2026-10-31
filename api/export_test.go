@@ -3,6 +3,10 @@ package api
 import (
 	"context"
 
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/lang"
+
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
 
@@ -19,3 +23,8 @@ func (s *Server) SetUSSDStart(fn func(context.Context, runtime.StartRequest) (ru
 
 // PreviewAnyPort lets link previews reach a test's local page.
 func (s *Server) PreviewAnyPort() { s.previewAnyPort = true }
+
+// BillsDueLine is the morning summary's line on linked suppliers' bills.
+func (s *Server) BillsDueLine(ctx context.Context, tenant uuid.UUID) string {
+	return s.billsDueDailyLine(ctx, lang.EN, tenant)
+}

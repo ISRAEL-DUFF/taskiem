@@ -67,6 +67,7 @@ import {
   TradeOrdersPage,
 } from "./pages/TradeOrders";
 import { StorefrontPriceLists, SupplierPricesPage } from "./pages/PriceLists";
+import { StatementPage } from "./pages/Statement";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -625,6 +626,7 @@ function SignedIn() {
               <Route path="/trade-orders" element={<TradeOrdersPage />} />
               <Route path="/trade-orders/:id" element={<TradeOrderPage />} />
               <Route path="/purchases/:id" element={<PurchasePage />} />
+              <Route path="/links/:id/statement" element={<StatementPage />} />
               <Route
                 path="/storefront/price-lists"
                 element={<StorefrontPriceLists />}

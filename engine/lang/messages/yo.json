@@ -4463,6 +4463,50 @@
     "wa.mention.second": {
       "text": "{references} kọja opin rẹ: oniwun miiran tabi admin yoo fi wọn ranṣẹ, lati oju-iwe Suppliers.",
       "reviewed": false
+    },
+    "bill.reminder_title": {
+      "text": "{from}: olurannileti nipa {reference}",
+      "reviewed": false
+    },
+    "bill.reminder": {
+      "text": "*{from}* nipa owo-ipe {reference} ({amount} ku): {note}",
+      "reviewed": false
+    },
+    "order.link.over_limit_note": {
+      "text": "O n duro: aṣẹ yii kọja kirẹditi {limit} ti {business} fun ọ (o jẹ {owed}). San awọn owo-ipe rẹ, tabi beere ki wọn gba a.",
+      "reviewed": false
+    },
+    "order.link.over_limit_title": {
+      "text": "Aṣẹ {reference} n duro: o kọja opin kirẹditi rẹ",
+      "reviewed": false
+    },
+    "order.link.over_limit": {
+      "text": "Aṣẹ {reference} si *{business}* kọja kirẹditi {limit} ti wọn fun ọ (o jẹ {owed}). Yoo duro titi iwọ o fi san owo-ipe rẹ tabi ti wọn gba a. Sanwo bayi lati Bills.",
+      "reviewed": false
+    },
+    "order.link.within_limit_title": {
+      "text": "Aṣẹ {reference} wa laarin opin kirẹditi rẹ",
+      "reviewed": false
+    },
+    "order.link.within_limit": {
+      "text": "Aṣẹ {reference} si *{business}* ko duro mọ: o wa laarin opin kirẹditi rẹ.",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller_title": {
+      "text": "Aṣẹ {reference} ti {buyer} kọja opin wọn",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller": {
+      "text": "Aṣẹ {reference} lati ọdọ *{buyer}* kọja {limit} ti o gba laaye (wọn jẹ {owed}). A ko gba a funrarẹ; o tun le gba a.",
+      "reviewed": false
+    },
+    "money.daily.bills_due": {
+      "text": "Owo-ipe ti o ku: {n}, {amount}. Fi *bills due* ranṣẹ lati ri wọn.",
+      "reviewed": false
+    },
+    "money.daily.bills_due_overdue": {
+      "text": "Owo-ipe ti o ku: {n}, {amount}, {overdue} ti kọja ọjọ. Fi *bills due* ranṣẹ lati ri wọn.",
+      "reviewed": false
     }
   }
 }

@@ -5939,6 +5939,12 @@ paths:
                     enum: [accepted, delivered]
                   auto_accept:
                     type: boolean
+                  terms_days:
+                    type: [integer, 'null']
+                    description: Days the buyer has to pay; an invoice to it with no due date takes it
+                  credit_limit_kobo:
+                    type: [integer, 'null']
+                    description: What it may owe (open invoices and accepted orders not yet invoiced) before its new orders wait
         default:
           $ref: '#/components/responses/Error'
     put:
@@ -5974,6 +5980,15 @@ paths:
                 auto_accept:
                   type: boolean
                   description: Accept its orders by themselves when they arrive priced
+                terms_days:
+                  type: [integer, 'null']
+                  minimum: 0
+                  maximum: 365
+                  description: A number sets them, null clears them, absent leaves them
+                credit_limit_kobo:
+                  type: [integer, 'null']
+                  minimum: 1
+                  description: A number sets it, null clears it, absent leaves it
       responses:
         '200':
           description: How we trade with the link's orders
@@ -5989,6 +6004,146 @@ paths:
                     enum: [accepted, delivered]
                   auto_accept:
                     type: boolean
+                  terms_days:
+                    type: [integer, 'null']
+                    description: Days the buyer has to pay; an invoice to it with no due date takes it
+                  credit_limit_kobo:
+                    type: [integer, 'null']
+                    description: What it may owe (open invoices and accepted orders not yet invoiced) before its new orders wait
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/links/{id}/statement:
+    get:
+      operationId: linkStatement
+      tags:
+      - Links
+      summary: A linked business's statement
+      description: 'What they owe you (your open invoices to them) and what you owe them (their open bills to you), each with the terms and credit limit and the documents, oldest due first. Computed from the invoices and bills; both businesses'' statements add up to the same numbers.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The statement
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [link, business]
+                properties:
+                  link:
+                    type: string
+                    format: uuid
+                  business:
+                    type: string
+                  they_owe:
+                        type: object
+                        additionalProperties: false
+                        required: [owed_kobo, overdue_kobo, documents]
+                        properties:
+                          owed_kobo:
+                            type: integer
+                          overdue_kobo:
+                            type: integer
+                          oldest_due:
+                            type: string
+                            format: date
+                          terms_days:
+                            type: integer
+                          credit_limit_kobo:
+                            type: integer
+                          available_kobo:
+                            type: integer
+                            description: The limit less what is owed (with accepted orders not yet invoiced, on the seller's side)
+                          documents:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              required: [id, reference, status, total_kobo, paid_kobo, due_kobo, overdue, disputed, issued_at]
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                reference:
+                                  type: string
+                                status:
+                                  type: string
+                                total_kobo:
+                                  type: integer
+                                paid_kobo:
+                                  type: integer
+                                due_kobo:
+                                  type: integer
+                                due_on:
+                                  type: string
+                                  format: date
+                                overdue:
+                                  type: boolean
+                                disputed:
+                                  type: boolean
+                                issued_at:
+                                  type: string
+                                  format: date-time
+                  we_owe:
+                        type: object
+                        additionalProperties: false
+                        required: [owed_kobo, overdue_kobo, documents]
+                        properties:
+                          owed_kobo:
+                            type: integer
+                          overdue_kobo:
+                            type: integer
+                          oldest_due:
+                            type: string
+                            format: date
+                          terms_days:
+                            type: integer
+                          credit_limit_kobo:
+                            type: integer
+                          available_kobo:
+                            type: integer
+                            description: The limit less what is owed (with accepted orders not yet invoiced, on the seller's side)
+                          documents:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              required: [id, reference, status, total_kobo, paid_kobo, due_kobo, overdue, disputed, issued_at]
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                reference:
+                                  type: string
+                                status:
+                                  type: string
+                                total_kobo:
+                                  type: integer
+                                paid_kobo:
+                                  type: integer
+                                due_kobo:
+                                  type: integer
+                                due_on:
+                                  type: string
+                                  format: date
+                                overdue:
+                                  type: boolean
+                                disputed:
+                                  type: boolean
+                                issued_at:
+                                  type: string
+                                  format: date-time
         default:
           $ref: '#/components/responses/Error'
   /v1/bills/{id}:
@@ -29086,6 +29241,10 @@ components:
           enum: [accepted, delivered]
         auto_accept:
           type: boolean
+        over_limit_at:
+          type: string
+          format: date-time
+          description: The order takes the buyer past the credit limit; it is not accepted by itself, and may still be accepted
         placed_by_seller:
           type: boolean
         decided_by:

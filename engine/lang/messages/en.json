@@ -5578,6 +5578,61 @@
       "text": "{references} are above your limit: another owner or admin sends them, from the Suppliers page.",
       "reviewed": true,
       "context": "Orders that need a second person to send them"
+    },
+    "bill.reminder_title": {
+      "text": "{from}: a reminder about {reference}",
+      "reviewed": true,
+      "context": "A linked supplier reminded the buyer of an overdue bill; the title"
+    },
+    "bill.reminder": {
+      "text": "*{from}* about bill {reference} ({amount} due): {note}",
+      "reviewed": true,
+      "context": "A linked supplier reminded the buyer of an overdue bill; {note} is their words"
+    },
+    "order.link.over_limit_note": {
+      "text": "Waiting: this order takes you past the {limit} credit {business} gives you (you owe {owed}). Pay your bills, or ask them to accept it.",
+      "reviewed": true,
+      "context": "On the buyer's purchase order: why it waits"
+    },
+    "order.link.over_limit_title": {
+      "text": "Order {reference} waits: over your credit limit",
+      "reviewed": true,
+      "context": "The buyer's order is over its credit limit; the title"
+    },
+    "order.link.over_limit": {
+      "text": "Order {reference} to *{business}* takes you past the {limit} credit they give you (you owe {owed}). It waits until you pay your bills or they accept it. Pay now from Bills.",
+      "reviewed": true,
+      "context": "The buyer's order is over its credit limit"
+    },
+    "order.link.within_limit_title": {
+      "text": "Order {reference} is within your credit limit",
+      "reviewed": true,
+      "context": "The buyer's waiting order is within its limit again; the title"
+    },
+    "order.link.within_limit": {
+      "text": "Order {reference} to *{business}* no longer waits: you are within your credit limit.",
+      "reviewed": true,
+      "context": "The buyer's waiting order is within its limit again"
+    },
+    "order.link.over_limit_seller_title": {
+      "text": "{buyer}'s order {reference} is over their limit",
+      "reviewed": true,
+      "context": "The seller is told a linked buyer's order is over its limit; the title"
+    },
+    "order.link.over_limit_seller": {
+      "text": "Order {reference} from *{buyer}* takes them past the {limit} you allow (they owe {owed}). It is not accepted by itself; you can still accept it.",
+      "reviewed": true,
+      "context": "The seller is told a linked buyer's order is over its limit"
+    },
+    "money.daily.bills_due": {
+      "text": "Bills due: {n}, {amount}. Send *bills due* to see them.",
+      "reviewed": true,
+      "context": "The morning summary: bills from linked suppliers due within three days"
+    },
+    "money.daily.bills_due_overdue": {
+      "text": "Bills due: {n}, {amount}, {overdue} overdue. Send *bills due* to see them.",
+      "reviewed": true,
+      "context": "The morning summary: bills due, some overdue"
     }
   }
 }

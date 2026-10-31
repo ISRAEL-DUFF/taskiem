@@ -38,6 +38,7 @@ func withLinkedOrders(w *world) {
 		w.srv.Orders.Moves = w.srv.Stock
 	}
 	w.srv.Orders.TradeNotify = w.srv.TradeNotify
+	w.srv.Invoices.DueFor, w.srv.Invoices.Reminded = w.srv.InvoiceDueFor, w.srv.InvoiceReminded
 }
 
 // drainLinked does the linked-order work due (orders written, mirrors,

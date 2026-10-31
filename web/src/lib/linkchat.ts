@@ -97,12 +97,15 @@ const VERB: Record<string, string> = {
   declared: "said it paid invoice",
   queried: "queried invoice",
   resolved: "settled the query on invoice",
+  reminder: "sent a reminder about invoice",
 };
 
 /** A card in words: "You sent order P-7QX4KD", "Dangote Stores sent invoice INV-0042". */
 export function cardLine(card: DocCard, mine: boolean, other: string): string {
   const who = mine ? "You" : other;
-  const verb = VERB[card.event] ?? `${card.event.replaceAll("_", " ")} ${card.doc === "invoice" || card.doc === "bill" ? "invoice" : "order"}`;
+  const verb =
+    VERB[card.event] ??
+    `${card.event.replaceAll("_", " ")} ${card.doc === "invoice" || card.doc === "bill" ? "invoice" : "order"}`;
   return `${who} ${verb} ${card.reference}`;
 }
 
@@ -123,7 +126,12 @@ export function cardHref(card: DocCard): string {
 
 /** A card's second line: the amount, and a word. */
 export function cardSub(card: DocCard): string {
-  return [card.amount_kobo !== undefined ? naira(card.amount_kobo) : "", card.note ? `“${card.note}”` : ""].filter(Boolean).join(" · ");
+  return [
+    card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
+    card.note ? `“${card.note}”` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** What an attachment is, in a word: "Photo", "Voice note", or the file's name. */
@@ -145,26 +153,39 @@ export function fileURL(m: Pick<LinkMessage, "link" | "id">): string {
 }
 
 /** A message as one line: the list's preview, and a quote. */
-export function previewLine(m: Pick<LinkMessage, "mine" | "kind" | "body" | "card" | "attachment">, other: string): string {
+export function previewLine(
+  m: Pick<LinkMessage, "mine" | "kind" | "body" | "card" | "attachment">,
+  other: string,
+): string {
   if (m.kind === "card" && m.card) return cardLine(m.card, m.mine, other);
-  const words = m.attachment ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ") : (m.body ?? "");
+  const words = m.attachment
+    ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ")
+    : (m.body ?? "");
   return (m.mine ? "You: " : "") + words;
 }
 
 /** The day a message falls in, as the stream's divider says it. */
 export function dayLabel(iso: string, now: Date = new Date()): string {
   const d = new Date(iso);
-  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const day = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 86_400_000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
   if (diff < 7) return d.toLocaleDateString("en-GB", { weekday: "long" });
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 /** A message's time in its bubble's corner: 09:41. */
 export function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /** The list's time: today's clock, else the day. */
@@ -174,7 +195,10 @@ export function listTime(iso: string, now: Date = new Date()): string {
 }
 
 /** Messages grouped by day, oldest first. */
-export function byDay(list: LinkMessage[], now: Date = new Date()): { day: string; messages: LinkMessage[] }[] {
+export function byDay(
+  list: LinkMessage[],
+  now: Date = new Date(),
+): { day: string; messages: LinkMessage[] }[] {
   const out: { day: string; messages: LinkMessage[] }[] = [];
   for (const m of list) {
     const day = dayLabel(m.created_at, now);
@@ -189,5 +213,8 @@ export function byDay(list: LinkMessage[], now: Date = new Date()): { day: strin
 export function merge(a: LinkMessage[], b: LinkMessage[]): LinkMessage[] {
   const seen = new Map<string, LinkMessage>();
   for (const m of [...a, ...b]) seen.set(m.id, m);
-  return [...seen.values()].sort((x, y) => x.created_at.localeCompare(y.created_at) || x.id.localeCompare(y.id));
+  return [...seen.values()].sort(
+    (x, y) =>
+      x.created_at.localeCompare(y.created_at) || x.id.localeCompare(y.id),
+  );
 }

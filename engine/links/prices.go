@@ -303,8 +303,23 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 	if err != nil {
 		return err
 	}
+	// The terms the seller gives this buyer go with its prices (L5).
+	terms, err := TradeTx(ctx, tx, seller, link)
+	if err != nil {
+		return err
+	}
 	detail, _ := json.Marshal(map[string]any{"shared": shared, "items": len(items)})
 	buyer, err := EnterTx(ctx, tx, link, "link.prices", detail, Actor{Type: "system", ID: "link-prices"})
+	if err != nil {
+		return err
+	}
+	if terms.TermsDays == nil && terms.CreditLimitKobo == nil {
+		_, err = tx.Exec(ctx, `DELETE FROM supplier_terms WHERE tenant_id = $1 AND link_id = $2`, buyer, link)
+	} else {
+		_, err = tx.Exec(ctx, `INSERT INTO supplier_terms (tenant_id, link_id, terms_days, credit_limit_kobo) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (tenant_id, link_id) DO UPDATE SET terms_days = EXCLUDED.terms_days, credit_limit_kobo = EXCLUDED.credit_limit_kobo, updated_at = now()`,
+			buyer, link, terms.TermsDays, terms.CreditLimitKobo)
+	}
 	if err != nil {
 		return err
 	}

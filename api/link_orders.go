@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -39,6 +40,7 @@ func (s *Server) linkOrderRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/trade-orders/{id}/lines/{line}/item", s.setTradeLineItem)
 	r.With(s.need(PermLinkManage)).Get("/links/{id}/trade", s.getLinkTrade)
 	r.With(s.need(PermLinkManage), s.tenantWide).Put("/links/{id}/trade", s.putLinkTrade)
+	r.With(s.need(PermInvoiceRead)).Get("/links/{id}/statement", s.linkStatement)
 	r.With(manage, s.tenantWide).Put("/stock/suppliers/{id}/link", s.linkSupplier)
 	r.With(manage).Get("/stock/deliver-to", s.getDeliverTo)
 	r.With(manage, s.tenantWide).Put("/stock/deliver-to", s.putDeliverTo)
@@ -267,6 +269,10 @@ func (s *Server) putLinkTrade(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		InvoiceAt  *string `json:"invoice_at"`
 		AutoAccept *bool   `json:"auto_accept"`
+		// Terms and the limit (L5): a number sets them, null clears them,
+		// absent leaves them.
+		TermsDays       json.RawMessage `json:"terms_days"`
+		CreditLimitKobo json.RawMessage `json:"credit_limit_kobo"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -285,14 +291,33 @@ func (s *Server) putLinkTrade(w http.ResponseWriter, r *http.Request) {
 		if in.AutoAccept != nil {
 			t.AutoAccept = *in.AutoAccept
 		}
+		if len(in.TermsDays) > 0 {
+			t.TermsDays = nil
+			if string(in.TermsDays) != "null" {
+				if err := json.Unmarshal(in.TermsDays, &t.TermsDays); err != nil {
+					return fmt.Errorf("%w: terms_days is a number of days", links.ErrInvalid)
+				}
+			}
+		}
+		if len(in.CreditLimitKobo) > 0 {
+			t.CreditLimitKobo = nil
+			if string(in.CreditLimitKobo) != "null" {
+				if err := json.Unmarshal(in.CreditLimitKobo, &t.CreditLimitKobo); err != nil {
+					return fmt.Errorf("%w: credit_limit_kobo is an amount in kobo", links.ErrInvalid)
+				}
+			}
+		}
 		if err := links.SetTradeTx(r.Context(), tx, p.TenantID, id, t, p.Actor()); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "link.trade_settings", id.String(), map[string]any{"invoice_at": t.InvoiceAt, "auto_accept": t.AutoAccept})
+		return auditTx(r, tx, "link.trade_settings", id.String(), map[string]any{"invoice_at": t.InvoiceAt, "auto_accept": t.AutoAccept,
+			"terms_days": t.TermsDays, "credit_limit_kobo": t.CreditLimitKobo})
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
 	}
+	// The buyer sees its terms and limit (with its prices).
+	s.mirrorPrices(r.Context(), p.TenantID, []uuid.UUID{id})
 	writeJSON(w, http.StatusOK, t)
 }
 
@@ -524,6 +549,8 @@ func (s *Server) LinkOrdersTick(ctx context.Context) (int, error) {
 			err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{d.Tenant}, func(tx pgx.Tx) error {
 				return links.MirrorPricesTx(ctx, tx, d.Tenant, d.ID)
 			})
+		case "credit":
+			err = s.creditAgain(ctx, d.Tenant, d.ID)
 		}
 		if err != nil {
 			s.Logger.Warn("links: linked-order work", "kind", d.Kind, "tenant", d.Tenant, "id", d.ID, "err", err)
@@ -552,7 +579,13 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	// order workflow started, as for any order.
 	seller := told.Tenant
 	o := s.matchTradeItems(ctx, seller, told.Order)
-	if o != nil && o.AutoAccept && o.Status == links.OrderReceived && allPriced(o.Lines) {
+	// Over the buyer's credit limit (L5), it waits: flagged, not accepted
+	// by itself.
+	var credit links.Credit
+	if o != nil {
+		credit, _ = s.creditCheck(ctx, seller, o.OrderReference)
+	}
+	if o != nil && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && allPriced(o.Lines) {
 		if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, links.Actor{Type: "system", ID: "link-orders"},
 			"system:link-orders", nil); err == nil {
 			told.Event = "auto_accepted"

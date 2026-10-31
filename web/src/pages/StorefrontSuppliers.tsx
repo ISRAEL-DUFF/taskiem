@@ -131,6 +131,15 @@ export function StorefrontSuppliers() {
                             <span className="sr-only"> from {s.name}</span>
                           </Link>
                         )}
+                        {s.link_id && (
+                          <Link
+                            className="button small"
+                            to={`/links/${s.link_id}/statement`}
+                          >
+                            Statement
+                            <span className="sr-only"> with {s.name}</span>
+                          </Link>
+                        )}
                         <button
                           type="button"
                           className="small"

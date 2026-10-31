@@ -4463,6 +4463,50 @@
     "wa.mention.second": {
       "text": "{references} pass your limit: another owner or admin go send dem, from Suppliers page.",
       "reviewed": false
+    },
+    "bill.reminder_title": {
+      "text": "{from}: reminder about {reference}",
+      "reviewed": false
+    },
+    "bill.reminder": {
+      "text": "*{from}* about bill {reference} ({amount} remain): {note}",
+      "reviewed": false
+    },
+    "order.link.over_limit_note": {
+      "text": "E dey wait: this order pass the {limit} credit wey {business} give you (you owe {owed}). Pay your bills, or ask dem make dem accept am.",
+      "reviewed": false
+    },
+    "order.link.over_limit_title": {
+      "text": "Order {reference} dey wait: e pass your credit limit",
+      "reviewed": false
+    },
+    "order.link.over_limit": {
+      "text": "Order {reference} to *{business}* pass the {limit} credit wey dem give you (you owe {owed}). E go wait until you pay your bills or dem accept am. Pay now from Bills.",
+      "reviewed": false
+    },
+    "order.link.within_limit_title": {
+      "text": "Order {reference} don dey inside your credit limit",
+      "reviewed": false
+    },
+    "order.link.within_limit": {
+      "text": "Order {reference} to *{business}* no dey wait again: you dey inside your credit limit.",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller_title": {
+      "text": "{buyer} order {reference} pass dem limit",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller": {
+      "text": "Order {reference} from *{buyer}* pass the {limit} wey you allow (dem owe {owed}). E no go accept by itself; you fit still accept am.",
+      "reviewed": false
+    },
+    "money.daily.bills_due": {
+      "text": "Bills wey don due: {n}, {amount}. Send *bills due* to see dem.",
+      "reviewed": false
+    },
+    "money.daily.bills_due_overdue": {
+      "text": "Bills wey don due: {n}, {amount}, {overdue} don pass date. Send *bills due* to see dem.",
+      "reviewed": false
     }
   }
 }

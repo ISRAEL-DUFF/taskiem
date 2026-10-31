@@ -56,6 +56,9 @@ export interface TradeOrder {
   auto_accept: boolean;
   /** We drafted it for the buyer: proposed until it confirms. */
   placed_by_seller: boolean;
+  /** It takes the buyer past the credit limit we give them (L5): not
+   * accepted by itself; we may still accept it. */
+  over_limit_at?: string;
   accepted_at?: string;
   delivered_at?: string;
   created_at: string;

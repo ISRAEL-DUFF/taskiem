@@ -231,6 +231,14 @@ type Invoices struct {
 	// line still fits the message: a line that does not is left out and
 	// not counted as offered. Nil offers nothing.
 	LinkOffer func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phone string, fits func(line string) bool) (string, error)
+	// DueFor, when set, is the due date an invoice to a customer takes
+	// when it names none: a linked business's terms (business links L5),
+	// "" for none.
+	DueFor func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, customerKey string) (string, error)
+	// Reminded, when set, tells a linked business a message for it (an
+	// invoice's customer that is a linked business has no phone or email:
+	// it is told in its own business, L5), once the transaction commits.
+	Reminded func(ctx context.Context, tenant uuid.UUID, x Invoice, text string)
 	// OrderRequested issues what a storefront order's status page asked
 	// for (N3): the storefront checks the order and calls IssueForOrder.
 	// OrderReceived counts a payment the checker found into an order's
@@ -619,6 +627,11 @@ func (s *Invoices) CreateOnce(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	if err != nil {
 		return Invoice{}, err
 	}
+	if d.DueOn == "" && d.Customer.Key != "" && s.DueFor != nil {
+		if d.DueOn, err = s.DueFor(ctx, tx, tenant, d.Customer.Key); err != nil {
+			return Invoice{}, err
+		}
+	}
 	number, st, err := nextNumber(ctx, tx, tenant)
 	if err != nil {
 		return Invoice{}, err
@@ -990,6 +1003,8 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		return nil, invalid("no text")
 	}
 	out := map[string]any{}
+	var linked *Invoice
+	var linkedText string
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		x, err := s.Get(ctx, tx, tenant, idOrNumber)
 		if err != nil {
@@ -997,6 +1012,14 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		}
 		if x.SentAt == nil {
 			return fmt.Errorf("%w: invoice %s has not been sent", ErrState, x.Number)
+		}
+		// A linked business is told in its own business, on the bill, not
+		// by text message (business links L5).
+		if strings.HasPrefix(x.Customer.Key, "link:") && s.Reminded != nil {
+			text = strings.NewReplacer("{link}", "", "{number}", x.Number, "{due}", Naira(x.DueKobo), "{fee_line}", "").Replace(text)
+			linked, linkedText = &x, strings.Join(strings.Fields(strings.TrimSuffix(strings.TrimSpace(text), ":")), " ")
+			out["number"], out["queued"] = x.Number, []string{"link"}
+			return nil
 		}
 		if strings.Contains(text, "{link}") {
 			t, err := s.token(ctx, tx, tenant, &x)
@@ -1030,6 +1053,9 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		}
 		return nil
 	})
+	if err == nil && linked != nil {
+		s.Reminded(ctx, tenant, *linked, linkedText)
+	}
 	return out, err
 }
 

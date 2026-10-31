@@ -4463,6 +4463,50 @@
     "wa.mention.second": {
       "text": "{references} sun wuce iyakarka: wani mai shi ko admin zai aika su, daga shafin Suppliers.",
       "reviewed": false
+    },
+    "bill.reminder_title": {
+      "text": "{from}: tunatarwa game da {reference}",
+      "reviewed": false
+    },
+    "bill.reminder": {
+      "text": "*{from}* game da lissafi {reference} ({amount} ya rage): {note}",
+      "reviewed": false
+    },
+    "order.link.over_limit_note": {
+      "text": "Yana jira: wannan oda ya wuce bashin {limit} da {business} suke ba ka (kana bin {owed}). Biya lissafinka, ko ka roƙe su su karɓa.",
+      "reviewed": false
+    },
+    "order.link.over_limit_title": {
+      "text": "Oda {reference} yana jira: ya wuce iyakar bashinka",
+      "reviewed": false
+    },
+    "order.link.over_limit": {
+      "text": "Oda {reference} zuwa *{business}* ya wuce bashin {limit} da suke ba ka (kana bin {owed}). Zai jira har ka biya lissafinka ko su karɓa. Biya yanzu daga Bills.",
+      "reviewed": false
+    },
+    "order.link.within_limit_title": {
+      "text": "Oda {reference} yana cikin iyakar bashinka",
+      "reviewed": false
+    },
+    "order.link.within_limit": {
+      "text": "Oda {reference} zuwa *{business}* ba ya jira kuma: kana cikin iyakar bashinka.",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller_title": {
+      "text": "Odar {buyer} {reference} ta wuce iyakarsu",
+      "reviewed": false
+    },
+    "order.link.over_limit_seller": {
+      "text": "Oda {reference} daga *{buyer}* ya wuce {limit} da ka yarda (suna bin {owed}). Ba za a karɓe shi da kansa ba; za ka iya karɓa har yanzu.",
+      "reviewed": false
+    },
+    "money.daily.bills_due": {
+      "text": "Lissafin da suka kusa: {n}, {amount}. Aika *bills due* don ganin su.",
+      "reviewed": false
+    },
+    "money.daily.bills_due_overdue": {
+      "text": "Lissafin da suka kusa: {n}, {amount}, {overdue} sun wuce lokaci. Aika *bills due* don ganin su.",
+      "reviewed": false
     }
   }
 }

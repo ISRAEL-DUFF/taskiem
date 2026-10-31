@@ -1235,6 +1235,11 @@ func serve(ctx context.Context, args []string) error {
 			// Taskiem (business links).
 			e.orders.TradeNotify = srv.TradeNotify
 		}
+		if e.invoices != nil {
+			// A linked business's terms set its invoices' due dates, and a
+			// reminder reaches it in its own business (business links L5).
+			e.invoices.DueFor, e.invoices.Reminded = srv.InvoiceDueFor, srv.InvoiceReminded
+		}
 		srv.Forms = e.forms
 		if e.forms != nil {
 			srv.ReachHost = e.forms.FormHost

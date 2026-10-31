@@ -126,6 +126,10 @@ func (s *Server) sendMoneyDailyItem(ctx context.Context, it whatsapp.OutboxItem)
 	if line := s.lowDailyLine(ctx, l, it.Tenant); line != "" {
 		text += "\n\n" + line
 	}
+	// Linked suppliers' bills due soon or overdue (business links L5).
+	if line := s.billsDueDailyLine(ctx, l, it.Tenant); line != "" {
+		text += "\n\n" + line
+	}
 	// Each rider's day (dispatch D4), before the link.
 	if len(riderDays) > 0 {
 		text += "\n\n" + tr(l, "money.daily.riders")

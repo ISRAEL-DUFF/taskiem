@@ -157,6 +157,9 @@ type Order struct {
 	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// OverLimitAt: the order takes the buyer past the credit limit set for
+	// the link (L5); it waits for payment or the seller's own accept.
+	OverLimitAt *time.Time `json:"over_limit_at,omitempty"`
 }
 
 // Told is the business a step tells, and what happened, for its people
@@ -182,7 +185,7 @@ const orderCols = `s.id, s.reference, o.source_id, o.link_id, o.buyer_tenant, o.
 	COALESCE((SELECT t.invoice_at FROM trade_settings t WHERE t.tenant_id = o.tenant_id AND t.link_id = o.link_id), 'delivered'),
 	COALESCE((SELECT t.auto_accept FROM trade_settings t WHERE t.tenant_id = o.tenant_id AND t.link_id = o.link_id), false), o.placed_by_seller,
 	COALESCE(s.decided_by, ''), CASE WHEN s.status IN ('accepted', 'paid', 'dispatched', 'on_the_way', 'arrived', 'completed') THEN s.decided_at END,
-	o.ready_at, o.delivered_at, s.created_at, GREATEST(o.updated_at, s.updated_at)`
+	o.ready_at, o.delivered_at, s.created_at, GREATEST(o.updated_at, s.updated_at), o.over_limit_at`
 
 const orderFrom = ` FROM link_orders o JOIN storefront_orders s ON s.id = o.order_id`
 
@@ -193,7 +196,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	err := r.Scan(&o.ID, &o.OrderReference, &o.Purchase, &o.LinkID, &o.Buyer, &o.BuyerName, &o.Reference, &lines, &o.TotalKobo, &o.Note,
 		&o.OrderStatus, &ready, &o.Fulfilment, &change, &o.SellerNote, &o.CancelAskedAt, &short, &o.ShortAt, &o.ReceiptAt,
 		&o.ShortAgreedAt, &o.InvoiceID, &o.InvoiceAt, &o.AutoAccept, &o.PlacedBySeller,
-		&o.DecidedBy, &o.AcceptedAt, &o.ReadyAt, &o.DeliveredAt, &o.CreatedAt, &o.UpdatedAt)
+		&o.DecidedBy, &o.AcceptedAt, &o.ReadyAt, &o.DeliveredAt, &o.CreatedAt, &o.UpdatedAt, &o.OverLimitAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return o, fmt.Errorf("%w: no such order", ErrNotFound)
 	}
@@ -258,6 +261,11 @@ func GetOrderTx(ctx context.Context, tx pgx.Tx, ref string, lock bool) (Order, e
 type Trade struct {
 	InvoiceAt  string `json:"invoice_at"`
 	AutoAccept bool   `json:"auto_accept"`
+	// TermsDays is how long the buyer has to pay an invoice (its due date,
+	// unless the invoice names one); CreditLimitKobo what it may owe
+	// before its new orders wait (L5). Nil: none.
+	TermsDays       *int   `json:"terms_days"`
+	CreditLimitKobo *int64 `json:"credit_limit_kobo"`
 }
 
 // SetTradeTx sets how the business in scope trades with a link's orders.
@@ -268,17 +276,27 @@ func SetTradeTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, t Trade,
 	if _, err := GetTx(ctx, tx, link); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO trade_settings (tenant_id, link_id, invoice_at, auto_accept, updated_by) VALUES ($1, $2, $3, $4, $5)
+	if t.TermsDays != nil && (*t.TermsDays < 0 || *t.TermsDays > 365) {
+		return fmt.Errorf("%w: terms are 0 to 365 days", ErrInvalid)
+	}
+	if t.CreditLimitKobo != nil && (*t.CreditLimitKobo <= 0 || *t.CreditLimitKobo > 100000000000) {
+		return fmt.Errorf("%w: a credit limit is more than ₦0", ErrInvalid)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO trade_settings (tenant_id, link_id, invoice_at, auto_accept, terms_days, credit_limit_kobo, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (tenant_id, link_id) DO UPDATE SET invoice_at = EXCLUDED.invoice_at, auto_accept = EXCLUDED.auto_accept,
-			updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		tenant, link, t.InvoiceAt, t.AutoAccept, by)
-	return err
+			terms_days = EXCLUDED.terms_days, credit_limit_kobo = EXCLUDED.credit_limit_kobo, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+		tenant, link, t.InvoiceAt, t.AutoAccept, t.TermsDays, t.CreditLimitKobo, by); err != nil {
+		return err
+	}
+	// The buyer sees its terms as a mirror, written with its prices.
+	return dueTx(ctx, tx, tenant, "prices", link, 0)
 }
 
 // TradeTx is how the business in scope trades with a link's orders.
 func TradeTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (Trade, error) {
 	t := Trade{InvoiceAt: InvoiceAtDelivered}
-	err := tx.QueryRow(ctx, `SELECT invoice_at, auto_accept FROM trade_settings WHERE tenant_id = $1 AND link_id = $2`, tenant, link).Scan(&t.InvoiceAt, &t.AutoAccept)
+	err := tx.QueryRow(ctx, `SELECT invoice_at, auto_accept, terms_days, credit_limit_kobo FROM trade_settings WHERE tenant_id = $1 AND link_id = $2`, tenant, link).
+		Scan(&t.InvoiceAt, &t.AutoAccept, &t.TermsDays, &t.CreditLimitKobo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
@@ -649,6 +667,16 @@ func DecideTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, ref, step string
 		for _, l := range o.Lines {
 			if l.PriceKobo < 1 {
 				return o, "", fmt.Errorf("%w: %s has no price; change the order to give it yours", ErrInvalid, l.Item)
+			}
+		}
+		// Over the buyer's limit, the seller's accept is its own call (L5):
+		// the flag goes with it.
+		if o.OverLimitAt != nil {
+			if _, err := tx.Exec(ctx, `UPDATE link_orders SET over_limit_at = NULL WHERE order_id = $1`, o.ID); err != nil {
+				return o, "", err
+			}
+			if err := Undue(ctx, tx, seller, "credit", o.ID); err != nil {
+				return o, "", err
 			}
 		}
 		decide = DecideAccept
