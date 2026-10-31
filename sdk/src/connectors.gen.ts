@@ -104,6 +104,18 @@ export const anchor = {
   verify_account: (input: AnchorVerifyAccountInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "verify_account", input, extra),
 };
 
+// Bills (bills@1)
+export interface BillsFinishBillPaymentInput {
+  /** The bank's name for the account */
+  account_name?: Val<string>;
+  payment_id: Val<string>;
+  status: Val<"paid" | "failed" | "rejected">;
+}
+export const bills = {
+  /** Record a linked bill's outcome (idempotent_write) */
+  finish_bill_payment: (input: BillsFinishBillPaymentInput, extra?: ConnectorExtra): StepSpec => connector("bills@1", "finish_bill_payment", input, extra),
+};
+
 // Breet (breet@1)
 export interface BreetAddBankInput {
   account_number: Val<string>;
@@ -3733,6 +3745,7 @@ export const zoho_mail = {
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
   "anchor@1": "anchor",
+  "bills@1": "bills",
   "breet@1": "breet",
   "brevo@1": "brevo",
   "dojah@1": "dojah",
@@ -3785,6 +3798,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
 export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
+  "bills@1": ["finish_bill_payment"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
