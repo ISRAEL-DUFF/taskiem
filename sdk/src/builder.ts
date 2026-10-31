@@ -124,6 +124,10 @@ export function formTrigger(config: FormTriggerConfig): Trigger {
 export function invoiceTrigger(config: { event: "paid" | "payment" }): Trigger {
   return { type: "invoice", config };
 }
+/** Starts in prod on what happens between businesses linked on Taskiem (docs/spec/business-links.md §11), once per event; trigger.body has the link, the other business's name, the document's reference and the amounts. */
+export function linkTrigger(config: { event: "bill.received" | "bill.paid" | "order.received" | "order.delivered" | "thread.message" | "link.accepted" }): Trigger {
+  return { type: "link", config };
+}
 /** Any trigger type, for those without a helper. */
 export function trigger(type: Trigger["type"], config?: Values): Trigger {
   return config === undefined ? { type } : { type, config };

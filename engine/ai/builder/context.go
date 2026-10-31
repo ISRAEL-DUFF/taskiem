@@ -43,6 +43,37 @@ type Context struct {
 	// Schools says the business has the Schools area on (decision 0046):
 	// its students, fees, clearance and the daily close are schools@1's.
 	Schools bool `json:"schools,omitempty"`
+	// Linked are the businesses linked to this one on Taskiem (business
+	// links): their names and how it sees them (supplier, customer or
+	// both), for link@1 and the link trigger.
+	Linked []LinkedBusiness `json:"linked_businesses,omitempty"`
+}
+
+// LinkedBusiness is a business linked to this one on Taskiem.
+type LinkedBusiness struct {
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+// NamesLinked reports whether the goal names one of the linked
+// businesses (a word of the goal starts one of their names' words).
+func (c Context) NamesLinked(goal string) bool {
+	split := func(s string) []string {
+		return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	}
+	words := split(goal)
+	for _, l := range c.Linked {
+		name := split(l.Name)
+		if len(name) == 0 || len(name[0]) < 3 {
+			continue
+		}
+		for _, w := range words {
+			if w == name[0] || (len(w) >= 4 && strings.HasPrefix(name[0], w)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // StartableWorkflow is one of the business's workflows a subflow step may

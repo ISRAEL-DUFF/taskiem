@@ -1,0 +1,243 @@
+# The link platform connector (docs/spec/business-links.md §11): what
+# workflows do between linked businesses on Taskiem. It acts on the run's
+# own business only, and on the other side only through the link (every
+# step into the other business is audited in both). It needs no
+# connection. A workflow starts on a link event with the "link" trigger.
+manifest: connector/v1
+id: link
+version: 1.0.0
+name: Linked businesses
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  get_bill:
+    title: Read a bill from a linked supplier
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string, description: The supplier's invoice number }
+    output:
+      type: object
+      properties:
+        reference:   { type: string }
+        business:    { type: string, description: The supplier }
+        link:        { type: string }
+        status:      { type: string, enum: [open, paying, part_paid, paid, disputed, void] }
+        amount_kobo: { type: integer }
+        paid_kobo:   { type: integer }
+        due_kobo:    { type: integer }
+        due_on:      { type: string }
+        payable:     { type: boolean, description: Taskiem can pay it now (an account to pay into, no payment under way, not queried) }
+  list_bills:
+    title: List bills from linked suppliers still to pay
+    description: Bills still owed, oldest due first, with whether each can be paid from Taskiem now. A bill with a payment under way is left out.
+    class: read
+    input:
+      type: object
+      properties:
+        business:        { type: string, description: Only this supplier's (its name on Taskiem) }
+        due_within_days: { type: integer, minimum: 0, maximum: 365, description: Only those due within this many days, or overdue }
+        limit:           { type: integer, minimum: 1, maximum: 100, description: At most this many (default 50) }
+    output:
+      type: object
+      properties:
+        bills:
+          type: array
+          items:
+            type: object
+            properties:
+              reference:   { type: string }
+              business:    { type: string }
+              link:        { type: string }
+              status:      { type: string }
+              amount_kobo: { type: integer }
+              paid_kobo:   { type: integer }
+              due_kobo:    { type: integer }
+              due_on:      { type: string }
+              payable:     { type: boolean }
+        count:     { type: integer }
+        due_kobo:  { type: integer, description: What the bills listed add up to }
+  pay_bill:
+    title: Pay a bill from a linked supplier
+    description: Starts paying the bill from the business's own payments account, through its bill payments (set up on the Bills page), where the approver approves it seeing the name on the supplier's account. The output says it is waiting for approval; the bill is paid when the bank confirms. A bill already being paid is refused.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference:   { type: string, description: The supplier's invoice number }
+        amount_kobo: { type: integer, minimum: 100, description: A part payment, where the supplier takes parts; what is left when left out }
+    output:
+      type: object
+      properties:
+        payment_id:  { type: string }
+        run_id:      { type: string, description: The payment's own run }
+        reference:   { type: string }
+        amount_kobo: { type: integer }
+        status:      { type: string, enum: [approving] }
+  get_order:
+    title: Read an order between linked businesses
+    description: An order a linked customer placed with us (by its reference), or one we placed with a linked supplier.
+    class: read
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference:   { type: string }
+        side:        { type: string, enum: [seller, buyer], description: seller when a linked customer ordered from us }
+        business:    { type: string, description: The other business }
+        link:        { type: string }
+        status:      { type: string }
+        total_kobo:  { type: integer }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              item:       { type: string }
+              unit:       { type: string }
+              quantity:   { type: integer }
+              price_kobo: { type: integer }
+        over_limit:  { type: boolean, description: For an order to us, it takes the customer past the credit limit we set }
+  order_step:
+    title: Move an order a linked customer placed with us
+    description: Accept, decline, mark ready or dispatched. Accepting an order over the customer's credit limit is refused; a person accepts it on the order's page. The invoice follows the link's settings (at acceptance or on delivery).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference, step]
+      properties:
+        reference: { type: string }
+        step:      { type: string, enum: [accept, decline, ready, dispatched] }
+        note:      { type: string, maxLength: 300, description: Said to the customer with the step }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        status:    { type: string }
+  price_of:
+    title: Price of an item on a linked supplier's list
+    class: read
+    input:
+      type: object
+      required: [business, item]
+      properties:
+        business: { type: string, description: The supplier's name on Taskiem }
+        item:     { type: string, description: The item's name, theirs or the business's own item linked to it }
+    output:
+      type: object
+      properties:
+        item:         { type: string }
+        item_id:      { type: string, description: The supplier's item }
+        unit:         { type: string }
+        price_kobo:   { type: integer }
+        min_quantity: { type: integer }
+        available:    { type: boolean }
+  low_orders:
+    title: What the low list would order from linked suppliers
+    description: For each linked supplier sharing a price list, the business's low items linked to its list, for enough to reach each item's order-up-to level, at its prices. Nothing is drafted; an item already on an open order is left out. not_listed names low items no linked supplier lists.
+    class: read
+    input:
+      type: object
+      properties:
+        business: { type: string, description: Only this supplier }
+    output:
+      type: object
+      properties:
+        orders:
+          type: array
+          items:
+            type: object
+            properties:
+              business:   { type: string }
+              link:       { type: string }
+              total_kobo: { type: integer }
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    item:       { type: string, description: The supplier's item }
+                    name:       { type: string }
+                    own_item:   { type: string, description: The business's own item }
+                    unit:       { type: string }
+                    quantity:   { type: integer }
+                    price_kobo: { type: integer }
+        count:      { type: integer }
+        not_listed: { type: array, items: { type: string } }
+  place_order:
+    title: Order from a linked supplier
+    description: A purchase order to a linked supplier at the prices on its list, sent at once (it reaches the supplier as an order). An order above the business's own limit is drafted and left for a person to send. Items are the supplier's items (item_id from price_of or low_orders), or names on its list.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [business, items]
+      properties:
+        business: { type: string, description: The supplier's name on Taskiem, or the link's id }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [item, quantity]
+            properties:
+              item:     { type: string }
+              quantity: { type: integer, minimum: 1 }
+        note: { type: string, maxLength: 300 }
+    output:
+      type: object
+      properties:
+        reference:  { type: string }
+        business:   { type: string }
+        status:     { type: string, enum: [sent, drafted] }
+        total_kobo: { type: integer }
+        reason:     { type: string, description: Why a drafted order was not sent }
+  reply:
+    title: Write to a linked business
+    description: A message in the conversation with a linked business, from the business (no person's name). With a reference, it answers that document's card (a bill, an invoice or an order).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [text]
+      properties:
+        business:  { type: string, description: Its name on Taskiem, or the link's id; with a reference, the document's business is used }
+        reference: { type: string, description: A document whose card the message answers }
+        text:      { type: string, minLength: 1, maxLength: 2000 }
+    output:
+      type: object
+      properties:
+        message_id: { type: string }
+        link:       { type: string }

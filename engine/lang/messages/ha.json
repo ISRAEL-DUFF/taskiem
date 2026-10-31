@@ -4507,6 +4507,30 @@
     "money.daily.bills_due_overdue": {
       "text": "Lissafin da suka kusa: {n}, {amount}, {overdue} sun wuce lokaci. Aika *bills due* don ganin su.",
       "reviewed": false
+    },
+    "wd.trigger.link_bill_received": {
+      "text": "Lokacin da mai kawo kaya da ka haɗu da shi ya aiko maka da lissafi",
+      "reviewed": false
+    },
+    "wd.trigger.link_bill_paid": {
+      "text": "Lokacin da aka biya ɗaya daga cikin lissafinka",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_received": {
+      "text": "Lokacin da kasuwancin da ka haɗu da shi ya aiko maka da oda",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_delivered": {
+      "text": "Lokacin da mai kawo kaya da ka haɗu da shi ya kawo odarka",
+      "reviewed": false
+    },
+    "wd.trigger.link_thread_message": {
+      "text": "Lokacin da kasuwancin da ka haɗu da shi ya rubuta maka",
+      "reviewed": false
+    },
+    "wd.trigger.link_link_accepted": {
+      "text": "Lokacin da wani kasuwanci ya haɗu da kai",
+      "reviewed": false
     }
   }
 }

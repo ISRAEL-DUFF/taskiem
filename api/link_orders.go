@@ -229,6 +229,9 @@ func (s *Server) acceptedByBuyer(ctx context.Context, told *links.Told) {
 }
 
 func actorOf(p *Principal) links.Actor {
+	if p.Run != uuid.Nil {
+		return links.Actor{Type: "system", ID: p.Actor()}
+	}
 	t, id, _ := strings.Cut(p.Actor(), ":")
 	if id == "" {
 		return links.Actor{Type: "user", ID: t}
@@ -551,6 +554,8 @@ func (s *Server) LinkOrdersTick(ctx context.Context) (int, error) {
 			})
 		case "credit":
 			err = s.creditAgain(ctx, d.Tenant, d.ID)
+		case "start":
+			err = s.startLinkRun(ctx, d.Tenant, d.ID)
 		}
 		if err != nil {
 			s.Logger.Warn("links: linked-order work", "kind", d.Kind, "tenant", d.Tenant, "id", d.ID, "err", err)

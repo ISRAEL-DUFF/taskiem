@@ -608,6 +608,11 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
+	// For the seller's workflows (L6): a linked buyer's order.
+	if err := QueueEventTx(ctx, tx, seller, EventOrderReceived, order.String(), map[string]any{"link": *p.Link, "business": name,
+		"reference": p.Reference, "total_kobo": linesTotal(lines), "lines": lines, "note": p.Note}); err != nil {
+		return nil, err
+	}
 	return &Told{Tenant: seller, Event: "ordered", Reference: p.Reference, From: name, Order: order, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
 }
 
@@ -923,6 +928,15 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 	}
 	if now == OrderDelivered && p.DeliveredAt == nil {
 		if err := dueTx(ctx, tx, buyer, "receipt", p.ID, ReceiptAfter); err != nil {
+			return nil, err
+		}
+		// For the buyer's workflows (L6): its order delivered.
+		var supplier string
+		if err := tx.QueryRow(ctx, `SELECT s.name FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1`, p.ID).Scan(&supplier); err != nil {
+			return nil, err
+		}
+		if err := QueueEventTx(ctx, tx, buyer, EventOrderDelivered, p.ID.String(), map[string]any{"link": o.LinkID, "business": supplier,
+			"reference": p.Reference, "purchase_id": p.ID, "total_kobo": total, "lines": o.Lines}); err != nil {
 			return nil, err
 		}
 	}

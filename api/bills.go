@@ -600,11 +600,27 @@ func (s *Server) payBill(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	p := principalFrom(r.Context())
+	pay, err := s.startBillPay(r.Context(), p.TenantID, chi.URLParam(r, "id"), in.AmountKobo, p.ActorType()+":"+p.Actor(), p.Actor(),
+		func(tx pgx.Tx, b links.Bill, pay links.BillPayment) error {
+			return auditTx(r, tx, "bill.pay", b.Reference, map[string]any{"amount_kobo": pay.AmountKobo, "payment": pay.ID})
+		})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, billPayOut{Payment: pay, RunID: *pay.RunID})
+}
+
+// startBillPay starts a payment of a bill (by id or reference) from the
+// business's own payments account, through its pay-linked-bill workflow,
+// whose approver approves it: for Pay, and for a workflow's link@1
+// pay_bill. amount 0 pays what is left. by is who started it.
+func (s *Server) startBillPay(ctx context.Context, tenant uuid.UUID, bill string, amount int64, by, startedBy string,
+	audit func(tx pgx.Tx, b links.Bill, pay links.BillPayment) error) (links.BillPayment, error) {
 	var st billPaySettings
 	var b links.Bill
 	var version int
-	err := s.tx(r, func(tx pgx.Tx) error {
-		ctx := r.Context()
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if err := links.SettleStalePaymentsTx(ctx, tx); err != nil {
 			return err
 		}
@@ -622,56 +638,50 @@ func (s *Server) payBill(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		b, err = links.GetBillTx(ctx, tx, chi.URLParam(r, "id"))
+		b, err = links.GetBillTx(ctx, tx, bill)
 		return err
 	})
 	if err != nil {
-		s.fail(w, r, billErr(err))
-		return
+		return links.BillPayment{}, billErr(err)
 	}
 	if b.PayAccountNumber == "" || b.PayBankName == "" {
-		s.fail(w, r, fmt.Errorf("%w: %s has not given your business an account number to pay into; pay on the invoice's page instead", errConflict, b.SupplierName))
-		return
+		return links.BillPayment{}, fmt.Errorf("%w: %s has not given your business an account number to pay into; pay on the invoice's page instead", errConflict, b.SupplierName)
 	}
-	code, err := s.billBankCode(r.Context(), p.TenantID, st.Connection, b.PayBankName)
+	code, err := s.billBankCode(ctx, tenant, st.Connection, b.PayBankName)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return links.BillPayment{}, err
 	}
-	if in.AmountKobo == 0 {
-		in.AmountKobo = b.DueKobo
+	if amount == 0 {
+		amount = b.DueKobo
 	}
 	var pay links.BillPayment
-	if err := s.tx(r, func(tx pgx.Tx) error {
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
-		if pay, err = links.StartBillPaymentTx(r.Context(), tx, p.TenantID, links.PayIn{Bill: b.ID, AmountKobo: in.AmountKobo, Connection: st.Connection,
-			BankCode: code, AccountNumber: b.PayAccountNumber, By: p.ActorType() + ":" + p.Actor()}); err != nil {
+		if pay, err = links.StartBillPaymentTx(ctx, tx, tenant, links.PayIn{Bill: b.ID, AmountKobo: amount, Connection: st.Connection,
+			BankCode: code, AccountNumber: b.PayAccountNumber, By: by}); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "bill.pay", b.Reference, map[string]any{"amount_kobo": in.AmountKobo, "payment": pay.ID})
+		return audit(tx, b, pay)
 	}); err != nil {
-		s.fail(w, r, billErr(err))
-		return
+		return pay, billErr(err)
 	}
-	ref, _, err := s.Store.StartRun(r.Context(), runtime.StartRequest{TenantID: p.TenantID, WorkflowID: *st.WorkflowID, Version: version, Environment: "prod",
+	ref, _, err := s.Store.StartRun(ctx, runtime.StartRequest{TenantID: tenant, WorkflowID: *st.WorkflowID, Version: version, Environment: "prod",
 		Trigger: map[string]any{"type": "manual", "body": map[string]any{"payment_id": pay.ID.String(), "supplier": b.SupplierName, "reference": b.Reference,
 			"token": pay.Token, "bank_code": code, "account_number": b.PayAccountNumber, "amount_kobo": pay.AmountKobo}},
-		StartedBy: p.Actor(), TriggerID: "bills/pay", DedupKey: "bill-payment:" + pay.ID.String()})
+		StartedBy: startedBy, TriggerID: "bills/pay", DedupKey: "bill-payment:" + pay.ID.String()})
 	if err != nil {
 		// Nothing will pay it: the bill is not left paying.
-		_ = s.tx(r, func(tx pgx.Tx) error {
-			_, ferr := links.FinishBillPaymentTx(r.Context(), tx, pay.ID, "failed", "")
+		_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, ferr := links.FinishBillPaymentTx(ctx, tx, pay.ID, "failed", "")
 			return ferr
 		})
-		s.fail(w, r, err)
-		return
+		return pay, err
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error { return links.SetPaymentRunTx(r.Context(), tx, pay.ID, ref.ID) }); err != nil {
-		s.fail(w, r, err)
-		return
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error { return links.SetPaymentRunTx(ctx, tx, pay.ID, ref.ID) }); err != nil {
+		return pay, err
 	}
 	pay.RunID = &ref.ID
-	writeJSON(w, http.StatusAccepted, billPayOut{Payment: pay, RunID: ref.ID})
+	return pay, nil
 }
 
 // billBankCode is the code of the bank named, among the banks the

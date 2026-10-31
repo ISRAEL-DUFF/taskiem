@@ -4507,6 +4507,30 @@
     "money.daily.bills_due_overdue": {
       "text": "Owo-ipe ti o ku: {n}, {amount}, {overdue} ti kọja ọjọ. Fi *bills due* ranṣẹ lati ri wọn.",
       "reviewed": false
+    },
+    "wd.trigger.link_bill_received": {
+      "text": "Nigbati olupese ti o sopọ fi owo-ipe ranṣẹ si ọ",
+      "reviewed": false
+    },
+    "wd.trigger.link_bill_paid": {
+      "text": "Nigbati a ba san ọkan ninu owo-ipe rẹ lati ọdọ olupese ti o sopọ",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_received": {
+      "text": "Nigbati iṣowo ti o sopọ fi aṣẹ ranṣẹ si ọ",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_delivered": {
+      "text": "Nigbati olupese ti o sopọ ba fi aṣẹ rẹ jiṣẹ",
+      "reviewed": false
+    },
+    "wd.trigger.link_thread_message": {
+      "text": "Nigbati iṣowo ti o sopọ kọwe si ọ",
+      "reviewed": false
+    },
+    "wd.trigger.link_link_accepted": {
+      "text": "Nigbati iṣowo kan ba sopọ mọ ọ",
+      "reviewed": false
     }
   }
 }

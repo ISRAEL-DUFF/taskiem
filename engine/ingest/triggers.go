@@ -180,6 +180,13 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 			return fmt.Errorf("an invoice trigger's event is paid or payment")
 		}
 		return nil
+	case "link":
+		// Business links L6: what happens between linked businesses.
+		switch str(c, "event") {
+		case "bill.received", "bill.paid", "order.received", "order.delivered", "thread.message", "link.accepted":
+			return nil
+		}
+		return fmt.Errorf("a link trigger's event is bill.received, bill.paid, order.received, order.delivered, thread.message or link.accepted")
 	case "form":
 		// The pages, conditions and fields are checked by wd.Validate.
 		_, err := def.FormTriggerConfig()
@@ -312,6 +319,11 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 			// other environments' rows say what is deployed there.
 			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, events)
 				VALUES ($1, $2, $3, $4, $5, 'invoice', $6)`, id, tenant, wf, version, env, []string{str(c, "event")})
+		case "link":
+			// Any number of workflows may start on a link event; events
+			// start runs in prod only, as invoices' do.
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, events)
+				VALUES ($1, $2, $3, $4, $5, 'link', $6)`, id, tenant, wf, version, env, []string{str(c, "event")})
 		case "form":
 			// The form is live at its endpoint's public id, which stays
 			// the same across versions; a paused or closed form stays so.

@@ -397,13 +397,28 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	if err != nil {
 		return m, uuid.Nil, err
 	}
+	fromBusiness, err := businessName(ctx, tx, tenant)
+	if err != nil {
+		return m, uuid.Nil, err
+	}
 	detail, _ := json.Marshal(map[string]any{"message": pair})
 	other, err := EnterTx(ctx, tx, link, "link.message", detail, by)
 	if err != nil {
 		return m, uuid.Nil, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview, mentions)
-		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirFile), o.Forwarded, preview, theirs)
+	if _, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview, mentions)
+		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirFile), o.Forwarded, preview, theirs); err != nil {
+		return m, other, err
+	}
+	// For the other side's workflows (L6): a message from a linked business.
+	ev := map[string]any{"link": link, "business": fromBusiness, "text": body, "sender": name, "message_id": pair}
+	if m.Reply != nil && m.Reply.Card != nil {
+		ev["about"] = map[string]any{"doc": m.Reply.Card.Doc, "reference": m.Reply.Card.Reference}
+	}
+	if ourFile != nil {
+		ev["attachment"] = ourFile.Kind
+	}
+	err = QueueEventTx(ctx, tx, other, EventThreadMessage, pair.String(), ev)
 	return m, other, err
 }
 

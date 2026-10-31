@@ -4507,6 +4507,30 @@
     "money.daily.bills_due_overdue": {
       "text": "Bills wey don due: {n}, {amount}, {overdue} don pass date. Send *bills due* to see dem.",
       "reviewed": false
+    },
+    "wd.trigger.link_bill_received": {
+      "text": "When supplier wey you link send you bill",
+      "reviewed": false
+    },
+    "wd.trigger.link_bill_paid": {
+      "text": "When dem pay one of your bills from supplier wey you link",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_received": {
+      "text": "When business wey you link send you order",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_delivered": {
+      "text": "When supplier wey you link deliver your order",
+      "reviewed": false
+    },
+    "wd.trigger.link_thread_message": {
+      "text": "When business wey you link write you",
+      "reviewed": false
+    },
+    "wd.trigger.link_link_accepted": {
+      "text": "When business link with you",
+      "reviewed": false
     }
   }
 }

@@ -362,6 +362,11 @@ func TestMatch(t *testing.T) {
 		"order from my supplier when rice is low, after I approve":           "reorder-from-supplier",
 		"remind me every Saturday to count the shelf":                        "stock-count-reminder",
 		"send me the takings from the sales I record in chat each night":     "sales-day-total",
+		"pay bills from my linked suppliers every Friday after I approve":    "pay-bills-on-approval",
+		"reorder from my suppliers on Taskiem":                               "reorder-from-linked-suppliers",
+		"tell me when a linked customer orders":                              "tell-me-when-a-linked-customer-orders",
+		"accept and dispatch orders from linked customers without a tap":     "linked-order-to-delivery",
+		"pay Dangote's bills every Friday after I approve on Taskiem":        "pay-bills-on-approval",
 	} {
 		m := lib.Match(goal, 3)
 		if len(m) == 0 || m[0].Template.ID != want {

@@ -576,7 +576,13 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 	offered := []string{}
 	var tpls []map[string]any
 	if b.Templates != nil && len(req.Base) == 0 {
-		for i, m := range b.Templates.Match(req.Goal, 2) {
+		goal := req.Goal
+		if req.Context.NamesLinked(goal) {
+			// A business linked on Taskiem, named: the link templates
+			// (business links L6) are offered as for "on Taskiem".
+			goal += " on Taskiem"
+		}
+		for i, m := range b.Templates.Match(goal, 2) {
 			tc := TemplateContext(m.Template)
 			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
 			tpls = append(tpls, tc)

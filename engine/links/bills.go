@@ -96,6 +96,12 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 		}
 		return &s
 	}
+	// Paid already, before this mirror (a bill.paid is said once).
+	var wasPaid bool
+	if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT paid_kobo >= amount_kobo AND NOT voided FROM bills WHERE tenant_id = $1 AND link_id = $2 AND source_id = $3), false)`,
+		buyer, m.Link, m.Source).Scan(&wasPaid); err != nil {
+		return false, err
+	}
 	var inserted bool
 	err := tx.QueryRow(ctx, `INSERT INTO bills (id, tenant_id, link_id, supplier_tenant, supplier_name, source_id, reference, lines, amount_kobo, paid_kobo,
 			due_on, voided, allow_part_payments, pay_account_number, pay_bank_name, pay_link)
@@ -107,7 +113,23 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 		RETURNING xmax = 0`,
 		uuid.Must(uuid.NewV7()), buyer, m.Link, m.Supplier, m.SupplierName, m.Source, m.Reference, m.Lines, m.AmountKobo, m.PaidKobo,
 		due, m.Voided, m.AllowParts, null(m.PayAccountNumber), null(m.PayBankName), null(m.PayLink)).Scan(&inserted)
-	return inserted, err
+	if err != nil || m.Voided {
+		return inserted, err
+	}
+	// For workflows (L6): a bill received, a bill paid.
+	body := map[string]any{"link": m.Link, "business": m.SupplierName, "reference": m.Reference, "amount_kobo": m.AmountKobo,
+		"paid_kobo": m.PaidKobo, "due_kobo": max(m.AmountKobo-m.PaidKobo, 0), "due_on": m.DueOn}
+	if inserted {
+		if err := QueueEventTx(ctx, tx, buyer, EventBillReceived, m.Source.String(), body); err != nil {
+			return inserted, err
+		}
+	}
+	if !wasPaid && m.PaidKobo >= m.AmountKobo {
+		if err := QueueEventTx(ctx, tx, buyer, EventBillPaid, m.Source.String(), body); err != nil {
+			return inserted, err
+		}
+	}
+	return inserted, nil
 }
 
 const billCols = `id, link_id, supplier_tenant, supplier_name, reference, lines, amount_kobo, paid_kobo, COALESCE(to_char(due_on, 'YYYY-MM-DD'), ''),

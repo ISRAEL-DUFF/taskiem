@@ -5633,6 +5633,36 @@
       "text": "Bills due: {n}, {amount}, {overdue} overdue. Send *bills due* to see them.",
       "reviewed": true,
       "context": "The morning summary: bills due, some overdue"
+    },
+    "wd.trigger.link_bill_received": {
+      "text": "When a linked supplier sends you a bill",
+      "reviewed": true,
+      "context": "A workflow starts when a linked supplier's invoice becomes a bill"
+    },
+    "wd.trigger.link_bill_paid": {
+      "text": "When one of your bills from a linked supplier is paid",
+      "reviewed": true,
+      "context": "A workflow starts when a bill is paid in full"
+    },
+    "wd.trigger.link_order_received": {
+      "text": "When a linked business sends you an order",
+      "reviewed": true,
+      "context": "A workflow starts when a linked buyer's order arrives"
+    },
+    "wd.trigger.link_order_delivered": {
+      "text": "When a linked supplier delivers your order",
+      "reviewed": true,
+      "context": "A workflow starts when a linked supplier delivers"
+    },
+    "wd.trigger.link_thread_message": {
+      "text": "When a linked business writes to you",
+      "reviewed": true,
+      "context": "A workflow starts on a message from a linked business"
+    },
+    "wd.trigger.link_link_accepted": {
+      "text": "When a business links with you",
+      "reviewed": true,
+      "context": "A workflow starts when a link becomes active"
     }
   }
 }

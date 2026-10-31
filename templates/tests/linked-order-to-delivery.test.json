@@ -1,0 +1,288 @@
+{
+  "schema": "wd-test/v1",
+  "template": "linked-order-to-delivery",
+  "params": {},
+  "cases": [
+    {
+      "name": "within the amount and the limit: accepted and dispatched",
+      "trigger": {
+        "type": "link",
+        "event": "order.received",
+        "body": {
+          "event": "order.received",
+          "link": "l1",
+          "business": "Ada's Kitchen",
+          "reference": "P-7QX4KD",
+          "total_kobo": 45000000,
+          "note": "",
+          "lines": [
+            {
+              "item": "Rice 50kg",
+              "unit": "bag",
+              "quantity": 10,
+              "price_kobo": 4500000
+            }
+          ]
+        }
+      },
+      "mocks": {
+        "order": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "side": "seller",
+            "business": "Ada's Kitchen",
+            "link": "l1",
+            "status": "received",
+            "total_kobo": 45000000,
+            "lines": [],
+            "over_limit": false
+          }
+        },
+        "accept": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "status": "accepted"
+          }
+        },
+        "dispatch": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "status": "dispatched"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "held": "skipped"
+        },
+        "inputs": {
+          "accept": {
+            "reference": "P-7QX4KD",
+            "step": "accept"
+          },
+          "dispatch": {
+            "reference": "P-7QX4KD",
+            "step": "dispatched"
+          }
+        }
+      }
+    },
+    {
+      "name": "above the amount: it waits, and the owner is told",
+      "params": {
+        "max_naira": 100000
+      },
+      "trigger": {
+        "type": "link",
+        "event": "order.received",
+        "body": {
+          "event": "order.received",
+          "link": "l1",
+          "business": "Ada's Kitchen",
+          "reference": "P-7QX4KD",
+          "total_kobo": 45000000,
+          "note": "",
+          "lines": [
+            {
+              "item": "Rice 50kg",
+              "unit": "bag",
+              "quantity": 10,
+              "price_kobo": 4500000
+            }
+          ]
+        }
+      },
+      "mocks": {
+        "order": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "side": "seller",
+            "business": "Ada's Kitchen",
+            "link": "l1",
+            "status": "received",
+            "total_kobo": 45000000,
+            "lines": [],
+            "over_limit": false
+          }
+        },
+        "held": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "accept": "skipped",
+          "dispatch": "skipped"
+        },
+        "inputs": {
+          "held": {
+            "message": "Order P-7QX4KD from Ada's Kitchen (NGN 450000) waits for you on the Trade orders page: it is above the amount accepted by itself."
+          }
+        }
+      }
+    },
+    {
+      "name": "over the customer's credit limit: it waits, saying why",
+      "trigger": {
+        "type": "link",
+        "event": "order.received",
+        "body": {
+          "event": "order.received",
+          "link": "l1",
+          "business": "Ada's Kitchen",
+          "reference": "P-7QX4KD",
+          "total_kobo": 45000000,
+          "note": "",
+          "lines": [
+            {
+              "item": "Rice 50kg",
+              "unit": "bag",
+              "quantity": 10,
+              "price_kobo": 4500000
+            }
+          ]
+        }
+      },
+      "mocks": {
+        "order": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "side": "seller",
+            "business": "Ada's Kitchen",
+            "link": "l1",
+            "status": "received",
+            "total_kobo": 45000000,
+            "lines": [],
+            "over_limit": true
+          }
+        },
+        "held": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "accept": "skipped",
+          "dispatch": "skipped"
+        },
+        "inputs": {
+          "held": {
+            "message": "Order P-7QX4KD from Ada's Kitchen (NGN 450000) waits for you on the Trade orders page: it takes them past the credit limit you set."
+          }
+        }
+      }
+    },
+    {
+      "name": "accepting refused: it waits, saying why",
+      "trigger": {
+        "type": "link",
+        "event": "order.received",
+        "body": {
+          "event": "order.received",
+          "link": "l1",
+          "business": "Ada's Kitchen",
+          "reference": "P-7QX4KD",
+          "total_kobo": 45000000,
+          "note": "",
+          "lines": [
+            {
+              "item": "Rice 50kg",
+              "unit": "bag",
+              "quantity": 10,
+              "price_kobo": 4500000
+            }
+          ]
+        }
+      },
+      "mocks": {
+        "order": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "side": "seller",
+            "business": "Ada's Kitchen",
+            "link": "l1",
+            "status": "received",
+            "total_kobo": 45000000,
+            "lines": [],
+            "over_limit": false
+          }
+        },
+        "accept": {
+          "error": {
+            "kind": "fatal",
+            "message": "not enough Rice in stock"
+          }
+        },
+        "refused": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "dispatch": "skipped",
+          "held": "skipped"
+        },
+        "inputs": {
+          "refused": {
+            "message": "Order P-7QX4KD from Ada's Kitchen waits for you on the Trade orders page: not enough Rice in stock"
+          }
+        }
+      }
+    },
+    {
+      "name": "accepted already by the link's own setting: nothing to do",
+      "trigger": {
+        "type": "link",
+        "event": "order.received",
+        "body": {
+          "event": "order.received",
+          "link": "l1",
+          "business": "Ada's Kitchen",
+          "reference": "P-7QX4KD",
+          "total_kobo": 45000000,
+          "note": "",
+          "lines": [
+            {
+              "item": "Rice 50kg",
+              "unit": "bag",
+              "quantity": 10,
+              "price_kobo": 4500000
+            }
+          ]
+        }
+      },
+      "mocks": {
+        "order": {
+          "output": {
+            "reference": "P-7QX4KD",
+            "side": "seller",
+            "business": "Ada's Kitchen",
+            "link": "l1",
+            "status": "accepted",
+            "total_kobo": 45000000,
+            "lines": [],
+            "over_limit": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "accept": "skipped",
+          "dispatch": "skipped",
+          "held": "skipped"
+        }
+      }
+    }
+  ]
+}

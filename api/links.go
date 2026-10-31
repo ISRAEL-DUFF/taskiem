@@ -525,6 +525,29 @@ func (s *Server) tellLinkAnswered(ctx context.Context, other, id uuid.UUID, answ
 	}
 	if answer == links.Accept {
 		s.background(ctx, "link accounts", func(ctx context.Context) { s.issueLinkAccounts(ctx, id, other) })
+		// For both sides' workflows (L6): a link accepted.
+		s.background(ctx, "link accepted", func(ctx context.Context) {
+			if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{other}, func(tx pgx.Tx) error {
+				l, err := links.GetTx(ctx, tx, id)
+				if err != nil {
+					return err
+				}
+				if err := links.QueueEventTx(ctx, tx, other, links.EventLinkAccepted, id.String(), map[string]any{"link": id, "business": l.Name, "role": l.Role}); err != nil {
+					return err
+				}
+				accepter, err := links.EnterTx(ctx, tx, id, "link.event", nil, links.Actor{Type: "system", ID: "link-events"})
+				if err != nil {
+					return err
+				}
+				mine, err := links.GetTx(ctx, tx, id)
+				if err != nil {
+					return err
+				}
+				return links.QueueEventTx(ctx, tx, accepter, links.EventLinkAccepted, id.String(), map[string]any{"link": id, "business": mine.Name, "role": mine.Role})
+			}); err != nil {
+				s.Logger.Warn("links: a link accepted, for workflows", "tenant", other, "err", err)
+			}
+		})
 	}
 	s.background(ctx, "link answered", func(ctx context.Context) {
 		s.tellLink(ctx, other, func(l links.Link) bool { return l.ID == id }, func(l lang.Tag, link links.Link, org string) (string, string) {

@@ -29,6 +29,20 @@ const service = (ref: unknown) => {
   return id ? id.charAt(0).toUpperCase() + id.slice(1) : "a service";
 };
 
+/** A link trigger's events (business links), in plain words. */
+export const LINK_EVENTS: { value: string; label: string }[] = [
+  { value: "order.received", label: "A linked customer sends an order" },
+  { value: "order.delivered", label: "A linked supplier delivers your order" },
+  { value: "bill.received", label: "A linked supplier sends a bill" },
+  { value: "bill.paid", label: "A bill from a linked supplier is paid" },
+  { value: "thread.message", label: "A linked business writes to you" },
+  { value: "link.accepted", label: "A business links with you" },
+];
+
+function linkEventWords(event: unknown): string {
+  return LINK_EVENTS.find((e) => e.value === event)?.label ?? "A linked business does something";
+}
+
 /** What starts a workflow, as its list and Home say it. */
 export function triggerWords(t: Trigger | null | undefined): string {
   if (!t) return "Not set up yet";
@@ -46,6 +60,8 @@ export function triggerWords(t: Trigger | null | undefined): string {
       return "Someone fills in a form";
     case "invoice":
       return c.event === "payment" ? "A payment is counted towards an invoice" : "An invoice is paid";
+    case "link":
+      return linkEventWords(c.event);
     case "whatsapp":
       return "A WhatsApp message comes in";
     case "ussd":

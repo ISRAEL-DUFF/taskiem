@@ -296,3 +296,17 @@ describe("invoice trigger", () => {
     expect(sdk.generate(evaluate(code))).toBe(code);
   });
 });
+
+describe("link trigger", () => {
+  it("builds a workflow that starts on a linked customer's order and prints back to it", () => {
+    const def = sdk
+      .workflow({ id: "wf_linked", name: "linked", trigger: sdk.linkTrigger({ event: "order.received" }) })
+      .step("accept", sdk.connector("link@1", "order_step", { reference: "=trigger.body.reference", step: "accept" }))
+      .build();
+    expect(def.trigger).toEqual({ type: "link", config: { event: "order.received" } });
+    const code = sdk.generate(def);
+    expect(code).toContain("linkTrigger(");
+    expect(evaluate(code)).toEqual(def);
+    expect(sdk.generate(evaluate(code))).toBe(code);
+  });
+});

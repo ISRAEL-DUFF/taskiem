@@ -1,0 +1,28 @@
+{
+  "id": "tell-me-when-a-linked-customer-orders",
+  "title": "Tell me when a linked customer orders",
+  "summary": "When a business linked to you on Taskiem sends you an order, you hear at once, with what they ordered and the total.",
+  "description": "Starts when a customer linked to you on Taskiem sends an order: you (or everyone with the role you choose) get a message on WhatsApp or Telegram with who ordered, the order's reference, the items and the total. Accept it from the Trade orders page, or set it to be accepted by itself with the linked-order-to-delivery template.",
+  "category": "operations",
+  "tags": ["taskiem trade"],
+  "keywords": ["taskiem trade"],
+  "requires": ["linked customer", "linked customers", "taskiem"],
+  "connectors": ["notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "role", "type": "string", "title": "Who hears it", "description": "The role told of each order.", "required": false, "default": "owner", "example": "owner", "pattern": "^[a-z][a-z0-9_]{0,39}$", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_tellLinkedCustomerOrders",
+    "version": 1,
+    "name": "Tell me when a linked customer orders",
+    "description": "Tells the business of each order from a linked customer.",
+    "trigger": {"type": "link", "config": {"event": "order.received"}},
+    "steps": [
+      {"id": "tell", "type": "connector", "name": "Tell the team about the order", "connector": "notify@1", "action": "tell",
+       "input": {"to": "role", "role": "{{role}}", "title": "=trigger.body.business + ' ordered'",
+        "message": "=trigger.body.business + ' sent order ' + trigger.body.reference + ': ' + trigger.body.lines.map(l, string(int(l.quantity)) + ' ' + l.item).join(', ') + ', NGN ' + string(double(trigger.body.total_kobo) / 100.0) + '. See it on the Trade orders page.'"}}
+    ]
+  }
+}

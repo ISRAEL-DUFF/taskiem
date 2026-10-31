@@ -30,6 +30,7 @@ import (
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
+	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
@@ -677,6 +678,9 @@ type engine struct {
 	// orders are the storefront's orders (S3); nil without the public
 	// host's key.
 	orders *storefront.Orders
+	// linkOps does link@1's actions (business links L6): the api role's
+	// server, or a worker's own when the api role runs elsewhere.
+	linkOps *linkconn.Late
 	// forms are hosted forms' api side (S7); nil without the public key.
 	forms *forms.Service
 	// schoolInboxKey opens what school families send from their pages
@@ -751,6 +755,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	emailOps := &emailconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
+	linkOps := &linkconn.Late{}
 	schoolOps := &schconn.Late{}
 	copts := cfg.Connectors
 	copts.Invoices = invoiceOps
@@ -758,6 +763,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Storefront = orders
 	copts.Riders = riderOps
 	copts.Bills = &links.Payments{Pool: pool}
+	copts.Link = linkOps
 	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps
@@ -785,7 +791,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOK:         &byok.Factory{Guard: &egress.Guard{Logger: log}, AllowPrivate: cfg.Keys.AllowPrivate},
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
-	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src,
+	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, HooksURL: cfg.HooksURL}}
 	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
@@ -1261,6 +1267,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
+		e.linkOps.Set(srv)
 		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
 		if e.wa != nil {
 			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
@@ -1408,6 +1415,13 @@ func serve(ctx context.Context, args []string) error {
 		tasks = append(tasks, s.Run)
 	}
 	if is("worker") {
+		if !is("api") {
+			// link@1's actions (business links L6) need the api's side of
+			// links, stock and invoices: a server of the worker's own.
+			ls := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log, Invoices: e.invoices, Orders: e.orders}
+			e.chat(ls)
+			e.linkOps.Set(ls)
+		}
 		host, _ := os.Hostname()
 		loopback := connectorLoopback(e.registry, log)
 		prefix := host + "/"

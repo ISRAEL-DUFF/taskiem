@@ -14,7 +14,7 @@ const stepTypes = {
 
 const triggerTypes = {
   webhook: true, schedule: true, connector_event: true, capability_event: true, polling: true, database_change: true,
-  manual: true, whatsapp: true, ussd: true, email: true, subflow: true, storefront: true, form: true, invoice: true,
+  manual: true, whatsapp: true, ussd: true, email: true, subflow: true, storefront: true, form: true, invoice: true, link: true,
 } satisfies Record<Trigger["type"], true>;
 
 interface Schema {

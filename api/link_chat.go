@@ -221,6 +221,12 @@ func linkMessageErr(err error) error {
 // sendLink sends a message as the person (the web, the API, chat) and
 // tells the other side's people on their phones.
 func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, text string, o links.SendOpts) (links.Message, error) {
+	return s.sendLinkAs(ctx, p, link, text, nil, o)
+}
+
+// sendLinkAs is sendLink from a sender given (a run: the business, no
+// person's name), or the caller when nil.
+func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, text string, as *links.Sender, o links.SendOpts) (links.Message, error) {
 	// The first link's preview, fetched by our side before the message is
 	// written (link_preview.go); a page that does not answer has none.
 	if o.Preview == nil {
@@ -239,8 +245,12 @@ func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, tex
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&from); err != nil {
 			return err
 		}
+		from := links.Sender{ID: p.Actor(), FirstName: firstWord(name)}
+		if as != nil {
+			from = *as
+		}
 		var err error
-		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, actorOf(p), o)
+		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o)
 		return err
 	})
 	if err != nil {

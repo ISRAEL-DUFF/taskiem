@@ -10,6 +10,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdtest"
 	"github.com/israel-duff/taskiem/templates"
@@ -96,6 +97,11 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			trig["event"], body["event"], body["due_kobo"] = "payment", "payment", 0
 			body["payment"] = map[string]any{"id": "00000000-0000-7000-8000-000000000001", "amount_kobo": 2500000, "amount": "₦25,000", "how": "exact", "paid_at": "2026-01-01T09:00:00Z"}
 		}
+	}
+	if def.Trigger.Type == links.TriggerType {
+		// A link event between linked businesses (business links L6).
+		ev, _ := def.Trigger.Config["event"].(string)
+		trig = links.SampleTrigger(ev)
 	}
 	if def.Trigger.Type == "form" {
 		// What a submission carries beside the answers (forms 8.2).

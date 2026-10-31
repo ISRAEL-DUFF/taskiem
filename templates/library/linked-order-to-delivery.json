@@ -1,0 +1,39 @@
+{
+  "id": "linked-order-to-delivery",
+  "title": "Accept and dispatch linked customers' orders",
+  "summary": "An order from a customer linked to you on Taskiem is accepted and marked dispatched without a tap, up to an amount you set; the invoice follows your terms.",
+  "description": "Starts when a customer linked to you on Taskiem sends an order. An order up to the amount you set, and within the credit limit you gave that customer, is accepted (taking the items off your stock) and marked dispatched, and the customer sees each step in their own Taskiem. The invoice is raised as your trade settings with that customer say: at acceptance or on delivery, due by your terms. A bigger order, or one over the customer's credit limit, waits for you, and you are told.",
+  "category": "operations",
+  "tags": ["taskiem trade"],
+  "keywords": ["taskiem trade"],
+  "requires": ["linked customer", "linked customers", "taskiem", "trade order", "trade orders"],
+  "connectors": ["link@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "max_naira", "type": "integer", "title": "Up to (naira)", "description": "Orders above this amount wait for you to accept.", "required": false, "default": 1000000, "example": 1000000, "minimum": 1, "maximum": 1000000000}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_linkedOrderToDelivery",
+    "version": 1,
+    "name": "Accept and dispatch linked orders",
+    "description": "Accepts and dispatches an order from a linked customer up to an amount; tells the owner of the rest.",
+    "trigger": {"type": "link", "config": {"event": "order.received"}},
+    "steps": [
+      {"id": "order", "type": "connector", "name": "Read the order", "connector": "link@1", "action": "get_order", "input": {"reference": "=trigger.body.reference"}},
+      {"id": "accept", "type": "connector", "name": "Accept the order", "connector": "link@1", "action": "order_step", "needs": ["order"],
+       "when": "=steps.order.output.status == 'received' && !steps.order.output.over_limit && double(steps.order.output.total_kobo) <= double({{max_naira}}) * 100.0",
+       "input": {"reference": "=trigger.body.reference", "step": "accept"},
+       "on_error": {"steps": [{"id": "refused", "type": "connector", "name": "Tell the owner it waits", "connector": "notify@1", "action": "tell",
+        "input": {"title": "=trigger.body.business + ' ordered'",
+         "message": "='Order ' + trigger.body.reference + ' from ' + trigger.body.business + ' waits for you on the Trade orders page: ' + steps.accept.error.message"}}]}},
+      {"id": "dispatch", "type": "connector", "name": "Mark it dispatched", "connector": "link@1", "action": "order_step", "needs": ["accept"],
+       "when": "=has(steps.accept.output.status)",
+       "input": {"reference": "=trigger.body.reference", "step": "dispatched"}},
+      {"id": "held", "type": "connector", "name": "Tell the owner it waits", "connector": "notify@1", "action": "tell", "needs": ["order"],
+       "when": "=steps.order.output.status == 'received' && (steps.order.output.over_limit || double(steps.order.output.total_kobo) > double({{max_naira}}) * 100.0)",
+       "input": {"title": "=trigger.body.business + ' ordered'",
+        "message": "='Order ' + trigger.body.reference + ' from ' + trigger.body.business + ' (NGN ' + string(double(trigger.body.total_kobo) / 100.0) + ') waits for you on the Trade orders page: ' + (steps.order.output.over_limit ? 'it takes them past the credit limit you set.' : 'it is above the amount accepted by itself.')"}}
+    ]
+  }
+}

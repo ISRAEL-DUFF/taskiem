@@ -4507,6 +4507,30 @@
     "money.daily.bills_due_overdue": {
       "text": "Ụgwọ ruru: {n}, {amount}, {overdue} gafere ụbọchị. Zipu *bills due* ka ịhụ ha.",
       "reviewed": false
+    },
+    "wd.trigger.link_bill_received": {
+      "text": "Mgbe onye na-ebubata ị jikọrọ zitere gị ụgwọ",
+      "reviewed": false
+    },
+    "wd.trigger.link_bill_paid": {
+      "text": "Mgbe a kwụrụ otu n'ime ụgwọ gị",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_received": {
+      "text": "Mgbe azụmahịa ị jikọrọ zitere gị iwu",
+      "reviewed": false
+    },
+    "wd.trigger.link_order_delivered": {
+      "text": "Mgbe onye na-ebubata ị jikọrọ wetara iwu gị",
+      "reviewed": false
+    },
+    "wd.trigger.link_thread_message": {
+      "text": "Mgbe azụmahịa ị jikọrọ degaara gị ozi",
+      "reviewed": false
+    },
+    "wd.trigger.link_link_accepted": {
+      "text": "Mgbe azụmahịa jikọrọ gị",
+      "reviewed": false
     }
   }
 }

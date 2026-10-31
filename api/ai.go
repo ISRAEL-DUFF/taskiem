@@ -503,6 +503,19 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(bool_or(enabled), false) FROM school_settings`).Scan(&c.Schools); err != nil {
 		return c, err
 	}
+	// The businesses linked to this one on Taskiem (business links L6):
+	// names and roles only, for link@1 and the link trigger.
+	rows, err = tx.Query(ctx, `SELECT name, role FROM taskiem_links_of() WHERE state = 'active' ORDER BY name LIMIT 200`)
+	if err != nil {
+		return c, err
+	}
+	c.Linked, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (builder.LinkedBusiness, error) {
+		var x builder.LinkedBusiness
+		return x, r.Scan(&x.Name, &x.Role)
+	})
+	if err != nil {
+		return c, err
+	}
 	// The business's own workflows a template step may use (decision
 	// 0048), with their interface.
 	callable, err := runtime.CallableWorkflows(ctx, tx, reg)

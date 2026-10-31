@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
 	"github.com/israel-duff/taskiem/connectors/lenco"
+	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/mailchimp"
 	"github.com/israel-duff/taskiem/connectors/meta"
 	"github.com/israel-duff/taskiem/connectors/moniepoint"
@@ -111,6 +112,9 @@ type Options struct {
 	// Bills binds the bills platform connector (business links, paying a
 	// linked supplier's bill); nil: its action fails plainly.
 	Bills bills.Ops
+	// Link binds the link platform connector (business links, L6); nil:
+	// its actions fail plainly.
+	Link linkconn.Ops
 	// Stock binds the stock platform connector (docs/stock.md); nil: its
 	// actions fail plainly.
 	Stock stock.Ops
@@ -177,6 +181,7 @@ func Register(r *connector.Registry, o Options) error {
 		storefront.New(o.Storefront),
 		riders.New(o.Riders),
 		bills.New(o.Bills),
+		linkconn.New(o.Link),
 		stock.New(o.Stock),
 		invoices.New(o.Invoices),
 		schools.New(o.Schools),

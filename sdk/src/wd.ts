@@ -222,7 +222,7 @@ export type Step =
 export type StepType = Step["type"];
 
 export interface Trigger {
-  type: "webhook" | "schedule" | "connector_event" | "capability_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront" | "form" | "invoice";
+  type: "webhook" | "schedule" | "connector_event" | "capability_event" | "polling" | "database_change" | "manual" | "whatsapp" | "ussd" | "email" | "subflow" | "storefront" | "form" | "invoice" | "link";
   config?: Record<string, unknown>;
 }
 

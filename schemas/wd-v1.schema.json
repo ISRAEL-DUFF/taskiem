@@ -1453,7 +1453,8 @@
             "storefront",
             "form",
             "capability_event",
-            "invoice"
+            "invoice",
+            "link"
           ]
         },
         "config": {
@@ -1774,6 +1775,42 @@
                     "enum": [
                       "paid",
                       "payment"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "link"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "config"
+            ],
+            "properties": {
+              "config": {
+                "description": "Starts a run in prod on what happens between the business and a linked business (docs/spec/business-links.md §11): bill.received, a linked supplier's invoice became a bill; bill.paid, a bill paid in full; order.received, a linked buyer's order arrived; order.delivered, a linked supplier delivered an order; thread.message, a linked business wrote; link.accepted, a link became active. trigger.body has the link, the business's name, the document's reference and the amounts, never the other side's contact details.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "event"
+                ],
+                "properties": {
+                  "event": {
+                    "enum": [
+                      "bill.received",
+                      "bill.paid",
+                      "order.received",
+                      "order.delivered",
+                      "thread.message",
+                      "link.accepted"
                     ]
                   }
                 }

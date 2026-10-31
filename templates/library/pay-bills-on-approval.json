@@ -1,0 +1,41 @@
+{
+  "id": "pay-bills-on-approval",
+  "title": "Pay bills from linked suppliers after one approval",
+  "summary": "Every week on the day you choose, each bill from your suppliers on Taskiem is sent to be paid after one approval, up to an amount; bigger ones are held for you.",
+  "description": "On the day and time you choose, Taskiem looks at the bills your suppliers on Taskiem sent you that are due within the week or overdue (or only one supplier's, if you name it). Each bill up to the amount you set goes to your bill payments: the person who approves payments sees the name on the supplier's account and approves it once, and the transfer goes from your own payments account, carrying the bill's reference so the supplier's Taskiem counts it. Bigger bills, queried bills and bills with no account to pay into are held, and you are told which. Set up paying bills on the Bills page first.",
+  "category": "suppliers",
+  "tags": ["taskiem trade"],
+  "keywords": ["taskiem trade", "weekly bills", "pay bills"],
+  "requires": ["linked supplier", "linked suppliers", "taskiem"],
+  "connectors": ["link@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "pay_day", "type": "weekday", "title": "Day", "description": "The day of the week bills are paid.", "required": false, "default": "friday", "example": "friday"},
+    {"name": "pay_time", "type": "time", "title": "Time", "description": "When the bills are sent for approval, Lagos time.", "required": false, "default": "09:00", "example": "09:00"},
+    {"name": "supplier", "type": "string", "title": "Only this supplier", "description": "A supplier's name on Taskiem, to pay only their bills. Leave it blank for every linked supplier.", "required": false, "default": "", "example": "", "max_length": 120},
+    {"name": "max_naira", "type": "integer", "title": "Up to (naira)", "description": "Bills above this amount are held for you to pay yourself.", "required": false, "default": 500000, "example": 500000, "minimum": 1, "maximum": 100000000}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payBillsOnApproval",
+    "version": 1,
+    "name": "Pay bills from linked suppliers",
+    "description": "Sends each bill due from linked suppliers, up to an amount, to be paid after one approval; holds the rest.",
+    "trigger": {"type": "schedule", "config": {"cron": "{{pay_time:minute}} {{pay_time:hour}} * * {{pay_day:cron}}", "timezone": "Africa/Lagos"}},
+    "settings": {"timeout": "1h"},
+    "steps": [
+      {"id": "bills", "type": "connector", "name": "Find the bills due", "connector": "link@1", "action": "list_bills",
+       "input": {"business": "{{supplier}}", "due_within_days": 7}},
+      {"id": "pay", "type": "foreach", "name": "Send each bill to be paid", "needs": ["bills"], "when": "=steps.bills.output.count > 0",
+       "config": {"items": "=steps.bills.output.bills.filter(b, b.payable && double(b.due_kobo) <= double({{max_naira}}) * 100.0)", "max_concurrency": 2, "max_items": 50,
+        "steps": [
+          {"id": "pay_one", "type": "connector", "name": "Pay the bill after approval", "connector": "link@1", "action": "pay_bill",
+           "input": {"reference": "=item.reference"},
+           "on_error": {"steps": [{"id": "not_paid", "type": "transform", "config": {"output": {"reference": "=item.reference", "reason": "=steps.pay_one.error.message"}}}]}}
+        ]}},
+      {"id": "tell", "type": "connector", "name": "Tell the owner", "connector": "notify@1", "action": "tell", "needs": ["pay"], "when": "=steps.bills.output.count > 0",
+       "input": {"title": "Bills to pay",
+        "message": "=(size(steps.pay.output.filter(o, !has(o.not_paid))) > 0 ? 'Waiting for approval: ' + steps.pay.output.filter(o, !has(o.not_paid)).map(o, o.pay_one.reference).join(', ') + '. ' : '') + (size(steps.bills.output.bills.filter(b, !b.payable || double(b.due_kobo) > double({{max_naira}}) * 100.0)) + size(steps.pay.output.filter(o, has(o.not_paid))) > 0 ? 'Held for you: ' + (steps.bills.output.bills.filter(b, !b.payable || double(b.due_kobo) > double({{max_naira}}) * 100.0).map(b, b.reference + ' from ' + b.business) + steps.pay.output.filter(o, has(o.not_paid)).map(o, o.not_paid.reference)).join(', ') + ' (see Bills).' : '')"}}
+    ]
+  }
+}

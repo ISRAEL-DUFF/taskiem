@@ -1,0 +1,43 @@
+{
+  "id": "reorder-from-linked-suppliers",
+  "title": "Reorder from your suppliers on Taskiem",
+  "summary": "Every morning, what is low is ordered from your linked suppliers at the prices on their lists, after one approval.",
+  "description": "Every day at the time you choose, Taskiem looks at your low items linked to a supplier's price list on Taskiem and puts together one order per supplier, for enough to reach each item's order-up-to level, at their listed prices. You approve the orders once; each then reaches the supplier as an order in their own Taskiem. An order above your approval limit is left drafted for a second person to send. Low items no linked supplier lists are named, so you can link them on the Prices page. Nothing is ordered twice: an item already on an open order is left out.",
+  "category": "operations",
+  "tags": ["taskiem trade"],
+  "keywords": ["taskiem trade"],
+  "requires": ["linked supplier", "linked suppliers", "taskiem", "price list", "price lists"],
+  "connectors": ["link@1", "notify@1"],
+  "variables": [],
+  "params": [
+    {"name": "send_time", "type": "time", "title": "Time", "description": "When the orders are put together, Lagos time.", "required": false, "default": "08:00", "example": "08:00"},
+    {"name": "approver_role", "type": "string", "title": "Who approves", "description": "The role that approves the orders.", "required": false, "default": "owner", "example": "owner", "pattern": "^[a-z][a-z0-9_]{0,39}$", "picker": "role"}
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_reorderFromLinkedSuppliers",
+    "version": 1,
+    "name": "Reorder from linked suppliers",
+    "description": "Orders what is low from linked suppliers at their listed prices, after one approval.",
+    "trigger": {"type": "schedule", "config": {"cron": "{{send_time:minute}} {{send_time:hour}} * * *", "timezone": "Africa/Lagos"}},
+    "settings": {"timeout": "48h"},
+    "steps": [
+      {"id": "low", "type": "connector", "name": "Find what to order from each supplier", "connector": "link@1", "action": "low_orders", "input": {}},
+      {"id": "approve", "type": "approval", "name": "Approve the orders", "needs": ["low"], "when": "=steps.low.output.count > 0",
+       "config": {"role": "{{approver_role}}", "count": 1, "timeout": "24h", "on_timeout": "reject",
+        "subject": {"orders": "=steps.low.output.orders.map(o, o.business + ': ' + o.items.map(i, string(int(i.quantity)) + ' ' + i.name).join(', ') + ', NGN ' + string(double(o.total_kobo) / 100.0)).join('; ')",
+         "not_listed": "=steps.low.output.not_listed.join(', ')"}}},
+      {"id": "send", "type": "foreach", "name": "Send each order", "needs": ["approve"],
+       "when": "=steps.low.output.count > 0 && steps.approve.output.decision == 'approved'",
+       "config": {"items": "=steps.low.output.orders", "max_concurrency": 3, "max_items": 50,
+        "steps": [
+          {"id": "order", "type": "connector", "name": "Order from the supplier", "connector": "link@1", "action": "place_order",
+           "input": {"business": "=item.link", "items": "=item.items"},
+           "on_error": {"steps": [{"id": "not_sent", "type": "transform", "config": {"output": {"business": "=item.business", "reason": "=steps.order.error.message"}}}]}}
+        ]}},
+      {"id": "tell", "type": "connector", "name": "Tell the owner what was ordered", "connector": "notify@1", "action": "tell", "needs": ["send"],
+       "when": "=steps.low.output.count > 0 && steps.approve.output.decision == 'approved'",
+       "input": {"message": "='Ordered: ' + steps.send.output.filter(o, !has(o.not_sent)).map(o, o.order.reference + ' from ' + o.order.business + (o.order.status == 'drafted' ? ' (waiting for a second person to send it)' : '')).join(', ') + (size(steps.send.output.filter(o, has(o.not_sent))) > 0 ? '. Not ordered: ' + steps.send.output.filter(o, has(o.not_sent)).map(o, o.not_sent.business + ' (' + o.not_sent.reason + ')').join(', ') : '')"}}
+    ]
+  }
+}

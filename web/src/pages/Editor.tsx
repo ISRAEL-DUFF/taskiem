@@ -10,7 +10,7 @@ import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
 import { connectIn, definitionProblem, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
 import { merge } from "../lib/schema";
-import { triggerWords } from "../lib/home";
+import { LINK_EVENTS, triggerWords } from "../lib/home";
 import { runLook } from "../lib/lists";
 import { EnvSelect, useEnvironments, type Deployment } from "../environments";
 import { Badge, ErrorBox, Field, Item, Items, JsonInput, Modal, Skeleton, fmtTime, useAction, useLoad } from "../ui";
@@ -762,6 +762,7 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
             if (choice) return onChange(choice.apply(def));
             if (type === "connector_event") onChange({ ...def, trigger: { type, config: { connector: "paystack@1", trigger: "transfer_event" } } });
             else if (type === "invoice") onChange({ ...def, trigger: { type, config: { event: "paid" } } });
+            else if (type === "link") onChange({ ...def, trigger: { type, config: { event: "order.received" } } });
           }}
         >
           {TRIGGER_CHOICES.map((c) => (
@@ -770,10 +771,22 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
             </option>
           ))}
           <option value="invoice">{advanced ? "An invoice is paid (invoice)" : "An invoice is paid"}</option>
+          <option value="link">{advanced ? "A linked business does something (link)" : "A linked business does something"}</option>
           <option value="connector_event">{advanced ? "Something happens in a service (connector_event)" : "Something happens in a service"}</option>
-          {![...TRIGGER_CHOICES.map((c) => c.type), "invoice", "connector_event"].includes(t.type) && <option value={t.type}>{triggerWords(t)}</option>}
+          {![...TRIGGER_CHOICES.map((c) => c.type), "invoice", "link", "connector_event"].includes(t.type) && <option value={t.type}>{triggerWords(t)}</option>}
         </select>
       </Field>
+      {t.type === "link" && (
+        <Field label="When">
+          <select value={String(cfg.event ?? "order.received")} onChange={(e) => setCfg({ event: e.target.value })}>
+            {LINK_EVENTS.map((e) => (
+              <option key={e.value} value={e.value}>
+                {e.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
       {t.type === "webhook" && !advanced && <p className="hint">Another system starts it at its web address (under Web addresses). Turn on Advanced in Settings to change how.</p>}
       {t.type === "webhook" && advanced && (
         <>
