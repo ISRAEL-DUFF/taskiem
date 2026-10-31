@@ -215,6 +215,89 @@ func TestChatDebtorBook(t *testing.T) {
 	}
 }
 
+// A customer of a sent invoice is offered when their name is looked up:
+// chosen, they join the book as their phone's customer, so a notebook line
+// and the invoice sent to them are one balance. Someone new given a phone
+// that invoices were sent to owes those too.
+func TestChatDebtorBookSentInvoices(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Kemi Wears", "owner@kemiwears.test")
+	const on = "+2348010000071"
+	w.bind(t, owner, on)
+	all := func(text string) string {
+		t.Helper()
+		var out []string
+		for _, m := range w.send(t, on, whatsapptest.Text(text)) {
+			out = append(out, m.Text)
+		}
+		return strings.Join(out, "\n")
+	}
+	send := func(name, phone string, kobo int, key string) {
+		t.Helper()
+		x := owner.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": name, "phone": phone}, "amount_kobo": kobo})
+		owner.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", key)
+	}
+	invoice := func(number string) map[string]any {
+		t.Helper()
+		return owner.must(200, "GET", "/v1/invoices/"+number, nil)["invoice"].(map[string]any)
+	}
+	send("Kemi Bello", "+2348035550101", 250000, "k1")
+
+	// One customer found, from her invoice: the line joins it.
+	if r := w.say(t, on, "Kemi owes 1,000"); !strings.Contains(r, "How long do you give customers to pay") {
+		t.Fatalf("terms first: %q", r)
+	}
+	if r := all("4"); !strings.Contains(r, "Record that Kemi Bello owes ₦1,000?") || !strings.Contains(r, "₦3,500 in all") {
+		t.Fatalf("read back: %q", r)
+	}
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "INV-0002") || !strings.Contains(r, "₦3,500") {
+		t.Fatalf("recorded: %q", r)
+	}
+	if c := invoice("INV-0002")["customer"].(map[string]any); c["phone"] == nil || c["key"] != nil {
+		t.Errorf("her line: %v", c)
+	}
+	if r := w.say(t, on, "who owes me"); !strings.Contains(r, "1 customer(s) owe you ₦3,500") || !strings.Contains(r, "(2 line(s))") {
+		t.Fatalf("one balance: %q", r)
+	}
+	// Paid: oldest first, so the invoice sent to her.
+	w.say(t, on, "Kemi paid 500 cash")
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Kemi Bello owes ₦3,000 now") {
+		t.Fatalf("paid: %q", r)
+	}
+	if x := invoice("INV-0001"); x["status"] != "part_paid" {
+		t.Errorf("the invoice first: %v", x)
+	}
+
+	// Two of a name: the book's own first, then the customer of an invoice.
+	send("Kemi Ade", "+2348035550102", 50000, "k2")
+	if r := w.say(t, on, "Kemi owes 300"); !strings.Contains(r, "1. Kemi Bello") || !strings.Contains(r, "2. Kemi Ade") || !strings.Contains(r, "3. Someone new") {
+		t.Fatalf("pick: %q", r)
+	}
+	if r := w.say(t, on, "2"); !strings.Contains(r, "Record that Kemi Ade owes ₦300?") || !strings.Contains(r, "₦800 in all") {
+		t.Fatalf("picked: %q", r)
+	}
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "₦800") {
+		t.Fatalf("recorded for Kemi Ade: %q", r)
+	}
+	if r := w.say(t, on, "Kemi Ade's number is 0803 555 0109"); !strings.Contains(r, "has a phone number in the book already") {
+		t.Errorf("a second number: %q", r)
+	}
+
+	// Someone new, given a number invoices went to, owes them too.
+	send("Funmi Alade", "+2348035550104", 70000, "k3")
+	if r := w.say(t, on, "Mama Twins owes 400"); !strings.Contains(r, "Mama Twins is new") {
+		t.Fatalf("new: %q", r)
+	}
+	if r := w.say(t, on, "0803 555 0104"); !strings.Contains(r, "Record that Mama Twins owes ₦400?") || !strings.Contains(r, "₦1,100 in all") {
+		t.Fatalf("new with a known number: %q", r)
+	}
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "₦1,100") {
+		t.Fatalf("recorded for her: %q", r)
+	}
+}
+
 // The debtor book in Yoruba, Hausa and Igbo (R5f): the name first, then
 // the language's words, matched without accents; a sentence about the
 // business itself ("mo ti san …") is not a customer's.

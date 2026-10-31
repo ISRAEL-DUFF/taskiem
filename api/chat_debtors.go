@@ -51,11 +51,13 @@ type chatDebt struct {
 	// owner's credit terms), apply (the terms to open lines), how (cash or
 	// transfer), account (which), account_name (a new one), confirm.
 	Phase string `json:"phase"`
-	// Name is the customer as written; Key the one chosen ("" for a new
-	// one); Pick the keys offered, numbered from 1.
-	Name string   `json:"name"`
-	Key  string   `json:"key,omitempty"`
-	Pick []string `json:"pick,omitempty"`
+	// Name is the customer as written; Key the one chosen, as
+	// BookCustomer.Ref names them ("" for a new one), and Customer who they
+	// are as their invoices group; Pick the refs offered, numbered from 1.
+	Name     string   `json:"name"`
+	Key      string   `json:"key,omitempty"`
+	Customer string   `json:"customer,omitempty"`
+	Pick     []string `json:"pick,omitempty"`
 	// Phone is a new customer's phone, sealed.
 	Phone       map[string]any `json:"phone,omitempty"`
 	AmountKobo  int64          `json:"amount_kobo,omitempty"`
@@ -69,6 +71,11 @@ type chatDebt struct {
 	// Days are the credit terms chosen (0: no fixed time) for terms.
 	Days  int    `json:"days,omitempty"`
 	Nonce string `json:"nonce,omitempty"`
+}
+
+// use makes f the customer the conversation is about.
+func (d *chatDebt) use(f invoicing.BookCustomer) {
+	d.Key, d.Customer, d.Name = f.Ref(), f.CustomerID, f.Name
 }
 
 var (
@@ -253,7 +260,7 @@ func (s *Server) pickList(ctx context.Context, c *chat, found []invoicing.BookCu
 	var lines []string
 	err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
 		for i, f := range found {
-			due, _, err := owedBy(ctx, tx, c.tenant.ID, "key:"+f.Key)
+			due, _, err := owedBy(ctx, tx, c.tenant.ID, f.CustomerID)
 			if err != nil {
 				return err
 			}
@@ -295,7 +302,7 @@ func (s *Server) waOwes(ctx context.Context, c *chat, name string, kobo int64, d
 		}
 		return c.say(ctx, s, c.t("wa.debt.ask_phone", "name", whatsapp.SafeText(d.Name)))
 	case 1:
-		d.Key, d.Name = found[0].Key, found[0].Name
+		d.use(found[0])
 		return s.waOwesTerms(ctx, c, d)
 	}
 	return s.waDebtPick(ctx, c, d, found, true)
@@ -305,7 +312,7 @@ func (s *Server) waOwes(ctx context.Context, c *chat, name string, kobo int64, d
 func (s *Server) waDebtPick(ctx context.Context, c *chat, d *chatDebt, found []invoicing.BookCustomer, withNew bool) error {
 	d.Phase, d.Pick = "pick", nil
 	for _, f := range found {
-		d.Pick = append(d.Pick, f.Key)
+		d.Pick = append(d.Pick, f.Ref())
 	}
 	if err := s.saveDebt(ctx, c, d); err != nil {
 		return err
@@ -359,14 +366,27 @@ func termsWords(c *chat, days int) string {
 func (s *Server) waOwesConfirm(ctx context.Context, c *chat, d *chatDebt, st invoicing.Settings) error {
 	d.Phase, d.Nonce = "confirm", uuid.NewString()
 	var before, credit int64
-	if d.Key != "" {
+	if d.Key != "" || d.Phone != nil {
 		if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
+			customer := d.Customer
+			if d.Key == "" {
+				// Someone new with a phone is that phone's customer: what
+				// invoices sent to it are owed counts too.
+				v, err := s.Store.PII.OpenTx(ctx, tx, c.tenant.ID, d.Phone)
+				if err != nil {
+					return err
+				}
+				phone, _ := v.(string)
+				if customer, err = s.Invoices.Vault.SubjectForTx(ctx, tx, c.tenant.ID, "phone", phone); err != nil {
+					return err
+				}
+			}
 			var err error
-			if before, _, err = owedBy(ctx, tx, c.tenant.ID, "key:"+d.Key); err != nil {
+			if before, _, err = owedBy(ctx, tx, c.tenant.ID, customer); err != nil {
 				return err
 			}
 			// Money they paid before and no line took counts towards it.
-			credit, err = invoicing.CreditOf(ctx, tx, c.tenant.ID, "key:"+d.Key)
+			credit, err = invoicing.CreditOf(ctx, tx, c.tenant.ID, customer)
 			return err
 		}); err != nil {
 			return err
@@ -427,6 +447,11 @@ func (s *Server) waOwesNow(ctx context.Context, c *chat, d *chatDebt) error {
 			if cust, err = s.Invoices.NewBookCustomer(ctx, tx, c.tenant.ID, d.Name, phone, c.p.Actor()); err != nil {
 				return err
 			}
+		} else if strings.HasPrefix(d.Key, invoicing.SentRefPrefix) {
+			// A customer of a sent invoice, in the book from now on.
+			if cust, err = s.Invoices.AdoptCustomer(ctx, tx, c.tenant.ID, d.Customer, c.p.Actor()); err != nil {
+				return err
+			}
 		} else if cust, err = s.Invoices.BookCustomerByKey(ctx, tx, c.tenant.ID, d.Key); err != nil {
 			return err
 		}
@@ -472,7 +497,7 @@ func (s *Server) waCustomerPaid(ctx context.Context, c *chat, name string, kobo 
 	case 0:
 		return c.say(ctx, s, c.t("wa.debt.no_one", "name", whatsapp.SafeText(d.Name)))
 	case 1:
-		d.Key, d.Name = found[0].Key, found[0].Name
+		d.use(found[0])
 		return s.waPaidHow(ctx, c, d)
 	}
 	return s.waDebtPick(ctx, c, d, found, false)
@@ -547,7 +572,7 @@ func (s *Server) waPaidConfirm(ctx context.Context, c *chat, d *chatDebt) error 
 	var owed int64
 	if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
 		var err error
-		owed, _, err = owedBy(ctx, tx, c.tenant.ID, "key:"+d.Key)
+		owed, _, err = owedBy(ctx, tx, c.tenant.ID, d.Customer)
 		return err
 	}); err != nil {
 		return err
@@ -577,7 +602,7 @@ func (s *Server) waPaidNow(ctx context.Context, c *chat, d *chatDebt) error {
 	if d.How == "transfer" {
 		kind, channel = "statement", d.Channel
 	}
-	customer := "key:" + d.Key
+	customer := d.Customer
 	var parts []matching.CountedPart
 	var owed, credit int64
 	m := s.matcher()
@@ -645,10 +670,9 @@ func (s *Server) waDebtReply(ctx context.Context, c *chat, text, cmd string) err
 		n, ok := num()
 		switch {
 		case ok && n >= 1 && n <= len(d.Pick):
-			d.Key = d.Pick[n-1]
 			if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
-				cust, err := s.Invoices.BookCustomerByKey(ctx, tx, c.tenant.ID, d.Key)
-				d.Name = cust.Name
+				cust, err := s.Invoices.BookCustomerByRef(ctx, tx, c.tenant.ID, d.Pick[n-1])
+				d.use(cust)
 				return err
 			}); err != nil {
 				return err
@@ -661,7 +685,7 @@ func (s *Server) waDebtReply(ctx context.Context, c *chat, text, cmd string) err
 			}
 			return s.waOwesTerms(ctx, c, d)
 		case ok && n == len(d.Pick)+1 && d.Op == "owes":
-			d.Key, d.Phase = "", "phone"
+			d.Key, d.Customer, d.Phase = "", "", "phone"
 			if err := s.saveDebt(ctx, c, d); err != nil {
 				return err
 			}
@@ -915,7 +939,7 @@ func (s *Server) waStatement(ctx context.Context, c *chat, name string) error {
 		return c.say(ctx, s, c.t("wa.debt.which_balance", "list", list))
 	}
 	cust := found[0]
-	customer := "key:" + cust.Key
+	customer := cust.CustomerID
 	var open []invoicing.Invoice
 	var credit int64
 	var last *invoicing.Payment
@@ -998,10 +1022,14 @@ func (s *Server) waCustomerPhone(ctx context.Context, c *chat, name, phone strin
 		}
 		return c.say(ctx, s, c.t("wa.debt.which_balance", "list", list))
 	}
-	if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
+	err = s.waBookIn(ctx, c, func(tx pgx.Tx) error {
 		_, err := s.Invoices.SetBookPhone(ctx, tx, c.tenant.ID, found[0], p, c.p.Actor())
 		return err
-	}); err != nil {
+	})
+	if errors.Is(err, invoicing.ErrInvalid) {
+		return c.say(ctx, s, c.t("wa.debt.refused", "reason", whatsapp.SafeText(strings.TrimPrefix(err.Error(), "invoicing: invalid: "))))
+	}
+	if err != nil {
 		return err
 	}
 	return c.say(ctx, s, c.t("wa.debt.phone_set", "name", whatsapp.SafeText(found[0].Name), "phone", whatsapp.MaskValue("phone", p)))
@@ -1025,7 +1053,7 @@ func (s *Server) waSendBalance(ctx context.Context, c *chat, name string) error 
 	case 0:
 		return c.say(ctx, s, c.t("wa.debt.no_one", "name", whatsapp.SafeText(d.Name)))
 	case 1:
-		d.Key, d.Name = found[0].Key, found[0].Name
+		d.use(found[0])
 		return s.waSendConfirm(ctx, c, d)
 	}
 	return s.waDebtPick(ctx, c, d, found, false)
@@ -1034,7 +1062,7 @@ func (s *Server) waSendBalance(ctx context.Context, c *chat, name string) error 
 // waSendConfirm reads the message back: what the customer owes, where it
 // goes and how they can pay.
 func (s *Server) waSendConfirm(ctx context.Context, c *chat, d *chatDebt) error {
-	customer := "key:" + d.Key
+	customer := d.Customer
 	var open []invoicing.Invoice
 	var own bool
 	if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
@@ -1099,7 +1127,7 @@ func (s *Server) waSendNow(ctx context.Context, c *chat, d *chatDebt) error {
 	var out invoicing.BalanceSent
 	err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
 		var err error
-		out, err = s.Invoices.SendBalance(ctx, tx, c.tenant.ID, "key:"+d.Key, c.p.Actor(), "chat:"+d.Nonce)
+		out, err = s.Invoices.SendBalance(ctx, tx, c.tenant.ID, d.Customer, c.p.Actor(), "chat:"+d.Nonce)
 		return err
 	})
 	if errors.Is(err, invoicing.ErrInvalid) || errors.Is(err, invoicing.ErrState) {

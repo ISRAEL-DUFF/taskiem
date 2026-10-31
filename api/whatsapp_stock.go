@@ -557,9 +557,11 @@ type saleChat struct {
 	// Beyond names the items sold beyond the stock there is.
 	Beyond []string `json:"beyond,omitempty"`
 	// Customer is who owes for a sale on credit: their name as written,
-	// and their key in the debtor book ("" for someone new).
+	// how the debtor book names them (BookCustomer.Ref; "" for someone
+	// new), and who they are as their invoices group.
 	Customer    string `json:"customer,omitempty"`
 	CustomerKey string `json:"customer_key,omitempty"`
+	CustomerID  string `json:"customer_id,omitempty"`
 }
 
 // creditSaleRe finds who a sale on credit is to: "… credit to Ada", "… on
@@ -583,7 +585,7 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !ok {
 		return c.say(ctx, s, c.t("wa.sale.how"))
 	}
-	var customerKey string
+	var customerKey, customerID string
 	if customer != "" {
 		if s.Invoices == nil || !c.p.Can(PermInvoiceManage) {
 			return c.say(ctx, s, c.t("wa.debt.denied", "org", c.tenant.Name))
@@ -594,7 +596,7 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 		}
 		switch {
 		case len(found) == 1:
-			customerKey, customer = found[0].Key, found[0].Name
+			customerKey, customerID, customer = found[0].Ref(), found[0].CustomerID, found[0].Name
 		case len(found) > 1:
 			list, err := s.pickList(ctx, c, found, false)
 			if err != nil {
@@ -608,7 +610,7 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !ok || err != nil {
 		return err
 	}
-	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: customer, CustomerKey: customerKey}
+	sale := &saleChat{AmountKobo: said.AmountKobo, PaidHow: said.PaidHow, Customer: customer, CustomerKey: customerKey, CustomerID: customerID}
 	if sale.PaidHow == "" {
 		sale.PaidHow = stock.Cash
 	}
@@ -664,7 +666,7 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 		if sale.CustomerKey != "" {
 			if err := s.waBookIn(ctx, c, func(tx pgx.Tx) error {
 				var err error
-				before, _, err = owedBy(ctx, tx, c.tenant.ID, "key:"+sale.CustomerKey)
+				before, _, err = owedBy(ctx, tx, c.tenant.ID, sale.CustomerID)
 				return err
 			}); err != nil {
 				return err
@@ -766,9 +768,12 @@ func takeOff(args string) string {
 func (s *Server) creditSale(ctx context.Context, tx pgx.Tx, c *chat, sale *saleChat, lines []stock.SaleLine, amount int64, key string) (invoicing.Invoice, error) {
 	var cust invoicing.BookCustomer
 	var err error
-	if sale.CustomerKey == "" {
+	switch {
+	case sale.CustomerKey == "":
 		cust, err = s.Invoices.NewBookCustomer(ctx, tx, c.tenant.ID, sale.Customer, "", c.p.Actor())
-	} else {
+	case strings.HasPrefix(sale.CustomerKey, invoicing.SentRefPrefix):
+		cust, err = s.Invoices.AdoptCustomer(ctx, tx, c.tenant.ID, sale.CustomerID, c.p.Actor())
+	default:
 		cust, err = s.Invoices.BookCustomerByKey(ctx, tx, c.tenant.ID, sale.CustomerKey)
 	}
 	if err != nil {
