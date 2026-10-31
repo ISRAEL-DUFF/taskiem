@@ -166,7 +166,10 @@ func Save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, slug string, card Ca
 	if errors.As(err, &pe) && pe.Code == "23505" {
 		return Storefront{}, fmt.Errorf("%w: %s", ErrSlugTaken, slug)
 	}
-	return s, err
+	if err != nil {
+		return Storefront{}, err
+	}
+	return s, syncFirstFront(ctx, tx, s)
 }
 
 // Publish writes a snapshot of the draft as the next version, claims the
@@ -426,13 +429,21 @@ func SyncCatalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Ite
 	if err != nil {
 		return err
 	}
+	// The copy names the table it copies (fronts §5.2): one table today,
+	// the catalogue's.
+	var table string
+	if s.CatalogueTable != nil {
+		if err := tx.QueryRow(ctx, `SELECT name FROM data_tables WHERE id = $1`, *s.CatalogueTable).Scan(&table); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1`, s.ID); err != nil {
 		return err
 	}
 	for i, it := range items {
 		raw, _ := json.Marshal(it)
-		if _, err := tx.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (storefront_id, row_id) DO NOTHING`, s.ID, it.ID, tenant, i, raw); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (storefront_id, table_name, row_id) DO NOTHING`, s.ID, table, it.ID, tenant, i, raw); err != nil {
 			return err
 		}
 	}

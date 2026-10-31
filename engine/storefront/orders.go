@@ -480,12 +480,18 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 		}
 	}
 	id := uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
-		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
+	// The submission names its action and front: the built-in action of its
+	// kind (fronts §5.5).
+	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
+		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
+		action_id, front_id)
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id
+		  FROM storefront_actions a WHERE a.storefront_id = $3 AND a.kind = $4 AND a.builtin`,
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
 		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery); err != nil {
 		return Order{}, err
+	} else if tag.RowsAffected() == 0 {
+		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
 	}
 	if b != nil {
 		kept := true

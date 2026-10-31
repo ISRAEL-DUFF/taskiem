@@ -149,6 +149,16 @@ type PublicAction struct {
 
 var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book"}
 
+// builtinPosition is a built-in action's place on the first front.
+func builtinPosition(kind string) int {
+	for i, k := range []string{"order", "booking", "enquiry", "callback"} {
+		if k == kind {
+			return i + 1
+		}
+	}
+	return 0
+}
+
 // Actions reads the storefront's forms, every kind present (unset ones
 // disabled with their default label), with the workflow deployed for each.
 func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error) {
@@ -266,9 +276,17 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		}
 	}
 	opts, _ := json.Marshal(a.Options)
-	if _, err := tx.Exec(ctx, `INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment, options) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (storefront_id, kind) DO UPDATE SET enabled = EXCLUDED.enabled, label = EXCLUDED.label, payment = EXCLUDED.payment,
-		  options = EXCLUDED.options, updated_at = now()`, sf.ID, a.Kind, tenant, a.Enabled, a.Label, a.Payment, opts); err != nil {
+	// A built-in action lives on the first front, its slug its kind
+	// (fronts §5.3).
+	front, err := ensureFirstFront(ctx, tx, sf)
+	if err != nil {
+		return Action{}, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment, options, id, front_id, slug, position, builtin)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $2, $10, true)
+		ON CONFLICT (storefront_id, kind) WHERE builtin DO UPDATE SET enabled = EXCLUDED.enabled, label = EXCLUDED.label, payment = EXCLUDED.payment,
+		  options = EXCLUDED.options, updated_at = now()`, sf.ID, a.Kind, tenant, a.Enabled, a.Label, a.Payment, opts, uuid.Must(uuid.NewV7()), front,
+		builtinPosition(a.Kind)); err != nil {
 		return Action{}, err
 	}
 	list, err := Actions(ctx, tx, tenant)
