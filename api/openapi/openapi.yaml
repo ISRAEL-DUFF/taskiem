@@ -6161,7 +6161,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, trade]
       - name: limit
         in: query
         schema:
@@ -7540,6 +7540,54 @@ paths:
                 properties:
                   supplier:
                     $ref: '#/components/schemas/StockSupplier'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/deliver-to:
+    get:
+      operationId: getDeliverTo
+      tags:
+      - Stock
+      summary: Where linked suppliers deliver our orders
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The address and the number a rider calls; an empty address, picked up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putDeliverTo
+      tags:
+      - Stock
+      summary: Say where linked suppliers deliver our orders
+      description: Sealed, and carried to each order to a linked supplier (its rider takes it there); an empty address, picked up.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverTo'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliverTo'
         default:
           $ref: '#/components/responses/Error'
   /v1/stock/settings:
@@ -27390,6 +27438,10 @@ components:
         delivered_at:
           type: string
           format: date-time
+        short_agreed_at:
+          type: string
+          format: date-time
+          description: The linked supplier agreed our count of what came
         cancel_asked_at:
           type: string
           format: date-time
@@ -27398,6 +27450,16 @@ components:
           type: string
           format: date-time
           description: We said Not all came
+    DeliverTo:
+      type: object
+      additionalProperties: false
+      required: [address, phone]
+      properties:
+        address:
+          type: string
+          maxLength: 300
+        phone:
+          type: string
     TradeOrderLine:
       type: object
       additionalProperties: false
@@ -27426,11 +27488,25 @@ components:
     TradeOrder:
       type: object
       additionalProperties: false
-      required: [id, link, buyer, buyer_name, reference, lines, total_kobo, status, invoice_at, auto_accept, placed_by_seller, created_at, updated_at]
+      required: [id, order_reference, link, buyer, buyer_name, reference, lines, total_kobo, status, order_status, invoice_at, auto_accept, placed_by_seller, created_at, updated_at]
       properties:
         id:
           type: string
           format: uuid
+          description: The storefront order's (kind trade), on the Orders page with every order
+        order_reference:
+          type: string
+          description: The storefront order's reference; the buyer's (reference) unless another order had it
+        order_status:
+          type: string
+          description: The storefront order's own status (status says it as a linked order)
+        fulfilment:
+          type: string
+          enum: [pickup, delivery]
+          description: delivery when the buyer said where its orders are delivered
+        ready_at:
+          type: string
+          format: date-time
         link:
           type: string
           format: uuid
@@ -28670,10 +28746,10 @@ components:
           type: string
         kind:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, trade]
         status:
           type: string
-          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived]
+          enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived, proposed, changed]
         customer:
           type: object
           properties:

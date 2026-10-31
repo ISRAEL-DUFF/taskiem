@@ -4359,6 +4359,10 @@
     "order.link.confirmed": {
       "text": "*{from}* confirm order {reference} wey you draft for dem. E don accept.",
       "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} about {reference}",
+      "reviewed": false
     }
   }
 }

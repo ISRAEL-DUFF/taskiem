@@ -4359,6 +4359,10 @@
     "order.link.confirmed": {
       "text": "*{from}* ya tabbatar da oda {reference} da kuka tsara musu. An karɓe ta.",
       "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} game da {reference}",
+      "reviewed": false
     }
   }
 }

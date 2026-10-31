@@ -1326,7 +1326,7 @@ func (s *Server) waShopOrderMove(ctx context.Context, c *chat, ref, move string)
 	}
 	status := c.t("wa.shop.status." + o.Status)
 	if move == "ready" {
-		if o.Kind != "order" || o.Status != "accepted" && o.Status != "paid" {
+		if o.Kind != "order" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
 			return c.say(ctx, s, c.t("wa.shop.not_ready_now", "ref", ref, "status", status))
 		}
 		return s.shopAsk(ctx, c, &chatShop{Action: "ready", Reference: ref}, c.t("wa.shop.confirm_ready", "ref", ref))
@@ -1641,7 +1641,7 @@ func (s *Server) shopReady(ctx context.Context, c *chat, ref string) error {
 	if !ok || err != nil {
 		return err
 	}
-	if o.Kind != "order" || o.Status != "accepted" && o.Status != "paid" {
+	if o.Kind != "order" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
 		return c.say(ctx, s, c.t("wa.shop.not_ready_now", "ref", ref, "status", c.t("wa.shop.status."+o.Status)))
 	}
 	sf, err := s.shopOf(ctx, c)

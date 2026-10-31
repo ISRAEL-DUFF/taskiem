@@ -93,6 +93,10 @@ type Orders struct {
 	// IssueTransfer asks the business's rail for a one-time account number
 	// for an order (N3; invoicing's IssueForOrder): nil offers none.
 	IssueTransfer IssueTransfer
+	// TradeNotify tells a linked business, the customer of an order of
+	// the kind trade, a message meant for its customer (business links
+	// §7): in its own Taskiem, not by SMS.
+	TradeNotify func(ctx context.Context, tenant uuid.UUID, ord Order, text string) error
 	// AfterPaid hears of an order a payment moved to paid, after the
 	// payment is counted (dispatch tells the rider at the door).
 	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
@@ -169,7 +173,8 @@ type Order struct {
 func (x Order) CustomerID() string { return x.subject }
 
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
-	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
+	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at,
+	COALESCE(storefront_id, '00000000-0000-0000-0000-000000000000'::uuid),
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
 	COALESCE(zone, ''), COALESCE(delivery_kobo, 0),
 	CASE WHEN paid_at IS NULL THEN ''
@@ -237,7 +242,7 @@ func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st
 	switch status {
 	case "":
 	case "open":
-		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed', 'dispatched', 'on_the_way', 'arrived')`
+		q += ` AND status IN ('received', 'awaiting_payment', 'paid', 'accepted', 'refund_due', 'price_changed', 'dispatched', 'on_the_way', 'arrived', 'proposed', 'changed')`
 	default:
 		args = append(args, status)
 		q += fmt.Sprintf(` AND status = $%d`, len(args))
@@ -586,6 +591,12 @@ func (x Order) Payable() int64 {
 	return x.TotalKobo
 }
 
+// StartTrade starts the order workflow's run for a linked business's
+// order (kind trade, business links §7), as a submission's starts.
+func (o *Orders) StartTrade(ctx context.Context, tenant uuid.UUID, reference string) error {
+	return o.startRun(ctx, tenant, reference)
+}
+
 // startRun starts the run of the workflow deployed for the order's form,
 // in prod. An order with no such workflow stays received, with a note.
 func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference string) error {
@@ -599,13 +610,21 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 		if ord, err = o.GetOrder(ctx, tx, tenant, reference); err != nil {
 			return err
 		}
-		var draft []byte
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(published_slug, slug), draft FROM storefronts WHERE id = $1`, ord.storefront).Scan(&slug, &draft); err != nil {
-			return err
+		if ord.storefront == uuid.Nil {
+			// A linked business's order needs no storefront (business
+			// links §7): the business's own name.
+			if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&name); err != nil {
+				return err
+			}
+		} else {
+			var draft []byte
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(published_slug, slug), draft FROM storefronts WHERE id = $1`, ord.storefront).Scan(&slug, &draft); err != nil {
+				return err
+			}
+			var c Card
+			_ = json.Unmarshal(draft, &c)
+			name = c.Name
 		}
-		var c Card
-		_ = json.Unmarshal(draft, &c)
-		name = c.Name
 		if ord.Kind == "booking" {
 			sf, err := Get(ctx, tx, tenant)
 			if err != nil {
@@ -613,7 +632,12 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 			}
 			autoConfirm = sf.Availability.AutoConfirm
 		}
-		err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action = $1 AND environment = 'prod'`, ord.Kind).Scan(&wf, &version)
+		// A linked business's order starts the order workflow.
+		action := ord.Kind
+		if action == "trade" {
+			action = "order"
+		}
+		err = tx.QueryRow(ctx, `SELECT workflow_id, version FROM triggers WHERE type = 'storefront' AND storefront_action = $1 AND environment = 'prod'`, action).Scan(&wf, &version)
 		if errors.Is(err, pgx.ErrNoRows) {
 			_, err = tx.Exec(ctx, `UPDATE storefront_orders SET note = 'No workflow is deployed for this form: set it up under Storefront.', updated_at = now()
 				WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID)
@@ -858,7 +882,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "declined", "refund_due":
 				next = ord.Status
-			case "received", "accepted", "dispatched":
+			case "received", "accepted", "dispatched", "changed":
 				next = "declined"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -886,7 +910,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			switch ord.Status {
 			case "cancelled", "expired":
 				next = ord.Status
-			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived":
+			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived", "proposed", "changed":
 				next = "cancelled"
 				if ord.PaidAt != nil {
 					next = "refund_due"
@@ -1038,10 +1062,15 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 	}
 	var channels []string
 	overAllowance := false
+	var trade *Order
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		ord, err := o.GetOrder(ctx, tx, tenant, reference)
 		if err != nil {
 			return err
+		}
+		if ord.Kind == "trade" {
+			trade = &ord
+			return nil
 		}
 		var draft []byte
 		if err := tx.QueryRow(ctx, `SELECT draft FROM storefronts WHERE id = $1`, ord.storefront).Scan(&draft); err != nil {
@@ -1083,6 +1112,16 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 		}
 		return nil
 	})
+	if err == nil && trade != nil {
+		// A linked business is told in its own Taskiem, never by SMS.
+		if o.TradeNotify == nil {
+			return nil, errors.New("storefront: linked businesses cannot be told here")
+		}
+		if err := o.TradeNotify(ctx, tenant, *trade, strings.ReplaceAll(text, "{link}", "")); err != nil {
+			return nil, err
+		}
+		channels = []string{"link"}
+	}
 	if channels == nil {
 		channels = []string{}
 	}

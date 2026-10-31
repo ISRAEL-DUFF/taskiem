@@ -4359,6 +4359,10 @@
     "order.link.confirmed": {
       "text": "*{from}* fọwọsi ọja-ibere {reference} ti ẹ ṣe silẹ fun wọn. A ti gba a.",
       "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} nipa {reference}",
+      "reviewed": false
     }
   }
 }

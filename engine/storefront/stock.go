@@ -240,7 +240,18 @@ const stockAttempts = 5
 // same change with the same key: it lands once.
 func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([]string, error) {
 	short := []string{}
-	if o.Stock == nil || ord.Kind != "order" || len(ord.Basket) == 0 {
+	if ord.Kind == "trade" {
+		// A linked business's order (business links §7): its lines matched
+		// to the catalogue's items are lowered, the rest are not ours.
+		var mine []Line
+		for _, l := range ord.Basket {
+			if l.ID != "" {
+				mine = append(mine, l)
+			}
+		}
+		ord.Basket = mine
+	}
+	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade") || len(ord.Basket) == 0 {
 		return short, nil
 	}
 	var rec map[string]stockStep

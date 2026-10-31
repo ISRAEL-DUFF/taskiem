@@ -4359,6 +4359,10 @@
     "order.link.confirmed": {
       "text": "*{from}* kwenyere iwu {reference} unu deere ha. A nabatala ya.",
       "reviewed": false
+    },
+    "order.link.message_title": {
+      "text": "{from} gbasara {reference}",
+      "reviewed": false
     }
   }
 }

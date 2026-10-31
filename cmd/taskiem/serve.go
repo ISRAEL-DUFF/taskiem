@@ -1222,6 +1222,11 @@ func serve(ctx context.Context, args []string) error {
 		srv.DomainTarget = storefront.DomainTarget{CNAME: cfg.Public.CNAME, Addresses: cfg.Public.Addresses}
 		// Storefront photos in tenants' Xenibase storage (docs/media.md).
 		srv.Orders = e.orders
+		if e.orders != nil {
+			// A linked business's order tells its buyer in the buyer's own
+			// Taskiem (business links).
+			e.orders.TradeNotify = srv.TradeNotify
+		}
 		srv.Forms = e.forms
 		if e.forms != nil {
 			srv.ReachHost = e.forms.FormHost

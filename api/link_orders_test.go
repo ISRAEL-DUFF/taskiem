@@ -10,10 +10,50 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/templates"
 )
+
+// withLinkedOrders keeps invoices, and storefront orders that take linked
+// businesses' orders: their stock lowered on accepting, and what is meant
+// for their customer told to the buyer.
+func withLinkedOrders(w *world) {
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	key, _ := storefront.InboxKey(bytes.Repeat([]byte{5}, 32))
+	w.srv.Orders = &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault, InboxKey: key, PreviewDomain: shopDomain,
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
+		Start:    w.env.Store.Start, Signal: w.env.Store.DeliverSignalOnce, Cancel: w.env.Store.CancelRun}
+	if w.srv.Stock != nil {
+		w.srv.Orders.Stock, _ = w.srv.Stock.Table.(storefront.Stock)
+		w.srv.Orders.Moves = w.srv.Stock
+	}
+	w.srv.Orders.TradeNotify = w.srv.TradeNotify
+}
+
+// drainLinked does the linked-order work due (orders written, mirrors,
+// invoices) until there is none, and waits for the telling.
+func drainLinked(t *testing.T, w *world) {
+	t.Helper()
+	for range 20 {
+		n, err := w.srv.LinkOrdersTick(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.srv.WaitBackground()
+		if n == 0 {
+			return
+		}
+	}
+	t.Fatal("linked-order work never ran out")
+}
 
 // Linked orders (L2, docs/spec/business-links.md §7): a purchase order to a
 // supplier that is a linked business goes through the link, not by chat,
@@ -30,22 +70,14 @@ func TestLinkedOrders(t *testing.T) {
 	w := shopWorld(t)
 	withStock(w.world)
 	withPurchases(w.world)
-	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
-		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	withLinkedOrders(w.world)
 	seller, buyer, sellerID, buyerID := linkedPair(t, w.waWorld)
 	const sellerOn, buyerOn = "+2348010000361", "+2348010000362"
 	w.bind(t, seller, sellerOn)
 	w.bind(t, buyer, buyerOn)
 	w.say(t, sellerOn, "links")
 	w.say(t, buyerOn, "links")
-	tick := func(want int) {
-		t.Helper()
-		n, err := w.srv.LinkOrdersTick(ctx)
-		if err != nil || n != want {
-			t.Fatalf("did %d, want %d: %v", n, want, err)
-		}
-		w.srv.WaitBackground()
-	}
+	tick := func(int) { t.Helper(); drainLinked(t, w.world) }
 
 	// The buyer's stock and its supplier, said to be the linked business.
 	buyer.must(200, "POST", "/v1/stock/setup", nil)
@@ -298,7 +330,7 @@ func TestLinkedOrders(t *testing.T) {
 
 	// Each step is audited in both businesses.
 	var n int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(DISTINCT tenant_id) FROM audit_log WHERE action = 'link.order.delivered' AND tenant_id IN ($1, $2)`,
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(DISTINCT tenant_id) FROM audit_log WHERE action = 'link.order.mirror' AND tenant_id IN ($1, $2)`,
 		sellerID, buyerID).Scan(&n); err != nil || n != 2 {
 		t.Errorf("audited in %d businesses: %v", n, err)
 	}
@@ -314,8 +346,7 @@ func TestLinkedOrderIsolation(t *testing.T) {
 	w := shopWorld(t)
 	withStock(w.world)
 	withPurchases(w.world)
-	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
-		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	withLinkedOrders(w.world)
 	seller, buyer, sellerID, buyerID := linkedPair(t, w.waWorld)
 	log := &scopeLog{scope: map[*pgx.Conn]string{}}
 	cfg := w.env.Store.Pool.Config()
@@ -366,26 +397,17 @@ func TestLinkedOrderIsolation(t *testing.T) {
 // buyer waits for the buyer's Confirm, saying which of its items each
 // line is, or its cancel.
 func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
-	ctx := context.Background()
 	w := shopWorld(t)
 	withStock(w.world)
 	withPurchases(w.world)
-	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
-		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	withLinkedOrders(w.world)
 	seller, buyer, _, _ := linkedPair(t, w.waWorld)
 	const sellerOn, buyerOn = "+2348010000371", "+2348010000372"
 	w.bind(t, seller, sellerOn)
 	w.bind(t, buyer, buyerOn)
 	w.say(t, sellerOn, "links")
 	w.say(t, buyerOn, "links")
-	tick := func(want int) {
-		t.Helper()
-		n, err := w.srv.LinkOrdersTick(ctx)
-		if err != nil || n != want {
-			t.Fatalf("did %d, want %d: %v", n, want, err)
-		}
-		w.srv.WaitBackground()
-	}
+	tick := func(int) { t.Helper(); drainLinked(t, w.world) }
 	// Both keep stock; the seller sells Rice at ₦45,000.
 	buyer.must(200, "POST", "/v1/stock/setup", nil)
 	rice := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000},
@@ -523,4 +545,131 @@ func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
 	seller.must(400, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item": "Palm oil", "quantity": 1}}})
 	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": nil})
 	seller.must(409, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item_id": sGarri, "quantity": 1}}})
+}
+
+// A linked order is a storefront order (§7): it is on the seller's Orders
+// page with every order, delivered to where the buyer said, starts the
+// seller's order workflow, whose word for its customer reaches the
+// buyer's people, not an SMS; accepted the way any order is (a workflow's
+// decision), and delivered by the seller's rider, it reaches the buyer's
+// purchase order.
+func TestLinkedOrderLikeAnyOrder(t *testing.T) {
+	ctx := context.Background()
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	withLinkedOrders(w.world)
+	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: w.srv.Reach, Messages: w.srv.Messages, PageBase: "https://forms.test"}
+	w.srv.Dispatch = &dispatch.Dispatch{Pool: w.env.DB.App, Vault: w.env.Vault, Riders: w.srv.Riders, Orders: w.srv.Orders, Chat: []string{"whatsapp"},
+		MoneyLog: &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}, Delivered: dispatch.TellRun(w.env.Store), StatusLink: w.srv.Orders.StatusLink}
+	seller, buyer, sellerID, _ := linkedPair(t, w.waWorld)
+	const buyerOn = "+2348010000382"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links")
+
+	// The seller's order workflow, deployed for its orders.
+	tpl, _ := templates.Default().Get("storefront-order")
+	def, err := tpl.Instantiate(map[string]any{}, "Orders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sellerTenant := uuid.MustParse(sellerID)
+	wf := w.env.PublishIn(t, sellerTenant, string(def))
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{sellerTenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, storefront_action) VALUES ($1, $2, $3, 1, 'prod', 'storefront', 'order')`,
+			uuid.New(), sellerTenant, wf)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The buyer says where its orders are delivered, and orders.
+	buyer.must(400, "PUT", "/v1/stock/deliver-to", map[string]any{"address": "12 Admiralty Way, Lekki", "phone": "not a phone"})
+	if d := buyer.must(200, "PUT", "/v1/stock/deliver-to", map[string]any{"address": "12 Admiralty Way, Lekki", "phone": "0803 123 4599"}); d["phone"] != "+2348031234599" {
+		t.Fatalf("deliver to: %v", d)
+	}
+	buyer.must(200, "POST", "/v1/stock/setup", nil)
+	rice := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 4000000},
+		"Idempotency-Key", "r")["item"].(map[string]any)["id"].(string)
+	sup := buyer.must(201, "POST", "/v1/stock/suppliers", map[string]any{"name": "Dangote", "phone": "0803 123 4503"})["supplier"].(map[string]any)["id"].(string)
+	link := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": link})
+	po := buyer.must(201, "POST", "/v1/stock/purchases", map[string]any{"supplier_id": sup, "lines": []any{map[string]any{"item_id": rice, "quantity": 6}}},
+		"Idempotency-Key", "po")["purchase"].(map[string]any)["id"].(string)
+	ref := buyer.must(200, "POST", "/v1/stock/purchases/"+po+"/send", nil)["purchase"].(map[string]any)["reference"].(string)
+	drainLinked(t, w.world)
+
+	// On the seller's Orders page, as an order for delivery to the buyer,
+	// its workflow started.
+	var found map[string]any
+	for _, x := range seller.must(200, "GET", "/v1/storefront/orders", nil)["orders"].([]any) {
+		if o := x.(map[string]any); o["reference"] == ref {
+			found = o
+		}
+	}
+	if found == nil || found["kind"] != "trade" || found["status"] != "received" || found["fulfilment"] != "delivery" || found["total_kobo"] != float64(24000000) {
+		t.Fatalf("on the Orders page: %v", found)
+	}
+	got := seller.must(200, "GET", "/v1/storefront/orders/"+ref, nil)
+	order := got
+	if v, ok := got["order"].(map[string]any); ok {
+		order = v
+	}
+	c := order["customer"].(map[string]any)
+	// (Shown masked, as every customer is.)
+	if order["run_id"] == nil || c["name"] != "A•••" || c["phone"] != "•••4599" || c["address"] != "•••" {
+		t.Fatalf("the order, its run and its customer: %v", order)
+	}
+
+	// The workflow's word for its customer reaches the buyer's people.
+	before := len(w.graph.Sent(buyerOn))
+	out, err := w.srv.Orders.NotifyCustomer(ctx, sellerTenant, ref, "We have your order and will deliver it tomorrow.", "", "k1")
+	if err != nil || len(out["queued"].([]string)) != 1 || out["queued"].([]string)[0] != "link" {
+		t.Fatalf("notify: %v %v", out, err)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "Dangote Stores about "+ref) ||
+		!strings.Contains(told[0].Text, "We have your order and will deliver it tomorrow.") {
+		t.Errorf("the buyer told: %+v", told)
+	}
+
+	// Accepted the way a workflow accepts any order: the purchase order follows.
+	if _, err := w.srv.Orders.Decide(ctx, sellerTenant, ref, "accept", "", "workflow:orders"); err != nil {
+		t.Fatal(err)
+	}
+	drainLinked(t, w.world)
+	if p := buyer.must(200, "GET", "/v1/stock/purchases/"+po, nil)["purchase"].(map[string]any); p["status"] != "confirmed" || p["seller_status"] != "accepted" {
+		t.Fatalf("accepted by the workflow: %v", p)
+	}
+
+	// The seller's rider takes it to the buyer.
+	r := seller.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": "+2348031110021", "fee_kobo": 100000})["rider"].(map[string]any)
+	offered := seller.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{"rider_id": r["id"]})
+	if offered["status"] != "offered" {
+		t.Fatalf("offered: %v", offered)
+	}
+	delivery := uuid.MustParse(offered["delivery"].(map[string]any)["id"].(string))
+	for _, action := range []string{dispatch.Accept, dispatch.PickedUp, dispatch.Arrived} {
+		if _, err := w.srv.Dispatch.Press(ctx, sellerTenant, delivery, action); err != nil {
+			t.Fatalf("%s: %v", action, err)
+		}
+	}
+	drainLinked(t, w.world)
+	if p := buyer.must(200, "GET", "/v1/stock/purchases/"+po, nil)["purchase"].(map[string]any); p["seller_status"] != "dispatched" {
+		t.Errorf("on its way: %v", p)
+	}
+	before = len(w.graph.Sent(buyerOn))
+	if _, err := w.srv.Dispatch.Press(ctx, sellerTenant, delivery, dispatch.Delivered); err != nil {
+		t.Fatal(err)
+	}
+	drainLinked(t, w.world)
+	p := buyer.must(200, "GET", "/v1/stock/purchases/"+po, nil)["purchase"].(map[string]any)
+	if p["seller_status"] != "delivered" || p["lines"].([]any)[0].(map[string]any)["delivered"] != float64(6) || p["delivered_at"] == nil {
+		t.Fatalf("delivered by the rider: %v", p)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) == 0 || !strings.Contains(told[len(told)-1].Text, "delivered your order "+ref+": 6 Rice") {
+		t.Errorf("the buyer told of the delivery: %+v", told)
+	}
+	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po+"/all-came", nil)["purchase"].(map[string]any); p["status"] != "received" {
+		t.Errorf("all came: %v", p)
+	}
 }

@@ -5448,6 +5448,11 @@
       "text": "*{from}* confirmed order {reference}, which you drafted for them. It is accepted.",
       "reviewed": true,
       "context": "A linked buyer confirmed an order the seller drafted for it"
+    },
+    "order.link.message_title": {
+      "text": "{from} about {reference}",
+      "reviewed": true,
+      "context": "Notification title: the linked seller's order workflow sends the buyer a message about its order"
     }
   }
 }
