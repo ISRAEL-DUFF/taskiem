@@ -1692,6 +1692,106 @@
       "text": "• *find*, orúkọ tábìlì àti ọ̀rọ̀ kan: wá àwọn ìlà, lẹ́yìn náà *change 1* tàbí *delete 1*",
       "reviewed": false
     },
+    "wa.help.ask": {
+      "text": "• Béèrè nípa àwọn tábìlì rẹ: *how many customers*, *total balance*, tàbí ìbéèrè kankan bíi *ta ló jẹ ju 10k lọ?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Kí lo fẹ́ mọ̀? Fún àpẹẹrẹ: *ask how many customers are in Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "Mi ò tíì lè ka irú ìbéèrè bẹ́ẹ̀ níbí. Ìwọ̀nyí ń ṣiṣẹ́: *how many customers*, *total balance* (ọ̀wọ̀n nọ́mbà), àti *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "Mi ò lè dáhùn ìyẹn láti inú àwọn tábìlì rẹ. Gbìyànjú *find*, orúkọ tábìlì àti ọ̀rọ̀ kan, tàbí *tables* láti rí wọn.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "Ìpín AI oṣù yìí ti tán, nítorí náà mi ò lè ka ìbéèrè náà. *how many customers*, *total balance* àti *find* ṣì ń ṣiṣẹ́.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Ìbéèrè {count} nìyẹn ní wákàtí yìí. Tún béèrè díẹ̀ lẹ́yìn náà, tàbí lo *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Ìgbà tí a fi kún un",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} níbi tí {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " àti ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} jẹ́ {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} kì í ṣe {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} kéré ju {value} lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} kò ju {value} lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} ju {value} lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} tó {value} tàbí jù bẹ́ẹ̀ lọ",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} ní \"{value}\" nínú",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} ṣófo",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} ní nǹkan",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} tó ga jù lọ ṣáájú",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} tó kéré jù lọ ṣáájú",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Àpapọ̀ {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(lórí ìlà {count} àkọ́kọ́)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: kò sí.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
+      "reviewed": false
+    },
     "wa.help.intro": {
       "text": "Ẹ lè fi ránṣẹ́:",
       "reviewed": false

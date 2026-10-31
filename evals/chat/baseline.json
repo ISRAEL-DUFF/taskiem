@@ -1,0 +1,978 @@
+{
+  "kind": "chat",
+  "suite": "evals/chat",
+  "provider": "fake",
+  "model": "heuristic",
+  "summary": {
+    "cases": 44,
+    "errors": 0,
+    "route_accuracy": 0.9286,
+    "spec_accuracy": 1,
+    "refusal_accuracy": 0.75,
+    "usage": {
+      "input_tokens": 23878,
+      "output_tokens": 829,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0
+    },
+    "cost_usd": null
+  },
+  "by_language": {
+    "en": {
+      "cases": 11,
+      "errors": 0,
+      "route_accuracy": 0.5,
+      "spec_accuracy": 1,
+      "refusal_accuracy": 0.5,
+      "usage": {
+        "input_tokens": 6124,
+        "output_tokens": 275,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      },
+      "cost_usd": null
+    },
+    "ha": {
+      "cases": 8,
+      "errors": 0,
+      "route_accuracy": 1,
+      "spec_accuracy": 1,
+      "refusal_accuracy": 1,
+      "usage": {
+        "input_tokens": 4282,
+        "output_tokens": 125,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      },
+      "cost_usd": null
+    },
+    "ig": {
+      "cases": 8,
+      "errors": 0,
+      "route_accuracy": 1,
+      "spec_accuracy": 1,
+      "refusal_accuracy": 0,
+      "usage": {
+        "input_tokens": 4280,
+        "output_tokens": 127,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      },
+      "cost_usd": null
+    },
+    "pcm": {
+      "cases": 9,
+      "errors": 0,
+      "route_accuracy": 1,
+      "spec_accuracy": 1,
+      "refusal_accuracy": 1,
+      "usage": {
+        "input_tokens": 4887,
+        "output_tokens": 171,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      },
+      "cost_usd": null
+    },
+    "yo": {
+      "cases": 8,
+      "errors": 0,
+      "route_accuracy": 1,
+      "spec_accuracy": 1,
+      "refusal_accuracy": 0,
+      "usage": {
+        "input_tokens": 4305,
+        "output_tokens": 131,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      },
+      "cost_usd": null
+    }
+  },
+  "results": [
+    {
+      "id": "en-spec-count",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "count",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "customers | count: |  | ",
+      "got": "customers | count: |  | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 573,
+        "output_tokens": 28,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-spec-count-area",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "count",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "customers | count: | area eq ikeja | ",
+      "got": "customers | count: | area eq ikeja | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 573,
+        "output_tokens": 38,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-spec-owe-10k",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "rows",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "customers |  | balance gt 10000 | balance desc",
+      "got": "customers |  | balance gt 10000 | balance desc",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 578,
+        "output_tokens": 47,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-spec-total-balance",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "sum",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "customers | sum:balance |  | ",
+      "got": "customers | sum:balance |  | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 573,
+        "output_tokens": 29,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-spec-staff-inactive",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "rows",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "staff |  | active eq false | ",
+      "got": "staff |  | active eq false | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 571,
+        "output_tokens": 38,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-spec-refused-colour",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "refused",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "refused",
+      "got": "customers | count: |  | ",
+      "correct": false,
+      "refusal": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 574,
+        "output_tokens": 28,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-spec-refused-weather",
+      "kind": "spec",
+      "language": "en",
+      "tags": [
+        "refused",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "refused",
+      "got": "refused",
+      "correct": true,
+      "refusal": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 573,
+        "output_tokens": 25,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-spec-count-area",
+      "kind": "spec",
+      "language": "pcm",
+      "tags": [
+        "count",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "customers | count: | area eq ikeja | ",
+      "got": "customers | count: | area eq ikeja | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 576,
+        "output_tokens": 38,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-spec-owe-pass",
+      "kind": "spec",
+      "language": "pcm",
+      "tags": [
+        "rows",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "customers |  | balance gt 20000 | balance desc",
+      "got": "customers |  | balance gt 20000 | balance desc",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 576,
+        "output_tokens": 47,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-spec-refused-sum-text",
+      "kind": "spec",
+      "language": "pcm",
+      "tags": [
+        "refused",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "refused",
+      "got": "refused",
+      "correct": true,
+      "refusal": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 575,
+        "output_tokens": 25,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-spec-count-area",
+      "kind": "spec",
+      "language": "yo",
+      "tags": [
+        "count",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "customers | count: | area eq ikeja | ",
+      "got": "customers | count: | area eq ikeja | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 575,
+        "output_tokens": 38,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-spec-total-salary",
+      "kind": "spec",
+      "language": "yo",
+      "tags": [
+        "sum",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "staff | sum:salary |  | ",
+      "got": "staff | sum:salary |  | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 576,
+        "output_tokens": 28,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-spec-count-area",
+      "kind": "spec",
+      "language": "ha",
+      "tags": [
+        "count",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "customers | count: | area eq kano | ",
+      "got": "customers | count: | area eq kano | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 571,
+        "output_tokens": 38,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-spec-refused-unknown",
+      "kind": "spec",
+      "language": "ha",
+      "tags": [
+        "refused",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "refused",
+      "got": "refused",
+      "correct": true,
+      "refusal": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 572,
+        "output_tokens": 25,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-spec-count-area",
+      "kind": "spec",
+      "language": "ig",
+      "tags": [
+        "count",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "customers | count: | area eq enugu | ",
+      "got": "customers | count: | area eq enugu | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 572,
+        "output_tokens": 38,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-spec-products-stock",
+      "kind": "spec",
+      "language": "ig",
+      "tags": [
+        "count",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "products | count: |  | ",
+      "got": "products | count: |  | ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 570,
+        "output_tokens": 27,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-route-tables",
+      "kind": "route",
+      "language": "en",
+      "tags": [
+        "tables",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "tables ",
+      "got": "unknown ",
+      "correct": false,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 525,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-route-ask-ikeja",
+      "kind": "route",
+      "language": "en",
+      "tags": [
+        "ask",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "ask ikeja",
+      "got": "ask how many of my customers live in Ikeja",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 528,
+        "output_tokens": 17,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-route-owes",
+      "kind": "route",
+      "language": "en",
+      "tags": [
+        "owes",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "owes ada owes 5000",
+      "got": "unknown ",
+      "correct": false,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 527,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-route-new-table",
+      "kind": "route",
+      "language": "en",
+      "tags": [
+        "new_table",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "new_table ",
+      "got": "new_table ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 529,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-route-tables",
+      "kind": "route",
+      "language": "pcm",
+      "tags": [
+        "tables",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "tables ",
+      "got": "tables ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 527,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-route-ask",
+      "kind": "route",
+      "language": "pcm",
+      "tags": [
+        "ask",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "ask ikeja",
+      "got": "ask how many customers dey for Ikeja?",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 529,
+        "output_tokens": 15,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-route-owes",
+      "kind": "route",
+      "language": "pcm",
+      "tags": [
+        "owes",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "owes emeka owes 3000",
+      "got": "owes Emeka owes 3000",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 528,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-route-paid",
+      "kind": "route",
+      "language": "pcm",
+      "tags": [
+        "paid",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "paid emeka paid 2000",
+      "got": "paid Emeka paid 2000",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 526,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-route-delete",
+      "kind": "route",
+      "language": "pcm",
+      "tags": [
+        "delete_row",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "delete_row 2",
+      "got": "delete_row 2",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 524,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-route-who-owes",
+      "kind": "route",
+      "language": "pcm",
+      "tags": [
+        "owes",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "owes ",
+      "got": "owes ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 526,
+        "output_tokens": 7,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-route-tables",
+      "kind": "route",
+      "language": "yo",
+      "tags": [
+        "tables",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "tables ",
+      "got": "tables ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 526,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-route-ask",
+      "kind": "route",
+      "language": "yo",
+      "tags": [
+        "ask",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "ask ikeja",
+      "got": "ask oníbàárà mélòó ló wà ní Ikeja?",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 528,
+        "output_tokens": 17,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-route-owes",
+      "kind": "route",
+      "language": "yo",
+      "tags": [
+        "owes",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "owes tunde owes 4000",
+      "got": "owes Tunde owes 4000",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 523,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-route-paid",
+      "kind": "route",
+      "language": "yo",
+      "tags": [
+        "paid",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "paid tunde paid 1500",
+      "got": "paid Tunde paid 1500",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 522,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-route-change",
+      "kind": "route",
+      "language": "yo",
+      "tags": [
+        "change_row",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "change_row 3",
+      "got": "change_row 3",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 525,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "yo-route-new",
+      "kind": "route",
+      "language": "yo",
+      "tags": [
+        "new_table",
+        "yo"
+      ],
+      "status": "ok",
+      "expected": "new_table ",
+      "got": "new_table ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 530,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-route-tables",
+      "kind": "route",
+      "language": "ha",
+      "tags": [
+        "tables",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "tables ",
+      "got": "tables ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 523,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-route-ask",
+      "kind": "route",
+      "language": "ha",
+      "tags": [
+        "ask",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "ask kano",
+      "got": "ask kwastomomi nawa ne a Kano?",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 524,
+        "output_tokens": 14,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-route-owes",
+      "kind": "route",
+      "language": "ha",
+      "tags": [
+        "owes",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "owes musa owes 6000",
+      "got": "owes Musa owes 6000",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 523,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-route-paid",
+      "kind": "route",
+      "language": "ha",
+      "tags": [
+        "paid",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "paid musa paid 2000",
+      "got": "paid Musa paid 2000",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 522,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-route-delete",
+      "kind": "route",
+      "language": "ha",
+      "tags": [
+        "delete_row",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "delete_row 1",
+      "got": "delete_row 1",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 520,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ha-route-new",
+      "kind": "route",
+      "language": "ha",
+      "tags": [
+        "new_table",
+        "ha"
+      ],
+      "status": "ok",
+      "expected": "new_table ",
+      "got": "new_table ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 527,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-route-tables",
+      "kind": "route",
+      "language": "ig",
+      "tags": [
+        "tables",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "tables ",
+      "got": "tables ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 523,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-route-ask",
+      "kind": "route",
+      "language": "ig",
+      "tags": [
+        "ask",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "ask enugu",
+      "got": "ask ndị ahịa ole nọ na Enugu?",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 525,
+        "output_tokens": 15,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-route-owes",
+      "kind": "route",
+      "language": "ig",
+      "tags": [
+        "owes",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "owes chika owes 2500",
+      "got": "owes Chika owes 2500",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 521,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-route-paid",
+      "kind": "route",
+      "language": "ig",
+      "tags": [
+        "paid",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "paid chika paid 1000",
+      "got": "paid Chika paid 1000",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 523,
+        "output_tokens": 11,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-route-change",
+      "kind": "route",
+      "language": "ig",
+      "tags": [
+        "change_row",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "change_row 2",
+      "got": "change_row 2",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 521,
+        "output_tokens": 9,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "ig-route-unknown",
+      "kind": "route",
+      "language": "ig",
+      "tags": [
+        "unknown",
+        "ig"
+      ],
+      "status": "ok",
+      "expected": "unknown ",
+      "got": "unknown ",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 525,
+        "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    }
+  ]
+}

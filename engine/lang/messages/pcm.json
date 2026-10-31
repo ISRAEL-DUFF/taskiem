@@ -1692,6 +1692,106 @@
       "text": "• *find*, the table name and one word: look for rows, then *change 1* or *delete 1*",
       "reviewed": false
     },
+    "wa.help.ask": {
+      "text": "• Ask about your tables: *how many customers*, *total balance*, or any question like *who owe pass 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Wetin you wan know? Like: *ask how many customers dey Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "I no fit read questions like that here yet. These ones dey work: *how many customers*, *total balance* (number column), and *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "I no fit answer that one from your tables. Try *find*, the table name and one word, or *tables* to see them.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "This month AI allowance don finish, so I no fit read that question. *how many customers*, *total balance* and *find* still dey work.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Na {count} questions be that for this hour. Ask again small time later, or use *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Added",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} wey {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " and ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} na {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} no be {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} dey less than {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} no pass {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} pass {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} reach {value} or pass am",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} get \"{value}\" inside",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} empty",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} get something",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} highest first",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} lowest first",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Total {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(for the first {count} rows)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: none.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
+      "reviewed": false
+    },
     "wa.help.intro": {
       "text": "You fit send:",
       "reviewed": false

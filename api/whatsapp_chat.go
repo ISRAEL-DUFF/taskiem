@@ -197,6 +197,10 @@ type chat struct {
 	// blocked is the draft waiting for a connection, while this message is
 	// read (connect_links.go).
 	blocked uuid.UUID
+	// letGo is the list of found rows this message let go, so *change 2*
+	// in another language, by its words or the model's routing, still
+	// finds it (R6).
+	letGo *chatFound
 }
 
 // t is a message in the conversation's language.
@@ -676,6 +680,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
 			return err
 		}
+		// Questions over the tables that need no model ("how many
+		// customers", "total balance") and "ask …" (chat_tables_ask.go),
+		// before stock's "how many rice".
+		if done, err := s.waAskCommand(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
 		if done, err := s.waShopCommand(ctx, c, text, cmd); done || err != nil {
 			return err
 		}
@@ -804,8 +814,15 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
-	// Not recognised: in a language other than English, the model may
-	// route it (engine/ai/intent); it never confirms anything.
+	// Not recognised: in English, a question naming a table goes to the
+	// model as one (chat_tables_ask.go).
+	if c.state == stateIdle && !matched {
+		if done, err := s.waAskFallback(ctx, c, text, cmd); done || err != nil {
+			return err
+		}
+	}
+	// In a language other than English, the model may route it
+	// (engine/ai/intent); it never confirms anything.
 	if c.state == stateIdle && !matched {
 		if m := s.waModelIntent(ctx, c, text); m.Intent != lang.IntentNone {
 			if done, err := s.waIntent(ctx, c, m); done || err != nil {
@@ -880,8 +897,46 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 		return true, s.waTableFind(ctx, c, arg)
 	case lang.IntentNewTable:
 		return true, s.waNewTable(ctx, c, arg)
+	// A row of the list this message let go (chat_tables_rows.go), in any
+	// language.
+	case lang.IntentChangeRow, lang.IntentDeleteRow:
+		n, ok := rowNumber(arg)
+		if !ok || c.letGo == nil {
+			return false, nil
+		}
+		op := "change"
+		if m.Intent == lang.IntentDeleteRow {
+			op = "delete"
+		}
+		return true, s.waRowStart(ctx, c, c.letGo, op, n)
+	// The debtor book and questions over the tables, as the model routes
+	// them: the argument is read as the English words are
+	// (chat_debtors.go, chat_tables_ask.go), and every write still waits
+	// for the person's yes.
+	case lang.IntentOwes, lang.IntentPaid:
+		if c.state != stateIdle || m.Language == lang.EN {
+			return false, nil
+		}
+		if arg == "" {
+			if m.Intent == lang.IntentPaid {
+				return false, nil
+			}
+			arg = "who owes me"
+		}
+		return s.waDebtCommand(ctx, c, arg, normalizeCommand(arg))
+	case lang.IntentAsk:
+		if arg == "" || c.state != stateIdle {
+			return false, nil
+		}
+		return true, s.waAsk(ctx, c, arg)
 	}
 	return false, nil
+}
+
+// rowNumber reads the number of a row in a list ("2", "#2").
+func rowNumber(arg string) (int, bool) {
+	n, err := strconv.Atoi(strings.Trim(arg, " #."))
+	return n, err == nil
 }
 
 func (s *Server) waHelp(c *chat) string {
@@ -902,7 +957,7 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.add"))
 	}
 	if c.p.Can(PermTableRead) {
-		lines = append(lines, c.t("wa.help.find"))
+		lines = append(lines, c.t("wa.help.find"), c.t("wa.help.ask"))
 	}
 	if c.p.Can(PermStorefrontManage) {
 		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"))

@@ -1692,6 +1692,106 @@
       "text": "• *find*, aha tebụl na otu okwu: chọọ ahịrị, mgbe ahụ *change 1* ma ọ bụ *delete 1*",
       "reviewed": false
     },
+    "wa.help.ask": {
+      "text": "• Jụọ maka tebụl gị: *how many customers*, *total balance*, ma ọ bụ ajụjụ ọ bụla dịka *onye ji m karịa 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Gịnị ka ị chọrọ ịma? Dịka: *ask how many customers are in Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "Enweghị m ike ịgụ ajụjụ dị otú ahụ ebe a ugbu a. Ndị a na-arụ ọrụ: *how many customers*, *total balance* (kọlụm nọmba), na *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "Enweghị m ike ịza nke ahụ site na tebụl gị. Nwaa *find*, aha tebụl na otu okwu, ma ọ bụ *tables* iji hụ ha.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "Oke AI nke ọnwa a agwụla, ya mere enweghị m ike ịgụ ajụjụ ahụ. *how many customers*, *total balance* na *find* ka na-arụ ọrụ.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Nke ahụ bụ ajụjụ {count} n'awa a. Jụọ ọzọ obere oge, ma ọ bụ jiri *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Mgbe etinyere ya",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} ebe {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " na ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} bụ {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} abụghị {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} pere mpe karịa {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} agafeghị {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} karịrị {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} ruru {value} ma ọ bụ karịa",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} nwere \"{value}\"",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} tọgbọ chakoo",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} nwere ihe",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} nke kachasị elu buru ụzọ",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} nke kacha nta buru ụzọ",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Ngụkọta {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(n'ahịrị {count} mbụ)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: ọ dịghị.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
+      "reviewed": false
+    },
     "wa.help.intro": {
       "text": "Ị nwere ike iziga:",
       "reviewed": false

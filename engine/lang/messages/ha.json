@@ -1692,6 +1692,106 @@
       "text": "• *find*, sunan tebur da kalma: nemo layuka, sannan *change 1* ko *delete 1*",
       "reviewed": false
     },
+    "wa.help.ask": {
+      "text": "• Tambayi game da teburanka: *how many customers*, *total balance*, ko wata tambaya kamar *wa ke bina fiye da 10k?*",
+      "reviewed": false
+    },
+    "wa.ask.what": {
+      "text": "Me kake so ka sani? Misali: *ask how many customers are in Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.no_model": {
+      "text": "Ba zan iya karanta irin wannan tambaya a nan ba tukuna. Waɗannan suna aiki: *how many customers*, *total balance* (layin lamba), da *find customers Ikeja*.",
+      "reviewed": false
+    },
+    "wa.ask.cant": {
+      "text": "Ban iya amsa wannan daga teburanka ba. Gwada *find*, sunan tebur da kalma, ko *tables* don ganin su.",
+      "reviewed": false
+    },
+    "wa.ask.budget": {
+      "text": "Kason AI na wannan wata ya ƙare, don haka ba zan iya karanta wannan tambaya ba. *how many customers*, *total balance* da *find* suna aiki har yanzu.",
+      "reviewed": false
+    },
+    "wa.ask.limit": {
+      "text": "Wannan tambayoyi {count} ne a wannan sa'a. Sake tambaya daga baya kaɗan, ko yi amfani da *find*.",
+      "reviewed": false
+    },
+    "wa.ask.added": {
+      "text": "Lokacin ƙarawa",
+      "reviewed": false
+    },
+    "wa.ask.where": {
+      "text": "{table} inda {conditions}",
+      "reviewed": false
+    },
+    "wa.ask.and": {
+      "text": " da ",
+      "reviewed": false
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} shi ne {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} ba {value} ba ne",
+      "reviewed": false
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} ya gaza {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} bai wuce {value} ba",
+      "reviewed": false
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} ya fi {value}",
+      "reviewed": false
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} ya kai {value} ko fiye",
+      "reviewed": false
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} yana ɗauke da \"{value}\"",
+      "reviewed": false
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} babu komai",
+      "reviewed": false
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} yana da wani abu",
+      "reviewed": false
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} mafi girma da farko",
+      "reviewed": false
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} mafi ƙanƙanta da farko",
+      "reviewed": false
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": false
+    },
+    "wa.ask.sum": {
+      "text": "Jimillar {column}, {reading}: {total}",
+      "reviewed": false
+    },
+    "wa.ask.sum_over": {
+      "text": "(a kan layuka {count} na farko)",
+      "reviewed": false
+    },
+    "wa.ask.none": {
+      "text": "{reading}: babu.",
+      "reviewed": false
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
+      "reviewed": false
+    },
     "wa.help.intro": {
       "text": "Za ka iya aika:",
       "reviewed": false

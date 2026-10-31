@@ -76,9 +76,15 @@ jobs:
           args=(-mode repair -provider anthropic -skip-without-key -out repair-eval.json -markdown repair-eval.md)
           if [ -n "$MODEL" ]; then args+=(-model "$MODEL"); fi
           go run ./tools/aieval "${args[@]}"
+      - name: Chat suite with the real model
+        if: always() && steps.key.outputs.present == 'true'
+        run: |
+          args=(-mode chat -provider anthropic -skip-without-key -out chat-eval.json -markdown chat-eval.md)
+          if [ -n "$MODEL" ]; then args+=(-model "$MODEL"); fi
+          go run ./tools/aieval "${args[@]}"
       - name: Summary
         if: always() && steps.key.outputs.present == 'true'
-        run: cat builder-eval.md repair-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+        run: cat builder-eval.md repair-eval.md chat-eval.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.key.outputs.present == 'true'
         with:
@@ -88,4 +94,6 @@ jobs:
             builder-eval.md
             repair-eval.json
             repair-eval.md
+            chat-eval.json
+            chat-eval.md
           if-no-files-found: ignore

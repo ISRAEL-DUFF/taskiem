@@ -42,10 +42,12 @@ import (
 type chatFound struct {
 	Table uuid.UUID `json:"table"`
 	Title string    `json:"title"`
-	// Text is the search; Last the smallest id shown, where *more* goes on.
-	Text string  `json:"text"`
-	Rows []int64 `json:"rows"`
-	Last int64   `json:"last,omitempty"`
+	// Text is the search, or Ask the question's spec (chat_tables_ask.go);
+	// Last the smallest id shown, where *more* goes on.
+	Text string                `json:"text"`
+	Ask  *datatables.QuerySpec `json:"ask,omitempty"`
+	Rows []int64               `json:"rows"`
+	Last int64                 `json:"last,omitempty"`
 	// Op is change or delete while one is prepared; Phase is column (which
 	// detail), value (its new value) or confirm.
 	Op    string `json:"op,omitempty"`
@@ -133,6 +135,9 @@ func (s *Server) waFoundReply(ctx context.Context, c *chat, text, cmd string) (b
 	}
 	switch {
 	case cmd == "more" || cmd == "next":
+		if f.Ask != nil {
+			return true, s.waAskMore(ctx, c, f)
+		}
 		t, err := s.waGetTable(ctx, c.tenant.ID, f.Table)
 		if err != nil {
 			return true, s.waRowTableGone(ctx, c, f, err)
@@ -145,6 +150,7 @@ func (s *Server) waFoundReply(ctx context.Context, c *chat, text, cmd string) (b
 		n, _ := strconv.Atoi(deleteRowRe.FindStringSubmatch(cmd)[1])
 		return true, s.waRowStart(ctx, c, f, "delete", n)
 	}
+	c.letGo = f
 	return false, s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 }
 

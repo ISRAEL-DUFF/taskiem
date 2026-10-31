@@ -2114,6 +2114,131 @@
       "reviewed": true,
       "context": "help line for find, change and delete"
     },
+    "wa.help.ask": {
+      "text": "• Ask about your tables: *how many customers*, *total balance*, or any question such as *who owes more than 10k?*",
+      "reviewed": true,
+      "context": "help line for questions over tables"
+    },
+    "wa.ask.what": {
+      "text": "What would you like to know? For example: *ask how many customers are in Ikeja*.",
+      "reviewed": true,
+      "context": "ask with nothing after it"
+    },
+    "wa.ask.no_model": {
+      "text": "I can't read questions like that here yet. These work: *how many customers*, *total balance* (a number column), and *find customers Ikeja*.",
+      "reviewed": true,
+      "context": "questions need the AI, which is not on here: what still works"
+    },
+    "wa.ask.cant": {
+      "text": "I couldn't answer that from your tables. Try *find*, a table's name and a word, or *tables* to see them.",
+      "reviewed": true,
+      "context": "a question that could not be answered from the tables; nothing was read"
+    },
+    "wa.ask.budget": {
+      "text": "This month's AI allowance is used up, so I can't read that question. *how many customers*, *total balance* and *find* still work.",
+      "reviewed": true,
+      "context": "the business's AI allowance for the month is used up"
+    },
+    "wa.ask.limit": {
+      "text": "That's {count} questions this hour. Ask again a little later, or use *find*.",
+      "reviewed": true,
+      "context": "too many questions this hour from this chat"
+    },
+    "wa.ask.added": {
+      "text": "Added",
+      "reviewed": true,
+      "context": "a question's reading: when a row was added"
+    },
+    "wa.ask.where": {
+      "text": "{table} where {conditions}",
+      "reviewed": true,
+      "context": "a question's reading: the table and its conditions"
+    },
+    "wa.ask.and": {
+      "text": " and ",
+      "reviewed": true,
+      "context": "joins two conditions in a question's reading (with spaces)"
+    },
+    "wa.ask.op_eq": {
+      "text": "{column} is {value}",
+      "reviewed": true,
+      "context": "condition: equal"
+    },
+    "wa.ask.op_neq": {
+      "text": "{column} is not {value}",
+      "reviewed": true,
+      "context": "condition: not equal"
+    },
+    "wa.ask.op_lt": {
+      "text": "{column} is less than {value}",
+      "reviewed": true,
+      "context": "condition: less than"
+    },
+    "wa.ask.op_lte": {
+      "text": "{column} is at most {value}",
+      "reviewed": true,
+      "context": "condition: at most"
+    },
+    "wa.ask.op_gt": {
+      "text": "{column} is more than {value}",
+      "reviewed": true,
+      "context": "condition: more than"
+    },
+    "wa.ask.op_gte": {
+      "text": "{column} is at least {value}",
+      "reviewed": true,
+      "context": "condition: at least"
+    },
+    "wa.ask.op_contains": {
+      "text": "{column} contains \"{value}\"",
+      "reviewed": true,
+      "context": "condition: text contains"
+    },
+    "wa.ask.op_is_null": {
+      "text": "{column} is empty",
+      "reviewed": true,
+      "context": "condition: empty"
+    },
+    "wa.ask.op_not_null": {
+      "text": "{column} is filled in",
+      "reviewed": true,
+      "context": "condition: not empty"
+    },
+    "wa.ask.order_desc": {
+      "text": "{column} highest first",
+      "reviewed": true,
+      "context": "a question's reading: highest first"
+    },
+    "wa.ask.order_asc": {
+      "text": "{column} lowest first",
+      "reviewed": true,
+      "context": "a question's reading: lowest first"
+    },
+    "wa.ask.count": {
+      "text": "{reading}: {count}",
+      "reviewed": true,
+      "context": "a count answered, with how the question was read"
+    },
+    "wa.ask.sum": {
+      "text": "Total {column}, {reading}: {total}",
+      "reviewed": true,
+      "context": "a column added up, with how the question was read"
+    },
+    "wa.ask.sum_over": {
+      "text": "(over the first {count} rows)",
+      "reviewed": true,
+      "context": "a sum stopped after the first rows"
+    },
+    "wa.ask.none": {
+      "text": "{reading}: none.",
+      "reviewed": true,
+      "context": "no rows answer the question"
+    },
+    "wa.ask.rows_head": {
+      "text": "{reading} ({count}):",
+      "reviewed": true,
+      "context": "the rows that answer a question: how it was read and how many"
+    },
     "wa.help.intro": {
       "text": "You can send:",
       "reviewed": true,
