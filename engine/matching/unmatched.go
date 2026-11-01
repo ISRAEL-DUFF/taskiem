@@ -117,7 +117,7 @@ func (m *Matcher) OpenOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, l
 	}
 	list, err := m.Orders.Matchables(ctx, tx, tenant, limit)
 	for _, x := range list {
-		out = append(out, OpenOrder{TargetKind: TargetOrder, Target: OrderTarget(x.Reference), Number: x.Reference, DueKobo: x.Payable(),
+		out = append(out, OpenOrder{TargetKind: TargetOrder, Target: OrderTarget(x.Reference), Number: x.Reference, DueKobo: x.AskedKobo(),
 			Customer: x.Customer.Name, PlacedAt: x.CreatedAt})
 	}
 	return out, err

@@ -92,7 +92,7 @@ func (o *Orders) TransferRequested(ctx context.Context, tenant, order uuid.UUID)
 	if ord.Customer.Phone != "" {
 		payer["phone"] = ord.Customer.Phone
 	}
-	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.Payable(), what+ord.Reference, payer, minutes)
+	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.AskedKobo(), what+ord.Reference, payer, minutes)
 }
 
 // TransferReceived counts a payment the rail confirmed into an order's
@@ -142,7 +142,7 @@ func (o *Orders) statusLinkFor(ctx context.Context, tenant uuid.UUID, ord Order)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"reference": ord.Reference, "url": link, "total": FormatNaira(ord.Payable())}, nil
+	return map[string]any{"reference": ord.Reference, "url": link, "total": FormatNaira(ord.AskedKobo())}, nil
 }
 
 // refundByHandNote is what a refund_due order paid by transfer says.
@@ -151,7 +151,7 @@ func refundByHandNote(ord Order) string {
 	if ord.PaidBy != "transfer" {
 		how = "with money matched to it, not through its card page"
 	}
-	return "Paid " + how + ": send " + FormatNaira(ord.Payable()) + " back to the customer from your bank, then mark it refunded."
+	return "Paid " + how + ": send " + FormatNaira(ord.RefundKobo()) + " back to the customer from your bank, then mark it refunded."
 }
 
 // askRefundByHand leaves a refund_due order with the note saying how to
@@ -196,7 +196,7 @@ func (o *Orders) MarkRefunded(ctx context.Context, tenant uuid.UUID, reference, 
 			return err
 		}
 		ord.Status, ord.Note, marked = "refunded", note, true
-		if err := audit(ctx, tx, tenant, "storefront.refunded", reference, map[string]any{"by": actor, "by_hand": true, "total_kobo": ord.Payable()}); err != nil {
+		if err := audit(ctx, tx, tenant, "storefront.refunded", reference, map[string]any{"by": actor, "by_hand": true, "total_kobo": ord.RefundKobo()}); err != nil {
 			return err
 		}
 		return o.open(ctx, tx, tenant, &ord)
@@ -204,7 +204,7 @@ func (o *Orders) MarkRefunded(ctx context.Context, tenant uuid.UUID, reference, 
 	if err != nil || !marked {
 		return ord, err
 	}
-	err = o.tell(ctx, tenant, reference, "Your payment of "+FormatNaira(ord.Payable())+" for "+reference+" has been sent back to you. Contact us if it has not reached you.",
+	err = o.tell(ctx, tenant, reference, "Your payment of "+FormatNaira(ord.RefundKobo())+" for "+reference+" has been sent back to you. Contact us if it has not reached you.",
 		"refund:"+reference)
 	return ord, err
 }
@@ -245,7 +245,7 @@ func (o *Orders) DoorTransfer(ctx context.Context, tenant, order uuid.UUID) erro
 	if ord.Customer.Phone != "" {
 		payer["phone"] = ord.Customer.Phone
 	}
-	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.Payable(), "Order "+ord.Reference, payer, doorMinutes)
+	return o.IssueTransfer(ctx, tenant, ord.ID, checkoutChannel(connection), ord.AskedKobo(), "Order "+ord.Reference, payer, doorMinutes)
 }
 
 // DoorAccount is the account number an order is paid into at the door:

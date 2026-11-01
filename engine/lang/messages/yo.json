@@ -4775,6 +4775,14 @@
     "wa.front.orders_head": {
       "text": "Àwọn ìfipamọ́ tí ó ṣí sílẹ̀ lórí *{front}*, èyí tuntun jù lọ ní àkọ́kọ́:",
       "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "A ti gba owó {amount} tí o san fún {reference}. {balance} ló kù láti san.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} ló kù láti san fún {reference}. San án níbí: {url}",
+      "reviewed": false
     }
   }
 }

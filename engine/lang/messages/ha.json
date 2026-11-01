@@ -4775,6 +4775,14 @@
     "wa.front.orders_head": {
       "text": "Oda a buɗe a kan *{front}*, sabbi a farko:",
       "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "Mun karɓi kuɗinka na {amount} don {reference}. Saura {balance} da za a biya.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "Saura {balance} da za a biya don {reference}. Biya a nan: {url}",
+      "reviewed": false
     }
   }
 }

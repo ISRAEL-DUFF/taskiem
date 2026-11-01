@@ -414,6 +414,13 @@ func TestStatusPage(t *testing.T) {
 		{OrderState{Status: "expired", Kind: "order"}, []string{"expired"}, false},
 		{OrderState{Status: "cancelled", Kind: "order"}, []string{"cancelled"}, false},
 		{OrderState{Status: "refund_due", Kind: "order"}, []string{"refunded"}, false},
+		// Paid in parts (fronts F5): what is paid of what it costs, and a
+		// later step's own page for what is asked now.
+		{OrderState{Status: "accepted", Kind: "order", TotalKobo: 450200, DueKobo: 450200, PaidKobo: 200000}, []string{"Paid ₦2,000 of ₦4,502."}, false},
+		{OrderState{Status: "accepted", Kind: "order", TotalKobo: 450200, DueKobo: 450200, PaidKobo: 200000, AskedKobo: 250200, PaymentURL: "https://checkout.paystack.test/bal"},
+			[]string{"Paid ₦2,000 of ₦4,502.", "₦2,502 is due now.", `href="https://checkout.paystack.test/bal" rel="noopener noreferrer">Pay the balance, ₦2,502</a>`}, false},
+		{OrderState{Status: "accepted", Kind: "order", TotalKobo: 450200, DueKobo: 450200, PaidKobo: 200000, AskedKobo: 100000, PaymentURL: "https://checkout.paystack.test/part"},
+			[]string{"₦1,000 is due now.", `>Pay ₦1,000</a>`}, false},
 	} {
 		e.inbox.states[ref] = c.state
 		w := get(e.h, "GET", sfHost, loc)

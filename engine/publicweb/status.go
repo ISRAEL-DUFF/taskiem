@@ -127,7 +127,9 @@ func (s *Server) statusPage(ctx context.Context, site Site, ref, key string, o O
 	if embed {
 		prefix = "/embed"
 	}
-	if o.Status == "awaiting_payment" && s.OrderPay != nil {
+	// A later step asks for more on an order paid before (fronts F5).
+	step := o.AskedKobo > 0 && o.Status != "awaiting_payment"
+	if (o.Status == "awaiting_payment" || step) && s.OrderPay != nil {
 		p, ok, err := s.OrderPay.Payment(ctx, ref, storefront.StatusHash(key))
 		if err != nil {
 			return d, err
@@ -169,7 +171,8 @@ func (s *Server) statusPage(ctx context.Context, site Site, ref, key string, o O
 	default:
 		statusWords(&d, o)
 	}
-	if o.Status == "awaiting_payment" {
+	moneyWords(&d, o, step)
+	if o.Status == "awaiting_payment" || step {
 		s.payByTransfer(&d, ref, key, prefix)
 	}
 	if o.Kind == "order" && o.Status == "completed" {
@@ -312,13 +315,19 @@ func statusWords(d *statusData, o OrderState) {
 		d.Headline, d.Refresh = "We have your order "+d.Reference, true
 		d.Lines = []string{"This page will update in a moment."}
 	case "awaiting_payment":
+		// By transfer, what is left of it once part was paid (fronts F5).
+		pay := total
+		if o.AskedKobo > 0 {
+			pay = storefront.FormatNaira(o.AskedKobo)
+		}
 		if u := payLink(o.PaymentURL); u != "" {
 			d.Headline = "Pay for your order " + d.Reference
+			// The card page charges what it was made for.
 			d.PayURL, d.PayLabel = u, "Pay "+total
 			d.Lines = []string{d.heldLine(false), "You pay " + b + " through their payment provider. Never share a PIN or one-time code with anyone."}
 		} else if d.transferOnly() {
 			d.Headline = "Pay for your order " + d.Reference
-			d.Lines = []string{d.heldLine(false), "Pay " + total + " by bank transfer to the account number " + b + " gives you here."}
+			d.Lines = []string{d.heldLine(false), "Pay " + pay + " by bank transfer to the account number " + b + " gives you here."}
 		} else {
 			d.Headline, d.Refresh = "We have your order "+d.Reference, true
 			d.Lines = []string{"We are preparing your payment. This page will update in a moment."}
@@ -365,6 +374,26 @@ func statusWords(d *statusData, o OrderState) {
 	}
 	if total != "" && d.PayURL == "" && o.Status != "processing" && (o.Status != "awaiting_payment" || !d.transferOnly()) {
 		d.Lines = append(d.Lines, "Total: "+total)
+	}
+}
+
+// moneyWords says what is paid and what is due on an order paid in parts
+// (fronts F5), and gives a later step's Pay button: nothing for an order
+// paid in full, or not paid at all.
+func moneyWords(d *statusData, o OrderState, step bool) {
+	if o.PaidKobo > 0 && o.PaidKobo < o.DueKobo {
+		d.Lines = append(d.Lines, "Paid "+storefront.FormatNaira(o.PaidKobo)+" of "+storefront.FormatNaira(o.DueKobo)+".")
+	}
+	if !step {
+		return
+	}
+	asked := storefront.FormatNaira(o.AskedKobo)
+	d.Lines = append(d.Lines, asked+" is due now.")
+	if u := payLink(o.PaymentURL); u != "" && d.PayURL == "" {
+		d.PayURL, d.PayLabel = u, "Pay the balance, "+asked
+		if o.AskedKobo < o.DueKobo-o.PaidKobo {
+			d.PayLabel = "Pay " + asked
+		}
 	}
 }
 

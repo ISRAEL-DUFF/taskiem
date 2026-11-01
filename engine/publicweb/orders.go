@@ -57,6 +57,9 @@ type OrderState struct {
 	Payment    string
 	PaymentURL string
 	Storefront uuid.UUID
+	// What it costs, what was paid towards it and what it asks now (a
+	// deposit, the balance, an instalment; fronts F5): 0 when not read.
+	DueKobo, PaidKobo, AskedKobo int64
 }
 
 // OrderStatus reads a submission's state by its reference and the hash of
@@ -78,6 +81,13 @@ func DBOrderStatus(pool *pgxpool.Pool) OrderStatus {
 		}
 		if url != nil {
 			o.PaymentURL = *url
+		}
+		if o.Status != "processing" {
+			err := pool.QueryRow(ctx, `SELECT due_kobo, paid_kobo, asked_kobo FROM taskiem_public_order_money($1, $2)`, reference, statusHash).
+				Scan(&o.DueKobo, &o.PaidKobo, &o.AskedKobo)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return OrderState{}, false, err
+			}
 		}
 		return o, true, nil
 	}

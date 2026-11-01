@@ -21,7 +21,7 @@ type ops struct {
 func (o *ops) Decide(context.Context, uuid.UUID, string, string, string, string) (map[string]any, error) {
 	return nil, nil
 }
-func (o *ops) PaymentLink(context.Context, uuid.UUID, string) (map[string]any, error) {
+func (o *ops) PaymentLink(context.Context, uuid.UUID, string, int64) (map[string]any, error) {
 	return nil, nil
 }
 func (o *ops) NotifyCustomer(_ context.Context, _ uuid.UUID, _, text, _, _ string) (map[string]any, error) {

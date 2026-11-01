@@ -29,7 +29,7 @@ var manifest []byte
 // Ops is what the actions call: *storefront.Orders.
 type Ops interface {
 	Decide(ctx context.Context, tenant uuid.UUID, reference, decision, note, actor string) (map[string]any, error)
-	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
+	PaymentLink(ctx context.Context, tenant uuid.UUID, reference string, amountKobo int64) (map[string]any, error)
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
@@ -84,7 +84,22 @@ func (a *actions) paymentLink(ctx context.Context, req connector.Request) (conne
 	if err != nil {
 		return connector.Response{}, err
 	}
-	out, err := a.ops.PaymentLink(ctx, c.Tenant, ref)
+	// An amount asks for part of what is left on an order paid before (a
+	// deposit's balance, an instalment; fronts F5); none, the order's
+	// payment, or then its balance.
+	var amount int64
+	switch v := req.Input["amount_kobo"].(type) {
+	case nil:
+	case float64:
+		amount = int64(v)
+	case int64:
+		amount = v
+	case int:
+		amount = int64(v)
+	default:
+		return connector.Response{}, fmt.Errorf("amount_kobo is a whole number of kobo: %w", effects.ErrFatal)
+	}
+	out, err := a.ops.PaymentLink(ctx, c.Tenant, ref, amount)
 	return connector.Response{Output: out}, classify(err)
 }
 
@@ -137,13 +152,13 @@ func (a *actions) refund(ctx context.Context, req connector.Request) (connector.
 	if errors.Is(err, sf.ErrRefundByHand) {
 		// Paid by bank transfer: the owner sends it back from their bank
 		// and marks it refunded; the order says so (N3).
-		return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.Payable()), "by_hand": true,
+		return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.RefundKobo()), "by_hand": true,
 			"note": strings.TrimSpace(strings.TrimPrefix(err.Error(), sf.ErrRefundByHand.Error()+":"))}}, nil
 	}
 	if err != nil {
 		return connector.Response{}, classify(err)
 	}
-	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.Payable())}}, nil
+	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total": sf.FormatNaira(o.RefundKobo())}}, nil
 }
 
 // classify makes refusals fatal: retrying an order the tenant does not
@@ -186,12 +201,12 @@ func (l *Late) Decide(ctx context.Context, tenant uuid.UUID, reference, decision
 	return ops.Decide(ctx, tenant, reference, decision, note, actor)
 }
 
-func (l *Late) PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error) {
+func (l *Late) PaymentLink(ctx context.Context, tenant uuid.UUID, reference string, amountKobo int64) (map[string]any, error) {
 	ops, err := l.get()
 	if err != nil {
 		return nil, err
 	}
-	return ops.PaymentLink(ctx, tenant, reference)
+	return ops.PaymentLink(ctx, tenant, reference, amountKobo)
 }
 
 func (l *Late) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error) {

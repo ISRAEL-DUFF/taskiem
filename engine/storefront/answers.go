@@ -342,7 +342,7 @@ func (r submissionRecord) submission(ord Order, paymentStatus string) map[string
 		phone = "•••" + p[len(p)-4:]
 	}
 	return map[string]any{"reference": ord.Reference, "front": r.front, "action": r.action, "total_kobo": ord.TotalKobo,
-		"payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}, "customer": map[string]any{"name": maskName(ord.Customer.Name), "phone": phone},
+		"payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}, "due_kobo": ord.DueKobo(), "paid_kobo": ord.PaidKobo, "customer": map[string]any{"name": maskName(ord.Customer.Name), "phone": phone},
 		"status_link": r.statusLink, "lines": lines}
 }
 

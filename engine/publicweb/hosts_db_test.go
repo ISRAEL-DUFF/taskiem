@@ -148,7 +148,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_storefront(uuid)": true, "taskiem_public_storefront_catalogue(uuid)": true,
 		// Fronts (F3): a front's list, by its table.
 		"taskiem_public_storefront_list(uuid,text)":               true,
-		"taskiem_public_submit(uuid,text,text,bytea,bytea,bytea)": true, "taskiem_public_order_status(text,bytea)": true,
+		"taskiem_public_submit(uuid,text,text,bytea,bytea,bytea)": true, "taskiem_public_order_status(text,bytea)": true, "taskiem_public_order_money(text,bytea)": true,
 		// Bookings (S4): the services and free time, holding a slot, a booking's status and the customer's changes.
 		"taskiem_public_storefront_services(uuid)": true, "taskiem_public_busy(uuid,timestamp with time zone,timestamp with time zone)": true,
 		"taskiem_public_book(uuid,text,bytea,bytea,bytea,text,timestamp with time zone,timestamp with time zone,integer)": true,

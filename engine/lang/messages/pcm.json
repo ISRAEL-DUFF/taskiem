@@ -4775,6 +4775,14 @@
     "wa.front.orders_head": {
       "text": "Open orders for *{front}*, the new ones first:",
       "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "We don receive your payment of {amount} for {reference}. {balance} remain to pay.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} remain to pay for {reference}. Pay am here: {url}",
+      "reviewed": false
     }
   }
 }

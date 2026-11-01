@@ -51,9 +51,15 @@ type Counted struct {
 	PaymentID uuid.UUID
 	// Became is true when this payment moved the order to paid.
 	Became bool
+	// Step is true when this payment completed a later step (a balance, an
+	// instalment) on an order paid before (fronts F5): its run is told,
+	// with the step's number in the signal's key.
+	Step bool
 	// wake: the paid flow starts the order's run (start) or wakes the run
 	// waiting for its payment (!start).
 	wake, start bool
+	// stepKobo is what the completed step asked.
+	stepKobo int64
 }
 
 // OrderPayment is a payment counted towards an order, or the undoing of
@@ -79,7 +85,16 @@ type OrderPayment struct {
 // acceptance waits for its payment link to be made first: its workflow
 // sends the link and waits for it.
 func (x Order) Matchable() bool {
-	if x.PaidAt != nil || (x.Kind != "order" && x.Kind != "booking") || x.Payable() < 100 {
+	// A later step (a balance, an instalment) waits for its money while
+	// the order stands (fronts F5).
+	if x.PayToKobo != nil {
+		switch x.Status {
+		case "refunded", "refund_due", "cancelled", "declined", "expired":
+			return false
+		}
+		return true
+	}
+	if x.PaidAt != nil || x.Kind == "enquiry" || x.Kind == "callback" || x.Payable() < 100 {
 		return false
 	}
 	switch x.Payment {
@@ -97,9 +112,10 @@ func (x Order) Matchable() bool {
 }
 
 // matchableSQL is Matchable in SQL.
-const matchableSQL = `paid_at IS NULL AND kind IN ('order', 'booking') AND COALESCE(deposit_kobo, total_kobo) >= 100
+const matchableSQL = `(pay_to_kobo IS NOT NULL AND status NOT IN ('refunded', 'refund_due', 'cancelled', 'declined', 'expired')
+	OR pay_to_kobo IS NULL AND paid_at IS NULL AND kind NOT IN ('enquiry', 'callback') AND COALESCE(deposit_kobo, total_kobo) >= 100
 	AND (status = 'awaiting_payment' OR payment = 'none' AND status IN ('received', 'accepted')
-	  OR payment = 'on_delivery' AND status IN ('received', 'accepted', 'dispatched', 'on_the_way', 'arrived'))`
+	  OR payment = 'on_delivery' AND status IN ('received', 'accepted', 'dispatched', 'on_the_way', 'arrived')))`
 
 // CountPayment counts a payment towards the order with this reference, in
 // the caller's transaction, and moves the order to paid when it is not
@@ -154,34 +170,41 @@ func (o *Orders) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 // it moved from (nil when it was paid already).
 func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *Counted, p PaymentIn) (*string, error) {
 	ord := c.Order
-	if p.EntryID != nil {
-		paidBy, err := moneylog.OrderParts.Paid(ctx, tx, ord.ID)
-		if err != nil {
-			return nil, err
-		}
-		if paidBy {
-			var same bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = $1 AND p.entry_id = $2 AND p.undoes IS NULL
-				AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id))`, ord.ID, *p.EntryID).Scan(&same); err != nil {
-				return nil, err
-			}
-			if same {
-				return nil, fmt.Errorf("%w: %s is already paid by this payment; an order takes one payment", ErrDecision, ord.Reference)
-			}
-			return nil, fmt.Errorf("%w: %s is already paid by another payment", ErrDecision, ord.Reference)
-		}
-	}
-	if ord.Kind != "order" && ord.Kind != "booking" {
+	if ord.Kind == "enquiry" || ord.Kind == "callback" {
 		return nil, fmt.Errorf("%w: %s takes no payment", ErrDecision, ord.Reference)
 	}
-	if p.AmountKobo < ord.Payable() {
-		return nil, fmt.Errorf("%w: %s is less than the %s due on %s", ErrDecision, FormatNaira(p.AmountKobo), FormatNaira(ord.Payable()), ord.Reference)
+	// A later step on an order paid before (fronts F5): each payment is a
+	// part of it, and the one that reaches it completes it.
+	if ord.PayToKobo != nil {
+		if ord.Status == "refunded" || ord.Status == "refund_due" || ord.Status == "cancelled" || ord.Status == "declined" {
+			return nil, fmt.Errorf("%w: %s is not waiting for a payment (%s)", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
+		}
+		if ord.PaidKobo+p.AmountKobo < *ord.PayToKobo {
+			return nil, audit(ctx, tx, tenant, "storefront.order_part_paid", ord.Reference, map[string]any{"amount_kobo": p.AmountKobo, "how": p.How, "by": p.By})
+		}
+		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET pay_to_kobo = NULL, pay_step_kobo = NULL, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID); err != nil {
+			return nil, err
+		}
+		c.Step, c.wake = true, true
+		if ord.PayStepKobo != nil {
+			c.stepKobo = *ord.PayStepKobo
+		}
+		return nil, audit(ctx, tx, tenant, "storefront.order_step_paid", ord.Reference, map[string]any{"amount_kobo": p.AmountKobo, "step": ord.PaySeq, "how": p.How, "by": p.By})
 	}
 	if ord.PaidAt != nil {
-		return nil, nil
+		if p.EntryID == nil {
+			// Its own payment check came first.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: %s is already paid, and asks for nothing more", ErrDecision, ord.Reference)
 	}
 	if !ord.Matchable() {
 		return nil, fmt.Errorf("%w: %s is not waiting for a payment (%s)", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
+	}
+	// Less than the deposit or the total: a part, counted; the order waits
+	// for the rest.
+	if ord.PaidKobo+p.AmountKobo < ord.Payable() {
+		return nil, audit(ctx, tx, tenant, "storefront.order_part_paid", ord.Reference, map[string]any{"amount_kobo": p.AmountKobo, "how": p.How, "by": p.By})
 	}
 	decided := ord.DecidedAt != nil
 	next := ord.Status
@@ -227,14 +250,22 @@ func (o *Orders) Paid(ctx context.Context, tenant uuid.UUID, c Counted) error {
 			o.log().Warn("storefront: after a payment", "reference", c.Order.Reference, "err", err)
 		}
 	}
-	if !c.Became || !c.wake {
+	if !c.Became && !c.Step || !c.wake {
 		return nil
 	}
 	if c.start {
 		return o.startRun(ctx, tenant, c.Order.Reference)
 	}
-	_, _, err := o.Signal(ctx, tenant, "prod", PaymentSignal, c.Order.Reference, "paid:"+c.Order.Reference,
-		map[string]any{"reference": c.Order.Reference, "status": "paid"})
+	// The signal says what this step asked and what is left (fronts F5):
+	// a workflow waits for a deposit, then later for the balance.
+	key := "paid:" + c.Order.Reference
+	asked := c.Order.Payable()
+	if c.Step {
+		key = fmt.Sprintf("paid:%s:%d", c.Order.Reference, c.Order.PaySeq)
+		asked = c.stepKobo
+	}
+	_, _, err := o.Signal(ctx, tenant, "prod", PaymentSignal, c.Order.Reference, key,
+		map[string]any{"reference": c.Order.Reference, "status": "paid", "amount_kobo": asked, "balance_kobo": c.Order.BalanceKobo()})
 	return err
 }
 
@@ -354,14 +385,15 @@ func (o *Orders) UndoPayment(ctx context.Context, tx pgx.Tx, tenant, payment uui
 			if err := tx.QueryRow(ctx, `SELECT from_status, woke_run FROM storefront_order_payments WHERE id = $1`, p.ID).Scan(&from, &woke); err != nil {
 				return nil, err
 			}
+			if woke {
+				return nil, fmt.Errorf("%w: %s went on with this payment (its workflow was started or told it was paid); cancel or refund the order instead", ErrDecision, ord.Reference)
+			}
 			if from != nil {
 				want := *from
 				if want == "accepted" {
 					want = "paid"
 				}
 				switch {
-				case woke:
-					return nil, fmt.Errorf("%w: %s went on with this payment (its workflow was started or told it was paid); cancel or refund the order instead", ErrDecision, ord.Reference)
 				case *from == "awaiting_payment":
 					return nil, fmt.Errorf("%w: %s was waiting for its checkout payment, which this payment completed; cancel or refund the order instead", ErrDecision, ord.Reference)
 				case ord.Status != want:

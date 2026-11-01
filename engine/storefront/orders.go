@@ -156,7 +156,16 @@ type Order struct {
 	// is asked to confirm it (status price_changed).
 	PriceChange *PriceChange `json:"price_change,omitempty"`
 	// FrontID is the front the submission came from (fronts F3).
-	FrontID     *uuid.UUID `json:"front_id,omitempty"`
+	FrontID *uuid.UUID `json:"front_id,omitempty"`
+	// Part payments (fronts F5, §5.4): ExtraKobo is added to what it costs
+	// (a late fee), PaidKobo is what was paid towards it, and PayToKobo,
+	// while a later step (a balance, an instalment) is open, what PaidKobo
+	// is to reach; PaySeq numbers the steps.
+	ExtraKobo   int64  `json:"extra_kobo,omitempty"`
+	PaidKobo    int64  `json:"paid_kobo"`
+	PayToKobo   *int64 `json:"pay_to_kobo,omitempty"`
+	PayStepKobo *int64 `json:"pay_step_kobo,omitempty"`
+	PaySeq      int    `json:"pay_seq,omitempty"`
 	subject     string
 	storefront  uuid.UUID
 	action      uuid.UUID
@@ -174,7 +183,7 @@ func (x Order) CustomerID() string { return x.subject }
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
-	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq,
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -187,7 +196,8 @@ func scanOrder(r pgx.Row) (Order, error) {
 	var basket, change []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
-		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID, &x.PaidBy)
+		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID,
+		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -635,12 +645,52 @@ func (o *Orders) createPayment(ctx context.Context, tenant uuid.UUID, ord Order,
 	})
 }
 
+// RefundKobo is what a refund gives back: what was paid.
+func (x Order) RefundKobo() int64 {
+	if x.PaidKobo > 0 {
+		return x.PaidKobo
+	}
+	return x.Payable()
+}
+
 // Payable is what is paid online: the deposit, or the total.
 func (x Order) Payable() int64 {
 	if x.DepositKobo != nil {
 		return *x.DepositKobo
 	}
 	return x.TotalKobo
+}
+
+// DueKobo is what the order costs: its total and anything added since (a
+// late fee).
+func (x Order) DueKobo() int64 { return x.TotalKobo + x.ExtraKobo }
+
+// BalanceKobo is what is left to pay on it.
+func (x Order) BalanceKobo() int64 { return max(x.DueKobo()-x.PaidKobo, 0) }
+
+// AskedKobo is what the order asks for now: the rest of an open later
+// step, or, while it waits for its first payment, the rest of its deposit
+// or total; 0 when it asks for nothing.
+func (x Order) AskedKobo() int64 {
+	switch {
+	case x.PayToKobo != nil:
+		return max(*x.PayToKobo-x.PaidKobo, 0)
+	case x.PaidAt == nil:
+		return max(x.Payable()-x.PaidKobo, 0)
+	}
+	return 0
+}
+
+// PaymentState is unpaid, part_paid or paid, from what was paid against
+// what it costs.
+func (x Order) PaymentState() string {
+	switch {
+	case x.PaidKobo <= 0:
+		return "unpaid"
+	case x.PaidKobo < x.DueKobo():
+		return "part_paid"
+	}
+	return "paid"
 }
 
 // startRun starts the run of the workflow deployed for the order's form,
@@ -790,9 +840,14 @@ type due struct {
 func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []due
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, COALESCE(o.payment_ref, ''), COALESCE(a.options->>'connection', ''), COALESCE(o.deposit_kobo, o.total_kobo), o.expires_at, o.status, o.kind, o.run_id
+		// Orders waiting for their first payment, and later steps (fronts
+		// F5) paid by card: a step asks its own amount and never expires.
+		rows, err := tx.Query(ctx, `SELECT o.id, o.reference, COALESCE(o.payment_ref, ''), COALESCE(a.options->>'connection', ''),
+				CASE WHEN o.pay_to_kobo IS NOT NULL THEN o.pay_step_kobo ELSE COALESCE(o.deposit_kobo, o.total_kobo) END,
+				CASE WHEN o.pay_to_kobo IS NULL THEN o.expires_at END, o.status, o.kind, o.run_id
 			FROM storefront_orders o JOIN storefront_actions a ON a.id = o.action_id
-			WHERE o.tenant_id = $1 AND o.status = 'awaiting_payment' ORDER BY o.created_at LIMIT 100`, tenant)
+			WHERE o.tenant_id = $1 AND (o.status = 'awaiting_payment' AND o.pay_to_kobo IS NULL OR o.pay_to_kobo IS NOT NULL AND o.payment_ref IS NOT NULL)
+			ORDER BY o.created_at LIMIT 100`, tenant)
 		if err != nil {
 			return err
 		}
@@ -1029,8 +1084,10 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 
 // PaymentLink makes the payment page for an accepted order paid after
 // acceptance (once: a second call returns the same page) and leaves the
-// order waiting for it.
-func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error) {
+// order waiting for it. On an order paid before, it asks for more (fronts
+// F5): amountKobo (a deposit's balance in parts, an instalment), or the
+// balance when 0.
+func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference string, amountKobo int64) (map[string]any, error) {
 	var ord Order
 	var slug, connection string
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -1044,8 +1101,17 @@ func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference st
 	if err != nil {
 		return nil, err
 	}
+	if amountKobo < 0 {
+		return nil, fmt.Errorf("%w: an amount is above 0", ErrInvalid)
+	}
+	if ord.PaidAt != nil || ord.PayToKobo != nil {
+		return o.stepLink(ctx, tenant, ord, slug, connection, amountKobo)
+	}
+	if amountKobo > 0 && amountKobo != ord.Payable() {
+		return nil, fmt.Errorf("%w: %s's first payment is its %s; ask for more once it is paid", ErrDecision, reference, FormatNaira(ord.Payable()))
+	}
 	if ord.PaymentURL != "" {
-		return map[string]any{"reference": reference, "url": ord.PaymentURL, "total": FormatNaira(ord.Payable())}, nil
+		return map[string]any{"reference": reference, "url": ord.PaymentURL, "total": FormatNaira(ord.Payable()), "amount_kobo": ord.Payable(), "balance_kobo": ord.BalanceKobo()}, nil
 	}
 	name, card := paystackConnection(connection)
 	if !card && ord.Status == "awaiting_payment" && ord.Payment == "after_accept" {
@@ -1087,7 +1153,7 @@ func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference st
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"reference": reference, "url": url, "total": FormatNaira(ord.Payable())}, nil
+	return map[string]any{"reference": reference, "url": url, "total": FormatNaira(ord.Payable()), "amount_kobo": ord.Payable(), "balance_kobo": ord.BalanceKobo()}, nil
 }
 
 // NotifyCustomer queues a message to the order's customer: an SMS, and an
@@ -1182,4 +1248,79 @@ func (o *Orders) CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Ta
 		return nil
 	})
 	return l
+}
+
+// stepLink asks for more on an order paid before (fronts F5): amount, or
+// the balance when 0, as a new step with its own checkout reference, so a
+// retried call gives the same page and a later one a new page. The order's
+// status stays as it is; the run waits for the storefront.payment signal,
+// which says what the step asked and what is left. Another rail's form
+// gives the status page, where the step is paid by transfer.
+func (o *Orders) stepLink(ctx context.Context, tenant uuid.UUID, ord Order, slug, connection string, amount int64) (map[string]any, error) {
+	switch ord.Status {
+	case "refunded", "refund_due", "cancelled", "declined", "expired":
+		return nil, fmt.Errorf("%w: %s takes no more payments while %s", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
+	}
+	balance := ord.BalanceKobo()
+	if amount == 0 || amount > balance {
+		amount = balance
+	}
+	out := func(url string, asked int64) map[string]any {
+		return map[string]any{"reference": ord.Reference, "url": url, "total": FormatNaira(asked), "amount_kobo": asked, "balance_kobo": balance}
+	}
+	// A step already open is the one asked for, whatever the amount: it is
+	// paid (or its link made again) before another.
+	if ord.PayToKobo != nil {
+		asked := *ord.PayToKobo - ord.PaidKobo
+		if ord.PaymentURL != "" {
+			return out(ord.PaymentURL, asked), nil
+		}
+		return o.stepStatusLink(ctx, tenant, ord, asked, balance)
+	}
+	if amount < 100 {
+		return nil, fmt.Errorf("%w: %s has nothing left to pay", ErrDecision, ord.Reference)
+	}
+	seq := ord.PaySeq + 1
+	name, card := paystackConnection(connection)
+	var url, ref *string
+	if card {
+		if o.Payments == nil {
+			return nil, errors.New("storefront: no payment provider is configured")
+		}
+		u, r, err := o.Payments.Create(ctx, tenant, name, PaymentRequest{Reference: fmt.Sprintf("%s_%d", paymentKey(ord.ID), seq), AmountKobo: amount,
+			Email: o.payerEmail(ord.Customer, ord.Reference), CallbackURL: "https://" + slug + "." + o.PreviewDomain + "/",
+			Metadata: map[string]any{"storefront_reference": ord.Reference}})
+		if err != nil {
+			return nil, err
+		}
+		url, ref = &u, &r
+	}
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE storefront_orders SET pay_to_kobo = paid_kobo + $4, pay_step_kobo = $4, pay_seq = $3, payment_url = $5, payment_ref = $6, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2 AND pay_to_kobo IS NULL AND pay_seq = $3 - 1`, tenant, ord.ID, seq, amount, url, ref)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("%w: %s changed meanwhile; ask again", ErrDecision, ord.Reference)
+		}
+		return audit(ctx, tx, tenant, "storefront.payment_step", ord.Reference, map[string]any{"amount_kobo": amount, "step": seq, "card": card})
+	})
+	if err != nil {
+		return nil, err
+	}
+	if url != nil {
+		return out(*url, amount), nil
+	}
+	return o.stepStatusLink(ctx, tenant, ord, amount, balance)
+}
+
+// stepStatusLink answers a step paid by transfer: the order's status page.
+func (o *Orders) stepStatusLink(ctx context.Context, tenant uuid.UUID, ord Order, asked, balance int64) (map[string]any, error) {
+	m, err := o.statusLinkFor(ctx, tenant, ord)
+	if err != nil {
+		return nil, err
+	}
+	m["total"], m["amount_kobo"], m["balance_kobo"] = FormatNaira(asked), asked, balance
+	return m, nil
 }

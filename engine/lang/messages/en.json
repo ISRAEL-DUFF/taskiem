@@ -5968,6 +5968,16 @@
       "text": "Open orders on *{front}*, newest first:",
       "reviewed": true,
       "context": "orders <front>: the list's heading"
+    },
+    "customer.deposit_received": {
+      "text": "We have your payment of {amount} for {reference}. {balance} is left to pay.",
+      "reviewed": true,
+      "context": "SMS to a customer: a deposit or part payment received, with what is left (fronts F5)"
+    },
+    "customer.balance_due": {
+      "text": "{balance} is left to pay for {reference}. Pay it here: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: the link for the balance, or an instalment (fronts F5)"
     }
   }
 }

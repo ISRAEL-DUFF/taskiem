@@ -4775,6 +4775,14 @@
     "wa.front.orders_head": {
       "text": "Order mepere emepe na *{front}*, ndị ọhụrụ na mbụ:",
       "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "Anyị anatala ego {amount} i kwụrụ maka {reference}. {balance} ka fọdụrụ ịkwụ.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} ka fọdụrụ ịkwụ maka {reference}. Kwụọ ya ebe a: {url}",
+      "reviewed": false
     }
   }
 }

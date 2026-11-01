@@ -1038,6 +1038,7 @@ storefront_orders.expires_at
 storefront_orders.front_id
 storefront_orders.id
 storefront_orders.kind
+storefront_orders.pay_to_kobo
 storefront_orders.payment
 storefront_orders.payment_url
 storefront_orders.price_change

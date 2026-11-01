@@ -58,9 +58,11 @@ func (o *Orders) Refund(ctx context.Context, tenant uuid.UUID, reference, actor 
 		return ord, fmt.Errorf("%w: %s has no payment to refund (%s)", ErrDecision, reference, ord.Status)
 	}
 	name, card := paystackConnection(connection)
-	if ord.PaidBy != "card" || !card || ord.paymentRef == "" {
+	if ord.PaidBy != "card" || !card || ord.paymentRef == "" || ord.PaySeq > 0 {
 		// Paid by bank transfer, or by money matched to it: Taskiem cannot
-		// send it back (N3); the owner does, from their bank.
+		// send it back (N3); the owner does, from their bank. So too an
+		// order paid in more than one step (fronts F5): a card refund gives
+		// back one checkout payment, not all of them.
 		return ord, o.askRefundByHand(ctx, tenant, ord)
 	}
 	if o.Payments == nil {
@@ -84,7 +86,7 @@ func (o *Orders) Refund(ctx context.Context, tenant uuid.UUID, reference, actor 
 			return err
 		}
 		ord.Status = "refunded"
-		return audit(ctx, tx, tenant, "storefront.refunded", reference, map[string]any{"by": actor, "total_kobo": ord.Payable()})
+		return audit(ctx, tx, tenant, "storefront.refunded", reference, map[string]any{"by": actor, "total_kobo": ord.RefundKobo()})
 	})
 	if err != nil {
 		return ord, err
@@ -92,7 +94,7 @@ func (o *Orders) Refund(ctx context.Context, tenant uuid.UUID, reference, actor 
 	if rerr != nil {
 		return ord, fmt.Errorf("%w: %w", ErrRefund, rerr)
 	}
-	err = o.tell(ctx, tenant, reference, "Your refund of "+FormatNaira(ord.Payable())+" for "+reference+" has been started. It reaches you in about 5 to 10 working days.",
+	err = o.tell(ctx, tenant, reference, "Your refund of "+FormatNaira(ord.RefundKobo())+" for "+reference+" has been started. It reaches you in about 5 to 10 working days.",
 		"refund:"+reference)
 	return ord, err
 }
