@@ -50,6 +50,9 @@ type Submission struct {
 	Submitted time.Time `json:"submitted_at"`
 	// Booking is a booking's service and time, held when it was sent.
 	Booking *Booked `json:"booking,omitempty"`
+	// Hire is a hire's item, quantity and dates (fronts F5); its claim was
+	// taken by the public host with the submission.
+	Hire *Hired `json:"hire,omitempty"`
 	// DepositKobo is what a booking pays online when less than the total.
 	DepositKobo int64 `json:"deposit_kobo,omitempty"`
 	// Answers are the customer's answers to the action's own questions
@@ -59,6 +62,19 @@ type Submission struct {
 
 // Booked is the slot a booking holds: Until is the end plus the service's
 // buffer, Capacity the customers it takes at once.
+// Hired is what a hire takes: qty of an item from the From day to the To
+// day, both whole days in Lagos (Until is the midnight after To, the end
+// of its claim).
+type Hired struct {
+	ItemID string    `json:"item_id"`
+	Item   string    `json:"item"`
+	Qty    int       `json:"qty"`
+	From   time.Time `json:"from"`
+	To     time.Time `json:"to"`
+	Until  time.Time `json:"until"`
+	Days   int       `json:"days"`
+}
+
 type Booked struct {
 	ServiceID   string    `json:"service_id"`
 	ServiceName string    `json:"service_name"`

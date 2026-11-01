@@ -1,0 +1,405 @@
+{
+  "id": "storefront-hire",
+  "title": "Hire: accept, take the deposit, remind, mark returned",
+  "summary": "Each hire from a Hire front comes to you to accept or decline; the customer pays the deposit, is reminded on the day it is due back, and when you mark it returned any late fee and the balance are asked for.",
+  "description": "Starts when a customer hires items from a Hire front: the item, how many, and from which day to which day. You get the hire to accept or decline; if nobody answers in a day it is declined, and the items are free again. Once accepted, the customer gets a payment link for the deposit. When it is paid they are told it is confirmed, with the day it is due back, and on that day they are reminded. When the items are back you are asked to mark them returned: that frees them for other dates, adds the late fee for each day late, and sends the customer a link for whatever is left to pay. Messages go from your business's name, by SMS, and by email when the customer gave one.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "hire",
+    "hiring",
+    "rental",
+    "rent out",
+    "canopies",
+    "chairs",
+    "party rentals",
+    "equipment hire"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who confirms hires",
+      "description": "The role that accepts or declines hires and marks them returned.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontHire",
+    "version": 1,
+    "name": "Storefront hires",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "hire"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "front": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "due_kobo": {
+            "type": "integer"
+          },
+          "paid_kobo": {
+            "type": "integer"
+          },
+          "status_link": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "hire": {
+            "type": "object",
+            "properties": {
+              "item": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "days": {
+                "type": "integer"
+              },
+              "from": {
+                "type": "string"
+              },
+              "due_back": {
+                "type": "string"
+              },
+              "due_back_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "remind_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "ask",
+        "type": "approval",
+        "name": "Accept or decline the hire",
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "24h",
+          "subject": {
+            "hire": "=trigger.body.reference",
+            "item": "=trigger.body.hire.item",
+            "how_many": "=trigger.body.hire.qty",
+            "from": "=trigger.body.hire.from",
+            "due_back": "=trigger.body.hire.due_back"
+          }
+        }
+      },
+      {
+        "id": "answer",
+        "type": "connector",
+        "name": "Record the answer",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "ask"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "=steps.ask.output.decision == 'approved' ? 'accept' : 'decline'",
+          "note": "=steps.ask.output.decision == 'approved' ? '' : (has(steps.ask.output.reason) && steps.ask.output.reason == 'timeout' ? 'No answer within a day' : 'Declined')"
+        }
+      },
+      {
+        "id": "tell_declined",
+        "type": "connector",
+        "name": "Tell the customer it was declined",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "answer"
+        ],
+        "when": "=steps.ask.output.decision != 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "order_declined",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "link",
+        "type": "connector",
+        "name": "Make the deposit's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "answer"
+        ],
+        "when": "=steps.ask.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_pay",
+        "type": "connector",
+        "name": "Send the deposit's payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "order_pay",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "total": "=steps.link.output.total",
+            "url": "=steps.link.output.url"
+          }
+        }
+      },
+      {
+        "id": "wait_pay",
+        "type": "signal",
+        "name": "Wait for the deposit",
+        "needs": [
+          "tell_pay"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "25h"
+        }
+      },
+      {
+        "id": "tell_confirmed",
+        "type": "connector",
+        "name": "Tell the customer it is confirmed",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_pay"
+        ],
+        "when": "=steps.wait_pay.output.status == 'paid'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "hire_confirmed",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "item": "=trigger.body.hire.item",
+            "from": "=trigger.body.hire.from",
+            "due_back": "=trigger.body.hire.due_back"
+          }
+        }
+      },
+      {
+        "id": "wait_due",
+        "type": "wait",
+        "name": "Until the day it is due back",
+        "needs": [
+          "tell_confirmed"
+        ],
+        "config": {
+          "until": "=trigger.body.hire.remind_at"
+        }
+      },
+      {
+        "id": "say_due",
+        "type": "connector",
+        "name": "Remind the customer it is due back",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_due"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "hire_due_back",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "item": "=trigger.body.hire.item",
+            "due_back": "=trigger.body.hire.due_back"
+          }
+        }
+      },
+      {
+        "id": "back",
+        "type": "approval",
+        "name": "Are the items back?",
+        "needs": [
+          "say_due"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "2160h",
+          "subject": {
+            "hire": "=trigger.body.reference",
+            "item": "=trigger.body.hire.item",
+            "how_many": "=trigger.body.hire.qty",
+            "due_back": "=trigger.body.hire.due_back",
+            "action": "Approve when everything is back"
+          }
+        }
+      },
+      {
+        "id": "returned",
+        "type": "connector",
+        "name": "Mark it returned",
+        "connector": "storefront@1",
+        "action": "mark_returned",
+        "needs": [
+          "back"
+        ],
+        "when": "=steps.back.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_returned",
+        "type": "connector",
+        "name": "Tell the customer it is back",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "returned"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "=steps.returned.output.late_days > 0 ? 'hire_late' : 'hire_returned'",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "days": "=steps.returned.output.late_days",
+            "late_fee": "=steps.returned.output.late_fee",
+            "balance": "=steps.returned.output.balance"
+          }
+        }
+      },
+      {
+        "id": "balance_link",
+        "type": "connector",
+        "name": "Make the balance's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "tell_returned"
+        ],
+        "when": "=steps.returned.output.balance_kobo >= 100",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_balance",
+        "type": "connector",
+        "name": "Send the balance's payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "balance_link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "balance_due",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "balance": "=steps.balance_link.output.total",
+            "url": "=steps.balance_link.output.url"
+          }
+        }
+      },
+      {
+        "id": "wait_balance",
+        "type": "signal",
+        "name": "Wait for the balance",
+        "needs": [
+          "tell_balance"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "168h"
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Complete the hire",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "tell_returned"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4800h"
+    }
+  }
+}

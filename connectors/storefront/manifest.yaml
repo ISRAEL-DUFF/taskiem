@@ -106,6 +106,30 @@ actions:
         total:     { type: string }
         by_hand:   { type: boolean, description: True when the owner refunds it from their bank and marks it refunded }
         note:      { type: string }
+  mark_returned:
+    title: Mark a hire returned
+    description: Ends a hire (fronts F5) when its items are back, freeing them for other dates. Put an approval before it so the owner says they are back. Back after the day it was due, the hire's late fee for each day late is added to what is owed; balance_kobo is then what is left, for a payment_link step to ask. Marking it again changes nothing.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference:     { type: string }
+        late_days:     { type: integer }
+        late_fee_kobo: { type: integer }
+        late_fee:      { type: string }
+        balance_kobo:  { type: integer }
+        balance:       { type: string }
   get_booking:
     title: Read a booking
     description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.

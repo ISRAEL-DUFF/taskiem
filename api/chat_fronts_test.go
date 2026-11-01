@@ -53,7 +53,7 @@ func TestChatFronts(t *testing.T) {
 
 	// The kind asked as a list, then shown and made on yes.
 	r := w.say(t, on, "add front Snacks")
-	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "5. *Custom*") {
+	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "6. *Custom*") {
 		t.Fatalf("kinds: %q", r)
 	}
 	if r := w.say(t, on, "rockets"); !strings.Contains(r, "What is *Snacks* for?") {

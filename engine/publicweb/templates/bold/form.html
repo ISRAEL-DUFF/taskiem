@@ -20,7 +20,7 @@
 {{end}}
 </fieldset>
 {{end}}
-{{if eq .Kind "order"}}
+{{template "hire" .}}{{if eq .Kind "order"}}
 {{if and .Pickup .Delivery}}
 <fieldset class="segment">
 <legend>Delivery or pickup?</legend>

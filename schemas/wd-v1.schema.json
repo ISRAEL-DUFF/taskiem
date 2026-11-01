@@ -1741,7 +1741,8 @@
                       "order",
                       "enquiry",
                       "callback",
-                      "booking"
+                      "booking",
+                      "hire"
                     ]
                   },
                   "action_id": {

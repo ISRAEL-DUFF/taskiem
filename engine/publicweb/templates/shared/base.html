@@ -78,3 +78,17 @@ theme. Forms only: the page refreshes itself, with no script. */}}
 <button class="btn btn-block{{if $.Primary}} btn-primary btn-brand{{end}}" type="submit">{{.}}</button>
 </form>{{end}}
 </section>{{end}}
+{{define "hire"}}{{with .Hire}}
+<fieldset class="basket hire">
+<legend>What you are hiring</legend>
+<div class="field"><label for="h-item">Item</label>
+<select id="h-item" name="hire_item" required><option value="">Choose…</option>{{range .Items}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+<div class="field"><label for="h-from">First day</label>
+<input id="h-from" type="date" name="hire_from" value="{{.From}}" min="{{.Min}}" max="{{.Max}}" required></div>
+<div class="field"><label for="h-to">Last day</label>
+<input id="h-to" type="date" name="hire_to" value="{{.To}}" min="{{.Min}}" max="{{.Max}}" required></div>
+<div class="field"><label for="h-qty">How many</label>
+<input id="h-qty" type="number" name="hire_qty" value="{{.Qty}}" min="1" step="1" inputmode="numeric" required></div>
+{{with .Deposit}}<p class="hint">{{.}}</p>{{end}}
+</fieldset>
+{{end}}{{end}}

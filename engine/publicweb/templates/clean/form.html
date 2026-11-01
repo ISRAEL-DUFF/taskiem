@@ -18,7 +18,7 @@
 <p class="total" data-total aria-live="polite"></p>
 </fieldset>
 {{end}}
-{{if eq .Kind "order"}}
+{{template "hire" .}}{{if eq .Kind "order"}}
 {{if and .Pickup .Delivery}}
 <fieldset class="choices">
 <legend>How do you want it?</legend>

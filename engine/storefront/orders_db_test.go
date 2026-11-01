@@ -642,7 +642,7 @@ func TestCopiedActionStartsItsOwnWorkflow(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if n := len(list); n != len(storefront.Kinds)+1 || list[n-1].Slug != "order-2" {
+		if n := len(list); n != len(storefront.BuiltinKinds)+1 || list[n-1].Slug != "order-2" {
 			return fmt.Errorf("the list: %+v", list)
 		}
 		_, err = storefront.Publish(ctx, tx, w.env.Tenant, "shops.test", "user:ada", false)

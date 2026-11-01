@@ -188,7 +188,7 @@ func publicTask(ctx context.Context, cfg config, log *slog.Logger) (*publicweb.S
 	}
 	srv := &publicweb.Server{Lookup: publicweb.DBLookup(pool), Origins: publicweb.DBOrigins(pool), Storefronts: publicweb.DBStorefronts(pool), Reports: publicweb.DBReports(pool), Brands: publicweb.DBBrands(pool),
 		Submit: publicweb.DBSubmit(pool), OrderStatus: publicweb.DBOrderStatus(pool),
-		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Booking: publicweb.DBBookingStatus(pool),
+		Services: publicweb.DBServices(pool), Busy: publicweb.DBBusy(pool), Book: publicweb.DBBook(pool), Claim: publicweb.DBClaim(pool), Booking: publicweb.DBBookingStatus(pool),
 		Change: publicweb.DBChange(pool), PriceChange: publicweb.DBPriceChange(pool),
 		Forms: publicweb.DBForms(pool), Invoices: publicweb.DBInvoices(pool), InvoicePay: publicweb.DBInvoicePay{Pool: pool}, Customers: publicweb.DBCustomers(pool), CustomerPay: publicweb.DBCustomerPay{Pool: pool}, OrderPay: publicweb.DBOrderPay{Pool: pool}, OrderRate: publicweb.DBOrderRate{Pool: pool}, Receipts: publicweb.DBReceipts(pool), Families: publicweb.DBFamilies{Pool: pool}, Reach: publicweb.DBReach(pool), FormHost: cfg.Public.FormHost, AppURL: cfg.Public.AppURL,
 		Logger: log.With("server", "public"), TrustProxy: cfg.TrustProxy}

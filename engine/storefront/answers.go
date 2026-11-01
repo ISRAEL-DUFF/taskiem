@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -341,9 +342,26 @@ func (r submissionRecord) submission(ord Order, paymentStatus string) map[string
 	if p := ord.Customer.Phone; len(p) > 4 {
 		phone = "•••" + p[len(p)-4:]
 	}
-	return map[string]any{"reference": ord.Reference, "front": r.front, "action": r.action, "total_kobo": ord.TotalKobo,
+	out := map[string]any{"reference": ord.Reference, "front": r.front, "action": r.action, "total_kobo": ord.TotalKobo,
 		"payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}, "due_kobo": ord.DueKobo(), "paid_kobo": ord.PaidKobo, "customer": map[string]any{"name": maskName(ord.Customer.Name), "phone": phone},
 		"status_link": r.statusLink, "lines": lines}
+	// A hire's item, quantity and days (fronts F5): due back at the end of
+	// its last day.
+	if ord.Kind == "hire" && ord.StartsAt != nil && ord.EndsAt != nil {
+		qty := 0
+		for _, l := range ord.Basket {
+			qty += l.Quantity
+		}
+		days := int(ord.EndsAt.Sub(*ord.StartsAt).Hours()/24 + 0.5)
+		if days > 0 {
+			qty /= days
+		}
+		out["hire"] = map[string]any{"item": ord.ServiceName, "qty": qty, "days": days, "from": When(*ord.StartsAt),
+			"due_back": When(ord.EndsAt.Add(-time.Minute)), "due_back_at": ord.EndsAt.UTC().Format(time.RFC3339),
+			// The morning of the last day, 08:00 in Lagos: the reminder.
+			"remind_at": ord.EndsAt.Add(-16 * time.Hour).UTC().Format(time.RFC3339)}
+	}
+	return out
 }
 
 func mustProps(form []byte) []byte {

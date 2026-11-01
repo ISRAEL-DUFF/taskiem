@@ -12,8 +12,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Kinds are the forms a storefront can offer (storefronts 6.3).
-var Kinds = []string{"order", "enquiry", "callback", "booking"}
+// Kinds are the forms a storefront can offer (storefronts 6.3), and
+// BuiltinKinds the four every storefront has on its first front; a hire
+// (fronts F5) is only ever an action of a front of its kind.
+var (
+	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire"}
+	BuiltinKinds = []string{"order", "enquiry", "callback", "booking"}
+)
 
 // ErrNoWorkflow refuses enabling a form no workflow is deployed for.
 var ErrNoWorkflow = errors.New("storefront: no workflow is deployed for this form")
@@ -63,6 +68,9 @@ type ActionOptions struct {
 	// CancelRefund is what a customer cancelling a paid booking gets back:
 	// full (the default) or keep_deposit.
 	CancelRefund string `json:"cancel_refund,omitempty"`
+	// LateFeeKobo is what a hire adds for each day it comes back late
+	// (fronts F5); 0 for none.
+	LateFeeKobo int64 `json:"late_fee_kobo,omitempty"`
 }
 
 // Zone is an area a business delivers to and what delivery there costs.
@@ -128,7 +136,7 @@ func Zones(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Zone, error) {
 var formConnection = regexp.MustCompile(`^(?:[a-z][a-z0-9_-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 
 // takesPayment reports whether a form's kind may ask for payment.
-func takesPayment(kind string) bool { return kind == "order" || kind == "booking" }
+func takesPayment(kind string) bool { return kind == "order" || kind == "booking" || kind == "hire" }
 
 // Deposit is what a booking pays online of price.
 func (o ActionOptions) Deposit(price int64) int64 {
@@ -161,7 +169,7 @@ type PublicAction struct {
 	DepositPercent int `json:"deposit_percent,omitempty"`
 }
 
-var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book"}
+var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now"}
 
 // builtinPosition is a built-in action's place on the first front.
 func builtinPosition(kind string) int {
@@ -217,8 +225,8 @@ func Actions(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Action, error)
 			others = append(others, a)
 		}
 	}
-	out := make([]Action, 0, len(Kinds))
-	for _, k := range Kinds {
+	out := make([]Action, 0, len(BuiltinKinds))
+	for _, k := range BuiltinKinds {
 		a, ok := have[k]
 		if !ok {
 			a = Action{Kind: k, Slug: k, Builtin: true, Label: defaultLabels[k], Payment: "after_accept"}
@@ -306,6 +314,20 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 			return Action{}, fmt.Errorf("%w: cancel_refund is full or keep_deposit", ErrInvalid)
 		}
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, CancelRefund: a.Options.CancelRefund}
+	case "hire":
+		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
+			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+		}
+		if a.Options.LateFeeKobo < 0 {
+			return Action{}, fmt.Errorf("%w: a late fee is 0 or more", ErrInvalid)
+		}
+		if !a.Options.Pickup && !a.Options.Delivery {
+			a.Options.Pickup = true
+		}
+		// A hire takes its deposit once accepted, and the rest later.
+		a.Payment = "after_accept"
+		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, LateFeeKobo: a.Options.LateFeeKobo,
+			Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote}
 	default:
 		a.Options = ActionOptions{}
 	}

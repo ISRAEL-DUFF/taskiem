@@ -151,9 +151,11 @@ type Server struct {
 	// changes from it and PriceChange reads new prices waiting on them.
 	// Without Services, Busy and Book the booking form is not open;
 	// without Change the status page offers no changes.
-	Services    Services
-	Busy        BusyTimes
-	Book        Book
+	Services Services
+	Busy     BusyTimes
+	Book     Book
+	// Claim takes a hire's claim with its submission (fronts F5).
+	Claim       Claim
 	Booking     BookingStatus
 	Change      Change
 	PriceChange PriceChange

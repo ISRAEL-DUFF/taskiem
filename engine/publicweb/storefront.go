@@ -350,7 +350,7 @@ func storefrontView(p StorefrontPage, now time.Time) storefrontData {
 		return d
 	}
 	// Order first: it is the primary button.
-	for _, k := range storefront.Kinds {
+	for _, k := range storefront.BuiltinKinds {
 		if a, ok := findAction(p.Model.Home().Actions, k); ok {
 			d.Forms = append(d.Forms, a)
 			d.Ordering = d.Ordering || k == "order"

@@ -5978,6 +5978,26 @@
       "text": "{balance} is left to pay for {reference}. Pay it here: {url}",
       "reviewed": true,
       "context": "SMS to a customer: the link for the balance, or an instalment (fronts F5)"
+    },
+    "customer.hire_confirmed": {
+      "text": "Your hire {reference} is confirmed: {item}, from {from}. It is due back by the end of {due_back}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a hire confirmed once its deposit is paid (fronts F5)"
+    },
+    "customer.hire_due_back": {
+      "text": "Reminder: {item} for {reference} is due back today, {due_back}.",
+      "reviewed": true,
+      "context": "SMS to a customer: on the day a hire is due back (fronts F5)"
+    },
+    "customer.hire_returned": {
+      "text": "Thank you: {reference} is back with us.",
+      "reviewed": true,
+      "context": "SMS to a customer: a hire returned on time (fronts F5); {days}, {late_fee} and {balance} are not used"
+    },
+    "customer.hire_late": {
+      "text": "{reference} came back {days} days late, so a late fee of {late_fee} is added. Left to pay: {balance}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a hire returned late, with the fee and what is left (fronts F5)"
     }
   }
 }

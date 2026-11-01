@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/db"
@@ -166,6 +167,8 @@ type Order struct {
 	PayToKobo   *int64 `json:"pay_to_kobo,omitempty"`
 	PayStepKobo *int64 `json:"pay_step_kobo,omitempty"`
 	PaySeq      int    `json:"pay_seq,omitempty"`
+	// ReturnedAt is when a hire's items came back (fronts F5).
+	ReturnedAt  *time.Time `json:"returned_at,omitempty"`
 	subject     string
 	storefront  uuid.UUID
 	action      uuid.UUID
@@ -183,7 +186,7 @@ func (x Order) CustomerID() string { return x.subject }
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
-	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq, returned_at,
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -197,7 +200,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
 		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID,
-		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.PaidBy)
+		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -477,7 +480,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if sub.DepositKobo > 0 {
 		payable = sub.DepositKobo
 	}
-	if (sub.Kind != "order" && sub.Kind != "booking") || payable < 100 {
+	if (sub.Kind != "order" && sub.Kind != "booking" && sub.Kind != "hire") || payable < 100 {
 		payment = "none"
 	}
 	if payment == "on_delivery" && (sub.Kind != "order" || sub.Fulfilment != "delivery") {
@@ -490,7 +493,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	}
 	var change []byte
 	switch {
-	case changed && (len(pc.Gone) > 0 && (sub.Booking != nil || len(pc.Basket) == 0)):
+	case changed && (len(pc.Gone) > 0 && (sub.Booking != nil || sub.Hire != nil || len(pc.Basket) == 0)):
 		status, expires, note = "cancelled", nil, "no longer available: "+strings.Join(pc.Gone, ", ")
 	case changed:
 		status = "price_changed"
@@ -515,6 +518,15 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	var starts, ends *time.Time
 	if b != nil {
 		serviceID, serviceName, starts, ends = &b.ServiceID, &b.ServiceName, &b.Start, &b.End
+	}
+	// A hire's item and dates in the same columns: from its first day to
+	// the end of its last, the day it is due back (fronts F5).
+	h := sub.Hire
+	if sub.Kind == "hire" && h == nil {
+		return Order{}, fmt.Errorf("%w: a hire without its dates", ErrInvalid)
+	}
+	if h != nil {
+		serviceID, serviceName, starts, ends = &h.ItemID, &h.Item, &h.From, &h.Until
 	}
 	var noteArg *string
 	if note != "" {
@@ -566,6 +578,26 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 		}
 		if !kept {
 			status, note = "expired", "that time was taken before the booking was recorded; please book another"
+			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $2, note = $3, expires_at = NULL WHERE id = $1`, id, status, note); err != nil {
+				return Order{}, err
+			}
+		}
+	}
+	if h != nil {
+		// The claim taken with the submission is kept until the order's
+		// payment is due, or for as long as the hire lives; one that lapsed
+		// before the hire was recorded is not taken again.
+		var tag pgconn.CommandTag
+		if status == "cancelled" {
+			_, err = tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, x.reference)
+		} else {
+			tag, err = tx.Exec(ctx, `UPDATE storefront_claims SET expires_at = $2 WHERE reference = $1 AND (expires_at IS NULL OR expires_at > now())`, x.reference, expires)
+		}
+		if err != nil {
+			return Order{}, err
+		}
+		if status != "cancelled" && tag.RowsAffected() == 0 {
+			status, note = "expired", "those dates were taken before the hire was recorded; please choose others"
 			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $2, note = $3, expires_at = NULL WHERE id = $1`, id, status, note); err != nil {
 				return Order{}, err
 			}
@@ -1049,7 +1081,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 				}
 			}
 			// A booking declined or cancelled frees its slot.
-			if ord.Kind == "booking" && (next == "declined" || next == "cancelled" || next == "refund_due") {
+			if (ord.Kind == "booking" || ord.Kind == "hire") && (next == "declined" || next == "cancelled" || next == "refund_due") {
 				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {
 					return err
 				}
@@ -1323,4 +1355,66 @@ func (o *Orders) stepStatusLink(ctx context.Context, tenant uuid.UUID, ord Order
 	}
 	m["total"], m["amount_kobo"], m["balance_kobo"] = FormatNaira(asked), asked, balance
 	return m, nil
+}
+
+// Returned is what marking a hire returned found: the days it came back
+// late and the fee added for them.
+type Returned struct {
+	Order       Order
+	LateDays    int
+	LateFeeKobo int64
+}
+
+// MarkReturned ends a hire's claim: its items are back (fronts F5). A hire
+// back after the day it was due adds its action's late fee for each day
+// late to what it costs, for a later payment step to ask. Marking it again
+// changes nothing.
+func (o *Orders) MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (Returned, error) {
+	var r Returned
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
+		if err != nil {
+			return err
+		}
+		r.Order = ord
+		if ord.Kind != "hire" {
+			return fmt.Errorf("%w: %s is not a hire", ErrDecision, reference)
+		}
+		back := o.now()
+		if ord.ReturnedAt != nil {
+			// Marked before: the same answer, from when it was.
+			back = *ord.ReturnedAt
+		} else {
+			switch ord.Status {
+			case "declined", "cancelled", "expired", "refunded", "refund_due", "price_changed":
+				return fmt.Errorf("%w: %s has nothing out (%s)", ErrDecision, reference, strings.ReplaceAll(ord.Status, "_", " "))
+			}
+		}
+		if ord.EndsAt != nil && back.After(*ord.EndsAt) {
+			r.LateDays = int((back.Sub(*ord.EndsAt) + 24*time.Hour - time.Nanosecond) / (24 * time.Hour))
+		}
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT options FROM storefront_actions WHERE id = $1`, ord.action).Scan(&raw); err != nil {
+			return err
+		}
+		var opts ActionOptions
+		_ = json.Unmarshal(raw, &opts)
+		r.LateFeeKobo = int64(r.LateDays) * opts.LateFeeKobo
+		if ord.ReturnedAt != nil {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET returned_at = $4, extra_kobo = extra_kobo + $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+			tenant, ord.ID, r.LateFeeKobo, back); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {
+			return err
+		}
+		if err := audit(ctx, tx, tenant, "storefront.hire_returned", reference, map[string]any{"by": actor, "late_days": r.LateDays, "late_fee_kobo": r.LateFeeKobo}); err != nil {
+			return err
+		}
+		r.Order, err = o.GetOrder(ctx, tx, tenant, reference)
+		return err
+	})
+	return r, err
 }

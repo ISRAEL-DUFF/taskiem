@@ -4783,6 +4783,22 @@
     "customer.balance_due": {
       "text": "{balance} ló kù láti san fún {reference}. San án níbí: {url}",
       "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "A ti fìdí ìyáwó {reference} rẹ múlẹ̀: {item}, láti {from}. Dá a padà kí {due_back} tó parí.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Ìránnilétí: ó yẹ kí {item} fún {reference} padà dé lónìí, {due_back}.",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "A dúpẹ́: {reference} ti padà dé ọ̀dọ̀ wa.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} padà dé ní ọjọ́ {days} lẹ́yìn àkókò, nítorí náà a fi owó ìjìyà {late_fee} kún un. Ohun tí ó kù láti san: {balance}.",
+      "reviewed": false
     }
   }
 }

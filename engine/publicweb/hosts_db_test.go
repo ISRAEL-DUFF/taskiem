@@ -157,6 +157,9 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		// Fronts (F1): a submission and a booking to an action by its id; the two above are their wrappers for a release.
 		"taskiem_public_submit_action(uuid,text,bytea,bytea,bytea)":                                                              true,
 		"taskiem_public_book_action(uuid,text,bytea,bytea,bytea,text,timestamp with time zone,timestamp with time zone,integer)": true,
+		// Hire (F5): a claim on a list's item for dates, and what is taken between two times.
+		"taskiem_public_claim(uuid,text,bytea,bytea,bytea,text,integer,timestamp with time zone,timestamp with time zone)": true,
+		"taskiem_public_taken(uuid,timestamp with time zone,timestamp with time zone)":                                     true,
 		// Hosted forms (S7): a form, a one-time link, a form step's request, a submission and its files, codes and status links.
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,

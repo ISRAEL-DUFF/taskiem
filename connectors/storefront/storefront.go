@@ -33,6 +33,7 @@ type Ops interface {
 	NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference, text, subject, key string) (map[string]any, error)
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
+	MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error)
 	// CustomerLanguage is the business's language for its customers
 	// (its default chat language), English when it has none.
 	CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Tag
@@ -48,6 +49,7 @@ func New(ops Ops) *connector.Connector {
 		"notify_customer": connector.ActionFunc(a.notify),
 		"get_booking":     connector.ActionFunc(a.getBooking),
 		"refund":          connector.ActionFunc(a.refund),
+		"mark_returned":   connector.ActionFunc(a.markReturned),
 	}}
 }
 
@@ -143,6 +145,21 @@ func (a *actions) getBooking(ctx context.Context, req connector.Request) (connec
 	return connector.Response{Output: out}, classify(err)
 }
 
+// markReturned ends a hire: its items are back (fronts F5). A late return
+// adds its fee to what is owed; balance_kobo says what is left to ask.
+func (a *actions) markReturned(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	r, err := a.ops.MarkReturned(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "late_days": r.LateDays, "late_fee_kobo": r.LateFeeKobo,
+		"late_fee": sf.FormatNaira(r.LateFeeKobo), "balance_kobo": r.Order.BalanceKobo(), "balance": sf.FormatNaira(r.Order.BalanceKobo())}}, nil
+}
+
 func (a *actions) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
 	c, ref, err := a.caller(ctx, req)
 	if err != nil {
@@ -231,6 +248,14 @@ func (l *Late) GetBooking(ctx context.Context, tenant uuid.UUID, reference strin
 		return nil, err
 	}
 	return ops.GetBooking(ctx, tenant, reference)
+}
+
+func (l *Late) MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error) {
+	ops, err := l.get()
+	if err != nil {
+		return sf.Returned{}, err
+	}
+	return ops.MarkReturned(ctx, tenant, reference, actor)
 }
 
 func (l *Late) Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error) {

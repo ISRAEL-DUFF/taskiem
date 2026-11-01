@@ -37,7 +37,7 @@ var (
 
 // frontKindWords are the words a kind is named by in a command.
 var frontKindWords = map[string]string{
-	"shop": "shop", "food": "food", "kitchen": "food", "questions": "questions", "question": "questions",
+	"shop": "shop", "food": "food", "kitchen": "food", "hire": "hire", "rental": "hire", "questions": "questions", "question": "questions",
 	"call-backs": "callbacks", "call-back": "callbacks", "callbacks": "callbacks", "callback": "callbacks", "custom": "custom",
 }
 
@@ -413,6 +413,8 @@ func turnOnWord(kind string) string {
 		return "call-backs"
 	case "booking":
 		return "bookings"
+	case "hire":
+		return "hire"
 	}
 	return "orders"
 }
@@ -864,13 +866,13 @@ func (s *Server) shopChangeFrontItem(ctx context.Context, c *chat) error {
 var (
 	// "turn on orders for Snacks", "turn on questions for Ask us",
 	// "turn on deliveries for Snacks".
-	turnOnForCmd = regexp.MustCompile(`(?i)^\s*turn\s+on\s+(orders|questions|call-?backs|deliveries)\s+for\s+(.+?)\s*[.!]?\s*$`)
+	turnOnForCmd = regexp.MustCompile(`(?i)^\s*turn\s+on\s+(orders|hire|questions|call-?backs|deliveries)\s+for\s+(.+?)\s*[.!]?\s*$`)
 	// "orders Snacks", "orders for Snacks".
 	ordersOnCmd = regexp.MustCompile(`(?i)^\s*(?:my\s+)?orders\s+(?:for\s+|on\s+|from\s+)?(.+?)\s*[.!?]?\s*$`)
 )
 
 // turnOnKinds are the action kinds "turn on … for <front>" names.
-var turnOnKinds = map[string]string{"orders": "order", "questions": "enquiry", "callbacks": "callback", "call-backs": "callback", "deliveries": "order"}
+var turnOnKinds = map[string]string{"orders": "order", "hire": "hire", "questions": "enquiry", "callbacks": "callback", "call-backs": "callback", "deliveries": "order"}
 
 // waFrontTurnOn answers "turn on <orders|questions|call-backs|deliveries>
 // for <front>": the front's action named, shown and done on yes.

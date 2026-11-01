@@ -4783,6 +4783,22 @@
     "customer.balance_due": {
       "text": "{balance} remain to pay for {reference}. Pay am here: {url}",
       "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "Your hire {reference} don confirm: {item}, from {from}. Make you return am before {due_back} end.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Reminder: {item} for {reference} suppose return today, {due_back}.",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Thank you: {reference} don reach us back.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
+      "reviewed": false
     }
   }
 }

@@ -85,6 +85,8 @@ type formData struct {
 	pageData
 	Business string
 	Kind     string
+	// Hire is a hire's dates-and-quantity field (fronts F5).
+	Hire     *hireView
 	Label    string
 	Action   string // where the form posts
 	Home     string // the storefront page; empty when embedded
@@ -239,6 +241,9 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		return
 	}
 	f := formView(p, act, site, embed, base)
+	if act.Kind == "hire" {
+		f.Hire = hireField(p.Items, s.now(), act.DepositPercent)
+	}
 	f.Look = s.lookFor(r.Context(), site.Tenant, f.Business)
 	refuse := http.StatusOK
 	if r.Method == http.MethodPost {
@@ -389,6 +394,9 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		return
 	}
 	sub, msg := f.check(v, p.Items)
+	if msg == "" && act.Kind == "hire" {
+		msg = checkHire(v, p.Items, act, s.now(), &sub)
+	}
 	if msg != "" {
 		f.Error = msg
 		s.showForm(w, r, http.StatusUnprocessableEntity, f, v.Get(tokenField))
@@ -404,7 +412,16 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		sub.Channel = "embed"
 	}
 	sub.Submitted = s.now().UTC()
-	ref, ok, err := s.record(r.Context(), site.ID, p.Model.Slug, act, idem, sub)
+	record := s.record
+	if act.Kind == "hire" {
+		record = s.recordHire
+	}
+	ref, ok, err := record(r.Context(), site.ID, p.Model.Slug, act, idem, sub)
+	if errors.Is(err, ErrNotFree) {
+		f.Error = "Not that many are free for those days. Choose other days, or fewer."
+		s.showForm(w, r, http.StatusConflict, f, v.Get(tokenField))
+		return
+	}
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: submit", "storefront", site.ID, "kind", act.Kind, "err", err)
@@ -448,6 +465,9 @@ func (s *Server) record(ctx context.Context, sf uuid.UUID, slug string, act stor
 // keep copies what was sent back into the form, so a refusal loses
 // nothing the customer typed.
 func (f *formData) keep(v url.Values) {
+	if f.Hire != nil {
+		f.Hire.keep(v)
+	}
 	f.Name, f.Phone, f.Email = v.Get("name"), v.Get("phone"), v.Get("email")
 	f.Message, f.BestTime, f.Address = v.Get("message"), v.Get("best_time"), v.Get("address")
 	if fl := v.Get("fulfilment"); f.Pickup && f.Delivery && (fl == "pickup" || fl == "delivery") {

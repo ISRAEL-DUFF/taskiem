@@ -4783,6 +4783,22 @@
     "customer.balance_due": {
       "text": "Saura {balance} da za a biya don {reference}. Biya a nan: {url}",
       "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "An tabbatar da hayarka {reference}: {item}, daga {from}. A dawo da shi kafin ƙarshen {due_back}.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Tunatarwa: ya kamata a dawo da {item} na {reference} yau, {due_back}.",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Mun gode: {reference} ya dawo gare mu.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} ya dawo bayan kwana {days} da lokaci, don haka an ƙara kuɗin jinkiri na {late_fee}. Saura biya: {balance}.",
+      "reviewed": false
     }
   }
 }

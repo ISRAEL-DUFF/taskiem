@@ -4783,6 +4783,22 @@
     "customer.balance_due": {
       "text": "{balance} ka fọdụrụ ịkwụ maka {reference}. Kwụọ ya ebe a: {url}",
       "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "Akwadoola mgbazinye gị {reference}: {item}, site na {from}. Weghachite ya tupu {due_back} agwụ.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Ncheta: a ga-eweghachi {item} maka {reference} taa, {due_back}.",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Daalụ: {reference} alọghachila n'aka anyị.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} lọghachiri ụbọchị {days} n'azụ oge, ya mere etinyere ụgwọ ịbịa n'azụ oge {late_fee}. Ihe fọdụrụ ịkwụ: {balance}.",
+      "reviewed": false
     }
   }
 }
