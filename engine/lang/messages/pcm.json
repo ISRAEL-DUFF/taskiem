@@ -4728,6 +4728,46 @@
       "text": "We don add *{name}* for {price} to *{front}*.",
       "reviewed": false
     },
+    "wa.ticket.in": {
+      "text": "E don enter: *{code}*, seat {seat} of {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* don already enter: dem check am {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "No ticket get the code *{code}*. Check am with the customer message.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* no fit enter: dem don refund or cancel the order.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tickets wey remain:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} remain, {in} don enter",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "No event dey sell tickets now.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Spaces wey remain:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} spaces remain",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "No class dey open for enrolment now.",
+      "reviewed": false
+    },
     "wa.front.turn_on_hint": {
       "text": "*{front}* dey off: send *front {front} on* make e show.",
       "reviewed": false
@@ -4798,6 +4838,34 @@
     },
     "customer.space_reminder": {
       "text": "Reminder: your booking {reference} for {space} na tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Your tickets for {event}, {when}: {codes}. Show one code for door. Reference {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Reminder: {event} na tomorrow, {when}. Your tickets: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "You don enrol for {class}, e go start {when}. Reference {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "The next part of the fee for {class}, {amount}, don reach. Pay here: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Reminder: {class} go start tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} don full, so you dey for the waiting list (reference {reference}). We go tell you when space free.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "One space for {class} don free for you. Pay {total} here inside one day to take am: {url}",
       "reviewed": false
     },
     "customer.hire_returned": {

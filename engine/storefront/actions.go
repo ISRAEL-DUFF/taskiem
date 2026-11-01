@@ -16,7 +16,7 @@ import (
 // BuiltinKinds the four every storefront has on its first front; a hire
 // (fronts F5) is only ever an action of a front of its kind.
 var (
-	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire", "space"}
+	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire", "space", "tickets", "class"}
 	BuiltinKinds = []string{"order", "enquiry", "callback", "booking"}
 )
 
@@ -71,6 +71,15 @@ type ActionOptions struct {
 	// LateFeeKobo is what a hire adds for each day it comes back late
 	// (fronts F5); 0 for none.
 	LateFeeKobo int64 `json:"late_fee_kobo,omitempty"`
+	// MaxPerOrder is how many tickets or places one order may take
+	// (fronts F6); 0 is 10.
+	MaxPerOrder int `json:"max_per_order,omitempty"`
+	// Instalments is how many parts a class's fee may be paid in (1 to 4;
+	// 0 or 1 is in full), InstalmentDays the days between them (default
+	// 30), and WaitingList whether a full class takes names (fronts F6).
+	Instalments    int  `json:"instalments,omitempty"`
+	InstalmentDays int  `json:"instalment_days,omitempty"`
+	WaitingList    bool `json:"waiting_list,omitempty"`
 }
 
 // Zone is an area a business delivers to and what delivery there costs.
@@ -137,7 +146,7 @@ var formConnection = regexp.MustCompile(`^(?:[a-z][a-z0-9_-]{0,63}/)?[A-Za-z0-9]
 
 // takesPayment reports whether a form's kind may ask for payment.
 func takesPayment(kind string) bool {
-	return kind == "order" || kind == "booking" || kind == "hire" || kind == "space"
+	return kind == "order" || kind == "booking" || kind == "hire" || kind == "space" || kind == "tickets" || kind == "class"
 }
 
 // Deposit is what a booking pays online of price.
@@ -169,10 +178,16 @@ type PublicAction struct {
 	PayOnDelivery bool `json:"pay_on_delivery,omitempty"`
 	// DepositPercent is a booking's online part of the price (100: all).
 	DepositPercent int `json:"deposit_percent,omitempty"`
+	// A ticket or class form's (fronts F6): how many one order may take,
+	// how many parts a fee may be paid in, and whether a full class takes
+	// names for a waiting list.
+	MaxPerOrder int  `json:"max_per_order,omitempty"`
+	Instalments int  `json:"instalments,omitempty"`
+	WaitingList bool `json:"waiting_list,omitempty"`
 }
 
 var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now",
-	"space": "Book the space"}
+	"space": "Book the space", "tickets": "Buy tickets", "class": "Enrol"}
 
 // builtinPosition is a built-in action's place on the first front.
 func builtinPosition(kind string) int {
@@ -338,6 +353,30 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		// A space takes its deposit once accepted, and the rest later.
 		a.Payment = "after_accept"
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent}
+	case "tickets", "class":
+		if a.Options.MaxPerOrder == 0 {
+			a.Options.MaxPerOrder = 10
+		}
+		if a.Options.MaxPerOrder < 1 || a.Options.MaxPerOrder > 100 {
+			return Action{}, fmt.Errorf("%w: tickets or places per order are 1 to 100", ErrInvalid)
+		}
+		opts := ActionOptions{Connection: a.Options.Connection, MaxPerOrder: a.Options.MaxPerOrder}
+		if a.Kind == "class" {
+			if a.Options.Instalments < 0 || a.Options.Instalments > MaxInstalments {
+				return Action{}, fmt.Errorf("%w: a fee is paid in 1 to %d instalments", ErrInvalid, MaxInstalments)
+			}
+			if a.Options.InstalmentDays < 0 || a.Options.InstalmentDays > 120 {
+				return Action{}, fmt.Errorf("%w: instalments are 1 to 120 days apart", ErrInvalid)
+			}
+			opts.Instalments, opts.InstalmentDays, opts.WaitingList = a.Options.Instalments, a.Options.InstalmentDays, a.Options.WaitingList
+			if opts.Instalments > 1 && opts.InstalmentDays == 0 {
+				opts.InstalmentDays = 30
+			}
+		}
+		// Tickets and places are paid for when they are taken; a class's
+		// first instalment then, and the rest later.
+		a.Payment = "at_order"
+		a.Options = opts
 	default:
 		a.Options = ActionOptions{}
 	}
@@ -414,7 +453,8 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 // publicAction is an action as a snapshot holds it.
 func publicAction(a Action) PublicAction {
 	return PublicAction{Kind: a.Kind, Label: a.Label, Payment: a.Payment, Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote,
-		Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent}
+		Zones: a.Options.Zones, PayOnDelivery: a.Options.PayOnDelivery, DepositPercent: a.Options.DepositPercent,
+		MaxPerOrder: a.Options.MaxPerOrder, Instalments: a.Options.Instalments, WaitingList: a.Options.WaitingList}
 }
 
 // Ref is how a page addresses the action, /a/<ref>: its slug, or for one

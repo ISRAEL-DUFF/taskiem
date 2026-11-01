@@ -248,6 +248,8 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		f.Hire = hireField(p.Items, s.now(), act.DepositPercent)
 	case "space":
 		f.Hire = spaceField(p.Items, *cal, s.now(), act.DepositPercent)
+	case "tickets", "class":
+		f.Hire = countField(p.Items, act, s.now())
 	}
 	f.Look = s.lookFor(r.Context(), site.Tenant, f.Business)
 	refuse := http.StatusOK
@@ -405,6 +407,8 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		msg = checkHire(v, p.Items, act, s.now(), &sub)
 	case act.Kind == "space" && f.Hire != nil:
 		msg = checkSpace(v, p.Items, act, f.Hire.cal, s.now(), &sub)
+	case act.Kind == "tickets" || act.Kind == "class":
+		msg = checkCount(v, p.Items, act, s.now(), &sub)
 	}
 	if msg != "" {
 		f.Error = msg
@@ -422,14 +426,25 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 	}
 	sub.Submitted = s.now().UTC()
 	record := s.record
-	if act.Kind == "hire" || act.Kind == "space" {
+	// A name on a full class's waiting list holds no place, so it is
+	// sent as a plain submission.
+	if (act.Kind == "hire" || act.Kind == "space" || act.Kind == "tickets" || act.Kind == "class") && !sub.Waitlist {
 		record = s.recordHire
 	}
 	ref, ok, err := record(r.Context(), site.ID, p.Model.Slug, act, idem, sub)
 	if errors.Is(err, ErrNotFree) {
 		f.Error = "Not that many are free for those days. Choose other days, or fewer."
-		if act.Kind == "space" {
+		switch act.Kind {
+		case "space":
 			f.Error = "That space is booked for some of that time. Choose another time."
+		case "tickets":
+			f.Error = "Not that many tickets are left. Choose fewer, or another event."
+		case "class":
+			f.Error = "Not that many places are left in that class. Choose fewer, or another class."
+			if act.WaitingList && f.Hire != nil {
+				f.Error = "That class is full. You can join its waiting list, and we will tell you when a place is free."
+				f.Hire.Waitlist = true
+			}
 		}
 		s.showForm(w, r, http.StatusConflict, f, v.Get(tokenField))
 		return
@@ -479,6 +494,7 @@ func (s *Server) record(ctx context.Context, sf uuid.UUID, slug string, act stor
 func (f *formData) keep(v url.Values) {
 	if f.Hire != nil {
 		f.Hire.keep(v)
+		f.Hire.keepCount(v)
 	}
 	f.Name, f.Phone, f.Email = v.Get("name"), v.Get("phone"), v.Get("email")
 	f.Message, f.BestTime, f.Address = v.Get("message"), v.Get("best_time"), v.Get("address")

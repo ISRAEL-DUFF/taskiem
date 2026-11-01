@@ -4728,6 +4728,46 @@
       "text": "Etinyela *{name}* na {price} na *{front}*.",
       "reviewed": false
     },
+    "wa.ticket.in": {
+      "text": "Abanyela: *{code}*, oche {seat} n'ime {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* abanyelarị: e lebara ya {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "Ọ dịghị tiketi nwere koodu *{code}*. Lelee ya na ozi onye ahịa.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* enweghị ike ịbanye: eweghachila ego ma ọ bụ kagbuo usoro ya.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tiketi fọdụrụ:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} n'ime {total} fọdụrụ, {in} abanyela",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "Ọ dịghị mmemme a na-ere tiketi ya.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Ohere fọdụrụ:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): ohere {left} n'ime {total} fọdụrụ",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "Ọ dịghị klaasị meghere maka ndebanye aha.",
+      "reviewed": false
+    },
     "wa.front.turn_on_hint": {
       "text": "*{front}* gbanyụrụ: ziga *front {front} on* ka o gosi.",
       "reviewed": false
@@ -4798,6 +4838,34 @@
     },
     "customer.space_reminder": {
       "text": "Ncheta: ndebe gị {reference} nke {space} bụ echi, {when}.",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Tiketi gị maka {event}, {when}: {codes}. Gosi koodu n'ọnụ ụzọ. Nọmba {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Ncheta: {event} bụ echi, {when}. Tiketi gị: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "Edebanyela gị aha na {class}, ọ ga-amalite {when}. Nọmba {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "Akụkụ ụgwọ ọzọ maka {class}, {amount}, eruola. Kwụọ ebe a: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Ncheta: {class} ga-amalite echi, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} ejupụtala, ya mere ị nọ na ndepụta nchere ya (nọmba {reference}). Anyị ga-agwa gị mgbe ohere dị.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "Ohere dị na {class} maka gị. Kwụọ {total} ebe a n'ime otu ụbọchị iji were ya: {url}",
       "reviewed": false
     },
     "customer.hire_returned": {

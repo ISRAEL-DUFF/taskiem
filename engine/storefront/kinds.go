@@ -50,7 +50,7 @@ var (
 )
 
 // kindOrder is the order owners are offered kinds in: Custom last.
-var kindOrder = []string{"shop", "food", "hire", "spaces", "questions", "callbacks", "custom"}
+var kindOrder = []string{"shop", "food", "hire", "spaces", "tickets", "classes", "questions", "callbacks", "custom"}
 
 func loadKinds() {
 	names, err := fs.Glob(kindFiles, "kinds/*.json")
@@ -77,7 +77,7 @@ func loadKinds() {
 		}
 		for _, a := range k.Actions {
 			if !contains(Kinds, a.Kind) || a.Kind == "booking" || a.Label == "" || a.Template == "" {
-				kindsErr = fmt.Errorf("%s: an action is an order, hire, space booking, question or call-back, with a label and a template", n)
+				kindsErr = fmt.Errorf("%s: an action is an order, hire, space booking, tickets, a class, a question or a call-back, with a label and a template", n)
 				return
 			}
 		}

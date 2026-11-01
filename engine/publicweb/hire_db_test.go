@@ -243,3 +243,152 @@ func TestSpaceThroughTheDatabase(t *testing.T) {
 		t.Fatal("an overlap was booked")
 	}
 }
+
+// TestCountsThroughTheDatabase sells tickets and class places through the
+// public host's count field over taskiem_public_claim: the event's count
+// holds, a class's fee may be paid in instalments (the first now), and a
+// full class offers its waiting list, which holds no place.
+func TestCountsThroughTheDatabase(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	tn := d.SeedTenant(t, nil)
+	sf := uuid.New()
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO storefronts (id, tenant_id, slug, status, created_by) VALUES ($1, $2, 'ada-events', 'published', 'user:ada')`, sf, tn.ID); err != nil {
+		t.Fatal(err)
+	}
+	starts := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
+	concert := storefront.Item{ID: "1", Name: "Concert", PriceKobo: kobo(500000), Available: true, Capacity: 3, Starts: &starts, Venue: "Muson Centre"}
+	course := storefront.Item{ID: "2", Name: "Baking class", PriceKobo: kobo(3000000), Available: true, Capacity: 1, Starts: &starts}
+	p := samplePage("classic", 0)
+	p.Model.Fronts = []storefront.PublicFront{{Slug: "", Kind: "shop", Name: "Ada"}}
+	p.Lists = map[string][]storefront.Item{}
+	actions := map[string]uuid.UUID{}
+	for _, f := range []struct {
+		slug, kind, action, table string
+		item                      storefront.Item
+		opts                      string
+		pub                       storefront.PublicAction
+	}{
+		{"concerts", "tickets", "tickets", "events", concert, `{"max_per_order": 2}`, storefront.PublicAction{MaxPerOrder: 2}},
+		{"courses", "classes", "class", "classes", course, `{"instalments": 3, "waiting_list": true}`, storefront.PublicAction{Instalments: 3, WaitingList: true}},
+	} {
+		front, action := uuid.New(), uuid.New()
+		raw, _ := json.Marshal(f.item)
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`INSERT INTO storefront_fronts (id, tenant_id, storefront_id, slug, kind, name, enabled) VALUES ($1, $2, $3, $4, $5, $4, true)`, []any{front, tn.ID, sf, f.slug, f.kind}},
+			{`INSERT INTO storefront_blocks (id, tenant_id, front_id, kind, config) VALUES ($1, $2, $3, 'list', jsonb_build_object('table_name', $4::text))`, []any{uuid.New(), tn.ID, front, f.table}},
+			{`INSERT INTO storefront_actions (id, storefront_id, kind, tenant_id, enabled, label, payment, front_id, slug, builtin, options) VALUES ($1, $2, $3, $4, true, 'Take', 'at_order', $5, $3, false, $6)`,
+				[]any{action, sf, f.action, tn.ID, front, f.opts}},
+			{`INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, 0, $5)`, []any{sf, f.table, f.item.ID, tn.ID, raw}},
+		} {
+			if _, err := d.Admin.Exec(ctx, q.sql, q.args...); err != nil {
+				t.Fatal(err)
+			}
+		}
+		actions[f.action] = action
+		pub := f.pub
+		pub.ID, pub.Slug, pub.Kind, pub.Label, pub.Payment, pub.Form = &action, f.action, f.action, "Take", "at_order", storefront.BuiltinForm(f.action)
+		p.Model.Fronts = append(p.Model.Fronts, storefront.PublicFront{Slug: f.slug, Kind: f.kind, Name: f.slug,
+			Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(`{"table_name": "` + f.table + `"}`)}},
+			Actions: []storefront.PublicAction{pub}})
+		p.Lists[f.table] = []storefront.Item{f.item}
+	}
+	pool := d.PublicPool(t, 4)
+	s := &Server{Lookup: func(context.Context, string) (Site, bool, error) {
+		return Site{Tenant: tn.ID, Kind: "storefront", ID: sf}, true, nil
+	},
+		Storefronts: func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
+		Submit:      DBSubmit(pool), OrderStatus: DBOrderStatus(pool), Claim: DBClaim(pool),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
+		Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
+	var err error
+	if s.FormKey, err = storefront.FormKey(testMaster); err != nil {
+		t.Fatal(err)
+	}
+	if s.InboxKey, err = storefront.InboxKey(testMaster); err != nil {
+		t.Fatal(err)
+	}
+	ahead := time.Duration(0)
+	s.now = func() time.Time { return time.Now().Add(ahead) }
+	e := &formEnv{s: s, h: s.Handler(), sf: sf}
+	take := func(path string, extra url.Values) *httptest.ResponseRecorder {
+		t.Helper()
+		_, tok := e.form(t, path)
+		ahead += 5 * time.Second
+		v := url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}}
+		for k, x := range extra {
+			v[k] = x
+		}
+		return e.post(path, v)
+	}
+	sealed := func(loc string) storefront.Submission {
+		t.Helper()
+		ref := refOf(loc)
+		var payload []byte
+		if err := d.Admin.QueryRow(ctx, `SELECT payload FROM storefront_inbox WHERE reference = $1`, ref).Scan(&payload); err != nil {
+			t.Fatal(err)
+		}
+		sub, err := storefront.OpenSubmission(s.InboxKey, sf, ref, payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sub
+	}
+
+	body, _ := e.form(t, "/concerts/a/tickets")
+	if !strings.Contains(body, "Concert, "+storefront.When(starts)+", Muson Centre, ₦5,000") || !strings.Contains(body, `max="2"`) || strings.Contains(body, `name="plan"`) {
+		t.Fatalf("the ticket form: %s", body)
+	}
+	r := take("/concerts/a/tickets", url.Values{"hire_item": {"1"}, "hire_qty": {"2"}})
+	if r.Code != http.StatusSeeOther {
+		t.Fatalf("two tickets: %d %s", r.Code, r.Body.String())
+	}
+	if sub := sealed(r.Header().Get("Location")); sub.Kind != "tickets" || sub.TotalKobo != 1000000 || sub.Hire == nil || !sub.Hire.From.Equal(starts) {
+		t.Fatalf("sent: %+v", sub)
+	}
+	if r := take("/concerts/a/tickets", url.Values{"hire_item": {"1"}, "hire_qty": {"3"}}); r.Code != http.StatusUnprocessableEntity || !strings.Contains(r.Body.String(), "At most 2 in one order.") {
+		t.Fatalf("over the order's limit: %d", r.Code)
+	}
+	if r := take("/concerts/a/tickets", url.Values{"hire_item": {"1"}, "hire_qty": {"2"}}); r.Code != http.StatusConflict || !strings.Contains(r.Body.String(), "Not that many tickets are left.") {
+		t.Fatalf("beyond the event's: %d", r.Code)
+	}
+
+	// A class in three instalments: the first now.
+	body, _ = e.form(t, "/courses/a/class")
+	if !strings.Contains(body, `name="plan" value="3"`) || !strings.Contains(body, "Pay in 3 instalments, the first now") {
+		t.Fatalf("the class form: %s", body)
+	}
+	r = take("/courses/a/class", url.Values{"hire_item": {"2"}, "hire_qty": {"1"}, "plan": {"3"}})
+	if r.Code != http.StatusSeeOther {
+		t.Fatalf("enrol: %d %s", r.Code, r.Body.String())
+	}
+	if sub := sealed(r.Header().Get("Location")); sub.Kind != "class" || sub.Instalments != 3 || sub.DepositKobo != 1000000 || sub.TotalKobo != 3000000 {
+		t.Fatalf("enrolled: %+v", sub)
+	}
+	// Full: the waiting list is offered, and sending again joins it.
+	r = take("/courses/a/class", url.Values{"hire_item": {"2"}, "hire_qty": {"1"}})
+	if r.Code != http.StatusConflict || !strings.Contains(r.Body.String(), "That class is full.") || !strings.Contains(r.Body.String(), `name="waitlist" value="1"`) {
+		t.Fatalf("full: %d %s", r.Code, r.Body.String())
+	}
+	r = take("/courses/a/class", url.Values{"hire_item": {"2"}, "hire_qty": {"1"}, "waitlist": {"1"}})
+	if r.Code != http.StatusSeeOther {
+		t.Fatalf("waiting list: %d %s", r.Code, r.Body.String())
+	}
+	if sub := sealed(r.Header().Get("Location")); !sub.Waitlist || sub.DepositKobo != 0 {
+		t.Fatalf("waiting: %+v", sub)
+	}
+	var claims int
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM storefront_claims WHERE reference = $1`, refOf(r.Header().Get("Location"))).Scan(&claims); err != nil || claims != 0 {
+		t.Fatalf("a waiting name holds a place: %d %v", claims, err)
+	}
+	// An event that has started sells no more.
+	if _, err := d.Admin.Exec(ctx, `UPDATE storefront_catalogue SET item = jsonb_set(item, '{starts}', to_jsonb(now() - interval '1 minute')) WHERE row_id = '1'`); err != nil {
+		t.Fatal(err)
+	}
+	if r := take("/concerts/a/tickets", url.Values{"hire_item": {"1"}, "hire_qty": {"1"}}); r.Code != http.StatusConflict {
+		t.Fatalf("after it started: %d", r.Code)
+	}
+}

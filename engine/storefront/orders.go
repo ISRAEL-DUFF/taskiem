@@ -168,7 +168,12 @@ type Order struct {
 	PayStepKobo *int64 `json:"pay_step_kobo,omitempty"`
 	PaySeq      int    `json:"pay_seq,omitempty"`
 	// ReturnedAt is when a hire's items came back (fronts F5).
-	ReturnedAt  *time.Time `json:"returned_at,omitempty"`
+	ReturnedAt *time.Time `json:"returned_at,omitempty"`
+	// Instalments is how many parts a class's fee is paid in, and
+	// Waitlist an order on a full class's waiting list, holding no place
+	// until the owner offers one (fronts F6).
+	Instalments int  `json:"instalments,omitempty"`
+	Waitlist    bool `json:"waitlist,omitempty"`
 	subject     string
 	storefront  uuid.UUID
 	action      uuid.UUID
@@ -186,7 +191,7 @@ func (x Order) CustomerID() string { return x.subject }
 const orderCols = `id, reference, kind, status, customer, subject_id, basket, total_kobo, COALESCE(fulfilment, ''), payment, COALESCE(payment_url, ''),
 	COALESCE(payment_ref, ''), paid_at, run_id, COALESCE(note, ''), COALESCE(decided_by, ''), decided_at, expires_at, created_at, storefront_id,
 	COALESCE(service_id, ''), COALESCE(service_name, ''), starts_at, ends_at, version, deposit_kobo, price_change,
-	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq, returned_at,
+	COALESCE(zone, ''), COALESCE(delivery_kobo, 0), action_id, front_id, extra_kobo, paid_kobo, pay_to_kobo, pay_step_kobo, pay_seq, returned_at, instalments, waitlist,
 	CASE WHEN paid_at IS NULL THEN ''
 	  WHEN EXISTS (SELECT 1 FROM customer_invoice_accounts x WHERE x.order_id = storefront_orders.id AND x.status = 'paid') THEN 'transfer'
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
@@ -200,7 +205,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
 		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID,
-		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.PaidBy)
+		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.Instalments, &x.Waitlist, &x.PaidBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -480,7 +485,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if sub.DepositKobo > 0 {
 		payable = sub.DepositKobo
 	}
-	if !takesPayment(sub.Kind) || payable < 100 {
+	if !takesPayment(sub.Kind) || payable < 100 || sub.Waitlist {
 		payment = "none"
 	}
 	if payment == "on_delivery" && (sub.Kind != "order" || sub.Fulfilment != "delivery") {
@@ -522,11 +527,18 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	// A hire's item and dates in the same columns: from its first day to
 	// the end of its last, the day it is due back (fronts F5).
 	h := sub.Hire
-	if (sub.Kind == "hire" || sub.Kind == "space") && h == nil {
+	if (sub.Kind == "hire" || sub.Kind == "space" || sub.Kind == "tickets" || sub.Kind == "class") && h == nil {
 		return Order{}, fmt.Errorf("%w: a hire without its dates", ErrInvalid)
 	}
 	if h != nil {
-		serviceID, serviceName, starts, ends = &h.ItemID, &h.Item, &h.From, &h.Until
+		serviceID, serviceName = &h.ItemID, &h.Item
+		// A ticket or a place has its event's or class's start, and no end.
+		if !h.From.IsZero() {
+			starts = &h.From
+		}
+		if !h.Until.IsZero() {
+			ends = &h.Until
+		}
 	}
 	var noteArg *string
 	if note != "" {
@@ -557,11 +569,11 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	// The submission names its action and front (fronts §5.5).
 	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
-		action_id, front_id, answers)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26
+		action_id, front_id, answers, instalments, waitlist)
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26, $27, $28
 		  FROM storefront_actions a WHERE a.storefront_id = $3 AND `+actionOf("$25", "$4"),
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
-		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action, answers); err != nil {
+		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action, answers, max(1, min(MaxInstalments, sub.Instalments)), sub.Waitlist); err != nil {
 		return Order{}, err
 	} else if tag.RowsAffected() == 0 {
 		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
@@ -583,7 +595,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 			}
 		}
 	}
-	if h != nil {
+	if h != nil && !sub.Waitlist {
 		// The claim taken with the submission is kept until the order's
 		// payment is due, or for as long as the hire lives; one that lapsed
 		// before the hire was recorded is not taken again.
@@ -784,7 +796,7 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 		body["zone"], body["delivery_kobo"], body["delivery_fee"] = ord.Zone, ord.DeliveryKobo, FormatNaira(ord.DeliveryKobo)
 		body["summary"] = Summary(ord.Basket) + ", delivery to " + ord.Zone + " " + FormatNaira(ord.DeliveryKobo)
 	}
-	if k, v := reservedTime(ord); k != "" {
+	if k, v := reservedTime(ord, rec.instalmentDays); k != "" {
 		body[k] = v
 		body["summary"] = Summary(ord.Basket)
 		if w, ok := v["when"].(string); ok {
@@ -1091,7 +1103,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 				}
 			}
 			// A booking declined or cancelled frees its slot.
-			if (ord.Kind == "booking" || ord.Kind == "hire" || ord.Kind == "space") && (next == "declined" || next == "cancelled" || next == "refund_due") {
+			if (ord.Kind == "booking" || ord.Kind == "hire" || ord.Kind == "space" || ord.Kind == "tickets" || ord.Kind == "class") && (next == "declined" || next == "cancelled" || next == "refund_due") {
 				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {
 					return err
 				}

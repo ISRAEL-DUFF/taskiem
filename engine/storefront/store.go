@@ -116,6 +116,10 @@ type Item struct {
 	// A Food dish's options and the minutes it takes (fronts F3).
 	Options []ItemOption `json:"options,omitempty"`
 	ReadyIn int          `json:"ready_in,omitempty"`
+	// An event's or a class's start and place (fronts F6): sales close
+	// when it starts.
+	Starts *time.Time `json:"starts,omitempty"`
+	Venue  string     `json:"venue,omitempty"`
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
@@ -392,6 +396,12 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Options != "" {
 			it.Options = ParseOptions(r[m.Options])
 		}
+		if m.Starts != "" {
+			it.Starts = parseStarts(r[m.Starts])
+		}
+		if m.Venue != "" {
+			it.Venue = str(r[m.Venue])
+		}
 		if m.ReadyIn != "" {
 			if n, ok := num(r[m.ReadyIn]); ok && n >= 1 && n <= 600 {
 				it.ReadyIn = int(n)
@@ -401,7 +411,7 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 			col      string
 			v        *int
 			min, max int
-		}{{m.Duration, &it.DurationMinutes, 5, 480}, {m.Capacity, &it.Capacity, 1, 1000}, {m.Buffer, &it.BufferMinutes, 0, 480}} {
+		}{{m.Duration, &it.DurationMinutes, 5, 480}, {m.Capacity, &it.Capacity, 1, 100000}, {m.Buffer, &it.BufferMinutes, 0, 480}} {
 			if f.col == "" {
 				continue
 			}
@@ -502,6 +512,24 @@ func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error)
 		}
 		return it, json.Unmarshal(raw, &it)
 	})
+}
+
+// parseStarts reads a date or a date and time cell; a date alone starts
+// at 00:00 in Lagos.
+func parseStarts(v any) *time.Time {
+	s := str(v)
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02 15:04"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			if layout != time.RFC3339Nano {
+				t, _ = time.ParseInLocation(layout, s, Lagos)
+			}
+			return &t
+		}
+	}
+	if t, err := time.ParseInLocation(time.DateOnly, s, Lagos); err == nil {
+		return &t
+	}
+	return nil
 }
 
 func str(v any) string {

@@ -5909,6 +5909,56 @@
       "reviewed": true,
       "context": "Done: an item was added to a front"
     },
+    "wa.ticket.in": {
+      "text": "In: *{code}*, seat {seat} of {of}, {event}.",
+      "reviewed": true,
+      "context": "Done: a ticket checked in at the door (fronts F6)"
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* is already in: it was checked in {at}.",
+      "reviewed": true,
+      "context": "Refused: a ticket checked in before"
+    },
+    "wa.ticket.none": {
+      "text": "No ticket has the code *{code}*. Check it against the customer's message.",
+      "reviewed": true,
+      "context": "Refused: no ticket of the business has that code"
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* cannot go in: its order was refunded or cancelled.",
+      "reviewed": true,
+      "context": "Refused: a ticket whose order was refunded or cancelled"
+    },
+    "wa.tickets.left": {
+      "text": "Tickets left:",
+      "reviewed": true,
+      "context": "Heading: tickets left per event"
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} left, {in} in",
+      "reviewed": true,
+      "context": "A line: an event, its tickets left and checked in"
+    },
+    "wa.tickets.none": {
+      "text": "No event has tickets on sale.",
+      "reviewed": true,
+      "context": "Reply: no event on a Tickets front is on sale"
+    },
+    "wa.places.left": {
+      "text": "Places left:",
+      "reviewed": true,
+      "context": "Heading: places left per class"
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} places left",
+      "reviewed": true,
+      "context": "A line: a class and its places left"
+    },
+    "wa.places.none": {
+      "text": "No class is open for enrolment.",
+      "reviewed": true,
+      "context": "Reply: no class on a Classes front is open"
+    },
     "wa.front.turn_on_hint": {
       "text": "*{front}* is off: send *front {front} on* to show it.",
       "reviewed": true,
@@ -5998,6 +6048,41 @@
       "text": "Reminder: your booking {reference} of {space} is tomorrow, {when}.",
       "reviewed": true,
       "context": "SMS to a customer: the day before a space booking (fronts F5)"
+    },
+    "customer.ticket_issued": {
+      "text": "Your tickets for {event}, {when}: {codes}. Show a code at the door. Reference {reference}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a ticket order's codes once it is paid (fronts F6)"
+    },
+    "customer.event_reminder": {
+      "text": "Reminder: {event} is tomorrow, {when}. Your tickets: {codes}.",
+      "reviewed": true,
+      "context": "SMS to a customer: the day before an event they hold tickets for (fronts F6)"
+    },
+    "customer.enrolled": {
+      "text": "You are enrolled in {class}, starting {when}. Reference {reference}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a place in a class taken and its first payment made (fronts F6)"
+    },
+    "customer.instalment_due": {
+      "text": "The next instalment for {class}, {amount}, is due. Pay here: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: a class fee's next instalment, with its payment link (fronts F6)"
+    },
+    "customer.session_reminder": {
+      "text": "Reminder: {class} starts tomorrow, {when}.",
+      "reviewed": true,
+      "context": "SMS to a customer: the day before their class starts (fronts F6)"
+    },
+    "customer.waiting_list": {
+      "text": "{class} is full, so you are on its waiting list (reference {reference}). We will tell you when a place is free.",
+      "reviewed": true,
+      "context": "SMS to a customer: on a full class's waiting list (fronts F6)"
+    },
+    "customer.place_offered": {
+      "text": "A place in {class} is free for you. Pay {total} here within a day to take it: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer on a waiting list: a place offered, with its payment link (fronts F6)"
     },
     "customer.hire_returned": {
       "text": "Thank you: {reference} is back with us.",

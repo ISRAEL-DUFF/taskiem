@@ -54,6 +54,11 @@ type Submission struct {
 	// space and times (fronts F5); its claim was taken by the public host
 	// with the submission.
 	Hire *Hired `json:"hire,omitempty"`
+	// Instalments is how many parts a class's fee is paid in, the first
+	// as DepositKobo; Waitlist a name for a full class's waiting list,
+	// with no claim (fronts F6).
+	Instalments int  `json:"instalments,omitempty"`
+	Waitlist    bool `json:"waitlist,omitempty"`
 	// DepositKobo is what a booking pays online when less than the total.
 	DepositKobo int64 `json:"deposit_kobo,omitempty"`
 	// Answers are the customer's answers to the action's own questions

@@ -231,7 +231,7 @@ export interface Trigger {
  * first front; action_id, when set, names any action on any front, and action is then ignored.
  */
 export interface StorefrontTriggerConfig {
-  action: "order" | "enquiry" | "callback" | "booking" | "hire" | "space";
+  action: "order" | "enquiry" | "callback" | "booking" | "hire" | "space" | "tickets" | "class";
   action_id?: string;
 }
 

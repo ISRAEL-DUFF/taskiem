@@ -53,7 +53,7 @@ func TestChatFronts(t *testing.T) {
 
 	// The kind asked as a list, then shown and made on yes.
 	r := w.say(t, on, "add front Snacks")
-	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "4. *Spaces*") || !strings.Contains(r, "7. *Custom*") {
+	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "4. *Spaces*") || !strings.Contains(r, "5. *Tickets*") || !strings.Contains(r, "6. *Classes*") || !strings.Contains(r, "9. *Custom*") {
 		t.Fatalf("kinds: %q", r)
 	}
 	if r := w.say(t, on, "rockets"); !strings.Contains(r, "What is *Snacks* for?") {
@@ -260,7 +260,7 @@ func TestChatFrontsInPidgin(t *testing.T) {
 	}
 }
 
-// Hire and Spaces fronts from chat (fronts F5): made with their tables and
+// Hire, Spaces, Tickets and Classes fronts from chat (fronts F5, F6): made with their tables and
 // calendars, an item added with a count to start from, and their forms
 // turned on with their workflows.
 func TestChatHireAndSpaceFronts(t *testing.T) {
@@ -272,36 +272,55 @@ func TestChatHireAndSpaceFronts(t *testing.T) {
 	}
 	owner := w.tenant(t, "Ada's Events", "ada@ada.test")
 	verifyPhone(t, w.world, owner, "phone", "business")
-	const on = "+2348010000049"
+	const on, an = "+2348010000049", "+2348010000041"
 	w.bind(t, owner, on)
+	// Two people, so no number sends more than chat's burst allows.
+	w.bind(t, w.member(t, owner, "adm@ada.test", "admin"), an)
 	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-events", "draft": map[string]any{"name": "Ada's Events"}})
 	owner.must(200, "POST", "/v1/storefront/publish", nil)
 
-	for _, c := range []struct{ make, title, item, added, turnOn, kind string }{
-		{"add hire front Tools", "a Hire front", "add item Canopy 5000 to Tools", "Added *Canopy* at ₦5,000 to *Tools*.", "turn on hire for Tools", "hire"},
-		{"add spaces front Halls", "a Spaces front", "add item Main hall 150000 to Halls", "Added *Main hall* at ₦150,000 to *Halls*.", "turn on bookings for Halls", "space"},
+	for _, c := range []struct{ by, make, title, item, added, turnOn, kind string }{
+		{on, "add hire front Tools", "a Hire front", "add item Canopy 5000 to Tools", "Added *Canopy* at ₦5,000 to *Tools*.", "turn on hire for Tools", "hire"},
+		{on, "add spaces front Halls", "a Spaces front", "add item Main hall 150000 to Halls", "Added *Main hall* at ₦150,000 to *Halls*.", "turn on bookings for Halls", "space"},
+		{an, "add tickets front Concerts", "a Tickets front", "add item Owambe night 5000 to Concerts", "Added *Owambe night* at ₦5,000 to *Concerts*.", "turn on tickets for Concerts", "tickets"},
+		{an, "add class front Courses", "a Classes front", "add item Baking class 30000 to Courses", "Added *Baking class* at ₦30,000 to *Courses*.", "turn on enrolment for Courses", "class"},
 	} {
-		if r := w.say(t, on, c.make); !strings.Contains(r, c.title) {
+		if r := w.say(t, c.by, c.make); !strings.Contains(r, c.title) {
 			t.Fatalf("%s: %q", c.make, r)
 		}
-		if r := w.yes(t, on); !strings.Contains(r, "Made *") {
+		if r := w.yes(t, c.by); !strings.Contains(r, "Made *") {
 			t.Fatalf("%s, made: %q", c.make, r)
 		}
-		if r := w.say(t, on, c.item); !strings.Contains(r, "Add this to *") {
+		if r := w.say(t, c.by, c.item); !strings.Contains(r, "Add this to *") {
 			t.Fatalf("%s: %q", c.item, r)
 		}
-		if r := w.yes(t, on); !strings.Contains(r, c.added) {
+		if r := w.yes(t, c.by); !strings.Contains(r, c.added) {
 			t.Fatalf("%s, added: %q", c.item, r)
 		}
-		if r := w.say(t, on, c.turnOn); !strings.Contains(r, "Turn on *") {
+		if r := w.say(t, c.by, c.turnOn); !strings.Contains(r, "Turn on *") {
 			t.Fatalf("%s: %q", c.turnOn, r)
 		}
-		r := w.yes(t, on)
+		r := w.yes(t, c.by)
 		var enabled bool
 		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT a.enabled FROM storefront_actions a JOIN triggers t ON t.storefront_action_id = a.id AND t.environment = 'prod'
 			WHERE a.kind = $1 AND t.storefront_action = $1`, c.kind).Scan(&enabled); err != nil || !enabled {
 			t.Fatalf("%s: %v %v %q", c.turnOn, err, enabled, r)
 		}
+	}
+	// At the door and for the owner (fronts F6): what is left, and a code
+	// checked in.
+	if r := w.say(t, an, "tickets left"); !strings.Contains(r, "Tickets left:") || !strings.Contains(r, "*Owambe night* (Concerts): 1 of 1 left, 0 in") {
+		t.Errorf("tickets left: %q", r)
+	}
+	if r := w.say(t, an, "places left"); !strings.Contains(r, "*Baking class* (Courses): 1 of 1 places left") {
+		t.Errorf("places left: %q", r)
+	}
+	if r := w.say(t, an, "check in AD-ZZZZZZ-1"); !strings.Contains(r, "No ticket has the code *AD-ZZZZZZ-1*") {
+		t.Errorf("no such ticket: %q", r)
+	}
+	var payment string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT payment FROM storefront_actions WHERE kind = 'tickets'`).Scan(&payment); err != nil || payment != "at_order" {
+		t.Errorf("tickets are paid when bought: %q %v", payment, err)
 	}
 	var grain string
 	var setup int

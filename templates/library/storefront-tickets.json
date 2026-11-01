@@ -1,0 +1,214 @@
+{
+  "id": "storefront-tickets",
+  "title": "Tickets: send a code per seat, remind, check in at the door",
+  "summary": "Each paid ticket order from a Tickets front gets a code per seat by SMS, a reminder the day before the event, and is completed when the event starts; codes are checked in at the door from chat.",
+  "description": "Starts when a customer has paid for tickets on a Tickets front: the event and how many. Each seat gets its own code, the order's reference and the seat number, sent to the customer by SMS and by email when they gave one. The day before the event they are reminded, with their codes. At the door, check people in with check in and the code in chat: each code goes in once, and a refunded order's codes do not. A refund frees its tickets for others.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "tickets",
+    "event",
+    "concert",
+    "seminar",
+    "conference",
+    "party",
+    "sell tickets",
+    "ticketing",
+    "check in"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontTickets",
+    "version": 1,
+    "name": "Storefront tickets",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "tickets"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "front": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "due_kobo": {
+            "type": "integer"
+          },
+          "paid_kobo": {
+            "type": "integer"
+          },
+          "status_link": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "tickets": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "when": {
+                "type": "string"
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "remind_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "issue",
+        "type": "connector",
+        "name": "Make a code for each seat",
+        "connector": "storefront@1",
+        "action": "issue_tickets",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell",
+        "type": "connector",
+        "name": "Send the tickets",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "issue"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "ticket_issued",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "event": "=steps.issue.output.event",
+            "when": "=steps.issue.output.when",
+            "codes": "=steps.issue.output.codes"
+          }
+        }
+      },
+      {
+        "id": "wait_remind",
+        "type": "wait",
+        "name": "Until the day before",
+        "needs": [
+          "tell"
+        ],
+        "config": {
+          "until": "=trigger.body.tickets.remind_at"
+        },
+        "when": "=has(trigger.body.tickets.remind_at)"
+      },
+      {
+        "id": "remind",
+        "type": "connector",
+        "name": "Remind the customer",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_remind"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "event_reminder",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "event": "=steps.issue.output.event",
+            "when": "=steps.issue.output.when",
+            "codes": "=steps.issue.output.codes"
+          }
+        }
+      },
+      {
+        "id": "wait_over",
+        "type": "wait",
+        "name": "Until the event starts",
+        "needs": [
+          "remind"
+        ],
+        "config": {
+          "until": "=trigger.body.tickets.starts_at"
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Complete the order",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "wait_over"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4800h"
+    }
+  }
+}

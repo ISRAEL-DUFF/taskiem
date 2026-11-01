@@ -1,0 +1,10 @@
+{
+  "name": "tickets",
+  "title": "Tickets",
+  "line": "A concert, a seminar, a conference, a party, a match: tickets paid for when bought, one code per seat, checked in at the door.",
+  "table": "events",
+  "mapping": {"name": "name", "price": "price", "price_unit": "naira", "photo": "photo", "description": "description", "available": "available", "capacity": "tickets", "starts": "starts", "venue": "venue"},
+  "actions": [
+    {"kind": "tickets", "label": "Buy tickets", "template": "storefront-tickets", "options": {"max_per_order": 10}}
+  ]
+}

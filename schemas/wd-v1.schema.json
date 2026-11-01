@@ -1743,7 +1743,9 @@
                       "callback",
                       "booking",
                       "hire",
-                      "space"
+                      "space",
+                      "tickets",
+                      "class"
                     ]
                   },
                   "action_id": {

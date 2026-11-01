@@ -77,6 +77,12 @@ type hireView struct {
 	ToHours         []hourOption
 	MinHours, Opens string
 	cal             storefront.Calendar
+	// A ticket's or a class's (fronts F6): how many one order may take,
+	// the fee's instalment choice, and a full class's waiting list.
+	Count       bool
+	MaxPerOrder int
+	Plans       []hourOption
+	Waitlist    bool
 }
 
 type hourOption struct {

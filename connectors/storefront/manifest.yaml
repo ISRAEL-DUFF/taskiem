@@ -130,6 +130,51 @@ actions:
         late_fee:      { type: string }
         balance_kobo:  { type: integer }
         balance:       { type: string }
+  issue_tickets:
+    title: Issue tickets
+    description: Makes a paid ticket order's codes (fronts F6), one per seat, the order's reference and the seat (AK-7QX4KD-2), to send to the customer; they are checked in at the door with `check in <code>` in chat. Asked again, it gives the same codes. A refunded or cancelled order's codes do not check in.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        count:     { type: integer }
+        codes:     { type: string }
+        event:     { type: string }
+        when:      { type: string }
+  offer_place:
+    title: Offer a waiting-list place
+    description: Gives a name on a full class's waiting list its place when one is free (fronts F6), taken as a place on the page is, so two offers cannot both take the last one. The order becomes accepted and paid after acceptance, for a payment_link step. Still full, the step fails.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference:  { type: string }
+        status:     { type: string }
+        total_kobo: { type: integer }
+        total:      { type: string }
   get_booking:
     title: Read a booking
     description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.

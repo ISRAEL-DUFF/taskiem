@@ -34,6 +34,8 @@ type Ops interface {
 	GetBooking(ctx context.Context, tenant uuid.UUID, reference string) (map[string]any, error)
 	Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
 	MarkReturned(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Returned, error)
+	IssueTickets(ctx context.Context, tenant uuid.UUID, reference string) ([]sf.Ticket, sf.Order, error)
+	OfferPlace(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error)
 	// CustomerLanguage is the business's language for its customers
 	// (its default chat language), English when it has none.
 	CustomerLanguage(ctx context.Context, tenant uuid.UUID) lang.Tag
@@ -50,6 +52,8 @@ func New(ops Ops) *connector.Connector {
 		"get_booking":     connector.ActionFunc(a.getBooking),
 		"refund":          connector.ActionFunc(a.refund),
 		"mark_returned":   connector.ActionFunc(a.markReturned),
+		"issue_tickets":   connector.ActionFunc(a.issueTickets),
+		"offer_place":     connector.ActionFunc(a.offerPlace),
 	}}
 }
 
@@ -160,6 +164,42 @@ func (a *actions) markReturned(ctx context.Context, req connector.Request) (conn
 		"late_fee": sf.FormatNaira(r.LateFeeKobo), "balance_kobo": r.Order.BalanceKobo(), "balance": sf.FormatNaira(r.Order.BalanceKobo())}}, nil
 }
 
+// issueTickets makes a paid ticket order's codes, one per seat (fronts
+// F6); asked again, the same codes.
+func (a *actions) issueTickets(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	list, ord, err := a.ops.IssueTickets(ctx, c.Tenant, ref)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	codes := make([]string, len(list))
+	for i, t := range list {
+		codes[i] = t.Code
+	}
+	when := ""
+	if ord.StartsAt != nil {
+		when = sf.When(*ord.StartsAt)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "count": len(codes), "codes": strings.Join(codes, ", "), "event": ord.ServiceName, "when": when}}, nil
+}
+
+// offerPlace gives a name on a full class's waiting list its place, when
+// one is free (fronts F6); still full, the step fails and may be retried.
+func (a *actions) offerPlace(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, ref, err := a.caller(ctx, req)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	o, err := a.ops.OfferPlace(ctx, c.Tenant, ref, "workflow:"+c.Run.String())
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "status": o.Status, "total_kobo": o.TotalKobo, "total": sf.FormatNaira(o.TotalKobo)}}, nil
+}
+
 func (a *actions) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
 	c, ref, err := a.caller(ctx, req)
 	if err != nil {
@@ -256,6 +296,22 @@ func (l *Late) MarkReturned(ctx context.Context, tenant uuid.UUID, reference, ac
 		return sf.Returned{}, err
 	}
 	return ops.MarkReturned(ctx, tenant, reference, actor)
+}
+
+func (l *Late) IssueTickets(ctx context.Context, tenant uuid.UUID, reference string) ([]sf.Ticket, sf.Order, error) {
+	ops, err := l.get()
+	if err != nil {
+		return nil, sf.Order{}, err
+	}
+	return ops.IssueTickets(ctx, tenant, reference)
+}
+
+func (l *Late) OfferPlace(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error) {
+	ops, err := l.get()
+	if err != nil {
+		return sf.Order{}, err
+	}
+	return ops.OfferPlace(ctx, tenant, reference, actor)
 }
 
 func (l *Late) Refund(ctx context.Context, tenant uuid.UUID, reference, actor string) (sf.Order, error) {

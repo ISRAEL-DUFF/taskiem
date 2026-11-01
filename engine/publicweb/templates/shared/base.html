@@ -78,7 +78,18 @@ theme. Forms only: the page refreshes itself, with no script. */}}
 <button class="btn btn-block{{if $.Primary}} btn-primary btn-brand{{end}}" type="submit">{{.}}</button>
 </form>{{end}}
 </section>{{end}}
-{{define "hire"}}{{with .Hire}}{{if .Space}}
+{{define "hire"}}{{with .Hire}}{{if .Count}}
+<fieldset class="basket hire">
+<legend>{{if .Plans}}Your place{{else}}Your tickets{{end}}</legend>
+<div class="field"><label for="h-item">{{if .Plans}}Class{{else}}Event{{end}}</label>
+<select id="h-item" name="hire_item" required><option value="">Choose…</option>{{range .Items}}<option value="{{.ID}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></div>
+<div class="field"><label for="h-qty">How many</label>
+<input id="h-qty" type="number" name="hire_qty" value="{{.Qty}}" min="1" max="{{.MaxPerOrder}}" step="1" inputmode="numeric" required></div>
+{{if .Plans}}<div class="field"><span class="label">How to pay</span>{{range .Plans}}
+<label class="choice"><input type="radio" name="plan" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>{{end}}</div>{{end}}
+{{if .Waitlist}}<input type="hidden" name="waitlist" value="1"><p class="hint">Send again to join the waiting list. Nothing is paid until a place is offered.</p>{{end}}
+</fieldset>
+{{else if .Space}}
 <fieldset class="basket hire">
 <legend>When you want the space</legend>
 <div class="field"><label for="h-item">Space</label>

@@ -33,11 +33,13 @@ var (
 	soldOutCmd = regexp.MustCompile(`(?i)^\s*sold\s*out\s+(.+)$`)
 	// "front Snacks on", "front Snacks off".
 	frontSwitchCmd = regexp.MustCompile(`(?i)^\s*front\s+(.+?)\s+(on|off)\s*[.!]?\s*$`)
+	// "check in AK-7QX4KD-2": a ticket at the door (fronts F6).
+	checkInCmd = regexp.MustCompile(`(?i)^\s*check\s*-?\s*in\s+(\S+)\s*[.!]?\s*$`)
 )
 
 // frontKindWords are the words a kind is named by in a command.
 var frontKindWords = map[string]string{
-	"shop": "shop", "food": "food", "kitchen": "food", "hire": "hire", "rental": "hire", "spaces": "spaces", "space": "spaces", "hall": "spaces", "halls": "spaces", "venue": "spaces", "questions": "questions", "question": "questions",
+	"shop": "shop", "food": "food", "kitchen": "food", "hire": "hire", "rental": "hire", "spaces": "spaces", "space": "spaces", "hall": "spaces", "halls": "spaces", "venue": "spaces", "tickets": "tickets", "ticket": "tickets", "event": "tickets", "events": "tickets", "classes": "classes", "class": "classes", "course": "classes", "courses": "classes", "questions": "questions", "question": "questions",
 	"call-backs": "callbacks", "call-back": "callbacks", "callbacks": "callbacks", "callback": "callbacks", "custom": "custom",
 }
 
@@ -72,6 +74,14 @@ func (s *Server) waFrontCommand(ctx context.Context, c *chat, text, cmd string) 
 		do = func() error { return s.waFrontTurnOn(ctx, c, m[1], m[2]) }
 	case s.Orders != nil && (strings.HasPrefix(cmd, "orders ") || strings.HasPrefix(cmd, "my orders ")):
 		do = func() error { return s.waShopOrdersOn(ctx, c, ordersOnCmd.FindStringSubmatch(text)[1]) }
+	case s.Orders != nil && checkInCmd.MatchString(text):
+		do = func() error { return s.waCheckIn(ctx, c, checkInCmd.FindStringSubmatch(text)[1]) }
+	case cmd == "tickets left" || cmd == "places left":
+		kind := "tickets"
+		if cmd == "places left" {
+			kind = "class"
+		}
+		do = func() error { return s.waLeft(ctx, c, kind) }
 	case frontSwitchCmd.MatchString(text):
 		m := frontSwitchCmd.FindStringSubmatch(text)
 		do = func() error { return s.waFrontSwitch(ctx, c, strings.TrimSpace(m[1]), strings.EqualFold(m[2], "on")) }
@@ -417,6 +427,10 @@ func turnOnWord(kind string) string {
 		return "hire"
 	case "space":
 		return "bookings"
+	case "tickets":
+		return "tickets"
+	case "class":
+		return "enrolment"
 	}
 	return "orders"
 }
@@ -872,13 +886,13 @@ func (s *Server) shopChangeFrontItem(ctx context.Context, c *chat) error {
 var (
 	// "turn on orders for Snacks", "turn on questions for Ask us",
 	// "turn on deliveries for Snacks".
-	turnOnForCmd = regexp.MustCompile(`(?i)^\s*turn\s+on\s+(orders|hire|bookings|questions|call-?backs|deliveries)\s+for\s+(.+?)\s*[.!]?\s*$`)
+	turnOnForCmd = regexp.MustCompile(`(?i)^\s*turn\s+on\s+(orders|hire|bookings|tickets|enroll?ment|questions|call-?backs|deliveries)\s+for\s+(.+?)\s*[.!]?\s*$`)
 	// "orders Snacks", "orders for Snacks".
 	ordersOnCmd = regexp.MustCompile(`(?i)^\s*(?:my\s+)?orders\s+(?:for\s+|on\s+|from\s+)?(.+?)\s*[.!?]?\s*$`)
 )
 
 // turnOnKinds are the action kinds "turn on … for <front>" names.
-var turnOnKinds = map[string]string{"orders": "order", "hire": "hire", "bookings": "space", "questions": "enquiry", "callbacks": "callback", "call-backs": "callback", "deliveries": "order"}
+var turnOnKinds = map[string]string{"orders": "order", "hire": "hire", "bookings": "space", "tickets": "tickets", "enrolment": "class", "enrollment": "class", "questions": "enquiry", "callbacks": "callback", "call-backs": "callback", "deliveries": "order"}
 
 // waFrontTurnOn answers "turn on <orders|questions|call-backs|deliveries>
 // for <front>": the front's action named, shown and done on yes.
@@ -1043,4 +1057,47 @@ func (s *Server) waShopOrdersOn(ctx context.Context, c *chat, name string) error
 		return s.noFront(ctx, c, list, name)
 	}
 	return s.shopListOrders(ctx, c, &f.ID, f.Name, nil)
+}
+
+// waCheckIn lets a ticket in at the door, once (fronts F6).
+func (s *Server) waCheckIn(ctx context.Context, c *chat, code string) error {
+	t, already, err := s.Orders.CheckIn(ctx, c.tenant.ID, code, c.p.Actor())
+	safe := whatsapp.SafeText(strings.ToUpper(code))
+	switch {
+	case errors.Is(err, storefront.ErrNoTicket):
+		return c.say(ctx, s, c.t("wa.ticket.none", "code", safe))
+	case errors.Is(err, storefront.ErrDecision):
+		return c.say(ctx, s, c.t("wa.ticket.refused", "code", safe))
+	case err != nil:
+		return err
+	case already:
+		return c.say(ctx, s, c.t("wa.ticket.already", "code", t.Code, "at", storefront.When(*t.CheckedInAt)))
+	}
+	return c.say(ctx, s, c.t("wa.ticket.in", "code", t.Code, "seat", strconv.Itoa(t.Seat), "of", strconv.Itoa(t.Of), "event", whatsapp.SafeText(t.Event)))
+}
+
+// waLeft lists each event's tickets, or each class's places, left.
+func (s *Server) waLeft(ctx context.Context, c *chat, kind string) error {
+	var list []storefront.EventCount
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		list, err = storefront.TicketsLeft(ctx, tx, c.tenant.ID, kind)
+		return err
+	}); err != nil {
+		return err
+	}
+	head, line, none := "wa.tickets.left", "wa.tickets.left_line", "wa.tickets.none"
+	if kind == "class" {
+		head, line, none = "wa.places.left", "wa.places.left_line", "wa.places.none"
+	}
+	if len(list) == 0 {
+		return c.say(ctx, s, c.t(none))
+	}
+	var b strings.Builder
+	b.WriteString(c.t(head))
+	for _, e := range list {
+		b.WriteString("\n" + c.t(line, "name", whatsapp.SafeText(e.Event), "front", whatsapp.SafeText(e.Front), "left", strconv.Itoa(max(0, e.Tickets-e.Taken)),
+			"total", strconv.Itoa(e.Tickets), "in", strconv.Itoa(e.CheckedIn)))
+	}
+	return c.say(ctx, s, b.String())
 }

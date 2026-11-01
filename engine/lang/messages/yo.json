@@ -4728,6 +4728,46 @@
       "text": "A ti fi *{name}* kún *{front}* ní {price}.",
       "reviewed": false
     },
+    "wa.ticket.in": {
+      "text": "Wọlé: *{code}*, ìjókòó {seat} nínú {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* ti wọlé tẹ́lẹ̀: wọ́n ṣàyẹ̀wò rẹ̀ {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "Kò sí tíkẹ́ẹ̀tì tí ó ní kóòdù *{code}*. Fi wé ọ̀rọ̀ oníbàárà.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* kò lè wọlé: wọ́n ti dá owó padà tàbí fagilé ìbéèrè rẹ̀.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Àwọn tíkẹ́ẹ̀tì tó kù:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} nínú {total} ló kù, {in} ti wọlé",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "Kò sí ìṣẹ̀lẹ̀ tí wọ́n ń ta tíkẹ́ẹ̀tì rẹ̀.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Àwọn àyè tó kù:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): àyè {left} nínú {total} ló kù",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "Kò sí kílásì tí wọ́n ń forúkọ sílẹ̀ fún.",
+      "reviewed": false
+    },
     "wa.front.turn_on_hint": {
       "text": "*{front}* ti pa: fi *front {front} on* ránṣẹ́ láti fihàn án.",
       "reviewed": false
@@ -4798,6 +4838,34 @@
     },
     "customer.space_reminder": {
       "text": "Ìránnilétí: ìfipamọ́ {reference} rẹ fún {space} jẹ́ ọ̀la, {when}.",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Àwọn tíkẹ́ẹ̀tì rẹ fún {event}, {when}: {codes}. Fi kóòdù kan hàn ní ẹnu ọ̀nà. Nọ́mbà {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Ìránnilétí: {event} jẹ́ ọ̀la, {when}. Àwọn tíkẹ́ẹ̀tì rẹ: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "O ti forúkọ sílẹ̀ fún {class}, tí yóò bẹ̀rẹ̀ {when}. Nọ́mbà {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "Ìdíyelé tó kàn fún {class}, {amount}, ti tó. Sanwó níbí: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Ìránnilétí: {class} yóò bẹ̀rẹ̀ ní ọ̀la, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} ti kún, nítorí náà o wà lórí àkójọ ìdúró rẹ̀ (nọ́mbà {reference}). A ó sọ fún ọ nígbà tí àyè bá ṣí sílẹ̀.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "Àyè kan nínú {class} ti ṣí sílẹ̀ fún ọ. San {total} níbí láàrin ọjọ́ kan láti gbà á: {url}",
       "reviewed": false
     },
     "customer.hire_returned": {

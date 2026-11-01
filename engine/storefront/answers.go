@@ -27,8 +27,8 @@ import (
 
 // ReservedAnswers are the names a question may not take: Taskiem's own
 // fields of a submission, in trigger.submission and trigger.body.
-var ReservedAnswers = []string{"action", "basket", "booking", "customer", "delivery_fee", "delivery_kobo", "event", "front", "fulfilment",
-	"hire", "kind", "lines", "payment", "reference", "space", "status_link", "summary", "total", "total_kobo", "zone"}
+var ReservedAnswers = []string{"action", "basket", "booking", "class", "customer", "delivery_fee", "delivery_kobo", "event", "front", "fulfilment",
+	"hire", "kind", "lines", "payment", "reference", "space", "status_link", "summary", "tickets", "total", "total_kobo", "zone"}
 
 var answerName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
@@ -293,6 +293,8 @@ type submissionRecord struct {
 	front, action map[string]any
 	statusLink    string
 	answers       map[string]any
+	// instalmentDays is the days between a class's instalments.
+	instalmentDays int
 }
 
 // recordOf reads an order's front, action, status link and answers.
@@ -301,11 +303,15 @@ func (o *Orders) recordOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ord 
 	var fid, aid uuid.UUID
 	var fslug, fname, aslug, akind string
 	var env map[string]any
-	if err := tx.QueryRow(ctx, `SELECT f.id, f.slug, f.name, a.id, a.slug, a.kind, o.answers FROM storefront_orders o
+	var opts []byte
+	if err := tx.QueryRow(ctx, `SELECT f.id, f.slug, f.name, a.id, a.slug, a.kind, a.options, o.answers FROM storefront_orders o
 		JOIN storefront_actions a ON a.id = o.action_id JOIN storefront_fronts f ON f.id = o.front_id
-		WHERE o.tenant_id = $1 AND o.id = $2`, tenant, ord.ID).Scan(&fid, &fslug, &fname, &aid, &aslug, &akind, &env); err != nil {
+		WHERE o.tenant_id = $1 AND o.id = $2`, tenant, ord.ID).Scan(&fid, &fslug, &fname, &aid, &aslug, &akind, &opts, &env); err != nil {
 		return r, err
 	}
+	var ao ActionOptions
+	_ = json.Unmarshal(opts, &ao)
+	r.instalmentDays = ao.InstalmentDays
 	r.front = map[string]any{"id": fid.String(), "slug": fslug, "name": fname}
 	r.action = map[string]any{"id": aid.String(), "slug": aslug, "kind": akind}
 	if env != nil {
@@ -345,7 +351,7 @@ func (r submissionRecord) submission(ord Order, paymentStatus string) map[string
 	out := map[string]any{"reference": ord.Reference, "front": r.front, "action": r.action, "total_kobo": ord.TotalKobo,
 		"payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}, "due_kobo": ord.DueKobo(), "paid_kobo": ord.PaidKobo, "customer": map[string]any{"name": maskName(ord.Customer.Name), "phone": phone},
 		"status_link": r.statusLink, "lines": lines}
-	if k, v := reservedTime(ord); k != "" {
+	if k, v := reservedTime(ord, r.instalmentDays); k != "" {
 		out[k] = v
 	}
 	return out
@@ -365,7 +371,7 @@ func mustProps(form []byte) []byte {
 // and trigger.submission (fronts F5): "hire" with its item, quantity and
 // days, due back at the end of its last day; or "space" with the space
 // and its times, by the day or the hour, with a reminder a day before.
-func reservedTime(ord Order) (string, map[string]any) {
+func reservedTime(ord Order, instalmentDays int) (string, map[string]any) {
 	// A hire's item, quantity and days (fronts F5): due back at the end of
 	// its last day.
 	if ord.Kind == "hire" && ord.StartsAt != nil && ord.EndsAt != nil {
@@ -402,5 +408,60 @@ func reservedTime(ord Order) (string, map[string]any) {
 		}
 		return "space", sp
 	}
+	// A ticket order's event and seats, or a class order's places and its
+	// instalments (fronts F6), with a reminder a day before it starts.
+	if ord.Kind == "tickets" || ord.Kind == "class" {
+		qty := 0
+		for _, l := range ord.Basket {
+			qty += l.Quantity
+		}
+		v := map[string]any{"name": ord.ServiceName, "qty": qty, "when": "", "waitlist": ord.Waitlist}
+		if ord.StartsAt != nil {
+			v["when"] = When(*ord.StartsAt)
+			v["starts_at"] = ord.StartsAt.UTC().Format(time.RFC3339)
+			v["remind_at"] = ord.StartsAt.Add(-24 * time.Hour).UTC().Format(time.RFC3339)
+		}
+		if ord.Kind == "tickets" {
+			return "tickets", v
+		}
+		// The instalments after the first: instalment_2 to instalment_4,
+		// each with its amount and when it is due.
+		n := max(1, ord.Instalments)
+		v["instalments"] = n
+		days := instalmentDays
+		if days <= 0 {
+			days = 30
+		}
+		for i, amt := range InstalmentAmounts(ord.TotalKobo, n) {
+			if i == 0 {
+				v["first_kobo"], v["first"] = amt, FormatNaira(amt)
+				continue
+			}
+			due := ord.CreatedAt.Add(time.Duration(i*days) * 24 * time.Hour)
+			v[fmt.Sprintf("instalment_%d", i+1)] = map[string]any{"amount_kobo": amt, "amount": FormatNaira(amt), "due": Day(due),
+				"due_at": due.UTC().Format(time.RFC3339)}
+		}
+		return "class", v
+	}
 	return "", nil
+}
+
+// MaxInstalments is how many parts a class's fee may be paid in.
+const MaxInstalments = 4
+
+// InstalmentAmounts splits a fee into n parts: equal, rounded up to the
+// naira, the last taking what is left.
+func InstalmentAmounts(total int64, n int) []int64 {
+	n = max(1, min(MaxInstalments, n))
+	each := (total/int64(n) + 99) / 100 * 100
+	out := make([]int64, n)
+	left := total
+	for i := range out {
+		out[i] = min(each, left)
+		if i == n-1 {
+			out[i] = left
+		}
+		left -= out[i]
+	}
+	return out
 }

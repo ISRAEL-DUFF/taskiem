@@ -434,7 +434,11 @@ func CreateFront(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewFront) 
 	}
 	for i, a := range k.Actions {
 		payment := "none"
-		if takesPayment(a.Kind) {
+		switch {
+		case a.Kind == "tickets" || a.Kind == "class":
+			// Paid when taken (fronts F6).
+			payment = "at_order"
+		case takesPayment(a.Kind):
 			payment = "after_accept"
 		}
 		opts, _ := json.Marshal(a.Options)

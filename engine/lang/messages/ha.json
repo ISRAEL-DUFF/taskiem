@@ -4728,6 +4728,46 @@
       "text": "An ƙara *{name}* a {price} zuwa *{front}*.",
       "reviewed": false
     },
+    "wa.ticket.in": {
+      "text": "An shiga: *{code}*, kujera {seat} cikin {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* ya riga ya shiga: an duba shi {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "Babu tikiti mai lamba *{code}*. Duba shi da saƙon abokin ciniki.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* ba zai iya shiga ba: an mayar da kuɗi ko an soke odar.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tikitocin da suka rage:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} cikin {total} sun rage, {in} sun shiga",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "Babu taron da ake sayar da tikitinsa.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Wuraren da suka rage:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): wurare {left} cikin {total} sun rage",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "Babu aji da ake yin rajista.",
+      "reviewed": false
+    },
     "wa.front.turn_on_hint": {
       "text": "*{front}* yana a kashe: aika *front {front} on* don nuna shi.",
       "reviewed": false
@@ -4798,6 +4838,34 @@
     },
     "customer.space_reminder": {
       "text": "Tunatarwa: ajiyarka {reference} ta {space} gobe ce, {when}.",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Tikitocinka na {event}, {when}: {codes}. Nuna lamba a ƙofa. Lamba {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Tunatarwa: {event} gobe ne, {when}. Tikitocinka: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "An yi maka rajista a {class}, za a fara {when}. Lamba {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "Kashi na gaba na kuɗin {class}, {amount}, ya yi. Biya a nan: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Tunatarwa: {class} za a fara gobe, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} ya cika, don haka kana cikin jerin jira (lamba {reference}). Za mu sanar da kai idan wuri ya samu.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "Akwai wuri a {class} gare ka. Biya {total} a nan cikin yini ɗaya don ka karɓa: {url}",
       "reviewed": false
     },
     "customer.hire_returned": {

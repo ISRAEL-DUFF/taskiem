@@ -28,7 +28,7 @@ func TestFronts(t *testing.T) {
 
 	list := owner.must(200, "GET", "/v1/storefront/fronts", nil)
 	kinds := list["kinds"].([]any)
-	if len(kinds) != 7 || kinds[0].(map[string]any)["name"] != "shop" || kinds[2].(map[string]any)["name"] != "hire" || kinds[3].(map[string]any)["name"] != "spaces" || kinds[6].(map[string]any)["name"] != "custom" {
+	if len(kinds) != 9 || kinds[0].(map[string]any)["name"] != "shop" || kinds[2].(map[string]any)["name"] != "hire" || kinds[3].(map[string]any)["name"] != "spaces" || kinds[4].(map[string]any)["name"] != "tickets" || kinds[8].(map[string]any)["name"] != "custom" {
 		t.Fatalf("kinds: %v", kinds)
 	}
 	if fronts := list["fronts"].([]any); len(fronts) != 1 || fronts[0].(map[string]any)["slug"] != "" {
