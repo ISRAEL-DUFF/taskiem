@@ -314,7 +314,10 @@ for (const f of ["mark.svg", "mark-reversed.svg", "mark-small.svg", "wordmark.sv
 // device is set to dark ("auto"), then this site's own additions.
 let css = await readFile(path.join(design, "tk.css"), "utf8");
 const darkRules = css.match(/[^}]*\[data-theme="dark"\][^{]*\{[^}]*\}/g) || [];
-css += `\n@media (prefers-color-scheme:dark){\n${darkRules.map((r) => r.trim().replaceAll('[data-theme="dark"]', '[data-theme="auto"]')).join("\n")}\n}\n`;
+// The header's switch sets <html data-force="light|dark">, which wins
+// over the device's setting.
+const asAuto = (sel) => darkRules.map((r) => r.trim().replaceAll('.tk[data-theme="dark"]', `${sel} .tk[data-theme="auto"]`)).join("\n");
+css += `\n@media (prefers-color-scheme:dark){\n${asAuto('html:not([data-force="light"])')}\n}\n${asAuto('html[data-force="dark"]')}\n`;
 css += await readFile(path.join(here, "site.css"), "utf8");
 await writeFile(path.join(dist, "tk.css"), css);
 await copyFile(path.join(here, "site.js"), path.join(dist, "site.js"));
@@ -328,6 +331,18 @@ const page = (title, description, body, extra = "") => `<!doctype html>
 <meta name="description" content="${description.replaceAll('"', "&quot;")}">
 <meta property="og:image" content="/img/og.png">
 <meta name="theme-color" content="#0d3b2e">
+<script>
+// The reader's theme, before the page paints: ?theme=light|dark|auto, else their last choice.
+(function () {
+  try {
+    var q = new URLSearchParams(location.search).get("theme");
+    if (q === "light" || q === "dark") localStorage.setItem("tk-theme", q);
+    if (q === "auto") localStorage.removeItem("tk-theme");
+    var t = q === "auto" ? null : q || localStorage.getItem("tk-theme");
+    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-force", t);
+  } catch (e) { /* storage blocked: follow the device */ }
+})();
+</script>
 <link rel="icon" href="/img/mark-small.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">

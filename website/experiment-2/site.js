@@ -34,6 +34,44 @@
     });
   });
 
+  // ---------- Light or dark: a switch in the header ----------
+  var SUN = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  var MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>';
+  var deviceDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  function current() { return doc.getAttribute("data-force") || (deviceDark && deviceDark.matches ? "dark" : "light"); }
+  var toggles = [];
+  function paint() {
+    var dark = current() === "dark";
+    toggles.forEach(function (b) {
+      b.innerHTML = dark ? SUN : MOON;
+      b.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+      b.setAttribute("title", dark ? "Light theme" : "Dark theme");
+    });
+  }
+  each(".tk header", function (header) {
+    var menu = header.querySelector(".nav-narrow");
+    if (!menu) return;
+    var cta = header.querySelector("a.btn.nav-wide");
+    var group = document.createElement("div");
+    group.className = "tk-actions";
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "theme-toggle";
+    b.addEventListener("click", function () {
+      var next = current() === "dark" ? "light" : "dark";
+      doc.setAttribute("data-force", next);
+      try { window.localStorage.setItem("tk-theme", next); } catch { /* not remembered */ }
+      paint();
+    });
+    toggles.push(b);
+    header.insertBefore(group, cta || menu);
+    if (cta) group.appendChild(cta);
+    group.appendChild(b);
+    group.appendChild(menu);
+  });
+  paint();
+  if (deviceDark && deviceDark.addEventListener) deviceDark.addEventListener("change", paint);
+
   // ---------- Pricing: monthly or yearly ----------
   var prices = window.TK_PRICES;
   if (prices) {

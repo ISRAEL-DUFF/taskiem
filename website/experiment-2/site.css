@@ -13,6 +13,11 @@
 .tk header.menu-open .nav-wide:not(.btn) a:last-child { border-bottom: 0; }
 @media (min-width: 901px) { .tk header.menu-open .nav-wide:not(.btn) { position: static; flex-direction: row; padding: 0; border: 0; box-shadow: none; background: none; } }
 
+/* The header's light/dark switch, beside the main button and the phone menu. */
+.tk .tk-actions { display: flex; align-items: center; gap: 12px; }
+.tk .theme-toggle { width: 48px; height: 48px; display: grid; place-items: center; padding: 0; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+.tk .theme-toggle:hover { border-color: var(--head); }
+
 /* Respect a reader who asks for less motion. */
 @media (prefers-reduced-motion: reduce) { .tk .btn, .tk details.faq .plus { transition: none; } .tk .btn:hover { transform: none; } }
 
