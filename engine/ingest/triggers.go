@@ -243,10 +243,10 @@ func Check(def *wd.Definition, reg connector.Lookup) error {
 		return nil
 	case "storefront":
 		switch str(c, "action") {
-		case "order", "enquiry", "callback", "booking", "hire", "space", "tickets", "class":
+		case "order", "enquiry", "callback", "booking", "hire", "space", "tickets", "class", "quote":
 			return nil
 		}
-		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback, booking, hire, space, tickets or class")
+		return fmt.Errorf("a storefront trigger's action is order, enquiry, callback, booking, hire, space, tickets, class or quote")
 	case "invoice":
 		if e := str(c, "event"); e != "paid" && e != "payment" {
 			return fmt.Errorf("an invoice trigger's event is paid or payment")

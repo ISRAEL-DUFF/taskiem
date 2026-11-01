@@ -462,6 +462,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts", s.addFront)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Patch("/storefront/fronts/{id}", s.patchFront)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/storefront/fronts/{id}", s.deleteFront)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/fronts/{id}/actions", s.addFrontAction)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/storefront/actions/{id}/form", s.putActionForm)
 			r.With(s.need(PermStorefrontManage), s.need(PermWorkflowEdit), s.tenantWide).Post("/storefront/actions/{kind}/setup", s.setupAction)
 			s.invoiceRoutes(r)
 			s.schoolRoutes(r) // the Schools area (schools.go)
@@ -469,6 +471,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/quote", s.quoteStorefrontOrder)
 			// The business's own riders (riders.go, dispatch D1).
 			r.With(s.need(PermStorefrontManage)).Get("/riders", s.listRiders)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders", s.addRider)

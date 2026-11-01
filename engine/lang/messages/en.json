@@ -5909,6 +5909,46 @@
       "reviewed": true,
       "context": "Done: an item was added to a front"
     },
+    "wa.quote.sent": {
+      "text": "Sent *{reference}*: {total}, with {now} to pay on accepting. It stands until {until}.",
+      "reviewed": true,
+      "context": "Done: a quote request priced (fronts F7)"
+    },
+    "wa.quote.price": {
+      "text": "Say the price for *{reference}* in naira, like *quote {reference} 45000*.",
+      "reviewed": true,
+      "context": "Refused: a quote with no price we can read"
+    },
+    "wa.quote.none": {
+      "text": "No quote request has the reference *{reference}*.",
+      "reviewed": true,
+      "context": "Refused: no such quote request"
+    },
+    "wa.quote.refused": {
+      "text": "*{reference}* cannot be quoted: {why}",
+      "reviewed": true,
+      "context": "Refused: a quote that cannot be sent"
+    },
+    "wa.quotes.head": {
+      "text": "Quote requests waiting for a price:",
+      "reviewed": true,
+      "context": "Heading: open quote requests"
+    },
+    "wa.quotes.by": {
+      "text": "(needed by {date})",
+      "reviewed": true,
+      "context": "A quote request's date needed by"
+    },
+    "wa.quotes.how": {
+      "text": "Reply *quote <reference> <price>* to send one a price.",
+      "reviewed": true,
+      "context": "How to price a quote request"
+    },
+    "wa.quotes.none": {
+      "text": "No quote request is waiting for a price.",
+      "reviewed": true,
+      "context": "Reply: no open quote requests"
+    },
     "wa.ticket.in": {
       "text": "In: *{code}*, seat {seat} of {of}, {event}.",
       "reviewed": true,
@@ -6048,6 +6088,31 @@
       "text": "Reminder: your booking {reference} of {space} is tomorrow, {when}.",
       "reviewed": true,
       "context": "SMS to a customer: the day before a space booking (fronts F5)"
+    },
+    "customer.quote_requested": {
+      "text": "We have your request {reference}. You will get a price by SMS, with a link to accept it.",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote request received (fronts F7)"
+    },
+    "customer.quote_sent": {
+      "text": "Your quote {reference} is ready: {total}. Pay {now} to go ahead, by {until}: {link}",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote with the link to accept it (fronts F7)"
+    },
+    "customer.quote_accepted": {
+      "text": "Thank you: {reference} is accepted and your payment is in. We will tell you when it is ready.",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote accepted and its deposit paid (fronts F7)"
+    },
+    "customer.quote_expired": {
+      "text": "Your quote {reference} has closed. Contact us if you still want it.",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote not accepted in time (fronts F7)"
+    },
+    "customer.work_ready": {
+      "text": "{reference} is ready. Pay the balance, {balance}, here: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: made-to-order work done, with the balance's link (fronts F7)"
     },
     "customer.ticket_issued": {
       "text": "Your tickets for {event}, {when}: {codes}. Show a code at the door. Reference {reference}.",

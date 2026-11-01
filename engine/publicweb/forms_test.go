@@ -938,3 +938,49 @@ func TestFoodOptionsOnTheForm(t *testing.T) {
 		t.Fatalf("priced: %+v %v", sub.Basket, err)
 	}
 }
+
+// A quote form asks what is wanted and by when (fronts F7); a blank form
+// asks only its own questions, its message optional.
+func TestQuoteAndBlankForms(t *testing.T) {
+	quote, blank := uuid.New(), uuid.New()
+	p := orderPage()
+	home := storefront.PublicFront{Slug: "", Kind: "shop", Name: "Ada"}
+	repairs := storefront.PublicFront{Slug: "repairs", Kind: "custom", Name: "Repairs",
+		Actions: []storefront.PublicAction{
+			{ID: &quote, Slug: "quote", Kind: "quote", Label: "Request a quote", Payment: "after_accept", Form: storefront.BuiltinForm("quote")},
+			{ID: &blank, Slug: "form", Kind: "enquiry", Label: "Send", Payment: "none",
+				Form: []byte(`{"type":"object","required":["device"],"properties":{"device":{"type":"string","title":"What needs fixing?"}}}`)}}}
+	p.Model.Fronts = []storefront.PublicFront{home, repairs}
+	e := formServer(t, p)
+
+	body, tok := e.form(t, "/repairs/a/quote")
+	if !strings.Contains(body, "What do you need?") || !strings.Contains(body, `name="a.needed_by"`) || !strings.Contains(body, "send you a price") {
+		t.Fatalf("the quote form: %s", body)
+	}
+	*e.now = e.now.Add(20 * time.Second)
+	v := url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}}
+	if w := e.post("/repairs/a/quote", v); w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("no details: %d", w.Code)
+	}
+	_, tok = e.form(t, "/repairs/a/quote")
+	*e.now = e.now.Add(20 * time.Second)
+	v = url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}, "a.details": {"A wardrobe, 2m wide"}, "a.needed_by": {"2026-12-20"}}
+	w := e.post("/repairs/a/quote", v)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("sent: %d %s", w.Code, w.Body.String())
+	}
+	ref := refOf(w.Header().Get("Location"))
+	row := e.inbox.rows[ref]
+	sub, err := storefront.OpenSubmission(e.s.InboxKey, e.sf, ref, row.payload)
+	if err != nil || row.kind != "quote" || sub.Answers["details"] != "A wardrobe, 2m wide" || sub.Answers["needed_by"] != "2026-12-20" || sub.TotalKobo != 0 {
+		t.Fatalf("the request: %+v %+v %v", row, sub, err)
+	}
+
+	// The blank form: its own question, no message needed.
+	_, tok = e.form(t, "/repairs/a/form")
+	*e.now = e.now.Add(20 * time.Second)
+	w = e.post("/repairs/a/form", url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"}, "a.device": {"Fridge"}})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("a blank form: %d %s", w.Code, w.Body.String())
+	}
+}

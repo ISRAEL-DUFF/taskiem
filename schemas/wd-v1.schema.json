@@ -1745,7 +1745,8 @@
                       "hire",
                       "space",
                       "tickets",
-                      "class"
+                      "class",
+                      "quote"
                     ]
                   },
                   "action_id": {

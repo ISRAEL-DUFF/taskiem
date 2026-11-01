@@ -4728,6 +4728,38 @@
       "text": "An ƙara *{name}* a {price} zuwa *{front}*.",
       "reviewed": false
     },
+    "wa.quote.sent": {
+      "text": "An aika *{reference}*: {total}, {now} za a biya idan an karɓa. Yana nan har {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Faɗi farashin *{reference}* da naira, kamar *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "Babu buƙatar farashi mai lamba *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "Ba za a iya aika farashin *{reference}* ba: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Buƙatun farashi da ke jiran amsa:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(ana bukata kafin {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Amsa da *quote <lamba> <farashi>* don aika farashi.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "Babu buƙatar da ke jiran farashi.",
+      "reviewed": false
+    },
     "wa.ticket.in": {
       "text": "An shiga: *{code}*, kujera {seat} cikin {of}, {event}.",
       "reviewed": false
@@ -4838,6 +4870,26 @@
     },
     "customer.space_reminder": {
       "text": "Tunatarwa: ajiyarka {reference} ta {space} gobe ce, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "Mun karɓi buƙatarka {reference}. Za ka sami farashi ta SMS, tare da hanyar karɓa.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Farashinka {reference} ya shirya: {total}. Biya {now} don ci gaba, kafin {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Mun gode: an karɓi {reference} kuma kuɗinka sun shigo. Za mu sanar da kai idan ya shirya.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Farashinka {reference} ya rufe. Tuntuɓe mu idan har yanzu kana so.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} ya shirya. Biya sauran, {balance}, a nan: {url}",
       "reviewed": false
     },
     "customer.ticket_issued": {

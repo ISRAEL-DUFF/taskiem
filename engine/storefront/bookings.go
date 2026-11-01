@@ -410,7 +410,7 @@ func (o *Orders) acceptPrices(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	}
 	pc := ord.PriceChange
 	basket := ord.Basket
-	if ord.Kind == "order" {
+	if ord.Kind == "order" || ord.Kind == "quote" {
 		basket = pc.Basket
 	}
 	raw, _ := json.Marshal(basket)

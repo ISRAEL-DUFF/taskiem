@@ -689,3 +689,31 @@ func TestStatusLinkStaysOnThisHost(t *testing.T) {
 		}
 	}
 }
+
+// A quote (fronts F7) reads as one on the status page: the price the
+// business set, and whether to accept it, before and after it is priced.
+func TestQuoteOnTheStatusPage(t *testing.T) {
+	e, c := bookingEnv(t, "after_accept", 0)
+	loc := bookOne(t, e, at(20, 10, 0))
+	ref := refOf(loc)
+	e.inbox.states[ref] = OrderState{Status: "received", Kind: "quote"}
+	if body := get(e.h, "GET", sfHost, loc).Body.String(); !strings.Contains(body, "Your request was sent") || !strings.Contains(body, "will send you a price by SMS") {
+		t.Fatalf("waiting for a price: %s", body)
+	}
+	e.inbox.states[ref] = OrderState{Status: "price_changed", Kind: "quote"}
+	c.offer = &PriceOffer{TotalKobo: 4500000, DepositKobo: 2250000}
+	body := get(e.h, "GET", sfHost, loc).Body.String()
+	for _, want := range []string{"<h1>Your quote is ready</h1>", "The price is ₦45,000. You pay ₦22,500 now to go ahead, and the rest later.",
+		">Accept the quote</button>", ">Decline</button>"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("no %q", want)
+		}
+	}
+	if strings.Contains(body, "Prices have changed") || strings.Contains(body, "Confirm new total") {
+		t.Errorf("reads as a changed price: %s", body)
+	}
+	e.inbox.states[ref] = OrderState{Status: "cancelled", Kind: "quote"}
+	if body := get(e.h, "GET", sfHost, loc).Body.String(); !strings.Contains(body, "Your request was closed") {
+		t.Fatalf("declined: %s", body)
+	}
+}

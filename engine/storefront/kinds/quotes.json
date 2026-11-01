@@ -1,0 +1,8 @@
+{
+  "name": "quotes",
+  "title": "Quotes",
+  "line": "Tailoring, catering, printing, furniture, repairs, anything made to order: customers ask, you send a price, they accept and pay a deposit.",
+  "actions": [
+    {"kind": "quote", "label": "Request a quote", "template": "storefront-quote", "options": {"deposit_percent": 50, "quote_days": 7}}
+  ]
+}

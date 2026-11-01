@@ -17,7 +17,13 @@ func TestActionForms(t *testing.T) {
 		if err := storefront.CheckForm(f); err != nil {
 			t.Fatalf("%s: %v", k, err)
 		}
-		if q := storefront.FormFields(f); len(q) != 0 {
+		// A quote request asks what is wanted and by when (fronts F7); the
+		// others ask nothing of their own.
+		want := []string(nil)
+		if k == "quote" {
+			want = []string{"details", "needed_by"}
+		}
+		if q := storefront.FormFields(f); !slices.Equal(q, want) {
 			t.Fatalf("%s: questions %v", k, q)
 		}
 	}

@@ -28,7 +28,7 @@ func TestFronts(t *testing.T) {
 
 	list := owner.must(200, "GET", "/v1/storefront/fronts", nil)
 	kinds := list["kinds"].([]any)
-	if len(kinds) != 9 || kinds[0].(map[string]any)["name"] != "shop" || kinds[2].(map[string]any)["name"] != "hire" || kinds[3].(map[string]any)["name"] != "spaces" || kinds[4].(map[string]any)["name"] != "tickets" || kinds[8].(map[string]any)["name"] != "custom" {
+	if len(kinds) != 10 || kinds[0].(map[string]any)["name"] != "shop" || kinds[2].(map[string]any)["name"] != "hire" || kinds[3].(map[string]any)["name"] != "spaces" || kinds[4].(map[string]any)["name"] != "tickets" || kinds[6].(map[string]any)["name"] != "quotes" || kinds[9].(map[string]any)["name"] != "custom" {
 		t.Fatalf("kinds: %v", kinds)
 	}
 	if fronts := list["fronts"].([]any); len(fronts) != 1 || fronts[0].(map[string]any)["slug"] != "" {
@@ -105,4 +105,45 @@ func TestFronts(t *testing.T) {
 	owner.must(400, "GET", "/v1/storefront/orders?front=snacks", nil)
 	owner.must(400, "DELETE", "/v1/storefront/fronts/"+snacks["id"].(string), nil)
 	owner.must(204, "DELETE", "/v1/storefront/fronts/"+id, nil)
+}
+
+// Quotes and Custom from the API (fronts F7): a Quotes front has its quote
+// form with no table; a Custom front takes a blank form whose questions
+// are set, a refused question, and its kind's questions put back; a quote
+// is priced only on a quote request.
+func TestQuoteAndCustomFrontsAPI(t *testing.T) {
+	w := newTablesWorld(t)
+	w.srv.PublicHosts = []string{"shops.taskiem.test"}
+	w.srv.Orders = &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault}
+	if err := w.env.Registry.Register(sfconn.New(w.srv.Orders)); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Ada's Tailoring", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business")
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-tailoring", "draft": map[string]any{"name": "Ada's Tailoring"}})
+
+	quotes := owner.must(201, "POST", "/v1/storefront/fronts", map[string]any{"name": "Made to measure", "kind": "quotes"})
+	acts := quotes["actions"].([]any)
+	if quotes["table_id"] != nil || len(acts) != 1 || acts[0].(map[string]any)["kind"] != "quote" || acts[0].(map[string]any)["payment"] != "after_accept" {
+		t.Fatalf("the quotes front: %v", quotes)
+	}
+	custom := owner.must(201, "POST", "/v1/storefront/fronts", map[string]any{"name": "Repairs", "kind": "custom"})
+	id := custom["id"].(string)
+	blank := owner.must(201, "POST", "/v1/storefront/fronts/"+id+"/actions", map[string]any{"kind": "form", "label": "Book a repair"})
+	if blank["kind"] != "enquiry" || blank["slug"] != "form" || blank["label"] != "Book a repair" || blank["enabled"] != false {
+		t.Fatalf("the blank form: %v", blank)
+	}
+	owner.must(400, "POST", "/v1/storefront/fronts/"+id+"/actions", map[string]any{"kind": "order"})
+	owner.must(404, "POST", "/v1/storefront/fronts/00000000-0000-0000-0000-000000000001/actions", map[string]any{"kind": "form"})
+
+	formURL := "/v1/storefront/actions/" + blank["id"].(string) + "/form"
+	got := owner.must(200, "PUT", formURL, map[string]any{"form": map[string]any{"type": "object", "required": []string{"device"},
+		"properties": map[string]any{"device": map[string]any{"type": "string", "title": "What needs fixing?"}}}})
+	if q := got["questions"].([]any); len(q) != 1 || q[0] != "device" {
+		t.Fatalf("its questions: %v", got)
+	}
+	owner.must(400, "PUT", formURL, map[string]any{"form": map[string]any{"type": "object", "properties": map[string]any{"reference": map[string]any{"type": "string"}}}})
+	owner.must(200, "PUT", formURL, map[string]any{"form": nil})
+
+	owner.must(404, "POST", "/v1/storefront/orders/AD-ZZZZZZ/quote", map[string]any{"price_kobo": 4500000})
 }

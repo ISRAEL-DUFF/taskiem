@@ -16,7 +16,7 @@ import (
 // BuiltinKinds the four every storefront has on its first front; a hire
 // (fronts F5) is only ever an action of a front of its kind.
 var (
-	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire", "space", "tickets", "class"}
+	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire", "space", "tickets", "class", "quote"}
 	BuiltinKinds = []string{"order", "enquiry", "callback", "booking"}
 )
 
@@ -80,6 +80,9 @@ type ActionOptions struct {
 	Instalments    int  `json:"instalments,omitempty"`
 	InstalmentDays int  `json:"instalment_days,omitempty"`
 	WaitingList    bool `json:"waiting_list,omitempty"`
+	// QuoteDays is how long a quote stands for the customer to accept
+	// (fronts F7): 1 to 60, 7 by default.
+	QuoteDays int `json:"quote_days,omitempty"`
 }
 
 // Zone is an area a business delivers to and what delivery there costs.
@@ -146,7 +149,7 @@ var formConnection = regexp.MustCompile(`^(?:[a-z][a-z0-9_-]{0,63}/)?[A-Za-z0-9]
 
 // takesPayment reports whether a form's kind may ask for payment.
 func takesPayment(kind string) bool {
-	return kind == "order" || kind == "booking" || kind == "hire" || kind == "space" || kind == "tickets" || kind == "class"
+	return kind == "order" || kind == "booking" || kind == "hire" || kind == "space" || kind == "tickets" || kind == "class" || kind == "quote"
 }
 
 // Deposit is what a booking pays online of price.
@@ -187,7 +190,8 @@ type PublicAction struct {
 }
 
 var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now",
-	"space": "Book the space", "tickets": "Buy tickets", "class": "Enrol"}
+	"space": "Book the space", "tickets": "Buy tickets", "class": "Enrol",
+	"quote": "Request a quote"}
 
 // builtinPosition is a built-in action's place on the first front.
 func builtinPosition(kind string) int {
@@ -353,6 +357,20 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		// A space takes its deposit once accepted, and the rest later.
 		a.Payment = "after_accept"
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent}
+	case "quote":
+		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
+			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+		}
+		if a.Options.QuoteDays == 0 {
+			a.Options.QuoteDays = 7
+		}
+		if a.Options.QuoteDays < 1 || a.Options.QuoteDays > 60 {
+			return Action{}, fmt.Errorf("%w: a quote stands 1 to 60 days", ErrInvalid)
+		}
+		// Nothing is paid until the customer accepts the price, and then
+		// the deposit at once.
+		a.Payment = "after_accept"
+		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, QuoteDays: a.Options.QuoteDays}
 	case "tickets", "class":
 		if a.Options.MaxPerOrder == 0 {
 			a.Options.MaxPerOrder = 10

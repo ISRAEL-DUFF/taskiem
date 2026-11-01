@@ -291,6 +291,22 @@ func statusWords(d *statusData, o OrderState) {
 			d.Lines = []string{b + " will reply by SMS or a call."}
 		}
 		return
+	case "quote":
+		// A quote request (fronts F7) until it is priced; once accepted it
+		// is paid and done as an order is.
+		switch o.Status {
+		case "processing":
+			d.Headline, d.Refresh = "Sending your request", true
+			return
+		case "received":
+			d.Headline = "Your request was sent"
+			d.Lines = []string{b + " will send you a price by SMS, with a link to accept it here."}
+			return
+		case "declined", "cancelled", "expired":
+			d.Headline = "Your request was closed"
+			d.Lines = []string{"Contact " + b + " directly if you still want a price."}
+			return
+		}
 	case "callback":
 		switch o.Status {
 		case "processing":

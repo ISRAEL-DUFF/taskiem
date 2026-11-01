@@ -1230,6 +1230,102 @@ paths:
                 $ref: '#/components/schemas/StorefrontFront'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/fronts/{id}/actions:
+    post:
+      operationId: addStorefrontFrontAction
+      tags:
+      - Storefront
+      summary: Add a form to a front
+      description: A form added to a front, off (fronts F7) - a blank form (form, a question form whose questions you write), a question (enquiry), a call-back (callback) or a quote request (quote). Set it up and turn it on as any form is.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind]
+              properties:
+                kind:
+                  type: string
+                  enum: [form, enquiry, callback, quote]
+                label:
+                  type: string
+                  maxLength: 40
+      responses:
+        '201':
+          description: The form, off
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/actions/{id}/form:
+    put:
+      operationId: putStorefrontActionForm
+      tags:
+      - Storefront
+      summary: Set a form's own questions
+      description: A question, call-back or quote form's own questions (fronts F7), as a JSON Schema object of questions with x-form hints, as hosted forms are written; null puts back its kind's. A question named like one of Taskiem's fields, a file, or a list field is refused. A published page is published again with its checks, so a question a live workflow reads cannot be dropped.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [form]
+              properties:
+                form:
+                  type: [object, 'null']
+                  additionalProperties: true
+      responses:
+        '200':
+          description: The form's questions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, questions]
+                properties:
+                  id:
+                    type: string
+                  questions:
+                    type: [array, 'null']
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/storefront/fronts/{id}:
     patch:
       operationId: patchStorefrontFront
@@ -5531,7 +5627,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote]
       - name: limit
         in: query
         schema:
@@ -5662,6 +5758,52 @@ paths:
       responses:
         '200':
           description: The order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/StorefrontOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/quote:
+    post:
+      operationId: quoteStorefrontOrder
+      tags:
+      - Storefront
+      summary: Price a quote request
+      description: The owner sends a quote request (a Quotes front's form, fronts F7) its price. The order waits for the customer as a changed price does, with the action's deposit share to pay on accepting, standing for its quote_days; the request's workflow sends it to the customer, who accepts or declines it on their page. 409 when the order is not a quote request waiting for a price.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [price_kobo]
+              properties:
+                price_kobo:
+                  type: integer
+                  minimum: 100
+                  description: The price, in kobo
+      responses:
+        '200':
+          description: The order, waiting for the customer
           content:
             application/json:
               schema:
@@ -26086,6 +26228,33 @@ components:
           type: string
           enum: [full, keep_deposit, '']
           description: What a customer cancelling a paid booking gets back (default full)
+        late_fee_kobo:
+          type: integer
+          minimum: 0
+          description: What a hire adds for each day it comes back late (fronts F5)
+        max_per_order:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: How many tickets or places one order may take (fronts F6; 10 by default)
+        instalments:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: How many parts a class's fee may be paid in (fronts F6; 0 or 1 is in full)
+        instalment_days:
+          type: integer
+          minimum: 0
+          maximum: 120
+          description: Days between a class's instalments (30 by default)
+        waiting_list:
+          type: boolean
+          description: Whether a full class takes names for a waiting list (fronts F6)
+        quote_days:
+          type: integer
+          minimum: 0
+          maximum: 60
+          description: How long a quote stands for the customer to accept (fronts F7; 7 by default)
     Delivery:
       type: object
       required: [id, order_id, reference, rider_id, rider, status, offered_at, fee_kobo]
@@ -26800,7 +26969,7 @@ components:
           description: The front the action is on (fronts F3)
         kind:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote]
         enabled:
           type: boolean
         label:
@@ -27637,7 +27806,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [order, enquiry, callback, booking]
+          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote]
         status:
           type: string
           enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived]

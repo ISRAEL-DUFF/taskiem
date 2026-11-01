@@ -4728,6 +4728,38 @@
       "text": "A ti fi *{name}* kún *{front}* ní {price}.",
       "reviewed": false
     },
+    "wa.quote.sent": {
+      "text": "A ti fi *{reference}* ránṣẹ́: {total}, {now} láti san nígbà tí wọ́n bá gbà á. Ó wà títí {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Sọ iye owó fún *{reference}* ní náírà, bíi *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "Kò sí ìbéèrè iye owó tí ó ní nọ́mbà *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "A kò lè fi iye owó ránṣẹ́ fún *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Àwọn ìbéèrè tó ń dúró de iye owó:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(fún {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Fèsì *quote <nọ́mbà> <iye owó>* láti fi iye owó ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "Kò sí ìbéèrè tó ń dúró de iye owó.",
+      "reviewed": false
+    },
     "wa.ticket.in": {
       "text": "Wọlé: *{code}*, ìjókòó {seat} nínú {of}, {event}.",
       "reviewed": false
@@ -4838,6 +4870,26 @@
     },
     "customer.space_reminder": {
       "text": "Ìránnilétí: ìfipamọ́ {reference} rẹ fún {space} jẹ́ ọ̀la, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "A ti gba ìbéèrè rẹ {reference}. Wàá gba iye owó lórí SMS, pẹ̀lú ìlànà láti gbà á.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Iye owó rẹ {reference} ti ṣetán: {total}. San {now} láti tẹ̀síwájú, kí {until} tó dé: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Ẹ ṣé: a ti gba {reference}, owó rẹ sì ti dé. A ó sọ fún ọ nígbà tí ó bá ṣetán.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Iye owó rẹ {reference} ti parí. Kàn sí wa tí o bá ṣì fẹ́.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} ti ṣetán. San ìyókù, {balance}, níbí: {url}",
       "reviewed": false
     },
     "customer.ticket_issued": {

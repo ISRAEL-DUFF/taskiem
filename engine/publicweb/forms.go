@@ -177,7 +177,8 @@ type closedData struct {
 	Home     string
 }
 
-var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back", "booking": "handle your booking"}
+var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back", "booking": "handle your booking",
+	"hire": "handle your hire", "space": "handle your booking", "tickets": "send your tickets", "class": "handle your enrolment", "quote": "send you a price"}
 
 func findAction(list []storefront.PublicAction, ref string) (storefront.PublicAction, bool) {
 	for _, a := range list {
@@ -594,7 +595,9 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 			}
 		}
 	case "enquiry":
-		if c.Message, bad = text(v.Get("message"), maxEnquiry, true); bad || c.Message == "" {
+		// A form with questions of its own (a blank form, fronts F7) asks
+		// those; the message is then optional.
+		if c.Message, bad = text(v.Get("message"), maxEnquiry, true); bad || (c.Message == "" && len(f.Questions) == 0) {
 			if bad {
 				f.Message = ""
 			}

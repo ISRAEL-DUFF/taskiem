@@ -4728,6 +4728,38 @@
       "text": "Etinyela *{name}* na {price} na *{front}*.",
       "reviewed": false
     },
+    "wa.quote.sent": {
+      "text": "Ezitela *{reference}*: {total}, {now} a ga-akwụ mgbe ha nabatara ya. Ọ ga-adị ruo {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Kwuo ọnụ ahịa *{reference}* na naira, dịka *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "Ọ dịghị arịrịọ ọnụ ahịa nwere nọmba *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "Enweghị ike izipu ọnụ ahịa *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Arịrịọ ọnụ ahịa na-eche ọnụ ahịa:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(achọrọ ya tupu {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Zaa *quote <nọmba> <ọnụ ahịa>* iji zipu ọnụ ahịa.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "Ọ dịghị arịrịọ na-eche ọnụ ahịa.",
+      "reviewed": false
+    },
     "wa.ticket.in": {
       "text": "Abanyela: *{code}*, oche {seat} n'ime {of}, {event}.",
       "reviewed": false
@@ -4838,6 +4870,26 @@
     },
     "customer.space_reminder": {
       "text": "Ncheta: ndebe gị {reference} nke {space} bụ echi, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "Anyị natara arịrịọ gị {reference}. Ị ga-enweta ọnụ ahịa site na SMS, ya na njikọ iji nabata ya.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Ọnụ ahịa gị {reference} adịla njikere: {total}. Kwụọ {now} iji gaa n'ihu, tupu {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Daalụ: anabatala {reference} ma ego gị abatala. Anyị ga-agwa gị mgbe ọ dị njikere.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Ọnụ ahịa gị {reference} emechiela. Kpọtụrụ anyị ma ọ bụrụ na ị ka chọrọ ya.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} adịla njikere. Kwụọ ego fọdụrụ, {balance}, ebe a: {url}",
       "reviewed": false
     },
     "customer.ticket_issued": {

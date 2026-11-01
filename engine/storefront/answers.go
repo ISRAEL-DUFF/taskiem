@@ -48,6 +48,10 @@ func BuiltinForm(kind string) []byte {
 		return []byte(`{"type":"object","properties":{"basket":{"type":"array","title":"Your order","x-form":{"widget":"basket","list":"catalogue","min":1}}}}`)
 	case "booking":
 		return []byte(`{"type":"object","properties":{"time":{"type":"object","title":"Your time","x-form":{"widget":"time","list":"services"}}}}`)
+	case "quote":
+		// Plain questions (fronts F7): what is wanted, and by when.
+		return []byte(`{"type":"object","required":["details"],"properties":{"details":{"type":"string","title":"What do you need?","maxLength":1000,` +
+			`"x-form":{"widget":"textarea","placeholder":"Sizes, colours, how many, where…"}},"needed_by":{"type":"string","format":"date","title":"When do you need it?"}}}`)
 	}
 	return []byte(`{"type":"object","properties":{}}`)
 }

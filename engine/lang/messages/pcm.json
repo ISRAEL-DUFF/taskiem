@@ -4728,6 +4728,38 @@
       "text": "We don add *{name}* for {price} to *{front}*.",
       "reviewed": false
     },
+    "wa.quote.sent": {
+      "text": "We don send *{reference}*: {total}, {now} to pay when dem accept. E dey till {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Talk the price for *{reference}* for naira, like *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "No quote request get the reference *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "We no fit quote *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Quote requests wey dey wait for price:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(need am by {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Reply *quote <reference> <price>* to send price.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "No quote request dey wait for price.",
+      "reviewed": false
+    },
     "wa.ticket.in": {
       "text": "E don enter: *{code}*, seat {seat} of {of}, {event}.",
       "reviewed": false
@@ -4838,6 +4870,26 @@
     },
     "customer.space_reminder": {
       "text": "Reminder: your booking {reference} for {space} na tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "We don get your request {reference}. You go get price by SMS, with link to accept am.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Your quote {reference} don ready: {total}. Pay {now} to continue, before {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Thank you: {reference} don accept and your money don enter. We go tell you when e ready.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Your quote {reference} don close. Contact us if you still want am.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} don ready. Pay the balance, {balance}, here: {url}",
       "reviewed": false
     },
     "customer.ticket_issued": {

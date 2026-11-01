@@ -53,7 +53,7 @@ func TestChatFronts(t *testing.T) {
 
 	// The kind asked as a list, then shown and made on yes.
 	r := w.say(t, on, "add front Snacks")
-	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "4. *Spaces*") || !strings.Contains(r, "5. *Tickets*") || !strings.Contains(r, "6. *Classes*") || !strings.Contains(r, "9. *Custom*") {
+	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "4. *Spaces*") || !strings.Contains(r, "5. *Tickets*") || !strings.Contains(r, "6. *Classes*") || !strings.Contains(r, "7. *Quotes*") || !strings.Contains(r, "10. *Custom*") {
 		t.Fatalf("kinds: %q", r)
 	}
 	if r := w.say(t, on, "rockets"); !strings.Contains(r, "What is *Snacks* for?") {
@@ -321,6 +321,20 @@ func TestChatHireAndSpaceFronts(t *testing.T) {
 	var payment string
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT payment FROM storefront_actions WHERE kind = 'tickets'`).Scan(&payment); err != nil || payment != "at_order" {
 		t.Errorf("tickets are paid when bought: %q %v", payment, err)
+	}
+	// Quotes (fronts F7): no list; priced by reference.
+	if r := w.say(t, an, "add quotes front Tailoring"); !strings.Contains(r, "a Quotes front") {
+		t.Fatalf("quotes front: %q", r)
+	}
+	w.yes(t, an)
+	if r := w.say(t, an, "quotes"); !strings.Contains(r, "No quote request is waiting for a price.") {
+		t.Errorf("quotes: %q", r)
+	}
+	if r := w.say(t, an, "quote AD-ZZZZZZ 45k"); !strings.Contains(r, "No quote request has the reference *AD-ZZZZZZ*.") {
+		t.Errorf("no such request: %q", r)
+	}
+	if r := w.say(t, an, "quote AD-ZZZZZZ lots"); !strings.Contains(r, "Say the price for *AD-ZZZZZZ* in naira") {
+		t.Errorf("no price: %q", r)
 	}
 	var grain string
 	var setup int
