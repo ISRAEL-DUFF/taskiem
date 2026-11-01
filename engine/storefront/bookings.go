@@ -18,7 +18,7 @@ import (
 )
 
 // Bookings (docs/spec/storefronts.md 6.9) are orders of kind booking with
-// a service and a time, holding their slot in storefront_holds. A run
+// a service and a time, holding their slot in storefront_claims. A run
 // takes a booking to its appointment: the owner's decision (or automatic
 // confirmation), the customer's confirmation, reminders the day before and
 // two hours before as timer steps, and attended or no-show after. Moving a
@@ -212,7 +212,7 @@ func (o *Orders) OwnerCancel(ctx context.Context, tenant uuid.UUID, reference, a
 			tenant, ord.ID, next, actor); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM storefront_holds WHERE reference = $1`, reference); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {
 			return err
 		}
 		ord.Status = next
@@ -254,7 +254,7 @@ func (o *Orders) OwnerMove(ctx context.Context, tenant uuid.UUID, reference stri
 			return ErrSlotTaken
 		}
 		from := *ord.StartsAt
-		if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET starts_at = $2, until_at = $3 WHERE reference = $1`, reference, start, until); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE storefront_claims SET starts_at = $2, until_at = $3 WHERE reference = $1`, reference, start, until); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET starts_at = $3, ends_at = $4, version = version + 1, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
@@ -431,7 +431,7 @@ func (o *Orders) acceptPrices(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		return err
 	}
 	if ord.Kind == "booking" {
-		if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = $2 WHERE reference = $1`, ord.Reference, expires); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE storefront_claims SET expires_at = $2 WHERE reference = $1`, ord.Reference, expires); err != nil {
 			return err
 		}
 	}
@@ -496,7 +496,7 @@ func (o *Orders) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 			return err
 		}
 		for _, g := range gone {
-			if _, err := tx.Exec(ctx, `DELETE FROM storefront_holds WHERE reference = $1`, g.reference); err != nil {
+			if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, g.reference); err != nil {
 				return err
 			}
 			if err := audit(ctx, tx, tenant, "storefront.order_expired", g.reference, nil); err != nil {

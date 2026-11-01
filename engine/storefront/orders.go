@@ -557,7 +557,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if b != nil {
 		kept := true
 		if status == "cancelled" {
-			_, err = tx.Exec(ctx, `DELETE FROM storefront_holds WHERE reference = $1`, x.reference)
+			_, err = tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, x.reference)
 		} else {
 			kept, err = keepHold(ctx, tx, x.tenant, x.storefront, x.reference, *b, expires)
 		}
@@ -582,7 +582,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 // booking lives). A hold that lapsed before the booking was recorded is
 // taken again if the slot is still free; kept is false when it is not.
 func keepHold(ctx context.Context, tx pgx.Tx, tenant, storefront uuid.UUID, reference string, b Booked, expires *time.Time) (bool, error) {
-	tag, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = $2 WHERE reference = $1 AND (expires_at IS NULL OR expires_at > now())`, reference, expires)
+	tag, err := tx.Exec(ctx, `UPDATE storefront_claims SET expires_at = $2 WHERE reference = $1 AND (expires_at IS NULL OR expires_at > now())`, reference, expires)
 	if err != nil || tag.RowsAffected() == 1 {
 		return err == nil, err
 	}
@@ -593,7 +593,7 @@ func keepHold(ctx context.Context, tx pgx.Tx, tenant, storefront uuid.UUID, refe
 	if err := tx.QueryRow(ctx, `SELECT taskiem_storefront_slot_free($1, $2, $3, $4, $5, $6)`, storefront, reference, b.ServiceID, b.Start, b.Until, b.Capacity).Scan(&free); err != nil || !free {
 		return false, err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO storefront_holds (reference, storefront_id, tenant_id, service_id, starts_at, until_at, expires_at)
+	_, err = tx.Exec(ctx, `INSERT INTO storefront_claims (reference, storefront_id, tenant_id, item_id, starts_at, until_at, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (reference) DO UPDATE SET starts_at = EXCLUDED.starts_at, until_at = EXCLUDED.until_at, expires_at = EXCLUDED.expires_at`,
 		reference, storefront, tenant, b.ServiceID, b.Start, b.Until, expires)
@@ -890,7 +890,7 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 				if err != nil {
 					return err
 				}
-				if _, err := tx.Exec(ctx, `DELETE FROM storefront_holds WHERE reference = $1`, d.reference); err != nil {
+				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, d.reference); err != nil {
 					return err
 				}
 				return audit(ctx, tx, tenant, "storefront.order_expired", d.reference, nil)
@@ -1050,7 +1050,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			}
 			// A booking declined or cancelled frees its slot.
 			if ord.Kind == "booking" && (next == "declined" || next == "cancelled" || next == "refund_due") {
-				if _, err := tx.Exec(ctx, `DELETE FROM storefront_holds WHERE reference = $1`, reference); err != nil {
+				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {
 					return err
 				}
 			}

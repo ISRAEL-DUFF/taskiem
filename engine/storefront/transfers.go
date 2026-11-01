@@ -75,7 +75,7 @@ func (o *Orders) TransferRequested(ctx context.Context, tenant, order uuid.UUID)
 			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET expires_at = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID, until); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = $2 WHERE reference = $1 AND expires_at IS NOT NULL`, ord.Reference, until); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE storefront_claims SET expires_at = $2 WHERE reference = $1 AND expires_at IS NOT NULL`, ord.Reference, until); err != nil {
 				return err
 			}
 		}

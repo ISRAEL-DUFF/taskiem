@@ -230,7 +230,7 @@ func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *C
 		tenant, ord.ID, next); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE storefront_holds SET expires_at = NULL WHERE reference = $1`, ord.Reference); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE storefront_claims SET expires_at = NULL WHERE reference = $1`, ord.Reference); err != nil {
 		return nil, err
 	}
 	if err := audit(ctx, tx, tenant, "storefront.order_paid", ord.Reference, map[string]any{"total_kobo": ord.Payable(), "how": p.How, "by": p.By}); err != nil {
