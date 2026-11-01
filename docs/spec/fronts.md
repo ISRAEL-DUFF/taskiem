@@ -1,6 +1,6 @@
 # Fronts: a storefront with any number of pages, each with its own things and its own actions
 
-Status: **Building**: F0 built 31 October 2026 (§13.1), F1 built the same day (§13.2), F2 too (§13.3), F3 too (§13.4), F4 on 1 November 2026 (§13.5), F5 the same day (§13.6), F6 too (§13.7), F7 too (§13.8); the rest a draft of 30 October 2026, for review (revised the same day after a review against the code: §3, §5, §9, §10, §13 and §14; and again for the review's gaps: part payments, Food's options, the Spaces calendar, one reservation model, the form's one owner, known tables shared with 0060) · Decision: [0059](../decisions/0059-fronts.md) (proposed) · Builds on: [storefronts](../storefronts.md) ([0036](../decisions/0036-storefronts.md)), [forms](../forms.md) ([spec](forms.md)), [data tables](../data-tables.md), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [dispatch](dispatch.md), [invoices and the money log](invoices-and-money-log.md), [public page themes](../decisions/0042-public-page-themes.md)
+Status: **Built**: F0 on 31 October 2026 (§13.1), F1 the same day (§13.2), F2 too (§13.3), F3 too (§13.4), F4 on 1 November 2026 (§13.5), F5 the same day (§13.6), F6 too (§13.7), F7 too (§13.8), F8 too (§13.9); drafted 30 October 2026 (revised the same day after a review against the code: §3, §5, §9, §10, §13 and §14; and again for the review's gaps: part payments, Food's options, the Spaces calendar, one reservation model, the form's one owner, known tables shared with 0060) · Decision: [0059](../decisions/0059-fronts.md) (accepted) · Builds on: [storefronts](../storefronts.md) ([0036](../decisions/0036-storefronts.md)), [forms](../forms.md) ([spec](forms.md)), [data tables](../data-tables.md), [stock](stock.md) ([0057](../decisions/0057-stock-by-chat.md)), [dispatch](dispatch.md), [invoices and the money log](invoices-and-money-log.md), [public page themes](../decisions/0042-public-page-themes.md)
 
 ## 1. Summary
 
@@ -413,6 +413,13 @@ Built 1 November 2026:
 - **Words on the way.** The form's privacy line names what each kind's details are for (hire, space, tickets, class and quote had none). The API's description of a form takes the kinds and options of F5 to F7.
 - **Not in F7:** pricing a quote, adding a form or editing its questions in the web app (the API and chat do it); a re-quote (a request is priced once; decline it and ask again); photos with a quote request (storefront forms take no files); chat words for adding forms to a front.
 - Tests: `TestQuoteRequestedPricedAcceptedPaid` (the owner told with the request, priced once, the run told, accepted on the status link, the deposit paid and the balance left), `TestBlankFormsOnAFront`, `TestQuoteOnTheStatusPage`, `TestQuoteAndBlankForms`, `TestQuoteAndCustomFrontsAPI`, and Quotes in `TestChatHireAndSpaceFronts`, `TestFronts`, `TestChatFronts` and `TestActionForms`.
+
+### 13.9 As built (F8)
+
+Built 1 November 2026:
+- **The builder.** A rule for fronts and their kinds (`engine/ai/builder/prompt.go`, rule 25): selling or taking requests for one of the kinds on the page starts from that kind's template, its storefront trigger naming the kind's form (order, hire, space, tickets, class or quote); a front, its list and its form are never built from steps, nor its orders kept in a data table; the draft's assumptions say the owner adds a front of that kind first. One eval case per kind (`evals/builder/fronts.jsonl`: Food, Hire, Spaces, Tickets, Classes, Quotes), each starting from its kind's template; the old 316 cases hold, and the baseline is rewritten with the six (322 cases, strict 24.5%).
+- **Docs.** [Storefronts](../storefronts.md) opens with fronts and the kinds; [forms](../forms.md) has the four storefront fields and claims; [stock](stock.md) (§11.1) and the owners' [Your stock](../guide/your-stock.md) say what fronts do and do not move; the owners' guide gains [Sell more than one thing](../guide/sell-more-than-one-thing.md); decision 0059 is accepted with what was built; the atlas's business modules page covers fronts.
+- **Not in F8:** the kinds in the web app's builder suggestions beyond what retrieval gives (the builder names the template; it does not make the front).
 
 ## 14. Risks and open questions
 

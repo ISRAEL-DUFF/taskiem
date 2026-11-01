@@ -1,6 +1,20 @@
 # Storefronts
 
-A storefront is a business's one-page public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). This is Phase 5, S2 and S3: the page, its catalogue, and ordering, questions and call-backs. Booking came with S4 ([below](#bookings)); setting up and running it [from chat](#from-chat) with S5, and field agents later in S5; the business's [own domain](#your-own-domain) with S6, and embedding later.
+A storefront is a business's public page: who it is, what it sells, and how to reach it ([spec](spec/storefronts.md), decision 0036). Its home page has the business card, the catalogue and four forms (order, question, call-back, booking). Beside it the business can add **fronts**, more pages each made from a **kind** with its own list, its own forms and their own workflows ([plan](spec/fronts.md), decision [0059](decisions/0059-fronts.md)): the shop that also cooks, the tailor who hires out chairs, the church with a bookshop and a hall, on one page, one money log and one number.
+
+| Kind | What it sells or takes | Its list | Its form and workflow |
+| --- | --- | --- | --- |
+| Shop | Products | `products` | Order now (`storefront-order`), Ask a question |
+| Food | A menu, with options and how long each dish takes | `menu` | Order now, delivering by default (`storefront-order`, or `dispatch-orders` with riders) |
+| Hire | Chairs, canopies, generators by the day | `hire_items` (how many, a rate per day) | Hire now: an item, the days, how many (`storefront-hire`: deposit, due back, Returned, late fee) |
+| Spaces | A hall or room by the day or the hour | `spaces`, with a calendar | Book the space (`storefront-space`: deposit, balance, reminder) |
+| Tickets | An event's tickets | `events` (when, where, how many) | Buy tickets, paid when bought (`storefront-tickets`: a code per seat, checked in at the door) |
+| Classes | Places in a class | `classes` (when, places, the fee) | Enrol, in full or by instalment (`storefront-classes`, with a waiting list) |
+| Quotes | Anything made to order | none | Request a quote (`storefront-quote`: priced in chat, accepted on the order page, a deposit) |
+| Questions, Call-backs | A question, a call back | none | That one form |
+| Custom | What no kind covers | your choice | Forms you add: blank, question, call-back, quote |
+
+Every front's orders are ordinary storefront orders: the Orders page, matching, refunds and the money log treat a ticket, a hire and a dish alike. Below: [the page](#the-page), [fronts](#fronts), [orders](#orders-questions-and-call-backs) and [bookings](#bookings), [your own domain](#your-own-domain), and [running it from chat](#from-chat). For owners, [Sell more than one thing](guide/sell-more-than-one-thing.md) walks through it.
 
 It is built and off by default: pages are served only by the [public host](public-host.md), and the web app's **Storefront** page needs `storefront.manage` (owners and admins).
 

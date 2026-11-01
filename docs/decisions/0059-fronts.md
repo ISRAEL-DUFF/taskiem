@@ -1,6 +1,6 @@
 # 0059 — Fronts: a storefront is pages of things and actions, not one catalogue and four forms
 
-Date: 2026-10-30 · Status: **Proposed** · Plan: [fronts](../spec/fronts.md)
+Date: 2026-10-30 · Status: **Accepted** (built 31 October to 1 November 2026) · Plan: [fronts](../spec/fronts.md)
 
 ## Context
 
@@ -70,6 +70,16 @@ Forms ([forms](../forms.md)) already put any page of questions in front of any w
 - **Chat** gains `add front`, `… to <front>`, `turn on … for <front>`, `front … on` (a publish) and `orders <front>`.
 - **Limits.** `storefront_items` counts each copied table once. The monthly order and booking limits count submissions by what their form takes.
 - **Docs.** Storefronts is rewritten around fronts. Forms, stock (what fronts do not move) and the owners' guide are updated, along with the atlas's business modules page.
+
+## As built
+
+Built in nine milestones, F0 to F8, each recorded in the plan's §13.1 to §13.9:
+- **F0 to F2.** A held storefront action offers **Replace it with this one**; actions are keyed by id with the built-in four findable by kind; submissions name their front and action; a run gets the customer's answers apart from Taskiem's record (`trigger.answers`, `trigger.submission`); a workflow can have **a new action** of its own on the same front. The order and booking pages are drawn from their action's form, byte for byte as before.
+- **F3 and F4.** Fronts in the web app (the Fronts tab), on the public page (`/<slug>`, its forms at `/<slug>/a/<action>`) and from chat (`add front`, `front … on`, `add item … to`, `turn on … for`), one copy of each table's list, and Food's options.
+- **F5 to F7.** Part payments on any submission; claims as the one reservation model (`storefront_claims`, taken by the public host with the submission under the list's lock); Hire (dates and quantity, deposit, Returned, late fee), Spaces (a calendar per list by the day or the hour, setup time), Tickets (a code per seat, checked in at the door), Classes (instalments, a waiting list), Quotes (priced in chat, accepted on the status page, a deposit) and forms added to any front (Custom).
+- **F8.** The builder's rule for the kinds with one eval case each, and the docs: storefronts led by fronts and kinds, forms with the four fields, stock on what fronts do not move, the owners' guide *Sell more than one thing*, and the atlas.
+
+What the decision said and the build changed: a kind is a preset file (`engine/storefront/kinds/*.json`) and a known table, as decided; ten kinds were built (Services is the home page's booking list until a Services front is asked for). Hire and Spaces have their own workflows (`storefront-hire`, `storefront-space`) rather than Spaces reusing `storefront-booking`, since a space is booked on its list's own calendar. A quote's acceptance is the status page's confirmed price, not a new page. A ticket is a typed code for now; a QR code is a later step. What is not built is listed in each milestone's **Not in** line.
 
 ## Provenance
 
