@@ -27,9 +27,12 @@ type FrontKind struct {
 	Line  string `json:"line"`
 	// Table is the known table the kind makes (templates/tables), and
 	// Mapping its columns as a list shows them; "" for none.
-	Table   string       `json:"table,omitempty"`
-	Mapping Columns      `json:"mapping"`
-	Actions []KindAction `json:"actions"`
+	Table   string  `json:"table,omitempty"`
+	Mapping Columns `json:"mapping"`
+	// Calendar is the list's calendar, for a kind whose rows are booked
+	// for times (Spaces).
+	Calendar *Calendar    `json:"calendar,omitempty"`
+	Actions  []KindAction `json:"actions"`
 }
 
 // KindAction is an action a kind adds.
@@ -47,7 +50,7 @@ var (
 )
 
 // kindOrder is the order owners are offered kinds in: Custom last.
-var kindOrder = []string{"shop", "food", "hire", "questions", "callbacks", "custom"}
+var kindOrder = []string{"shop", "food", "hire", "spaces", "questions", "callbacks", "custom"}
 
 func loadKinds() {
 	names, err := fs.Glob(kindFiles, "kinds/*.json")
@@ -74,9 +77,17 @@ func loadKinds() {
 		}
 		for _, a := range k.Actions {
 			if !contains(Kinds, a.Kind) || a.Kind == "booking" || a.Label == "" || a.Template == "" {
-				kindsErr = fmt.Errorf("%s: an action is an order, hire, question or call-back, with a label and a template", n)
+				kindsErr = fmt.Errorf("%s: an action is an order, hire, space booking, question or call-back, with a label and a template", n)
 				return
 			}
+		}
+		if k.Calendar != nil {
+			c, err := CleanCalendar(*k.Calendar)
+			if err != nil {
+				kindsErr = fmt.Errorf("%s: %w", n, err)
+				return
+			}
+			k.Calendar = &c
 		}
 		kindsList = append(kindsList, k)
 	}

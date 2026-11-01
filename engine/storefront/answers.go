@@ -28,7 +28,7 @@ import (
 // ReservedAnswers are the names a question may not take: Taskiem's own
 // fields of a submission, in trigger.submission and trigger.body.
 var ReservedAnswers = []string{"action", "basket", "booking", "customer", "delivery_fee", "delivery_kobo", "event", "front", "fulfilment",
-	"kind", "lines", "payment", "reference", "status_link", "summary", "total", "total_kobo", "zone"}
+	"hire", "kind", "lines", "payment", "reference", "space", "status_link", "summary", "total", "total_kobo", "zone"}
 
 var answerName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
@@ -345,21 +345,8 @@ func (r submissionRecord) submission(ord Order, paymentStatus string) map[string
 	out := map[string]any{"reference": ord.Reference, "front": r.front, "action": r.action, "total_kobo": ord.TotalKobo,
 		"payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}, "due_kobo": ord.DueKobo(), "paid_kobo": ord.PaidKobo, "customer": map[string]any{"name": maskName(ord.Customer.Name), "phone": phone},
 		"status_link": r.statusLink, "lines": lines}
-	// A hire's item, quantity and days (fronts F5): due back at the end of
-	// its last day.
-	if ord.Kind == "hire" && ord.StartsAt != nil && ord.EndsAt != nil {
-		qty := 0
-		for _, l := range ord.Basket {
-			qty += l.Quantity
-		}
-		days := int(ord.EndsAt.Sub(*ord.StartsAt).Hours()/24 + 0.5)
-		if days > 0 {
-			qty /= days
-		}
-		out["hire"] = map[string]any{"item": ord.ServiceName, "qty": qty, "days": days, "from": When(*ord.StartsAt),
-			"due_back": When(ord.EndsAt.Add(-time.Minute)), "due_back_at": ord.EndsAt.UTC().Format(time.RFC3339),
-			// The morning of the last day, 08:00 in Lagos: the reminder.
-			"remind_at": ord.EndsAt.Add(-16 * time.Hour).UTC().Format(time.RFC3339)}
+	if k, v := reservedTime(ord); k != "" {
+		out[k] = v
 	}
 	return out
 }
@@ -372,4 +359,48 @@ func mustProps(form []byte) []byte {
 		return []byte("{}")
 	}
 	return f.Properties
+}
+
+// reservedTime is what a hire or a space booking holds, for trigger.body
+// and trigger.submission (fronts F5): "hire" with its item, quantity and
+// days, due back at the end of its last day; or "space" with the space
+// and its times, by the day or the hour, with a reminder a day before.
+func reservedTime(ord Order) (string, map[string]any) {
+	// A hire's item, quantity and days (fronts F5): due back at the end of
+	// its last day.
+	if ord.Kind == "hire" && ord.StartsAt != nil && ord.EndsAt != nil {
+		qty := 0
+		for _, l := range ord.Basket {
+			qty += l.Quantity
+		}
+		days := int(ord.EndsAt.Sub(*ord.StartsAt).Hours()/24 + 0.5)
+		if days > 0 {
+			qty /= days
+		}
+		return "hire", map[string]any{"item": ord.ServiceName, "qty": qty, "days": days, "from": Day(*ord.StartsAt),
+			"when":     Day(*ord.StartsAt) + " to " + Day(ord.EndsAt.Add(-time.Minute)),
+			"due_back": Day(ord.EndsAt.Add(-time.Minute)), "due_back_at": ord.EndsAt.UTC().Format(time.RFC3339),
+			// The morning of the last day, 08:00 in Lagos: the reminder.
+			"remind_at": ord.EndsAt.Add(-16 * time.Hour).UTC().Format(time.RFC3339)}
+	}
+	// A space booking's space and times (fronts F5): from its start to its
+	// end, by the day or the hour, with a reminder a day before.
+	if ord.Kind == "space" && ord.StartsAt != nil && ord.EndsAt != nil {
+		sp := map[string]any{"space": ord.ServiceName, "from": When(*ord.StartsAt), "until": When(*ord.EndsAt),
+			"starts_at": ord.StartsAt.UTC().Format(time.RFC3339), "ends_at": ord.EndsAt.UTC().Format(time.RFC3339), "remind_at": ord.StartsAt.Add(-24 * time.Hour).UTC().Format(time.RFC3339)}
+		// By the day, from the first day's opening to the last's closing;
+		// by the hour, on one day.
+		if len(ord.Basket) > 0 && ord.Basket[0].Unit == "day" {
+			sp["days"] = ord.Basket[0].Quantity
+			sp["when"] = Day(*ord.StartsAt)
+			if Day(*ord.StartsAt) != Day(*ord.EndsAt) {
+				sp["when"] = Day(*ord.StartsAt) + " to " + Day(*ord.EndsAt)
+			}
+		} else {
+			sp["hours"] = int(ord.EndsAt.Sub(*ord.StartsAt) / time.Hour)
+			sp["when"] = When(*ord.StartsAt) + " to " + ord.EndsAt.In(Lagos).Format("15:04")
+		}
+		return "space", sp
+	}
+	return "", nil
 }

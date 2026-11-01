@@ -1742,7 +1742,8 @@
                       "enquiry",
                       "callback",
                       "booking",
-                      "hire"
+                      "hire",
+                      "space"
                     ]
                   },
                   "action_id": {

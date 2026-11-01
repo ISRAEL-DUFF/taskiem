@@ -4792,6 +4792,14 @@
       "text": "Ìránnilétí: ó yẹ kí {item} fún {reference} padà dé lónìí, {due_back}.",
       "reviewed": false
     },
+    "customer.space_confirmed": {
+      "text": "A ti fìdí ìfipamọ́ {reference} rẹ múlẹ̀: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Ìránnilétí: ìfipamọ́ {reference} rẹ fún {space} jẹ́ ọ̀la, {when}.",
+      "reviewed": false
+    },
     "customer.hire_returned": {
       "text": "A dúpẹ́: {reference} ti padà dé ọ̀dọ̀ wa.",
       "reviewed": false

@@ -4792,6 +4792,14 @@
       "text": "Ncheta: a ga-eweghachi {item} maka {reference} taa, {due_back}.",
       "reviewed": false
     },
+    "customer.space_confirmed": {
+      "text": "Akwadoola ndebe gị {reference}: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Ncheta: ndebe gị {reference} nke {space} bụ echi, {when}.",
+      "reviewed": false
+    },
     "customer.hire_returned": {
       "text": "Daalụ: {reference} alọghachila n'aka anyị.",
       "reviewed": false

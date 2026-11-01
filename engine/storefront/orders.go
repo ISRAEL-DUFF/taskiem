@@ -480,7 +480,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if sub.DepositKobo > 0 {
 		payable = sub.DepositKobo
 	}
-	if (sub.Kind != "order" && sub.Kind != "booking" && sub.Kind != "hire") || payable < 100 {
+	if !takesPayment(sub.Kind) || payable < 100 {
 		payment = "none"
 	}
 	if payment == "on_delivery" && (sub.Kind != "order" || sub.Fulfilment != "delivery") {
@@ -522,7 +522,7 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	// A hire's item and dates in the same columns: from its first day to
 	// the end of its last, the day it is due back (fronts F5).
 	h := sub.Hire
-	if sub.Kind == "hire" && h == nil {
+	if (sub.Kind == "hire" || sub.Kind == "space") && h == nil {
 		return Order{}, fmt.Errorf("%w: a hire without its dates", ErrInvalid)
 	}
 	if h != nil {
@@ -783,6 +783,16 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 		// The delivery area and its fee (dispatch D1), in the summary too.
 		body["zone"], body["delivery_kobo"], body["delivery_fee"] = ord.Zone, ord.DeliveryKobo, FormatNaira(ord.DeliveryKobo)
 		body["summary"] = Summary(ord.Basket) + ", delivery to " + ord.Zone + " " + FormatNaira(ord.DeliveryKobo)
+	}
+	if k, v := reservedTime(ord); k != "" {
+		body[k] = v
+		body["summary"] = Summary(ord.Basket)
+		if w, ok := v["when"].(string); ok {
+			body["summary"] = ord.ServiceName + ", " + w
+			if q, ok := v["qty"].(int); ok && q > 1 {
+				body["summary"] = fmt.Sprintf("%d × %s, %s", q, ord.ServiceName, w)
+			}
+		}
 	}
 	dedup := ord.ID.String()
 	if ord.Kind == "booking" {
@@ -1081,7 +1091,7 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 				}
 			}
 			// A booking declined or cancelled frees its slot.
-			if (ord.Kind == "booking" || ord.Kind == "hire") && (next == "declined" || next == "cancelled" || next == "refund_due") {
+			if (ord.Kind == "booking" || ord.Kind == "hire" || ord.Kind == "space") && (next == "declined" || next == "cancelled" || next == "refund_due") {
 				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {
 					return err
 				}

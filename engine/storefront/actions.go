@@ -16,7 +16,7 @@ import (
 // BuiltinKinds the four every storefront has on its first front; a hire
 // (fronts F5) is only ever an action of a front of its kind.
 var (
-	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire"}
+	Kinds        = []string{"order", "enquiry", "callback", "booking", "hire", "space"}
 	BuiltinKinds = []string{"order", "enquiry", "callback", "booking"}
 )
 
@@ -136,7 +136,9 @@ func Zones(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Zone, error) {
 var formConnection = regexp.MustCompile(`^(?:[a-z][a-z0-9_-]{0,63}/)?[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`)
 
 // takesPayment reports whether a form's kind may ask for payment.
-func takesPayment(kind string) bool { return kind == "order" || kind == "booking" || kind == "hire" }
+func takesPayment(kind string) bool {
+	return kind == "order" || kind == "booking" || kind == "hire" || kind == "space"
+}
 
 // Deposit is what a booking pays online of price.
 func (o ActionOptions) Deposit(price int64) int64 {
@@ -169,7 +171,8 @@ type PublicAction struct {
 	DepositPercent int `json:"deposit_percent,omitempty"`
 }
 
-var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now"}
+var defaultLabels = map[string]string{"order": "Order now", "enquiry": "Ask a question", "callback": "Request a call back", "booking": "Book", "hire": "Hire now",
+	"space": "Book the space"}
 
 // builtinPosition is a built-in action's place on the first front.
 func builtinPosition(kind string) int {
@@ -328,6 +331,13 @@ func SaveAction(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, a Action) (Act
 		a.Payment = "after_accept"
 		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent, LateFeeKobo: a.Options.LateFeeKobo,
 			Pickup: a.Options.Pickup, Delivery: a.Options.Delivery, DeliveryNote: a.Options.DeliveryNote}
+	case "space":
+		if a.Options.DepositPercent < 0 || a.Options.DepositPercent > 100 {
+			return Action{}, fmt.Errorf("%w: a deposit is 1 to 100 per cent of the price", ErrInvalid)
+		}
+		// A space takes its deposit once accepted, and the rest later.
+		a.Payment = "after_accept"
+		a.Options = ActionOptions{Connection: a.Options.Connection, DepositPercent: a.Options.DepositPercent}
 	default:
 		a.Options = ActionOptions{}
 	}

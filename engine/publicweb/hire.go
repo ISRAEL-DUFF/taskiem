@@ -61,12 +61,27 @@ func DBClaim(pool *pgxpool.Pool) Claim {
 	}
 }
 
-// hireView is the hire field as the form shows it.
+// hireView is the hire field as the form shows it, or a space's: a
+// space by the day takes a first and a last day, by the hour a day and
+// the hours from and to.
 type hireView struct {
 	Items         []hireItem
 	From, To, Qty string
 	Min, Max      string // the dates the pickers allow
 	Deposit       string // "half the price is paid to confirm", or ""
+	// A space's (fronts F5): its calendar's grain and hours.
+	Space           bool
+	Hourly          bool
+	Day             string
+	FromHours       []hourOption
+	ToHours         []hourOption
+	MinHours, Opens string
+	cal             storefront.Calendar
+}
+
+type hourOption struct {
+	Value, Label string
+	Selected     bool
 }
 
 type hireItem struct {
@@ -100,6 +115,13 @@ func (h *hireView) keep(v url.Values) {
 	}
 	for i := range h.Items {
 		h.Items[i].Selected = h.Items[i].ID == v.Get("hire_item")
+	}
+	h.Day = v.Get("hire_day")
+	for i := range h.FromHours {
+		h.FromHours[i].Selected = h.FromHours[i].Value == v.Get("hire_start")
+	}
+	for i := range h.ToHours {
+		h.ToHours[i].Selected = h.ToHours[i].Value == v.Get("hire_end")
 	}
 }
 

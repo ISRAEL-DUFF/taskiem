@@ -223,6 +223,7 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		return
 	}
 	actions, base := p.Model.Home().Actions, ""
+	var cal *storefront.Calendar
 	if frontSlug != "" {
 		f, found := frontOf(p, frontSlug)
 		if !found {
@@ -231,18 +232,22 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		}
 		// A front's basket draws on its own list.
 		actions, base = f.Actions, "/"+f.Slug
+		cal = f.ListCalendar()
 		p.Items = p.Lists[f.ListTable()]
 		p.Model.HasServices = false
 	}
 	act, enabled := findAction(actions, ref)
 	kind := act.Kind
-	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) {
+	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) || (kind == "space" && cal == nil) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
 	f := formView(p, act, site, embed, base)
-	if act.Kind == "hire" {
+	switch act.Kind {
+	case "hire":
 		f.Hire = hireField(p.Items, s.now(), act.DepositPercent)
+	case "space":
+		f.Hire = spaceField(p.Items, *cal, s.now(), act.DepositPercent)
 	}
 	f.Look = s.lookFor(r.Context(), site.Tenant, f.Business)
 	refuse := http.StatusOK
@@ -394,8 +399,12 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		return
 	}
 	sub, msg := f.check(v, p.Items)
-	if msg == "" && act.Kind == "hire" {
+	switch {
+	case msg != "":
+	case act.Kind == "hire":
 		msg = checkHire(v, p.Items, act, s.now(), &sub)
+	case act.Kind == "space" && f.Hire != nil:
+		msg = checkSpace(v, p.Items, act, f.Hire.cal, s.now(), &sub)
 	}
 	if msg != "" {
 		f.Error = msg
@@ -413,12 +422,15 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 	}
 	sub.Submitted = s.now().UTC()
 	record := s.record
-	if act.Kind == "hire" {
+	if act.Kind == "hire" || act.Kind == "space" {
 		record = s.recordHire
 	}
 	ref, ok, err := record(r.Context(), site.ID, p.Model.Slug, act, idem, sub)
 	if errors.Is(err, ErrNotFree) {
 		f.Error = "Not that many are free for those days. Choose other days, or fewer."
+		if act.Kind == "space" {
+			f.Error = "That space is booked for some of that time. Choose another time."
+		}
 		s.showForm(w, r, http.StatusConflict, f, v.Get(tokenField))
 		return
 	}

@@ -4792,6 +4792,14 @@
       "text": "Tunatarwa: ya kamata a dawo da {item} na {reference} yau, {due_back}.",
       "reviewed": false
     },
+    "customer.space_confirmed": {
+      "text": "An tabbatar da ajiyarka {reference}: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Tunatarwa: ajiyarka {reference} ta {space} gobe ce, {when}.",
+      "reviewed": false
+    },
     "customer.hire_returned": {
       "text": "Mun gode: {reference} ya dawo gare mu.",
       "reviewed": false

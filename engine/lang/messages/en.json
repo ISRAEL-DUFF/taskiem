@@ -5989,6 +5989,16 @@
       "reviewed": true,
       "context": "SMS to a customer: on the day a hire is due back (fronts F5)"
     },
+    "customer.space_confirmed": {
+      "text": "Your booking {reference} is confirmed: {space}, {when}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a space booking confirmed once its deposit is paid (fronts F5)"
+    },
+    "customer.space_reminder": {
+      "text": "Reminder: your booking {reference} of {space} is tomorrow, {when}.",
+      "reviewed": true,
+      "context": "SMS to a customer: the day before a space booking (fronts F5)"
+    },
     "customer.hire_returned": {
       "text": "Thank you: {reference} is back with us.",
       "reviewed": true,

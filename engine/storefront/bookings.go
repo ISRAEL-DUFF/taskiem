@@ -40,6 +40,9 @@ var liveBooking = []string{"received", "accepted", "awaiting_payment", "paid"}
 // When is a booking's time as customers read it: "Sat 24 Oct, 10:30".
 func When(t time.Time) string { return t.In(Lagos).Format("Mon 2 Jan, 15:04") }
 
+// Day is a day as customers read it, in Lagos: "Mon 2 Jan".
+func Day(t time.Time) string { return t.In(Lagos).Format("Mon 2 Jan") }
+
 // bookingBody is trigger.body.booking: the service and time, and when the
 // reminders fall (now, when already past: remind_day and remind_hours say
 // whether to send them).

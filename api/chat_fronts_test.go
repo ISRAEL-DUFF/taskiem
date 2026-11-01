@@ -53,7 +53,7 @@ func TestChatFronts(t *testing.T) {
 
 	// The kind asked as a list, then shown and made on yes.
 	r := w.say(t, on, "add front Snacks")
-	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "6. *Custom*") {
+	if !strings.Contains(r, "What is *Snacks* for?") || !strings.Contains(r, "1. *Shop*") || !strings.Contains(r, "2. *Food*") || !strings.Contains(r, "3. *Hire*") || !strings.Contains(r, "4. *Spaces*") || !strings.Contains(r, "7. *Custom*") {
 		t.Fatalf("kinds: %q", r)
 	}
 	if r := w.say(t, on, "rockets"); !strings.Contains(r, "What is *Snacks* for?") {
@@ -257,5 +257,56 @@ func TestChatFrontsInPidgin(t *testing.T) {
 	}
 	if r := w.say(t, on, "orders for Snacks"); !strings.Contains(r, "No open orders for *Snacks*.") {
 		t.Fatalf("orders: %q", r)
+	}
+}
+
+// Hire and Spaces fronts from chat (fronts F5): made with their tables and
+// calendars, an item added with a count to start from, and their forms
+// turned on with their workflows.
+func TestChatHireAndSpaceFronts(t *testing.T) {
+	w := shopWorld(t)
+	ctx := context.Background()
+	w.srv.Orders = &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault}
+	if err := w.env.Registry.Register(sfconn.New(w.srv.Orders)); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Ada's Events", "ada@ada.test")
+	verifyPhone(t, w.world, owner, "phone", "business")
+	const on = "+2348010000049"
+	w.bind(t, owner, on)
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-events", "draft": map[string]any{"name": "Ada's Events"}})
+	owner.must(200, "POST", "/v1/storefront/publish", nil)
+
+	for _, c := range []struct{ make, title, item, added, turnOn, kind string }{
+		{"add hire front Tools", "a Hire front", "add item Canopy 5000 to Tools", "Added *Canopy* at ₦5,000 to *Tools*.", "turn on hire for Tools", "hire"},
+		{"add spaces front Halls", "a Spaces front", "add item Main hall 150000 to Halls", "Added *Main hall* at ₦150,000 to *Halls*.", "turn on bookings for Halls", "space"},
+	} {
+		if r := w.say(t, on, c.make); !strings.Contains(r, c.title) {
+			t.Fatalf("%s: %q", c.make, r)
+		}
+		if r := w.yes(t, on); !strings.Contains(r, "Made *") {
+			t.Fatalf("%s, made: %q", c.make, r)
+		}
+		if r := w.say(t, on, c.item); !strings.Contains(r, "Add this to *") {
+			t.Fatalf("%s: %q", c.item, r)
+		}
+		if r := w.yes(t, on); !strings.Contains(r, c.added) {
+			t.Fatalf("%s, added: %q", c.item, r)
+		}
+		if r := w.say(t, on, c.turnOn); !strings.Contains(r, "Turn on *") {
+			t.Fatalf("%s: %q", c.turnOn, r)
+		}
+		r := w.yes(t, on)
+		var enabled bool
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT a.enabled FROM storefront_actions a JOIN triggers t ON t.storefront_action_id = a.id AND t.environment = 'prod'
+			WHERE a.kind = $1 AND t.storefront_action = $1`, c.kind).Scan(&enabled); err != nil || !enabled {
+			t.Fatalf("%s: %v %v %q", c.turnOn, err, enabled, r)
+		}
+	}
+	var grain string
+	var setup int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT b.config->'calendar'->>'grain', (b.config->'calendar'->>'setup_minutes')::int FROM storefront_blocks b
+		JOIN storefront_fronts f ON f.id = b.front_id WHERE f.name = 'Halls'`).Scan(&grain, &setup); err != nil || grain != "days" || setup != 60 {
+		t.Fatalf("the halls' calendar: %q %d %v", grain, setup, err)
 	}
 }

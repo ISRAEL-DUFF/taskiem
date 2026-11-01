@@ -4792,6 +4792,14 @@
       "text": "Reminder: {item} for {reference} suppose return today, {due_back}.",
       "reviewed": false
     },
+    "customer.space_confirmed": {
+      "text": "Your booking {reference} don confirm: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Reminder: your booking {reference} for {space} na tomorrow, {when}.",
+      "reviewed": false
+    },
     "customer.hire_returned": {
       "text": "Thank you: {reference} don reach us back.",
       "reviewed": false

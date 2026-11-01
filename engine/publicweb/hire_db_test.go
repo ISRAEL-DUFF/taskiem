@@ -146,3 +146,100 @@ func TestHireThroughTheDatabase(t *testing.T) {
 		t.Fatalf("taken: %d %v", taken, err)
 	}
 }
+
+// TestSpaceThroughTheDatabase books a hall by the hour through the public
+// host over taskiem_public_claim: one party at a time, an hour of setup
+// kept clear between bookings, and a booking by the day that runs from
+// opening to closing.
+func TestSpaceThroughTheDatabase(t *testing.T) {
+	d := dbtest.New(t)
+	ctx := context.Background()
+	tn := d.SeedTenant(t, nil)
+	sf, front, block, action := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	cfg := `{"table_name": "spaces", "calendar": {"grain": "hours", "open": "08:00", "close": "22:00", "min_hours": 2, "setup_minutes": 60}}`
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO storefronts (id, tenant_id, slug, status, created_by) VALUES ($1, $2, 'ada-halls', 'published', 'user:ada')`, []any{sf, tn.ID}},
+		{`INSERT INTO storefront_fronts (id, tenant_id, storefront_id, slug, kind, name, enabled) VALUES ($1, $2, $3, 'halls', 'spaces', 'Halls', true)`, []any{front, tn.ID, sf}},
+		{`INSERT INTO storefront_blocks (id, tenant_id, front_id, kind, config) VALUES ($1, $2, $3, 'list', $4)`, []any{block, tn.ID, front, cfg}},
+		{`INSERT INTO storefront_actions (id, storefront_id, kind, tenant_id, enabled, label, payment, front_id, slug, builtin) VALUES ($1, $2, 'space', $3, true, 'Book the space', 'after_accept', $4, 'space', false)`,
+			[]any{action, sf, tn.ID, front}},
+	} {
+		if _, err := d.Admin.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hall := storefront.Item{ID: "1", Name: "Main hall", PriceKobo: kobo(2000000), Available: true}
+	raw, _ := json.Marshal(hall)
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES ($1, 'spaces', '1', $2, 0, $3)`, sf, tn.ID, raw); err != nil {
+		t.Fatal(err)
+	}
+	pool := d.PublicPool(t, 4)
+	p := samplePage("classic", 0)
+	halls := storefront.PublicFront{Slug: "halls", Kind: "spaces", Name: "Halls",
+		Blocks:  []storefront.PublicBlock{{Kind: "list", Config: json.RawMessage(cfg)}},
+		Actions: []storefront.PublicAction{{ID: &action, Slug: "space", Kind: "space", Label: "Book the space", Payment: "after_accept", DepositPercent: 50, Form: storefront.BuiltinForm("space")}}}
+	p.Model.Fronts = []storefront.PublicFront{{Slug: "", Kind: "shop", Name: "Ada"}, halls}
+	p.Lists = map[string][]storefront.Item{"spaces": {hall}}
+	s := &Server{Lookup: func(context.Context, string) (Site, bool, error) {
+		return Site{Tenant: tn.ID, Kind: "storefront", ID: sf}, true, nil
+	},
+		Storefronts: func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
+		Submit:      DBSubmit(pool), OrderStatus: DBOrderStatus(pool), Claim: DBClaim(pool),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
+		Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
+	var err error
+	if s.FormKey, err = storefront.FormKey(testMaster); err != nil {
+		t.Fatal(err)
+	}
+	if s.InboxKey, err = storefront.InboxKey(testMaster); err != nil {
+		t.Fatal(err)
+	}
+	ahead := time.Duration(0)
+	s.now = func() time.Time { return time.Now().Add(ahead) }
+	e := &formEnv{s: s, h: s.Handler(), sf: sf}
+	today := time.Now().In(storefront.Lagos)
+	day := today.AddDate(0, 0, 3).Format(time.DateOnly)
+	book := func(from, to int) *httptest.ResponseRecorder {
+		t.Helper()
+		_, tok := e.form(t, "/halls/a/space")
+		ahead += 5 * time.Second
+		return e.post("/halls/a/space", url.Values{"token": {tok}, "website": {""}, "name": {"Bola"}, "phone": {"0803 123 4567"},
+			"hire_item": {"1"}, "hire_day": {day}, "hire_start": {strconv.Itoa(from)}, "hire_end": {strconv.Itoa(to)}})
+	}
+
+	body, _ := e.form(t, "/halls/a/space")
+	if !strings.Contains(body, `name="hire_start"`) || !strings.Contains(body, "Main hall, ₦20,000 an hour") || !strings.Contains(body, "Open 08:00 to 22:00. At least 2 hours.") ||
+		strings.Contains(body, `name="hire_qty"`) {
+		t.Fatalf("the space form: %s", body)
+	}
+	// 10:00 to 14:00: four hours, ₦80,000, half to confirm.
+	r := book(10, 14)
+	if r.Code != http.StatusSeeOther {
+		t.Fatalf("first: %d %s", r.Code, r.Body.String())
+	}
+	ref := refOf(r.Header().Get("Location"))
+	var payload []byte
+	if err := d.Admin.QueryRow(ctx, `SELECT payload FROM storefront_inbox WHERE reference = $1 AND kind = 'space'`, ref).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := storefront.OpenSubmission(s.InboxKey, sf, ref, payload)
+	if err != nil || sub.TotalKobo != 8000000 || sub.DepositKobo != 4000000 || sub.Hire == nil || sub.Hire.Hours != 4 || sub.Basket[0].Unit != "hour" || sub.Hire.From.In(storefront.Lagos).Hour() != 10 {
+		t.Fatalf("booked: %+v %v", sub, err)
+	}
+	// One hour is too short; 14:00 is inside the setup hour; 15:00 is clear.
+	if r := book(16, 17); r.Code != http.StatusUnprocessableEntity || !strings.Contains(r.Body.String(), "Book at least 2 hours.") {
+		t.Fatalf("too short: %d", r.Code)
+	}
+	if r := book(14, 16); r.Code != http.StatusConflict || !strings.Contains(r.Body.String(), "That space is booked for some of that time.") {
+		t.Fatalf("in the setup time: %d", r.Code)
+	}
+	if r := book(15, 18); r.Code != http.StatusSeeOther {
+		t.Fatalf("after setup: %d %s", r.Code, r.Body.String())
+	}
+	if r := book(12, 13); r.Code == http.StatusSeeOther {
+		t.Fatal("an overlap was booked")
+	}
+}

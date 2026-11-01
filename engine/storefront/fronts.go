@@ -50,6 +50,70 @@ type ListConfig struct {
 	// TableName is the table's name, which its copy is kept by (§5.2).
 	TableName string  `json:"table_name,omitempty"`
 	Columns   Columns `json:"columns"`
+	// Calendar is the list's own calendar, when its rows are booked for
+	// times (Spaces, fronts F5): nil for none.
+	Calendar *Calendar `json:"calendar,omitempty"`
+}
+
+// Calendar is a list's booking rules (docs/spec/fronts.md §5.3): its
+// grain, whole days or hours on one day; the hours a booking may run
+// between, in Lagos; the fewest hours a booking by the hour takes; and
+// the setup time kept clear between bookings.
+type Calendar struct {
+	Grain        string `json:"grain"`
+	Open         string `json:"open,omitempty"`
+	Close        string `json:"close,omitempty"`
+	MinHours     int    `json:"min_hours,omitempty"`
+	SetupMinutes int    `json:"setup_minutes,omitempty"`
+}
+
+// CleanCalendar checks a list's calendar: days or hours; whole hours to
+// open and close, open before close (08:00 to 22:00 by default); 1 to 24
+// minimum hours; and up to a day of setup time.
+func CleanCalendar(c Calendar) (Calendar, error) {
+	if c.Grain != "days" && c.Grain != "hours" {
+		return Calendar{}, fmt.Errorf("%w: a calendar books whole days or hours", ErrInvalid)
+	}
+	if c.Open == "" {
+		c.Open = "08:00"
+	}
+	if c.Close == "" {
+		c.Close = "22:00"
+	}
+	o, err1 := clockHour(c.Open)
+	cl, err2 := clockHour(c.Close)
+	if err1 != nil || err2 != nil || o >= cl {
+		return Calendar{}, fmt.Errorf("%w: a calendar opens and closes on the hour, opening first", ErrInvalid)
+	}
+	if c.MinHours == 0 {
+		c.MinHours = 1
+	}
+	if c.MinHours < 1 || c.MinHours > cl-o {
+		return Calendar{}, fmt.Errorf("%w: the fewest hours is 1 to the hours it is open", ErrInvalid)
+	}
+	if c.SetupMinutes < 0 || c.SetupMinutes > 1440 {
+		return Calendar{}, fmt.Errorf("%w: setup time is 0 to 1440 minutes", ErrInvalid)
+	}
+	return c, nil
+}
+
+// OpenHours are the hours a calendar opens and closes at.
+func (c Calendar) OpenHours() (open, close int) {
+	o, _ := clockHour(c.Open)
+	cl, err := clockHour(c.Close)
+	if err != nil || cl <= o {
+		return 8, 22
+	}
+	return o, cl
+}
+
+// clockHour reads "HH:00", 00:00 to 24:00.
+func clockHour(s string) (int, error) {
+	var h, m int
+	if _, err := fmt.Sscanf(s, "%d:%d", &h, &m); err != nil || m != 0 || h < 0 || h > 24 || len(s) != 5 {
+		return 0, fmt.Errorf("not an hour: %q", s)
+	}
+	return h, nil
 }
 
 const frontCols = `id, slug, kind, name, COALESCE(tagline, ''), COALESCE(photo, ''), position, enabled`
@@ -362,7 +426,7 @@ func CreateFront(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in NewFront) 
 		return Front{}, err
 	}
 	if in.Table != nil {
-		cfg, _ := json.Marshal(ListConfig{Table: in.Table, TableName: in.TableName, Columns: k.Mapping})
+		cfg, _ := json.Marshal(ListConfig{Table: in.Table, TableName: in.TableName, Columns: k.Mapping, Calendar: k.Calendar})
 		if _, err := tx.Exec(ctx, `INSERT INTO storefront_blocks (id, tenant_id, front_id, position, kind, config) VALUES ($1, $2, $3, 0, 'list', $4)`,
 			uuid.Must(uuid.NewV7()), tenant, id, cfg); err != nil {
 			return Front{}, err
@@ -578,4 +642,15 @@ func (f PublicFront) ListTable() string {
 		return t[0]
 	}
 	return ""
+}
+
+// ListCalendar is the calendar of the front's first list, nil for none.
+func (f PublicFront) ListCalendar() *Calendar {
+	for _, b := range f.Blocks {
+		var lc ListConfig
+		if b.Kind == "list" && json.Unmarshal(b.Config, &lc) == nil && lc.TableName != "" {
+			return lc.Calendar
+		}
+	}
+	return nil
 }

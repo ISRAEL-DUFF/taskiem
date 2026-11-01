@@ -6,7 +6,7 @@
 import { whenLabel } from "./bookings";
 import { formatPrice } from "./storefront";
 
-export type FormKind = "order" | "enquiry" | "callback" | "booking" | "hire";
+export type FormKind = "order" | "enquiry" | "callback" | "booking" | "hire" | "space";
 export type PaymentMode = "after_accept" | "at_order" | "none";
 
 export interface ActionOptions {
@@ -179,6 +179,12 @@ export const FORM_INFO: Record<
     help: "Customers hire items for days, pay a deposit and bring them back.",
     template: "storefront-hire",
     workflow: "Storefront hire",
+  },
+  space: {
+    title: "Space bookings",
+    help: "Customers book a hall or room by the day or the hour, with a deposit.",
+    template: "storefront-space",
+    workflow: "Storefront space bookings",
   },
 };
 
@@ -479,6 +485,7 @@ export const KIND_LABEL: Record<FormKind, string> = {
   callback: "Call-back",
   booking: "Booking",
   hire: "Hire",
+  space: "Space booking",
 };
 
 /** How long ago, in words: "just now", "5 min ago", "2 hours ago", "yesterday", "3 days ago", then the date. */

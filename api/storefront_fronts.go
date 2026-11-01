@@ -263,7 +263,8 @@ func (s *Server) deleteFront(w http.ResponseWriter, r *http.Request) {
 
 // actionTemplates are the workflow templates that start on each kind of
 // action (§8).
-var actionTemplates = map[string]string{"order": "storefront-order", "enquiry": "storefront-enquiry", "callback": "storefront-callback", "booking": "storefront-booking", "hire": "storefront-hire"}
+var actionTemplates = map[string]string{"order": "storefront-order", "enquiry": "storefront-enquiry", "callback": "storefront-callback", "booking": "storefront-booking", "hire": "storefront-hire",
+	"space": "storefront-space"}
 
 // setupAction answers POST /v1/storefront/actions/{id}/setup: the action's
 // default workflow from its kind's template, its trigger naming the action

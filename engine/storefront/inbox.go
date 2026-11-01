@@ -50,8 +50,9 @@ type Submission struct {
 	Submitted time.Time `json:"submitted_at"`
 	// Booking is a booking's service and time, held when it was sent.
 	Booking *Booked `json:"booking,omitempty"`
-	// Hire is a hire's item, quantity and dates (fronts F5); its claim was
-	// taken by the public host with the submission.
+	// Hire is a hire's item, quantity and dates, or a space booking's
+	// space and times (fronts F5); its claim was taken by the public host
+	// with the submission.
 	Hire *Hired `json:"hire,omitempty"`
 	// DepositKobo is what a booking pays online when less than the total.
 	DepositKobo int64 `json:"deposit_kobo,omitempty"`
@@ -73,6 +74,9 @@ type Hired struct {
 	To     time.Time `json:"to"`
 	Until  time.Time `json:"until"`
 	Days   int       `json:"days"`
+	// Hours is a space booked by the hour: From and Until are on one day,
+	// and Days is 0.
+	Hours int `json:"hours,omitempty"`
 }
 
 type Booked struct {
@@ -107,6 +111,9 @@ type Line struct {
 	Quantity  int    `json:"quantity"`
 	PriceKobo int64  `json:"price_kobo"`
 	LineKobo  int64  `json:"line_kobo"`
+	// Unit is what Quantity counts when it is time, a space's "day" or
+	// "hour" (fronts F5); "" for items.
+	Unit string `json:"unit,omitempty"`
 	// Options are the choices a Food dish took (fronts F3); PriceKobo is
 	// the dish's price with them.
 	Options []LineOption `json:"options,omitempty"`
