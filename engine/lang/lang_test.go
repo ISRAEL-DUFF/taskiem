@@ -268,6 +268,18 @@ func TestMatchIntent(t *testing.T) {
 		{"wá nínú debtors Ada", []lang.Tag{lang.YO, lang.EN}, lang.IntentFind, "debtors Ada"},
 		// The person's language first, English still understood.
 		{"abeg run payroll", []lang.Tag{lang.PCM, lang.EN}, lang.IntentRun, "payroll"},
+		// Fronts (fronts F4): the list, adding one, switching one, its orders.
+		{"fronts", all, lang.IntentFronts, ""},
+		{"my fronts", []lang.Tag{lang.PCM, lang.EN}, lang.IntentFronts, ""},
+		{"make new front Snacks", []lang.Tag{lang.PCM, lang.EN}, lang.IntentAddFront, "Snacks"},
+		{"orders for Snacks", []lang.Tag{lang.PCM, lang.EN}, lang.IntentOrders, "Snacks"},
+		{"off front Snacks", []lang.Tag{lang.PCM, lang.EN}, lang.IntentFrontOff, "Snacks"},
+		{"fi front kún Ìpanu", []lang.Tag{lang.YO, lang.EN}, lang.IntentAddFront, "Ìpanu"},
+		{"tan front Ìpanu", []lang.Tag{lang.YO, lang.EN}, lang.IntentFrontOn, "Ìpanu"},
+		{"kunna front Abinci", []lang.Tag{lang.HA, lang.EN}, lang.IntentFrontOn, "Abinci"},
+		{"ƙara front Abinci", []lang.Tag{lang.HA, lang.EN}, lang.IntentAddFront, "Abinci"},
+		{"gbanyụọ front Nri", []lang.Tag{lang.IG, lang.EN}, lang.IntentFrontOff, "Nri"},
+		{"tinye front Nri", []lang.Tag{lang.IG, lang.EN}, lang.IntentAddFront, "Nri"},
 		{"wetin fail today", []lang.Tag{lang.PCM, lang.EN}, lang.IntentStatus, ""},
 		{"status", []lang.Tag{lang.PCM, lang.EN}, lang.IntentStatus, ""},
 		{"Fagilé", []lang.Tag{lang.YO, lang.EN}, lang.IntentCancel, ""},

@@ -265,6 +265,8 @@ A front is made off. Add its items in its table (**Add your first item**), set u
 
 A Food dish's options go in its `options` cell as a list of groups: `[{"name": "Size", "choices": ["Regular", {"name": "Large", "price": 500}]}]`. The customer picks one choice in each group, and the dish is priced with its choices, checked again from the table before the order goes on.
 
+Fronts are run from chat too ([below](#fronts-from-chat)).
+
 ## Your own domain
 
 A business that already owns a domain can serve its page there instead of the preview address ([spec 6.6](spec/storefronts.md#66-addresses-domains-and-sharing)): `adakitchen.ng`, or a part of a domain it uses for something else, such as `shop.example.com`. This is Phase 5, S6. Buying a domain through the domain platform waits for its contract; embedding the page on a website comes later.
@@ -338,6 +340,25 @@ The owner runs the storefront from WhatsApp or Telegram (spec [5.1](spec/storefr
 | `order AK-7QX4KD ready` | For an accepted or paid order: texts the customer that it is ready (by SMS, and email when they gave one), and leaves its status: it is not done until it is collected |
 | `order AK-7QX4KD delivered` (or `collected`, `done`) | Completes it, as the order workflow's "mark it delivered or collected" step does. A run still waiting on that step finds it completed |
 | `order AK-7QX4KD to Musa`, `release AK-7QX4KD`, `deliveries`, `turn on deliveries` | A business's own riders ([dispatch](dispatch.md#in-chat)) |
+
+### Fronts from chat
+
+[Fronts](#fronts) from WhatsApp or Telegram ([plan](spec/fronts.md#135-as-built-f4)), with the same permissions, confirmations and audit as the commands above, and through the same code as the Fronts tab. The storefront's other commands keep their meaning for the home page.
+
+| Message | What happens |
+| --- | --- |
+| `fronts` | Each front: its name, kind, on or off, its address, how many items it has and how many of its forms are on |
+| `add front Snacks` | The kind asked as a numbered list (Shop, Food, Questions, Call-backs, Custom), each with its line; the number or the kind's word answers it. Then the front is shown (its list, its forms, that it starts off) and made on **yes**, its table made too (`table.edit`). The reply says what to add first and how to turn its form and the front on |
+| `add food front Snacks`, `add questions front Ask us` | The kind named: no question |
+| `front Snacks on`, `front Snacks off` | Turns a front on or off on **yes**; a published page is published again with its checks. Its items and orders stay when it is off. The home page is always on (`close shop` stops orders) |
+| `add dish Jollof rice 2500` | To the Food front when there is one; otherwise name it with `to <front>`. Shown, then added to the front's own table on **yes** |
+| `add item Chin chin 500 to Snacks`, `add product … to Snacks`, a photo captioned `Chin chin 500 to Snacks` | To that front's own table. Without `to <front>`, `add product` goes to the home page's catalogue, as before |
+| `price`, `hide`, `show`, `sold out <item>` | Once other fronts have items, the item is found on any list; when the name is on more than one, the numbered pick names each one's front (`Puff puff (Snacks)`). `sold out` hides the item until `show`. Only the home page's catalogue keeps [stock](stock.md), so `stock` for another front's item says so |
+| `turn on orders for Snacks`, `turn on questions for Ask us`, `turn on call-backs for …` | The front's own form: its workflow made from its kind's template, naming the form by id, and published from chat with the Forms page's checks (or kept, when one is deployed for it already); the form switched on and a published page published again |
+| `turn on deliveries for Snacks` | The front's order form's workflow made from `dispatch-orders` in place of its plain one ([dispatch](dispatch.md#in-chat)); the home page's order form keeps its own |
+| `orders Snacks` | That front's open orders; `orders` names each order's front when there is more than one |
+
+`fronts`, `add front`, switching a front on or off and `orders <front>` have words in every language that is on (`make new front Snacks`, `orders for Snacks` in Pidgin; `fi front kún` and `tan front` in Yoruba; `ƙara front` and `kunna front` in Hausa; `tinye front` and `gbanyụọ front` in Igbo; drafts until reviewed). `add dish`, `sold out` and `turn on … for` are typed in English in every language, as `add product` is.
 
 Photos are fetched from the chat (WhatsApp's media API, Telegram's `getFile`), at most 10 MB, held in memory only. A photo sent while something else is being answered is refused.
 

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -127,16 +128,42 @@ func (s *Server) addFront(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	in := storefront.NewFront{Name: req.Name, Kind: k.Name}
+	var v frontView
+	err := s.makeFront(r.Context(), p, req.Name, k, func(tx pgx.Tx, action, target string, detail map[string]any) error {
+		return auditTx(r, tx, action, target, detail)
+	}, func(tx pgx.Tx, f storefront.Front) error {
+		list, err := frontViews(r.Context(), tx, p.TenantID)
+		if err != nil {
+			return err
+		}
+		for _, x := range list {
+			if x.ID == f.ID {
+				v = x
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, v)
+}
+
+// makeFront makes a front of a kind for the web app and chat alike: the
+// kind's table made for the business (named for the kind, or the next free
+// name; it needs table.edit), then the front, off, with its list and its
+// actions, audited; then, in the same transaction, done.
+func (s *Server) makeFront(ctx context.Context, p *Principal, name string, k storefront.FrontKind,
+	audit func(tx pgx.Tx, action, target string, detail map[string]any) error, done func(tx pgx.Tx, f storefront.Front) error) error {
+	in := storefront.NewFront{Name: name, Kind: k.Name}
 	if k.Table != "" {
 		if !p.Can(PermTableEdit) {
-			s.fail(w, r, fmt.Errorf("%w: a %s front makes a table, which needs %s", errForbidden, k.Title, PermTableEdit))
-			return
+			return fmt.Errorf("%w: a %s front makes a table, which needs %s", errForbidden, k.Title, PermTableEdit)
 		}
 		kt, ok := templates.KnownTable(k.Table)
 		if !ok {
-			s.fail(w, r, fmt.Errorf("the kind %s names no known table %s", k.Name, k.Table))
-			return
+			return fmt.Errorf("the kind %s names no known table %s", k.Name, k.Table)
 		}
 		t := datatables.Table{Name: kt.Name, Title: kt.Title, Description: kt.Description}
 		for _, col := range kt.Columns {
@@ -150,36 +177,21 @@ func (s *Server) addFront(w http.ResponseWriter, r *http.Request) {
 		for n := 2; n <= 9; n++ {
 			names = append(names, fmt.Sprintf("%s_%d", kt.Name, n))
 		}
-		if err := s.makeOwnTable(r.Context(), p.TenantID, p.Actor(), func(tx pgx.Tx, action, target string, detail map[string]any) error {
-			return auditTx(r, tx, action, target, detail)
-		}, &t, names...); err != nil {
-			s.fail(w, r, storefrontErr(fmt.Errorf("%w: the table could not be made: %s", errConflict, plainError(err))))
-			return
+		if err := s.makeOwnTable(ctx, p.TenantID, p.Actor(), audit, &t, names...); err != nil {
+			return storefrontErr(fmt.Errorf("%w: the table could not be made: %s", errConflict, plainError(err)))
 		}
 		in.Table, in.TableName = &t.ID, t.Name
 	}
-	var v frontView
-	err := s.tx(r, func(tx pgx.Tx) error {
-		f, err := storefront.CreateFront(r.Context(), tx, p.TenantID, in)
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		f, err := storefront.CreateFront(ctx, tx, p.TenantID, in)
 		if err != nil {
 			return storefrontErr(err)
 		}
-		list, err := frontViews(r.Context(), tx, p.TenantID)
-		if err != nil {
+		if err := audit(tx, "storefront.front_create", f.Slug, map[string]any{"kind": f.Kind, "name": f.Name}); err != nil {
 			return err
 		}
-		for _, x := range list {
-			if x.ID == f.ID {
-				v = x
-			}
-		}
-		return auditTx(r, tx, "storefront.front_create", f.Slug, map[string]any{"kind": f.Kind, "name": f.Name})
+		return done(tx, f)
 	})
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, v)
 }
 
 // patchFront changes a front's name, line, address, place or switch; on a
@@ -267,44 +279,10 @@ func (s *Server) setupAction(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var wf uuid.UUID
-	var label string
 	held := false
 	err = s.tx(r, func(tx pgx.Tx) error {
-		var kind string
-		var front string
-		if err := tx.QueryRow(r.Context(), `SELECT a.kind, a.label, f.name FROM storefront_actions a JOIN storefront_fronts f ON f.id = a.front_id WHERE a.id = $1`, id).
-			Scan(&kind, &label, &front); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return storefront.ErrNotFound
-			}
-			return err
-		}
-		if err := tx.QueryRow(r.Context(), `SELECT workflow_id FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, id).
-			Scan(&wf); err == nil {
-			held = true
-			return nil
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		tpl, ok := templates.Default().Get(actionTemplates[kind])
-		if !ok {
-			return fmt.Errorf("%w: no workflow template for a %s", errConflict, kind)
-		}
-		named := *tpl
-		var def map[string]any
-		if err := json.Unmarshal(tpl.Definition, &def); err != nil {
-			return err
-		}
-		trig, _ := def["trigger"].(map[string]any)
-		cfg, _ := trig["config"].(map[string]any)
-		if cfg == nil {
-			return fmt.Errorf("the template %s has no storefront trigger", tpl.ID)
-		}
-		cfg["action_id"] = id.String()
-		if named.Definition, err = json.Marshal(def); err != nil {
-			return err
-		}
-		wf, _, err = s.instantiateTx(r.Context(), tx, p, &named, map[string]any{}, front+": "+label, func(action, target string, detail map[string]any) error {
+		var err error
+		wf, held, err = s.setupActionTx(r.Context(), tx, p, id, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
 		})
 		return err
@@ -318,4 +296,57 @@ func (s *Server) setupAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"workflow_id": wf, "state": "draft", "version": 1})
+}
+
+// setupActionTx makes an action's default workflow from its kind's
+// template, its trigger naming the action by id, as version 1 to publish;
+// held is set, and nothing made, when a workflow is deployed for it
+// already.
+func (s *Server) setupActionTx(ctx context.Context, tx pgx.Tx, p *Principal, id uuid.UUID, audit func(action, target string, detail map[string]any) error) (uuid.UUID, bool, error) {
+	var kind, label, front string
+	if err := tx.QueryRow(ctx, `SELECT a.kind, a.label, f.name FROM storefront_actions a JOIN storefront_fronts f ON f.id = a.front_id WHERE a.id = $1`, id).
+		Scan(&kind, &label, &front); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, false, storefront.ErrNotFound
+		}
+		return uuid.Nil, false, err
+	}
+	var wf uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT workflow_id FROM triggers WHERE type = 'storefront' AND storefront_action_id = $1 AND environment = 'prod'`, id).
+		Scan(&wf); err == nil {
+		return wf, true, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, err
+	}
+	tpl, ok := templates.Default().Get(actionTemplates[kind])
+	if !ok {
+		return uuid.Nil, false, fmt.Errorf("%w: no workflow template for a %s", errConflict, kind)
+	}
+	named, err := templateForAction(tpl, id)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
+	wf, _, err = s.instantiateTx(ctx, tx, p, named, map[string]any{}, front+": "+label, audit)
+	return wf, false, err
+}
+
+// templateForAction is a template whose storefront trigger names the
+// action by id.
+func templateForAction(tpl *templates.Template, id uuid.UUID) (*templates.Template, error) {
+	named := *tpl
+	var def map[string]any
+	if err := json.Unmarshal(tpl.Definition, &def); err != nil {
+		return nil, err
+	}
+	trig, _ := def["trigger"].(map[string]any)
+	cfg, _ := trig["config"].(map[string]any)
+	if cfg == nil {
+		return nil, fmt.Errorf("the template %s has no storefront trigger", tpl.ID)
+	}
+	cfg["action_id"] = id.String()
+	var err error
+	if named.Definition, err = json.Marshal(def); err != nil {
+		return nil, err
+	}
+	return &named, nil
 }

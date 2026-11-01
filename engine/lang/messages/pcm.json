@@ -4567,6 +4567,214 @@
     "wd.workflow.does": {
       "text": "Use your own workflow: {template}, wey {does}",
       "reviewed": false
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: your other pages, like menu; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": false
+    },
+    "wa.front.list_head": {
+      "text": "Your fronts:",
+      "reviewed": false
+    },
+    "wa.front.on": {
+      "text": "on",
+      "reviewed": false
+    },
+    "wa.front.off": {
+      "text": "off",
+      "reviewed": false
+    },
+    "wa.front.home": {
+      "text": "home page",
+      "reviewed": false
+    },
+    "wa.front.items": {
+      "text": "{n} items",
+      "reviewed": false
+    },
+    "wa.front.forms_on": {
+      "text": "{n} forms dey on",
+      "reviewed": false
+    },
+    "wa.front.list_tail": {
+      "text": "Add one with *add front Snacks*. Switch one with *front Snacks on* or *front Snacks off*.",
+      "reviewed": false
+    },
+    "wa.front.none_named": {
+      "text": "No front get the name {name}. Your fronts na: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.how_add": {
+      "text": "Write am like *add front Snacks*, or *add food front Snacks*: name wey no pass 80 letters.",
+      "reviewed": false
+    },
+    "wa.front.exists": {
+      "text": "You don get front wey dem call *{name}* before. Send *fronts* to see dem.",
+      "reviewed": false
+    },
+    "wa.front.which_kind": {
+      "text": "Wetin *{name}* dey for?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.front.confirm_add": {
+      "text": "Make I add *{name}*, {kind} front?",
+      "reviewed": false
+    },
+    "wa.front.confirm_table": {
+      "text": "E go get im own list, {table}, wey you go add things to.",
+      "reviewed": false
+    },
+    "wa.front.confirm_forms": {
+      "text": "Im forms: {forms}.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off": {
+      "text": "E go start off, so customers go see am only when you on am.",
+      "reviewed": false
+    },
+    "wa.front.not_made": {
+      "text": "We no fit make the front: {reason}",
+      "reviewed": false
+    },
+    "wa.front.made": {
+      "text": "We don make *{name}*, {kind} front. E dey off for now.",
+      "reviewed": false
+    },
+    "wa.front.next_dish": {
+      "text": "Add your first food: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_item": {
+      "text": "Add your first item: *add item Chin chin 500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_forms": {
+      "text": "On im form: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_on": {
+      "text": "When e ready: *front {front} on*",
+      "reviewed": false
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* na your home page, and e dey on every time. To stop orders small, send *close shop*.",
+      "reviewed": false
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* don dey on before.",
+      "reviewed": false
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* don dey off before.",
+      "reviewed": false
+    },
+    "wa.front.confirm_on": {
+      "text": "Make I on *{name}*? Customers go see am for your page.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Make I off *{name}*? Customers no go see am again. We go keep im items and orders.",
+      "reviewed": false
+    },
+    "wa.front.gone": {
+      "text": "*{name}* no dey again. Send *fronts* to see your fronts.",
+      "reviewed": false
+    },
+    "wa.front.not_changed": {
+      "text": "Nothing change: {reason}",
+      "reviewed": false
+    },
+    "wa.front.now_off": {
+      "text": "*{name}* don off. We keep im items and orders.",
+      "reviewed": false
+    },
+    "wa.front.now_on": {
+      "text": "*{name}* don on.",
+      "reviewed": false
+    },
+    "wa.front.forms_off": {
+      "text": "Im form still dey off: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.no_food": {
+      "text": "You never get Food front. Make one with *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.no_item_fronts": {
+      "text": "None of your fronts get list wey you fit add to. Add to your page with *add product Jollof rice 2000*, or make front with *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.say_which": {
+      "text": "Talk which front e be for, like *add item Chin chin 500 to Snacks*. Your fronts wey get items: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* no get list of items: na only im forms e dey show.",
+      "reviewed": false
+    },
+    "wa.front.how_item": {
+      "text": "Write am like *add item Chin chin 500 to {front}*: the name, then the price.",
+      "reviewed": false
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* don dey for {front} before, for {price}. Change im price with *price {name} 3000*.",
+      "reviewed": false
+    },
+    "wa.front.confirm_item": {
+      "text": "Make I add this one to *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.front.item_added": {
+      "text": "We don add *{name}* for {price} to *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* dey off: send *front {front} on* make e show.",
+      "reviewed": false
+    },
+    "wa.front.catalogue": {
+      "text": "home page",
+      "reviewed": false
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Na only the products for your home page dey keep stock. *{name}* for {front} fit dey available or finish: *sold out {name}*.",
+      "reviewed": false
+    },
+    "wa.front.changed": {
+      "text": "E don do: *{name}* for {front} don change.",
+      "reviewed": false
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* no get form for {what}.",
+      "reviewed": false
+    },
+    "wa.front.no_deliveries": {
+      "text": "Deliveries by your riders never dey here yet.",
+      "reviewed": false
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Make I on deliveries for *{front}*? Every order wey you confirm for delivery go reach your riders one by one. Im order form go remain as e be.",
+      "reviewed": false
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* for {front} don dey on before.",
+      "reviewed": false
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Make I on *{form}* for *{front}*? Customers fit use am, and every one go come meet you here.",
+      "reviewed": false
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* dey take {what} now: every one go come meet you here.",
+      "reviewed": false
+    },
+    "wa.front.no_orders": {
+      "text": "No open orders for *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.orders_head": {
+      "text": "Open orders for *{front}*, the new ones first:",
+      "reviewed": false
     }
   }
 }

@@ -17,6 +17,7 @@
     "orders": ["orders", "my orders", "open orders"],
     "open_shop": ["open shop", "open my shop", "reopen shop", "reopen"],
     "qr": ["qr", "qr code", "my qr", "my qr code"],
+    "fronts": ["fronts", "my fronts"],
     "signup": ["sign up", "signup", "register", "open account", "open an account", "i want to open account", "i want to open an account", "new business", "start my business", "start a business"],
     "plan": ["plan", "my plan", "subscription", "trial", "pay for taskiem"]
   },
@@ -30,6 +31,9 @@
     "new_table": ["new table", "keep a list of", "new list"],
     "publish": ["publish"],
     "close_shop": ["close my shop", "close shop"],
+    "add_front": ["add front"],
+    "front_on": ["turn on front"],
+    "front_off": ["turn off front"],
     "order_ready": ["ready"],
     "order_delivered": ["delivered", "collected"],
     "connect": ["connect"],

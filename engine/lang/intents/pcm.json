@@ -85,6 +85,11 @@
       "my plan",
       "how much i go pay",
       "wetin i go pay"
+    ],
+    "fronts": [
+      "my fronts",
+      "show my fronts",
+      "all my fronts"
     ]
   },
   "prefixes": {
@@ -200,6 +205,24 @@
       "remove",
       "delete",
       "clear"
+    ],
+    "add_front": [
+      "add front",
+      "make new front",
+      "open new front"
+    ],
+    "front_on": [
+      "on front",
+      "open front"
+    ],
+    "front_off": [
+      "off front",
+      "close front"
+    ],
+    "orders": [
+      "my orders for",
+      "orders for",
+      "wetin people order for"
     ]
   },
   "fillers": [
