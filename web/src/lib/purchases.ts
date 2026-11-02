@@ -87,6 +87,10 @@ export interface Purchase {
   delivered_at?: string;
   cancel_asked_at?: string;
   short_at?: string;
+  /** Our count of what came of each line (Not all came). */
+  short?: number[];
+  /** When the supplier raised the order's invoice (mirrored). */
+  invoiced_at?: string;
 }
 
 /** An order's status in a word or two, and its badge. */
@@ -140,15 +144,33 @@ export function purchaseSub(p: Purchase): string {
   return parts.join(" · ");
 }
 
+/** Whether a linked supplier handles the order: it is received by the
+ * link's own steps (All came, Not all came), never by hand. */
+export const linkedOrder = (p: Pick<Purchase, "link_id" | "seller_status">) =>
+  !!p.link_id && !!p.seller_status;
+
+/** Whether the buyer may say what came of a linked supplier's delivery:
+ * All came, or Not all came (which stays open after the day, as a
+ * dispute the supplier settles). */
+export const answersDelivery = (
+  p: Pick<Purchase, "status" | "seller_status" | "link_id" | "short_at">,
+) =>
+  !!p.link_id &&
+  p.seller_status === "delivered" &&
+  !p.short_at &&
+  p.status !== "cancelled";
+
 /** What the order's buttons may do in its status. */
 export function purchaseActions(p: Purchase) {
   return {
     send: p.status === "drafted" && p.seller_status !== "proposed",
     confirm: p.status === "sent" && !p.link_id,
     receive:
-      p.status === "sent" ||
-      p.status === "confirmed" ||
-      p.status === "part_received",
+      (p.status === "sent" ||
+        p.status === "confirmed" ||
+        p.status === "part_received") &&
+      !linkedOrder(p),
+    answerDelivery: answersDelivery(p),
     pay: p.status !== "drafted" && p.status !== "cancelled",
     cancel:
       (p.status === "drafted" || p.status === "sent" || p.status === "confirmed") &&

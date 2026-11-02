@@ -112,6 +112,7 @@ describe("purchase orders", () => {
       send: false,
       confirm: false,
       receive: true,
+      answerDelivery: false,
       pay: true,
       cancel: false,
     });
@@ -119,9 +120,17 @@ describe("purchase orders", () => {
       send: true,
       confirm: false,
       receive: false,
+      answerDelivery: false,
       pay: false,
       cancel: true,
     });
+    // A linked supplier's order is never received by hand: All came or
+    // Not all came once it is delivered, on the order's page.
+    const linked = { ...po, status: "confirmed" as const, link_id: "l1", seller_status: "accepted" as const };
+    expect(purchaseActions(linked)).toMatchObject({ receive: false, answerDelivery: false });
+    expect(purchaseActions({ ...linked, seller_status: "delivered" })).toMatchObject({ receive: false, answerDelivery: true });
+    expect(purchaseActions({ ...linked, status: "received", seller_status: "delivered" })).toMatchObject({ receive: false, answerDelivery: true });
+    expect(purchaseActions({ ...linked, seller_status: "delivered", short_at: "x" }).answerDelivery).toBe(false);
     expect(purchaseActions({ ...po, status: "sent" }).confirm).toBe(true);
   });
   it("fills a receipt with what is still to come", () => {

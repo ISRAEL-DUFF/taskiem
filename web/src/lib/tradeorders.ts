@@ -3,7 +3,7 @@
 // order in the seller's business (GET /v1/trade-orders), and the seller's
 // side of it as the buyer's purchase order shows it.
 
-import type { Purchase } from "./purchases";
+import { answersDelivery, type Purchase } from "./purchases";
 
 export type TradeStatus = "proposed" | "received" | "changed" | "accepted" | "ready" | "dispatched" | "delivered" | "declined" | "cancelled";
 
@@ -18,6 +18,12 @@ export interface TradeLine {
    * (linked), or by the same name, to confirm (name). */
   item_id?: string;
   matched?: "linked" | "name";
+  /** The price the buyer proposed; never the order's price. */
+  proposed_kobo?: number;
+  /** Whose price it is: the list shared with the buyer, our catalogue, or
+   * ourselves (a change, an order we drafted); none is the buyer's
+   * proposal, which we accept knowingly, and never by itself. */
+  priced_by?: "list" | "catalogue" | "seller";
 }
 
 export interface TradeOrder {
@@ -148,13 +154,12 @@ export function sellerLine(p: Pick<Purchase, "supplier" | "seller_status" | "lin
 /** What the buyer may do on a purchase order to a linked supplier. */
 export function buyerSteps(p: Pick<Purchase, "status" | "seller_status" | "link_id" | "cancel_asked_at" | "short_at" | "change">) {
   const open = p.status === "sent" || p.status === "confirmed";
-  const delivered = p.seller_status === "delivered";
   const proposed = !!p.link_id && p.status === "drafted" && p.seller_status === "proposed";
   return {
     confirmProposed: proposed,
     acceptChange: !!p.link_id && open && p.seller_status === "changed" && !!p.change,
     cancel: proposed || (!!p.link_id && open && !p.cancel_asked_at && p.seller_status !== "delivered"),
-    answerDelivery: !!p.link_id && delivered && !p.short_at && p.status !== "cancelled",
+    answerDelivery: answersDelivery(p),
   };
 }
 

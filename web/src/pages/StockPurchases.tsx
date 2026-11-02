@@ -166,6 +166,12 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
                     <span className="sr-only"> on {p.reference}</span>
                   </button>
                 )}
+                {can.answerDelivery && (
+                  <Link className="button small" to={`/purchases/${p.id}`}>
+                    Goods came in
+                    <span className="sr-only"> on {p.reference}</span>
+                  </Link>
+                )}
                 {can.pay && p.owed_kobo > 0 && (
                   <button
                     type="button"

@@ -76,6 +76,7 @@ export interface Conversation {
 const VERB: Record<string, string> = {
   ordered: "sent order",
   auto_accepted: "sent order (accepted by itself)",
+  auto_changed: "sent order (changed to our prices by itself)",
   proposed: "drafted order",
   confirmed: "confirmed order",
   accept: "accepted order",

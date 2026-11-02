@@ -279,6 +279,9 @@ function LinesTable({
   short?: number[];
 }) {
   const delivered = lines.some((l) => l.delivered !== undefined);
+  const proposed = lines.some(
+    (l) => l.proposed_kobo !== undefined && l.proposed_kobo !== l.price_kobo,
+  );
   return (
     <table>
       <thead>
@@ -286,6 +289,7 @@ function LinesTable({
           <th scope="col">Item</th>
           <th scope="col">Quantity</th>
           <th scope="col">Price each</th>
+          {proposed && <th scope="col">They proposed</th>}
           {delivered && <th scope="col">Delivered</th>}
           {short && <th scope="col">They counted</th>}
         </tr>
@@ -295,7 +299,12 @@ function LinesTable({
           <tr key={i}>
             <td>{l.item}</td>
             <td>{quantity(l.quantity, l.unit)}</td>
-            <td className="sf-price">{naira(l.price_kobo)}</td>
+            <td className="sf-price">
+              {l.price_kobo > 0 ? naira(l.price_kobo) : "No price yet"}
+            </td>
+            {proposed && (
+              <td className="sf-price">{naira(l.proposed_kobo ?? 0)}</td>
+            )}
             {delivered && <td>{l.delivered ?? 0}</td>}
             {short && <td>{short[i] ?? 0}</td>}
           </tr>
