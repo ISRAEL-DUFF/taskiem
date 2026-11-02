@@ -6,7 +6,8 @@
 //     linked (WhatsApp before Telegram): money in, settled and pending, by
 //     channel, money out, invoices paid and leaks opened, with a link to
 //     the Money page. A day with no movement, no invoice paid and no leak
-//     opened sends nothing.
+//     opened sends nothing, unless bills from linked suppliers are due
+//     (business links §10): then the summary goes, with the bills due.
 //   - on the 1st of the month from 09:00 Lagos (or on the 2nd or 3rd, when
 //     the scheduler was down), last month's summary by email, with a link
 //     to the Money page's exports. Only when email is set up.
@@ -189,6 +190,16 @@ func (d *Digester) Tick(ctx context.Context) (Report, error) {
 	return r, nil
 }
 
+// BillsDue reports whether the business has bills from linked suppliers
+// due within three days or overdue (business links §10), which the daily
+// summary says even on a day nothing else happened.
+func BillsDue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (bool, error) {
+	var due bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM bills WHERE tenant_id = $1 AND status NOT IN ('paid', 'void') AND NOT voided
+		AND due_on IS NOT NULL AND due_on <= (now() AT TIME ZONE 'Africa/Lagos')::date + 3)`, tenant).Scan(&due)
+	return due, err
+}
+
 // Quiet says nothing happened: no movement, no invoice paid, no leak
 // opened.
 func Quiet(s moneyreport.Summary) bool {
@@ -279,8 +290,16 @@ func (d *Digester) daily(ctx context.Context, tenant uuid.UUID, day time.Time) (
 			return err
 		}
 		if Quiet(s) {
-			_, _, err = take(ctx, tx, tenant, Daily, day, "quiet")
-			return err
+			// Bills due are worth a summary on a quiet day: a business
+			// that only buys through links has nothing else to say.
+			due, err := BillsDue(ctx, tx, tenant)
+			if err != nil {
+				return err
+			}
+			if !due {
+				_, _, err = take(ctx, tx, tenant, Daily, day, "quiet")
+				return err
+			}
 		}
 		us, err := Recipients(ctx, tx, tenant, Daily)
 		if err != nil {

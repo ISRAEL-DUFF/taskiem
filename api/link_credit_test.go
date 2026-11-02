@@ -1,13 +1,67 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/moneydigest"
+	"github.com/israel-duff/taskiem/engine/moneyreport"
+	"github.com/israel-duff/taskiem/engine/sender"
 )
+
+// Bills due reach a business that only buys through links (§10; the
+// review): it has no money entries and no sent invoices, so the morning
+// summary used to pass it by; now it is looked at, and a quiet day with a
+// bill due still gets the summary, with the bills due in it.
+func TestBillsDueReachBuyerOnly(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	seller, buyer, _, buyerID := linkedPair(t, w)
+	const buyerOn = "+2348010000371"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "help") // the conversation window is open
+	x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"amount_kobo": 1000000}, "Idempotency-Key", "b-1")
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", "s-1")
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bills SET due_on = current_date - 1 WHERE tenant_id = $1`, buyerID); err != nil {
+		t.Fatal(err)
+	}
+	var money int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM money_entries WHERE tenant_id = $1`, buyerID).Scan(&money); err != nil || money != 0 {
+		t.Fatalf("a buyer with money of its own: %d %v", money, err)
+	}
+	today, _ := moneyreport.Day(time.Now())
+	tomorrow := today.AddDate(0, 0, 1)
+	d := &moneydigest.Digester{Pool: w.env.DB.App, Channels: []string{"whatsapp"}, PublicURL: "https://taskiem.test",
+		Now: func() time.Time { return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 8, 5, 0, 0, moneyreport.Lagos) }}
+	for range 2 {
+		if _, err := d.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		w.tick(t)
+	}
+	var got []string
+	for _, s := range w.graph.Sent(buyerOn) {
+		if strings.Contains(s.Text, "Yesterday: ") {
+			got = append(got, s.Text)
+		}
+	}
+	if len(got) != 1 || !strings.Contains(got[0], "Bills due: 1, ₦10,000, 1 overdue") {
+		t.Fatalf("the buyer's summary: %q", got)
+	}
+}
 
 // Statements, credit terms and limits, and reminders between linked
 // businesses (L5, docs/spec/business-links.md §10): the seller's terms set
@@ -24,6 +78,9 @@ func TestLinkCredit(t *testing.T) {
 	withPurchases(w.world)
 	withLinkedOrders(w.world)
 	seller, buyer, sellerID, buyerID := linkedPair(t, w.waWorld)
+	const buyerOn = "+2348010000361"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links") // the window is open: notices reach the buyer's chat
 	buyer.must(200, "POST", "/v1/stock/setup", nil)
 	// The buyer's cost is the seller's price: an order at another price is
 	// the seller's change, not accepted by itself (§16.3).
@@ -176,6 +233,46 @@ func TestLinkCredit(t *testing.T) {
 	var sms int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE tenant_id = $1 AND dedup_key LIKE 'notice:rem-1%'`, sellerID).Scan(&sms); err != nil || sms != 0 {
 		t.Errorf("no text message to a linked business: %d", sms)
+	}
+	// The reminder in chat carries Pay (§10).
+	payButton := false
+	for _, m := range w.waWorld.graph.Sent(buyerOn) {
+		if strings.Contains(m.Text, "a reminder about "+x["number"].(string)) {
+			for _, b := range m.Buttons {
+				payButton = payButton || (b.Title == "Pay" && b.ID == "lk:pay:"+x["number"].(string))
+			}
+		}
+	}
+	if !payButton {
+		t.Error("the reminder in chat with Pay")
+	}
+
+	// A queried bill is not reminded, and the overdue lists leave its
+	// invoice out, until the query is settled (§8).
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_invoices SET due_on = current_date - 2 WHERE tenant_id = $1`, sellerID); err != nil {
+		t.Fatal(err)
+	}
+	svc := invoicing.Service{Invoices: w.srv.Invoices}
+	if got, err := svc.ListCustomersOverdue(ctx, uuid.MustParse(sellerID), 0); err != nil || len(got) != 1 {
+		t.Fatalf("overdue before the query: %v %+v", err, got)
+	}
+	buyer.must(200, "POST", "/v1/bills/"+x["number"].(string)+"/query", map[string]any{"reason": "We got 4 cartons, not 5"})
+	if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	out, err = w.srv.Invoices.NotifyCustomer(ctx, uuid.MustParse(sellerID), x["number"].(string), "Still overdue: {number}", "", "rem-2")
+	if err != nil || len(out["queued"].([]string)) != 0 || out["reason"] != "disputed" {
+		t.Fatalf("a queried bill reminded: %v %v", out, err)
+	}
+	if got, err := svc.ListCustomersOverdue(ctx, uuid.MustParse(sellerID), 0); err != nil || len(got) != 0 {
+		t.Errorf("the queried invoice in the overdue customers: %v %+v", err, got)
+	}
+	if got, err := svc.ListFor(ctx, uuid.MustParse(sellerID), "overdue", 0, 0); err != nil || len(got) != 0 {
+		t.Errorf("the queried invoice in the overdue list: %v %+v", err, got)
+	}
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/settle-query", map[string]any{"note": "As it stands"})
+	if got, err := svc.ListCustomersOverdue(ctx, uuid.MustParse(sellerID), 0); err != nil || len(got) != 1 {
+		t.Errorf("settled, listed again: %v %+v", err, got)
 	}
 }
 
