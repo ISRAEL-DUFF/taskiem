@@ -6524,6 +6524,21 @@
       "reviewed": true,
       "context": "A linked supplier reminded the buyer of an overdue bill; {note} is their words"
     },
+    "bill.button_pay": {
+      "text": "Pay",
+      "reviewed": true,
+      "context": "Button on a bill's reminder in chat: pays the bill from Taskiem (20 characters at most)"
+    },
+    "bill.pay_started": {
+      "text": "Paying {reference}: {amount} to {supplier} goes once it is approved as your policy says. Send *bill {reference}* to follow it.",
+      "reviewed": true,
+      "context": "Pay pressed on a bill in chat: the payment is started and waits for the approval the business's policy requires"
+    },
+    "bill.pay_refused": {
+      "text": "{reference} was not paid: {reason}",
+      "reviewed": true,
+      "context": "Pay pressed on a bill in chat, refused; {reason} is the plain reason (not set up, already under way, no account number)"
+    },
     "order.link.over_limit_note": {
       "text": "Waiting: this order takes you past the {limit} credit {business} gives you (you owe {owed}). Pay your bills, or ask them to accept it.",
       "reviewed": true,

@@ -1043,6 +1043,13 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 		// A linked business is told in its own business, on the bill, not
 		// by text message (business links L5).
 		if strings.HasPrefix(x.Customer.Key, "link:") && s.Reminded != nil {
+			// A bill the buyer queried is not reminded until the query is
+			// settled (business links §8): nothing is sent, and the run is
+			// told why.
+			if x.Disputed {
+				out["number"], out["queued"], out["sent"], out["reason"] = x.Number, []string{}, false, "disputed"
+				return nil
+			}
 			// The bill is the link there: none is sent.
 			customerDue, customerLines := Naira(x.DueKobo), "1"
 			if strings.Contains(text, "{customer_due}") || strings.Contains(text, "{customer_lines}") {
@@ -1483,7 +1490,8 @@ type ListedCustomer struct {
 
 // ListCustomersOverdue lists the customers with overdue invoices or
 // notebook debts, oldest due first: what one message per customer needs.
-// A debt with no due date is never overdue, so never listed.
+// A debt with no due date is never overdue, so never listed, and nor is
+// a linked buyer's invoice whose bill it queried (business links §8).
 func (s Service) ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, limit int) ([]ListedCustomer, error) {
 	if limit <= 0 || limit > MaxListed {
 		limit = 50
@@ -1494,6 +1502,7 @@ func (s Service) ListCustomersOverdue(ctx context.Context, tenant uuid.UUID, lim
 			to_char(min(due_on), 'YYYY-MM-DD'), ((now() AT TIME ZONE 'Africa/Lagos')::date - min(due_on))
 			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
 			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
+			AND NOT (disputed AND customer_id LIKE 'key:link:%')
 			GROUP BY customer_id ORDER BY min(due_on), customer_id LIMIT $2`, tenant, limit)
 		if err != nil {
 			return err
@@ -1531,7 +1540,8 @@ const MaxPaidWithin = 7 * 24 * time.Hour
 // (sent or part paid and past the due date, oldest due first) or "paid"
 // (paid within the last within, oldest paid first). Overdue is computed
 // from the date here as the status is, so an invoice the hourly check has
-// not reached yet is included.
+// not reached yet is included; a linked buyer's invoice whose bill it
+// queried is left out until the query is settled (business links §8).
 func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, within time.Duration, limit int) ([]Listed, error) {
 	if limit <= 0 || limit > MaxListed {
 		limit = 50
@@ -1544,6 +1554,7 @@ func (s Service) ListFor(ctx context.Context, tenant uuid.UUID, status string, w
 			((now() AT TIME ZONE 'Africa/Lagos')::date - due_on)
 			FROM customer_invoices WHERE tenant_id = $1 AND status IN ('recorded', 'sent', 'part_paid', 'overdue')
 			AND due_on IS NOT NULL AND due_on < (now() AT TIME ZONE 'Africa/Lagos')::date
+			AND NOT (disputed AND customer_id LIKE 'key:link:%')
 			ORDER BY due_on, number LIMIT $2`
 		args = []any{tenant, limit}
 	case "paid":

@@ -5220,6 +5220,18 @@
       "text": "*{from}* game da lissafi {reference} ({amount} ya rage): {note}",
       "reviewed": false
     },
+    "bill.button_pay": {
+      "text": "Biya",
+      "reviewed": false
+    },
+    "bill.pay_started": {
+      "text": "Ana biyan {reference}: {amount} zuwa {supplier} zai tafi da zarar an amince kamar yadda ƙa'idarka ta ce. Aika *bill {reference}* don bin sa.",
+      "reviewed": false
+    },
+    "bill.pay_refused": {
+      "text": "Ba a biya {reference} ba: {reason}",
+      "reviewed": false
+    },
     "order.link.over_limit_note": {
       "text": "Yana jira: wannan oda ya wuce bashin {limit} da {business} suke ba ka (kana bin {owed}). Biya lissafinka, ko ka roƙe su su karɓa.",
       "reviewed": false

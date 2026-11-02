@@ -5220,6 +5220,18 @@
       "text": "*{from}* nipa owo-ipe {reference} ({amount} ku): {note}",
       "reviewed": false
     },
+    "bill.button_pay": {
+      "text": "San",
+      "reviewed": false
+    },
+    "bill.pay_started": {
+      "text": "A n san {reference}: {amount} si {supplier} yoo lọ ni kete ti a ba fọwọsi rẹ bi ilana rẹ ṣe sọ. Fi *bill {reference}* ranṣẹ lati tẹle e.",
+      "reviewed": false
+    },
+    "bill.pay_refused": {
+      "text": "A ko san {reference}: {reason}",
+      "reviewed": false
+    },
     "order.link.over_limit_note": {
       "text": "O n duro: aṣẹ yii kọja kirẹditi {limit} ti {business} fun ọ (o jẹ {owed}). San awọn owo-ipe rẹ, tabi beere ki wọn gba a.",
       "reviewed": false

@@ -5220,6 +5220,18 @@
       "text": "*{from}* about bill {reference} ({amount} remain): {note}",
       "reviewed": false
     },
+    "bill.button_pay": {
+      "text": "Pay",
+      "reviewed": false
+    },
+    "bill.pay_started": {
+      "text": "We dey pay {reference}: {amount} go reach {supplier} once dem approve am as your policy talk. Send *bill {reference}* make you follow am.",
+      "reviewed": false
+    },
+    "bill.pay_refused": {
+      "text": "{reference} no pay: {reason}",
+      "reviewed": false
+    },
     "order.link.over_limit_note": {
       "text": "E dey wait: this order pass the {limit} credit wey {business} give you (you owe {owed}). Pay your bills, or ask dem make dem accept am.",
       "reviewed": false

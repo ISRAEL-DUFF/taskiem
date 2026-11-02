@@ -5220,6 +5220,18 @@
       "text": "*{from}* gbasara ụgwọ {reference} ({amount} fọdụrụ): {note}",
       "reviewed": false
     },
+    "bill.button_pay": {
+      "text": "Kwụọ",
+      "reviewed": false
+    },
+    "bill.pay_started": {
+      "text": "Na-akwụ {reference}: {amount} nye {supplier} ga-aga ozugbo a nabatara ya dị ka iwu gị si kwuo. Zipu *bill {reference}* iji soro ya.",
+      "reviewed": false
+    },
+    "bill.pay_refused": {
+      "text": "Akwụghị {reference}: {reason}",
+      "reviewed": false
+    },
     "order.link.over_limit_note": {
       "text": "Ọ na-eche: iwu a gafere kredit {limit} {business} na-enye gị (ị ji {owed}). Kwụọ ụgwọ gị, ma ọ bụ rịọ ha ka ha nabata ya.",
       "reviewed": false

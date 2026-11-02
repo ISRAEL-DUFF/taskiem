@@ -626,6 +626,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
 		return s.waLinkOffer(ctx, c, code)
 	}
+	// Pay on a bill's reminder (link_credit.go).
+	if ref, ok := strings.CutPrefix(text, billPayPrefix); ok {
+		return s.waBillPayPress(ctx, c, ref)
+	}
 	// Confirm on a payout the supplier's matching did not pair (bills.go).
 	if strings.HasPrefix(text, billPairPrefix) {
 		return s.waBillPairPress(ctx, c, text)

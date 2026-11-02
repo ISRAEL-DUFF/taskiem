@@ -5,7 +5,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -65,8 +68,59 @@ func (s *Server) InvoiceReminded(ctx context.Context, seller uuid.UUID, x invoic
 		s.tellHoldersSent(ctx, buyer, []string{PermInvoiceManage}, "reminder:"+x.Number, "/bills/"+x.Number, func(l lang.Tag) (string, string) {
 			return tr(l, "bill.reminder_title", "from", from, "reference", x.Number),
 				tr(l, "bill.reminder", "from", whatsapp.SafeText(from), "reference", x.Number, "amount", invoicing.Naira(due), "note", whatsapp.SafeText(text))
-		}, nil, s.keepSent(ctx, buyer, link.ID, card))
+		}, billPayButtons(x.Number), s.keepSent(ctx, buyer, link.ID, card))
 	})
+}
+
+// billPayPrefix is the chat button that pays a bill from Taskiem: Pay on
+// a reminder (§10). Answered by waBillPayPress.
+const billPayPrefix = linkPrefix + "pay:"
+
+// billPayButtons is Pay on a chat message about a bill, in the reader's
+// language.
+func billPayButtons(reference string) func(lang.Tag) []whatsapp.Button {
+	return func(l lang.Tag) []whatsapp.Button {
+		return []whatsapp.Button{{ID: billPayPrefix + reference, Title: tr(l, "bill.button_pay")}}
+	}
+}
+
+// waBillPayPress is Pay pressed on a bill's chat message: the bill is paid
+// from Taskiem as Pay on its page pays it (startBillPay), by whichever of
+// the person's businesses holds the bill, for a person who may pay bills
+// there. The approval is the business's policy's, as for Pay on the page.
+func (s *Server) waBillPayPress(ctx context.Context, c *chat, reference string) error {
+	tenants := append([]tenantRef{c.tenant}, slices.DeleteFunc(slices.Clone(c.tenants), func(t tenantRef) bool { return t.ID == c.tenant.ID })...)
+	for _, t := range tenants {
+		var b links.Bill
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
+			var err error
+			b, err = links.GetBillTx(ctx, tx, reference)
+			return err
+		})
+		if errors.Is(err, links.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
+		if err != nil || !p.Can(PermInvoiceManage) {
+			return c.say(ctx, s, c.t("bill.denied", "org", t.Name))
+		}
+		pay, err := s.startBillPay(ctx, t.ID, b.ID.String(), 0, "user:"+p.UserID.String(), p.Actor(), func(tx pgx.Tx, b links.Bill, pay links.BillPayment) error {
+			raw, _ := json.Marshal(map[string]any{"amount_kobo": pay.AmountKobo, "payment": pay.ID, "channel": c.ch.Name()})
+			_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'bill.pay', $3, $4)`, t.ID, p.UserID.String(), b.Reference, raw)
+			return err
+		})
+		if errors.Is(err, errConflict) || errors.Is(err, errBadRequest) {
+			return c.say(ctx, s, c.t("bill.pay_refused", "reference", b.Reference, "reason", plainRefusal(err)))
+		}
+		if err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t("bill.pay_started", "reference", b.Reference, "amount", invoicing.Naira(pay.AmountKobo), "supplier", whatsapp.SafeText(b.SupplierName)))
+	}
+	return c.say(ctx, s, c.t("bill.not_found", "reference", whatsapp.SafeText(reference)))
 }
 
 // creditCheck checks a new order from a linked buyer against the limit
@@ -99,7 +153,12 @@ func (s *Server) creditTold(ctx context.Context, seller uuid.UUID, o links.Order
 	_ = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, seller).Scan(&name)
 	})
+	// The note on the buyer's order is in the seller's language for its
+	// customers (its default chat language), as its invoices are.
 	l := lang.EN
+	if tc, err := s.tenantChannel(ctx, seller); err == nil && lang.Valid(tc.Default) {
+		l = tc.Default
+	}
 	note := ""
 	if c.Over {
 		note = tr(l, "order.link.over_limit_note", "business", name, "limit", invoicing.Naira(c.LimitKobo), "owed", invoicing.Naira(c.BalanceKobo))
