@@ -196,6 +196,9 @@ func ShareListTx(ctx context.Context, tx pgx.Tx, tenant, list uuid.UUID, to []uu
 		if x.State != Active {
 			return nil, fmt.Errorf("%w: you are no longer linked with %s", ErrState, x.Name)
 		}
+		if x.Role == RoleSupplier {
+			return nil, fmt.Errorf("%w: %s does not buy from you on Taskiem", ErrState, x.Name)
+		}
 	}
 	before, err := sharedDueTx(ctx, tx, tenant, list)
 	if err != nil {

@@ -564,6 +564,10 @@ type Purchase struct {
 	DeliveredAt   *time.Time     `json:"delivered_at,omitempty"`
 	CancelAskedAt *time.Time     `json:"cancel_asked_at,omitempty"`
 	ShortAt       *time.Time     `json:"short_at,omitempty"`
+	// Short is our count of what came of each line (Not all came);
+	// InvoicedAt when the supplier raised the order's invoice (mirrored).
+	Short      []int64    `json:"short,omitempty"`
+	InvoicedAt *time.Time `json:"invoiced_at,omitempty"`
 }
 
 // Proposed reports whether a linked supplier drafted the order for us,
@@ -588,14 +592,14 @@ func (x Purchase) Words() string {
 
 const purchaseCols = `o.id, o.reference, o.supplier_id, s.name, o.lines, o.total_kobo, o.status, o.note, o.drafted_by, o.approved_by, o.sent_at,
 	o.confirmed_at, o.confirmed_how, o.counter, o.counter_at, o.received_at, o.cancelled_at, o.received_kobo, o.paid_kobo, o.created_at,
-	o.link_id, o.seller_status, o.seller_note, o.change, o.delivered_at, o.cancel_asked_at, o.short_at`
+	o.link_id, o.seller_status, o.seller_note, o.change, o.delivered_at, o.cancel_asked_at, o.short_at, o.short, o.invoiced_at`
 
 func scanPurchase(r pgx.Row) (Purchase, error) {
 	var x Purchase
-	var lines, change []byte
+	var lines, change, short []byte
 	err := r.Scan(&x.ID, &x.Reference, &x.SupplierID, &x.Supplier, &lines, &x.TotalKobo, &x.Status, &x.Note, &x.DraftedBy, &x.ApprovedBy, &x.SentAt,
 		&x.ConfirmedAt, &x.ConfirmedHow, &x.Counter, &x.CounterAt, &x.ReceivedAt, &x.CancelledAt, &x.ReceivedKobo, &x.PaidKobo, &x.CreatedAt,
-		&x.LinkID, &x.SellerStatus, &x.SellerNote, &change, &x.DeliveredAt, &x.CancelAskedAt, &x.ShortAt)
+		&x.LinkID, &x.SellerStatus, &x.SellerNote, &change, &x.DeliveredAt, &x.CancelAskedAt, &x.ShortAt, &short, &x.InvoicedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNoPurchase
 	}
@@ -605,6 +609,11 @@ func scanPurchase(r pgx.Row) (Purchase, error) {
 	x.OwedKobo = max(0, x.ReceivedKobo-x.PaidKobo)
 	if change != nil {
 		if err := json.Unmarshal(change, &x.Change); err != nil {
+			return x, err
+		}
+	}
+	if short != nil {
+		if err := json.Unmarshal(short, &x.Short); err != nil {
 			return x, err
 		}
 	}
@@ -1042,6 +1051,12 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	if x.Status != Sent && x.Status != Confirmed && x.Status != PartReceived {
 		return x, nil, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
 	}
+	if x.LinkID != nil && x.SellerStatus != nil && !strings.HasPrefix(key, LinkReceiptKey) {
+		// An order in a linked supplier's business is received by the
+		// link's own steps (All came, Not all came, or the day's end from
+		// the supplier's count), never by hand (business links §7).
+		return x, nil, nil, ErrLinked
+	}
 	known := map[string]bool{}
 	for _, l := range x.Lines {
 		known[l.ItemID] = true
@@ -1096,6 +1111,67 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	}
 	out, err := PurchaseTx(ctx, tx, tenant, id, false)
 	return out, moves, costs, err
+}
+
+// LinkReceiptKey starts the idempotency key of a receipt made by the
+// link's own steps on an order to a linked supplier: the only receipt
+// such an order takes.
+const LinkReceiptKey = "link-receipt-"
+
+// AdjustShortTx takes off an order what was received above the buyer's
+// count of a short delivery the linked supplier agreed (business links
+// §17): an adjustment movement per item for the difference, the lines'
+// received quantities and the value received brought down to the count.
+// counts is the buyer's count per line, in order; key makes it once.
+func AdjustShortTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, counts []int64, actor, key string) (Purchase, []Movement, error) {
+	x, err := PurchaseTx(ctx, tx, tenant, id, true)
+	if err != nil {
+		return x, nil, err
+	}
+	if key == "" {
+		return x, nil, fmt.Errorf("%w: an idempotency key", ErrPurchase)
+	}
+	if len(counts) != len(x.Lines) {
+		return x, nil, fmt.Errorf("%w: a count for each of the %d items", ErrPurchase, len(x.Lines))
+	}
+	key = FitKey(key)
+	var done bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND key LIKE $2)`, tenant, "po:"+key+":%").Scan(&done); err != nil {
+		return x, nil, err
+	}
+	if done {
+		return x, nil, nil
+	}
+	var moves []Movement
+	var value int64
+	for i, l := range x.Lines {
+		over := l.Received - max(counts[i], 0)
+		if over <= 0 {
+			continue
+		}
+		delta := -over
+		m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Adjustment, Delta: &delta, Reference: x.Reference,
+			Note: "not all came from " + x.Supplier + ", as agreed", Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
+		if err != nil {
+			return x, nil, err
+		}
+		moves = append(moves, m)
+		x.Lines[i].Received -= over
+		value += over * l.CostKobo
+	}
+	if len(moves) == 0 {
+		return x, nil, nil
+	}
+	lines, _ := json.Marshal(x.Lines)
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET lines = $3, received_kobo = GREATEST(0, received_kobo - $4), updated_at = now()
+		WHERE tenant_id = $1 AND id = $2`, tenant, id, lines, value); err != nil {
+		return x, nil, err
+	}
+	if err := stockAudit(ctx, tx, tenant, "purchase.short_adjusted", x.Reference, map[string]any{"purchase_id": id, "value_kobo": value, "by": actor}); err != nil {
+		return x, nil, err
+	}
+	out, err := PurchaseTx(ctx, tx, tenant, id, false)
+	return out, moves, err
 }
 
 // Receive records goods received on an order, then sends the movements to

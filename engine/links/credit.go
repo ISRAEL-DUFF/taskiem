@@ -202,12 +202,35 @@ func StatementTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (Statem
 	if len(ours) > 0 || terms != nil || limit != nil {
 		side := sideOf(ours, terms, limit)
 		if limit != nil {
-			avail := *limit - side.OwedKobo
+			// As the seller counts it: our open bills, and our orders it
+			// accepted and has not yet invoiced (invoiced_at, mirrored).
+			bal, err := OwedBalanceTx(ctx, tx, tenant, link)
+			if err != nil {
+				return st, err
+			}
+			avail := *limit - bal
 			side.AvailableKobo = &avail
 		}
 		st.WeOwe = &side
 	}
 	return st, nil
+}
+
+// OwedBalanceTx is what the business in scope owes a linked supplier, as
+// the supplier's OpenBalanceTx counts it: its open bills' dues, and its
+// orders the supplier accepted and has not yet invoiced.
+func OwedBalanceTx(ctx context.Context, tx pgx.Tx, buyer, link uuid.UUID) (int64, error) {
+	var bills, orders int64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo - paid_kobo), 0)::bigint FROM bills
+		WHERE tenant_id = $1 AND link_id = $2 AND status NOT IN ('paid', 'void') AND NOT voided`, buyer, link).Scan(&bills); err != nil {
+		return 0, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(total_kobo), 0)::bigint FROM purchase_orders
+		WHERE tenant_id = $1 AND link_id = $2 AND invoiced_at IS NULL AND status <> 'cancelled' AND seller_status = ANY ($3)`,
+		buyer, link, []string{OrderAccepted, OrderReady, OrderDispatched, OrderDelivered}).Scan(&orders); err != nil {
+		return 0, err
+	}
+	return bills + orders, nil
 }
 
 var lagos = func() *time.Location {

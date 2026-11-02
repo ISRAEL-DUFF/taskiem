@@ -113,6 +113,78 @@ type OrderLine struct {
 	// the same name, for the seller to confirm ("name").
 	ItemID  string `json:"item_id,omitempty"`
 	Matched string `json:"matched,omitempty"`
+	// ProposedKobo is the price the buyer proposed (its last cost); it
+	// is never the order's price. PricedBy says whose price PriceKobo is:
+	// the price list shared with the buyer ("list"), the seller's own
+	// catalogue ("catalogue"), the seller itself ("seller": its change,
+	// or an order it drafted); "" is the buyer's proposal, which the
+	// seller accepts knowingly or changes, and is never accepted by
+	// itself.
+	ProposedKobo int64  `json:"proposed_kobo,omitempty"`
+	PricedBy     string `json:"priced_by,omitempty"`
+}
+
+// Whose price a line carries (OrderLine.PricedBy).
+const (
+	PricedByList      = "list"
+	PricedByCatalogue = "catalogue"
+	PricedBySeller    = "seller"
+)
+
+// SellerPriced reports whether the seller's side priced every line: by
+// its list, its catalogue or itself, never the buyer's proposal alone.
+func SellerPriced(lines []OrderLine) bool {
+	for _, l := range lines {
+		if l.PriceKobo < 1 || l.PricedBy == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// AsProposed reports whether every line is at the price the buyer
+// proposed: an order accepted by itself at another price is a change the
+// buyer accepts instead.
+func AsProposed(lines []OrderLine) bool {
+	for _, l := range lines {
+		if l.PriceKobo != l.ProposedKobo {
+			return false
+		}
+	}
+	return true
+}
+
+// linkPrices is the price list the seller in scope shares with a link, by
+// the seller's item: what a linked buyer's order is priced at first.
+func linkPrices(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (map[string]int64, error) {
+	_, items, ok, err := LinkPricesTx(ctx, tx, seller, link)
+	if err != nil || !ok {
+		return nil, err
+	}
+	out := make(map[string]int64, len(items))
+	for _, it := range items {
+		if it.PriceKobo > 0 {
+			out[it.ItemID] = it.PriceKobo
+		}
+	}
+	return out, nil
+}
+
+// priceLine prices a line matched to one of the seller's items: the
+// link's list first, else the catalogue's price; neither leaves it as it
+// was. It reports whether the line's price changed.
+func priceLine(l *OrderLine, list map[string]int64, catalogue *int64) bool {
+	if p, ok := list[l.ItemID]; ok && p > 0 {
+		changed := l.PriceKobo != p || l.PricedBy != PricedByList
+		l.PriceKobo, l.PricedBy = p, PricedByList
+		return changed
+	}
+	if catalogue != nil && *catalogue > 0 {
+		changed := l.PriceKobo != *catalogue || l.PricedBy != PricedByCatalogue
+		l.PriceKobo, l.PricedBy = *catalogue, PricedByCatalogue
+		return changed
+	}
+	return false
 }
 
 // Order is an order from a linked business, as the seller sees it.
@@ -238,20 +310,38 @@ func ListOrdersTx(ctx context.Context, tx pgx.Tx, open bool, limit int) ([]Order
 }
 
 // GetOrderTx is one of the business in scope's orders from linked
-// businesses: by id, by the buyer's reference (P-7QX4KD), or by the
-// order's own.
+// businesses: by id, by the order's own reference (unique here), or by
+// the buyer's reference (P-7QX4KD), which two buyers' orders may share:
+// that is an error, naming the ids to use instead.
 func GetOrderTx(ctx context.Context, tx pgx.Tx, ref string, lock bool) (Order, error) {
 	q := `SELECT ` + orderCols + orderFrom + ` WHERE `
-	var arg any
-	if id, err := uuid.Parse(ref); err == nil {
-		q, arg = q+`s.id = $1`, id
-	} else {
-		q, arg = q+`(o.purchase_reference = upper($1) OR s.reference = upper($1)) ORDER BY s.created_at DESC LIMIT 1`, strings.TrimSpace(ref)
-	}
+	forUpdate := ""
 	if lock {
-		q += ` FOR UPDATE OF o, s`
+		forUpdate = ` FOR UPDATE OF o, s`
 	}
-	return scanOrder(tx.QueryRow(ctx, q, arg))
+	if id, err := uuid.Parse(ref); err == nil {
+		return scanOrder(tx.QueryRow(ctx, q+`s.id = $1`+forUpdate, id))
+	}
+	ref = strings.ToUpper(strings.TrimSpace(ref))
+	o, err := scanOrder(tx.QueryRow(ctx, q+`s.reference = $1`+forUpdate, ref))
+	if !errors.Is(err, ErrNotFound) {
+		return o, err
+	}
+	rows, err := tx.Query(ctx, q+`o.purchase_reference = $1 ORDER BY s.created_at DESC LIMIT 2`+forUpdate, ref)
+	if err != nil {
+		return o, err
+	}
+	found, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Order, error) { return scanOrder(r) })
+	switch {
+	case err != nil:
+		return o, err
+	case len(found) == 0:
+		return o, fmt.Errorf("%w: no such order", ErrNotFound)
+	case len(found) > 1:
+		return o, fmt.Errorf("%w: more than one order is %s (from %s and %s); open it by its own reference or id", ErrInvalid, ref,
+			found[0].BuyerName, found[1].BuyerName)
+	}
+	return found[0], nil
 }
 
 // Trade is how the business in scope trades with a linked business that
@@ -392,26 +482,48 @@ type purchase struct {
 	CancelAskedAt *time.Time
 	ShortAt       *time.Time
 	ShortAgreedAt *time.Time
+	// Short is the buyer's own count of what came of each line (Not all
+	// came); InvoicedAt when the seller raised the order's invoice
+	// (mirrored).
+	Short      []int64
+	InvoicedAt *time.Time
 }
 
 func purchaseTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (purchase, error) {
 	var p purchase
-	var lines, change []byte
+	var lines, change, short []byte
 	err := tx.QueryRow(ctx, `SELECT id, reference, link_id, lines, total_kobo, note, status, COALESCE(seller_status, ''), change, delivered_at, cancel_asked_at,
-		short_at, short_agreed_at FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.ID, &p.Reference, &p.Link, &lines, &p.Total, &p.Note, &p.Status,
-		&p.SellerStatus, &change, &p.DeliveredAt, &p.CancelAskedAt, &p.ShortAt, &p.ShortAgreedAt)
+		short_at, short_agreed_at, short, invoiced_at FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.ID, &p.Reference, &p.Link, &lines, &p.Total, &p.Note, &p.Status,
+		&p.SellerStatus, &change, &p.DeliveredAt, &p.CancelAskedAt, &p.ShortAt, &p.ShortAgreedAt, &short, &p.InvoicedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, fmt.Errorf("%w: no such purchase order", ErrNotFound)
 	}
 	if err != nil {
 		return p, err
 	}
-	if change != nil {
-		if err := json.Unmarshal(change, &p.Change); err != nil {
-			return p, err
+	for _, f := range []struct {
+		raw []byte
+		to  any
+	}{{change, &p.Change}, {short, &p.Short}} {
+		if f.raw != nil {
+			if err := json.Unmarshal(f.raw, f.to); err != nil {
+				return p, err
+			}
 		}
 	}
 	return p, json.Unmarshal(lines, &p.Lines)
+}
+
+// settled reports whether the buyer's receipt of a delivery was settled
+// (its tap, or the day's end from the seller's count): something was
+// received on the order.
+func (p purchase) settled() bool {
+	for _, l := range p.Lines {
+		if l.Received > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func linesTotal(lines []OrderLine) int64 {
@@ -593,7 +705,7 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	}
 	lines := make([]OrderLine, len(p.Lines))
 	for i, l := range p.Lines {
-		lines[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: l.Quantity, PriceKobo: l.CostKobo}
+		lines[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: l.Quantity, PriceKobo: l.CostKobo, ProposedKobo: l.CostKobo}
 		if id := linked[l.ItemID]; id != "" {
 			lines[i].ItemID, lines[i].Matched = id, "linked"
 		}
@@ -602,6 +714,19 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	seller, err := EnterTx(ctx, tx, *p.Link, "link.order.sent", detail, Actor{Type: "system", ID: "link-orders"})
 	if err != nil {
 		return nil, err
+	}
+	// A linked line is priced by the seller's side, never by the buyer:
+	// the list shared with the buyer, else its catalogue (MatchItemsTx,
+	// which has the catalogue), else nothing until the seller says.
+	list, err := linkPrices(ctx, tx, seller, *p.Link)
+	if err != nil {
+		return nil, err
+	}
+	for i := range lines {
+		if lines[i].ItemID != "" {
+			lines[i].PriceKobo, lines[i].PricedBy = 0, ""
+			priceLine(&lines[i], list, nil)
+		}
 	}
 	order, err := insertOrder(ctx, tx, v, orderIn{seller: seller, link: *p.Link, buyer: buyer, source: p.ID, buyerName: name, reference: p.Reference,
 		note: p.Note, status: "received", lines: lines, deliver: deliver})
@@ -706,7 +831,8 @@ func DecideTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, ref, step string
 		}
 		change := make([]OrderLine, len(o.Lines))
 		for i, l := range o.Lines {
-			change[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: in.Lines[i].Quantity, PriceKobo: in.Lines[i].PriceKobo, ItemID: l.ItemID, Matched: l.Matched}
+			change[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: in.Lines[i].Quantity, PriceKobo: in.Lines[i].PriceKobo, ItemID: l.ItemID, Matched: l.Matched,
+				ProposedKobo: l.ProposedKobo, PricedBy: PricedBySeller}
 		}
 		raw, _ := json.Marshal(change)
 		if _, err := tx.Exec(ctx, `UPDATE link_orders SET change = $2, seller_note = NULLIF($3, ''), updated_at = now() WHERE order_id = $1`, o.ID, raw, in.Note); err != nil {
@@ -760,6 +886,11 @@ func DecideTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, ref, step string
 		for i, n := range got {
 			if n < 0 || n > 1_000_000 {
 				return o, "", fmt.Errorf("%w: what was delivered of %s is a whole number", ErrInvalid, o.Lines[i].Item)
+			}
+			if n > o.Lines[i].Quantity {
+				// More than was agreed is a change the buyer accepts, never a
+				// delivery (and never billed).
+				return o, "", fmt.Errorf("%w: %d %s is more than the %d ordered; change the order first", ErrInvalid, n, o.Lines[i].Item, o.Lines[i].Quantity)
 			}
 			o.Lines[i].Delivered = &got[i]
 			some = some || n > 0
@@ -922,9 +1053,19 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 		cancel_asked_at = CASE WHEN $10 THEN cancel_asked_at END,
 		short_agreed_at = $11,
 		counter = CASE WHEN $12 <> '' THEN $12 ELSE counter END, counter_at = CASE WHEN $12 <> '' THEN now() ELSE counter_at END,
+		invoiced_at = CASE WHEN $13 THEN COALESCE(invoiced_at, now()) ELSE invoiced_at END,
 		updated_at = now() WHERE id = $1`,
-		p.ID, now, o.SellerNote, change, raw, accepted, total, status, now == OrderDelivered, keepAsk, o.ShortAgreedAt, counter); err != nil {
+		p.ID, now, o.SellerNote, change, raw, accepted, total, status, now == OrderDelivered, keepAsk, o.ShortAgreedAt, counter, o.InvoiceID != nil); err != nil {
 		return nil, err
+	}
+	// The seller agreed the buyer's count of a short delivery: what the
+	// buyer received above its count (the seller's count, taken after the
+	// day) is adjusted off its stock by the worker (kind adjust), tried
+	// again until it is.
+	if o.ShortAgreedAt != nil && p.ShortAgreedAt == nil && p.ShortAt != nil && p.settled() {
+		if err := dueTx(ctx, tx, buyer, "adjust", p.ID, 0); err != nil {
+			return nil, err
+		}
 	}
 	if now == OrderDelivered && p.DeliveredAt == nil {
 		if err := dueTx(ctx, tx, buyer, "receipt", p.ID, ReceiptAfter); err != nil {
@@ -935,8 +1076,9 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 		if err := tx.QueryRow(ctx, `SELECT s.name FROM purchase_orders p JOIN suppliers s ON s.id = p.supplier_id WHERE p.id = $1`, p.ID).Scan(&supplier); err != nil {
 			return nil, err
 		}
+		// The buyer's own lines (its items), never the seller's catalogue rows.
 		if err := QueueEventTx(ctx, tx, buyer, EventOrderDelivered, p.ID.String(), map[string]any{"link": o.LinkID, "business": supplier,
-			"reference": p.Reference, "purchase_id": p.ID, "total_kobo": total, "lines": o.Lines}); err != nil {
+			"reference": p.Reference, "purchase_id": p.ID, "total_kobo": total, "lines": p.Lines}); err != nil {
 			return nil, err
 		}
 	}
@@ -1255,7 +1397,17 @@ func AcceptChangeTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, by Acto
 		o.ID, "link:"+name); err != nil {
 		return nil, err
 	}
+	if err := DueStockTx(ctx, tx, seller, o.ID); err != nil {
+		return nil, err
+	}
 	return &Told{Tenant: seller, Event: "change_accepted", Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil
+}
+
+// DueStockTx puts an accepted order's stock on the seller in scope's
+// list: lowered once the acceptance commits (the caller's, at once, or
+// the worker's, tried again), never forgotten.
+func DueStockTx(ctx context.Context, tx pgx.Tx, seller, order uuid.UUID) error {
+	return dueTx(ctx, tx, seller, "stock", order, 0)
 }
 
 // Receipt is the buyer's word on a delivery: all came (Short nil), or Not
@@ -1267,7 +1419,9 @@ type Receipt struct {
 // ToReceive is what a delivered purchase order still has to receive, by
 // item, from the seller's count: what the buyer's tap or the day's end
 // records (stock.ReceiveTx). Short counts instead give what the buyer
-// counted, less what it already recorded.
+// counted, less what it already recorded. After the day (the seller's
+// count received already), Not all came moves no stock: it is a dispute
+// the seller's agreement settles, with the adjustment (§17).
 func ToReceive(ctx context.Context, tx pgx.Tx, id uuid.UUID, short []int64) (map[string]int64, string, error) {
 	p, err := purchaseTx(ctx, tx, id)
 	if err != nil {
@@ -1289,12 +1443,12 @@ func ToReceive(ctx context.Context, tx pgx.Tx, id uuid.UUID, short []int64) (map
 			n = *l.Delivered
 		}
 		if short != nil {
-			if short[i] < 0 || short[i] > 1_000_000 {
-				return nil, p.Reference, fmt.Errorf("%w: what came of %s is a whole number", ErrInvalid, l.Item)
+			if short[i] < 0 || short[i] > l.Quantity {
+				return nil, p.Reference, fmt.Errorf("%w: what came of %s is a whole number up to the %d ordered", ErrInvalid, l.Item, l.Quantity)
 			}
 			n = short[i]
 		}
-		if n > l.Received {
+		if n > l.Received && !(short != nil && p.settled()) {
 			got[l.ItemID] = n - l.Received
 		}
 	}
@@ -1315,18 +1469,26 @@ func ReceiptTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, r Receipt, b
 		return nil, fmt.Errorf("%w: %s has no delivery to settle", ErrState, p.Reference)
 	}
 	// The day's wait, put on the list at delivery, is what is settled:
-	// gone, the receipt was settled already.
+	// gone, the receipt was settled already (All came, or the day's end
+	// from the seller's count). Not all came after that is still a
+	// dispute on the order's card (§17): the count is kept, no stock
+	// moves, and the seller's agreement brings the adjustment and the
+	// credit.
 	tag, err := tx.Exec(ctx, `DELETE FROM link_orders_due WHERE tenant_id = $1 AND kind = 'receipt' AND object_id = $2`, buyer, id)
 	if err != nil {
 		return nil, err
 	}
-	if tag.RowsAffected() == 0 {
+	if tag.RowsAffected() == 0 && (r.Short == nil || !p.settled()) {
 		return nil, fmt.Errorf("%w: you said what came of %s already", ErrState, p.Reference)
 	}
 	event := "received"
 	if r.Short != nil {
 		event = "short"
-		if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET short_at = now(), updated_at = now() WHERE id = $1`, id); err != nil {
+		if len(r.Short) != len(p.Lines) {
+			return nil, fmt.Errorf("%w: say what came of each of the %d items", ErrInvalid, len(p.Lines))
+		}
+		raw, _ := json.Marshal(r.Short)
+		if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET short = $2, short_at = now(), updated_at = now() WHERE id = $1`, id, raw); err != nil {
 			return nil, err
 		}
 	}
@@ -1367,7 +1529,8 @@ func ReceiptTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, r Receipt, b
 
 // InvoiceLines is what an order's invoice charges: what was agreed when it
 // is raised at acceptance; what came when raised on delivery (the
-// seller's count, or the buyer's once agreed).
+// seller's count, or the buyer's once agreed); never more than was
+// agreed.
 func (o Order) InvoiceLines() []OrderLine {
 	var out []OrderLine
 	for i, l := range o.Lines {
@@ -1380,6 +1543,7 @@ func (o Order) InvoiceLines() []OrderLine {
 				n = o.Short[i]
 			}
 		}
+		n = min(n, l.Quantity)
 		if n > 0 {
 			out = append(out, OrderLine{Item: l.Item, Unit: l.Unit, Quantity: n, PriceKobo: l.PriceKobo})
 		}
@@ -1387,13 +1551,24 @@ func (o Order) InvoiceLines() []OrderLine {
 	return out
 }
 
+// billed is what the order's invoice charged of a line: what was agreed
+// when raised at acceptance, else what the seller delivered.
+func (o Order) billed(l OrderLine) int64 {
+	n := l.Quantity
+	if o.InvoiceAt == InvoiceAtDelivered && l.Delivered != nil {
+		n = *l.Delivered
+	}
+	return min(n, l.Quantity)
+}
+
 // ShortKobo is what a short delivery the seller agreed takes off an order
-// already invoiced at acceptance: the agreed price of what did not come.
+// already invoiced (at acceptance, or on delivery from the seller's count
+// after the day): the agreed price of what was billed and did not come.
 func (o Order) ShortKobo() int64 {
 	var t int64
 	for i, l := range o.Lines {
-		if i < len(o.Short) && o.Short[i] < l.Quantity {
-			t += (l.Quantity - o.Short[i]) * l.PriceKobo
+		if b := o.billed(l); i < len(o.Short) && o.Short[i] < b {
+			t += (b - o.Short[i]) * l.PriceKobo
 		}
 	}
 	return t
@@ -1441,14 +1616,31 @@ func nameKey(s string) string {
 	return k
 }
 
+// sellerOf is the seller of an order: link_orders' tenant.
+func sellerOf(ctx context.Context, tx pgx.Tx, order uuid.UUID) (uuid.UUID, error) {
+	var seller uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT tenant_id FROM link_orders WHERE order_id = $1`, order).Scan(&seller)
+	return seller, err
+}
+
 // MatchItemsTx matches a new order's lines to the seller's own items, in
 // the seller's scope (§17): an item the seller said a name is, for this
 // link, else its item of the same name, for the seller to confirm. A
-// matched line takes the seller's price, when its item has one. It
-// reports whether anything changed.
+// line matched to the seller's item (here, or linked by the buyer) is
+// priced by the seller's side: the list shared with the buyer, else the
+// catalogue's price; never the buyer's proposal. It reports whether
+// anything changed.
 func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem) (Order, bool, error) {
 	o, err := GetOrderTx(ctx, tx, ref, true)
 	if err != nil || o.Status != OrderReceived {
+		return o, false, err
+	}
+	seller, err := sellerOf(ctx, tx, o.ID)
+	if err != nil {
+		return o, false, err
+	}
+	list, err := linkPrices(ctx, tx, seller, o.LinkID)
+	if err != nil {
 		return o, false, err
 	}
 	byID, byName := map[string]SellerItem{}, map[string]SellerItem{}
@@ -1480,6 +1672,11 @@ func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem
 	changed := false
 	for i, l := range o.Lines {
 		if l.ItemID != "" {
+			// Linked by the buyer, or matched before: priced by the seller's
+			// side when it is not yet.
+			if l.PricedBy == "" && priceLine(&o.Lines[i], list, byID[l.ItemID].PriceKobo) {
+				changed = true
+			}
 			continue
 		}
 		it, how := SellerItem{}, ""
@@ -1492,9 +1689,8 @@ func MatchItemsTx(ctx context.Context, tx pgx.Tx, ref string, items []SellerItem
 			continue
 		}
 		o.Lines[i].ItemID, o.Lines[i].Matched = it.ID, how
-		if it.PriceKobo != nil && *it.PriceKobo > 0 {
-			o.Lines[i].PriceKobo = *it.PriceKobo
-		}
+		o.Lines[i].PriceKobo, o.Lines[i].PricedBy = 0, ""
+		priceLine(&o.Lines[i], list, it.PriceKobo)
 		changed = true
 	}
 	if !changed {
@@ -1518,11 +1714,18 @@ func SetLineItemTx(ctx context.Context, tx pgx.Tx, ref string, line int, it Sell
 	if line < 0 || line >= len(o.Lines) || it.ID == "" || strings.TrimSpace(it.Name) == "" {
 		return o, fmt.Errorf("%w: no such line or item", ErrInvalid)
 	}
+	seller, err := sellerOf(ctx, tx, o.ID)
+	if err != nil {
+		return o, err
+	}
+	list, err := linkPrices(ctx, tx, seller, o.LinkID)
+	if err != nil {
+		return o, err
+	}
 	l := &o.Lines[line]
 	l.ItemID, l.Matched = it.ID, "linked"
-	if it.PriceKobo != nil && *it.PriceKobo > 0 {
-		l.PriceKobo = *it.PriceKobo
-	}
+	l.PriceKobo, l.PricedBy = 0, ""
+	priceLine(l, list, it.PriceKobo)
 	name := it.Name
 	if r := []rune(name); len(r) > 120 {
 		name = string(r[:120])
@@ -1575,6 +1778,7 @@ func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUI
 		x := &lines[i]
 		x.Item = strings.Join(strings.Fields(x.Item), " ")
 		x.Delivered = nil
+		x.ProposedKobo, x.PricedBy = x.PriceKobo, PricedBySeller
 		if x.Item == "" || len([]rune(x.Item)) > 120 {
 			return Order{}, nil, fmt.Errorf("%w: each line names an item", ErrInvalid)
 		}
@@ -1707,6 +1911,9 @@ func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.U
 	}
 	if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = 'accepted', customer = $2, subject_id = $3, fulfilment = $4, decided_at = now(), updated_at = now()
 		WHERE id = $1`, o.ID, customer, subject, fulfilment(deliver)); err != nil {
+		return nil, err
+	}
+	if err := DueStockTx(ctx, tx, seller, o.ID); err != nil {
 		return nil, err
 	}
 	return &Told{Tenant: seller, Event: "confirmed", Reference: p.Reference, From: name, Order: o.ID, Purchase: p.ID, Link: *p.Link, FromTenant: buyer}, nil

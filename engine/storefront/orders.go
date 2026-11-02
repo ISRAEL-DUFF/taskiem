@@ -865,6 +865,25 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 	var out map[string]any
 	var accepted *Order
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		out, accepted, err = o.DecideTx(ctx, tx, tenant, reference, decision, note, actor)
+		return err
+	})
+	if err != nil || accepted == nil {
+		return out, err
+	}
+	return o.afterAccept(ctx, tenant, *accepted, out)
+}
+
+// DecideTx is Decide's decision in the caller's transaction (a linked
+// order's step takes it with its own record, business links §16.3): the
+// order's status, its delivery and its slot. It answers the order when
+// the decision accepts it, for the caller to lower its stock once the
+// transaction commits (LowerStock), else nil.
+func (o *Orders) DecideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, reference, decision, note, actor string) (map[string]any, *Order, error) {
+	var out map[string]any
+	var accepted *Order
+	err := func() error {
 		ord, err := scanOrder(tx.QueryRow(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1 AND reference = $2 FOR UPDATE`, tenant, reference))
 		if err != nil {
 			return err
@@ -922,6 +941,19 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 		if next == "" {
 			return fmt.Errorf("%w: %s cannot be %sed while %s", ErrDecision, reference, strings.TrimSuffix(decision, "e"), ord.Status)
 		}
+		if ord.Kind == "trade" && next == "accepted" && next != ord.Status {
+			// A linked business's order is accepted only with every line
+			// priced (business links §16.3), by whichever path accepts it:
+			// its invoice charges each line's price.
+			var unpriced bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_orders o, jsonb_array_elements(o.lines) l
+				WHERE o.order_id = $1 AND COALESCE((l->>'price_kobo')::bigint, 0) < 1)`, ord.ID).Scan(&unpriced); err != nil {
+				return err
+			}
+			if unpriced {
+				return fmt.Errorf("%w: %s has an item with no price; change the order to give it yours", ErrDecision, reference)
+			}
+		}
 		if next != ord.Status {
 			if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, note = COALESCE(NULLIF($4, ''), note), decided_by = COALESCE(decided_by, $5),
 				decided_at = COALESCE(decided_at, now()), updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, ord.ID, next, note, actor); err != nil {
@@ -938,6 +970,12 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'delivered', delivered_at = now() WHERE tenant_id = $1 AND order_id = $2
 					AND status IN ('accepted', 'picked_up', 'arrived')`, tenant, ord.ID); err != nil {
 					return err
+				}
+				if ord.Kind == "trade" {
+					// A linked order delivered by a rider: delivered now.
+					if _, err := tx.Exec(ctx, `UPDATE link_orders SET delivered_at = COALESCE(delivered_at, now()), updated_at = now() WHERE order_id = $1`, ord.ID); err != nil {
+						return err
+					}
 				}
 				if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'withdrawn', answered_at = now() WHERE tenant_id = $1 AND order_id = $2 AND status = 'offered'`,
 					tenant, ord.ID); err != nil {
@@ -962,11 +1000,34 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 			accepted = &ord
 		}
 		return nil
-	})
-	if err != nil || accepted == nil {
-		return out, err
+	}()
+	return out, accepted, err
+}
+
+// LowerStock lowers the stock for an order accepted in a caller's own
+// transaction (DecideTx), once it committed; a retry finishes what is
+// left. It answers the items there was too little of.
+func (o *Orders) LowerStock(ctx context.Context, tenant uuid.UUID, reference string) ([]string, error) {
+	var ord Order
+	if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		ord, err = o.GetOrder(ctx, tx, tenant, reference)
+		return err
+	}); err != nil {
+		return nil, err
 	}
-	short, err := o.lowerStock(ctx, tenant, *accepted)
+	out, err := o.afterAccept(ctx, tenant, ord, map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	short, _ := out["short"].([]string)
+	return short, nil
+}
+
+// afterAccept lowers an accepted order's stock and notes what there was
+// too little of on it.
+func (o *Orders) afterAccept(ctx context.Context, tenant uuid.UUID, accepted Order, out map[string]any) (map[string]any, error) {
+	short, err := o.lowerStock(ctx, tenant, accepted)
 	if err != nil {
 		return nil, err
 	}
