@@ -45,7 +45,9 @@ func TestBillsDueReachBuyerOnly(t *testing.T) {
 	today, _ := moneyreport.Day(time.Now())
 	tomorrow := today.AddDate(0, 0, 1)
 	d := &moneydigest.Digester{Pool: w.env.DB.App, Channels: []string{"whatsapp"}, PublicURL: "https://taskiem.test",
-		Now: func() time.Time { return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 8, 5, 0, 0, moneyreport.Lagos) }}
+		Now: func() time.Time {
+			return time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 8, 5, 0, 0, moneyreport.Lagos)
+		}}
 	for range 2 {
 		if _, err := d.Tick(ctx); err != nil {
 			t.Fatal(err)
