@@ -732,7 +732,28 @@ run_checks() {
     fi
   fi
   [ ! -s "$STATE/update-failed" ] || echo "release $(cat "$STATE/update-failed") failed to upgrade and was rolled back"
+  staging_behind
   ! ls /root/taskiem-recovery-*.txt >/dev/null 2>&1 || echo "the recovery sheet is still on the server (/root/taskiem-recovery-*.txt)"
+}
+
+# A staging server runs every merge to main, so main ahead of the running
+# release by a merge older than a day means releases are not being tagged
+# (CI's image job skipped or failing) or this server is not taking them.
+# Compared through GitHub's API from the running image's revision label;
+# nothing to say when GitHub cannot be asked.
+staging_behind() {
+  local rev cmp ahead oldest age
+  [ "$(conf CHANNEL)" = staging ] || return 0
+  test_mode && return 0
+  rev=$(image_revision "$(cat "$STATE/current" 2>/dev/null)")
+  [ -n "$rev" ] || return 0
+  cmp=$(curl -fsS --max-time 10 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$REPO_SLUG/compare/$rev...main" 2>/dev/null) || return 0
+  ahead=$(jq -r '.ahead_by // 0' <<<"$cmp" 2>/dev/null) || return 0
+  [ "${ahead:-0}" -gt 0 ] || return 0
+  oldest=$(jq -r '[.commits[].commit.committer.date] | min // empty' <<<"$cmp" 2>/dev/null)
+  [ -n "$oldest" ] || return 0
+  age=$(( ($(date +%s) - $(date -d "$oldest" +%s)) / 3600 ))
+  [ "$age" -lt 24 ] || echo "staging is $ahead merge(s) behind main, the oldest $age hours old: check that CI's image job tagged staging (taskiem-vps update --now if it did)"
 }
 
 cmd_check() {
