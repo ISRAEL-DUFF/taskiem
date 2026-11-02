@@ -656,14 +656,16 @@ jobs:
   # not move staging servers back. (GitHub keeps one waiting run per group: a
   # third merge replaces the waiting one, whose image is then not tagged.)
   #
-  # The condition names every gate's result. A plain `if:` gets success()
-  # added, and success() looks through the whole chain of needs: docker and
-  # vps need image-build-pr, which is skipped on a push, so success() was
-  # false and this job was skipped on every merge (staging did not move from
-  # 29 October to 2 November 2026). The same goes for release-build and
-  # promote below, and the tagged job turns a skip here red.
+  # The condition names each gate's result, one by one. A plain `if:` gets
+  # success() added, and success() looks through the whole chain of needs:
+  # docker and vps need image-build-pr, which is skipped on a push, so
+  # success() was false and this job was skipped on every merge (staging did
+  # not move from 29 October to 2 November 2026). contains(needs.*.result,
+  # 'skipped') sees that skipped job too (tested: it skips the job as well);
+  # needs.<job>.result does not. The same goes for release-build and promote
+  # below, and the tagged job turns a skip here red.
   image:
-    if: ${{ !cancelled() && github.event_name == 'push' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.image-build.result == 'success' && needs.go.result == 'success' && needs.typescript.result == 'success' && needs.web.result == 'success' && needs.docker.result == 'success' && needs.licences.result == 'success' && needs.vps.result == 'success' && needs.deploy.result == 'success' }}
     needs: [image-build, go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     concurrency:
@@ -783,7 +785,7 @@ jobs:
   # workflow artifact, for every merge to main and every v* tag (a release
   # has a signed binary as well as a signed image).
   release-build:
-    if: ${{ !cancelled() && github.event_name == 'push' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.go.result == 'success' && needs.typescript.result == 'success' && needs.web.result == 'success' && needs.docker.result == 'success' && needs.licences.result == 'success' && needs.vps.result == 'success' && needs.deploy.result == 'success' }}
     needs: [go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     permissions:
