@@ -61,9 +61,11 @@ auth_challenges.expires_at
 auth_challenges.purpose
 auth_challenges.scope
 auth_challenges.user_id
+bill_payments.alerted_at
 bill_payments.amount_kobo
 bill_payments.created_at
 bill_payments.paired_at
+bill_payments.sent_at
 bill_payments.status
 bill_payments.tenant_id
 bill_payments.token
@@ -81,6 +83,7 @@ bills.link_id
 bills.paid_kobo
 bills.reference
 bills.source_id
+bills.supplier_tenant
 bills.tenant_id
 bills.voided
 business_links.a_blocked
