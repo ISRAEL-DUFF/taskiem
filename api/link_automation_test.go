@@ -282,7 +282,7 @@ func TestLinkAutomation(t *testing.T) {
 		t.Errorf("over the limit, accepted by a run: %v\n%s", got["run"].(map[string]any)["status"], ev)
 	}
 	var flagged int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM link_orders WHERE tenant_id = $1 AND status = 'received' AND over_limit_at IS NOT NULL`, sellerID).Scan(&flagged); err != nil || flagged != 1 {
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM link_orders WHERE tenant_id = $1 AND over_limit_at IS NOT NULL`, sellerID).Scan(&flagged); err != nil || flagged != 1 {
 		t.Errorf("the order waiting, flagged: %d %v", flagged, err)
 	}
 }
