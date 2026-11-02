@@ -3,6 +3,8 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -29,7 +31,23 @@ func TestLinkAutomation(t *testing.T) {
 	withLinkedOrders(w.world)
 	w.srv.AccountRails = &linkRails{} // the seller issues the buyer an account at acceptance, so its bills can be paid
 	payments := &links.Payments{Pool: w.env.DB.App}
-	for _, c := range []*connector.Connector{linkconn.New(w.srv), billsconn.New(payments), paystack.New(paystack.Options{})} {
+	// The fake rail behind the buyer's bill payments: the name on any
+	// account resolved, so the managed payment reaches its approval.
+	rail := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/bank":
+			_, _ = rw.Write([]byte(`{"status":true,"data":[{"name":"Wema Bank Plc","code":"035"}]}`))
+		case r.URL.Path == "/bank/resolve":
+			_, _ = rw.Write([]byte(`{"status":true,"data":{"account_number":"` + r.URL.Query().Get("account_number") + `","account_name":"DANGOTE STORES"}}`))
+		case r.URL.Path == "/balance":
+			_, _ = rw.Write([]byte(`{"status":true,"data":[{"currency":"NGN","balance":100000000}]}`))
+		default:
+			rw.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(rail.Close)
+	for _, c := range []*connector.Connector{linkconn.New(w.srv), billsconn.New(payments), paystack.New(paystack.Options{BaseURL: rail.URL})} {
 		if err := w.env.Registry.Register(c); err != nil {
 			t.Fatal(err)
 		}
@@ -209,8 +227,9 @@ func TestLinkAutomation(t *testing.T) {
 		t.Fatalf("the payment, started by the step, with its run: %q %v %v", startedBy, payRun, err)
 	}
 	// Its payment waits for the approver, through the fake rail's workflow.
-	if r := buyer.must(200, "GET", "/v1/runs/"+*payRun, nil)["run"].(map[string]any); r["status"] == "failed" || r["status"] == "completed" {
-		t.Errorf("the bill's payment ended at once: %v", r)
+	w.env.Drain(t)
+	if got := buyer.must(200, "GET", "/v1/runs/"+*payRun, nil); got["run"].(map[string]any)["status"] != "waiting" || !strings.Contains(toJSON(got["events"]), `"type":"ApprovalRequested"`) {
+		t.Errorf("the bill's payment waiting for its approver, the name on the account found: %v\n%s", got["run"], toJSON(got["events"]))
 	}
 	// Paying: no longer listed to pay.
 	run = buyer.must(201, "POST", "/v1/workflows/"+payWF+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
