@@ -6553,6 +6553,31 @@
       "text": "When a business links with you",
       "reviewed": true,
       "context": "A workflow starts when a link becomes active"
+    },
+    "wa.received.linked": {
+      "text": "{supplier} delivered order {reference} through Taskiem. Tap *All came* if it all came, or say what came of each item on the order's page.",
+      "reviewed": true,
+      "context": "Goods received said of an order a linked supplier delivered: the link's own steps record it"
+    },
+    "wa.received.linked_wait": {
+      "text": "Order {reference} is with {supplier} on Taskiem and is not delivered yet; when it is, you record what came with *All came* or *Not all came*.",
+      "reviewed": true,
+      "context": "Goods received said of an order with a linked supplier that has not delivered it"
+    },
+    "wa.mention.which": {
+      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "reviewed": true,
+      "context": "A mention names a business of which the writer has two links of the same name; {list} says each with its role"
+    },
+    "order.link.auto_changed_title": {
+      "text": "{from} sent order {reference}, at your prices",
+      "reviewed": true,
+      "context": "Notification title: a linked buyer's order, set to accept by itself, changed to the seller's prices for the buyer to accept"
+    },
+    "order.link.auto_changed": {
+      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them.",
+      "reviewed": true,
+      "context": "A linked buyer's order, set to accept by itself, changed to the seller's prices instead; {note} is its items and total"
     }
   }
 }

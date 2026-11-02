@@ -9,11 +9,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
@@ -124,9 +126,11 @@ func (s *Server) tradeOrderStep(w http.ResponseWriter, r *http.Request) {
 
 // sellerStep takes a seller's step on an order from a linked business (the
 // web, the API, chat, and accepting by itself): the linked order's own
-// fields in one transaction (with audit, the caller's own record), then
-// the order moved by the storefront order's own Decide (its stock, its
-// rider, its run), then mirrored to the buyer at once. It answers the
+// fields and the order's own move (the storefront order's decision: its
+// status, its delivery, its run) in one transaction, with audit (the
+// caller's own record, which may refuse the step); then its stock lowered
+// on acceptance (noted on the worker's list first, so a failure is tried
+// again), and the order mirrored to the buyer at once. It answers the
 // order, and the items there was too little stock of on accepting.
 func (s *Server) sellerStep(ctx context.Context, tenant uuid.UUID, ref, step string, in links.StepIn, by links.Actor, actor string,
 	audit func(tx pgx.Tx, o links.Order) error) (links.Order, []string, error) {
@@ -147,8 +151,8 @@ func (s *Server) sellerStep(ctx context.Context, tenant uuid.UUID, ref, step str
 				return err
 			}
 		}
-		// Agreeing a short count of an order invoiced at acceptance takes
-		// what did not come off the invoice.
+		// Agreeing a short count of an order invoiced already takes what
+		// was billed and did not come off the invoice.
 		if step == links.StepAgree && cur.InvoiceID != nil && cur.ShortAgreedAt == nil && cur.ShortAt != nil && cur.ShortKobo() > 0 && s.Invoices != nil {
 			a, err := s.Invoices.Amend(ctx, tx, tenant, cur.InvoiceID.String(), invoicing.AmendmentIn{Kind: invoicing.AmendDiscount,
 				Description: "Not all came: " + cur.Reference, AmountKobo: cur.ShortKobo(), Reason: "Agreed with " + cur.BuyerName + "'s count of what came"}, actor)
@@ -157,8 +161,23 @@ func (s *Server) sellerStep(ctx context.Context, tenant uuid.UUID, ref, step str
 			}
 			became, amended = a.Became, a.Invoice
 		}
-		o, decide, err = links.DecideTx(ctx, tx, tenant, cur.ID.String(), step, in, by)
-		return err
+		if o, decide, err = links.DecideTx(ctx, tx, tenant, cur.ID.String(), step, in, by); err != nil {
+			return err
+		}
+		if decide == "" {
+			return nil
+		}
+		_, accepted, err := s.Orders.DecideTx(ctx, tx, tenant, o.OrderReference, decide, "", actor)
+		if errors.Is(err, storefront.ErrDecision) {
+			return fmt.Errorf("%w: %s", links.ErrState, strings.TrimPrefix(err.Error(), storefront.ErrDecision.Error()+": "))
+		}
+		if err != nil {
+			return err
+		}
+		if accepted != nil {
+			return links.DueStockTx(ctx, tx, tenant, o.ID)
+		}
+		return nil
 	})
 	if err != nil {
 		return o, nil, err
@@ -169,19 +188,57 @@ func (s *Server) sellerStep(ctx context.Context, tenant uuid.UUID, ref, step str
 		}
 	}
 	short := []string{}
-	if decide != "" {
-		out, err := s.Orders.Decide(ctx, tenant, o.OrderReference, decide, "", actor)
-		if errors.Is(err, storefront.ErrDecision) {
-			return o, nil, fmt.Errorf("%w: %s", links.ErrState, strings.TrimPrefix(err.Error(), storefront.ErrDecision.Error()+": "))
-		}
-		if err != nil {
-			return o, nil, err
-		}
-		if sh, ok := out["short"].([]string); ok && sh != nil {
-			short = sh
-		}
+	if decide == links.DecideAccept {
+		short = s.lowerLinkedStock(ctx, tenant, o.ID, o.OrderReference)
 	}
 	return s.mirrorLinkedOrder(ctx, tenant, o.ID), short, nil
+}
+
+// lowerLinkedStock lowers the seller's stock for a linked order accepted a
+// moment ago (DecideTx, AcceptChangeTx, ConfirmProposedTx, which noted it
+// on the worker's list), and takes it off the list; a failure leaves it
+// there for the worker. It answers the items there was too little of.
+func (s *Server) lowerLinkedStock(ctx context.Context, seller, id uuid.UUID, reference string) []string {
+	short, err := s.Orders.LowerStock(ctx, seller, reference)
+	if err != nil {
+		s.Logger.Warn("links: lowering stock for an accepted order (the worker tries again)", "tenant", seller, "err", err)
+		return []string{}
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+		return links.Undue(ctx, tx, seller, "stock", id)
+	}); err != nil {
+		s.Logger.Warn("links: an accepted order's stock, done", "tenant", seller, "err", err)
+	}
+	if short == nil {
+		short = []string{}
+	}
+	return short
+}
+
+// lowerLinkedStockLater is the worker's: the stock of an accepted linked
+// order that was not lowered when it was accepted.
+func (s *Server) lowerLinkedStockLater(ctx context.Context, seller, id uuid.UUID) error {
+	if s.Orders == nil {
+		return errors.New("storefront orders are not configured")
+	}
+	var o links.Order
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+		var err error
+		o, err = links.GetOrderTx(ctx, tx, id.String(), false)
+		if errors.Is(err, links.ErrNotFound) {
+			return links.Undue(ctx, tx, seller, "stock", id)
+		}
+		return err
+	})
+	if err != nil || o.ID == uuid.Nil {
+		return err
+	}
+	if _, err := s.Orders.LowerStock(ctx, seller, o.OrderReference); err != nil {
+		return err
+	}
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+		return links.Undue(ctx, tx, seller, "stock", id)
+	})
 }
 
 // mirrorLinkedOrder mirrors a seller's order to its buyer's purchase order
@@ -208,7 +265,8 @@ func (s *Server) mirrorLinkedOrder(ctx context.Context, seller, id uuid.UUID) li
 
 // acceptedByBuyer moves a seller's order the buyer's step accepted (its
 // change, or the seller's draft) as an acceptance moves any order: its
-// stock lowered. The order is accepted already; Decide finishes it.
+// stock lowered (noted on the worker's list by the step, so a failure
+// here is tried again), and the order mirrored.
 func (s *Server) acceptedByBuyer(ctx context.Context, told *links.Told) {
 	if told == nil || s.Orders == nil {
 		return
@@ -219,12 +277,10 @@ func (s *Server) acceptedByBuyer(ctx context.Context, told *links.Told) {
 		ref = o.OrderReference
 		return err
 	}); err != nil {
-		s.Logger.Warn("links: reading an accepted order", "err", err)
+		s.Logger.Warn("links: reading an accepted order (the worker lowers its stock)", "err", err)
 		return
 	}
-	if _, err := s.Orders.Decide(ctx, told.Tenant, ref, "accept", "", "link:"+told.From); err != nil {
-		s.Logger.Warn("links: lowering stock for an order the buyer accepted", "tenant", told.Tenant, "err", err)
-	}
+	s.lowerLinkedStock(ctx, told.Tenant, told.Order, ref)
 	s.mirrorLinkedOrder(ctx, told.Tenant, told.Order)
 }
 
@@ -494,7 +550,7 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 	var told *links.Told
 	var moves []stock.Movement
 	var costs []stock.Cost
-	key := "link-receipt-" + id.String()
+	key := stock.LinkReceiptKey + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		got, ref, err := links.ToReceive(ctx, tx, id, short)
 		if err != nil {
@@ -556,6 +612,10 @@ func (s *Server) LinkOrdersTick(ctx context.Context) (int, error) {
 			err = s.creditAgain(ctx, d.Tenant, d.ID)
 		case "start":
 			err = s.startLinkRun(ctx, d.Tenant, d.ID)
+		case "stock":
+			err = s.lowerLinkedStockLater(ctx, d.Tenant, d.ID)
+		case "adjust":
+			err = s.adjustShort(ctx, d.Tenant, d.ID)
 		}
 		if err != nil {
 			s.Logger.Warn("links: linked-order work", "kind", d.Kind, "tenant", d.Tenant, "id", d.ID, "err", err)
@@ -590,12 +650,23 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	if o != nil {
 		credit, _ = s.creditCheck(ctx, seller, o.OrderReference)
 	}
-	if o != nil && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && allPriced(o.Lines) {
-		if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, links.Actor{Type: "system", ID: "link-orders"},
+	// Accepted by itself only when the seller's side priced every line
+	// (its list, its catalogue), never a line priced by the buyer alone;
+	// at another price than the buyer proposed, it is the seller's change
+	// instead, for the buyer to accept.
+	if o != nil && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) {
+		by := links.Actor{Type: "system", ID: "link-orders"}
+		if links.AsProposed(o.Lines) {
+			if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, by, "system:link-orders", nil); err == nil {
+				told.Event = "auto_accepted"
+			} else {
+				s.Logger.Warn("links: accepting an order by itself", "tenant", seller, "err", err)
+			}
+		} else if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepChange, links.StepIn{Lines: o.Lines, Note: "Our prices"}, by,
 			"system:link-orders", nil); err == nil {
-			told.Event = "auto_accepted"
+			told.Event = "auto_changed"
 		} else {
-			s.Logger.Warn("links: accepting an order by itself", "tenant", seller, "err", err)
+			s.Logger.Warn("links: changing an order to our prices by itself", "tenant", seller, "err", err)
 		}
 	}
 	note := ""
@@ -607,15 +678,6 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	}
 	s.tellOrder(ctx, told, links.StepIn{Note: note})
 	return nil
-}
-
-func allPriced(lines []links.OrderLine) bool {
-	for _, l := range lines {
-		if l.PriceKobo < 1 {
-			return false
-		}
-	}
-	return true
 }
 
 func linesKobo(lines []links.OrderLine) int64 {
@@ -694,6 +756,22 @@ func (s *Server) raiseOrderInvoice(ctx context.Context, seller, id uuid.UUID) er
 		}
 		var lines []invoicing.Line
 		for _, l := range o.InvoiceLines() {
+			if l.PriceKobo < 1 {
+				// An invoice cannot charge a line with no price: not tried
+				// again; the seller is told to raise it by hand.
+				if err := links.Undue(ctx, tx, seller, "invoice", id); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET note = $2, updated_at = now() WHERE id = $1`, o.ID,
+					"No invoice was raised: "+l.Item+" has no price. Raise it by hand."); err != nil {
+					return err
+				}
+				_, err := alerts.Notify(ctx, tx, seller, alerts.Alert{Kind: alertOrderInvoice, Dedup: o.ID.String(),
+					Title: "No invoice for order " + o.Reference + " from " + o.BuyerName,
+					Body:  l.Item + " has no price, so the order's invoice could not be raised. Raise it by hand from the order's page.",
+					Link:  "/trade-orders/" + o.ID.String()})
+				return err
+			}
 			d := l.Item
 			if l.Unit != "" {
 				d += " (" + l.Unit + ")"
@@ -726,6 +804,46 @@ func (s *Server) raiseOrderInvoice(ctx context.Context, seller, id uuid.UUID) er
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 		return links.SetInvoiceTx(ctx, tx, seller, id, *invoice)
 	})
+}
+
+// alertOrderInvoice is the alert when a linked order's invoice could not
+// be raised.
+const alertOrderInvoice = "link.order_invoice"
+
+// adjustShort is the worker's: in the buyer's scope, what it received of
+// a delivery above its own count, once the seller agreed the count after
+// the day (§17), taken off its stock and the order.
+func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
+	if s.Purchases == nil {
+		return errors.New("purchases are not configured")
+	}
+	var moves []stock.Movement
+	key := "link-short-" + id.String()
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
+		if err := links.Undue(ctx, tx, buyer, "adjust", id); err != nil {
+			return err
+		}
+		var short []byte
+		var agreed *time.Time
+		err := tx.QueryRow(ctx, `SELECT short, short_agreed_at FROM purchase_orders WHERE id = $1`, id).Scan(&short, &agreed)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && (short == nil || agreed == nil) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		var counts []int64
+		if err := json.Unmarshal(short, &counts); err != nil {
+			return err
+		}
+		_, moves, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	s.Purchases.Apply(ctx, buyer, moves, nil, key)
+	return nil
 }
 
 // settleReceiptLater settles a delivery's receipt from the seller's count,
@@ -859,7 +977,7 @@ func (s *Server) waOrderPress(ctx context.Context, c *chat, reply string) error 
 // buyer).
 func sellerTold(event string) bool {
 	switch event {
-	case "ordered", "auto_accepted", "cancelled_by_buyer", "cancel_asked", "change_accepted", "received", "short", "confirmed":
+	case "ordered", "auto_accepted", "auto_changed", "cancelled_by_buyer", "cancel_asked", "change_accepted", "received", "short", "confirmed":
 		return true
 	}
 	return false

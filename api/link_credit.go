@@ -137,7 +137,7 @@ func (s *Server) creditAgain(ctx context.Context, seller, id uuid.UUID) error {
 	if o == nil || c.Over || !c.Changed {
 		return nil
 	}
-	if o.AutoAccept && o.Status == links.OrderReceived && allPriced(o.Lines) {
+	if o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) && links.AsProposed(o.Lines) {
 		if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, links.Actor{Type: "system", ID: "link-orders"},
 			"system:link-orders", nil); err != nil {
 			s.Logger.Warn("links: accepting an order within the limit", "tenant", seller, "err", err)

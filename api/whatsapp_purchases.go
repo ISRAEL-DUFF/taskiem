@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/reach"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -518,6 +519,16 @@ func (s *Server) waReceived(ctx context.Context, c *chat, rest string) (bool, er
 			x, err = stock.OpenFromTx(ctx, tx, c.tenant.ID, it.Supplier, it.ID)
 			return err
 		})
+		if err == nil && x.LinkID != nil && x.SellerStatus != nil {
+			// An order a linked supplier handles is received by the link's
+			// own steps (business links §7): All came on its delivery, or
+			// what came of each item on the order's page.
+			if *x.SellerStatus != links.OrderDelivered || x.ShortAt != nil {
+				return true, c.say(ctx, s, c.t("wa.received.linked_wait", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier)))
+			}
+			return true, c.say(ctx, s, c.t("wa.received.linked", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier)),
+				orderButtons(c.lang.Tag, links.Told{Event: "delivered", Purchase: x.ID})...)
+		}
 		if err == nil {
 			return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_receive", Name: it.Name, Row: it.ID,
 				StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Item: it.ID, Quantity: a.Quantity}}},

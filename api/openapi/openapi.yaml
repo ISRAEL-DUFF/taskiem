@@ -29054,6 +29054,15 @@ components:
           type: string
           format: date-time
           description: We said Not all came
+        short:
+          type: array
+          items:
+            type: integer
+          description: Not all came, our count of each line
+        invoiced_at:
+          type: string
+          format: date-time
+          description: The linked supplier raised the order's invoice (mirrored)
     DeliverTo:
       type: object
       additionalProperties: false
@@ -29379,6 +29388,14 @@ components:
           type: string
           enum: [linked, name]
           description: linked, by a match we confirmed for the link; name, by the same name, for us to confirm
+        proposed_kobo:
+          type: integer
+          minimum: 0
+          description: The price the buyer proposed; never the order's price
+        priced_by:
+          type: string
+          enum: [list, catalogue, seller]
+          description: Whose price price_kobo is (the list shared with the buyer, our catalogue, ourselves); absent, the buyer's proposal, never accepted by itself
     TradeOrder:
       type: object
       additionalProperties: false

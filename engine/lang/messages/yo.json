@@ -5243,6 +5243,26 @@
     "wd.trigger.link_link_accepted": {
       "text": "Nigbati iṣowo kan ba sopọ mọ ọ",
       "reviewed": false
+    },
+    "wa.received.linked": {
+      "text": "{supplier} delivered order {reference} through Taskiem. Tap *All came* if it all came, or say what came of each item on the order's page.",
+      "reviewed": false
+    },
+    "wa.received.linked_wait": {
+      "text": "Order {reference} is with {supplier} on Taskiem and is not delivered yet; when it is, you record what came with *All came* or *Not all came*.",
+      "reviewed": false
+    },
+    "wa.mention.which": {
+      "text": "More than one of your linked businesses is called *{name}*: {list}. Pick it on the Chat page, where each is its own conversation.",
+      "reviewed": false
+    },
+    "order.link.auto_changed_title": {
+      "text": "{from} sent order {reference}, at your prices",
+      "reviewed": false
+    },
+    "order.link.auto_changed": {
+      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them.",
+      "reviewed": false
     }
   }
 }

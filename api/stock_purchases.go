@@ -44,6 +44,8 @@ func (s *Server) purchaseFail(w http.ResponseWriter, r *http.Request, err error)
 		err = fmt.Errorf("%w: %s", errBadRequest, msg)
 	case errors.Is(err, stock.ErrSupplierExists), errors.Is(err, stock.ErrTooSoon), errors.Is(err, stock.ErrSecondApproval):
 		err = fmt.Errorf("%w: %s", errConflict, msg)
+	case errors.Is(err, stock.ErrLinked):
+		err = fmt.Errorf("%w: the order is with a linked business: record what came with All came or Not all came once it is delivered", errConflict)
 	default:
 		s.stockFail(w, r, err)
 		return

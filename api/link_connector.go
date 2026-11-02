@@ -336,22 +336,32 @@ func (s *Server) linkOrderStep(ctx context.Context, p *Principal, c linkconn.Cal
 	if slices.Contains(reached, cur.Status) {
 		return map[string]any{"reference": cur.Reference, "status": cur.Status}, nil
 	}
-	if step == links.StepAccept {
-		// Checked now, not only when the order came: the balance moves.
-		if c, o := s.creditCheck(ctx, p.TenantID, cur.ID.String()); o != nil && c.Over {
-			cur.OverLimitAt = o.OverLimitAt
-			if cur.OverLimitAt == nil {
-				now := time.Now()
-				cur.OverLimitAt = &now
+	var checked *links.Credit
+	o, _, err := s.sellerStep(ctx, p.TenantID, cur.ID.String(), step, links.StepIn{Note: inStr(c.Input, "note")}, actorOf(p), p.Actor(), func(tx pgx.Tx, o links.Order) error {
+		if step == links.StepAccept {
+			// Checked now, in the accepting transaction with the order
+			// locked, not only when the order came: the balance moves, and
+			// two runs accepting at once cannot both pass.
+			o, cr, err := links.CreditCheckTx(ctx, tx, p.TenantID, o.ID.String())
+			if err != nil {
+				return err
+			}
+			if cr.Changed {
+				checked = &cr
+			}
+			if cr.Over || o.OverLimitAt != nil {
+				return fmt.Errorf("%w: %s takes %s past the credit limit you set; a person accepts it on the order's page", links.ErrState, o.Reference, o.BuyerName)
 			}
 		}
-	}
-	if step == links.StepAccept && cur.OverLimitAt != nil {
-		return nil, fmt.Errorf("%w: %s takes %s past the credit limit you set; a person accepts it on the order's page", links.ErrState, cur.Reference, cur.BuyerName)
-	}
-	o, _, err := s.sellerStep(ctx, p.TenantID, cur.ID.String(), step, links.StepIn{Note: inStr(c.Input, "note")}, actorOf(p), p.Actor(), func(tx pgx.Tx, o links.Order) error {
 		return wfAudit(ctx, tx, p, "trade_order."+step, o.Reference, map[string]any{"order_id": o.ID, "buyer": o.Buyer})
 	})
+	if checked != nil {
+		// The flag was set by the refused check (its transaction rolled
+		// back with the step): set again on its own, and both sides told.
+		if cr, flagged := s.creditCheck(ctx, p.TenantID, cur.ID.String()); flagged != nil && !cr.Changed && cr.Over {
+			s.creditTold(ctx, p.TenantID, *flagged, cr)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
