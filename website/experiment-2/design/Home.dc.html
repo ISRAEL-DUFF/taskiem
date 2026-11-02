@@ -97,9 +97,9 @@ body{margin:0}
 <section class="onpine" style="margin:0 clamp(12px,2vw,24px);border-radius:24px;background:#0d3b2e;color:#ffffff;overflow:hidden">
   <div class="container" style="display:flex;flex-wrap:wrap;align-items:center;gap:clamp(40px,6vw,80px);padding-top:clamp(44px,7vw,96px);padding-bottom:clamp(44px,7vw,96px)">
     <div style="flex:1 1 480px;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:28px">
-      <p class="label">For traders, shops, schools and lenders</p>
-      <h1 style="font-weight:800;font-size:clamp(44px,6.4vw,92px);line-height:1;letter-spacing:-0.035em;color:#ffffff;text-wrap:balance">Run your business from <span style="color:#c8f169">WhatsApp.</span></h1>
-      <p class="lede" style="max-width:560px">Tell Taskiem what to do in your own words. It reads back exactly what it will do, waits for your yes, then does it every time, whether you remember or not.</p>
+      <p class="label">Business workflow automation</p>
+      <h1 style="font-weight:800;font-size:clamp(44px,6.4vw,92px);line-height:1;letter-spacing:-0.035em;color:#ffffff;text-wrap:balance">Automate your business. <span style="color:#c8f169">From WhatsApp.</span></h1>
+      <p class="lede" style="max-width:580px">The jobs you repeat every day, chasing debtors, matching payments, paying staff, keeping records, become workflows that run on their own. Describe one in your own words, or build it on the canvas. Taskiem reads back exactly what it will do, waits for your yes, then does it every time.</p>
       <div class="btn-row" id="whatsapp">
         <a class="btn btn-pine-main" href="#whatsapp-chat">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg>
@@ -107,7 +107,7 @@ body{margin:0}
         </a>
         <a class="btn btn-pine-alt" href="#start-web">Start on the web</a>
       </div>
-      <p style="font-size:15px;line-height:1.5;color:rgba(255,255,255,.78)">14 days free. Priced in naira. No charge per run.</p>
+      <p style="font-size:15px;line-height:1.5;color:rgba(255,255,255,.78)">14 days free. No charge per run.</p>
     </div>
 
     <!-- Phone: the real conversation -->
@@ -146,13 +146,89 @@ body{margin:0}
   </div>
 </section>
 
+<!-- THE CANVAS: a workflow as the web app draws it -->
+<section class="sec" id="canvas" style="padding-bottom:0">
+  <div class="container" style="display:flex;flex-direction:column;gap:40px">
+    <div style="max-width:800px;display:flex;flex-direction:column;gap:16px">
+      <p class="label">Workflow automation</p>
+      <h2 class="h2">Every job becomes a workflow you can see, step by step.</h2>
+      <p class="lede">Describe it in chat and Taskiem draws it. Or open the canvas in the web app and build it yourself: what starts it, then each step as a card, joined by arrows. This is the payroll workflow, as it is in the app.</p>
+    </div>
+    <div class="wf" aria-label="The payroll workflow on the canvas: on the 25th of the month, read the staff list, check the balance, get the payroll approved; if yes, pay each person, record each payment and tell the owner; if no, tell the owner nothing was paid">
+      <div class="wf-bar">
+        <span class="wf-back" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></span>
+        <span class="wf-name">Run payroll</span>
+        <span class="wf-tag">Version 3 · Draft</span>
+        <span class="wf-tabs" aria-hidden="true"><span class="on">Steps</span><span>Runs</span><span>Settings</span></span>
+        <span class="wf-actions" aria-hidden="true"><span class="wf-btn">Save draft</span><span class="wf-btn">Test workflow</span><span class="wf-btn main">Publish</span></span>
+      </div>
+      <div class="wf-canvas">
+        <div class="wf-stage" aria-hidden="true">
+          <svg class="wf-edges" viewBox="0 0 1160 440" preserveAspectRatio="none">
+            <path d="M280 100 H330"/><path d="M570 100 H620"/><path d="M860 100 H910"/>
+            <path class="yes" d="M1030 144 V196 Q1030 208 1018 208 H172 Q160 208 160 220 V272"/>
+            <path class="no" d="M1030 144 V272"/>
+            <path d="M280 316 H330"/><path d="M570 316 H620"/>
+            <circle class="plus" cx="305" cy="100" r="11"/><circle class="plus" cx="595" cy="100" r="11"/><circle class="plus" cx="885" cy="100" r="11"/>
+            <circle class="plus" cx="305" cy="316" r="11"/><circle class="plus" cx="595" cy="316" r="11"/>
+            <g class="plus-x"><path d="M301 100h8M305 96v8"/><path d="M591 100h8M595 96v8"/><path d="M881 100h8M885 96v8"/><path d="M301 316h8M305 312v8"/><path d="M591 316h8M595 312v8"/></g>
+          </svg>
+          <span class="wf-lab" style="left:948px;top:196px">Yes</span>
+          <span class="wf-lab" style="left:1040px;top:196px">No</span>
+
+          <div class="wf-card trigger" style="left:40px;top:56px">
+            <span class="wf-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+            <span class="wf-text"><span class="wf-kicker">What starts it</span><span class="wf-title">On the 25th of the month, 8:00</span><span class="wf-line">Lagos time</span></span>
+          </div>
+          <div class="wf-card" style="left:330px;top:56px" data-run="1">
+            <span class="wf-ico tone-brand"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Read the staff list</span><span class="wf-line">Your records · Staff</span></span>
+          </div>
+          <div class="wf-card" style="left:620px;top:56px" data-run="2">
+            <span class="wf-ico tone-info"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Check the balance</span><span class="wf-line">Payments · Moniepoint</span></span>
+          </div>
+          <div class="wf-card" style="left:910px;top:56px" data-run="3">
+            <span class="wf-ico tone-warn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.5 3 8 7.5 9.5 4.5-1.5 7.5-5 7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Get the payroll approved</span><span class="wf-line">Approval · the owner, with a PIN</span></span>
+          </div>
+
+          <div class="wf-card" style="left:40px;top:272px" data-run="4">
+            <span class="wf-ico tone-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M18 15l2 2 3-3"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Pay each person</span><span class="wf-line">For each · Pay to bank, once</span></span>
+          </div>
+          <div class="wf-card" style="left:330px;top:272px" data-run="5">
+            <span class="wf-ico tone-brand"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M12 10v10"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Record each payment</span><span class="wf-line">Your records · Add rows</span></span>
+          </div>
+          <div class="wf-card" style="left:620px;top:272px" data-run="6">
+            <span class="wf-ico tone-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Tell the owner how it went</span><span class="wf-line">WhatsApp · Paid 3 people, ₦255,000</span></span>
+          </div>
+          <div class="wf-card dim" style="left:910px;top:272px">
+            <span class="wf-ico tone-muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></span>
+            <span class="wf-text"><span class="wf-title">Tell the owner nothing was paid</span><span class="wf-line">WhatsApp · Tell</span></span>
+          </div>
+        </div>
+        <div class="wf-tools" aria-hidden="true"><span>+</span><span>−</span><span>⤢</span><span class="wide">Tidy up</span></div>
+        <div class="wf-map" aria-hidden="true"><i style="left:4%;top:18%;background:#0d3b2e"></i><i style="left:30%;top:18%"></i><i style="left:56%;top:18%"></i><i style="left:82%;top:18%"></i><i style="left:4%;top:62%"></i><i style="left:30%;top:62%"></i><i style="left:56%;top:62%"></i><i style="left:82%;top:62%;opacity:.4"></i></div>
+      </div>
+    </div>
+    <div class="grid" style="--min:280px">
+      <div style="display:flex;flex-direction:column;gap:8px"><h3 class="h3" style="font-size:19px">Starts by itself</h3><p class="small">On a schedule, when a payment lands, when an order or a form comes in, or when you say so.</p></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><h3 class="h3" style="font-size:19px">Each step is a card</h3><p class="small">Read a table, send a message, ask for an approval, pay someone. An If has a Yes and a No. For each repeats.</p></div>
+      <div style="display:flex;flex-direction:column;gap:8px"><h3 class="h3" style="font-size:19px">Every run on record</h3><p class="small">Open any run to see what each step did, what it read and what it sent, and why it stopped.</p></div>
+    </div>
+  </div>
+</section>
+
 <!-- PROBLEM -->
 <section class="sec">
   <div class="container" style="display:flex;flex-direction:column;gap:48px">
     <div style="max-width:760px;display:flex;flex-direction:column;gap:16px">
       <p class="label">The problem</p>
       <h2 class="h2">You spend your day chasing, checking and counting.</h2>
-      <p class="lede">Every business has small jobs that never end. Each one is simple. Together they eat the day.</p>
+      <p class="lede">Every business has small jobs that never end. Each one is simple. Together they eat the day. Each one can be a workflow.</p>
     </div>
     <div class="grid" style="--min:240px">
       <div class="card">
@@ -190,8 +266,8 @@ body{margin:0}
     <div class="grid" style="--min:290px">
       <div class="card-band">
         <p class="label" style="color:#c8f169;font-size:15px">01</p>
-        <h3 class="h3">Say it</h3>
-        <p class="small">Type or send a message in your own words, the way you would tell a person.</p>
+        <h3 class="h3">Say it, or draw it</h3>
+        <p class="small">Type it in your own words, the way you would tell a person, or build it step by step on the canvas in the web app.</p>
         <p style="margin-top:auto;padding-top:6px;font-size:16px;line-height:1.5;color:#c8f169;font-weight:500">“Every Friday at 10am, text the customers who still owe me.”</p>
       </div>
       <div class="card-band">
@@ -218,8 +294,8 @@ body{margin:0}
   <div class="container" style="display:flex;flex-direction:column;gap:48px">
     <div style="max-width:760px;display:flex;flex-direction:column;gap:16px">
       <p class="label">Ready-made</p>
-      <h2 class="h2">Six jobs Taskiem can take off your hands.</h2>
-      <p class="lede">A workflow is something Taskiem does for you again and again. Pick one, answer a few questions, say yes.</p>
+      <h2 class="h2">Six workflows, ready to run.</h2>
+      <p class="lede">A workflow is a job Taskiem does for you again and again: on a schedule, or when something happens, like a payment landing. Pick one and answer a few questions, or build your own.</p>
     </div>
     <div class="grid" style="--min:320px">
       <div class="card-pine">
@@ -297,7 +373,7 @@ body{margin:0}
       <div class="card">
         <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
         <h3 class="h3">The web app</h3>
-        <p class="small">Your tables, approvals and records on a bigger screen.</p>
+        <p class="small">Build workflows on the canvas, see every run and what it did, your tables and your team.</p>
       </div>
     </div>
   </div>
@@ -582,7 +658,7 @@ body{margin:0}
       </a>
       <a class="btn btn-pine-alt" href="#start-web" id="start-web">Start on the web</a>
     </div>
-    <p style="font-size:15px;line-height:1.5;color:rgba(255,255,255,.78)">14 days free. Priced in naira. No charge per run.</p>
+    <p style="font-size:15px;line-height:1.5;color:rgba(255,255,255,.78)">14 days free. No charge per run.</p>
   </div>
 </section>
 
@@ -597,7 +673,7 @@ body{margin:0}
           <img src="/_blob/883c87704e19d22b80e24a64c63ed9de" alt="" width="40" height="40" style="width:40px;height:40px">
           <img src="/_blob/8c096f830081fc34bad0c5ab0c1c76ab" alt="" width="102" height="22" style="width:102px;height:22px">
         </a>
-        <p style="font-size:16px;line-height:1.55;color:rgba(255,255,255,.82)">Automation Nigerian businesses can trust with their money, from the corner shop to the regulated lender.</p>
+        <p style="font-size:16px;line-height:1.55;color:rgba(255,255,255,.82)">Business workflow automation Nigerian businesses can trust with their money, from the corner shop to the regulated lender.</p>
       </div>
       <div style="flex:2 1 420px;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:32px">
         <div style="display:flex;flex-direction:column;gap:4px">
@@ -622,7 +698,7 @@ body{margin:0}
       </div>
     </div>
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;padding-top:24px;border-top:1px solid rgba(255,255,255,.16);font-size:15px;color:rgba(255,255,255,.78)">
-      <p>Made in Lagos by the team behind Xenibase.</p>
+      <p>Built by the team behind Xenibase.</p>
       <p>© 2026 Taskiem</p>
     </div>
   </div>

@@ -255,7 +255,7 @@ function renderInPage({ name, sources, props, overrides, patches }) {
   const textIs = (el, start) => el.textContent.trim().startsWith(start);
   const all = (sel) => [...root.querySelectorAll(sel)];
   if (name === "Home") {
-    const jobs = all("h2").find((h) => textIs(h, "Six jobs")).closest("section");
+    const jobs = all("h2").find((h) => textIs(h, "Six workflows")).closest("section");
     jobs.querySelectorAll(".card, .card-pine").forEach((c, i) => {
       const t = patches.homeCards[i];
       if (!t) return;
@@ -310,14 +310,16 @@ await mkdir(path.join(dist, "integrations"), { recursive: true });
 for (const f of ["mark.svg", "mark-reversed.svg", "mark-small.svg", "wordmark.svg", "wordmark-reversed.svg", "avatar.svg", "og.png"]) {
   await copyFile(path.join(repo, "docs/brand/relay", f), path.join(dist, "img", f));
 }
-// The design's stylesheet, with its dark theme also applied when the reader's
-// device is set to dark ("auto"), then this site's own additions.
+// The design's stylesheet, with its dark theme applied only when the reader
+// chose it with the header's switch (or ?theme=dark), and following the
+// device only when they asked for that (?theme=auto); light is the default.
+// Then this site's own additions.
 let css = await readFile(path.join(design, "tk.css"), "utf8");
 const darkRules = css.match(/[^}]*\[data-theme="dark"\][^{]*\{[^}]*\}/g) || [];
-// The header's switch sets <html data-force="light|dark">, which wins
-// over the device's setting.
+// The header's switch sets <html data-force="light|dark">; "auto" follows
+// the device. Nothing set is light.
 const asAuto = (sel) => darkRules.map((r) => r.trim().replaceAll('.tk[data-theme="dark"]', `${sel} .tk[data-theme="auto"]`)).join("\n");
-css += `\n@media (prefers-color-scheme:dark){\n${asAuto('html:not([data-force="light"])')}\n}\n${asAuto('html[data-force="dark"]')}\n`;
+css += `\n@media (prefers-color-scheme:dark){\n${asAuto('html[data-force="auto"]')}\n}\n${asAuto('html[data-force="dark"]')}\n`;
 css += await readFile(path.join(here, "site.css"), "utf8");
 await writeFile(path.join(dist, "tk.css"), css);
 await copyFile(path.join(here, "site.js"), path.join(dist, "site.js"));
@@ -333,15 +335,15 @@ const page = (title, description, body, extra = "") => `<!doctype html>
 <meta property="og:image" content="/img/og.png">
 <meta name="theme-color" content="#0d3b2e">
 <script>
-// The reader's theme, before the page paints: ?theme=light|dark|auto, else their last choice.
+// The reader's theme, before the page paints: light unless they chose dark
+// with the switch, or a link said ?theme=light|dark|auto (auto follows the device).
 (function () {
   try {
     var q = new URLSearchParams(location.search).get("theme");
-    if (q === "light" || q === "dark") localStorage.setItem("tk-theme", q);
-    if (q === "auto") localStorage.removeItem("tk-theme");
-    var t = q === "auto" ? null : q || localStorage.getItem("tk-theme");
-    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-force", t);
-  } catch (e) { /* storage blocked: follow the device */ }
+    if (q === "light" || q === "dark" || q === "auto") localStorage.setItem("tk-theme", q);
+    var t = q || localStorage.getItem("tk-theme");
+    if (t === "dark" || t === "auto") document.documentElement.setAttribute("data-force", t);
+  } catch (e) { /* storage blocked: light */ }
 })();
 </script>
 <link rel="icon" href="/img/mark-small.svg" type="image/svg+xml">
@@ -362,14 +364,14 @@ const finish = (body) => {
   for (const [from, to] of Object.entries({ ...blobs, ...links })) out = out.replaceAll(`"${from}"`, `"${to}"`);
   return out;
 };
-const lede = "Tell Taskiem what to do in your own words. It reminds customers who owe you, thanks those who pay, and pays your staff after you approve.";
+const lede = "Business workflow automation for Nigerian businesses. Tell Taskiem what to do in your own words, or build it on the canvas: it reminds customers who owe you, matches what they pay, and pays your staff after you approve.";
 
 const browser = await chromium.launch();
 const tab = await browser.newPage();
 await tab.setContent("<!doctype html><html><body></body></html>");
 for (const [name, out] of Object.entries(pages)) {
   const r = await tab.evaluate(renderInPage, { name, sources, props: { theme: "auto" }, overrides, patches });
-  const title = out === "index" || !r.title ? "Taskiem · Run your business from WhatsApp" : `${r.title} · Taskiem`;
+  const title = out === "index" || !r.title ? "Taskiem · Business workflow automation, from WhatsApp" : `${r.title} · Taskiem`;
   const extra = name === "Pricing" ? `<script>window.TK_PRICES=${JSON.stringify(pricing)}</script>\n` : "";
   await writeFile(path.join(dist, `${out}.html`), page(title, lede, finish(r.body), extra));
 }

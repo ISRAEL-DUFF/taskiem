@@ -48,3 +48,63 @@
 @keyframes tk-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 @keyframes tk-flip { 0% { transform: scale(.82); opacity: .3; } 60% { transform: scale(1.06); opacity: 1; } 100% { transform: none; } }
 @keyframes tk-press { 50% { transform: scale(.93); } }
+
+/* ---------- The canvas: a workflow as the web app's builder draws it ----------
+   Pine card for what starts it, white cards for steps with a tinted icon tile,
+   arrows with a + on each, Yes and No out of an approval (docs/workflow-builder.md). */
+.tk .wf { background: var(--card); border: 1px solid var(--line); border-radius: 24px; overflow: hidden; box-shadow: 0 24px 60px rgba(13, 59, 46, .10); }
+.tk .wf-bar { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--ink); background: var(--card); }
+.tk .wf-back { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); flex: none; }
+.tk .wf-name { font-weight: 800; font-size: 15px; white-space: nowrap; }
+.tk .wf-tag { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.tk .wf-tabs { display: flex; gap: 4px; margin-left: 8px; }
+.tk .wf-tabs span { padding: 6px 12px; border-radius: 999px; font-size: 13.5px; font-weight: 500; color: var(--muted); }
+.tk .wf-tabs span.on { background: var(--ground); color: var(--ink); font-weight: 800; }
+.tk .wf-actions { margin-left: auto; display: flex; gap: 8px; }
+.tk .wf-btn { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); font-size: 13.5px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.tk .wf-btn.main { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+.tk .wf-canvas { position: relative; overflow-x: auto; overflow-y: hidden; height: 440px;
+  background-color: var(--ground);
+  background-image: radial-gradient(color-mix(in srgb, var(--muted) 38%, transparent) 1.2px, transparent 1.3px); background-size: 22px 22px; }
+.tk .wf-stage { position: relative; width: 1160px; height: 440px; transform-origin: 0 0; }
+.tk .wf-edges { position: absolute; inset: 0; width: 1160px; height: 440px; overflow: visible; }
+.tk .wf-edges path { fill: none; stroke: color-mix(in srgb, var(--muted) 60%, var(--line)); stroke-width: 1.75; }
+.tk .wf-edges path.no { stroke-dasharray: 4 4; opacity: .7; }
+.tk .wf-edges .plus { fill: var(--card); stroke: color-mix(in srgb, var(--muted) 60%, var(--line)); stroke-width: 1.25; }
+.tk .wf-edges .plus-x path { stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; }
+.tk .wf-lab { position: absolute; font-size: 11.5px; font-weight: 600; line-height: 1.5; padding: 0 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted); }
+.tk .wf-card { position: absolute; display: flex; align-items: center; gap: 12px; width: 240px; padding: 12px 14px; border-radius: 14px;
+  background: var(--card); border: 1px solid color-mix(in srgb, var(--muted) 45%, var(--line)); color: var(--ink);
+  box-shadow: 0 6px 18px rgba(13, 59, 46, .08); }
+.tk .wf-card::before, .tk .wf-card::after { content: ""; position: absolute; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--card); border: 1.5px solid color-mix(in srgb, var(--muted) 60%, var(--line)); }
+.tk .wf-card::before { left: -5px; }
+.tk .wf-card::after { right: -5px; }
+.tk .wf-card.trigger::before { display: none; }
+.tk .wf-card.trigger { background: #0d3b2e; border-color: #0d3b2e; color: #ffffff; }
+.tk .wf-card.trigger::after { border-color: #0d3b2e; }
+.tk .wf-card.dim { opacity: .62; }
+.tk .wf-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; flex: none; background: var(--ground); color: var(--muted); }
+.tk .wf-card.trigger .wf-ico { background: rgba(255, 255, 255, .1); color: #c8f169; }
+.tk .wf-ico.tone-brand { background: color-mix(in srgb, #0d3b2e 9%, var(--card)); color: #0d3b2e; }
+.tk .wf-ico.tone-ok { background: color-mix(in srgb, #1f7a50 13%, var(--card)); color: #1f7a50; }
+.tk .wf-ico.tone-info { background: color-mix(in srgb, #2f5bd3 12%, var(--card)); color: #2f5bd3; }
+.tk .wf-ico.tone-warn { background: #fdf0dc; color: #8a3410; }
+.tk .wf-ico.tone-muted { background: var(--ground); color: var(--muted); }
+.tk[data-theme="dark"] .wf-ico.tone-brand, html[data-force="dark"] .tk .wf-ico.tone-brand { background: rgba(200, 241, 105, .14); color: #c8f169; }
+.tk[data-theme="dark"] .wf-ico.tone-warn, html[data-force="dark"] .tk .wf-ico.tone-warn { background: rgba(253, 240, 220, .14); color: #f0b27a; }
+.tk .wf-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.3; }
+.tk .wf-kicker { font-size: 11.5px; font-weight: 500; color: rgba(255, 255, 255, .78); }
+.tk .wf-title { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk .wf-card.trigger .wf-title { white-space: normal; }
+.tk .wf-line { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk .wf-card.trigger .wf-line { color: rgba(255, 255, 255, .78); }
+/* A run: each card along the Yes path gets its green tick in turn (site.js). */
+.tk .wf-card .wf-done { position: absolute; right: -7px; top: -7px; width: 18px; height: 18px; border-radius: 50%; background: #1f7a50; color: #fff; display: none; place-items: center; font-size: 11px; font-weight: 800; box-shadow: 0 0 0 2px var(--card); }
+.tk .wf-card.ran .wf-done { display: grid; animation: tk-flip .45s cubic-bezier(.2, .8, .3, 1.2) both; }
+.tk .wf-card.ran { border-color: #1f7a50; }
+.tk .wf-tools { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 14px; color: var(--ink); }
+.tk .wf-tools span { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 8px; font-weight: 800; }
+.tk .wf-tools span.wide { padding: 0 10px; font-size: 13px; }
+.tk .wf-map { position: absolute; right: 14px; bottom: 14px; width: 132px; height: 52px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+.tk .wf-map i { position: absolute; width: 14%; height: 20%; border-radius: 2px; background: color-mix(in srgb, var(--muted) 55%, var(--line)); }
+@media (max-width: 700px) { .tk .wf-bar { gap: 10px; padding: 10px 14px; } .tk .wf-bar .wf-tabs, .tk .wf-bar .wf-tag, .tk .wf-bar .wf-actions .wf-btn:not(.main), .tk .wf-map { display: none; } .tk .wf-tools { left: 10px; bottom: 10px; } }

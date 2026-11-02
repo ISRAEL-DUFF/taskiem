@@ -34,7 +34,7 @@ export default tseslint.config(
     files: ["website/experiment-2/site.js"],
     languageOptions: {
       sourceType: "script",
-      globals: { window: "readonly", document: "readonly", setTimeout: "readonly", performance: "readonly", requestAnimationFrame: "readonly", IntersectionObserver: "readonly" },
+      globals: { window: "readonly", document: "readonly", setTimeout: "readonly", performance: "readonly", requestAnimationFrame: "readonly", IntersectionObserver: "readonly", ResizeObserver: "readonly" },
     },
   },
   // The engineering atlas (docs/atlas/README.md): its build runs on Node,

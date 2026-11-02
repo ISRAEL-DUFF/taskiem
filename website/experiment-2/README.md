@@ -7,14 +7,14 @@ The Taskiem website as Claude Design drew it ([the canvas](https://claude.ai/art
 | `design/` | The canvas's pages and components as Claude Design saved them (`.dc.html`), its index (`canvas.json`) and its stylesheet (`tk.css`). Change the design in the canvas, then copy the files here again |
 | `build.mjs` | Renders each page in Chromium, as the canvas does, into plain HTML in `dist/` (not committed), with the repository's own facts in place of what the drawing wrote by hand |
 | `pages/Service.dc.html` | A page for each service on *Works with*, in the design's parts and styles: the drawing links to them but does not draw them |
-| `site.css`, `site.js` | What a real website needs beyond the drawing: the phone menu, the light/dark switch, the monthly and yearly prices, the contact form, and motion |
+| `site.css`, `site.js` | What a real website needs beyond the drawing: the phone menu, the light/dark switch (light by default), the monthly and yearly prices, the contact form, and motion |
 
 ```sh
 node website/experiment-2/build.mjs                                   # dist/
 node website/experiment-2/build.mjs --whatsapp 2348000000000 --app https://app.example.ng --email hello@example.ng
 ```
 
-It needs Go (it runs `go run ./tools/docsite -data` for the facts) and Playwright with Chromium, as the card maker does (`pnpm install`, then `pnpm --filter web exec playwright install chromium` once). The logos are the brand's own files, copied from `docs/brand/relay` at build time, never the canvas's uploads. Every page follows the reader's light or dark setting until they choose one with the switch in the header, which the site then remembers. A link can choose for them: `?theme=light`, `?theme=dark`, or `?theme=auto` to follow the device again.
+It needs Go (it runs `go run ./tools/docsite -data` for the facts) and Playwright with Chromium, as the card maker does (`pnpm install`, then `pnpm --filter web exec playwright install chromium` once). The logos are the brand's own files, copied from `docs/brand/relay` at build time, never the canvas's uploads. Every page is light until the reader chooses dark with the switch in the header, which the site then remembers. A link can choose for them: `?theme=light`, `?theme=dark`, or `?theme=auto` to follow the device's setting.
 
 ## Publishing: taskiem.ng on Vercel
 
