@@ -207,6 +207,22 @@ func LooksLikePhone(q string) bool {
 	return len(digitsRe.FindAllString(q, -1)) >= 7 && strings.Trim(q, "+0123456789 -()") == ""
 }
 
+var addressRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// Address is q as a storefront address: lower-case, without a path's
+// slashes or spaces around it.
+func Address(q string) string { return strings.ToLower(strings.Trim(strings.TrimSpace(q), "/ ")) }
+
+// LooksLikeAddress reports whether q is shaped like a storefront address
+// (one word, as a page's address is written, 3 to 30 characters): when a
+// search finds nothing for it, the one row offered sends a request to
+// whoever uses that address, and looks the same whether or not anyone
+// does.
+func LooksLikeAddress(q string) bool {
+	a := Address(q)
+	return len(a) >= 3 && len(a) <= 30 && addressRe.MatchString(a)
+}
+
 // SearchTx finds businesses that chose to be found, by name, by what they
 // sell or do, and by area.
 func SearchTx(ctx context.Context, tx pgx.Tx, q string, limit int) ([]Card, error) {

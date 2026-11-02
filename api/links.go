@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -108,6 +109,12 @@ func (s *Server) searchLinks(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkErr(err))
 		return
 	}
+	// One word that names no business found may be a storefront's address
+	// (as "link <address>" in chat): the one row that sends a request to
+	// whoever uses it, the same whether or not anyone does.
+	if len(out.Results) == 0 && links.LooksLikeAddress(q) {
+		out.Blind = &blindOffer{Kind: "address", Shown: links.Address(q)}
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -163,13 +170,15 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 		}
 		blind = &links.Blind{Phone: phone}
 	case req.Address != "":
-		blind = &links.Blind{Slug: strings.Trim(strings.TrimSpace(req.Address), "/")}
+		blind = &links.Blind{Slug: links.Address(req.Address)}
 	case req.Business == nil:
 		s.fail(w, r, fmt.Errorf("%w: name a business, a link code, a phone number or a storefront address", errBadRequest))
 		return
 	}
 	var told uuid.UUID
 	var out linkRequestOut
+	// The business's name, for the answer, where it was shown before asking.
+	name := "the business"
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		if blind != nil {
@@ -182,7 +191,7 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
-			target = c.Business
+			target, name = c.Business, c.Name
 			told, err = links.RequestByCodeTx(r.Context(), tx, req.Code, req.Role, by)
 			if err != nil {
 				return err
@@ -216,7 +225,13 @@ func (s *Server) requestLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if out.Link == nil {
-		s.fail(w, r, pgx.ErrNoRows)
+		// Taken, but nothing to show yet (the link's state is the
+		// database's to decide): answered as a request just sent is, so
+		// the answer never says what stood before. A request where a
+		// blind one of ours stood is the case the definer makes; it
+		// shows as sent.
+		out.Sent, out.Message = true, tr(lang.EN, "link.sent", "name", name)
+		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
 	switch out.Link.State {
@@ -405,8 +420,15 @@ func (s *Server) linkKey(tenant uuid.UUID) []byte {
 
 // --- telling each side's people ---
 
-// linkPrefix starts the buttons of a link request in chat: lk:<answer>:<link>.
+// linkPrefix starts the buttons of a link request in chat that need no
+// signature: the role chosen (lk:role:<role>) and an offer's Link
+// (lk:offer:<code>). Accept, Decline and Block carry a signed token, as
+// an approval's buttons do (linkAnswerButtonsTx).
 const linkPrefix = "lk:"
+
+// linkStepPrefix is what whatsapp_tokens carries as the step of a link
+// request's buttons: link:<answer>, with the link as the run.
+const linkStepPrefix = "link:"
 
 // linkPeople are the members of the business in tx's scope who may answer
 // for its links: the built-in roles holding link.manage.
@@ -420,7 +442,12 @@ func linkPeopleTx(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, error) {
 
 type linkTold struct {
 	channel, addr string
+	user          uuid.UUID
 }
+
+// linkButtons makes the chat buttons of a link for one person, in a
+// transaction of the business told (they are signed and recorded there).
+type linkButtons func(ctx context.Context, tx pgx.Tx, l lang.Tag, tenant uuid.UUID, link links.Link, user uuid.UUID, channel string) ([]whatsapp.Button, error)
 
 // tellLink tells the people of a business who answer for its links about
 // one of them, in the app's bell and in chat, in that business's own
@@ -428,7 +455,7 @@ type linkTold struct {
 // is what taskiem_links_of shows it. pick chooses the link; buttons are
 // the chat buttons for it.
 func (s *Server) tellLink(ctx context.Context, tenant uuid.UUID, pick func(links.Link) bool, text func(l lang.Tag, link links.Link, org string) (title, body string),
-	buttons func(l lang.Tag, link links.Link) []whatsapp.Button) {
+	buttons linkButtons) {
 	var link links.Link
 	var org string
 	var to []linkTold
@@ -460,7 +487,7 @@ func (s *Server) tellLink(ctx context.Context, tenant uuid.UUID, pick func(links
 			}
 			for _, u := range users {
 				if a, ok := addrs[u]; ok && !slices.ContainsFunc(to, func(t linkTold) bool { return t.addr == a }) {
-					to = append(to, linkTold{channel, a})
+					to = append(to, linkTold{channel, a, u})
 				}
 			}
 		}
@@ -482,7 +509,16 @@ func (s *Server) tellLink(ctx context.Context, tenant uuid.UUID, pick func(links
 		title, body := text(l, link, org)
 		var bs []whatsapp.Button
 		if buttons != nil {
-			bs = buttons(l, link)
+			// Each person's buttons are their own, signed and recorded in
+			// the business's scope.
+			if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+				var err error
+				bs, err = buttons(ctx, tx, l, tenant, link, t.user, t.channel)
+				return err
+			}); err != nil {
+				s.Logger.Warn("links: a chat message's buttons", "tenant", tenant, "err", err)
+				continue
+			}
 		}
 		if err := s.waSay(ctx, ch, t.addr, "", strings.TrimSpace(title+"\n"+body), bs...); err != nil {
 			s.Logger.Warn("links: a chat message", "tenant", tenant, "err", err)
@@ -504,16 +540,39 @@ func (s *Server) tellLinkAsked(ctx context.Context, tenant, by uuid.UUID) {
 	s.background(ctx, "link asked", func(ctx context.Context) {
 		s.tellLink(ctx, tenant, func(l links.Link) bool { return l.Business == by && l.State == links.AskedUs }, func(l lang.Tag, link links.Link, org string) (string, string) {
 			return tr(l, "link.asked_title", "name", link.Name), tr(l, "link.asked_body", "name", link.Name, "org", org, "role", linkRole(l, link.Role))
-		}, linkAnswerButtons)
+		}, s.linkAnswerButtonsTx)
 	})
 }
 
-func linkAnswerButtons(l lang.Tag, link links.Link) []whatsapp.Button {
-	return []whatsapp.Button{
-		{ID: linkPrefix + links.Accept + ":" + link.ID.String(), Title: tr(l, "link.button_accept")},
-		{ID: linkPrefix + links.Decline + ":" + link.ID.String(), Title: tr(l, "link.button_decline")},
-		{ID: linkPrefix + links.Block + ":" + link.ID.String(), Title: tr(l, "link.button_block")},
+// linkAnswerButtonsTx is Accept, Decline and Block on a request, for one
+// person of the business asked (tx's scope), signed as an approval's
+// buttons are (spec 9.1; whatsapp_approvals.go): each a decision token
+// bound to the business, the link (as the run), the answer (as the step
+// link:<answer>), the person and the request's expiry, recorded in
+// whatsapp_tokens under one notice, so using one spends the three. A
+// button copied from another person's message, another business's, or
+// one made up, is refused by waDecide before the link is looked at.
+func (s *Server) linkAnswerButtonsTx(ctx context.Context, tx pgx.Tx, l lang.Tag, tenant uuid.UUID, link links.Link, user uuid.UUID, channel string) ([]whatsapp.Button, error) {
+	exp := time.Unix(link.ExpiresAt.Unix(), 0)
+	if !exp.After(time.Now()) {
+		return nil, nil
 	}
+	notice := uuid.New()
+	var out []whatsapp.Button
+	for _, a := range []string{links.Accept, links.Decline, links.Block} {
+		decision := "rejected"
+		if a == links.Accept {
+			decision = "approved"
+		}
+		c := whatsapp.Claims{Tenant: tenant, Nonce: whatsapp.NewNonce(), Purpose: whatsapp.PurposeDecide, Decision: decision, Expires: exp,
+			Run: link.ID, Step: linkStepPrefix + a, Level: 0, User: user}
+		if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_tokens (nonce, tenant_id, purpose, run_id, step_id, level, user_id, decision, notice, expires_at, channel)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, c.Nonce[:], tenant, c.Purpose, link.ID, c.Step, 0, user, decision, notice, exp, channel); err != nil {
+			return nil, err
+		}
+		out = append(out, whatsapp.Button{ID: s.chatSigner().Sign(c), Title: tr(l, "link.button_"+a)})
+	}
+	return out, nil
 }
 
 // tellLinkAnswered tells the other side what it may know of an answer: an

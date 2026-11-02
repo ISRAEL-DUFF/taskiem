@@ -54,6 +54,21 @@ func TestBusinessLinksByChat(t *testing.T) {
 	if out := search(ada, "0803 123 4567"); len(out["results"].([]any)) != 0 || out["blind"].(map[string]any)["shown"] != "0803…4567" {
 		t.Errorf("a phone searched: %v", out)
 	}
+	// So is a storefront address that names no business found: the same
+	// row, whether or not a page is behind it; a name found is a result.
+	for _, q := range []string{"adas-kitchen", "/dangote-stores/", "nobody-here"} {
+		out := search(ada, q)
+		b, _ := out["blind"].(map[string]any)
+		if len(out["results"].([]any)) != 0 || b == nil || b["kind"] != "address" || b["shown"] != strings.Trim(q, "/") {
+			t.Errorf("an address searched (%s): %v", q, out)
+		}
+	}
+	if out := search(ada, "dangote"); out["blind"] != nil {
+		t.Errorf("a name found offered a blind request too: %v", out)
+	}
+	if out := search(ada, "cement in ikeja"); out["blind"] != nil {
+		t.Errorf("words offered a blind request: %v", out)
+	}
 	// A viewer sees, but may not ask.
 	viewer.must(200, "GET", "/v1/links", nil)
 	viewer.must(403, "POST", "/v1/links", map[string]any{"business": got[0].(map[string]any)["business"], "role": "supplier"})
@@ -93,12 +108,25 @@ func TestBusinessLinksByChat(t *testing.T) {
 		t.Fatalf("Dangote told: %+v", told)
 	}
 	accept := told[0].Buttons[0].ID
-	if !strings.HasPrefix(accept, "lk:accept:") {
+	lid := dangote.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	// Signed as an approval's buttons are: a token, not the link's id.
+	if !strings.HasPrefix(accept, "tk1.") || told[0].Buttons[0].Title != "Accept" || strings.Contains(accept, lid) {
 		t.Fatalf("buttons: %+v", told[0].Buttons)
 	}
-	// Ada cannot press Dangote's Accept.
-	if r := w.press(t, adaOn, accept); len(r) != 1 || !strings.Contains(r[0].Text, "no longer waiting") {
+	// Ada cannot press Dangote's Accept: it is Dangote's business's token.
+	if r := w.press(t, adaOn, accept); len(r) != 1 || !strings.Contains(r[0].Text, "not valid") {
 		t.Errorf("Ada pressed Accept: %+v", r)
+	}
+	// Nor can a button be made up from the link's id, by anyone.
+	if r := w.press(t, dangoteOn, "lk:accept:"+lid); len(r) == 0 || strings.Contains(r[0].Text, "Linked with") {
+		t.Errorf("an unsigned Accept worked: %+v", r)
+	}
+	if l := dangote.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any); l["state"] != "asked_us" {
+		t.Fatalf("after a forged button: %v", l)
+	}
+	// A token altered is refused.
+	if r := w.press(t, dangoteOn, accept[:len(accept)-2]+"zz"); len(r) != 1 || !strings.Contains(r[0].Text, "not valid") {
+		t.Errorf("an altered token: %+v", r)
 	}
 
 	// Dangote accepts: both linked, Ada told.
@@ -141,7 +169,7 @@ func TestBusinessLinksByChat(t *testing.T) {
 	}
 	// Cherry declines: Ada hears nothing and still sees it sent.
 	before = len(w.graph.Sent(adaOn))
-	if r := w.press(t, cherryOn, strings.Replace(cherryTold[0].Buttons[0].ID, "accept", "decline", 1)); len(r) != 1 || !strings.Contains(r[0].Text, "Declined") {
+	if r := w.press(t, cherryOn, cherryTold[0].Buttons[1].ID); len(r) != 1 || !strings.Contains(r[0].Text, "Declined") {
 		t.Fatalf("decline: %+v", r)
 	}
 	if told := w.lastTo(t, adaOn, before); len(told) != 0 {

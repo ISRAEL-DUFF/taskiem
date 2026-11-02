@@ -298,7 +298,7 @@ func (s *Server) tellHoldersSent(ctx context.Context, tenant uuid.UUID, perms []
 			}
 			for _, u := range users {
 				if a, ok := addrs[u]; ok && !slices.ContainsFunc(to, func(t linkTold) bool { return t.addr == a }) {
-					to = append(to, linkTold{channel, a})
+					to = append(to, linkTold{channel: channel, addr: a, user: u})
 				}
 			}
 		}

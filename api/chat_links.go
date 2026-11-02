@@ -125,8 +125,15 @@ func (s *Server) waLinks(ctx context.Context, c *chat) error {
 		return nil
 	}
 	for _, l := range asked {
-		if err := c.say(ctx, s, c.t("link.asked_body", "name", whatsapp.SafeText(l.Name), "org", c.tenant.Name, "role", linkRole(c.lang.Tag, l.Role)),
-			linkAnswerButtons(c.lang.Tag, l)...); err != nil {
+		var bs []whatsapp.Button
+		if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+			var err error
+			bs, err = s.linkAnswerButtonsTx(ctx, tx, c.lang.Tag, c.tenant.ID, l, c.p.UserID, c.ch.Name())
+			return err
+		}); err != nil {
+			return err
+		}
+		if err := c.say(ctx, s, c.t("link.asked_body", "name", whatsapp.SafeText(l.Name), "org", c.tenant.Name, "role", linkRole(c.lang.Tag, l.Role)), bs...); err != nil {
 			return err
 		}
 	}
@@ -370,48 +377,39 @@ func (s *Server) waLinkOffer(ctx context.Context, c *chat, code string) error {
 	return s.waLinkAskRole(ctx, c, &chatLink{Code: code, Shown: name}, c.t("link.which_role", "name", name))
 }
 
-// waLinkPress takes Accept, Decline or Block on a request: for whichever
-// of the person's businesses the request was made to, if they may answer
-// for its links there.
-func (s *Server) waLinkPress(ctx context.Context, c *chat, reply string) error {
-	answer, idText, _ := strings.Cut(strings.TrimPrefix(reply, linkPrefix), ":")
-	id, err := uuid.Parse(idText)
-	if err != nil || !slices.Contains([]string{links.Accept, links.Decline, links.Block}, answer) {
-		return c.say(ctx, s, c.t("link.gone"))
+// waLinkDecide takes Accept, Decline or Block on a request from its
+// signed button, once waDecide checked the token: this business's, made
+// for this person, unspent and in time. The answer is the token's step
+// (link:<answer>) and the link its run. The person must answer for the
+// business's links there, and the request must still wait.
+func (s *Server) waLinkDecide(ctx context.Context, c *chat, tenant tenantRef, p *Principal, cl whatsapp.Claims) error {
+	say := func(text string) error { return s.waSay(ctx, c.ch, c.addr, tenant.Name, text) }
+	answer := strings.TrimPrefix(cl.Step, linkStepPrefix)
+	if !slices.Contains([]string{links.Accept, links.Decline, links.Block}, answer) {
+		return say(c.t("link.gone"))
 	}
-	tenants := append([]tenantRef{c.tenant}, slices.DeleteFunc(slices.Clone(c.tenants), func(t tenantRef) bool { return t.ID == c.tenant.ID })...)
-	for _, t := range tenants {
-		var found links.Link
-		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
-			var err error
-			found, err = links.GetTx(ctx, tx, id)
-			return err
-		}); errors.Is(err, links.ErrNotFound) {
-			continue
-		} else if err != nil {
+	if !p.Can(PermLinkManage) {
+		return say(c.t("link.denied", "org", tenant.Name))
+	}
+	var found links.Link
+	var other uuid.UUID
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
+		var err error
+		if found, err = links.GetTx(ctx, tx, cl.Run); err != nil {
 			return err
 		}
 		if found.State != links.AskedUs {
-			return c.say(ctx, s, c.t("link.gone"))
+			return links.ErrState
 		}
-		p, err := s.principalOf(ctx, t.ID, c.p.UserID)
-		if err != nil || !p.Can(PermLinkManage) {
-			return c.say(ctx, s, c.t("link.denied", "org", t.Name))
-		}
-		var other uuid.UUID
-		err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t.ID}, func(tx pgx.Tx) error {
-			var err error
-			other, err = links.AnswerTx(ctx, tx, id, answer, links.Actor{Type: "user", ID: p.UserID.String()})
-			return err
-		})
-		if errors.Is(err, links.ErrState) || errors.Is(err, links.ErrNotFound) {
-			return c.say(ctx, s, c.t("link.gone"))
-		}
-		if err != nil {
-			return err
-		}
-		s.tellLinkAnswered(ctx, other, id, answer)
-		return c.say(ctx, s, c.t("link.done_"+answer, "name", whatsapp.SafeText(found.Name)))
+		other, err = links.AnswerTx(ctx, tx, cl.Run, answer, links.Actor{Type: "user", ID: p.UserID.String()})
+		return err
+	})
+	if errors.Is(err, links.ErrState) || errors.Is(err, links.ErrNotFound) {
+		return say(c.t("link.gone"))
 	}
-	return c.say(ctx, s, c.t("link.gone"))
+	if err != nil {
+		return err
+	}
+	s.tellLinkAnswered(ctx, other, cl.Run, answer)
+	return say(c.t("link.done_"+answer, "name", whatsapp.SafeText(found.Name)))
 }

@@ -620,13 +620,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		return c.say(ctx, s, c.t("wa.cancelled"))
 	}
-	// Accept, Decline or Block on a link request (chat_links.go), whatever
-	// else the conversation is in the middle of.
+	// An offer's Link button (chat_links.go), whatever else the
+	// conversation is in the middle of. Accept, Decline and Block on a
+	// link request are signed tokens, taken by waDecide before this.
 	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
 		return s.waLinkOffer(ctx, c, code)
-	}
-	if strings.HasPrefix(text, linkPrefix) && !strings.HasPrefix(text, linkPrefix+"role:") {
-		return s.waLinkPress(ctx, c, text)
 	}
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.

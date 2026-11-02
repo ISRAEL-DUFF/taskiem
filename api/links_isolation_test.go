@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"regexp"
@@ -12,7 +13,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/sender"
 )
 
 // scopeLog is the query log the isolation harness reads (business links
@@ -22,6 +26,9 @@ type scopeLog struct {
 	mu    sync.Mutex
 	scope map[*pgx.Conn]string
 	seen  []loggedQuery
+	// rescoped are the statements that set a scope after the door, in the
+	// same transaction: the door's narrowing must hold to its end.
+	rescoped []string
 }
 
 type loggedQuery struct {
@@ -38,6 +45,9 @@ func (l *scopeLog) TraceQueryStart(ctx context.Context, conn *pgx.Conn, d pgx.Tr
 	case strings.EqualFold(sql, "begin") || strings.HasPrefix(strings.ToLower(sql), "begin "):
 		l.scope[conn] = ""
 	case strings.Contains(sql, "set_config('app.tenant_scope'") && len(d.Args) > 0:
+		if l.scope[conn] == entered {
+			l.rescoped = append(l.rescoped, fmt.Sprintf("%s %v", sql, d.Args))
+		}
 		l.scope[conn] = fmt.Sprint(d.Args[0])
 	}
 	l.seen = append(l.seen, loggedQuery{scope: l.scope[conn], sql: sql, args: d.Args})
@@ -69,10 +79,13 @@ var crossing = regexp.MustCompile(`\btaskiem_link_(request|enter|answer|by_code|
 
 // TestLinkIsolation is the isolation harness of §14 for L0: two
 // businesses search, ask, accept and enter through the API while every
-// statement is logged with its transaction's scope. No transaction holds
-// both businesses; a transaction of one names the other only in a call to
-// the link functions; no statement reads business_links itself; and each
-// side's people are told in a transaction of that side alone.
+// statement is logged with its transaction's scope, on every pool the
+// server holds. No transaction holds both businesses; a transaction of
+// one names the other only in a call to the link functions; no statement
+// reads business_links itself; no transaction sets a scope again after
+// the door; each side's people are told in a transaction of that side
+// alone; and an acceptance goes through the door once, audited in both
+// chains, with the account the seller issues its linked buyer.
 func TestLinkIsolation(t *testing.T) {
 	ctx := context.Background()
 	w := newWAWorld(t)
@@ -84,7 +97,15 @@ func TestLinkIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(traced.Close)
+	// Every pool the server runs statements on: the store's, the invoices'
+	// (the account issued at acceptance, §6.3) and the reach book's.
 	w.srv.Store = &runtime.Store{Pool: traced, Registry: w.env.Store.Registry, PII: w.env.Store.PII}
+	hash := bytes.Repeat([]byte{8}, 32)
+	w.srv.Invoices = &invoicing.Invoices{Pool: traced, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: hash}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.Reach = &reach.Book{Pool: traced, Vault: w.env.Vault, HashKey: hash}
+	rails := &linkRails{}
+	w.srv.AccountRails = rails
 
 	ada := w.tenant(t, "Ada's Kitchen", "ada@isolation.test")
 	dangote := w.tenant(t, "Dangote Stores", "d@isolation.test")
@@ -93,6 +114,8 @@ func TestLinkIsolation(t *testing.T) {
 	w.bind(t, dangote, dangoteOn)
 	adaID, dangoteID := tenantOf(t, ada), tenantOf(t, dangote)
 	dangote.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	// Dangote's owner has written, so the request's buttons reach them.
+	w.say(t, dangoteOn, "links")
 	log.take()
 
 	// Ada searches and asks, Dangote accepts (by chat too), Ada ends it.
@@ -100,10 +123,37 @@ func TestLinkIsolation(t *testing.T) {
 	ada.must(201, "POST", "/v1/links", map[string]any{"business": dangoteID, "role": "supplier"})
 	w.srv.WaitBackground()
 	l := dangote.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)
-	if r := w.press(t, dangoteOn, "lk:accept:"+l["id"].(string)); len(r) != 1 || !strings.Contains(r[0].Text, "Linked with") {
+	told := w.graph.Sent(dangoteOn)
+	if len(told) == 0 || len(told[len(told)-1].Buttons) != 3 {
+		t.Fatalf("Dangote told: %+v", told)
+	}
+	asking := log.take()
+	if r := w.press(t, dangoteOn, told[len(told)-1].Buttons[0].ID); len(r) != 1 || !strings.Contains(r[0].Text, "Linked with") {
 		t.Fatalf("accept: %+v", r)
 	}
 	w.srv.WaitBackground()
+	accepting := log.take()
+	// The acceptance: through the door once (the event for both sides'
+	// workflows), audited in both chains, and Dangote, whom Ada buys
+	// from, issued her an account number.
+	doors := 0
+	for _, q := range accepting {
+		if strings.Contains(q.sql, "taskiem_link_enter(") {
+			doors++
+		}
+	}
+	if doors != 1 {
+		t.Errorf("an acceptance went through the door %d times", doors)
+	}
+	for _, action := range []string{"link.accept", "link.event"} {
+		var n int
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(DISTINCT tenant_id) FROM audit_log WHERE action = $1 AND target = $2`, action, l["id"]).Scan(&n); err != nil || n != 2 {
+			t.Errorf("%s audited in %d chains: %v", action, n, err)
+		}
+	}
+	if rails.asked != 1 {
+		t.Errorf("accounts issued at acceptance: %d", rails.asked)
+	}
 	ada.must(200, "GET", "/v1/links", nil)
 	code := dangote.must(200, "GET", "/v1/link-settings", nil)["code"].(string)
 	ada.must(200, "GET", "/v1/links/code/"+code, nil)
@@ -114,11 +164,15 @@ func TestLinkIsolation(t *testing.T) {
 	ada.must(200, "POST", "/v1/links/"+l["id"].(string)+"/end", nil)
 	w.srv.WaitBackground()
 
-	ofEach := checkIsolation(t, log.take(), adaID, dangoteID)
+	seen := append(append(asking, accepting...), log.take()...)
+	ofEach := checkIsolation(t, seen, adaID, dangoteID)
 	// Both sides ran their own transactions: the requester's, and the
 	// other's people told in its own.
 	if ofEach[adaID] == 0 || ofEach[dangoteID] == 0 {
 		t.Errorf("statements by business: %v", ofEach)
+	}
+	if len(log.rescoped) > 0 {
+		t.Errorf("a transaction set its scope again after the door: %q", log.rescoped)
 	}
 }
 

@@ -621,7 +621,7 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	var level int
 	var status string
 	var role *string
-	school := false
+	school, link := false, false
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		row, err = s.loadToken(ctx, tx, tok, whatsapp.PurposeDecide)
@@ -639,8 +639,10 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 			refusal = "used"
 			return nil
 		}
-		// A school's request (whatsapp_school_approvals.go) has no run.
-		if school = row.claims.Step == schoolStep; !school {
+		// A school's request (whatsapp_school_approvals.go) has no run;
+		// nor has a link request (chat_links.go), whose run is the link.
+		link = strings.HasPrefix(row.claims.Step, linkStepPrefix)
+		if school = row.claims.Step == schoolStep; !school && !link {
 			if err := tx.QueryRow(ctx, `SELECT status, level, role FROM approvals WHERE run_id = $1 AND step_id = $2 FOR UPDATE`, row.claims.Run, row.claims.Step).Scan(&status, &level, &role); err != nil {
 				return err
 			}
@@ -654,6 +656,14 @@ func (s *Server) waDecide(ctx context.Context, c *chat, tok string) error {
 	}
 	if school && refusal == "" {
 		return s.waSchoolDecide(ctx, c, tenant, p, row.claims)
+	}
+	if link {
+		if refusal != "" {
+			// A button not this person's, spent, or past the request: the
+			// same words as for a request answered already.
+			return say(c.t("link.gone"))
+		}
+		return s.waLinkDecide(ctx, c, tenant, p, row.claims)
 	}
 	if refusal != "" {
 		if refusal != "invalid" {
