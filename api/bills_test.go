@@ -301,6 +301,11 @@ func TestLinkedMoneyNamesItsInvoice(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// The token answers once the rail took the money (the payout step
+	// answered): not while the payment waits for its approver.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bill_payments SET sent_at = now() WHERE id = $1`, pay.ID); err != nil {
+		t.Fatal(err)
+	}
 	credit(1000000, "", "credit-2")
 	if paid(oldest) != 1000000 {
 		t.Fatalf("by the token: oldest %v", paid(oldest))
@@ -394,5 +399,373 @@ func TestBillDeclareAndQuery(t *testing.T) {
 	}
 	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "*Dangote Stores* settled your query on "+num+". A credit note is coming") {
 		t.Errorf("the buyer told: %+v", told)
+	}
+}
+
+// linkSupplier links another seller to buyer as its supplier, and answers
+// the seller's client and id.
+func linkSupplier(t *testing.T, w *waWorld, buyer *client, name, email string) (*client, string) {
+	t.Helper()
+	seller := w.tenant(t, name, email)
+	sellerID := tenantOf(t, seller)
+	seller.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+	buyer.must(201, "POST", "/v1/links", map[string]any{"business": sellerID, "role": "supplier"})
+	for _, l := range seller.must(200, "GET", "/v1/links", nil)["links"].([]any) {
+		if l := l.(map[string]any); l["state"] == "asked_us" {
+			seller.must(200, "POST", "/v1/links/"+l["id"].(string)+"/accept", nil)
+		}
+	}
+	w.srv.WaitBackground()
+	return seller, sellerID
+}
+
+// The pairing token (§5.3) is the calling seller's alone: a payout still
+// waiting to be approved answers nothing, and the credit goes oldest
+// first; a payout to another supplier of the same amount is never
+// answered to this seller; sent, the token pays the invoice it names and
+// pairs the payment; two equal payouts in the window pair neither; and
+// each question is audited in the buyer's chain. A credit whose rail
+// passed the narration on pays the invoice the narration names. A bill
+// number two suppliers used is refused until the supplier is named.
+func TestBillPayoutTokenScoped(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	mlog := &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test", MoneyLog: mlog,
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	dangote, buyer, dangoteID, buyerID := linkedPair(t, w) // Dangote issued 8800000001, lnk_1
+	kano, kanoID := linkSupplier(t, w, buyer, "Kano Traders", "k@bills.test")
+	buyerT := uuid.MustParse(buyerID)
+	m := &matching.Matcher{Invoices: w.srv.Invoices, PII: w.env.Vault}
+	const buyerOn = "+2348010000371"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links")
+	n := 0
+	invoice := func(seller *client, kobo int, due string) string {
+		t.Helper()
+		n++
+		x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+			"amount_kobo": kobo, "due_on": due, "allow_part_payments": true}, "Idempotency-Key", fmt.Sprintf("i-%d", n))
+		seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", fmt.Sprintf("s-%d", n))
+		if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		w.srv.WaitBackground()
+		return x["number"].(string)
+	}
+	credit := func(seller string, ref, account string, kobo int64, narration string) {
+		t.Helper()
+		n++
+		fields := map[string]any{"reference": ref, "credit_id": fmt.Sprintf("c-%d", n), "account_number": account, "amount_kobo": kobo}
+		if narration != "" {
+			fields["narration"] = narration
+		}
+		e, ok := moneylog.FromEvent("iswallet/main", "virtual_account.credited", fields)
+		if !ok {
+			t.Fatal("no entry")
+		}
+		if _, _, err := mlog.Record(ctx, uuid.MustParse(seller), e); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	paid := func(seller *client, number string) float64 {
+		t.Helper()
+		return seller.must(200, "GET", "/v1/invoices/"+number, nil)["invoice"].(map[string]any)["paid_kobo"].(float64)
+	}
+	pay := func(bill string, kobo int64, sent bool) links.BillPayment {
+		t.Helper()
+		var pay links.BillPayment
+		if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{buyerT}, func(tx pgx.Tx) error {
+			b, err := links.GetBillTx(ctx, tx, bill)
+			if err != nil {
+				return err
+			}
+			pay, err = links.StartBillPaymentTx(ctx, tx, buyerT, links.PayIn{Bill: b.ID, AmountKobo: kobo, Connection: "main", BankCode: "035", AccountNumber: b.PayAccountNumber, By: "user:ada"})
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if sent {
+			if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bill_payments SET sent_at = now() WHERE id = $1`, pay.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return pay
+	}
+	paired := func(p links.BillPayment) bool {
+		t.Helper()
+		var yes bool
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT paired_at IS NOT NULL FROM bill_payments WHERE id = $1`, p.ID).Scan(&yes); err != nil {
+			t.Fatal(err)
+		}
+		return yes
+	}
+
+	d1 := invoice(dangote, 2000000, "2099-01-01")
+	d2 := invoice(dangote, 1000000, "2099-02-01")
+	k1 := invoice(kano, 1000000, "2099-01-15")
+	if d1 != k1 {
+		t.Fatalf("the two suppliers' first numbers differ: %s, %s", d1, k1)
+	}
+	// Both suppliers' first invoice is INV-0001: the number alone is
+	// refused, naming them; the supplier's name chooses; so does chat.
+	if e := buyer.must(409, "GET", "/v1/bills/"+d1, nil); !strings.Contains(e["error"].(string), "Dangote Stores") || !strings.Contains(e["error"].(string), "Kano Traders") {
+		t.Errorf("two suppliers' bill: %v", e)
+	}
+	if b := buyer.must(200, "GET", "/v1/bills/Kano%20"+d1, nil); b["supplier"] != kanoID || b["reference"] != d1 {
+		t.Errorf("by supplier: %v", b)
+	}
+	if r := w.say(t, buyerOn, "bill "+d1); !strings.Contains(r, "say which supplier") {
+		t.Errorf("chat, two suppliers: %q", r)
+	}
+	if r := w.say(t, buyerOn, "bill kano "+d1); !strings.Contains(r, "from *Kano Traders*") {
+		t.Errorf("chat, by supplier: %q", r)
+	}
+
+	// A payout of the newer bill, waiting to be approved: the credit of
+	// its amount answers no token and goes to the oldest invoice.
+	waiting := pay("Dangote "+d2, 1000000, false)
+	credit(dangoteID, "lnk_1", "8800000001", 1000000, "")
+	if paid(dangote, d1) != 1000000 || paid(dangote, d2) != 0 || paired(waiting) {
+		t.Fatalf("a payout waiting to be approved: %s %v, %s %v, paired %v", d1, paid(dangote, d1), d2, paid(dangote, d2), paired(waiting))
+	}
+	// Sent, it answers: the invoice it names is paid, the payment paired.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bill_payments SET sent_at = now() WHERE id = $1`, waiting.ID); err != nil {
+		t.Fatal(err)
+	}
+	credit(dangoteID, "lnk_1", "8800000001", 1000000, "")
+	if paid(dangote, d2) != 1000000 || paid(dangote, d1) != 1000000 || !paired(waiting) {
+		t.Fatalf("by the token: %s %v, %s %v, paired %v", d1, paid(dangote, d1), d2, paid(dangote, d2), paired(waiting))
+	}
+
+	// A payout to Dangote for INV-0001, sent; a Kano credit of the same
+	// amount into Kano's account never hears Dangote's token, though Kano's
+	// INV-0001 would take it: Kano's invoice is paid oldest-first, and
+	// Dangote's payment stays unpaired for Dangote's own credit.
+	rest := pay("Dangote "+d1, 1000000, true)
+	credit(kanoID, "lnk_2", "8800000002", 1000000, "")
+	if paid(kano, k1) != 1000000 || paired(rest) {
+		t.Fatalf("Kano's credit: %s %v, Dangote's payment paired %v", k1, paid(kano, k1), paired(rest))
+	}
+	credit(dangoteID, "lnk_1", "8800000001", 1000000, "")
+	if paid(dangote, d1) != 2000000 || !paired(rest) {
+		t.Fatalf("Dangote's credit: %s %v, paired %v", d1, paid(dangote, d1), paired(rest))
+	}
+
+	// Two equal payouts in the window pair neither: the credit goes oldest
+	// first, and both payments stay unpaired (for the three-day alert).
+	d3 := invoice(dangote, 500000, "2099-03-01")
+	d4 := invoice(dangote, 500000, "2099-04-01")
+	p3, p4 := pay(d3, 500000, true), pay(d4, 500000, true)
+	credit(dangoteID, "lnk_1", "8800000001", 500000, "")
+	if paid(dangote, d3) != 500000 || paid(dangote, d4) != 0 || paired(p3) || paired(p4) {
+		t.Fatalf("two equal payouts: %s %v, %s %v, paired %v %v", d3, paid(dangote, d3), d4, paid(dangote, d4), paired(p3), paired(p4))
+	}
+	// The rail passed the narration on: the invoice it names is paid, and
+	// the payout whose token it carries is paired.
+	credit(dangoteID, "lnk_1", "8800000001", 500000, "TRF "+p4.Token+" ADA KITCHEN")
+	if paid(dangote, d4) != 500000 || !paired(p4) || paired(p3) {
+		t.Fatalf("by the narration: %s %v, paired %v %v", d4, paid(dangote, d4), paired(p3), paired(p4))
+	}
+
+	// Every question is in the buyer's audit chain, with the amount asked.
+	var audited int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'link.payout_token' AND (detail->>'amount_kobo')::bigint > 0`, buyerID).Scan(&audited); err != nil || audited < 5 {
+		t.Errorf("audited %d times in the buyer's chain: %v", audited, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id <> $1 AND action = 'link.payout_token'`, buyerID).Scan(&audited); err != nil || audited != 0 {
+		t.Errorf("audited %d times elsewhere: %v", audited, err)
+	}
+}
+
+// A bill payment is settled by what became of its money, not its run
+// alone (§6.2, §16.2): a run that failed before the rail took the money
+// fails the payment and the bill is open again; a run that failed after
+// the money went makes the payment unknown, the bill stays paying (a
+// second Pay refused) and the owner is told; a payment no run ever
+// started is failed after ten minutes. The rail taking the money is
+// recorded from the run, and the payout's money-log entry names the
+// bill. A payout the bank confirmed three days ago that no match paired
+// raises one alert, and the owner confirms the pair from it; the
+// supplier is told which invoice the money was for.
+func TestBillPaymentSettledByItsMoney(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	mlog := &moneylog.Log{Pool: w.env.DB.App, PII: w.env.Vault}
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test", MoneyLog: mlog,
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	payments := &links.Payments{Pool: w.env.DB.App}
+	for _, c := range []*connector.Connector{billsconn.New(payments), paystack.New(paystack.Options{})} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.srv.BillBanks = func(context.Context, uuid.UUID, string) ([]map[string]any, error) {
+		return []map[string]any{{"name": "Wema Bank Plc", "code": "035"}}, nil
+	}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	buyerT := uuid.MustParse(buyerID)
+	const sellerOn, buyerOn = "+2348010000381", "+2348010000382"
+	w.bind(t, seller, sellerOn)
+	w.bind(t, buyer, buyerOn)
+	w.say(t, sellerOn, "links")
+	w.say(t, buyerOn, "links")
+	n := 0
+	bill := func(kobo int) map[string]any {
+		t.Helper()
+		n++
+		x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+			"amount_kobo": kobo}, "Idempotency-Key", fmt.Sprintf("b-%d", n))
+		seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", fmt.Sprintf("s-%d", n))
+		if _, err := w.srv.LinkMirrorTick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		w.srv.WaitBackground()
+		return buyer.must(200, "GET", "/v1/bills/"+x["number"].(string), nil)
+	}
+	buyer.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main", "mode": "test",
+		"credentials": map[string]string{"secret_key": "sk_test_good"}})
+	buyer.must(200, "PUT", "/v1/bills/pay/setup", map[string]any{"rail_connection": "main"})
+	status := func(bill map[string]any) (string, string) {
+		t.Helper()
+		b := buyer.must(200, "GET", "/v1/bills/"+bill["id"].(string), nil)
+		ps := buyer.must(200, "GET", "/v1/bills/"+bill["id"].(string)+"/payments", nil)["payments"].([]any)
+		return b["status"].(string), ps[0].(map[string]any)["status"].(string)
+	}
+	runEnds := func(run any, how string) {
+		t.Helper()
+		if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE runs SET status = $2, ended_at = now() WHERE id = $1`, run, how); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tick := func() {
+		t.Helper()
+		if _, err := w.srv.BillPaymentsTick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		w.srv.WaitBackground()
+	}
+
+	// The run failed before the money went: the payment failed, the bill
+	// open again.
+	a := bill(4250000)
+	out := buyer.must(202, "POST", "/v1/bills/"+a["id"].(string)+"/pay", nil)
+	runEnds(out["run_id"], "failed")
+	tick()
+	if b, p := status(a); b != "open" || p != "failed" {
+		t.Fatalf("a run failed before the money went: bill %s, payment %s", b, p)
+	}
+
+	// The run died after the rail took the money: the payment is unknown,
+	// the bill stays paying, a second Pay is refused, and the owner is told
+	// once.
+	out = buyer.must(202, "POST", "/v1/bills/"+a["id"].(string)+"/pay", nil)
+	pay2 := out["payment"].(map[string]any)["id"].(string)
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{buyerT}, func(tx pgx.Tx) error {
+		return links.MarkPayoutSentTx(ctx, tx, buyerT, uuid.MustParse(out["run_id"].(string)), "po_2")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runEnds(out["run_id"], "cancelled")
+	before := len(w.graph.Sent(buyerOn))
+	tick()
+	if b, p := status(a); b != "paying" || p != "unknown" {
+		t.Fatalf("a run died after the money went: bill %s, payment %s", b, p)
+	}
+	if e := buyer.must(409, "POST", "/v1/bills/"+a["id"].(string)+"/pay", nil); !strings.Contains(e["error"].(string), "already under way") {
+		t.Errorf("paid twice: %v", e)
+	}
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 || !strings.Contains(told[0].Text, "could not record how it ended") {
+		t.Errorf("the owner told: %+v", told)
+	}
+	tick()
+	if told := w.lastTo(t, buyerOn, before); len(told) != 1 {
+		t.Errorf("told again: %+v", told)
+	}
+	// The bank's word, when it comes, settles it: paid.
+	if _, err := payments.FinishBillPayment(ctx, buyerT, uuid.MustParse(pay2), "paid", "DANGOTE/ADA"); err != nil {
+		t.Fatal(err)
+	}
+	if b, p := status(a); b != "open" || p != "paid" {
+		t.Fatalf("the bank confirmed: bill %s, payment %s", b, p)
+	}
+	// The payment knows its payout's entry by the rail's id.
+	var ref string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT payout_ref FROM bill_payments WHERE id = $1`, pay2).Scan(&ref); err != nil || ref != "po_2" {
+		t.Errorf("the payment's payout: %q %v", ref, err)
+	}
+
+	// A payment no run ever started is failed after ten minutes.
+	c := bill(100000)
+	var orphan links.BillPayment
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{buyerT}, func(tx pgx.Tx) error {
+		var err error
+		orphan, err = links.StartBillPaymentTx(ctx, tx, buyerT, links.PayIn{Bill: uuid.MustParse(c["id"].(string)), AmountKobo: 100000, Connection: "main", BankCode: "035", AccountNumber: "8800000001", By: "user:ada"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	tick()
+	if b, p := status(c); b != "paying" || p != "pending" {
+		t.Fatalf("a fresh payment with no run: bill %s, payment %s", b, p)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bill_payments SET created_at = now() - interval '11 minutes' WHERE id = $1`, orphan.ID); err != nil {
+		t.Fatal(err)
+	}
+	tick()
+	if b, p := status(c); b != "open" || p != "failed" {
+		t.Fatalf("a payment no run started: bill %s, payment %s", b, p)
+	}
+
+	// A payout the bank confirmed three days ago that no match paired: one
+	// alert, with a button; pressed, the payment is paired and the
+	// supplier is told which invoice the money was for.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE bill_payments SET sent_at = now() - interval '4 days' WHERE id = $1`, pay2); err != nil {
+		t.Fatal(err)
+	}
+	before = len(w.graph.Sent(buyerOn))
+	tick()
+	told := w.lastTo(t, buyerOn, before)
+	if len(told) != 1 || !strings.Contains(told[0].Text, "reached *Dangote Stores* three days ago") || len(told[0].Buttons) != 1 || told[0].Buttons[0].ID != "bp:"+pay2 {
+		t.Fatalf("the owner told of an unpaired payout: %+v", told)
+	}
+	tick()
+	if again := w.lastTo(t, buyerOn, before); len(again) != 1 {
+		t.Errorf("told again: %+v", again)
+	}
+	sellerBefore := len(w.graph.Sent(sellerOn))
+	if r := w.press(t, buyerOn, "bp:"+pay2); len(r) != 1 || !strings.Contains(r[0].Text, "your payment was for "+a["reference"].(string)) {
+		t.Fatalf("confirmed: %+v", r)
+	}
+	if ps := buyer.must(200, "GET", "/v1/bills/"+a["id"].(string)+"/payments", nil)["payments"].([]any); ps[0].(map[string]any)["paired_at"] == nil {
+		t.Errorf("not paired: %v", ps[0])
+	}
+	if told := w.lastTo(t, sellerOn, sellerBefore); len(told) != 1 || !strings.Contains(told[0].Text, "*Ada's Kitchen* says its transfer of ₦42,500") || !strings.Contains(told[0].Text, "was for invoice "+a["reference"].(string)) {
+		t.Errorf("the seller told: %+v", told)
+	}
+	var kind string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT kind FROM link_notices WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`, sellerID).Scan(&kind); err != nil || kind != "paired" {
+		t.Errorf("the seller's notice: %q %v", kind, err)
+	}
+	// Confirmed already, or not yet confirmed by the bank: refused; by the
+	// API, a confirmed payment is paired once.
+	buyer.must(409, "POST", "/v1/bills/"+a["id"].(string)+"/payments/"+pay2+"/confirm-pair", nil)
+	buyer.must(409, "POST", "/v1/bills/"+c["id"].(string)+"/payments/"+orphan.ID.String()+"/confirm-pair", nil)
+	if r := w.press(t, buyerOn, "bp:"+pay2); len(r) != 1 || !strings.Contains(r[0].Text, "paired already") {
+		t.Errorf("pressed again: %+v", r)
+	}
+	d := bill(200000)
+	out = buyer.must(202, "POST", "/v1/bills/"+d["id"].(string)+"/pay", nil)
+	payD := out["payment"].(map[string]any)["id"].(string)
+	if _, err := payments.FinishBillPayment(ctx, buyerT, uuid.MustParse(payD), "paid", ""); err != nil {
+		t.Fatal(err)
+	}
+	if p := buyer.must(200, "POST", "/v1/bills/"+d["id"].(string)+"/payments/"+payD+"/confirm-pair", nil); p["paired_at"] == nil || p["status"] != "paid" {
+		t.Errorf("confirmed by the API: %v", p)
 	}
 }

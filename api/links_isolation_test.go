@@ -13,7 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	billsconn "github.com/israel-duff/taskiem/connectors/bills"
+	"github.com/israel-duff/taskiem/connectors/paystack"
+	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/matching"
+	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -332,5 +339,159 @@ func TestLinkIsolationFiles(t *testing.T) {
 	checkIsolation(t, seen, adaID, dangoteID)
 	if len(puts) != 2 || puts[0].project != "prj_"+adaID || puts[1].project != "prj_"+cherryID || puts[0].entered != 0 || puts[1].entered != 1 {
 		t.Errorf("the forwarded copies: %+v", puts)
+	}
+}
+
+// billCrossing are the functions through which one business reaches
+// another's rows in L1 (migrations 00280, 00288): the door, the pairing
+// token, the reconciler and the mirror worker's claim; nothing else.
+var billCrossing = regexp.MustCompile(`\btaskiem_link_(enter|payout_token|reconcile|mirrors_claim)\(`)
+
+// TestLinkIsolationBills is the isolation harness of §14 for L1: a
+// seller's invoice is mirrored into the buyer's bill, the buyer pays it
+// from Taskiem, the seller's matching pairs the credit by the token, the
+// tick settles payments, and the reconciler runs, while every statement
+// is logged with its transaction's scope. No transaction holds both
+// businesses, no statement reads business_links or bill_payments of the
+// other side, and a transaction of one names the other only in a call to
+// the four crossing functions, or after the door.
+func TestLinkIsolationBills(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	log := &scopeLog{scope: map[*pgx.Conn]string{}}
+	cfg := w.env.Store.Pool.Config()
+	cfg.ConnConfig.Tracer = log
+	traced, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(traced.Close)
+	w.srv.Store = &runtime.Store{Pool: traced, Registry: w.env.Store.Registry, PII: w.env.Store.PII}
+	mlog := &moneylog.Log{Pool: traced, PII: w.env.Vault}
+	w.srv.Invoices = &invoicing.Invoices{Pool: traced, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test", MoneyLog: mlog,
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	w.srv.AccountRails = &linkRails{}
+	payments := &links.Payments{Pool: traced}
+	for _, c := range []*connector.Connector{billsconn.New(payments), paystack.New(paystack.Options{})} {
+		if err := w.env.Registry.Register(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.srv.BillBanks = func(context.Context, uuid.UUID, string) ([]map[string]any, error) {
+		return []map[string]any{{"name": "Wema Bank Plc", "code": "035"}}, nil
+	}
+	m := &matching.Matcher{Invoices: w.srv.Invoices, PII: w.env.Vault}
+	seller, buyer, sellerID, buyerID := linkedPair(t, w)
+	buyerT, sellerT := uuid.MustParse(buyerID), uuid.MustParse(sellerID)
+	buyer.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main", "mode": "test",
+		"credentials": map[string]string{"secret_key": "sk_test_good"}})
+	buyer.must(200, "PUT", "/v1/bills/pay/setup", map[string]any{"rail_connection": "main"})
+	log.take()
+
+	// The mirror, the payment, the credit paired by the token, the tick
+	// and the reconciler.
+	x := seller.must(201, "POST", "/v1/invoices", map[string]any{"customer": map[string]any{"name": "Ada's Kitchen", "key": "link:" + buyerID},
+		"amount_kobo": 1000000}, "Idempotency-Key", "iso-1")
+	seller.must(200, "POST", "/v1/invoices/"+x["id"].(string)+"/send", nil, "Idempotency-Key", "iso-s1")
+	if n, err := w.srv.LinkMirrorTick(ctx); err != nil || n != 1 {
+		t.Fatalf("mirrored %d: %v", n, err)
+	}
+	w.srv.WaitBackground()
+	bill := buyer.must(200, "GET", "/v1/bills/"+x["number"].(string), nil)
+	out := buyer.must(202, "POST", "/v1/bills/"+bill["id"].(string)+"/pay", nil)
+	if err := db.InTenantTx(ctx, traced, []uuid.UUID{buyerT}, func(tx pgx.Tx) error {
+		return links.MarkPayoutSentTx(ctx, tx, buyerT, uuid.MustParse(out["run_id"].(string)), "po_iso")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	amount := int64(1000000)
+	if _, _, err := mlog.Record(ctx, sellerT, moneylog.Entry{Direction: "in", Kind: "account_credit", Status: "settled", Channel: "iswallet/main",
+		Reference: "lnk_1", AccountNumber: "8800000001", Event: "virtual_account.credited", Credit: "iso-c1", Source: "event", AmountKobo: &amount}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var paired bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT paired_at IS NOT NULL FROM bill_payments WHERE tenant_id = $1`, buyerID).Scan(&paired); err != nil || !paired {
+		t.Fatalf("paired by the token: %v %v", paired, err)
+	}
+	if _, err := w.srv.BillPaymentsTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.srv.LinkReconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.srv.WaitBackground()
+
+	seen := log.take()
+	if len(seen) < 20 {
+		t.Fatalf("only %d statements logged", len(seen))
+	}
+	names := func(q loggedQuery, id string) bool {
+		if strings.Contains(q.sql, id) {
+			return true
+		}
+		for _, arg := range q.args {
+			switch v := arg.(type) {
+			case uuid.UUID:
+				if v.String() == id {
+					return true
+				}
+			case string:
+				// The seller's own key for its linked customer, link:<the
+				// buyer> (§6.1), is its record, in its own scope.
+				if strings.Contains(strings.ReplaceAll(v, "link:"+id, ""), id) {
+					return true
+				}
+			case []uuid.UUID:
+				for _, u := range v {
+					if u.String() == id {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	ofEach := map[string]int{}
+	crossed := map[string]int{}
+	for _, q := range seen {
+		if strings.Contains(q.sql, "business_links") {
+			t.Errorf("a statement reads business_links itself: %s", q.sql)
+		}
+		if strings.Contains(q.scope, ",") {
+			t.Errorf("a transaction holds more than one business (%s): %s", q.scope, q.sql)
+		}
+		if f := billCrossing.FindStringSubmatch(q.sql); f != nil {
+			crossed[f[1]]++
+		}
+		for _, pair := range [][2]string{{buyerID, sellerID}, {sellerID, buyerID}} {
+			mine, other := pair[0], pair[1]
+			if !strings.Contains(q.scope, mine) {
+				continue
+			}
+			ofEach[mine]++
+			if names(q, other) && !billCrossing.MatchString(q.sql) {
+				t.Errorf("a transaction of one business names the other outside the crossing functions: %s %v", q.sql, q.args)
+			}
+		}
+	}
+	if ofEach[buyerID] == 0 || ofEach[sellerID] == 0 {
+		t.Errorf("statements by business: %v", ofEach)
+	}
+	for _, f := range []string{"enter", "payout_token", "reconcile", "mirrors_claim"} {
+		if crossed[f] == 0 {
+			t.Errorf("taskiem_link_%s was never called: %v", f, crossed)
+		}
+	}
+	// The pairing token was asked once, for that credit's amount, and
+	// audited on the buyer's side.
+	if crossed["payout_token"] != 1 {
+		t.Errorf("the token asked %d times", crossed["payout_token"])
+	}
+	var audited int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = 'link.payout_token' AND (detail->>'amount_kobo')::bigint = 1000000`, buyerID).Scan(&audited); err != nil || audited != 1 {
+		t.Errorf("audited %d times on the buyer's side: %v", audited, err)
 	}
 }

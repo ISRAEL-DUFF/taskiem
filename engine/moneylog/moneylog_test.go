@@ -38,6 +38,17 @@ func TestFromEvent(t *testing.T) {
 	if one.FeeKobo == nil || *one.FeeKobo != 30000 || one.PayerAccount != "XXXXXX0011" || one.OccurredAt == nil || two.FeeKobo != nil {
 		t.Errorf("credit fields: %+v", one)
 	}
+	// What the payer wrote is the entry's description, for matching to
+	// read an invoice number in (business links §6.3).
+	for _, c := range []struct {
+		event  string
+		fields map[string]any
+	}{{"virtual_account.credited", map[string]any{"reference": "VA", "credit_id": "C3", "amount_kobo": int64(100), "narration": "INV-0042/7QX4 rice"}},
+		{"payment.received", map[string]any{"payment_id": "P2", "amount_kobo": int64(100), "narration": "INV-0042/7QX4 rice"}}} {
+		if e, ok := FromEvent("x/main", c.event, c.fields); !ok || e.Description != "INV-0042/7QX4 rice" {
+			t.Errorf("%s: description %q", c.event, e.Description)
+		}
+	}
 	for _, bad := range []struct {
 		event  string
 		fields map[string]any
@@ -68,6 +79,10 @@ func TestFromPayout(t *testing.T) {
 	if !ok || e.Key() != ev.Key() || e.Source != "step" || e.Direction != "out" || e.Kind != "payout" || e.Status != "settled" ||
 		e.AmountKobo == nil || *e.AmountKobo != 500000 || e.FeeKobo == nil || *e.FeeKobo != 1075 || e.check() != nil {
 		t.Errorf("%v %+v", ok, e)
+	}
+	// The payout's narration is its description.
+	if e, _ := FromPayout("paystack/main", map[string]any{"amount_kobo": int64(500000), "narration": "INV-0042/7QX4"}, map[string]any{"payout_id": "T1", "status": "settled"}); e.Description != "INV-0042/7QX4" {
+		t.Errorf("description %q", e.Description)
 	}
 	for _, out := range []map[string]any{{"payout_id": "T1", "status": "pending"}, {"payout_id": "T1", "status": "failed"}, {"status": "settled"}} {
 		if _, ok := FromPayout("paystack/main", nil, out); ok {
