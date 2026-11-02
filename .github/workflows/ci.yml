@@ -655,8 +655,15 @@ jobs:
   # commit whose run finishes last keeps its sha- tag and signature but does
   # not move staging servers back. (GitHub keeps one waiting run per group: a
   # third merge replaces the waiting one, whose image is then not tagged.)
+  #
+  # The condition names every gate's result. A plain `if:` gets success()
+  # added, and success() looks through the whole chain of needs: docker and
+  # vps need image-build-pr, which is skipped on a push, so success() was
+  # false and this job was skipped on every merge (staging did not move from
+  # 29 October to 2 November 2026). The same goes for release-build and
+  # promote below, and the tagged job turns a skip here red.
   image:
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}
     needs: [image-build, go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     concurrency:
@@ -725,13 +732,31 @@ jobs:
           done
           { echo "Signed and tagged \`$IMAGE@$DIGEST\`"; echo; echo "Tags: $(echo "$TAGS" | tr '\n' ' ')"; } >> "$GITHUB_STEP_SUMMARY"
 
+  # A merge to main whose image was not signed and tagged is a failed run.
+  # The image job above is the only thing that moves the staging tag, and a
+  # skipped job is grey, which nobody reads; this job is red in its place.
+  tagged:
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: The image job signed and tagged this merge
+        env:
+          RESULT: ${{ needs.image.result }}
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=staging not tagged::the image job ended '$RESULT', so this merge was not signed or tagged and staging servers will not upgrade to it"
+            exit 1
+          fi
+          echo "signed and tagged"
+
   # Production servers follow the "production" tag. A version tag (v1.2.0)
   # builds and signs its image above; this job moves "production" to it once
   # someone approves the deployment in the "production" GitHub environment
   # (Settings → Environments → production → required reviewers). Servers then
   # upgrade themselves inside their upgrade window, rolling back on failure.
   promote:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.image.result == 'success' }}
     needs: [image]
     runs-on: ubuntu-latest
     environment: production
@@ -758,7 +783,7 @@ jobs:
   # workflow artifact, for every merge to main and every v* tag (a release
   # has a signed binary as well as a signed image).
   release-build:
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && github.event_name == 'push' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}
     needs: [go, typescript, web, docker, licences, vps, deploy]
     runs-on: ubuntu-latest
     permissions:

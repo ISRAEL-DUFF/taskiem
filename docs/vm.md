@@ -77,6 +77,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 - the certificate expiring within 14 days;
 - no successful backup for 36 hours;
 - a release that failed to upgrade and was rolled back;
+- on the staging channel, main ahead of the running release by a merge more than a day old (CI did not tag the release, or the server did not take it);
 - the recovery sheet still on the server;
 - the public host or the mail server unhealthy, when they are on.
 

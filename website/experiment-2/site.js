@@ -38,7 +38,12 @@
   var SUN = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
   var MOON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>';
   var deviceDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
-  function current() { return doc.getAttribute("data-force") || (deviceDark && deviceDark.matches ? "dark" : "light"); }
+  // Light unless the reader chose dark; "auto" (from a link) follows the device.
+  function current() {
+    var f = doc.getAttribute("data-force");
+    if (f === "auto") return deviceDark && deviceDark.matches ? "dark" : "light";
+    return f === "dark" ? "dark" : "light";
+  }
   var toggles = [];
   function paint() {
     var dark = current() === "dark";
@@ -212,4 +217,34 @@
       wait(1600).then(function () { setStatus(waiting, STATUS.paid); });
     }, 0.8);
   }
+})();
+
+// ---------- The canvas: fit the stage to the frame, then play one run ----------
+(function () {
+  var doc = document.documentElement;
+  var stage = document.querySelector(".tk .wf-stage");
+  if (!stage) return;
+  var frame = stage.parentElement;
+  var W = 1160, H = 440;
+  function fit() {
+    var w = frame.clientWidth;
+    // Narrow screens scroll the canvas sideways instead of shrinking it past reading size.
+    var s = Math.min(1, Math.max(w / W, 0.66));
+    stage.style.transform = "scale(" + s + ")";
+    // Room under the last row for the tool bar that sits over the canvas.
+    frame.style.height = Math.round(H * s) + (s < 1 ? 56 : 0) + "px";
+    frame.style.overflowX = s * W > w + 1 ? "auto" : "hidden";
+  }
+  fit();
+  if ("ResizeObserver" in window) new ResizeObserver(fit).observe(frame); else window.addEventListener("resize", fit);
+  if (!doc.classList.contains("motion") || !("IntersectionObserver" in window)) return;
+  var cards = Array.prototype.slice.call(stage.querySelectorAll(".wf-card[data-run]")).sort(function (a, b) { return a.dataset.run - b.dataset.run; });
+  cards.forEach(function (c) { var d = document.createElement("span"); d.className = "wf-done"; d.setAttribute("aria-hidden", "true"); d.textContent = "✓"; c.appendChild(d); });
+  var io = new IntersectionObserver(function (entries) {
+    if (!entries[0].isIntersecting) return;
+    io.disconnect();
+    var t = 600;
+    cards.forEach(function (c) { setTimeout(function () { c.classList.add("ran"); }, t); t += 520; });
+  }, { threshold: 0.45 });
+  io.observe(frame);
 })();
