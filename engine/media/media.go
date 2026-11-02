@@ -71,6 +71,9 @@ type Service struct {
 	Credentials func(ctx context.Context, tenant uuid.UUID) (map[string]string, error)
 	Guard       *egress.Guard
 	Logger      *slog.Logger
+	// Scanner checks files sent in conversations for malware; nil refuses
+	// them (ErrNoScanner), as hosted forms refuse files without one.
+	Scanner Scanner
 
 	ready *lru.Cache[uuid.UUID, bool]
 }
@@ -166,21 +169,16 @@ func (s *Service) PutFile(ctx context.Context, tenant uuid.UUID, data []byte) (F
 // MaxVoiceBytes caps a voice note (several minutes of speech).
 const MaxVoiceBytes = 16 << 20
 
-// voiceType is an audio file's type, by its header: Ogg (WhatsApp's and
-// Telegram's voice notes, Firefox's recordings), WebM (Chrome's), MP3, or
-// MP4/M4A (Safari's); "" for anything else.
+// voiceType is an audio file's type, by its container and what it holds
+// (audio.go): Ogg Vorbis or Opus (WhatsApp's and Telegram's voice notes,
+// Firefox's recordings), WebM (Chrome's), MP3, or MP4/M4A (Safari's);
+// "" for anything else, a container with a video track included.
 func voiceType(data []byte) string {
-	switch {
-	case len(data) >= 4 && string(data[:4]) == "OggS":
-		return "audio/ogg"
-	case len(data) >= 4 && data[0] == 0x1A && data[1] == 0x45 && data[2] == 0xDF && data[3] == 0xA3:
-		return "audio/webm"
-	case len(data) >= 3 && string(data[:3]) == "ID3", len(data) >= 2 && data[0] == 0xFF && data[1]&0xE0 == 0xE0:
-		return "audio/mpeg"
-	case len(data) >= 12 && string(data[4:8]) == "ftyp":
-		return "audio/mp4"
+	ctype, _, err := cleanVoice(data)
+	if err != nil {
+		return ""
 	}
-	return ""
+	return ctype
 }
 
 // AudioType is an audio file's type by its header (Ogg, WebM, MP3 or
@@ -199,16 +197,55 @@ func ChatKind(ctype string) string {
 	return "file"
 }
 
+// Scanner checks a file for malware: the name of the threat found, or
+// "". It is what forms.Scanner is (clamd), named here so files sent in
+// conversations are scanned before either business keeps a copy.
+type Scanner interface {
+	Scan(ctx context.Context, data []byte) (string, error)
+}
+
+// ErrNoScanner refuses a file where no scanner is configured, as hosted
+// forms refuse files then.
+var ErrNoScanner = errors.New("media: no malware scanner is configured (TASKIEM_CLAMD_ADDR), so files cannot be sent")
+
+// ErrThreat says the scanner found something.
+var ErrThreat = errors.New("media: the file did not pass the malware check")
+
+// ScanChatFile runs the malware scanner over a file sent in a
+// conversation, before any copy of it is stored: ErrNoScanner without
+// one (the policy hosted forms' files follow), and ErrThreat when it
+// finds something.
+func (s *Service) ScanChatFile(ctx context.Context, data []byte) error {
+	if s.Scanner == nil {
+		return ErrNoScanner
+	}
+	threat, err := s.Scanner.Scan(ctx, data)
+	if err != nil {
+		return err
+	}
+	if threat != "" {
+		s.logger().Warn("media: a chat file failed the malware scan", "threat", threat)
+		return ErrThreat
+	}
+	return nil
+}
+
 // PutChatFile checks and stores a file sent in a conversation between
 // businesses (business links L3) in the tenant's private bucket: a photo
 // (cleaned as PutImage cleans it), a PDF (refused with scripts or
-// actions), or a voice note (Ogg, WebM, MP3 or MP4 audio, by its header).
-// Each business keeps its own copy, in its own storage.
+// actions), or a voice note (Ogg, WebM, MP3 or MP4 audio, by its
+// container, with its tags stripped; one with a video track is refused).
+// Each business keeps its own copy, in its own storage. The caller scans
+// it first (ScanChatFile).
 func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte) (File, error) {
-	ctype := voiceType(data)
+	ctype, clean, err := cleanVoice(data)
+	if err != nil {
+		return File{}, err
+	}
 	if ctype == "" {
 		return s.PutFile(ctx, tenant, data)
 	}
+	data = clean
 	if len(data) > MaxVoiceBytes {
 		return File{}, fmt.Errorf("%w: a voice note larger than %d MB", ErrFile, MaxVoiceBytes>>20)
 	}
