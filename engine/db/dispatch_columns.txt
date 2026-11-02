@@ -1170,6 +1170,7 @@ tenant_limits.ingest_burst
 tenant_limits.ingest_ceiling
 tenant_limits.ingest_ceiling_burst
 tenant_limits.ingest_rate
+tenant_limits.link_messages_daily
 tenant_limits.max_connections
 tenant_limits.max_data_table_columns
 tenant_limits.max_data_tables
