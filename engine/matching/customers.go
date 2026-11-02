@@ -3,7 +3,6 @@ package matching
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"slices"
 	"strings"
 
@@ -164,6 +163,10 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 				return nil, err
 			}
 			list = slices.Delete(slices.Clone(list), named, named+1)
+		} else {
+			// A token that names no open invoice pairs nothing: the money
+			// goes oldest first, and the payout stays unpaired.
+			token = ""
 		}
 		list = slices.DeleteFunc(list, func(x invoicing.Invoice) bool { return x.Disputed })
 	}
@@ -245,20 +248,38 @@ func namedInvoice(list []invoicing.Invoice, note string) (int, string) {
 
 // pairPayout marks the linked buyer's payment that carried token as
 // paired with this credit, entering the buyer's side (link:<buyer>)
-// through taskiem_link_enter: the last write of the transaction.
+// through taskiem_link_enter: the last write of the transaction. The
+// link is found among the seller's own links, read whole, so no statement
+// of the seller's names the buyer outside the door.
 func pairPayout(ctx context.Context, tx pgx.Tx, customer, token string) error {
-	var link *uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT id FROM taskiem_links_of() WHERE business = $1 AND state = 'active'`, strings.TrimPrefix(customer, "key:link:")).Scan(&link); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
+	rows, err := tx.Query(ctx, `SELECT id, business FROM taskiem_links_of() WHERE state = 'active'`)
+	if err != nil {
 		return err
 	}
+	type side struct {
+		id, business uuid.UUID
+	}
+	sides, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (side, error) {
+		var x side
+		return x, r.Scan(&x.id, &x.business)
+	})
+	if err != nil {
+		return err
+	}
+	buyer, err := uuid.Parse(strings.TrimPrefix(customer, "key:link:"))
+	if err != nil {
+		return nil
+	}
+	i := slices.IndexFunc(sides, func(x side) bool { return x.business == buyer })
+	if i < 0 {
+		return nil
+	}
+	link := sides[i].id
 	detail, _ := json.Marshal(map[string]any{"token": token})
 	if _, err := tx.Exec(ctx, `SELECT taskiem_link_enter($1, 'system', 'matching', 'link.paired', $2)`, link, detail); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `UPDATE bill_payments SET paired_at = now() WHERE token = $1 AND paired_at IS NULL`, token)
+	_, err = tx.Exec(ctx, `UPDATE bill_payments SET paired_at = now() WHERE token = $1 AND paired_at IS NULL`, token)
 	return err
 }
 

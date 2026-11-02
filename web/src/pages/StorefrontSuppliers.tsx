@@ -45,6 +45,16 @@ export function StorefrontSuppliers() {
   const [linking, setLinking] = useState<Supplier | null>(null);
   const act = useAction();
   const v = view.data;
+  // What is owed to a linked supplier is its open bills alone (business
+  // links §6.1): their orders are paid through their bills.
+  const bills = useLoad(() => get<{ bills: Bill[] }>("/v1/bills"), []);
+  const owedByLink = new Map<string, number>();
+  for (const b of bills.data?.bills ?? []) {
+    if (b.status === "void" || b.due_kobo <= 0) continue;
+    owedByLink.set(b.link, (owedByLink.get(b.link) ?? 0) + b.due_kobo);
+  }
+  const owed = (s: Supplier) =>
+    s.link_id ? (owedByLink.get(s.link_id) ?? 0) : s.owed_kobo;
   const off = view.error instanceof ApiError && view.error.status === 503;
   return (
     <>
@@ -104,13 +114,17 @@ export function StorefrontSuppliers() {
                     letter={s.name}
                     title={s.name}
                     side={
-                      s.owed_kobo > 0 && (
+                      owed(s) > 0 && (
                         <span className="badge warn">
-                          Owed {formatPrice(s.owed_kobo)}
+                          Owed {formatPrice(owed(s))}
                         </span>
                       )
                     }
-                    sub={<span className="sub">{supplierSub(s)}</span>}
+                    sub={
+                      <span className="sub">
+                        {supplierSub({ ...s, owed_kobo: owed(s) })}
+                      </span>
+                    }
                     testid="supplier"
                   >
                     {!retired && (

@@ -155,7 +155,7 @@ const supplierCols = `s.id, s.name, s.phone, s.invited_at, s.created_at, s.retir
 	CASE WHEN s.link_id IS NOT NULL THEN 'link' ELSE COALESCE((SELECT ch.channel FROM reach_contacts c JOIN reach_channels ch ON ch.contact_id = c.id
 	  WHERE c.tenant_id = s.tenant_id AND c.phone_hash = s.phone_hash AND ch.stopped_at IS NULL
 	  ORDER BY ch.linked_at DESC LIMIT 1), 'sms') END, s.link_id,
-	COALESCE((SELECT sum(GREATEST(o.received_kobo - o.paid_kobo, 0)) FROM purchase_orders o WHERE o.supplier_id = s.id), 0)::bigint,
+	COALESCE((SELECT sum(GREATEST(o.received_kobo - o.paid_kobo, 0)) FROM purchase_orders o WHERE o.supplier_id = s.id AND s.link_id IS NULL), 0)::bigint,
 	(SELECT count(*) FROM purchase_orders o WHERE o.supplier_id = s.id AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received'))::int`
 
 func (p *Purchases) scanSuppliers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows pgx.Rows) ([]Supplier, error) {
