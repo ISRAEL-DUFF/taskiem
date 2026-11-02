@@ -1,0 +1,91 @@
+name: website
+
+# Website experiment 2 (website/experiment-2/README.md): built on every
+# change to it or to the facts it shows, and published to Vercel at
+# taskiem.ng from main. Pull requests build it as a check and publish
+# nothing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - website/experiment-2/**
+      - tools/docsite/**
+      - templates/library/**
+      - connectors/**
+      - deploy/plans.yaml
+      - docs/brand/relay/**
+      - .github/workflows/website.yml
+  pull_request:
+    paths:
+      - website/experiment-2/**
+      - tools/docsite/**
+      - .github/workflows/website.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @taskiem/web exec playwright install --with-deps chromium
+      # The outside facts are repository variables (Settings > Secrets and
+      # variables > Actions > Variables); each is left off the site while empty.
+      - name: Build the site
+        env:
+          SITE_WHATSAPP: ${{ vars.SITE_WHATSAPP }}
+          SITE_APP: ${{ vars.SITE_APP }}
+          SITE_EMAIL: ${{ vars.SITE_EMAIL }}
+        run: |
+          args=()
+          [ -n "$SITE_WHATSAPP" ] && args+=(--whatsapp "$SITE_WHATSAPP")
+          [ -n "$SITE_APP" ] && args+=(--app "$SITE_APP")
+          [ -n "$SITE_EMAIL" ] && args+=(--email "$SITE_EMAIL")
+          node website/experiment-2/build.mjs "${args[@]}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: website
+          path: website/experiment-2/dist
+          retention-days: 7
+
+  # Publishes the built site to the Vercel project taskiem-website, made on
+  # the first run. Needs the VERCEL_TOKEN secret; taskiem.ng is added to the
+  # project once in Vercel (website/experiment-2/README.md).
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: website
+      url: https://taskiem.ng
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: website
+          path: dist
+      - name: Publish to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::Add the VERCEL_TOKEN secret first (website/experiment-2/README.md)."
+            exit 1
+          fi
+          npx --yes vercel@65.9.0 deploy dist --prod --yes \
+            --project taskiem-website --create-if-missing \
+            --token "$VERCEL_TOKEN"

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -184,85 +185,9 @@ var wwwFuncs = template.FuncMap{
 // buildWebsite renders the website's pages and stylesheet into files.
 // docPages are the docs site's public page names, for links to them.
 func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]bool, files map[string][]byte) error {
-	data := wwwData{Base: cfg.Base, Docs: docsBase, App: cfg.App, Email: cfg.Email}
-	if cfg.WhatsApp != "" {
-		n := strings.TrimLeft(strings.ReplaceAll(cfg.WhatsApp, " ", ""), "+")
-		if n == "" || strings.Trim(n, "0123456789") != "" {
-			return fmt.Errorf("-whatsapp %q is not a phone number", cfg.WhatsApp)
-		}
-		data.WhatsApp = "https://wa.me/" + n + "?text=" + url.QueryEscape("hi")
-	}
-	if cfg.App != "" && !strings.HasSuffix(cfg.App, "/") {
-		data.App = cfg.App + "/"
-	}
-	switch {
-	case data.WhatsApp != "":
-		data.Start = data.WhatsApp
-	case data.App != "":
-		data.Start = data.App + "signup"
-	default:
-		data.Start = docsBase + "guide/index"
-	}
-	conns, err := loadConnectors(root)
+	data, services, err := websiteData(root, cfg, docsBase, docPages)
 	if err != nil {
 		return err
-	}
-	names := map[string]string{}
-	for i, c := range conns {
-		names[c.ID] = c.Name
-		for _, page := range []string{c.ID, strings.ReplaceAll(c.ID, "_", "-"), docAliases[c.ID]} {
-			if page != "" && docPages["integrations/"+page] {
-				conns[i].DocURL = docsBase + "integrations/" + page
-				break
-			}
-		}
-	}
-	data.Connectors = groupConnectors(conns)
-	for _, c := range conns {
-		if ownConnectors[c.ID] {
-			continue
-		}
-		data.ConnectorCount++
-	}
-	for _, id := range featuredConnectors {
-		n, ok := names[id]
-		if !ok {
-			return fmt.Errorf("website: featured connector %q is not in connectors/", id)
-		}
-		data.FeaturedServices = append(data.FeaturedServices, n)
-	}
-	data.Templates, data.Featured, err = groupTemplates(data.App, names, conns)
-	if err != nil {
-		return err
-	}
-	var services []wwwConnector
-	for _, c := range conns {
-		if ownConnectors[c.ID] {
-			continue
-		}
-		for _, g := range data.Templates {
-			for _, w := range g.Items {
-				if t, _ := templates.Default().Get(w.ID); usesConnector(t, c) {
-					c.Templates = append(c.Templates, w)
-				}
-			}
-		}
-		if c.Kind = adapterKinds[c.Category]; c.Kind == "" {
-			c.Kind = "Integration"
-		}
-		services = append(services, c)
-	}
-	if data.Pricing, err = loadPricing(root); err != nil {
-		return err
-	}
-	data.Prices = map[string]string{}
-	for _, p := range data.Pricing.Plans {
-		data.Prices[p.ID] = p.Monthly
-	}
-	for _, id := range []string{"starter", "growth", "enterprise"} {
-		if _, ok := data.Prices[id]; !ok {
-			return fmt.Errorf("website: the pricing page needs a public plan %q in deploy/plans.yaml", id)
-		}
 	}
 	css, err := assets.ReadFile("assets/www.css")
 	if err != nil {
@@ -324,6 +249,115 @@ func buildWebsite(root string, cfg Config, docsBase string, docPages map[string]
 		files[c.Page+".html"] = buf.Bytes()
 	}
 	return nil
+}
+
+// websiteData reads what the website lists from the repository: the
+// connectors, the templates, the plans, and a page's worth of facts for
+// each service. buildWebsite renders it; -data writes it as JSON for
+// other builds of the website (website/experiment-2).
+func websiteData(root string, cfg Config, docsBase string, docPages map[string]bool) (wwwData, []wwwConnector, error) {
+	data := wwwData{Base: cfg.Base, Docs: docsBase, App: cfg.App, Email: cfg.Email}
+	if cfg.WhatsApp != "" {
+		n := strings.TrimLeft(strings.ReplaceAll(cfg.WhatsApp, " ", ""), "+")
+		if n == "" || strings.Trim(n, "0123456789") != "" {
+			return wwwData{}, nil, fmt.Errorf("-whatsapp %q is not a phone number", cfg.WhatsApp)
+		}
+		data.WhatsApp = "https://wa.me/" + n + "?text=" + url.QueryEscape("hi")
+	}
+	if cfg.App != "" && !strings.HasSuffix(cfg.App, "/") {
+		data.App = cfg.App + "/"
+	}
+	switch {
+	case data.WhatsApp != "":
+		data.Start = data.WhatsApp
+	case data.App != "":
+		data.Start = data.App + "signup"
+	default:
+		data.Start = docsBase + "guide/index"
+	}
+	conns, err := loadConnectors(root)
+	if err != nil {
+		return wwwData{}, nil, err
+	}
+	names := map[string]string{}
+	for i, c := range conns {
+		names[c.ID] = c.Name
+		for _, page := range []string{c.ID, strings.ReplaceAll(c.ID, "_", "-"), docAliases[c.ID]} {
+			if page != "" && docPages["integrations/"+page] {
+				conns[i].DocURL = docsBase + "integrations/" + page
+				break
+			}
+		}
+	}
+	data.Connectors = groupConnectors(conns)
+	for _, c := range conns {
+		if ownConnectors[c.ID] {
+			continue
+		}
+		data.ConnectorCount++
+	}
+	for _, id := range featuredConnectors {
+		n, ok := names[id]
+		if !ok {
+			return wwwData{}, nil, fmt.Errorf("website: featured connector %q is not in connectors/", id)
+		}
+		data.FeaturedServices = append(data.FeaturedServices, n)
+	}
+	data.Templates, data.Featured, err = groupTemplates(data.App, names, conns)
+	if err != nil {
+		return wwwData{}, nil, err
+	}
+	var services []wwwConnector
+	for _, c := range conns {
+		if ownConnectors[c.ID] {
+			continue
+		}
+		for _, g := range data.Templates {
+			for _, w := range g.Items {
+				if t, _ := templates.Default().Get(w.ID); usesConnector(t, c) {
+					c.Templates = append(c.Templates, w)
+				}
+			}
+		}
+		if c.Kind = adapterKinds[c.Category]; c.Kind == "" {
+			c.Kind = "Integration"
+		}
+		services = append(services, c)
+	}
+	if data.Pricing, err = loadPricing(root); err != nil {
+		return wwwData{}, nil, err
+	}
+	data.Prices = map[string]string{}
+	for _, p := range data.Pricing.Plans {
+		data.Prices[p.ID] = p.Monthly
+	}
+	for _, id := range []string{"starter", "growth", "enterprise"} {
+		if _, ok := data.Prices[id]; !ok {
+			return wwwData{}, nil, fmt.Errorf("website: the pricing page needs a public plan %q in deploy/plans.yaml", id)
+		}
+	}
+	return data, services, nil
+}
+
+// writeWebsiteData writes websiteData as JSON (-data).
+func writeWebsiteData(root string, cfg Config, path string) error {
+	data, services, err := websiteData(root, cfg, cfg.Base+"docs/", nil)
+	if err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(struct {
+		Templates        []wwwTemplateGroup
+		Featured         []wwwTemplate
+		FeaturedServices []string
+		Connectors       []wwwConnectorGroup
+		ConnectorCount   int
+		Services         []wwwConnector
+		Pricing          wwwPricing
+	}{data.Templates, data.Featured, data.FeaturedServices, data.Connectors, data.ConnectorCount, services, data.Pricing}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o644) //nolint:gosec // a build output, not a secret
 }
 
 // usesConnector reports whether a template works with the connector:

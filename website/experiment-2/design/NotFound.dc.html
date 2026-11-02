@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Page not found</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<dc-import name="Header" theme="{{theme}}" hint-size="100%,88px"></dc-import>
+<main>
+
+<section style="padding-top:clamp(56px,9vw,128px);padding-bottom:clamp(72px,10vw,144px)">
+  <div class="container" style="display:flex;flex-direction:column;align-items:flex-start;gap:24px">
+    <p class="label">Error 404</p>
+    <h1 class="h1" style="font-size:clamp(56px,10vw,144px);line-height:.95">That page is not here.</h1>
+    <p class="lede" style="max-width:520px">The link may be old, or the address may have a typing mistake. Start again from the home page, or ask Taskiem.</p>
+    <div class="btn-row" style="margin-top:8px">
+      <a class="btn btn-main" href="Home.dc.html">Go to the home page</a>
+      <a class="btn btn-alt" href="#whatsapp">Chat with Taskiem on WhatsApp</a>
+    </div>
+  </div>
+</section>
+
+</main>
+<dc-import name="Footer" theme="{{theme}}" hint-size="100%,380px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'dark' ? 'dark' : 'light' };
+  }
+}
+</script>
+</body>
+</html>

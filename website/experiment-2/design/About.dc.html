@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>About</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<dc-import name="Header" theme="{{theme}}" hint-size="100%,88px"></dc-import>
+<main>
+
+<section class="page-top">
+  <div class="container" style="display:flex;flex-direction:column;gap:20px">
+    <p class="label">About</p>
+    <h1 class="h1" style="max-width:1000px">Made in Lagos by the team behind Xenibase.</h1>
+    <p class="lede" style="max-width:660px">We build software for businesses that run on WhatsApp, POS terminals and a notebook, and we build it to be trusted with money.</p>
+  </div>
+</section>
+
+<section style="padding-bottom:clamp(56px,8vw,104px)">
+  <div class="container">
+    <div class="grid" style="--min:300px">
+      <div class="card" style="padding:32px">
+        <p class="label">What we do</p>
+        <h2 class="h3">Run the repeating jobs</h2>
+        <p class="small">Chasing debtors, checking transfers, paying staff, keeping records. Taskiem does them for you, the same way every time.</p>
+      </div>
+      <div class="card" style="padding:32px">
+        <p class="label">How we think</p>
+        <h2 class="h3">Plain words, flat prices</h2>
+        <p class="small">You should understand what Taskiem will do before it does it, and what it costs before you start. Prices are in naira and never per task.</p>
+      </div>
+      <div class="card-pine" style="padding:32px">
+        <p class="label" style="color:#c8f169">Where we are</p>
+        <h2 class="h3">Lagos</h2>
+        <p class="small">We are close to the businesses we build for, and to the services they already use.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<dc-import name="Cta" theme="{{theme}}" hint-size="100%,430px"></dc-import>
+<dc-import name="Footer" theme="{{theme}}" hint-size="100%,380px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'dark' ? 'dark' : 'light' };
+  }
+}
+</script>
+</body>
+</html>

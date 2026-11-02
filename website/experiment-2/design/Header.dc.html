@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Header</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<header style="display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1200px;margin:0 auto;padding:20px clamp(20px,5vw,48px)">
+  <a href="Home.dc.html" aria-label="Taskiem home" style="display:flex;align-items:center;gap:20px;min-height:44px">
+    <img class="logo-light" src="/_blob/f27b4430c8fa6ccfceb23d47b15d0ea4" alt="" width="40" height="40" style="width:40px;height:40px">
+    <img class="logo-light" src="/_blob/3c3ab2d1252ea744399a7067e5a21df5" alt="" width="102" height="22" style="width:102px;height:22px">
+    <img class="logo-dark" src="/_blob/883c87704e19d22b80e24a64c63ed9de" alt="" width="40" height="40" style="width:40px;height:40px">
+    <img class="logo-dark" src="/_blob/8c096f830081fc34bad0c5ab0c1c76ab" alt="" width="102" height="22" style="width:102px;height:22px">
+  </a>
+  <nav class="nav-wide" aria-label="Main" style="align-items:center;gap:clamp(20px,2.4vw,36px);font-size:16px;font-weight:500;color:var(--ink)">
+    <a href="/how-it-works" style="min-height:44px;display:inline-flex;align-items:center">How it works</a>
+    <a href="/templates" style="min-height:44px;display:inline-flex;align-items:center">Templates</a>
+    <a href="/integrations" style="min-height:44px;display:inline-flex;align-items:center">Works with</a>
+    <a href="/pricing" style="min-height:44px;display:inline-flex;align-items:center">Pricing</a>
+    <a href="/security" style="min-height:44px;display:inline-flex;align-items:center">Security</a>
+  </nav>
+  <a class="btn btn-main nav-wide" href="#whatsapp" style="min-height:48px;padding:0 22px;font-size:15px">Chat on WhatsApp</a>
+  <button class="nav-narrow" aria-label="Open menu" style="width:48px;height:48px;place-items:center;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;padding:0">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+</header>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":88}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'dark' ? 'dark' : 'light' };
+  }
+}
+</script>
+</body>
+</html>

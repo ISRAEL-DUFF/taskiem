@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your records</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/50a98d2917f323d39577f6eb0dc5de03">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;800&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="tk" data-theme="{{theme}}">
+<dc-import name="Header" theme="{{theme}}" hint-size="100%,88px"></dc-import>
+<main>
+
+<section class="page-top">
+  <div class="container" style="display:flex;flex-direction:column;gap:20px">
+    <p class="label">Your records</p>
+    <h1 class="h1" style="max-width:1000px">Lists without a spreadsheet.</h1>
+    <p class="lede" style="max-width:660px">Keep your debtors, customers, stock or staff in a list that Taskiem can read and update. Add a row from WhatsApp. Find one the same way.</p>
+  </div>
+</section>
+
+<!-- The drawn table -->
+<section style="padding-bottom:clamp(48px,6vw,80px)">
+  <div class="container">
+    <div class="card" aria-hidden="true" style="border-radius:24px;padding:clamp(16px,2.4vw,28px);gap:20px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+        <span class="h3" style="font-size:24px">Debtors</span>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+          <span style="display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--ground);font-size:15px;color:var(--muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Find a customer</span>
+          <span style="display:inline-flex;align-items:center;min-height:44px;padding:0 20px;border-radius:999px;background:var(--btn);color:var(--btn-ink);font-weight:800;font-size:15px">Add a row</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--line);border-radius:12px">
+        <table class="tbl" style="min-width:640px">
+          <thead><tr><th>Customer</th><th>Balance</th><th>Last reminded</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:800">Chidi</td><td class="num">₦12,500</td><td>Friday, 10:00</td><td><span class="status" style="background:#c4321f"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v6M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>Overdue</span></td></tr>
+            <tr><td><span style="display:block;height:10px;width:90px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:70px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:100px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:60px;border-radius:5px;background:var(--line)"></span></td></tr>
+            <tr><td><span style="display:block;height:10px;width:70px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:80px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:90px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:50px;border-radius:5px;background:var(--line)"></span></td></tr>
+            <tr><td><span style="display:block;height:10px;width:100px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:60px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:110px;border-radius:5px;background:var(--line)"></span></td><td><span style="display:block;height:10px;width:70px;border-radius:5px;background:var(--line)"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Three things you can do -->
+<section style="padding-bottom:clamp(56px,8vw,104px)">
+  <div class="container">
+    <div class="grid" style="--min:320px">
+
+      <div class="card" style="gap:20px">
+        <div aria-hidden="true" style="background:#f1f4ef;border:1px solid #d9e2d9;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;font-size:14.5px;line-height:1.4">
+          <div class="bub bub-me" style="font-size:14.5px">add Chidi, owes 12500</div>
+          <div class="bub bub-tk" style="font-size:14.5px">Added. Chidi now owes ₦12,500.</div>
+          <div class="bub bub-me" style="font-size:14.5px">who owes me more than 10000?</div>
+          <div class="bub bub-tk" style="font-size:14.5px">One person: Chidi, ₦12,500.</div>
+        </div>
+        <h2 class="h3">Add or find a row from WhatsApp</h2>
+        <p class="small">Type it the way you would say it. Taskiem adds the row, or finds the ones you asked for.</p>
+      </div>
+
+      <div class="card" style="gap:20px">
+        <div aria-hidden="true" style="background:var(--ground);border-radius:16px;padding:14px">
+          <div style="border:2px dashed var(--line);border-radius:12px;padding:22px 16px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;color:var(--ink);font-size:15px">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+            <span style="font-weight:800">Drop a CSV here</span>
+            <span class="chip" style="background:var(--card)">debtors.csv</span>
+          </div>
+        </div>
+        <h2 class="h3">Import a CSV</h2>
+        <p class="small">Already keep a list somewhere else? Bring it in as a file and it becomes a table in one step.</p>
+      </div>
+
+      <div class="card-pine" style="gap:20px">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+        <h2 class="h3">Private by default</h2>
+        <p class="small">Every list starts private. Only you, and the team members you add, can open it. Your customers' details are never shown to anyone else.</p>
+        <a class="link" href="/security" style="margin-top:auto">How we keep it safe <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg></a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+</main>
+<dc-import name="Cta" theme="{{theme}}" hint-size="100%,430px"></dc-import>
+<dc-import name="Footer" theme="{{theme}}" hint-size="100%,380px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Theme"},"$preview":{"width":1440,"height":2600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'dark' ? 'dark' : 'light' };
+  }
+}
+</script>
+</body>
+</html>
