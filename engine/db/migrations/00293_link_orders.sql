@@ -51,14 +51,55 @@ ALTER TABLE purchase_orders
 -- storefront (a business may sell to businesses without one); proposed
 -- (drafted by the seller for the buyer, waiting for its Confirm) and
 -- changed (the seller proposes other quantities or prices) are its own.
+-- The kinds are the fronts' (00290, docs/spec/fronts.md) and trade.
 ALTER TABLE storefront_orders DROP CONSTRAINT storefront_orders_kind_check;
-ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_kind_check CHECK (kind IN ('order', 'enquiry', 'callback', 'booking', 'trade'));
+ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_kind_check CHECK (kind IN ('order', 'enquiry', 'callback', 'booking', 'hire', 'space', 'tickets', 'class', 'quote', 'trade'));
 ALTER TABLE storefront_orders DROP CONSTRAINT storefront_orders_status_check;
 ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_status_check CHECK (status IN ('received', 'awaiting_payment', 'paid', 'accepted',
   'declined', 'expired', 'completed', 'cancelled', 'refund_due', 'no_show', 'price_changed', 'refunded', 'dispatched', 'on_the_way', 'arrived',
   'proposed', 'changed'));
+-- A trade order on a business with a storefront names the storefront's
+-- built-in order action and that action's front (fronts §5.5, 00279),
+-- so it starts the order workflow as an order from the page does; one on
+-- a business without a storefront names none, and no other order may.
 ALTER TABLE storefront_orders ALTER COLUMN storefront_id DROP NOT NULL;
-ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_trade CHECK ((kind = 'trade') OR storefront_id IS NOT NULL);
+ALTER TABLE storefront_orders ALTER COLUMN front_id DROP NOT NULL;
+ALTER TABLE storefront_orders ALTER COLUMN action_id DROP NOT NULL;
+ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_trade CHECK ((kind = 'trade') OR (storefront_id IS NOT NULL AND front_id IS NOT NULL AND action_id IS NOT NULL));
+-- The fill-in of 00279, with the trade kind: the built-in order action
+-- when the business has a storefront, never an action made for it.
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_storefront_orders_fill() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  a uuid;
+  f uuid;
+BEGIN
+  IF NEW.kind = 'trade' THEN
+    IF NEW.action_id IS NULL AND NEW.storefront_id IS NOT NULL THEN
+      SELECT id, front_id INTO NEW.action_id, NEW.front_id FROM storefront_actions WHERE storefront_id = NEW.storefront_id AND kind = 'order' AND builtin;
+    ELSIF NEW.action_id IS NOT NULL AND NEW.front_id IS NULL THEN
+      SELECT front_id INTO NEW.front_id FROM storefront_actions WHERE id = NEW.action_id;
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF NEW.action_id IS NULL THEN
+    SELECT id, front_id INTO a, f FROM storefront_actions WHERE storefront_id = NEW.storefront_id AND kind = NEW.kind AND builtin;
+    IF a IS NULL THEN
+      INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment)
+        VALUES (NEW.storefront_id, NEW.kind, NEW.tenant_id, false, initcap(NEW.kind), CASE WHEN NEW.kind IN ('order', 'booking') THEN 'after_accept' ELSE 'none' END)
+        ON CONFLICT (storefront_id, kind) WHERE builtin DO NOTHING;
+      SELECT id, front_id INTO a, f FROM storefront_actions WHERE storefront_id = NEW.storefront_id AND kind = NEW.kind AND builtin;
+    END IF;
+    NEW.action_id := a;
+    NEW.front_id := COALESCE(NEW.front_id, f);
+  ELSIF NEW.front_id IS NULL THEN
+    SELECT front_id INTO NEW.front_id FROM storefront_actions WHERE id = NEW.action_id;
+  END IF;
+  RETURN NEW;
+END
+$$;
+-- +goose StatementEnd
 
 CREATE TABLE link_orders (
   order_id         uuid PRIMARY KEY REFERENCES storefront_orders(id),
@@ -232,12 +273,39 @@ DROP TABLE trade_settings;
 DROP TABLE link_orders;
 DELETE FROM storefront_orders WHERE kind = 'trade' OR status IN ('proposed', 'changed');
 ALTER TABLE storefront_orders DROP CONSTRAINT storefront_orders_trade;
+ALTER TABLE storefront_orders ALTER COLUMN action_id SET NOT NULL;
+ALTER TABLE storefront_orders ALTER COLUMN front_id SET NOT NULL;
 ALTER TABLE storefront_orders ALTER COLUMN storefront_id SET NOT NULL;
+-- The fill-in as 00279 made it.
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_storefront_orders_fill() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  a uuid;
+  f uuid;
+BEGIN
+  IF NEW.action_id IS NULL THEN
+    SELECT id, front_id INTO a, f FROM storefront_actions WHERE storefront_id = NEW.storefront_id AND kind = NEW.kind AND builtin;
+    IF a IS NULL THEN
+      INSERT INTO storefront_actions (storefront_id, kind, tenant_id, enabled, label, payment)
+        VALUES (NEW.storefront_id, NEW.kind, NEW.tenant_id, false, initcap(NEW.kind), CASE WHEN NEW.kind IN ('order', 'booking') THEN 'after_accept' ELSE 'none' END)
+        ON CONFLICT (storefront_id, kind) WHERE builtin DO NOTHING;
+      SELECT id, front_id INTO a, f FROM storefront_actions WHERE storefront_id = NEW.storefront_id AND kind = NEW.kind AND builtin;
+    END IF;
+    NEW.action_id := a;
+    NEW.front_id := COALESCE(NEW.front_id, f);
+  ELSIF NEW.front_id IS NULL THEN
+    SELECT front_id INTO NEW.front_id FROM storefront_actions WHERE id = NEW.action_id;
+  END IF;
+  RETURN NEW;
+END
+$$;
+-- +goose StatementEnd
 ALTER TABLE storefront_orders DROP CONSTRAINT storefront_orders_status_check;
 ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_status_check CHECK (status IN ('received', 'awaiting_payment', 'paid', 'accepted',
   'declined', 'expired', 'completed', 'cancelled', 'refund_due', 'no_show', 'price_changed', 'refunded', 'dispatched', 'on_the_way', 'arrived'));
 ALTER TABLE storefront_orders DROP CONSTRAINT storefront_orders_kind_check;
-ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_kind_check CHECK (kind IN ('order', 'enquiry', 'callback', 'booking'));
+ALTER TABLE storefront_orders ADD CONSTRAINT storefront_orders_kind_check CHECK (kind IN ('order', 'enquiry', 'callback', 'booking', 'hire', 'space', 'tickets', 'class', 'quote'));
 ALTER TABLE purchase_orders DROP COLUMN short_at, DROP COLUMN cancel_asked_at, DROP COLUMN short_agreed_at, DROP COLUMN delivered_at, DROP COLUMN change,
   DROP COLUMN seller_status, DROP COLUMN seller_note, DROP COLUMN link_id;
 ALTER TABLE stock_settings DROP COLUMN deliver_to;

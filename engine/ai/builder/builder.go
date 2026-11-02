@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -598,7 +599,9 @@ func (b *Builder) contextDoc(req Request, reg connector.Lookup) (map[string]any,
 		}
 		for i, m := range b.Templates.MatchFor(goal, 2, req.Context.Holds) {
 			tc := TemplateContext(m.Template)
-			tc["match"] = map[string]any{"score": m.Score, "matched_words": m.Matched}
+			// The score to a tenth, not rounded to a whole: a near miss
+			// of a reader's threshold stays one.
+			tc["match"] = map[string]any{"score": math.Round(m.Exact*10) / 10, "matched_words": m.Matched}
 			tpls = append(tpls, tc)
 			offered = append(offered, m.Template.ID)
 			// The best template brings its connectors' schemas, after the

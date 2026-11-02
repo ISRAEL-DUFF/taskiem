@@ -1381,6 +1381,7 @@ export function StorefrontTabs() {
         Page
       </NavLink>
       <NavLink to="/storefront/look">Look</NavLink>
+      <NavLink to="/storefront/fronts">Fronts</NavLink>
       <NavLink to="/storefront/orders">Orders</NavLink>
       <NavLink to="/storefront/bookings">Bookings</NavLink>
       <NavLink to="/storefront/riders" end>

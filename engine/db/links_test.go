@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -399,7 +400,7 @@ func TestLinkSearchByWhatIsSold(t *testing.T) {
 }
 
 // TestLinkRequestPrivacy (docs/spec/business-links.md §5.1, §13; migration
-// 00287): what a request may not reveal. A blind request to a business the
+// 00299): what a request may not reveal. A blind request to a business the
 // caller already sees leaves its row alone; a request by search after a
 // blind one shows as sent whether or not the blind one reached anyone;
 // the daily quota counts no blind request; the side blocked cannot lift
@@ -459,7 +460,7 @@ func TestLinkRequestPrivacy(t *testing.T) {
 		state := "(none)"
 		if err := as(me, func(tx pgx.Tx) error {
 			err := tx.QueryRow(ctx, `SELECT state FROM taskiem_links_of() WHERE business = $1`, other).Scan(&state)
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				return nil
 			}
 			return err

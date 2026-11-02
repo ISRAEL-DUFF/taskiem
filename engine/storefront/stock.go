@@ -357,8 +357,9 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 // and forms show it at once rather than at the next refresh.
 func (o *Orders) copyStock(ctx context.Context, tenant, sf uuid.UUID, row string, n int64) error {
 	return db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE storefront_catalogue SET item = jsonb_set(item, '{stock}', to_jsonb($4::bigint))
-			WHERE tenant_id = $1 AND storefront_id = $2 AND row_id = $3`, tenant, sf, row, n)
+		// Stock is kept on the catalogue's table only (fronts §5.2).
+		_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb($4::bigint))
+			WHERE c.tenant_id = $1 AND c.storefront_id = $2 AND c.row_id = $3 AND c.table_name = `+catalogueTableSQL, tenant, sf, row, n)
 		return err
 	})
 }

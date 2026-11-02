@@ -35,12 +35,12 @@ func TestLinkAutomation(t *testing.T) {
 	// account resolved, so the managed payment reaches its approval.
 	rail := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.URL.Path == "/bank":
+		switch r.URL.Path {
+		case "/bank":
 			_, _ = rw.Write([]byte(`{"status":true,"data":[{"name":"Wema Bank Plc","code":"035"}]}`))
-		case r.URL.Path == "/bank/resolve":
+		case "/bank/resolve":
 			_, _ = rw.Write([]byte(`{"status":true,"data":{"account_number":"` + r.URL.Query().Get("account_number") + `","account_name":"DANGOTE STORES"}}`))
-		case r.URL.Path == "/balance":
+		case "/balance":
 			_, _ = rw.Write([]byte(`{"status":true,"data":[{"currency":"NGN","balance":100000000}]}`))
 		default:
 			rw.WriteHeader(http.StatusNotFound)
@@ -286,7 +286,7 @@ func TestLinkAutomation(t *testing.T) {
 	// An order over the customer's credit limit is not accepted by a run:
 	// the seller's workflow fails plainly, and a person accepts it.
 	seller.must(200, "PUT", "/v1/links/"+sellerLink+"/trade", map[string]any{"credit_limit_kobo": 100})
-	run = buyer.must(201, "POST", "/v1/workflows/"+buyerWF+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+	buyer.must(201, "POST", "/v1/workflows/"+buyerWF+"/runs", map[string]any{"input": map[string]any{}})
 	w.env.Drain(t)
 	drainLinked(t, w.world)
 	w.env.Drain(t)

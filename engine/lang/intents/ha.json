@@ -78,6 +78,10 @@
       "tsarina",
       "nawa zan biya",
       "biyan taskiem"
+    ],
+    "fronts": [
+      "fronts ɗina",
+      "nuna fronts ɗina"
     ]
   },
   "prefixes": {
@@ -180,6 +184,20 @@
       "goge",
       "cire",
       "share"
+    ],
+    "add_front": [
+      "ƙara front",
+      "buɗe sabon front"
+    ],
+    "front_on": [
+      "kunna front"
+    ],
+    "front_off": [
+      "kashe front"
+    ],
+    "orders": [
+      "odar",
+      "oda na"
     ]
   },
   "fillers": [

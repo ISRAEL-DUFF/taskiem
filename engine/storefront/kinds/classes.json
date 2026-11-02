@@ -1,0 +1,10 @@
+{
+  "name": "classes",
+  "title": "Classes",
+  "line": "A course, lessons, a workshop, a bootcamp, coaching: places paid for in full or in instalments, with a waiting list when it is full.",
+  "table": "classes",
+  "mapping": {"name": "name", "price": "fee", "price_unit": "naira", "photo": "photo", "description": "description", "available": "available", "capacity": "places", "starts": "starts", "venue": "venue"},
+  "actions": [
+    {"kind": "class", "label": "Enrol", "template": "storefront-classes", "options": {"max_per_order": 5, "instalments": 2, "instalment_days": 30, "waiting_list": true}}
+  ]
+}

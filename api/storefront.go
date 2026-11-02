@@ -258,6 +258,9 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}); err != nil {
 			return err
 		}
+		if err := s.syncLists(ctx, tenant); err != nil {
+			return err
+		}
 		return s.syncServices(ctx, tenant, sf)
 	}
 	// A catalogue keeping stock: counts changed in the table by hand are
@@ -296,7 +299,62 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	if err := s.syncLists(ctx, tenant); err != nil {
+		return err
+	}
 	return s.syncServices(ctx, tenant, sf)
+}
+
+// syncLists refreshes the copies of the other fronts' lists (fronts F3,
+// §5.2), one per table, each item checked as the catalogue's are, and
+// drops the copies no list shows. A table that cannot be read keeps its
+// old copy.
+func (s *Server) syncLists(ctx context.Context, tenant uuid.UUID) error {
+	var lists []storefront.ListConfig
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		lists, err = storefront.Lists(ctx, tx, tenant)
+		return err
+	}); err != nil {
+		return err
+	}
+	keep := []string{}
+	var errs []error
+	for _, l := range lists {
+		keep = append(keep, l.TableName)
+		var table datatables.Table
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			table, err = datatables.GetTable(ctx, tx, *l.Table)
+			return err
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
+			continue
+		}
+		rows, err := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
+			continue
+		}
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			items, err := storefront.Items(ctx, tx, tenant, rows, l.Columns)
+			if err != nil {
+				return err
+			}
+			if items, err = s.moderateItems(ctx, tx, tenant, items); err != nil {
+				return err
+			}
+			return storefront.SyncList(ctx, tx, tenant, l.TableName, items)
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", l.TableName, err))
+		}
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return storefront.PruneLists(ctx, tx, tenant, keep)
+	}); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }
 
 // readAllRows reads a table's rows in pages, up to limit.

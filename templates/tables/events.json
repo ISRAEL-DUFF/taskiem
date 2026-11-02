@@ -1,0 +1,16 @@
+{
+  "name": "events",
+  "front": true,
+  "title": "Events",
+  "description": "Events a business sells tickets for: a concert, a seminar, a conference, a party, a match. Each with its photo and description, when it starts, where, how many tickets there are, the price of a ticket in naira (a row per ticket type, such as Regular and VIP), and whether tickets are on sale.",
+  "columns": [
+    {"name": "name", "title": "Event", "type": "text", "required": true},
+    {"name": "photo", "title": "Photo", "type": "text"},
+    {"name": "description", "title": "Description", "type": "text"},
+    {"name": "starts", "title": "Starts", "type": "datetime"},
+    {"name": "venue", "title": "Venue", "type": "text"},
+    {"name": "tickets", "title": "Tickets", "type": "integer", "required": true},
+    {"name": "price", "title": "Price (₦)", "type": "number", "required": true},
+    {"name": "available", "title": "On sale", "type": "boolean"}
+  ]
+}

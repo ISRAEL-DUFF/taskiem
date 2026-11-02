@@ -4492,6 +4492,10 @@
       "text": "Lokacin da wani ya aika fom ɗin {form} na shagon",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "Lokacin da wani ya aika fom a shafin shago",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "Lokacin da wani aiki ya kira shi",
       "reviewed": false
@@ -5309,7 +5313,366 @@
       "reviewed": false
     },
     "order.link.auto_changed": {
-      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them.",
+      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them."
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: sauran shafukanka, kamar jerin abinci; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": false
+    },
+    "wa.front.list_head": {
+      "text": "Fronts ɗinka:",
+      "reviewed": false
+    },
+    "wa.front.on": {
+      "text": "a kunne",
+      "reviewed": false
+    },
+    "wa.front.off": {
+      "text": "a kashe",
+      "reviewed": false
+    },
+    "wa.front.home": {
+      "text": "shafin farko",
+      "reviewed": false
+    },
+    "wa.front.items": {
+      "text": "kaya {n}",
+      "reviewed": false
+    },
+    "wa.front.forms_on": {
+      "text": "fom {n} a kunne",
+      "reviewed": false
+    },
+    "wa.front.list_tail": {
+      "text": "Ƙara ɗaya da *add front Snacks*. Kunna ko kashe ɗaya da *front Snacks on* ko *front Snacks off*.",
+      "reviewed": false
+    },
+    "wa.front.none_named": {
+      "text": "Babu front mai suna {name}. Fronts ɗinka: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.how_add": {
+      "text": "Rubuta shi kamar *add front Snacks*, ko *add food front Snacks*: suna wanda bai wuce haruffa 80 ba.",
+      "reviewed": false
+    },
+    "wa.front.exists": {
+      "text": "Kana da front mai suna *{name}* tuni. Aika *fronts* don ganin su.",
+      "reviewed": false
+    },
+    "wa.front.which_kind": {
+      "text": "Me *{name}* yake yi?\n{list}\nAmsa da lambarsa.",
+      "reviewed": false
+    },
+    "wa.front.confirm_add": {
+      "text": "Mu ƙara *{name}*, front na {kind}?",
+      "reviewed": false
+    },
+    "wa.front.confirm_table": {
+      "text": "Zai sami jerin sa na kansa, {table}, don ƙara kaya.",
+      "reviewed": false
+    },
+    "wa.front.confirm_forms": {
+      "text": "Fom ɗinsa: {forms}.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off": {
+      "text": "Zai fara a kashe, don haka abokan ciniki za su gan shi ne kawai idan ka kunna shi.",
+      "reviewed": false
+    },
+    "wa.front.not_made": {
+      "text": "Ba a iya yin front ɗin ba: {reason}",
+      "reviewed": false
+    },
+    "wa.front.made": {
+      "text": "An yi *{name}*, front na {kind}. Yana a kashe a yanzu.",
+      "reviewed": false
+    },
+    "wa.front.next_dish": {
+      "text": "Ƙara abincinka na farko: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_item": {
+      "text": "Ƙara kayanka na farko: *add item Chin chin 500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_forms": {
+      "text": "Kunna fom ɗinsa: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_on": {
+      "text": "Idan ya shirya: *front {front} on*",
+      "reviewed": false
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* shine shafinka na farko, kuma yana a kunne koyaushe. Don dakatar da oda na ɗan lokaci, aika *close shop*.",
+      "reviewed": false
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* yana a kunne tuni.",
+      "reviewed": false
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* yana a kashe tuni.",
+      "reviewed": false
+    },
+    "wa.front.confirm_on": {
+      "text": "Mu kunna *{name}*? Abokan ciniki za su gan shi a shafinka.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Mu kashe *{name}*? Abokan ciniki ba za su ƙara ganin sa ba. Za a ajiye kayansa da odarsa.",
+      "reviewed": false
+    },
+    "wa.front.gone": {
+      "text": "*{name}* baya nan kuma. Aika *fronts* don ganin fronts ɗinka.",
+      "reviewed": false
+    },
+    "wa.front.not_changed": {
+      "text": "Ba a canza komai ba: {reason}",
+      "reviewed": false
+    },
+    "wa.front.now_off": {
+      "text": "An kashe *{name}*. An ajiye kayansa da odarsa.",
+      "reviewed": false
+    },
+    "wa.front.now_on": {
+      "text": "An kunna *{name}*.",
+      "reviewed": false
+    },
+    "wa.front.forms_off": {
+      "text": "Fom ɗinsa yana a kashe har yanzu: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.no_food": {
+      "text": "Ba ka da front na Food tukuna. Yi ɗaya da *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.no_item_fronts": {
+      "text": "Babu ɗaya daga cikin fronts ɗinka da ke da jerin da za a ƙara masa. Ƙara a shafinka da *add product Jollof rice 2000*, ko yi front da *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.say_which": {
+      "text": "Faɗi front ɗin da yake domin sa, kamar *add item Chin chin 500 to Snacks*. Fronts ɗinka masu kaya: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* ba shi da jerin kaya: fom ɗinsa kawai yake nunawa.",
+      "reviewed": false
+    },
+    "wa.front.how_item": {
+      "text": "Rubuta shi kamar *add item Chin chin 500 to {front}*: sunan, sannan farashin.",
+      "reviewed": false
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* yana kan {front} tuni, a {price}. Canza farashinsa da *price {name} 3000*.",
+      "reviewed": false
+    },
+    "wa.front.confirm_item": {
+      "text": "Mu ƙara wannan a *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.front.item_added": {
+      "text": "An ƙara *{name}* a {price} zuwa *{front}*.",
+      "reviewed": false
+    },
+    "wa.quote.sent": {
+      "text": "An aika *{reference}*: {total}, {now} za a biya idan an karɓa. Yana nan har {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Faɗi farashin *{reference}* da naira, kamar *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "Babu buƙatar farashi mai lamba *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "Ba za a iya aika farashin *{reference}* ba: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Buƙatun farashi da ke jiran amsa:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(ana bukata kafin {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Amsa da *quote <lamba> <farashi>* don aika farashi.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "Babu buƙatar da ke jiran farashi.",
+      "reviewed": false
+    },
+    "wa.ticket.in": {
+      "text": "An shiga: *{code}*, kujera {seat} cikin {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* ya riga ya shiga: an duba shi {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "Babu tikiti mai lamba *{code}*. Duba shi da saƙon abokin ciniki.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* ba zai iya shiga ba: an mayar da kuɗi ko an soke odar.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tikitocin da suka rage:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} cikin {total} sun rage, {in} sun shiga",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "Babu taron da ake sayar da tikitinsa.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Wuraren da suka rage:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): wurare {left} cikin {total} sun rage",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "Babu aji da ake yin rajista.",
+      "reviewed": false
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* yana a kashe: aika *front {front} on* don nuna shi.",
+      "reviewed": false
+    },
+    "wa.front.catalogue": {
+      "text": "shafin farko",
+      "reviewed": false
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Kayan shafinka na farko ne kawai ke ajiye adadin kaya. *{name}* a kan {front} yana nan ko ya ƙare: *sold out {name}*.",
+      "reviewed": false
+    },
+    "wa.front.changed": {
+      "text": "An gama: an sabunta *{name}* a kan {front}.",
+      "reviewed": false
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* ba shi da fom na {what}.",
+      "reviewed": false
+    },
+    "wa.front.no_deliveries": {
+      "text": "Isar da kaya ta hannun masu kai kayanka ba ya nan tukuna.",
+      "reviewed": false
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Mu kunna isar da kaya don *{front}*? Kowace oda da ka tabbatar don isarwa za a ba masu kai kayanka bi da bi. Fom ɗin odarsa zai zauna yadda yake.",
+      "reviewed": false
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* a kan {front} yana a kunne tuni.",
+      "reviewed": false
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Mu kunna *{form}* a kan *{front}*? Abokan ciniki za su iya amfani da shi, kuma kowanne zai zo gare ka a nan.",
+      "reviewed": false
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* yana karɓar {what} yanzu: kowanne zai zo gare ka a nan.",
+      "reviewed": false
+    },
+    "wa.front.no_orders": {
+      "text": "Babu oda a buɗe a kan *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.orders_head": {
+      "text": "Oda a buɗe a kan *{front}*, sabbi a farko:",
+      "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "Mun karɓi kuɗinka na {amount} don {reference}. Saura {balance} da za a biya.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "Saura {balance} da za a biya don {reference}. Biya a nan: {url}",
+      "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "An tabbatar da hayarka {reference}: {item}, daga {from}. A dawo da shi kafin ƙarshen {due_back}.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Tunatarwa: ya kamata a dawo da {item} na {reference} yau, {due_back}.",
+      "reviewed": false
+    },
+    "customer.space_confirmed": {
+      "text": "An tabbatar da ajiyarka {reference}: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Tunatarwa: ajiyarka {reference} ta {space} gobe ce, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "Mun karɓi buƙatarka {reference}. Za ka sami farashi ta SMS, tare da hanyar karɓa.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Farashinka {reference} ya shirya: {total}. Biya {now} don ci gaba, kafin {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Mun gode: an karɓi {reference} kuma kuɗinka sun shigo. Za mu sanar da kai idan ya shirya.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Farashinka {reference} ya rufe. Tuntuɓe mu idan har yanzu kana so.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} ya shirya. Biya sauran, {balance}, a nan: {url}",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Tikitocinka na {event}, {when}: {codes}. Nuna lamba a ƙofa. Lamba {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Tunatarwa: {event} gobe ne, {when}. Tikitocinka: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "An yi maka rajista a {class}, za a fara {when}. Lamba {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "Kashi na gaba na kuɗin {class}, {amount}, ya yi. Biya a nan: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Tunatarwa: {class} za a fara gobe, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} ya cika, don haka kana cikin jerin jira (lamba {reference}). Za mu sanar da kai idan wuri ya samu.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "Akwai wuri a {class} gare ka. Biya {total} a nan cikin yini ɗaya don ka karɓa: {url}",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Mun gode: {reference} ya dawo gare mu.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} ya dawo bayan kwana {days} da lokaci, don haka an ƙara kuɗin jinkiri na {late_fee}. Saura biya: {balance}.",
       "reviewed": false
     }
   }

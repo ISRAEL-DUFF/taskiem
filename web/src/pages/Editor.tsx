@@ -85,7 +85,7 @@ export function Editor() {
   // A publish refused because the storefront form it starts on already
   // starts another workflow (one workflow per form): Replace offers to
   // swap them in one change, unless four-eyes publishing refuses it.
-  const [held, setHeld] = useState<{ version: number; words: string; name: string; canReplace: boolean; refused: string }>();
+  const [held, setHeld] = useState<{ version: number; words: string; name: string; canReplace: boolean; canNewAction: boolean; refused: string }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [picking, setPicking] = useState<{ at: InsertAt; where: string } | null>(null);
@@ -256,12 +256,19 @@ export function Editor() {
       setNotice(r.valid ? "Valid: this version can be published." : "");
     }, false);
 
-  const publish = (replace = false) =>
+  // How a publish deals with a storefront action another workflow holds:
+  // take it over (replace), or make a new action for this one (fronts F2).
+  const publish = (how?: "replace" | "new_action") =>
     act.run(async () => {
-      const v = await save();
-      let r: { state: string; git?: Record<string, { url?: string; error?: string }> };
+      let v = await save();
+      let r: {
+        state: string;
+        version?: number;
+        new_action?: { label: string; slug: string };
+        git?: Record<string, { url?: string; error?: string }>;
+      };
       try {
-        r = await post(`/v1/workflows/${id}/versions/${v}/publish`, replace ? { replace: true } : undefined);
+        r = await post(`/v1/workflows/${id}/versions/${v}/publish`, how ? { [how]: true } : undefined);
       } catch (e) {
         // Not ready: what it needs, each with its fix, instead of an error.
         if (e instanceof ApiError && e.status === 422 && e.body.code === "not_ready") {
@@ -276,6 +283,7 @@ export function Editor() {
             words: typeof e.body.action_words === "string" ? e.body.action_words : "form",
             name: other?.name ?? "another workflow",
             canReplace: e.body.can_replace === true,
+            canNewAction: e.body.can_new_action === true,
             refused: typeof e.body.refused === "string" ? e.body.refused : "",
           });
           return;
@@ -285,15 +293,20 @@ export function Editor() {
       }
       setNeeds(undefined);
       setHeld(undefined);
+      // A new action is made with a new version that names it.
+      if (typeof r.version === "number") v = r.version;
+      const made = r.new_action
+        ? ` It starts on a new form, “${r.new_action.label}”, which is off: switch it on under Storefront → Forms.`
+        : "";
       if (r.state === "pending_approval") {
-        setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).`);
+        setNotice(`Version ${v} is waiting for a second person to publish it (Approvals → Publishing to review).${made}`);
         wf.reload();
         return;
       }
       const git = Object.entries(r.git ?? {})
         .map(([env, g]) => (g.url ? `Pull request for ${env}: ${g.url}` : `The pull request for ${env} could not be opened: ${g.error ?? "unknown error"}`))
         .join(" ");
-      setNotice(`Version ${v} is published; new runs use it.${replace ? " The form starts this workflow now." : ""}${git ? " " + git : ""}`);
+      setNotice(`Version ${v} is published; new runs use it.${how === "replace" ? " The form starts this workflow now." : ""}${made}${git ? " " + git : ""}`);
       toast("Published");
       wf.reload();
       doc.reload();
@@ -432,20 +445,28 @@ export function Editor() {
               This action already runs <strong>{held.name}</strong>: your storefront&apos;s {held.words} starts one workflow. Version {held.version} is saved, but not published yet.
             </p>
             {held.canReplace ? (
-              <>
-                <p>Replace it with this one: {held.name} stops taking the form&apos;s submissions and this workflow starts on them instead, in one change. Runs already started carry on.</p>
-                <div className="row">
-                  <button type="button" className="primary" disabled={act.busy} onClick={() => void publish(true)}>
-                    Replace it with this one
-                  </button>
-                  <button type="button" onClick={() => setHeld(undefined)}>
-                    Keep {held.name}
-                  </button>
-                </div>
-              </>
+              <p>Replace it with this one: {held.name} stops taking the form&apos;s submissions and this workflow starts on them instead, in one change. Runs already started carry on.</p>
             ) : (
               <p>{held.refused}</p>
             )}
+            {held.canNewAction && (
+              <p>Or make a new action for this workflow: a second {held.words} like it, off until you switch it on, and {held.name} keeps its own.</p>
+            )}
+            <div className="row">
+              {held.canReplace && (
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void publish("replace")}>
+                  Replace it with this one
+                </button>
+              )}
+              {held.canNewAction && (
+                <button type="button" disabled={act.busy} onClick={() => void publish("new_action")}>
+                  Make a new action for this workflow
+                </button>
+              )}
+              <button type="button" onClick={() => setHeld(undefined)}>
+                Keep {held.name}
+              </button>
+            </div>
           </div>
         )}
         {needs && (

@@ -3070,18 +3070,29 @@ export interface StorefrontDecideInput {
 export interface StorefrontGetBookingInput {
   reference: Val<string>;
 }
+export interface StorefrontIssueTicketsInput {
+  reference: Val<string>;
+}
+export interface StorefrontMarkReturnedInput {
+  reference: Val<string>;
+}
 export interface StorefrontNotifyCustomerInput {
   reference: Val<string>;
-  /** Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed…), in the business's own language */
+  /** Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed, deposit_received, balance_due…), in the business's own language */
   say?: Val<string>;
   /** The email's subject */
   subject?: Val<string>;
   /** The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled */
   text?: Val<string>;
-  /** With say: the message's values (reference, total, url, service, when) */
+  /** With say: the message's values (reference, total, url, service, when, amount, balance) */
   vars?: Value;
 }
+export interface StorefrontOfferPlaceInput {
+  reference: Val<string>;
+}
 export interface StorefrontPaymentLinkInput {
+  /** On an order paid before: what this step asks, at most the balance; left out, the balance */
+  amount_kobo?: Val<number>;
   reference: Val<string>;
 }
 export interface StorefrontRefundInput {
@@ -3092,8 +3103,14 @@ export const storefront = {
   decide: (input: StorefrontDecideInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "decide", input, extra),
   /** Read a booking (read) */
   get_booking: (input: StorefrontGetBookingInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "get_booking", input, extra),
+  /** Issue tickets (idempotent_write) */
+  issue_tickets: (input: StorefrontIssueTicketsInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "issue_tickets", input, extra),
+  /** Mark a hire returned (idempotent_write) */
+  mark_returned: (input: StorefrontMarkReturnedInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "mark_returned", input, extra),
   /** Message the customer (idempotent_write) */
   notify_customer: (input: StorefrontNotifyCustomerInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "notify_customer", input, extra),
+  /** Offer a waiting-list place (idempotent_write) */
+  offer_place: (input: StorefrontOfferPlaceInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "offer_place", input, extra),
   /** Make the order's payment link (idempotent_write) */
   payment_link: (input: StorefrontPaymentLinkInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "payment_link", input, extra),
   /** Refund the customer (idempotent_write) */
@@ -3918,7 +3935,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
-  "storefront@1": ["decide", "get_booking", "notify_customer", "payment_link", "refund"],
+  "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],

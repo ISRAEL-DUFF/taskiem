@@ -81,7 +81,7 @@ func (l *scopeLog) take() []loggedQuery {
 }
 
 // crossing are the functions through which one business may name another
-// (migration 00279): a request names its target, and the door enters it.
+// (migration 00291): a request names its target, and the door enters it.
 var crossing = regexp.MustCompile(`\btaskiem_link_(request|enter|answer|by_code|offer_to|search)\(|\btaskiem_links_of\(`)
 
 // TestLinkIsolation is the isolation harness of §14 for L0: two
@@ -343,7 +343,7 @@ func TestLinkIsolationFiles(t *testing.T) {
 }
 
 // billCrossing are the functions through which one business reaches
-// another's rows in L1 (migrations 00280, 00288): the door, the pairing
+// another's rows in L1 (migrations 00292, 00300): the door, the pairing
 // token, the reconciler and the mirror worker's claim; nothing else.
 var billCrossing = regexp.MustCompile(`\btaskiem_link_(enter|payout_token|reconcile|mirrors_claim)\(`)
 

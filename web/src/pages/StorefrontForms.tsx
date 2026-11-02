@@ -64,7 +64,7 @@ export function StorefrontForms({
       <div className="sf-forms">
         {actions.data?.actions.map((a) => (
           <FormCard
-            key={`${a.kind}/${a.workflow_id ?? ""}`}
+            key={`${a.id ?? a.kind}/${a.workflow_id ?? ""}`}
             action={a}
             previewURL={previewURL}
             published={published}
@@ -76,7 +76,7 @@ export function StorefrontForms({
   );
 }
 
-function FormCard({
+export function FormCard({
   action,
   previewURL,
   published,
@@ -89,7 +89,16 @@ function FormCard({
 }) {
   const { can } = useAuth();
   const kind = action.kind;
-  const info = FORM_INFO[kind];
+  // A copy made for a workflow (fronts F2) is addressed by its slug and
+  // saved by its id; the built-in four by their kind.
+  const copy = action.builtin === false && !!action.id;
+  const ref = copy ? (action.slug ?? kind) : kind;
+  const info = copy
+    ? {
+        ...FORM_INFO[kind],
+        title: `${FORM_INFO[kind].title} (another form)`,
+      }
+    : FORM_INFO[kind];
   const [saved, setSaved] = useState(action);
   const [form, setForm] = useState<ActionForm>(() => actionForm(action));
   const [notice, setNotice] = useState("");
@@ -101,7 +110,7 @@ function FormCard({
     JSON.stringify(actionRequest(kind, form)) !==
     JSON.stringify(actionRequest(kind, actionForm(saved)));
   const problem = actionProblem(kind, form);
-  const id = `sf-form-${kind}`;
+  const id = `sf-form-${ref}`;
   const canSetup = can("workflow.edit") && can("workflow.publish");
   const set = (patch: Partial<ActionForm>) => {
     setNotice("");
@@ -114,7 +123,7 @@ function FormCard({
       try {
         const out = await tidy(
           put<StorefrontAction>(
-            `/v1/storefront/actions/${kind}`,
+            `/v1/storefront/actions/${copy ? action.id : kind}`,
             actionRequest(kind, form),
           ),
         );
@@ -138,10 +147,22 @@ function FormCard({
   const setUp = () =>
     setup.run(async () => {
       setNotice("");
-      const req = setupRequest(kind);
-      const wf = await tidy(post<{ id: string }>(req.path, req.body));
+      // A built-in form's workflow from its template; any other action's
+      // from its kind's, its trigger naming the action (fronts F3).
+      let wfID: string;
+      if (copy) {
+        const made = await tidy(
+          post<{ workflow_id: string }>(
+            `/v1/storefront/actions/${action.id ?? ""}/setup`,
+          ),
+        );
+        wfID = made.workflow_id;
+      } else {
+        const req = setupRequest(kind);
+        wfID = (await tidy(post<{ id: string }>(req.path, req.body))).id;
+      }
       const p = await tidy(
-        post<{ state: string }>(`/v1/workflows/${wf.id}/versions/1/publish`),
+        post<{ state: string }>(`/v1/workflows/${wfID}/versions/1/publish`),
       );
       if (p.state !== "published") {
         setNotice(
@@ -180,7 +201,7 @@ function FormCard({
           <>
             {" "}
             <a
-              href={formURL(previewURL, kind)}
+              href={formURL(previewURL, ref)}
               target="_blank"
               rel="noreferrer"
             >

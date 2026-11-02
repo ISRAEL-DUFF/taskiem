@@ -34,27 +34,27 @@ func TestPublicSubmit(t *testing.T) {
 	hash := storefront.StatusHash("the key")
 	payload := []byte("sealed")
 
-	if _, ok, err := submit(ctx, sf, "order", "AD-AAAAAA", idem(1), hash, payload); err != nil || ok {
+	if _, ok, err := submit(ctx, sf, nil, "order", "AD-AAAAAA", idem(1), hash, payload); err != nil || ok {
 		t.Fatalf("a draft storefront took an order: %v %v", ok, err)
 	}
 	if _, err := d.Admin.Exec(ctx, `UPDATE storefronts SET status = 'published' WHERE id = $1`, sf); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := submit(ctx, sf, "enquiry", "AD-AAAAAB", idem(2), hash, payload); err != nil || ok {
+	if _, ok, err := submit(ctx, sf, nil, "enquiry", "AD-AAAAAB", idem(2), hash, payload); err != nil || ok {
 		t.Fatalf("a disabled form took a submission: %v %v", ok, err)
 	}
-	if _, ok, err := submit(ctx, uuid.New(), "order", "AD-AAAAAC", idem(3), hash, payload); err != nil || ok {
+	if _, ok, err := submit(ctx, uuid.New(), nil, "order", "AD-AAAAAC", idem(3), hash, payload); err != nil || ok {
 		t.Fatalf("an unknown storefront took an order: %v %v", ok, err)
 	}
-	ref, ok, err := submit(ctx, sf, "order", "AD-AAAAAD", idem(4), hash, payload)
+	ref, ok, err := submit(ctx, sf, nil, "order", "AD-AAAAAD", idem(4), hash, payload)
 	if err != nil || !ok || ref != "AD-AAAAAD" {
 		t.Fatalf("an enabled form: %q %v %v", ref, ok, err)
 	}
-	ref, ok, err = submit(ctx, sf, "order", "AD-AAAAAE", idem(4), hash, payload)
+	ref, ok, err = submit(ctx, sf, nil, "order", "AD-AAAAAE", idem(4), hash, payload)
 	if err != nil || !ok || ref != "AD-AAAAAD" {
 		t.Fatalf("a repeat must answer with the first reference: %q %v %v", ref, ok, err)
 	}
-	if _, _, err := submit(ctx, sf, "order", "AD-AAAAAD", idem(5), hash, payload); !errors.Is(err, publicweb.ErrReferenceTaken) {
+	if _, _, err := submit(ctx, sf, nil, "order", "AD-AAAAAD", idem(5), hash, payload); !errors.Is(err, publicweb.ErrReferenceTaken) {
 		t.Fatalf("a taken reference: %v", err)
 	}
 	var n int

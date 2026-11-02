@@ -137,7 +137,7 @@ REVOKE EXECUTE ON FUNCTION taskiem_link_reconcile() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_link_reconcile() TO taskiem_app;
 
 -- +goose Down
--- The definers as 00280 made them.
+-- The definers as 00292 made them.
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION taskiem_link_payout_token(p_customer text, p_amount bigint) RETURNS text
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$

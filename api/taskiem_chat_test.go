@@ -33,7 +33,7 @@ func jsonText(v any) string {
 }
 
 // The Taskiem conversation on the web, with its history on every channel
-// (L3, §5.5; migration 00283): what the owner says on WhatsApp and
+// (L3, §5.5; migration 00295): what the owner says on WhatsApp and
 // Taskiem's replies are in the web's Taskiem conversation; a message on
 // the web is read as one typed on WhatsApp, its reply's buttons pressable
 // there; the words are kept sealed, a code never; each person reads only

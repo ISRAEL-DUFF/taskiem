@@ -626,8 +626,13 @@ func insertOrder(ctx context.Context, tx pgx.Tx, v Vault, in orderIn) (uuid.UUID
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return id, err
 	}
-	var sf *uuid.UUID
-	if err := tx.QueryRow(ctx, `SELECT id FROM storefronts WHERE tenant_id = $1`, in.seller).Scan(&sf); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	// The seller's storefront, and the built-in order action of its home
+	// front (fronts §5.5): the order names them, so it starts the order
+	// workflow as an order from the page does. A seller without a
+	// storefront takes the order under its own name, with no action.
+	var sf, action, front *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT s.id, a.id, a.front_id FROM storefronts s
+		LEFT JOIN storefront_actions a ON a.storefront_id = s.id AND a.kind = 'order' AND a.builtin WHERE s.tenant_id = $1`, in.seller).Scan(&sf, &action, &front); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return id, err
 	}
 	customer, subject, err := sealCustomer(ctx, tx, v, in.seller, in.buyer, in.buyerName, in.deliver)
@@ -640,8 +645,8 @@ func insertOrder(ctx context.Context, tx pgx.Tx, v Vault, in orderIn) (uuid.UUID
 	ref := in.reference
 	for try := 0; ; try++ {
 		tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
-			total_kobo, fulfilment, payment) VALUES ($1, $2, $3, 'trade', $4, $5, $6, $7, $8, $9, $10, $11, 'none')
-			ON CONFLICT (reference) DO NOTHING`, id, in.seller, sf, ref, hash, in.status, customer, subject, b, linesTotal(in.lines), fulfilment(in.deliver))
+			total_kobo, fulfilment, payment, action_id, front_id) VALUES ($1, $2, $3, 'trade', $4, $5, $6, $7, $8, $9, $10, $11, 'none', $12, $13)
+			ON CONFLICT (reference) DO NOTHING`, id, in.seller, sf, ref, hash, in.status, customer, subject, b, linesTotal(in.lines), fulfilment(in.deliver), action, front)
 		if err != nil {
 			return id, err
 		}
@@ -1448,7 +1453,7 @@ func ToReceive(ctx context.Context, tx pgx.Tx, id uuid.UUID, short []int64) (map
 			}
 			n = short[i]
 		}
-		if n > l.Received && !(short != nil && p.settled()) {
+		if n > l.Received && (short == nil || !p.settled()) {
 			got[l.ItemID] = n - l.Received
 		}
 	}

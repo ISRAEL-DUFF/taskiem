@@ -1,7 +1,7 @@
 package links
 
 // What happens between linked businesses, for workflows (L6;
-// docs/spec/business-links.md §11; migration 00286): the "link" trigger.
+// docs/spec/business-links.md §11; migration 00298): the "link" trigger.
 // An event is queued in the business it happens to, inside the
 // transaction that makes it happen, once per workflow that starts on it;
 // the link worker starts the runs. A body carries the link, the business's

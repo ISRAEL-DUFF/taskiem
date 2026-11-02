@@ -4,18 +4,18 @@
 --   a business that only buys through links (no money entries, no sent
 --   invoices) gets the morning summary with its bills due (§10). The
 --   dispatch role already reads bills' tenant_id, amount_kobo, paid_kobo and
---   voided (00280). Its owner and grants stay as 00204 set them.
--- - link_starts, the link trigger's queued starts (00286), keeps each for
+--   voided (00292). Its owner and grants stay as 00204 set them.
+-- - link_starts, the link trigger's queued starts (00298), keeps each for
 --   90 days: taskiem_link_starts_purge() deletes older ones across
 --   businesses, reading only when each was made, as the chat history's purge
---   does (00283). Its "open" index, which no query used (a start is found by
+--   does (00295). Its "open" index, which no query used (a start is found by
 --   its id), is dropped.
 -- - link@1's idempotency lookups (a run's reply by link_messages.sender_id,
 --   a run's payment by bill_payments.created_by) get the indexes they scan.
--- Note on 00286's Down: it deletes the link triggers, but a deployed
+-- Note on 00298's Down: it deletes the link triggers, but a deployed
 -- workflow version whose definition starts on a "link" trigger stays
 -- deployed with no trigger behind it; after a downgrade such a version fails
--- validation when published again until its trigger is changed. 00286 is not
+-- validation when published again until its trigger is changed. 00298 is not
 -- edited (a migration already applied is never changed).
 -- +goose Up
 -- +goose StatementBegin

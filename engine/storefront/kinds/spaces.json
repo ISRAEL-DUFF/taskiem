@@ -1,0 +1,11 @@
+{
+  "name": "spaces",
+  "title": "Spaces",
+  "line": "Halls, event centres, an auditorium, a training room, a studio: booked by the day or the hour on their own calendar, with a deposit.",
+  "table": "spaces",
+  "mapping": {"name": "name", "price": "rate", "price_unit": "naira", "photo": "photo", "description": "description", "available": "available"},
+  "calendar": {"grain": "days", "open": "08:00", "close": "22:00", "min_hours": 2, "setup_minutes": 60},
+  "actions": [
+    {"kind": "space", "label": "Book the space", "template": "storefront-space", "options": {"deposit_percent": 50}}
+  ]
+}

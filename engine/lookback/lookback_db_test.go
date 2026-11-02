@@ -74,7 +74,14 @@ type world struct {
 
 func newWorld(t *testing.T) *world {
 	env := rt.New(t)
-	w := &world{t: t, env: env, rails: &fakeRails{}, now: time.Now().UTC().Truncate(time.Second)}
+	// The failing alert is raised once per day in Lagos: a test that steps
+	// the clock on from just before midnight there would see two days, so
+	// the clock starts clear of it.
+	now := time.Now().UTC().Truncate(time.Second)
+	if h := now.In(time.FixedZone("WAT", 3600)).Hour(); h >= 21 {
+		now = now.Add(-4 * time.Hour)
+	}
+	w := &world{t: t, env: env, rails: &fakeRails{}, now: now}
 	w.l = &lookback.Looker{Pool: env.DB.App, Rails: w.rails, Log: &moneylog.Log{Pool: env.DB.App, PII: env.Vault}, Now: func() time.Time { return w.now }}
 	return w
 }

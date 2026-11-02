@@ -27,7 +27,7 @@ LANGUAGE sql IMMUTABLE AS $$
 $$;
 -- +goose StatementEnd
 
--- As 00279, with a block read from the caller's own side: a link both
+-- As 00291, with a block read from the caller's own side: a link both
 -- sides blocked reads 'blocked' to each.
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION taskiem_link_view(l business_links, p_me uuid) RETURNS text
@@ -48,7 +48,7 @@ LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
 $$;
 -- +goose StatementEnd
 
--- As 00279, and:
+-- As 00291, and:
 --   a blind request to a business whose link the caller already sees
 --     (linked, ended, asked either way, or not accepted) changes nothing
 --     and tells no one: the caller knows the business, and a blind request
@@ -176,7 +176,7 @@ END
 $$;
 -- +goose StatementEnd
 
--- As 00279, with a block kept per side:
+-- As 00291, with a block kept per side:
 --   block: the side asked, or either side of a link (it ends), or a side
 --     whose link the other blocked (it reads as ended to it): its own
 --     block is recorded beside the other's, and neither learns of the

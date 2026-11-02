@@ -238,7 +238,7 @@ func TestLinkCredit(t *testing.T) {
 	}
 	// The reminder in chat carries Pay (§10).
 	payButton := false
-	for _, m := range w.waWorld.graph.Sent(buyerOn) {
+	for _, m := range w.graph.Sent(buyerOn) {
 		if strings.Contains(m.Text, "a reminder about "+x["number"].(string)) {
 			for _, b := range m.Buttons {
 				payButton = payButton || (b.Title == "Pay" && b.ID == "lk:pay:"+x["number"].(string))

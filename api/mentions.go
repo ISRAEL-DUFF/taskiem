@@ -349,7 +349,7 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	case unlinkedFrom != "":
 		return true, c.say(ctx, s, c.t("wa.prices.unlinked", "item", whatsapp.SafeText(unlinked.Item.Name), "name", whatsapp.SafeText(unlinkedFrom)))
 	case errIsAny(err, links.ErrInvalid, links.ErrState):
-		return true, c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(chatReason(err))))
+		return true, c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(linkReason(err))))
 	case errIsAny(err, stock.ErrPurchase, stock.ErrNoSupplier):
 		return true, s.purchaseChatFail(ctx, c, err)
 	case err != nil:

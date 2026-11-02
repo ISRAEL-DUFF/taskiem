@@ -170,7 +170,7 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 	case errors.As(err, &unlinked):
 		return c.say(ctx, s, c.t("wa.prices.unlinked", "item", whatsapp.SafeText(it.Name), "name", whatsapp.SafeText(p.Business)))
 	case errors.Is(err, links.ErrInvalid), errors.Is(err, links.ErrState):
-		return c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(chatReason(err))))
+		return c.say(ctx, s, c.t("wa.prices.refused", "reason", whatsapp.SafeText(linkReason(err))))
 	case errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier):
 		return s.purchaseChatFail(ctx, c, err)
 	case err != nil:
@@ -181,8 +181,8 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 			"total", storefront.FormatNaira(x.TotalKobo)))
 }
 
-// chatReason is an error's words, without the package's prefix.
-func chatReason(err error) string {
+// linkReason is a links error's words, without the package's prefix.
+func linkReason(err error) string {
 	msg := err.Error()
 	for _, p := range []string{links.ErrInvalid.Error() + ": ", links.ErrState.Error() + ": "} {
 		msg = strings.TrimPrefix(msg, p)

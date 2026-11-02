@@ -246,6 +246,13 @@ func namedInvoice(list []invoicing.Invoice, note string) (int, string) {
 	return found, ""
 }
 
+// linkBuyer is the buyer behind a link customer key (key:link:<buyer>),
+// and whether the key is one.
+func linkBuyer(customer string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(strings.TrimPrefix(customer, "key:link:"))
+	return id, err == nil
+}
+
 // pairPayout marks the linked buyer's payment that carried token as
 // paired with this credit, entering the buyer's side (link:<buyer>)
 // through taskiem_link_enter: the last write of the transaction. The
@@ -266,8 +273,8 @@ func pairPayout(ctx context.Context, tx pgx.Tx, customer, token string) error {
 	if err != nil {
 		return err
 	}
-	buyer, err := uuid.Parse(strings.TrimPrefix(customer, "key:link:"))
-	if err != nil {
+	buyer, linked := linkBuyer(customer)
+	if !linked {
 		return nil
 	}
 	i := slices.IndexFunc(sides, func(x side) bool { return x.business == buyer })

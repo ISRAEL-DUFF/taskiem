@@ -6,7 +6,7 @@
 import { whenLabel } from "./bookings";
 import { formatPrice } from "./storefront";
 
-export type FormKind = "order" | "enquiry" | "callback" | "booking";
+export type FormKind = "order" | "enquiry" | "callback" | "booking" | "hire" | "space" | "tickets" | "class" | "quote";
 export type PaymentMode = "after_accept" | "at_order" | "none";
 
 export interface ActionOptions {
@@ -36,6 +36,11 @@ export const ZONE_LIMITS = { zones: 30, name: 40, feeKobo: 10_000_000 } as const
 
 /** One of the storefront's forms (StorefrontAction). */
 export interface StorefrontAction {
+  /** The action's id and slug; builtin is one of the four found by kind,
+   * the others copies made for a workflow (fronts F2). */
+  id?: string;
+  slug?: string;
+  builtin?: boolean;
   kind: FormKind;
   enabled: boolean;
   label: string;
@@ -99,6 +104,8 @@ export interface Customer {
 export interface Order {
   id: string;
   reference: string;
+  /** The front the submission came from (fronts F3). */
+  front_id?: string;
   kind: FormKind | "trade";
   status: OrderStatus;
   customer: Customer;
@@ -169,6 +176,36 @@ export const FORM_INFO: Record<
     help: "Customers book a time for one of your services.",
     template: "storefront-booking",
     workflow: "Storefront bookings",
+  },
+  hire: {
+    title: "Hire",
+    help: "Customers hire items for days, pay a deposit and bring them back.",
+    template: "storefront-hire",
+    workflow: "Storefront hire",
+  },
+  space: {
+    title: "Space bookings",
+    help: "Customers book a hall or room by the day or the hour, with a deposit.",
+    template: "storefront-space",
+    workflow: "Storefront space bookings",
+  },
+  tickets: {
+    title: "Tickets",
+    help: "Customers buy tickets for an event, paid when bought, one code per seat.",
+    template: "storefront-tickets",
+    workflow: "Storefront tickets",
+  },
+  class: {
+    title: "Enrolment",
+    help: "Learners take a place in a class, paid in full or by instalment.",
+    template: "storefront-classes",
+    workflow: "Storefront classes",
+  },
+  quote: {
+    title: "Quotes",
+    help: "Customers ask for a price; you send one, they accept and pay a deposit.",
+    template: "storefront-quote",
+    workflow: "Storefront quotes",
   },
 };
 
@@ -397,9 +434,10 @@ export function zoneProblem(rows: { name: string; fee: string }[]): string | nul
 export const zoneLine = (z: DeliveryZone) =>
   `${z.name}, ${z.fee_kobo > 0 ? `${formatPrice(z.fee_kobo)} delivery` : "free delivery"}`;
 
-/** A form's public address on the published page. */
-export const formURL = (previewURL: string, kind: FormKind) =>
-  `${previewURL.replace(/\/+$/, "")}/a/${kind}`;
+/** A form's public address on the published page: a built-in form's by
+ * its kind, another action's by its slug. */
+export const formURL = (previewURL: string, ref: string) =>
+  `${previewURL.replace(/\/+$/, "")}/a/${ref}`;
 
 // --- orders ---
 
@@ -454,11 +492,14 @@ export const ORDER_FILTERS: { value: string; label: string }[] = [
 ];
 
 /** The GET /v1/storefront/orders call for a filter: "all" asks with no status. */
-export function ordersPath(filter: string): string {
+export function ordersPath(filter: string, front = ""): string {
   const status = filter === "all" ? "" : filter || "open";
-  return status
-    ? `/v1/storefront/orders?${new URLSearchParams({ status })}`
-    : "/v1/storefront/orders";
+  const q = new URLSearchParams();
+  if (status) q.set("status", status);
+  // One front's submissions (fronts F3).
+  if (front) q.set("front", front);
+  const qs = q.toString();
+  return qs ? `/v1/storefront/orders?${qs}` : "/v1/storefront/orders";
 }
 
 export const KIND_LABEL: Record<FormKind | "trade", string> = {
@@ -467,6 +508,11 @@ export const KIND_LABEL: Record<FormKind | "trade", string> = {
   callback: "Call-back",
   booking: "Booking",
   trade: "From a linked business",
+  hire: "Hire",
+  space: "Space booking",
+  tickets: "Tickets",
+  class: "Enrolment",
+  quote: "Quote",
 };
 
 /** How long ago, in words: "just now", "5 min ago", "2 hours ago", "yesterday", "3 days ago", then the date. */

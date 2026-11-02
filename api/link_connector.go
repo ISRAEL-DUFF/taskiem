@@ -251,7 +251,7 @@ const (
 )
 
 // purgeLinkStarts deletes the link trigger's queued starts past their
-// retention (90 days; migration 00291), in every business, through a
+// retention (90 days; migration 00303), in every business, through a
 // definer that reads only when each was made.
 func (s *Server) purgeLinkStarts(ctx context.Context) error {
 	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_link_starts_purge()`)

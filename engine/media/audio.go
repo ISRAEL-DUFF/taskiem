@@ -368,9 +368,11 @@ func ebmlWalk(b []byte, base int, f func(id uint32, start, at, size int, unknown
 			return
 		}
 		at := off + n + m
-		end := at + int(size)
-		if unknown || size > uint64(len(b)) || end > len(b) {
-			unknown, end = true, len(b)
+		end := len(b)
+		if !unknown && size <= uint64(len(b)-at) { //nolint:gosec // at <= len(b): the size field was read from b
+			end = at + int(size) //nolint:gosec // size <= len(b)-at, checked above
+		} else {
+			unknown = true
 		}
 		if f(id, base+off, base+at, end-at, unknown) || unknown {
 			return
@@ -391,10 +393,10 @@ func ebmlVoid(out []byte, start, at, size int) {
 		out[i] = 0
 	}
 	out[start] = mkvVoid
-	n := min(total-1, 8) // the size field's length
-	v := uint64(total - 1 - n)
+	n := min(total-1, 8)       // the size field's length
+	v := uint64(total - 1 - n) //nolint:gosec // n <= total-1, so not negative
 	for i := range n {
-		out[start+1+i] = byte(v >> (8 * (n - 1 - i)))
+		out[start+1+i] = byte(v >> (8 * (n - 1 - i))) //nolint:gosec // the byte wanted, big-endian
 	}
 	out[start+1] |= 0x80 >> (n - 1)
 }
@@ -408,11 +410,11 @@ func cleanMatroska(data []byte) (string, []byte, error) {
 		return "", nil, bad
 	}
 	hsize, m, unknown := ebmlVint(data[n:])
-	if m == 0 || unknown || n+m+int(hsize) > len(data) {
+	if m == 0 || unknown || hsize > uint64(len(data)-n-m) { //nolint:gosec // n+m <= len(data): the size field was read from data
 		return "", nil, bad
 	}
 	docType := ""
-	body := n + m + int(hsize)
+	body := n + m + int(hsize) //nolint:gosec // hsize <= len(data)-n-m, checked above
 	ebmlWalk(data[n+m:body], n+m, func(id uint32, _, at, size int, _ bool) bool {
 		if id == ebmlDocType {
 			docType = string(data[at : at+size])
@@ -496,7 +498,7 @@ func mp4Walk(b []byte, base int, f func(typ string, start, at, size int) bool) {
 			if large > uint64(len(b)-off) {
 				return
 			}
-			size, hdr = int(large), 16
+			size, hdr = int(large), 16 //nolint:gosec // large <= len(b)-off, checked above
 		}
 		if size < hdr || off+size > len(b) {
 			return

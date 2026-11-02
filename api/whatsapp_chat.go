@@ -931,7 +931,8 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 			return false, nil
 		}
 		return true, s.waStartBuild(ctx, c, arg)
-	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOrders, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered:
+	case lang.IntentMakePage, lang.IntentMyPage, lang.IntentOrders, lang.IntentOpenShop, lang.IntentCloseShop, lang.IntentQR, lang.IntentReady, lang.IntentDelivered,
+		lang.IntentFronts, lang.IntentAddFront, lang.IntentFrontOn, lang.IntentFrontOff:
 		// The storefront commands in any language: answered as their
 		// English command (N6).
 		if c.state != stateIdle {
@@ -1018,7 +1019,7 @@ func (s *Server) waHelp(c *chat) string {
 		lines = append(lines, c.t("wa.help.find"), c.t("wa.help.ask"))
 	}
 	if c.p.Can(PermStorefrontManage) {
-		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"))
+		lines = append(lines, c.t("wa.help.shop"), c.t("wa.help.shop_catalogue"), c.t("wa.help.fronts"))
 		if s.Orders != nil {
 			lines = append(lines, c.t("wa.help.shop_orders"))
 		}
@@ -1491,7 +1492,23 @@ func shopCommandOf(i lang.Intent, arg string) string {
 	case lang.IntentMyPage:
 		return "my page"
 	case lang.IntentOrders:
-		return "orders"
+		// "orders Snacks": one front's (chat_fronts.go).
+		return strings.TrimSpace("orders " + strings.TrimSpace(arg))
+	case lang.IntentFronts:
+		return "fronts"
+	case lang.IntentAddFront:
+		if strings.TrimSpace(arg) == "" {
+			return ""
+		}
+		return "add front " + strings.TrimSpace(arg)
+	case lang.IntentFrontOn, lang.IntentFrontOff:
+		if strings.TrimSpace(arg) == "" {
+			return ""
+		}
+		if i == lang.IntentFrontOn {
+			return "front " + strings.TrimSpace(arg) + " on"
+		}
+		return "front " + strings.TrimSpace(arg) + " off"
 	case lang.IntentOpenShop:
 		return "open shop"
 	case lang.IntentQR:

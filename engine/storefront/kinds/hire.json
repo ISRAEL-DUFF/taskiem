@@ -1,0 +1,10 @@
+{
+  "name": "hire",
+  "title": "Hire",
+  "line": "Chairs, canopies, cooking pots, sound equipment, generators: hired out by the day, with a deposit, and returned.",
+  "table": "hire_items",
+  "mapping": {"name": "name", "price": "day_rate", "price_unit": "naira", "photo": "photo", "description": "description", "available": "available", "capacity": "count"},
+  "actions": [
+    {"kind": "hire", "label": "Hire now", "template": "storefront-hire", "options": {"pickup": true, "delivery": true, "deposit_percent": 50}}
+  ]
+}

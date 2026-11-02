@@ -64,11 +64,21 @@ type chatShop struct {
 	Nonce string `json:"nonce,omitempty"`
 	// StockChat is a stock change being confirmed (whatsapp_stock.go).
 	StockChat *stockChat `json:"stock_chat,omitempty"`
+	// Fronts (chat_fronts.go): the front a change is to, by id and name,
+	// the kind of a front being added, and the table of an item on a
+	// front's own list with its columns (empty for the catalogue).
+	Front     string              `json:"front,omitempty"`
+	FrontName string              `json:"front_name,omitempty"`
+	Kind      string              `json:"kind,omitempty"`
+	Table     string              `json:"table,omitempty"`
+	Columns   *storefront.Columns `json:"columns,omitempty"`
 }
 
 type shopChoice struct {
 	Row  string `json:"row"`
 	Name string `json:"name"`
+	// Table is the item's front's table, empty for the catalogue.
+	Table string `json:"table,omitempty"`
 }
 
 const (
@@ -115,6 +125,10 @@ func (s *Server) waShopCommand(ctx context.Context, c *chat, text, cmd string) (
 	words := strings.Fields(cmd)
 	if len(words) == 0 {
 		return false, nil
+	}
+	// Fronts first: "sold out <dish>" is not a sale.
+	if done, err := s.waFrontCommand(ctx, c, text, cmd); done || err != nil {
+		return done, err
 	}
 	if done, err := s.waStockCommand(ctx, c, text, cmd); done || err != nil {
 		return done, err
@@ -188,12 +202,20 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 		if sh.Action == "setup" {
 			return s.waShopSetup(ctx, c, text)
 		}
+		if sh.Action == "front_kind" {
+			return s.waFrontKindPick(ctx, c, text)
+		}
 		if sh.StockChat != nil && sh.StockChat.Count != nil && sh.StockChat.Count.Asking {
 			return s.waStockCountAnswer(ctx, c, text)
 		}
 		if len(sh.Pick) > 0 {
 			if strings.HasPrefix(sh.Action, "stock_") {
 				return s.waStockPick(ctx, c, text)
+			}
+			for _, p := range sh.Pick {
+				if p.Table != "" {
+					return s.waFrontPick(ctx, c, text)
+				}
 			}
 			return s.waShopPick(ctx, c, text)
 		}
@@ -759,6 +781,10 @@ func (s *Server) waShopProduct(ctx context.Context, c *chat, args string, photo 
 	if !c.p.Can(PermTableEdit) {
 		return c.say(ctx, s, c.t("wa.shop.denied_table", "org", c.tenant.Name))
 	}
+	// "… to <front>": to that front's own list (chat_fronts.go).
+	if done, err := s.waFrontProduct(ctx, c, args, photo); done || err != nil {
+		return err
+	}
 	name, kobo, ok := productArgs(args)
 	if !ok {
 		if photo != nil {
@@ -962,6 +988,10 @@ func (s *Server) waShopChange(ctx context.Context, c *chat, action, args string)
 	}
 	if strings.TrimSpace(name) == "" {
 		return c.say(ctx, s, c.t("wa.shop.how_item"))
+	}
+	// Once other fronts have items, over every list (chat_fronts.go).
+	if done, err := s.waFrontChange(ctx, c, sh, name); done || err != nil {
+		return err
 	}
 	sf, _, ok, err := s.shopCatalogue(ctx, c, false)
 	if !ok || err != nil {
@@ -1251,20 +1281,51 @@ func (s *Server) shopOrderLine(c *chat, o storefront.Order) string {
 
 // waShopOrders lists the open orders, newest first.
 func (s *Server) waShopOrders(ctx context.Context, c *chat) error {
+	var names map[uuid.UUID]string
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		fronts, err := storefront.Fronts(ctx, tx, c.tenant.ID)
+		if err != nil || len(fronts) < 2 {
+			return err
+		}
+		names = map[uuid.UUID]string{}
+		for _, f := range fronts {
+			names[f.ID] = f.Name
+		}
+		return nil
+	}); err != nil && !errors.Is(err, storefront.ErrNotFound) {
+		return err
+	}
+	return s.shopListOrders(ctx, c, nil, "", names)
+}
+
+// shopListOrders lists the open orders, of one front or of all; names,
+// when there is more than one front, puts each order's front beside it.
+func (s *Server) shopListOrders(ctx context.Context, c *chat, front *uuid.UUID, frontName string, names map[uuid.UUID]string) error {
 	var list []storefront.Order
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error
-		list, err = s.Orders.ListOrders(ctx, tx, c.tenant.ID, "open", "", shopOrdersShown)
+		list, err = s.Orders.ListOrdersOn(ctx, tx, c.tenant.ID, front, "open", "", shopOrdersShown)
 		return err
 	}); err != nil {
 		return err
 	}
 	if len(list) == 0 {
+		if front != nil {
+			return c.say(ctx, s, c.t("wa.front.no_orders", "front", whatsapp.SafeText(frontName)))
+		}
 		return c.say(ctx, s, c.t("wa.shop.no_orders"))
 	}
-	lines := []string{c.t("wa.shop.orders_head")}
+	head := c.t("wa.shop.orders_head")
+	if front != nil {
+		head = c.t("wa.front.orders_head", "front", whatsapp.SafeText(frontName))
+	}
+	lines := []string{head}
 	for _, o := range list {
-		lines = append(lines, s.shopOrderLine(c, o))
+		line := s.shopOrderLine(c, o)
+		if o.FrontID != nil && names[*o.FrontID] != "" {
+			line += " · " + whatsapp.SafeText(names[*o.FrontID])
+		}
+		lines = append(lines, line)
 	}
 	return c.say(ctx, s, strings.Join(lines, "\n")+"\n\n"+c.t("wa.shop.orders_tail"))
 }
@@ -1351,7 +1412,7 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 		return c.say(ctx, s, c.t("wa.shop.denied", "org", c.tenant.Name))
 	}
 	switch sh.Action {
-	case "product", "price", "hide", "show", "stock", "service":
+	case "product", "price", "hide", "show", "stock", "service", "front_item":
 		if !c.p.Can(PermTableEdit) {
 			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 				return err
@@ -1371,9 +1432,30 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 	case "product":
 		return s.shopAddProduct(ctx, c)
 	case "price", "hide", "show", "stock":
+		if sh.Table != "" {
+			return s.shopChangeFrontItem(ctx, c)
+		}
 		return s.shopChangeItem(ctx, c)
+	case "front_item":
+		return s.shopAddFrontItem(ctx, c)
 	case "service":
 		return s.shopAddService(ctx, c)
+	// Fronts (chat_fronts.go), which read the session before closing it.
+	case "front_add":
+		return s.shopAddFront(ctx, c)
+	case "front_on", "front_off":
+		return s.shopSwitchFront(ctx, c)
+	case "front_action_on":
+		return s.shopTurnOnFrontAction(ctx, c)
+	case "front_deliveries_on":
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return err
+		}
+		id, err := uuid.Parse(sh.Row)
+		if err != nil {
+			return err
+		}
+		return s.shopTurnOnDeliveries(ctx, c, &id)
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
@@ -1390,7 +1472,7 @@ func (s *Server) waShopApply(ctx context.Context, c *chat) error {
 	case "orders_on":
 		return s.shopTurnOnOrders(ctx, c)
 	case "deliveries_on":
-		return s.shopTurnOnDeliveries(ctx, c)
+		return s.shopTurnOnDeliveries(ctx, c, nil)
 	}
 	return nil
 }

@@ -4492,6 +4492,10 @@
       "text": "When person send the shop {form} form",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "When person send form for the storefront",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "When another workflow call am",
       "reviewed": false
@@ -5309,7 +5313,366 @@
       "reviewed": false
     },
     "order.link.auto_changed": {
-      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them.",
+      "text": "*{from}* ordered {note}. It proposed other prices, so it is sent back at yours for them to accept, as you set for them."
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: your other pages, like menu; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": false
+    },
+    "wa.front.list_head": {
+      "text": "Your fronts:",
+      "reviewed": false
+    },
+    "wa.front.on": {
+      "text": "on",
+      "reviewed": false
+    },
+    "wa.front.off": {
+      "text": "off",
+      "reviewed": false
+    },
+    "wa.front.home": {
+      "text": "home page",
+      "reviewed": false
+    },
+    "wa.front.items": {
+      "text": "{n} items",
+      "reviewed": false
+    },
+    "wa.front.forms_on": {
+      "text": "{n} forms dey on",
+      "reviewed": false
+    },
+    "wa.front.list_tail": {
+      "text": "Add one with *add front Snacks*. Switch one with *front Snacks on* or *front Snacks off*.",
+      "reviewed": false
+    },
+    "wa.front.none_named": {
+      "text": "No front get the name {name}. Your fronts na: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.how_add": {
+      "text": "Write am like *add front Snacks*, or *add food front Snacks*: name wey no pass 80 letters.",
+      "reviewed": false
+    },
+    "wa.front.exists": {
+      "text": "You don get front wey dem call *{name}* before. Send *fronts* to see dem.",
+      "reviewed": false
+    },
+    "wa.front.which_kind": {
+      "text": "Wetin *{name}* dey for?\n{list}\nReply with the number.",
+      "reviewed": false
+    },
+    "wa.front.confirm_add": {
+      "text": "Make I add *{name}*, {kind} front?",
+      "reviewed": false
+    },
+    "wa.front.confirm_table": {
+      "text": "E go get im own list, {table}, wey you go add things to.",
+      "reviewed": false
+    },
+    "wa.front.confirm_forms": {
+      "text": "Im forms: {forms}.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off": {
+      "text": "E go start off, so customers go see am only when you on am.",
+      "reviewed": false
+    },
+    "wa.front.not_made": {
+      "text": "We no fit make the front: {reason}",
+      "reviewed": false
+    },
+    "wa.front.made": {
+      "text": "We don make *{name}*, {kind} front. E dey off for now.",
+      "reviewed": false
+    },
+    "wa.front.next_dish": {
+      "text": "Add your first food: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_item": {
+      "text": "Add your first item: *add item Chin chin 500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_forms": {
+      "text": "On im form: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_on": {
+      "text": "When e ready: *front {front} on*",
+      "reviewed": false
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* na your home page, and e dey on every time. To stop orders small, send *close shop*.",
+      "reviewed": false
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* don dey on before.",
+      "reviewed": false
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* don dey off before.",
+      "reviewed": false
+    },
+    "wa.front.confirm_on": {
+      "text": "Make I on *{name}*? Customers go see am for your page.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Make I off *{name}*? Customers no go see am again. We go keep im items and orders.",
+      "reviewed": false
+    },
+    "wa.front.gone": {
+      "text": "*{name}* no dey again. Send *fronts* to see your fronts.",
+      "reviewed": false
+    },
+    "wa.front.not_changed": {
+      "text": "Nothing change: {reason}",
+      "reviewed": false
+    },
+    "wa.front.now_off": {
+      "text": "*{name}* don off. We keep im items and orders.",
+      "reviewed": false
+    },
+    "wa.front.now_on": {
+      "text": "*{name}* don on.",
+      "reviewed": false
+    },
+    "wa.front.forms_off": {
+      "text": "Im form still dey off: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.no_food": {
+      "text": "You never get Food front. Make one with *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.no_item_fronts": {
+      "text": "None of your fronts get list wey you fit add to. Add to your page with *add product Jollof rice 2000*, or make front with *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.say_which": {
+      "text": "Talk which front e be for, like *add item Chin chin 500 to Snacks*. Your fronts wey get items: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* no get list of items: na only im forms e dey show.",
+      "reviewed": false
+    },
+    "wa.front.how_item": {
+      "text": "Write am like *add item Chin chin 500 to {front}*: the name, then the price.",
+      "reviewed": false
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* don dey for {front} before, for {price}. Change im price with *price {name} 3000*.",
+      "reviewed": false
+    },
+    "wa.front.confirm_item": {
+      "text": "Make I add this one to *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.front.item_added": {
+      "text": "We don add *{name}* for {price} to *{front}*.",
+      "reviewed": false
+    },
+    "wa.quote.sent": {
+      "text": "We don send *{reference}*: {total}, {now} to pay when dem accept. E dey till {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Talk the price for *{reference}* for naira, like *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "No quote request get the reference *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "We no fit quote *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Quote requests wey dey wait for price:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(need am by {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Reply *quote <reference> <price>* to send price.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "No quote request dey wait for price.",
+      "reviewed": false
+    },
+    "wa.ticket.in": {
+      "text": "E don enter: *{code}*, seat {seat} of {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* don already enter: dem check am {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "No ticket get the code *{code}*. Check am with the customer message.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* no fit enter: dem don refund or cancel the order.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Tickets wey remain:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} remain, {in} don enter",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "No event dey sell tickets now.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Spaces wey remain:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} spaces remain",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "No class dey open for enrolment now.",
+      "reviewed": false
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* dey off: send *front {front} on* make e show.",
+      "reviewed": false
+    },
+    "wa.front.catalogue": {
+      "text": "home page",
+      "reviewed": false
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Na only the products for your home page dey keep stock. *{name}* for {front} fit dey available or finish: *sold out {name}*.",
+      "reviewed": false
+    },
+    "wa.front.changed": {
+      "text": "E don do: *{name}* for {front} don change.",
+      "reviewed": false
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* no get form for {what}.",
+      "reviewed": false
+    },
+    "wa.front.no_deliveries": {
+      "text": "Deliveries by your riders never dey here yet.",
+      "reviewed": false
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Make I on deliveries for *{front}*? Every order wey you confirm for delivery go reach your riders one by one. Im order form go remain as e be.",
+      "reviewed": false
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* for {front} don dey on before.",
+      "reviewed": false
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Make I on *{form}* for *{front}*? Customers fit use am, and every one go come meet you here.",
+      "reviewed": false
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* dey take {what} now: every one go come meet you here.",
+      "reviewed": false
+    },
+    "wa.front.no_orders": {
+      "text": "No open orders for *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.orders_head": {
+      "text": "Open orders for *{front}*, the new ones first:",
+      "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "We don receive your payment of {amount} for {reference}. {balance} remain to pay.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} remain to pay for {reference}. Pay am here: {url}",
+      "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "Your hire {reference} don confirm: {item}, from {from}. Make you return am before {due_back} end.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Reminder: {item} for {reference} suppose return today, {due_back}.",
+      "reviewed": false
+    },
+    "customer.space_confirmed": {
+      "text": "Your booking {reference} don confirm: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Reminder: your booking {reference} for {space} na tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "We don get your request {reference}. You go get price by SMS, with link to accept am.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Your quote {reference} don ready: {total}. Pay {now} to continue, before {until}: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Thank you: {reference} don accept and your money don enter. We go tell you when e ready.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Your quote {reference} don close. Contact us if you still want am.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} don ready. Pay the balance, {balance}, here: {url}",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Your tickets for {event}, {when}: {codes}. Show one code for door. Reference {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Reminder: {event} na tomorrow, {when}. Your tickets: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "You don enrol for {class}, e go start {when}. Reference {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "The next part of the fee for {class}, {amount}, don reach. Pay here: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Reminder: {class} go start tomorrow, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} don full, so you dey for the waiting list (reference {reference}). We go tell you when space free.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "One space for {class} don free for you. Pay {total} here inside one day to take am: {url}",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "Thank you: {reference} don reach us back.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
       "reviewed": false
     }
   }

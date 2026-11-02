@@ -1,7 +1,7 @@
 package api
 
 // The Taskiem conversation's history and the web as a chat channel
-// (business links L3, §5.5; migration 00283). What a member says to
+// (business links L3, §5.5; migration 00295). What a member says to
 // Taskiem and what Taskiem says to them is kept on every channel, so the
 // Chat page's Taskiem conversation shows the same history as the phone:
 // each message in the business it concerns, only when its person is a

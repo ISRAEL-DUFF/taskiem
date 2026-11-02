@@ -104,7 +104,12 @@ func TestTransferAndPOSSalesMatch(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"rice": 0})
 	w.apply(w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(20)}).ID)
+	// The sales are counted by their day in Lagos: keep them clear of its
+	// midnight.
 	now := time.Now()
+	if now.In(storefront.Lagos).Hour() == 23 {
+		now = now.Add(-2 * time.Hour)
+	}
 	line := []stock.SaleLine{{ItemID: "rice", Item: "Rice", Quantity: 1, PriceKobo: 4500000}}
 
 	a := w.sale(stock.SaleIn{PaidHow: stock.Transfer, Lines: line, SoldAt: now})
@@ -145,7 +150,7 @@ func TestTransferAndPOSSalesMatch(t *testing.T) {
 	if len(unsold) != 1 || unsold[0].EntryID != lone || unsold[0].AmountKobo != 450000 {
 		t.Fatalf("unsold: %+v", unsold)
 	}
-	given := w.sale(stock.SaleIn{PaidHow: stock.POS, Entry: &lone, Lines: []stock.SaleLine{{ItemID: "rice", Item: "Rice", Quantity: 1, PriceKobo: 450000}}})
+	given := w.sale(stock.SaleIn{PaidHow: stock.POS, Entry: &lone, SoldAt: now, Lines: []stock.SaleLine{{ItemID: "rice", Item: "Rice", Quantity: 1, PriceKobo: 450000}}})
 	if given.Status != "matched" || given.MatchedHow != "owner" || *given.EntryID != lone {
 		t.Fatalf("given: %+v", given)
 	}

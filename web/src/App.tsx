@@ -68,6 +68,7 @@ import {
 } from "./pages/TradeOrders";
 import { StorefrontPriceLists, SupplierPricesPage } from "./pages/PriceLists";
 import { StatementPage } from "./pages/Statement";
+import { StorefrontFront, StorefrontFronts } from "./pages/StorefrontFronts";
 import { StorefrontBookings } from "./pages/StorefrontBookings";
 import { invoiceAccess } from "./lib/invoices";
 import {
@@ -596,6 +597,11 @@ function SignedIn() {
               <Route path="/tables/:id" element={<TablePage />} />
               <Route path="/storefront" element={<Storefront />} />
               <Route path="/storefront/look" element={<Look />} />
+              <Route path="/storefront/fronts" element={<StorefrontFronts />} />
+              <Route
+                path="/storefront/fronts/:id"
+                element={<StorefrontFront />}
+              />
               <Route path="/storefront/orders" element={<StorefrontOrders />} />
               <Route
                 path="/storefront/orders/:reference"

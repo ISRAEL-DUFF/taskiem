@@ -1,7 +1,7 @@
 // Package links is business links (decision 0061;
 // docs/spec/business-links.md): two businesses on Taskiem that agreed to
 // trade as records. A link is a platform row read only through definer
-// functions (migration 00279), so a business sees its links as it may know
+// functions (migration 00291), so a business sees its links as it may know
 // them: a requester never tells a decline or a block from a request still
 // waiting, and a request sent blind, by phone number or storefront
 // address, from one that reached no business.

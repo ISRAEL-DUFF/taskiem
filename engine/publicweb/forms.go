@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -84,6 +85,8 @@ type formData struct {
 	pageData
 	Business string
 	Kind     string
+	// Hire is a hire's dates-and-quantity field (fronts F5).
+	Hire     *hireView
 	Label    string
 	Action   string // where the form posts
 	Home     string // the storefront page; empty when embedded
@@ -108,6 +111,9 @@ type formData struct {
 	// (dispatch D2, D4).
 	Area, Landmark, Pin     string
 	PayOnDelivery, PayLater bool
+	// Questions are the action's own questions (fronts F1): its form's
+	// fields but the basket and time, drawn as hosted forms' fields.
+	Questions []*field
 }
 
 type zoneItem struct {
@@ -127,6 +133,40 @@ type formItem struct {
 	Max       int // the most one order may take: maxQuantity, or the stock left
 	Orderable bool
 	SoldOut   bool
+	// Options are a Food dish's groups, a choice each (fronts F3).
+	Options []formOption
+}
+
+// formOption is one group of a dish's choices as the form asks it.
+type formOption struct {
+	Input, Name string
+	Choices     []formChoice
+}
+
+type formChoice struct {
+	Value, Label string
+	Selected     bool
+}
+
+// optionInput is the name of a dish's choice in one of its groups.
+func optionInput(id string, group int) string { return fmt.Sprintf("o.%s.%d", id, group) }
+
+// formOptions are an item's groups for the form, the first choice of each
+// taken.
+func formOptions(it storefront.Item) []formOption {
+	var out []formOption
+	for gi, g := range it.Options {
+		o := formOption{Input: optionInput(it.ID, gi), Name: g.Name}
+		for ci, c := range g.Choices {
+			label := c.Name
+			if c.PriceKobo > 0 {
+				label += " (+" + storefront.FormatNaira(c.PriceKobo) + ")"
+			}
+			o.Choices = append(o.Choices, formChoice{Value: strconv.Itoa(ci), Label: label, Selected: ci == 0})
+		}
+		out = append(out, o)
+	}
+	return out
 }
 
 // closedData is the page a form answers with when it takes nothing.
@@ -137,11 +177,12 @@ type closedData struct {
 	Home     string
 }
 
-var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back", "booking": "handle your booking"}
+var purposes = map[string]string{"order": "handle your order", "enquiry": "answer your question", "callback": "call you back", "booking": "handle your booking",
+	"hire": "handle your hire", "space": "handle your booking", "tickets": "send your tickets", "class": "handle your enrolment", "quote": "send you a price"}
 
-func findAction(list []storefront.PublicAction, kind string) (storefront.PublicAction, bool) {
+func findAction(list []storefront.PublicAction, ref string) (storefront.PublicAction, bool) {
 	for _, a := range list {
-		if a.Kind == kind {
+		if a.Ref() == ref {
 			return a, true
 		}
 	}
@@ -162,7 +203,13 @@ func most(it storefront.Item) int {
 	return maxQuantity
 }
 
-func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, kind string, embed bool) {
+// serveForm serves an action's form: one of the home page's at /a/<ref>,
+// or one of a front's at /<front>/a/<ref> (fronts F3).
+func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ref string, embed bool) {
+	s.serveFrontForm(w, r, site, "", ref, embed)
+}
+
+func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Site, frontSlug, ref string, embed bool) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 		w.Header().Set("Allow", "GET, HEAD, POST")
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
@@ -176,12 +223,35 @@ func (s *Server) serveForm(w http.ResponseWriter, r *http.Request, site Site, ki
 		s.page(w, r, http.StatusServiceUnavailable, "unavailable", pageData{Title: "Try again shortly"})
 		return
 	}
-	act, enabled := findAction(p.Model.Actions, kind)
-	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) {
+	actions, base := p.Model.Home().Actions, ""
+	var cal *storefront.Calendar
+	if frontSlug != "" {
+		f, found := frontOf(p, frontSlug)
+		if !found {
+			s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
+			return
+		}
+		// A front's basket draws on its own list.
+		actions, base = f.Actions, "/"+f.Slug
+		cal = f.ListCalendar()
+		p.Items = p.Lists[f.ListTable()]
+		p.Model.HasServices = false
+	}
+	act, enabled := findAction(actions, ref)
+	kind := act.Kind
+	if !ok || !enabled || (kind == "booking" && !p.Model.HasServices) || (kind == "space" && cal == nil) {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	f := formView(p, act, site, embed)
+	f := formView(p, act, site, embed, base)
+	switch act.Kind {
+	case "hire":
+		f.Hire = hireField(p.Items, s.now(), act.DepositPercent)
+	case "space":
+		f.Hire = spaceField(p.Items, *cal, s.now(), act.DepositPercent)
+	case "tickets", "class":
+		f.Hire = countField(p.Items, act, s.now())
+	}
 	f.Look = s.lookFor(r.Context(), site.Tenant, f.Business)
 	refuse := http.StatusOK
 	if r.Method == http.MethodPost {
@@ -233,17 +303,24 @@ func (s *Server) formsOpen() bool {
 	return s.guard != nil && len(s.InboxKey) == 32 && s.Submit != nil
 }
 
-func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool) formData {
+func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bool, base string) formData {
 	c := p.Model.Card
 	f := formData{pageData: pageData{Title: act.Label, Lang: c.Language}, Business: c.Name, Kind: act.Kind, Label: act.Label,
-		Action: "/a/" + act.Kind, Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
-		form: formID(site.ID, act.Kind)}
+		Action: base + "/a/" + act.Ref(), Home: "/", Honeypot: formguard.HoneypotField, Purpose: purposes[act.Kind],
+		form: formID(site.ID, strings.TrimPrefix(base+"/"+act.Ref(), "/"))}
+	if base != "" {
+		f.Home = base
+	}
 	if f.Lang == "" {
 		f.Lang = "en"
 	}
 	if embed {
-		f.Action, f.Home = "/embed/a/"+act.Kind, ""
+		f.Action, f.Home = "/embed"+base+"/a/"+act.Ref(), ""
 	}
+	// The page is drawn from the action's form (fronts F1): the basket
+	// where it has one, then its questions.
+	form := storefront.EffectiveForm(act.Form, act.Kind)
+	f.Questions = questions(form)
 	if act.Kind == "order" {
 		f.Pickup, f.Delivery, f.DeliveryNote = act.Pickup, act.Delivery, act.DeliveryNote
 		f.PayOnDelivery = act.Delivery && act.PayOnDelivery && act.Payment != "none"
@@ -262,17 +339,8 @@ func formView(p StorefrontPage, act storefront.PublicAction, site Site, embed bo
 		case f.Delivery && !f.Pickup:
 			f.Fulfilment = "delivery"
 		}
-		seen := map[string]bool{}
-		for _, it := range p.Items {
-			if seen[it.ID] {
-				continue
-			}
-			seen[it.ID] = true
-			x := formItem{N: len(f.Items), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut()}
-			if it.PriceKobo != nil {
-				x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
-			}
-			f.Items = append(f.Items, x)
+		if storefront.HasWidget(form, "basket") {
+			f.Items = basketItems(p.Items)
 		}
 	}
 	return f
@@ -316,7 +384,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		s.showForm(w, r, http.StatusBadRequest, f, "")
 		return
 	}
-	claims, err := s.guard.Verify(v.Get(tokenField), formID(site.ID, act.Kind), s.now())
+	claims, err := s.guard.Verify(v.Get(tokenField), f.form, s.now())
 	switch {
 	case errors.Is(err, formguard.ErrTooFast):
 		// A fast typist must not lose an order: the same token works in a
@@ -334,6 +402,15 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		return
 	}
 	sub, msg := f.check(v, p.Items)
+	switch {
+	case msg != "":
+	case act.Kind == "hire":
+		msg = checkHire(v, p.Items, act, s.now(), &sub)
+	case act.Kind == "space" && f.Hire != nil:
+		msg = checkSpace(v, p.Items, act, f.Hire.cal, s.now(), &sub)
+	case act.Kind == "tickets" || act.Kind == "class":
+		msg = checkCount(v, p.Items, act, s.now(), &sub)
+	}
 	if msg != "" {
 		f.Error = msg
 		s.showForm(w, r, http.StatusUnprocessableEntity, f, v.Get(tokenField))
@@ -349,7 +426,30 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 		sub.Channel = "embed"
 	}
 	sub.Submitted = s.now().UTC()
-	ref, ok, err := s.record(r.Context(), site.ID, p.Model.Slug, act.Kind, idem, sub)
+	record := s.record
+	// A name on a full class's waiting list holds no place, so it is
+	// sent as a plain submission.
+	if (act.Kind == "hire" || act.Kind == "space" || act.Kind == "tickets" || act.Kind == "class") && !sub.Waitlist {
+		record = s.recordHire
+	}
+	ref, ok, err := record(r.Context(), site.ID, p.Model.Slug, act, idem, sub)
+	if errors.Is(err, ErrNotFree) {
+		f.Error = "Not that many are free for those days. Choose other days, or fewer."
+		switch act.Kind {
+		case "space":
+			f.Error = "That space is booked for some of that time. Choose another time."
+		case "tickets":
+			f.Error = "Not that many tickets are left. Choose fewer, or another event."
+		case "class":
+			f.Error = "Not that many places are left in that class. Choose fewer, or another class."
+			if act.WaitingList && f.Hire != nil {
+				f.Error = "That class is full. You can join its waiting list, and we will tell you when a place is free."
+				f.Hire.Waitlist = true
+			}
+		}
+		s.showForm(w, r, http.StatusConflict, f, v.Get(tokenField))
+		return
+	}
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: submit", "storefront", site.ID, "kind", act.Kind, "err", err)
@@ -373,7 +473,7 @@ func (s *Server) submitForm(w http.ResponseWriter, r *http.Request, site Site, p
 
 // record seals a submission and records it, with a new reference if the
 // one drawn is taken. A repeat of idem answers with its first reference.
-func (s *Server) record(ctx context.Context, sf uuid.UUID, slug, kind string, idem [32]byte, sub storefront.Submission) (string, bool, error) {
+func (s *Server) record(ctx context.Context, sf uuid.UUID, slug string, act storefront.PublicAction, idem [32]byte, sub storefront.Submission) (string, bool, error) {
 	hash := storefront.StatusHash(sub.StatusKey)
 	for range 3 {
 		ref := storefront.NewReference(slug)
@@ -381,7 +481,7 @@ func (s *Server) record(ctx context.Context, sf uuid.UUID, slug, kind string, id
 		if err != nil {
 			return "", false, err
 		}
-		got, ok, err := s.Submit(ctx, sf, kind, ref, idem[:], hash, payload)
+		got, ok, err := s.Submit(ctx, sf, act.ID, act.Kind, ref, idem[:], hash, payload)
 		if errors.Is(err, ErrReferenceTaken) {
 			continue
 		}
@@ -393,6 +493,10 @@ func (s *Server) record(ctx context.Context, sf uuid.UUID, slug, kind string, id
 // keep copies what was sent back into the form, so a refusal loses
 // nothing the customer typed.
 func (f *formData) keep(v url.Values) {
+	if f.Hire != nil {
+		f.Hire.keep(v)
+		f.Hire.keepCount(v)
+	}
 	f.Name, f.Phone, f.Email = v.Get("name"), v.Get("phone"), v.Get("email")
 	f.Message, f.BestTime, f.Address = v.Get("message"), v.Get("best_time"), v.Get("address")
 	if fl := v.Get("fulfilment"); f.Pickup && f.Delivery && (fl == "pickup" || fl == "delivery") {
@@ -401,9 +505,19 @@ func (f *formData) keep(v url.Values) {
 	f.chooseZone(v.Get("zone"))
 	f.Area, f.Landmark, f.Pin = v.Get("area"), v.Get("landmark"), v.Get("pin")
 	f.PayLater = f.PayOnDelivery && v.Get("pay") == "on_delivery"
+	for _, q := range f.Questions {
+		q.show(v)
+	}
 	for i := range f.Items {
 		if n, err := strconv.Atoi(strings.TrimSpace(v.Get(quantityField + f.Items[i].ID))); err == nil && n > 0 && n <= f.Items[i].Max && f.Items[i].Orderable {
 			f.Items[i].Qty = n
+		}
+		for _, o := range f.Items[i].Options {
+			if picked := v.Get(o.Input); picked != "" {
+				for c := range o.Choices {
+					o.Choices[c].Selected = o.Choices[c].Value == picked
+				}
+			}
 		}
 	}
 }
@@ -481,7 +595,9 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 			}
 		}
 	case "enquiry":
-		if c.Message, bad = text(v.Get("message"), maxEnquiry, true); bad || c.Message == "" {
+		// A form with questions of its own (a blank form, fronts F7) asks
+		// those; the message is then optional.
+		if c.Message, bad = text(v.Get("message"), maxEnquiry, true); bad || (c.Message == "" && len(f.Questions) == 0) {
 			if bad {
 				f.Message = ""
 			}
@@ -502,7 +618,53 @@ func (f *formData) check(v url.Values, items []storefront.Item) (sub storefront.
 			return sub, "Please do not put card numbers, BVNs or NINs in this form. " + f.Business + " will never ask for them here."
 		}
 	}
+	answers, msg := readAnswers(f.Questions, v)
+	if msg != "" {
+		return sub, msg
+	}
+	sub.Answers = answers
 	return sub, ""
+}
+
+// questions are a form's questions as fields, in order.
+func questions(form []byte) []*field {
+	var schema map[string]any
+	if json.Unmarshal(form, &schema) != nil {
+		return nil
+	}
+	all := fields(schema)
+	var out []*field
+	for _, name := range storefront.FormFields(form) {
+		if f, ok := all[name]; ok && !f.Hidden && f.Widget != "file" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// readAnswers reads the questions' answers; msg is the first refusal, the
+// field at fault marked.
+func readAnswers(qs []*field, v url.Values) (map[string]any, string) {
+	var answers map[string]any
+	for _, q := range qs {
+		q.show(v)
+		val, present, msg := q.parse(v)
+		if msg != "" {
+			q.Error = msg
+			return nil, msg
+		}
+		if present {
+			if s, ok := val.(string); ok && sensitive(s) {
+				q.Value, q.Error = "", "Please do not put card numbers, BVNs or NINs here."
+				return nil, q.Error
+			}
+			if answers == nil {
+				answers = map[string]any{}
+			}
+			answers[q.Name] = val
+		}
+	}
+	return answers, ""
 }
 
 // basket builds the order's lines. Quantities come from the form; ids,
@@ -541,7 +703,21 @@ func (f *formData) basket(v url.Values, items []storefront.Item, sub *storefront
 		if len(sub.Basket) == maxLines {
 			return fmt.Sprintf("An order can have up to %d different items.", maxLines)
 		}
-		line := storefront.Line{ID: it.ID, Name: it.Name, Quantity: n, PriceKobo: *it.PriceKobo, LineKobo: *it.PriceKobo * int64(n)}
+		// A dish's choices, one per group, priced from the copy.
+		picked := make([]int, len(it.Options))
+		for gi := range it.Options {
+			if raw := v.Get(optionInput(it.ID, gi)); raw != "" {
+				if picked[gi], err = strconv.Atoi(raw); err != nil {
+					picked[gi] = -1
+				}
+			}
+		}
+		opts, add, ok := it.Choose(picked)
+		if !ok {
+			return "Please choose from the options for " + it.Name + "."
+		}
+		unit := *it.PriceKobo + add
+		line := storefront.Line{ID: it.ID, Name: it.Name, Quantity: n, PriceKobo: unit, LineKobo: unit * int64(n), Options: opts}
 		sub.Basket = append(sub.Basket, line)
 		sub.TotalKobo += line.LineKobo
 	}
@@ -641,4 +817,22 @@ func sensitive(s string) bool {
 		}
 	}
 	return false
+}
+
+// basketItems are the catalogue's items as the basket shows them, each once.
+func basketItems(items []storefront.Item) []formItem {
+	var out []formItem
+	seen := map[string]bool{}
+	for _, it := range items {
+		if seen[it.ID] {
+			continue
+		}
+		seen[it.ID] = true
+		x := formItem{N: len(out), ID: it.ID, Name: it.Name, Max: most(it), Orderable: orderable(it), SoldOut: it.SoldOut(), Options: formOptions(it)}
+		if it.PriceKobo != nil {
+			x.PriceKobo, x.Price = *it.PriceKobo, storefront.FormatNaira(*it.PriceKobo)
+		}
+		out = append(out, x)
+	}
+	return out
 }
