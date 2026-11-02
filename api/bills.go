@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -537,28 +538,35 @@ func billWords(l lang.Tag, b links.Mirror) (string, string) {
 // --- chat ---
 
 // waBillCommand answers the buyer's bill words: "bills" (also "my bills",
-// "bills due"), the bills still to pay; "bill INV-0042", one bill. False
-// when text is neither ("bill Ada 5,000" makes an invoice, as before).
+// "bills due"), the bills still to pay; "bill INV-0042", one bill, with
+// the supplier's name before the number when two suppliers used it ("bill
+// Dangote INV-0042"). False when text is neither ("bill Ada 5,000" makes
+// an invoice, as before: the last word is not an invoice number).
 func (s *Server) waBillCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
 	f := strings.Fields(text)
+	one := len(f) >= 2 && strings.EqualFold(f[0], "bill") && (len(f) == 2 || billNumberRe.MatchString(f[len(f)-1]))
 	switch {
 	case cmd == "bills" || cmd == "my bills" || cmd == "bills due":
-	case len(f) == 2 && strings.EqualFold(f[0], "bill"):
+	case one:
 	default:
 		return false, nil
 	}
 	if !c.p.Can(PermInvoiceRead) {
 		return true, c.say(ctx, s, c.t("bill.denied", "org", c.tenant.Name))
 	}
-	if len(f) == 2 && strings.EqualFold(f[0], "bill") {
+	if one {
 		var b links.Bill
 		err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 			var err error
-			b, err = links.GetBillTx(ctx, tx, f[1])
+			b, err = links.GetBillTx(ctx, tx, strings.Join(f[1:], " "))
 			return err
 		})
 		if errors.Is(err, links.ErrNotFound) {
-			return true, c.say(ctx, s, c.t("bill.not_found", "reference", whatsapp.SafeText(f[1])))
+			return true, c.say(ctx, s, c.t("bill.not_found", "reference", whatsapp.SafeText(strings.Join(f[1:], " "))))
+		}
+		if errors.Is(err, links.ErrAmbiguous) {
+			// Two suppliers used the number: "bill Dangote INV-0042".
+			return true, c.say(ctx, s, whatsapp.SafeText(strings.TrimPrefix(err.Error(), links.ErrAmbiguous.Error()+": ")))
 		}
 		if err != nil {
 			return true, err
@@ -585,6 +593,10 @@ func (s *Server) waBillCommand(ctx context.Context, c *chat, text, cmd string) (
 	lines = append(lines, c.t("bill.list_total", "amount", invoicing.Naira(total)))
 	return true, c.say(ctx, s, strings.Join(lines, "\n"))
 }
+
+// billNumberRe is an invoice number as suppliers' Taskiem numbers them
+// (INV-0042), the last word of "bill Dangote INV-0042".
+var billNumberRe = regexp.MustCompile(`^[A-Za-z]{1,6}-?[0-9]{1,12}$`)
 
 func billDue(l lang.Tag, b links.Bill) string {
 	if b.DueOn == "" {

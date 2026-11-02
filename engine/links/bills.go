@@ -373,8 +373,10 @@ func FinishBillPaymentTx(ctx context.Context, tx pgx.Tx, payment uuid.UUID, stat
 		return p, err
 	}
 	was := p.Status
+	// Paid after all: the owner may be told again, of a pair not made.
 	if err := tx.QueryRow(ctx, `UPDATE bill_payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), finished_at = now(),
-		sent_at = CASE WHEN $2 IN ('paid', 'unknown') THEN COALESCE(sent_at, now()) ELSE sent_at END
+		sent_at = CASE WHEN $2 IN ('paid', 'unknown') THEN COALESCE(sent_at, now()) ELSE sent_at END,
+		alerted_at = CASE WHEN $2 = 'paid' THEN NULL ELSE alerted_at END
 		WHERE id = $1 RETURNING finished_at, sent_at`, payment, status, accountName).Scan(&p.FinishedAt, &p.SentAt); err != nil {
 		return p, err
 	}
@@ -385,9 +387,6 @@ func FinishBillPaymentTx(ctx context.Context, tx pgx.Tx, payment uuid.UUID, stat
 	sent := int64(0)
 	if status == "paid" {
 		sent = p.AmountKobo
-		if err := nameEntryTx(ctx, tx, p); err != nil {
-			return p, err
-		}
 	}
 	if was == "unknown" && status == "failed" {
 		// Nothing was sent after all.
@@ -400,48 +399,14 @@ func FinishBillPaymentTx(ctx context.Context, tx pgx.Tx, payment uuid.UUID, stat
 
 // MarkPayoutSentTx records that the rail took the money of the payment a
 // run is paying (the payout step answered pending or settled), with the
-// rail's payout id, in the transaction that records the step: from here
-// the payment is never failed by a sweep, whatever becomes of the run.
-// The payout entry in the money log, when it is there already, names the
-// bill.
+// rail's payout id (payout_ref, the reference of the payout's money-log
+// entry, whose description is the payout's narration, the bill's token),
+// in the transaction that records the step: from here the payment is
+// never failed by a sweep, whatever becomes of the run.
 func MarkPayoutSentTx(ctx context.Context, tx pgx.Tx, tenant, run uuid.UUID, payoutRef string) error {
-	rows, err := tx.Query(ctx, `UPDATE bill_payments p SET sent_at = COALESCE(p.sent_at, now()), payout_ref = COALESCE(NULLIF($3, ''), p.payout_ref)
-		FROM bills b WHERE b.id = p.bill_id AND p.tenant_id = $1 AND p.run_id = $2 AND p.status IN ('pending', 'unknown')
-		RETURNING `+paymentCols, tenant, run, payoutRef)
-	if err != nil {
-		return err
-	}
-	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (BillPayment, error) { return scanPayment(r) })
-	if err != nil {
-		return err
-	}
-	for _, p := range list {
-		if err := nameEntryTx(ctx, tx, p); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// nameEntryTx puts the bill in the description of the payout's money-log
-// entry, where the entry is written and says nothing yet ("Bill INV-0042
-// to Dangote Stores"): the buyer's expense for the bill is the payout.
-func nameEntryTx(ctx context.Context, tx pgx.Tx, p BillPayment) error {
-	var ref *string
-	if err := tx.QueryRow(ctx, `SELECT payout_ref FROM bill_payments WHERE id = $1`, p.ID).Scan(&ref); err != nil {
-		return err
-	}
-	if ref == nil || *ref == "" {
-		return nil
-	}
-	_, err := tx.Exec(ctx, `UPDATE money_entries SET description = $2 WHERE direction = 'out' AND kind = 'payout' AND reference = $1 AND COALESCE(description, '') = ''`,
-		*ref, PayoutDescription(p.Reference, p.SupplierName))
+	_, err := tx.Exec(ctx, `UPDATE bill_payments SET sent_at = COALESCE(sent_at, now()), payout_ref = COALESCE(NULLIF($3, ''), payout_ref)
+		WHERE tenant_id = $1 AND run_id = $2 AND status IN ('pending', 'unknown')`, tenant, run, payoutRef)
 	return err
-}
-
-// PayoutDescription is what a bill's payout entry says in the money log.
-func PayoutDescription(reference, supplier string) string {
-	return "Bill " + reference + " to " + supplier
 }
 
 // SettleStalePaymentsTx settles the payments of the business in scope

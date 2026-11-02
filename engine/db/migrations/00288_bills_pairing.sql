@@ -17,11 +17,8 @@ ALTER TABLE bill_payments ADD COLUMN payout_ref text CHECK (length(payout_ref) <
 ALTER TABLE bill_payments ADD COLUMN alerted_at timestamptz;
 ALTER TABLE bill_payments DROP CONSTRAINT bill_payments_status_check;
 ALTER TABLE bill_payments ADD CONSTRAINT bill_payments_status_check CHECK (status IN ('pending', 'paid', 'failed', 'rejected', 'unknown'));
-GRANT SELECT (sent_at, alerted_at) ON bill_payments TO taskiem_dispatch;
+GRANT SELECT (bill_id, sent_at, alerted_at) ON bill_payments TO taskiem_dispatch;
 GRANT SELECT (supplier_tenant) ON bills TO taskiem_dispatch;
--- The buyer's payout entry names its bill (§6.2): the only column of an
--- entry the application changes after it is written.
-GRANT UPDATE (description) ON money_entries TO taskiem_app;
 -- The buyer confirms a pair the seller's matching did not make (§5.3).
 ALTER TABLE link_notices DROP CONSTRAINT link_notices_kind_check;
 ALTER TABLE link_notices ADD CONSTRAINT link_notices_kind_check CHECK (kind IN ('declared', 'queried', 'resolved', 'paired'));
@@ -87,13 +84,20 @@ ALTER FUNCTION taskiem_bill_payments_tenants() OWNER TO taskiem_dispatch;
 REVOKE EXECUTE ON FUNCTION taskiem_bill_payments_tenants() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_bill_payments_tenants() TO taskiem_app;
 
--- The mirror trigger fires on the mirrored columns alone (§16.2), not on
--- every change of a linked invoice.
+-- The mirror trigger fires when a mirrored column changes (§16.2), not on
+-- every change of a linked invoice (a payment moves the invoice by
+-- touching updated_at, so the columns are compared, not the statement's
+-- SET list).
 DROP TRIGGER customer_invoice_link_mirror ON customer_invoices;
-CREATE TRIGGER customer_invoice_link_mirror
-  AFTER INSERT OR UPDATE OF number, lines, total_kobo, paid_kobo, due_on, voided_at, disputed, allow_part_payments, sent_at, customer_key
-  ON customer_invoices
+CREATE TRIGGER customer_invoice_link_mirror AFTER INSERT ON customer_invoices
   FOR EACH ROW WHEN (NEW.customer_key LIKE 'link:%' AND NEW.sent_at IS NOT NULL)
+  EXECUTE FUNCTION taskiem_link_mirror_note();
+CREATE TRIGGER customer_invoice_link_mirror_change AFTER UPDATE ON customer_invoices
+  FOR EACH ROW WHEN (NEW.customer_key LIKE 'link:%' AND NEW.sent_at IS NOT NULL AND (
+    OLD.number IS DISTINCT FROM NEW.number OR OLD.lines IS DISTINCT FROM NEW.lines OR OLD.total_kobo IS DISTINCT FROM NEW.total_kobo
+    OR OLD.paid_kobo IS DISTINCT FROM NEW.paid_kobo OR OLD.due_on IS DISTINCT FROM NEW.due_on OR OLD.voided_at IS DISTINCT FROM NEW.voided_at
+    OR OLD.disputed IS DISTINCT FROM NEW.disputed OR OLD.allow_part_payments IS DISTINCT FROM NEW.allow_part_payments
+    OR OLD.sent_at IS DISTINCT FROM NEW.sent_at OR OLD.customer_key IS DISTINCT FROM NEW.customer_key))
   EXECUTE FUNCTION taskiem_link_mirror_note();
 
 -- The reconciler compares every invoice that has a bill, and every open
@@ -187,13 +191,13 @@ END
 $$;
 -- +goose StatementEnd
 DROP FUNCTION taskiem_bill_payments_tenants();
+DROP TRIGGER customer_invoice_link_mirror_change ON customer_invoices;
 DROP TRIGGER customer_invoice_link_mirror ON customer_invoices;
 CREATE TRIGGER customer_invoice_link_mirror AFTER INSERT OR UPDATE ON customer_invoices
   FOR EACH ROW WHEN (NEW.customer_key LIKE 'link:%' AND NEW.sent_at IS NOT NULL)
   EXECUTE FUNCTION taskiem_link_mirror_note();
-REVOKE UPDATE (description) ON money_entries FROM taskiem_app;
 REVOKE SELECT (supplier_tenant) ON bills FROM taskiem_dispatch;
-REVOKE SELECT (sent_at, alerted_at) ON bill_payments FROM taskiem_dispatch;
+REVOKE SELECT (bill_id, sent_at, alerted_at) ON bill_payments FROM taskiem_dispatch;
 DELETE FROM link_notices WHERE kind = 'paired';
 ALTER TABLE link_notices DROP CONSTRAINT link_notices_kind_check;
 ALTER TABLE link_notices ADD CONSTRAINT link_notices_kind_check CHECK (kind IN ('declared', 'queried', 'resolved'));

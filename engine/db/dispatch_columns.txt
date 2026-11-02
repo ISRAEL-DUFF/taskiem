@@ -63,6 +63,7 @@ auth_challenges.scope
 auth_challenges.user_id
 bill_payments.alerted_at
 bill_payments.amount_kobo
+bill_payments.bill_id
 bill_payments.created_at
 bill_payments.paired_at
 bill_payments.sent_at
