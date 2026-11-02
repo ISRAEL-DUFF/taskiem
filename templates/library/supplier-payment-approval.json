@@ -20,7 +20,8 @@
     "approve",
     "approval",
     "transfer",
-    "bill"
+    "bill",
+    "payables"
   ],
   "connectors": [
     "notify@1",

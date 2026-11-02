@@ -128,7 +128,11 @@ func runCase(ctx context.Context, prov ai.Provider, reg *connector.Registry, c C
 		defer cancel()
 	}
 	start := time.Now()
-	p, err := newBuilder(prov, reg).Build(cctx, builder.Request{Goal: c.Request})
+	req := builder.Request{Goal: c.Request}
+	if c.Context != nil {
+		req.Context.Linked = c.Context.LinkedBusinesses
+	}
+	p, err := newBuilder(prov, reg).Build(cctx, req)
 	r.Seconds = time.Since(start).Seconds()
 	if p != nil {
 		r.Model, r.Usage, r.Rounds = p.Model, p.Usage, p.Rounds

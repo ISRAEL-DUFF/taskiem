@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -41,13 +42,22 @@ type Case struct {
 	// Source is where the request came from: synthetic (written by
 	// engineering, pending review by people), dogfood, partner.
 	Source string `json:"source,omitempty"`
+	// Context is what the builder knows of the business beyond the
+	// request, when the case needs it: the businesses linked to it on
+	// Taskiem (business links L6), which a goal may name.
+	Context *CaseContext `json:"context,omitempty"`
+}
+
+// CaseContext is the part of the builder's context a case sets.
+type CaseContext struct {
+	LinkedBusinesses []builder.LinkedBusiness `json:"linked_businesses,omitempty"`
 }
 
 var difficulties = []string{"easy", "medium", "hard"}
 
 var stepTypes = []string{"connector", "capability", "template", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "callback", "respond", "approval", "form"}
 
-var triggerTypes = []string{"webhook", "schedule", "connector_event", "capability_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form", "invoice"}
+var triggerTypes = []string{"webhook", "schedule", "connector_event", "capability_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form", "invoice", "link"}
 
 // check reports what is wrong with a case's own shape.
 func (c *Case) check() error {

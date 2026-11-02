@@ -14,6 +14,10 @@ type Match struct {
 	Score    int
 	// Matched are the goal's words the template answered to.
 	Matched []string
+	// raw is the score before rounding: two templates whose scores round
+	// to the same number are ordered by it, not by id, so a library
+	// growing by a few templates does not flip a near-tie.
+	raw float64
 }
 
 // MinScore is the score below which a template is not offered as a
@@ -130,7 +134,8 @@ func (l *Library) index() *index {
 // template shares says little). A word matched in a template's keywords,
 // tags or title is scaled by how many templates have it there, never by
 // what other templates say in their prose: a description elsewhere
-// cannot weaken a template's own keywords. Ties keep id order. Only templates
+// cannot weaken a template's own keywords. A tie in the rounded score is
+// decided by the score itself, then id order. Only templates
 // scoring at least MinScore, from at least two distinct words one of
 // which is a distinctive keyword, are returned, at most n.
 func (l *Library) Match(goal string, n int) []Match {
@@ -191,10 +196,10 @@ func (l *Library) Match(goal string, n int) []Match {
 		s := int(math.Round(score))
 		if s >= MinScore && len(matched) >= 2 && distinctive {
 			sort.Strings(matched)
-			out = append(out, Match{Template: t, Score: s, Matched: matched})
+			out = append(out, Match{Template: t, Score: s, Matched: matched, raw: score})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].raw > out[j].raw })
 	if n > 0 && len(out) > n {
 		out = out[:n]
 	}
