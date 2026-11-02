@@ -109,7 +109,7 @@ export interface BillsFinishBillPaymentInput {
   /** The bank's name for the account */
   account_name?: Val<string>;
   payment_id: Val<string>;
-  status: Val<"paid" | "failed" | "rejected">;
+  status: Val<"paid" | "failed" | "rejected" | "unknown">;
 }
 export const bills = {
   /** Record a linked bill's outcome (idempotent_write) */
