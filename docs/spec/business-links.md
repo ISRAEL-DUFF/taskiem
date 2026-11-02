@@ -225,7 +225,7 @@ Things a link makes possible that this plan does not build, so they are not desi
 - **Orders**: L2's accepts through the storefront's order harness and the stock harness together, riders included.
 - **Reconciler**: a mirror changed by hand is reported.
 - **Chat**: `link`, `bills`, `pay`, `prices from`, `ask … about`, on WhatsApp and Telegram, with the business name in brackets.
-- **Privacy**: a phone lookup answers the same words for a business and for no business; a name search lists only businesses whose findability is on; a declined, expired and blocked request to a listed business all end with the same "Not accepted" after the same time.
+- **Privacy**: a phone lookup answers the same words for a business and for no business; a name search lists only businesses whose findability is on; a declined, expired and blocked request to a listed business all end with the same "Not accepted" after the same time; a blind request to a business already seen leaves its row alone; a request by search after a blind one answers "sent" whether the blind one reached that business, was declined or was blocked; the daily quota counts no blind request; the side blocked cannot lift the block by blocking back or unblocking; a declined and a blocked business asked again keep the same clock; and the chat's Accept, Decline and Block work only from their signed buttons.
 - **Web**: the Linked businesses and Bills pages pass axe in both themes and the plain-words test.
 
 ## 15. Needs a person
@@ -256,35 +256,38 @@ In order, one PR each; L0 and L1 together if the first linked pair is waiting. L
 
 ### 16.1 As built (L0, first slice)
 
-The link itself, its search and its words in chat; migration 00279, `engine/links`, `api/links.go`, `api/chat_links.go`.
+The link itself, its search and its words in chat; migrations 00279 and 00287 (what a request may not reveal), `engine/links`, `api/links.go`, `api/chat_links.go`.
 
 - **The link record.** `business_links` is a platform table that no business reads: its policy for `taskiem_app` admits nothing, and each side reads it through `taskiem_links_of`. Its statuses are `requested`, `active`, `declined`, `blocked`, `cancelled` and `ended`; `paused` waits for a setting that needs it.
 - **What each side sees.** `taskiem_link_view` decides it, in one place:
   - the side asked sees `asked_us` while the request waits;
   - the side that asked sees `requested` until the 30 days pass, whatever the answer, then `not_accepted`;
   - a request sent blind never shows from `business_links` to the side that asked: its own `link_blind_requests` row stands for it, with the address masked, until it is accepted;
-  - a link that was made and then blocked reads `ended` to the other side.
+  - a link that was made and then blocked reads `ended` to the other side;
+  - a block is each side's own (`a_blocked`, `b_blocked`; `blocked_by` names the first): a side that blocked reads `blocked` whether or not the other blocked too, and the side blocked reads what it read before.
 - **The functions** (`definers.tsv`), all owned by `taskiem_dispatch` and granted to `taskiem_app` only:
-  - `taskiem_links_of`;
+  - `taskiem_links_of()`;
   - `taskiem_link_search(q, limit)`;
-  - `taskiem_link_request(target, phone, slug, role, actor)`;
-  - `taskiem_link_answer(link, answer, actor)` for accept, decline, block, unblock, cancel and end;
-  - `taskiem_link_enter`.
-  The helpers they call (`taskiem_link_self`, `taskiem_link_view`, `taskiem_link_role`, `taskiem_link_findable`, `taskiem_link_audit_other`) are not granted to the application.
+  - `taskiem_link_request(target, code, phone, slug, role, actor_type, actor_id)`;
+  - `taskiem_link_answer(link, answer, actor_type, actor_id)` for accept, decline, block, unblock, cancel and end;
+  - `taskiem_link_by_code(code)`, `taskiem_link_offer_to(phone)`;
+  - `taskiem_link_enter(link, actor_type, actor_id, action, detail)`.
+  The helpers they call (`taskiem_link_self`, `taskiem_link_view`, `taskiem_link_blocked_by`, `taskiem_link_role`, `taskiem_link_findable`, `taskiem_link_phone_business`, `taskiem_link_audit_other`) are not granted to the application.
 - **Search** (§5.1).
   - Every word must match the business's published card (name, tagline, area) or one of its published, available items (name or category). Up to three matching items come back with their public prices.
   - Linked businesses rank first, then those in the searcher's own storefront area, then by name.
-  - A query holding a phone number finds nothing; the API answers it with the one `blind` row instead.
+  - A query holding a phone number finds nothing; the API answers it with the one `blind` row instead (`kind` `phone`). One word shaped like a storefront address (3 to 30 characters of letters, digits and hyphens) that names no business found gets the same row (`kind` `address`), as `link <address>` does in chat; a name that finds a business is a result, as before.
   - Not built in this slice: the business's kind from sign-up, and the area of a findable business with no storefront. Such a business is found by name only.
 - **Findability.** `link_settings.findable` holds the business's choice. Left empty, it is on with a published storefront. The once-asked question in the sign-up chat is not built yet; `GET` and `PUT /v1/link-settings` set it.
 - **Requests.**
   - **By search,** the target must be findable, or the request is refused as not found.
   - **Blind,** by phone, the number must be an owner's linked WhatsApp number or a business's own active WhatsApp number, and name exactly one business; by address, the business's published storefront address. Either way the caller gets back only whom to tell, never anything to show.
-  - **Limits:** at most 20 requests a day through `business_links`, and 20 blind ones counted in the requester's own table.
-  - **Asking again** within the 30 days tells no one. Asking a business that blocked us restarts our own clock and tells no one. Asking a business we blocked lifts our block.
-  - **Unblocking** a link that was made returns it to ended. Unblocking a request makes it declined, so its requester, who saw it waiting while it was blocked, still sees it waiting until its 30 days pass.
+  - **Limits:** at most 20 requests a day by search or code, counted in `business_links` by `how <> 'blind'`, and 20 blind ones counted in the requester's own `link_blind_requests` only, so no count says whether a blind request reached anyone.
+  - **What a request may not reveal** (migration 00287, after review). A blind request to a business whose link the requester already sees (asked either way, linked, ended, blocked by us, or not accepted) changes nothing and tells no one: the requester knows that business, and a row that moved would say the number or address was its. A request by search or code where a blind one of ours stands, within its 30 days, becomes that request (`how`, a fresh clock) without telling the business twice, and the API answers it as sent (202) rather than 404, so the answer never says whether the blind one reached anyone. `how` is never written back from search or code to blind.
+  - **Asking again** within the 30 days tells no one and leaves the clock alone, whether the business declined, blocked us, or has not answered; after the 30 days the clock starts again, and a business that blocked us is still not told. Asking a business we blocked lifts our block.
+  - **Blocking** is each side's own. The side a link was blocked by reads it as ended and may block too; that records its block beside the other's, lifts nothing and tells nothing. **Unblocking** lifts only the caller's block; while the other side's stands the link stays blocked by it, and the caller reads what it read before. With no block left, a link that was made returns to ended, and a request becomes declined, so its requester, who saw it waiting while it was blocked, still sees it waiting until its 30 days pass. Requests from a blocked business are dropped as before.
 - **Telling people.**
-  - The other side's owners and admins are told after the request has been answered (`s.background`), in the app's bell and in chat with **Accept**, **Decline** and **Block** (`lk:<answer>:<link>`).
+  - The other side's owners and admins are told after the request has been answered (`s.background`), in the app's bell and in chat with **Accept**, **Decline** and **Block**, signed as an approval's buttons are (spec 9.1): each a `tk1.` decision token bound to the business asked, the link (as the run), the answer (as the step `link:<answer>`), the person and the request's expiry, recorded in `whatsapp_tokens` under one notice so using one spends the three. `waDecide` checks the token (this business's, this person's, unspent, in time) before `waLinkDecide` looks at the link, which must still read `asked_us` to a person holding `link.manage`. A button made up from a link's id, altered, or copied from another person's message is refused with the same words as a request answered already.
   - They are told in their own business's scope, from that business's own view of the link, so nothing the requester's transaction reads crosses.
   - An acceptance and the end of a link are told to the other side. A decline, a block and a cancel are never told.
 - **Chat words.**
@@ -299,16 +302,20 @@ The link itself, its search and its words in chat; migration 00279, `engine/link
     - search and findability;
     - a decline and a block that read the same to the requester, during the 30 days and after;
     - a blind request reaching only an owner's number;
-    - the one door's narrowing and refusals.
+    - the one door's narrowing and refusals;
+    - privacy (`TestLinkRequestPrivacy`): a row the requester sees is unchanged by a blind request; a request by search after a blind one, declined or blocked, reads as sent; the quota counts no blind request; the side blocked cannot lift the block by blocking back or unblocking, and its requests are still dropped; a declined and a blocked business asked again keep the same clock.
   - `api/links_test.go`: the chat and API path end to end, including:
     - the same words for a blind request to a business and to no one;
     - silence on a decline;
-    - a viewer refused.
+    - a viewer refused;
+    - the buttons signed: a token not the link's id, refused from another business's number, made up, or altered;
+    - the blind row for a page address that names no business found, and none for a name found.
 
 - **The web** (`web/src/pages/Links.tsx`, `web/src/lib/links.ts`).
   - **Chat** (`/chat`, in the menu for every member) is the Chat page's left pane until L3 adds the conversation. It lists requests to answer, with **Accept**, **Decline** and **Block**, then linked businesses, then requests waiting.
   - Its search box gives **Chats** (linked businesses whose name matches) and **Businesses on Taskiem**, each with **Request link** and the three role choices.
-  - A phone number typed shows the one row **Send a link request to 0803…4567**.
+  - A phone number typed shows the one row **Send a link request to 0803…4567**; so does a page address that names no business found (**Send a link request to adas-kitchen**), the same row either way.
+  - A business found with a request of ours waiting reads **Asked** and has **Cancel request** on its card; the search runs again once it is withdrawn.
   - Members without `link.manage` see the rows and the line "An owner or admin can link with this business", with no button.
   - **Linked businesses** (`/settings/links`, under More for `link.manage`) holds the **Let other businesses find us** switch and every link and request with what can be done to it: End link, Withdraw request, Unblock, Take off the list.
   - Tests: `web/src/lib/links.test.ts`; `web/e2e/links.spec.ts`, two businesses that find each other, link and end it, at 390 px, with axe in both themes; and both pages in `accessibility.spec.ts` and `plainwords.test.ts`.
@@ -335,12 +342,14 @@ The link itself, its search and its words in chat; migration 00279, `engine/link
   - It uses a connection that needs nothing a business cannot give (no email, BVN or wallet to choose), the invoice settings' connection first. Where there is none, nothing is issued.
   - The bill that carries the number is L1's.
 
-- **The isolation harness (§14), for L0.** `api/links_isolation_test.go` runs the API on a pool whose query tracer logs every statement with its transaction's tenant scope, while two businesses search, ask, accept by chat, open a link code and end the link. It asserts that:
+- **The isolation harness (§14), for L0.** `api/links_isolation_test.go` runs the API on one traced pool held by every service the server runs statements on (the store, the invoices with a rail that issues accounts, the reach book), whose query tracer logs every statement with its transaction's tenant scope, while two businesses search, ask, accept by chat (with the signed button), open a link code, talk and end the link. It asserts that:
   - no transaction holds both businesses;
   - a transaction of one names the other only in a call to the link functions;
-  - no statement reads `business_links` itself.
+  - no statement reads `business_links` itself;
+  - no transaction sets `app.tenant_scope` again after `taskiem_link_enter`: the door's narrowing holds to the transaction's end (the tracer relabels the scope `entered` there, and a later `set_config` fails the test);
+  - an acceptance goes through the door exactly once (the event for both sides' workflows), `link.accept` and `link.event` are audited in both chains, and the seller issues its linked buyer one account number (`issueLinkAccounts`).
 
-  A query planted in the accept path, naming the other business, makes it fail. L1 adds the mirror writes' checks: one `taskiem_link_enter` call and two audit entries each.
+  A query planted in the accept path, naming the other business, makes it fail. L1 adds the mirror writes' checks: one `taskiem_link_enter` call and two audit entries each. Not traced: the WhatsApp and Telegram platforms' own pool, which holds no tenant scope.
 
 **Left for later milestones:** a business's card with its documents (L1), and messages in the search (L3).
 
@@ -468,6 +477,7 @@ Migration 00286, `engine/links/events.go`, `connectors/link/`, `api/link_connect
 | A seller's order workflow expects a sealed customer phone (notify_customer) | A `trade` order's customer is the link; `notify_customer` on it writes to the buyer's thread and chat instead of SMS, and the order templates need no change |
 | Received quantities disagree, or the buyer never checks | The seller's `delivered` is the default: a day with no **Not all came** confirms `received` from it, moves the buyer's stock by the seller's count and, where the invoice was raised at acceptance, leaves it charged for what the seller says it sent (20 bags billed when 15 came, until the buyer says so). A **Not all came** within the day sets the buyer's count, opens the order's card as a dispute, and the invoice follows the agreed quantity; after the day it is still a dispute on the card, with a stock adjustment and a credit note when the seller agrees |
 | Name matching of order lines to the seller's items before a price list exists | Asked once per item on the seller's side ("Is Ada's 'rice 50kg' your 'Rice, 50 kg bag'?"), then remembered as an item link |
+| A blind request's answer takes a little longer when it reaches a business than when it reaches no one | The words and the status are the same, and the business is told off the request's path (`s.background`), but the request's own transaction does more when a business is behind the number or address (a `business_links` row and two audit entries, against none), a difference of milliseconds that a patient caller timing many requests could measure. Not closed in L0: the writes would have to be made for no one too, or the answer delayed to a fixed time. Open until there is a sign it is used; the daily limit of 20 blind requests bounds what such timing can learn |
 
 ## 18. Out of scope
 
