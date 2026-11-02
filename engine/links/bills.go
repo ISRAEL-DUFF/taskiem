@@ -156,8 +156,16 @@ var BillStatuses = []string{"open", "paid", "void", "all"}
 // by due date, then the rest newest first. status: open, paid, void or
 // all.
 func ListBillsTx(ctx context.Context, tx pgx.Tx, status string, limit int) ([]Bill, error) {
+	return ListBillsPageTx(ctx, tx, status, limit, 0)
+}
+
+// ListBillsPageTx is ListBillsTx from offset on: a page of the list.
+func ListBillsPageTx(ctx context.Context, tx pgx.Tx, status string, limit, offset int) ([]Bill, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	where := `TRUE`
 	switch status {
@@ -169,7 +177,7 @@ func ListBillsTx(ctx context.Context, tx pgx.Tx, status string, limit int) ([]Bi
 		where = `status = 'void'`
 	}
 	rows, err := tx.Query(ctx, `SELECT `+billCols+` FROM bills WHERE `+where+`
-		ORDER BY status IN ('paid', 'void'), due_on NULLS LAST, created_at DESC LIMIT $1`, limit)
+		ORDER BY status IN ('paid', 'void'), due_on NULLS LAST, created_at DESC, id LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
 	}

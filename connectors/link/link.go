@@ -30,6 +30,9 @@ type Call struct {
 	// Key is the step's idempotency key (writes): the same key twice is
 	// the same answer.
 	Key string
+	// Environment is the run's: a write (pay_bill, place_order,
+	// order_step, reply) is made in prod only.
+	Environment string
 }
 
 // Ops does the actions. A refusal the run cannot change by retrying is
@@ -71,7 +74,7 @@ func call(ctx context.Context, ops Ops, action string, req connector.Request) (c
 	if key == "" {
 		key = c.Run.String() + ":" + c.Step
 	}
-	out, err := ops.LinkAction(ctx, Call{Tenant: c.Tenant, Run: c.Run, Step: c.Step, Action: action, Input: in, Key: key})
+	out, err := ops.LinkAction(ctx, Call{Tenant: c.Tenant, Run: c.Run, Step: c.Step, Action: action, Input: in, Key: key, Environment: c.Environment})
 	if err != nil {
 		return connector.Response{}, err
 	}

@@ -27,11 +27,23 @@ import (
 	"github.com/israel-duff/taskiem/engine/stock"
 )
 
-// LinkAction does one link@1 action (connectors/link).
+// linkWrites are the actions that change something: made in prod only.
+var linkWrites = map[string]bool{"pay_bill": true, "place_order": true, "order_step": true, "reply": true}
+
+// LinkAction does one link@1 action (connectors/link). A run acts for its
+// own business as the system: the reads in any environment, a write
+// (pay_bill, place_order, order_step, reply) in prod alone, since a
+// sandbox run's order or payment would still reach the linked business.
+// reply is the one write a person needs a permission for (chat.trade,
+// decision 0061 §9): a run may write in the conversation only when the
+// person who published its workflow holds it.
 func (s *Server) LinkAction(ctx context.Context, c linkconn.Call) (map[string]any, error) {
 	p := &Principal{TenantID: c.Tenant, Run: c.Run, Permissions: map[string]bool{}}
 	var out map[string]any
 	var err error
+	if linkWrites[c.Action] && c.Environment != "" && c.Environment != "prod" {
+		return nil, fmt.Errorf("link@1 %s acts only in prod: a %s run reads linked businesses but does not write to them: %w", c.Action, c.Environment, effects.ErrFatal)
+	}
 	switch c.Action {
 	case "get_bill":
 		out, err = s.linkGetBill(ctx, p, c)
@@ -193,32 +205,57 @@ func (s *Server) linkListBills(ctx context.Context, p *Principal, c linkconn.Cal
 	business := strings.ToLower(inStr(c.Input, "business"))
 	_, within := c.Input["due_within_days"]
 	by := time.Now().In(lagosTZ).AddDate(0, 0, int(inInt(c.Input, "due_within_days"))).Format(time.DateOnly)
-	var all []links.Bill
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		var err error
-		all, err = links.ListBillsTx(ctx, tx, "open", 200)
-		return err
-	}); err != nil {
-		return nil, err
-	}
+	// The open bills are read in pages of 200, oldest due first, until
+	// limit are found or there are no more (linkListBillsPages pages at
+	// most, which is more bills than a business has open).
 	bills := []any{}
 	var due int64
-	for _, b := range all {
-		switch {
-		case b.PayingKobo > 0 || b.DueKobo <= 0:
-			continue
-		case business != "" && strings.ToLower(b.SupplierName) != business && !strings.Contains(strings.ToLower(b.SupplierName), business):
-			continue
-		case within && (b.DueOn == "" || b.DueOn > by):
-			continue
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		for page := 0; page < linkListBillsPages && len(bills) < limit; page++ {
+			all, err := links.ListBillsPageTx(ctx, tx, "open", linkListBillsPage, page*linkListBillsPage)
+			if err != nil {
+				return err
+			}
+			for _, b := range all {
+				switch {
+				case b.PayingKobo > 0 || b.DueKobo <= 0:
+					continue
+				case business != "" && strings.ToLower(b.SupplierName) != business && !strings.Contains(strings.ToLower(b.SupplierName), business):
+					continue
+				case within && (b.DueOn == "" || b.DueOn > by):
+					continue
+				}
+				if len(bills) == limit {
+					break
+				}
+				bills = append(bills, billOut(b))
+				due += b.DueKobo
+			}
+			if len(all) < linkListBillsPage {
+				break
+			}
 		}
-		if len(bills) == limit {
-			break
-		}
-		bills = append(bills, billOut(b))
-		due += b.DueKobo
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return map[string]any{"bills": bills, "count": len(bills), "due_kobo": due}, nil
+}
+
+// linkListBillsPage is how many open bills list_bills reads at a time, and
+// linkListBillsPages how many pages at most (10,000 open bills).
+const (
+	linkListBillsPage  = 200
+	linkListBillsPages = 50
+)
+
+// purgeLinkStarts deletes the link trigger's queued starts past their
+// retention (90 days; migration 00291), in every business, through a
+// definer that reads only when each was made.
+func (s *Server) purgeLinkStarts(ctx context.Context) error {
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_link_starts_purge()`)
+	return err
 }
 
 // linkPayBill starts paying a bill through the business's bill payments,
@@ -575,12 +612,23 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 	}
 	var x stock.Purchase
 	var business string
+	drafted := false // by this step before: the same order, no second draft
+	key := "link-" + c.Key
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		l, err := linkNamed(ctx, tx, inStr(c.Input, "business"))
 		if err != nil {
 			return err
 		}
 		business = l.Name
+		var id uuid.UUID
+		switch err := tx.QueryRow(ctx, `SELECT id FROM purchase_orders WHERE tenant_id = $1 AND key = $2`, p.TenantID, key).Scan(&id); {
+		case err == nil:
+			drafted = true
+			x, err = stock.PurchaseTx(ctx, tx, p.TenantID, id, false)
+			return err
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
 		got, err := links.SupplierPricesTx(ctx, tx, p.TenantID, l.ID)
 		if err != nil {
 			return err
@@ -610,7 +658,7 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 			}
 			lines = append(lines, line)
 		}
-		x, err = s.draftFromPricesTx(ctx, tx, p, l.ID, lines, own, inStr(c.Input, "note"), "link-"+c.Key)
+		x, err = s.draftFromPricesTx(ctx, tx, p, l.ID, lines, own, inStr(c.Input, "note"), key)
 		if err != nil {
 			return err
 		}
@@ -620,6 +668,11 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 		return nil, err
 	}
 	out := map[string]any{"reference": x.Reference, "business": business, "total_kobo": x.TotalKobo, "status": "drafted"}
+	if drafted && x.Status != stock.Drafted {
+		// Sent (or further) by this step before: the same answer.
+		out["status"] = "sent"
+		return out, nil
+	}
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		y, err := s.Purchases.SendTx(ctx, tx, p.TenantID, x.ID, p.Actor())
 		if err != nil {
@@ -637,10 +690,44 @@ func (s *Server) linkPlaceOrder(ctx context.Context, p *Principal, c linkconn.Ca
 
 // --- the conversation ---
 
+// publisherMay reports whether the person who published the run's
+// workflow version holds perm in the business: a run writes to a linked
+// business with the permission of the person who set it going (decision
+// 0061 §9). A version no person published (a Git push, a partner's
+// package) is refused.
+func (s *Server) publisherMay(ctx context.Context, tx pgx.Tx, p *Principal, perm string) (bool, error) {
+	var by *uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT v.published_by FROM runs r JOIN workflow_versions v ON v.workflow_id = r.workflow_id AND v.version = r.version
+		WHERE r.tenant_id = $1 AND r.id = $2`, p.TenantID, p.Run).Scan(&by)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && by == nil) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	who, err := s.principalOf(ctx, p.TenantID, *by)
+	if err != nil {
+		return false, nil //nolint:nilerr // no longer a member: may not
+	}
+	return who.Can(perm), nil
+}
+
 func (s *Server) linkReply(ctx context.Context, p *Principal, c linkconn.Call) (map[string]any, error) {
 	text := inStr(c.Input, "text")
 	if text == "" {
 		return nil, fmt.Errorf("%w: write something", links.ErrInvalid)
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		ok, err := s.publisherMay(ctx, tx, p, PermChatTrade)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("%w: writing to a linked business needs chat.trade: this workflow was not published by an owner, admin or operator", links.ErrState)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	sender := "workflow:" + c.Key
 	var link uuid.UUID

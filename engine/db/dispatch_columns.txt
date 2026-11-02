@@ -550,6 +550,8 @@ link_orders_due.kind
 link_orders_due.object_id
 link_orders_due.tenant_id
 link_orders_due.tries
+link_starts.created_at
+link_starts.id
 link_settings.code
 link_settings.findable
 link_settings.tenant_id

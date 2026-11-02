@@ -147,6 +147,10 @@ func (s *Server) runLinkMirrors(ctx context.Context) {
 			if _, err := s.LinkReconcile(ctx); err != nil && ctx.Err() == nil {
 				s.Logger.Error("links: reconciling bills", "err", err)
 			}
+			// The link trigger's starts past their retention (link_connector.go).
+			if err := s.purgeLinkStarts(ctx); err != nil && ctx.Err() == nil {
+				s.Logger.Error("links: purging queued starts", "err", err)
+			}
 		}
 	}
 }
