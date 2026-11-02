@@ -203,7 +203,7 @@ func (s *Server) writeSplit(w http.ResponseWriter, r *http.Request, sp matching.
 			parts = append(parts, map[string]any{"target": x.Target(), "amount_kobo": sp.PartKobo[i], "invoice": x.Invoice})
 		case x.Order != nil:
 			parts = append(parts, map[string]any{"target": x.Target(), "amount_kobo": sp.PartKobo[i], "order": map[string]any{"reference": x.Order.Reference, "status": x.Order.Status,
-				"paid_at": x.Order.PaidAt, "due_kobo": x.Order.Payable(), "total_kobo": x.Order.TotalKobo, "customer": maskName(x.Order.Customer.Name)}})
+				"paid_at": x.Order.PaidAt, "due_kobo": x.Order.AskedKobo(), "paid_kobo": x.Order.PaidKobo, "total_kobo": x.Order.TotalKobo, "customer": maskName(x.Order.Customer.Name)}})
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"parts": parts, "left_kobo": sp.LeftKobo, "credit_kobo": sp.CreditKobo})
@@ -266,7 +266,7 @@ func (s *Server) writeMatchedOrder(w http.ResponseWriter, r *http.Request, o sto
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"target": matching.OrderTarget(o.Reference), "reference": o.Reference, "status": o.Status, "paid_at": o.PaidAt,
-		"due_kobo": o.Payable(), "total_kobo": o.TotalKobo, "customer": maskName(o.Customer.Name), "payments": pays})
+		"due_kobo": o.AskedKobo(), "paid_kobo": o.PaidKobo, "total_kobo": o.TotalKobo, "customer": maskName(o.Customer.Name), "payments": pays})
 }
 
 func (s *Server) matchEntry(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,294 @@
+{
+  "id": "storefront-quote",
+  "title": "Quotes: price requests, take a deposit on acceptance, ask for the balance when ready",
+  "summary": "Each quote request from a Quotes front comes to you to price in chat; the customer accepts it on their page and pays a deposit, and when the work is ready they are asked for the balance.",
+  "description": "Starts when a customer asks for a quote on a Quotes front: what they need and by when. They are told it arrived, and you are told what they asked, with how to reply with a price (quote and the reference and the price, in chat). The customer gets the price by SMS with a link to accept or decline it on their page; accepting takes the deposit at once. When the work is ready, approve it: the customer is sent a link for the balance, and the request is completed. A quote not accepted in time closes, and the customer is told.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "quote",
+    "quotes",
+    "request a quote",
+    "made to order",
+    "tailoring",
+    "catering",
+    "printing",
+    "furniture",
+    "repairs",
+    "estimate",
+    "price on request"
+  ],
+  "connectors": [
+    "storefront@1",
+    "notify@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who says the work is ready",
+      "description": "The role asked when the work is ready, before the customer is asked for the balance.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontQuote",
+    "version": 1,
+    "name": "Storefront quotes",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "quote"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "front": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "due_kobo": {
+            "type": "integer"
+          },
+          "paid_kobo": {
+            "type": "integer"
+          },
+          "status_link": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "tell_received",
+        "type": "connector",
+        "name": "Tell the customer it arrived",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "quote_requested",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "tell_owner",
+        "type": "connector",
+        "name": "Tell you what they asked",
+        "connector": "notify@1",
+        "action": "tell",
+        "input": {
+          "to": "owner",
+          "title": "='Quote request ' + trigger.body.reference",
+          "message": "=(has(trigger.answers) && has(trigger.answers.details) ? trigger.answers.details : 'No details given') + (has(trigger.answers) && has(trigger.answers.needed_by) ? ' (needed by ' + trigger.answers.needed_by + ')' : '') + '. Reply: quote ' + trigger.body.reference + ' and the price, such as quote ' + trigger.body.reference + ' 45000.'"
+        }
+      },
+      {
+        "id": "wait_quote",
+        "type": "signal",
+        "name": "Wait for your price",
+        "needs": [
+          "tell_received"
+        ],
+        "config": {
+          "event": "storefront.quote",
+          "correlation": "=trigger.body.reference",
+          "timeout": "336h"
+        }
+      },
+      {
+        "id": "tell_quote",
+        "type": "connector",
+        "name": "Send the quote",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_quote"
+        ],
+        "when": "=has(steps.wait_quote.output.status) && steps.wait_quote.output.status == 'quoted'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "quote_sent",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "total": "=steps.wait_quote.output.total",
+            "now": "=steps.wait_quote.output.pay_now",
+            "until": "=steps.wait_quote.output.until"
+          }
+        }
+      },
+      {
+        "id": "wait_pay",
+        "type": "signal",
+        "name": "Wait for the customer to accept and pay",
+        "needs": [
+          "tell_quote"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "1464h"
+        }
+      },
+      {
+        "id": "tell_accepted",
+        "type": "connector",
+        "name": "Thank the customer",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_pay"
+        ],
+        "when": "=has(steps.wait_pay.output.status) && steps.wait_pay.output.status == 'paid'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "quote_accepted",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "tell_expired",
+        "type": "connector",
+        "name": "Tell the customer it closed",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_pay"
+        ],
+        "when": "=!has(steps.wait_pay.output.status) || steps.wait_pay.output.status != 'paid'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "quote_expired",
+          "vars": {
+            "reference": "=trigger.body.reference"
+          }
+        }
+      },
+      {
+        "id": "ready",
+        "type": "approval",
+        "name": "Is the work ready?",
+        "needs": [
+          "tell_accepted"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "2160h",
+          "subject": {
+            "quote": "=trigger.body.reference",
+            "action": "Approve when the work is ready, to ask for the balance"
+          }
+        }
+      },
+      {
+        "id": "balance_link",
+        "type": "connector",
+        "name": "Make the balance's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "ready"
+        ],
+        "when": "=steps.ready.output.decision == 'approved' && has(steps.wait_pay.output.balance_kobo) && steps.wait_pay.output.balance_kobo >= 100",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "tell_balance",
+        "type": "connector",
+        "name": "Send the balance's payment link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "balance_link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "work_ready",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "balance": "=steps.balance_link.output.total",
+            "url": "=steps.balance_link.output.url"
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Complete the request",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "ready"
+        ],
+        "when": "=steps.ready.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4800h"
+    }
+  }
+}

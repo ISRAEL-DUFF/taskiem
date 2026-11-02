@@ -5614,6 +5614,11 @@
       "reviewed": true,
       "context": "Read-back: started by a form on the business's public storefront; {form} is order, enquiry or callback"
     },
+    "wd.trigger.storefront_action": {
+      "text": "When someone sends a form on the storefront",
+      "reviewed": true,
+      "context": "Read-back: started by a form on one of the storefront's pages, named by its id"
+    },
     "wd.trigger.subflow": {
       "text": "When another workflow calls it",
       "reviewed": true,
@@ -5703,6 +5708,456 @@
       "text": "Use your workflow: {template}, which {does}",
       "reviewed": true,
       "context": "Read-back: as wd.workflow, with what it does (wd.effect.*)"
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: your other pages, like a menu; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": true,
+      "context": "Help line, with storefront.manage; keep the command words in English"
+    },
+    "wa.front.list_head": {
+      "text": "Your fronts:",
+      "reviewed": true,
+      "context": "fronts: the list's heading"
+    },
+    "wa.front.on": {
+      "text": "on",
+      "reviewed": true,
+      "context": "fronts: a front customers can see"
+    },
+    "wa.front.off": {
+      "text": "off",
+      "reviewed": true,
+      "context": "fronts: a front customers cannot see yet"
+    },
+    "wa.front.home": {
+      "text": "home page",
+      "reviewed": true,
+      "context": "fronts: before the home page's address"
+    },
+    "wa.front.items": {
+      "text": "{n} items",
+      "reviewed": true,
+      "context": "fronts: how many items a front's list has"
+    },
+    "wa.front.forms_on": {
+      "text": "{n} forms on",
+      "reviewed": true,
+      "context": "fronts: how many of a front's forms are on"
+    },
+    "wa.front.list_tail": {
+      "text": "Add one with *add front Snacks*. Switch one with *front Snacks on* or *front Snacks off*.",
+      "reviewed": true,
+      "context": "fronts: the list's last line"
+    },
+    "wa.front.none_named": {
+      "text": "No front is called {name}. Your fronts: {fronts}.",
+      "reviewed": true,
+      "context": "A command named a front that does not exist"
+    },
+    "wa.front.how_add": {
+      "text": "Write it like *add front Snacks*, or *add food front Snacks*: a name of up to 80 characters.",
+      "reviewed": true,
+      "context": "add front without a usable name"
+    },
+    "wa.front.exists": {
+      "text": "You have a front called *{name}* already. Send *fronts* to see them.",
+      "reviewed": true,
+      "context": "add front with a name already used"
+    },
+    "wa.front.which_kind": {
+      "text": "What is *{name}* for?\n{list}\nReply with its number.",
+      "reviewed": true,
+      "context": "add front: the kinds asked as a numbered list, each with a line"
+    },
+    "wa.front.confirm_add": {
+      "text": "Add *{name}*, a {kind} front?",
+      "reviewed": true,
+      "context": "add front: confirming; the kind is Shop, Food, Questions, Call-backs or Custom"
+    },
+    "wa.front.confirm_table": {
+      "text": "It gets its own list, {table}, to add items to.",
+      "reviewed": true,
+      "context": "add front: confirming, the list the kind makes"
+    },
+    "wa.front.confirm_forms": {
+      "text": "Its forms: {forms}.",
+      "reviewed": true,
+      "context": "add front: confirming, the forms the kind adds"
+    },
+    "wa.front.confirm_off": {
+      "text": "It starts off, so customers see it only once you turn it on.",
+      "reviewed": true,
+      "context": "add front: confirming, last line"
+    },
+    "wa.front.not_made": {
+      "text": "The front was not made: {reason}",
+      "reviewed": true,
+      "context": "add front refused"
+    },
+    "wa.front.made": {
+      "text": "Made *{name}*, a {kind} front. It is off for now.",
+      "reviewed": true,
+      "context": "add front done"
+    },
+    "wa.front.next_dish": {
+      "text": "Add your first dish: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": true,
+      "context": "add front done, Food: what to add first"
+    },
+    "wa.front.next_item": {
+      "text": "Add your first item: *add item Chin chin 500 to {front}*",
+      "reviewed": true,
+      "context": "add front done, a kind with a list: what to add first"
+    },
+    "wa.front.next_forms": {
+      "text": "Turn on its form: *turn on {what} for {front}*",
+      "reviewed": true,
+      "context": "add front done: turning its form on; what is orders, questions or call-backs"
+    },
+    "wa.front.next_on": {
+      "text": "When it is ready: *front {front} on*",
+      "reviewed": true,
+      "context": "add front done: turning the front on"
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* is your home page, and it is always on. To stop orders for a while, send *close shop*.",
+      "reviewed": true,
+      "context": "front <home> on or off"
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* is on already.",
+      "reviewed": true,
+      "context": "front X on, already on"
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* is off already.",
+      "reviewed": true,
+      "context": "front X off, already off"
+    },
+    "wa.front.confirm_on": {
+      "text": "Turn on *{name}*? Customers will see it on your page.",
+      "reviewed": true,
+      "context": "front X on: confirming"
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Turn off *{name}*? Customers will no longer see it. Its items and orders are kept.",
+      "reviewed": true,
+      "context": "front X off: confirming"
+    },
+    "wa.front.gone": {
+      "text": "*{name}* is not there any more. Send *fronts* to see your fronts.",
+      "reviewed": true,
+      "context": "The front was removed meanwhile"
+    },
+    "wa.front.not_changed": {
+      "text": "Nothing was changed: {reason}",
+      "reviewed": true,
+      "context": "A change to a front refused"
+    },
+    "wa.front.now_off": {
+      "text": "*{name}* is off. Its items and orders are kept.",
+      "reviewed": true,
+      "context": "front X off done"
+    },
+    "wa.front.now_on": {
+      "text": "*{name}* is on.",
+      "reviewed": true,
+      "context": "front X on done; the front's address or how to publish follows"
+    },
+    "wa.front.forms_off": {
+      "text": "Its form is off: *turn on {what} for {front}*",
+      "reviewed": true,
+      "context": "front X on done, but none of its forms is on"
+    },
+    "wa.front.no_food": {
+      "text": "You have no Food front yet. Make one with *add food front Kitchen*.",
+      "reviewed": true,
+      "context": "add dish with no Food front"
+    },
+    "wa.front.no_item_fronts": {
+      "text": "None of your fronts has a list to add to. Add to your page with *add product Jollof rice 2000*, or make a front with *add food front Kitchen*.",
+      "reviewed": true,
+      "context": "add item with no front that has a list"
+    },
+    "wa.front.say_which": {
+      "text": "Say which front it is for, like *add item Chin chin 500 to Snacks*. Your fronts with items: {fronts}.",
+      "reviewed": true,
+      "context": "add dish or add item without a front, when more than one fits"
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* has no list of items: it shows its forms only.",
+      "reviewed": true,
+      "context": "An item for a front with no list"
+    },
+    "wa.front.how_item": {
+      "text": "Write it like *add item Chin chin 500 to {front}*: the name, then the price.",
+      "reviewed": true,
+      "context": "add item to a front without a price"
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* is on {front} already, at {price}. Change its price with *price {name} 3000*.",
+      "reviewed": true,
+      "context": "add item to a front, a name it has already"
+    },
+    "wa.front.confirm_item": {
+      "text": "Add this to *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": true,
+      "context": "Confirming an item for a front's own list"
+    },
+    "wa.front.item_added": {
+      "text": "Added *{name}* at {price} to *{front}*.",
+      "reviewed": true,
+      "context": "Done: an item was added to a front"
+    },
+    "wa.quote.sent": {
+      "text": "Sent *{reference}*: {total}, with {now} to pay on accepting. It stands until {until}.",
+      "reviewed": true,
+      "context": "Done: a quote request priced (fronts F7)"
+    },
+    "wa.quote.price": {
+      "text": "Say the price for *{reference}* in naira, like *quote {reference} 45000*.",
+      "reviewed": true,
+      "context": "Refused: a quote with no price we can read"
+    },
+    "wa.quote.none": {
+      "text": "No quote request has the reference *{reference}*.",
+      "reviewed": true,
+      "context": "Refused: no such quote request"
+    },
+    "wa.quote.refused": {
+      "text": "*{reference}* cannot be quoted: {why}",
+      "reviewed": true,
+      "context": "Refused: a quote that cannot be sent"
+    },
+    "wa.quotes.head": {
+      "text": "Quote requests waiting for a price:",
+      "reviewed": true,
+      "context": "Heading: open quote requests"
+    },
+    "wa.quotes.by": {
+      "text": "(needed by {date})",
+      "reviewed": true,
+      "context": "A quote request's date needed by"
+    },
+    "wa.quotes.how": {
+      "text": "Reply *quote <reference> <price>* to send one a price.",
+      "reviewed": true,
+      "context": "How to price a quote request"
+    },
+    "wa.quotes.none": {
+      "text": "No quote request is waiting for a price.",
+      "reviewed": true,
+      "context": "Reply: no open quote requests"
+    },
+    "wa.ticket.in": {
+      "text": "In: *{code}*, seat {seat} of {of}, {event}.",
+      "reviewed": true,
+      "context": "Done: a ticket checked in at the door (fronts F6)"
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* is already in: it was checked in {at}.",
+      "reviewed": true,
+      "context": "Refused: a ticket checked in before"
+    },
+    "wa.ticket.none": {
+      "text": "No ticket has the code *{code}*. Check it against the customer's message.",
+      "reviewed": true,
+      "context": "Refused: no ticket of the business has that code"
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* cannot go in: its order was refunded or cancelled.",
+      "reviewed": true,
+      "context": "Refused: a ticket whose order was refunded or cancelled"
+    },
+    "wa.tickets.left": {
+      "text": "Tickets left:",
+      "reviewed": true,
+      "context": "Heading: tickets left per event"
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} left, {in} in",
+      "reviewed": true,
+      "context": "A line: an event, its tickets left and checked in"
+    },
+    "wa.tickets.none": {
+      "text": "No event has tickets on sale.",
+      "reviewed": true,
+      "context": "Reply: no event on a Tickets front is on sale"
+    },
+    "wa.places.left": {
+      "text": "Places left:",
+      "reviewed": true,
+      "context": "Heading: places left per class"
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): {left} of {total} places left",
+      "reviewed": true,
+      "context": "A line: a class and its places left"
+    },
+    "wa.places.none": {
+      "text": "No class is open for enrolment.",
+      "reviewed": true,
+      "context": "Reply: no class on a Classes front is open"
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* is off: send *front {front} on* to show it.",
+      "reviewed": true,
+      "context": "After a change on a front that is off"
+    },
+    "wa.front.catalogue": {
+      "text": "home page",
+      "reviewed": true,
+      "context": "A pick's label for an item on the home page, beside items on other fronts"
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Only your home page's products keep stock. *{name}* on {front} is available or sold out: *sold out {name}*.",
+      "reviewed": true,
+      "context": "stock for an item on another front"
+    },
+    "wa.front.changed": {
+      "text": "Done: *{name}* on {front} is updated.",
+      "reviewed": true,
+      "context": "Done: an item on a front was changed"
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* has no form for {what}.",
+      "reviewed": true,
+      "context": "turn on X for a front without that form"
+    },
+    "wa.front.no_deliveries": {
+      "text": "Deliveries by your riders are not available here yet.",
+      "reviewed": true,
+      "context": "turn on deliveries for a front, with riders off"
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Turn on deliveries for *{front}*? Each confirmed order for delivery is then offered to your riders in turn. Its order form stays as it is.",
+      "reviewed": true,
+      "context": "turn on deliveries for a front: confirming"
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* on {front} is on already.",
+      "reviewed": true,
+      "context": "turn on X for a front, already on"
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Turn on *{form}* on *{front}*? Customers can then use it, and each one comes to you here.",
+      "reviewed": true,
+      "context": "turn on X for a front: confirming"
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* takes {what} now: each one comes to you here.",
+      "reviewed": true,
+      "context": "turn on X for a front done; what is orders, questions or call-backs"
+    },
+    "wa.front.no_orders": {
+      "text": "No open orders on *{front}*.",
+      "reviewed": true,
+      "context": "orders <front>, none open"
+    },
+    "wa.front.orders_head": {
+      "text": "Open orders on *{front}*, newest first:",
+      "reviewed": true,
+      "context": "orders <front>: the list's heading"
+    },
+    "customer.deposit_received": {
+      "text": "We have your payment of {amount} for {reference}. {balance} is left to pay.",
+      "reviewed": true,
+      "context": "SMS to a customer: a deposit or part payment received, with what is left (fronts F5)"
+    },
+    "customer.balance_due": {
+      "text": "{balance} is left to pay for {reference}. Pay it here: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: the link for the balance, or an instalment (fronts F5)"
+    },
+    "customer.hire_confirmed": {
+      "text": "Your hire {reference} is confirmed: {item}, from {from}. It is due back by the end of {due_back}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a hire confirmed once its deposit is paid (fronts F5)"
+    },
+    "customer.hire_due_back": {
+      "text": "Reminder: {item} for {reference} is due back today, {due_back}.",
+      "reviewed": true,
+      "context": "SMS to a customer: on the day a hire is due back (fronts F5)"
+    },
+    "customer.space_confirmed": {
+      "text": "Your booking {reference} is confirmed: {space}, {when}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a space booking confirmed once its deposit is paid (fronts F5)"
+    },
+    "customer.space_reminder": {
+      "text": "Reminder: your booking {reference} of {space} is tomorrow, {when}.",
+      "reviewed": true,
+      "context": "SMS to a customer: the day before a space booking (fronts F5)"
+    },
+    "customer.quote_requested": {
+      "text": "We have your request {reference}. You will get a price by SMS, with a link to accept it.",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote request received (fronts F7)"
+    },
+    "customer.quote_sent": {
+      "text": "Your quote {reference} is ready: {total}. Pay {now} to go ahead, by {until}: {link}",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote with the link to accept it (fronts F7)"
+    },
+    "customer.quote_accepted": {
+      "text": "Thank you: {reference} is accepted and your payment is in. We will tell you when it is ready.",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote accepted and its deposit paid (fronts F7)"
+    },
+    "customer.quote_expired": {
+      "text": "Your quote {reference} has closed. Contact us if you still want it.",
+      "reviewed": true,
+      "context": "SMS to a customer: a quote not accepted in time (fronts F7)"
+    },
+    "customer.work_ready": {
+      "text": "{reference} is ready. Pay the balance, {balance}, here: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: made-to-order work done, with the balance's link (fronts F7)"
+    },
+    "customer.ticket_issued": {
+      "text": "Your tickets for {event}, {when}: {codes}. Show a code at the door. Reference {reference}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a ticket order's codes once it is paid (fronts F6)"
+    },
+    "customer.event_reminder": {
+      "text": "Reminder: {event} is tomorrow, {when}. Your tickets: {codes}.",
+      "reviewed": true,
+      "context": "SMS to a customer: the day before an event they hold tickets for (fronts F6)"
+    },
+    "customer.enrolled": {
+      "text": "You are enrolled in {class}, starting {when}. Reference {reference}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a place in a class taken and its first payment made (fronts F6)"
+    },
+    "customer.instalment_due": {
+      "text": "The next instalment for {class}, {amount}, is due. Pay here: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer: a class fee's next instalment, with its payment link (fronts F6)"
+    },
+    "customer.session_reminder": {
+      "text": "Reminder: {class} starts tomorrow, {when}.",
+      "reviewed": true,
+      "context": "SMS to a customer: the day before their class starts (fronts F6)"
+    },
+    "customer.waiting_list": {
+      "text": "{class} is full, so you are on its waiting list (reference {reference}). We will tell you when a place is free.",
+      "reviewed": true,
+      "context": "SMS to a customer: on a full class's waiting list (fronts F6)"
+    },
+    "customer.place_offered": {
+      "text": "A place in {class} is free for you. Pay {total} here within a day to take it: {url}",
+      "reviewed": true,
+      "context": "SMS to a customer on a waiting list: a place offered, with its payment link (fronts F6)"
+    },
+    "customer.hire_returned": {
+      "text": "Thank you: {reference} is back with us.",
+      "reviewed": true,
+      "context": "SMS to a customer: a hire returned on time (fronts F5); {days}, {late_fee} and {balance} are not used"
+    },
+    "customer.hire_late": {
+      "text": "{reference} came back {days} days late, so a late fee of {late_fee} is added. Left to pay: {balance}.",
+      "reviewed": true,
+      "context": "SMS to a customer: a hire returned late, with the fee and what is left (fronts F5)"
     }
   }
 }

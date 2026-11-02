@@ -4492,6 +4492,10 @@
       "text": "Nígbà tí ẹnìkan bá fi fọ́ọ̀mù {form} ilé ìtajà ránṣẹ́",
       "reviewed": false
     },
+    "wd.trigger.storefront_action": {
+      "text": "Nígbà tí ẹnìkan bá fi fọ́ọ̀mù ránṣẹ́ lórí ojú-ìwé ìtajà",
+      "reviewed": false
+    },
     "wd.trigger.subflow": {
       "text": "Nígbà tí iṣẹ́ míràn bá pè é",
       "reviewed": false
@@ -4562,6 +4566,366 @@
     },
     "wd.workflow.does": {
       "text": "Lo iṣẹ́ rẹ: {template}, tó {does}",
+      "reviewed": false
+    },
+    "wa.help.fronts": {
+      "text": "• *fronts*: àwọn ojú-ìwé rẹ mìíràn, bíi àtòjọ oúnjẹ; *add front Snacks*; *add dish Jollof rice 2500*; *turn on orders for Snacks*; *front Snacks on*; *orders Snacks*",
+      "reviewed": false
+    },
+    "wa.front.list_head": {
+      "text": "Àwọn front rẹ:",
+      "reviewed": false
+    },
+    "wa.front.on": {
+      "text": "ó ti tàn",
+      "reviewed": false
+    },
+    "wa.front.off": {
+      "text": "ó ti pa",
+      "reviewed": false
+    },
+    "wa.front.home": {
+      "text": "ojú-ìwé àkọ́kọ́",
+      "reviewed": false
+    },
+    "wa.front.items": {
+      "text": "ọjà {n}",
+      "reviewed": false
+    },
+    "wa.front.forms_on": {
+      "text": "fọ́ọ̀mù {n} ti tàn",
+      "reviewed": false
+    },
+    "wa.front.list_tail": {
+      "text": "Fi ọ̀kan kún pẹ̀lú *add front Snacks*. Tan án tàbí pa á pẹ̀lú *front Snacks on* tàbí *front Snacks off*.",
+      "reviewed": false
+    },
+    "wa.front.none_named": {
+      "text": "Kò sí front tí orúkọ rẹ̀ ń jẹ́ {name}. Àwọn front rẹ: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.how_add": {
+      "text": "Kọ ọ́ bíi *add front Snacks*, tàbí *add food front Snacks*: orúkọ tí kò ju lẹ́tà 80 lọ.",
+      "reviewed": false
+    },
+    "wa.front.exists": {
+      "text": "O ti ní front tí orúkọ rẹ̀ ń jẹ́ *{name}*. Fi *fronts* ránṣẹ́ láti rí wọn.",
+      "reviewed": false
+    },
+    "wa.front.which_kind": {
+      "text": "Kí ni *{name}* wà fún?\n{list}\nFèsì pẹ̀lú nọ́mbà rẹ̀.",
+      "reviewed": false
+    },
+    "wa.front.confirm_add": {
+      "text": "Ṣé kí a fi *{name}* kún, front {kind}?",
+      "reviewed": false
+    },
+    "wa.front.confirm_table": {
+      "text": "Yóò ní àkójọ tirẹ̀, {table}, láti fi ọjà kún.",
+      "reviewed": false
+    },
+    "wa.front.confirm_forms": {
+      "text": "Àwọn fọ́ọ̀mù rẹ̀: {forms}.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off": {
+      "text": "Yóò bẹ̀rẹ̀ ní pípa, kí àwọn oníbàárà lè rí i nígbà tí o bá tàn án nìkan.",
+      "reviewed": false
+    },
+    "wa.front.not_made": {
+      "text": "A kò lè ṣe front náà: {reason}",
+      "reviewed": false
+    },
+    "wa.front.made": {
+      "text": "A ti ṣe *{name}*, front {kind}. Ó ti pa fún báyìí.",
+      "reviewed": false
+    },
+    "wa.front.next_dish": {
+      "text": "Fi oúnjẹ àkọ́kọ́ kún: *add dish Jollof rice 2500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_item": {
+      "text": "Fi ọjà àkọ́kọ́ kún: *add item Chin chin 500 to {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_forms": {
+      "text": "Tan fọ́ọ̀mù rẹ̀: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.next_on": {
+      "text": "Nígbà tí ó bá ṣetán: *front {front} on*",
+      "reviewed": false
+    },
+    "wa.front.home_always_on": {
+      "text": "*{name}* ni ojú-ìwé àkọ́kọ́ rẹ, ó sì máa ń tàn nígbà gbogbo. Láti dá ìfipamọ́ dúró fún ìgbà díẹ̀, fi *close shop* ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.front.already_on": {
+      "text": "*{name}* ti tàn tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.front.already_off": {
+      "text": "*{name}* ti pa tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.front.confirm_on": {
+      "text": "Ṣé kí a tan *{name}*? Àwọn oníbàárà yóò rí i lórí ojú-ìwé rẹ.",
+      "reviewed": false
+    },
+    "wa.front.confirm_off_now": {
+      "text": "Ṣé kí a pa *{name}*? Àwọn oníbàárà kò ní rí i mọ́. A ó pa àwọn ọjà àti ìfipamọ́ rẹ̀ mọ́.",
+      "reviewed": false
+    },
+    "wa.front.gone": {
+      "text": "*{name}* kò sí mọ́. Fi *fronts* ránṣẹ́ láti rí àwọn front rẹ.",
+      "reviewed": false
+    },
+    "wa.front.not_changed": {
+      "text": "Kò sí ohun tí a yí padà: {reason}",
+      "reviewed": false
+    },
+    "wa.front.now_off": {
+      "text": "*{name}* ti pa. A pa àwọn ọjà àti ìfipamọ́ rẹ̀ mọ́.",
+      "reviewed": false
+    },
+    "wa.front.now_on": {
+      "text": "*{name}* ti tàn.",
+      "reviewed": false
+    },
+    "wa.front.forms_off": {
+      "text": "Fọ́ọ̀mù rẹ̀ ṣì wà ní pípa: *turn on {what} for {front}*",
+      "reviewed": false
+    },
+    "wa.front.no_food": {
+      "text": "O kò tíì ní front Food. Ṣe ọ̀kan pẹ̀lú *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.no_item_fronts": {
+      "text": "Kò sí èyíkéyìí nínú àwọn front rẹ tí ó ní àkójọ láti fi kún. Fi kún ojú-ìwé rẹ pẹ̀lú *add product Jollof rice 2000*, tàbí ṣe front pẹ̀lú *add food front Kitchen*.",
+      "reviewed": false
+    },
+    "wa.front.say_which": {
+      "text": "Sọ front tí ó wà fún, bíi *add item Chin chin 500 to Snacks*. Àwọn front rẹ tí ó ní ọjà: {fronts}.",
+      "reviewed": false
+    },
+    "wa.front.no_list": {
+      "text": "*{front}* kò ní àkójọ ọjà: àwọn fọ́ọ̀mù rẹ̀ nìkan ni ó ń fihàn.",
+      "reviewed": false
+    },
+    "wa.front.how_item": {
+      "text": "Kọ ọ́ bíi *add item Chin chin 500 to {front}*: orúkọ, lẹ́yìn náà iye owó.",
+      "reviewed": false
+    },
+    "wa.front.item_exists": {
+      "text": "*{name}* ti wà lórí {front} tẹ́lẹ̀, ní {price}. Yí iye owó rẹ̀ padà pẹ̀lú *price {name} 3000*.",
+      "reviewed": false
+    },
+    "wa.front.confirm_item": {
+      "text": "Ṣé kí a fi èyí kún *{front}*?\n*{name}* {price}{photo}",
+      "reviewed": false
+    },
+    "wa.front.item_added": {
+      "text": "A ti fi *{name}* kún *{front}* ní {price}.",
+      "reviewed": false
+    },
+    "wa.quote.sent": {
+      "text": "A ti fi *{reference}* ránṣẹ́: {total}, {now} láti san nígbà tí wọ́n bá gbà á. Ó wà títí {until}.",
+      "reviewed": false
+    },
+    "wa.quote.price": {
+      "text": "Sọ iye owó fún *{reference}* ní náírà, bíi *quote {reference} 45000*.",
+      "reviewed": false
+    },
+    "wa.quote.none": {
+      "text": "Kò sí ìbéèrè iye owó tí ó ní nọ́mbà *{reference}*.",
+      "reviewed": false
+    },
+    "wa.quote.refused": {
+      "text": "A kò lè fi iye owó ránṣẹ́ fún *{reference}*: {why}",
+      "reviewed": false
+    },
+    "wa.quotes.head": {
+      "text": "Àwọn ìbéèrè tó ń dúró de iye owó:",
+      "reviewed": false
+    },
+    "wa.quotes.by": {
+      "text": "(fún {date})",
+      "reviewed": false
+    },
+    "wa.quotes.how": {
+      "text": "Fèsì *quote <nọ́mbà> <iye owó>* láti fi iye owó ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.quotes.none": {
+      "text": "Kò sí ìbéèrè tó ń dúró de iye owó.",
+      "reviewed": false
+    },
+    "wa.ticket.in": {
+      "text": "Wọlé: *{code}*, ìjókòó {seat} nínú {of}, {event}.",
+      "reviewed": false
+    },
+    "wa.ticket.already": {
+      "text": "*{code}* ti wọlé tẹ́lẹ̀: wọ́n ṣàyẹ̀wò rẹ̀ {at}.",
+      "reviewed": false
+    },
+    "wa.ticket.none": {
+      "text": "Kò sí tíkẹ́ẹ̀tì tí ó ní kóòdù *{code}*. Fi wé ọ̀rọ̀ oníbàárà.",
+      "reviewed": false
+    },
+    "wa.ticket.refused": {
+      "text": "*{code}* kò lè wọlé: wọ́n ti dá owó padà tàbí fagilé ìbéèrè rẹ̀.",
+      "reviewed": false
+    },
+    "wa.tickets.left": {
+      "text": "Àwọn tíkẹ́ẹ̀tì tó kù:",
+      "reviewed": false
+    },
+    "wa.tickets.left_line": {
+      "text": "*{name}* ({front}): {left} nínú {total} ló kù, {in} ti wọlé",
+      "reviewed": false
+    },
+    "wa.tickets.none": {
+      "text": "Kò sí ìṣẹ̀lẹ̀ tí wọ́n ń ta tíkẹ́ẹ̀tì rẹ̀.",
+      "reviewed": false
+    },
+    "wa.places.left": {
+      "text": "Àwọn àyè tó kù:",
+      "reviewed": false
+    },
+    "wa.places.left_line": {
+      "text": "*{name}* ({front}): àyè {left} nínú {total} ló kù",
+      "reviewed": false
+    },
+    "wa.places.none": {
+      "text": "Kò sí kílásì tí wọ́n ń forúkọ sílẹ̀ fún.",
+      "reviewed": false
+    },
+    "wa.front.turn_on_hint": {
+      "text": "*{front}* ti pa: fi *front {front} on* ránṣẹ́ láti fihàn án.",
+      "reviewed": false
+    },
+    "wa.front.catalogue": {
+      "text": "ojú-ìwé àkọ́kọ́",
+      "reviewed": false
+    },
+    "wa.front.stock_catalogue_only": {
+      "text": "Àwọn ọjà ojú-ìwé àkọ́kọ́ rẹ nìkan ni ó ń ka iye tí ó kù. *{name}* lórí {front} wà tàbí ó ti tán: *sold out {name}*.",
+      "reviewed": false
+    },
+    "wa.front.changed": {
+      "text": "Ó ti ṣe: a ti ṣe àyípadà sí *{name}* lórí {front}.",
+      "reviewed": false
+    },
+    "wa.front.no_form": {
+      "text": "*{front}* kò ní fọ́ọ̀mù fún {what}.",
+      "reviewed": false
+    },
+    "wa.front.no_deliveries": {
+      "text": "Ìfijíṣẹ́ láti ọwọ́ àwọn ẹlẹ́ṣin rẹ kò tíì sí níbí.",
+      "reviewed": false
+    },
+    "wa.front.confirm_deliveries": {
+      "text": "Ṣé kí a tan ìfijíṣẹ́ fún *{front}*? Ìfipamọ́ kọ̀ọ̀kan tí o bá fọwọ́ sí fún ìfijíṣẹ́ yóò lọ sọ́dọ̀ àwọn ẹlẹ́ṣin rẹ ní ọ̀kọ̀ọ̀kan. Fọ́ọ̀mù ìfipamọ́ rẹ̀ yóò wà bí ó ti wà.",
+      "reviewed": false
+    },
+    "wa.front.form_already_on": {
+      "text": "*{form}* lórí {front} ti tàn tẹ́lẹ̀.",
+      "reviewed": false
+    },
+    "wa.front.confirm_form_on": {
+      "text": "Ṣé kí a tan *{form}* lórí *{front}*? Àwọn oníbàárà lè lò ó, ọ̀kọ̀ọ̀kan yóò sì wá sọ́dọ̀ rẹ níbí.",
+      "reviewed": false
+    },
+    "wa.front.form_on": {
+      "text": "*{front}* ń gba {what} báyìí: ọ̀kọ̀ọ̀kan yóò wá sọ́dọ̀ rẹ níbí.",
+      "reviewed": false
+    },
+    "wa.front.no_orders": {
+      "text": "Kò sí ìfipamọ́ tí ó ṣí sílẹ̀ lórí *{front}*.",
+      "reviewed": false
+    },
+    "wa.front.orders_head": {
+      "text": "Àwọn ìfipamọ́ tí ó ṣí sílẹ̀ lórí *{front}*, èyí tuntun jù lọ ní àkọ́kọ́:",
+      "reviewed": false
+    },
+    "customer.deposit_received": {
+      "text": "A ti gba owó {amount} tí o san fún {reference}. {balance} ló kù láti san.",
+      "reviewed": false
+    },
+    "customer.balance_due": {
+      "text": "{balance} ló kù láti san fún {reference}. San án níbí: {url}",
+      "reviewed": false
+    },
+    "customer.hire_confirmed": {
+      "text": "A ti fìdí ìyáwó {reference} rẹ múlẹ̀: {item}, láti {from}. Dá a padà kí {due_back} tó parí.",
+      "reviewed": false
+    },
+    "customer.hire_due_back": {
+      "text": "Ìránnilétí: ó yẹ kí {item} fún {reference} padà dé lónìí, {due_back}.",
+      "reviewed": false
+    },
+    "customer.space_confirmed": {
+      "text": "A ti fìdí ìfipamọ́ {reference} rẹ múlẹ̀: {space}, {when}.",
+      "reviewed": false
+    },
+    "customer.space_reminder": {
+      "text": "Ìránnilétí: ìfipamọ́ {reference} rẹ fún {space} jẹ́ ọ̀la, {when}.",
+      "reviewed": false
+    },
+    "customer.quote_requested": {
+      "text": "A ti gba ìbéèrè rẹ {reference}. Wàá gba iye owó lórí SMS, pẹ̀lú ìlànà láti gbà á.",
+      "reviewed": false
+    },
+    "customer.quote_sent": {
+      "text": "Iye owó rẹ {reference} ti ṣetán: {total}. San {now} láti tẹ̀síwájú, kí {until} tó dé: {link}",
+      "reviewed": false
+    },
+    "customer.quote_accepted": {
+      "text": "Ẹ ṣé: a ti gba {reference}, owó rẹ sì ti dé. A ó sọ fún ọ nígbà tí ó bá ṣetán.",
+      "reviewed": false
+    },
+    "customer.quote_expired": {
+      "text": "Iye owó rẹ {reference} ti parí. Kàn sí wa tí o bá ṣì fẹ́.",
+      "reviewed": false
+    },
+    "customer.work_ready": {
+      "text": "{reference} ti ṣetán. San ìyókù, {balance}, níbí: {url}",
+      "reviewed": false
+    },
+    "customer.ticket_issued": {
+      "text": "Àwọn tíkẹ́ẹ̀tì rẹ fún {event}, {when}: {codes}. Fi kóòdù kan hàn ní ẹnu ọ̀nà. Nọ́mbà {reference}.",
+      "reviewed": false
+    },
+    "customer.event_reminder": {
+      "text": "Ìránnilétí: {event} jẹ́ ọ̀la, {when}. Àwọn tíkẹ́ẹ̀tì rẹ: {codes}.",
+      "reviewed": false
+    },
+    "customer.enrolled": {
+      "text": "O ti forúkọ sílẹ̀ fún {class}, tí yóò bẹ̀rẹ̀ {when}. Nọ́mbà {reference}.",
+      "reviewed": false
+    },
+    "customer.instalment_due": {
+      "text": "Ìdíyelé tó kàn fún {class}, {amount}, ti tó. Sanwó níbí: {url}",
+      "reviewed": false
+    },
+    "customer.session_reminder": {
+      "text": "Ìránnilétí: {class} yóò bẹ̀rẹ̀ ní ọ̀la, {when}.",
+      "reviewed": false
+    },
+    "customer.waiting_list": {
+      "text": "{class} ti kún, nítorí náà o wà lórí àkójọ ìdúró rẹ̀ (nọ́mbà {reference}). A ó sọ fún ọ nígbà tí àyè bá ṣí sílẹ̀.",
+      "reviewed": false
+    },
+    "customer.place_offered": {
+      "text": "Àyè kan nínú {class} ti ṣí sílẹ̀ fún ọ. San {total} níbí láàrin ọjọ́ kan láti gbà á: {url}",
+      "reviewed": false
+    },
+    "customer.hire_returned": {
+      "text": "A dúpẹ́: {reference} ti padà dé ọ̀dọ̀ wa.",
+      "reviewed": false
+    },
+    "customer.hire_late": {
+      "text": "{reference} padà dé ní ọjọ́ {days} lẹ́yìn àkókò, nítorí náà a fi owó ìjìyà {late_fee} kún un. Ohun tí ó kù láti san: {balance}.",
       "reviewed": false
     }
   }

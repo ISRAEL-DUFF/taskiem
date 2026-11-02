@@ -21,7 +21,7 @@ type ops struct {
 func (o *ops) Decide(context.Context, uuid.UUID, string, string, string, string) (map[string]any, error) {
 	return nil, nil
 }
-func (o *ops) PaymentLink(context.Context, uuid.UUID, string) (map[string]any, error) {
+func (o *ops) PaymentLink(context.Context, uuid.UUID, string, int64) (map[string]any, error) {
 	return nil, nil
 }
 func (o *ops) NotifyCustomer(_ context.Context, _ uuid.UUID, _, text, _, _ string) (map[string]any, error) {
@@ -29,6 +29,15 @@ func (o *ops) NotifyCustomer(_ context.Context, _ uuid.UUID, _, text, _, _ strin
 	return map[string]any{}, nil
 }
 func (o *ops) GetBooking(context.Context, uuid.UUID, string) (map[string]any, error) { return nil, nil }
+func (o *ops) MarkReturned(context.Context, uuid.UUID, string, string) (sf.Returned, error) {
+	return sf.Returned{}, nil
+}
+func (o *ops) IssueTickets(context.Context, uuid.UUID, string) ([]sf.Ticket, sf.Order, error) {
+	return nil, sf.Order{}, nil
+}
+func (o *ops) OfferPlace(context.Context, uuid.UUID, string, string) (sf.Order, error) {
+	return sf.Order{}, nil
+}
 func (o *ops) Refund(context.Context, uuid.UUID, string, string) (sf.Order, error) {
 	return sf.Order{}, nil
 }

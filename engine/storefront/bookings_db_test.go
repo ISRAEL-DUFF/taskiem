@@ -390,7 +390,7 @@ type fakeLive struct {
 	err   error
 }
 
-func (f *fakeLive) Items(_ context.Context, _ uuid.UUID, _ bool, ids []string) (map[string]storefront.Item, error) {
+func (f *fakeLive) Items(_ context.Context, _ uuid.UUID, _ storefront.Source, ids []string) (map[string]storefront.Item, error) {
 	out := map[string]storefront.Item{}
 	for _, id := range ids {
 		if it, ok := f.items[id]; ok {

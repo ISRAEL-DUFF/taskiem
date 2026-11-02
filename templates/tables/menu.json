@@ -1,0 +1,16 @@
+{
+  "name": "menu",
+  "front": true,
+  "title": "Menu",
+  "description": "What a kitchen sells: each dish with its price in naira, a photo, a description and a category, whether it is available, its options (sizes and extras, each with its price) and how many minutes it takes.",
+  "columns": [
+    {"name": "name", "title": "Dish", "type": "text", "required": true},
+    {"name": "price", "title": "Price (₦)", "type": "number"},
+    {"name": "photo", "title": "Photo", "type": "text"},
+    {"name": "description", "title": "Description", "type": "text"},
+    {"name": "category", "title": "Category", "type": "text"},
+    {"name": "available", "title": "Available", "type": "boolean"},
+    {"name": "options", "title": "Options", "type": "json"},
+    {"name": "ready_in", "title": "Ready in (minutes)", "type": "integer"}
+  ]
+}

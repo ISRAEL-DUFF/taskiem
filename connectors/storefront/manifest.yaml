@@ -37,7 +37,7 @@ actions:
         short:      { type: array, items: { type: string }, description: "On accept, the items there was too little stock of (stock is lowered to zero)" }
   payment_link:
     title: Make the order's payment link
-    description: A payment page for an accepted order the customer pays after acceptance; the run can then wait for the storefront.payment signal.
+    description: A payment page for an accepted order the customer pays after acceptance; the run can then wait for the storefront.payment signal. On an order paid before it asks for more (a deposit's balance, an instalment), amount_kobo or the balance, as a new step with its own page; the signal then says what the step asked and what is left.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -50,12 +50,15 @@ actions:
       required: [reference]
       properties:
         reference: { type: string }
+        amount_kobo: { type: integer, minimum: 100, description: "On an order paid before: what this step asks, at most the balance; left out, the balance" }
     output:
       type: object
       properties:
-        reference: { type: string }
-        url:       { type: string }
-        total:     { type: string }
+        reference:    { type: string }
+        url:          { type: string }
+        total:        { type: string }
+        amount_kobo:  { type: integer }
+        balance_kobo: { type: integer }
   notify_customer:
     title: Message the customer
     description: An SMS to the customer, and an email when they gave one, from the business's name. The recipient is the order's customer, never an address in the input.
@@ -72,8 +75,8 @@ actions:
       properties:
         reference: { type: string }
         text:      { type: string, maxLength: 1000, description: "The message; an SMS starts with the business's name and is at most three parts. {link} becomes the customer's status link, where a booking is moved or cancelled" }
-        say:       { type: string, description: "Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed…), in the business's own language" }
-        vars:      { type: object, description: "With say: the message's values (reference, total, url, service, when)" }
+        say:       { type: string, description: "Instead of text: one of Taskiem's customer messages (order_confirmed_pickup, booking_confirmed, deposit_received, balance_due…), in the business's own language" }
+        vars:      { type: object, description: "With say: the message's values (reference, total, url, service, when, amount, balance)" }
         subject:   { type: string, description: The email's subject }
     output:
       type: object
@@ -103,6 +106,75 @@ actions:
         total:     { type: string }
         by_hand:   { type: boolean, description: True when the owner refunds it from their bank and marks it refunded }
         note:      { type: string }
+  mark_returned:
+    title: Mark a hire returned
+    description: Ends a hire (fronts F5) when its items are back, freeing them for other dates. Put an approval before it so the owner says they are back. Back after the day it was due, the hire's late fee for each day late is added to what is owed; balance_kobo is then what is left, for a payment_link step to ask. Marking it again changes nothing.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference:     { type: string }
+        late_days:     { type: integer }
+        late_fee_kobo: { type: integer }
+        late_fee:      { type: string }
+        balance_kobo:  { type: integer }
+        balance:       { type: string }
+  issue_tickets:
+    title: Issue tickets
+    description: Makes a paid ticket order's codes (fronts F6), one per seat, the order's reference and the seat (AK-7QX4KD-2), to send to the customer; they are checked in at the door with `check in <code>` in chat. Asked again, it gives the same codes. A refunded or cancelled order's codes do not check in.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        count:     { type: integer }
+        codes:     { type: string }
+        event:     { type: string }
+        when:      { type: string }
+  offer_place:
+    title: Offer a waiting-list place
+    description: Gives a name on a full class's waiting list its place when one is free (fronts F6), taken as a place on the page is, so two offers cannot both take the last one. The order becomes accepted and paid after acceptance, for a payment_link step. Still full, the step fails.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+    output:
+      type: object
+      properties:
+        reference:  { type: string }
+        status:     { type: string }
+        total_kobo: { type: integer }
+        total:      { type: string }
   get_booking:
     title: Read a booking
     description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.

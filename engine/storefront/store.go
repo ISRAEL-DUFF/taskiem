@@ -90,9 +90,12 @@ type Model struct {
 	HasCatalog bool   `json:"has_catalogue"`
 	// HasServices: the page lists services to book.
 	HasServices bool `json:"has_services,omitempty"`
-	// Actions are the forms the page offers.
-	Actions     []PublicAction `json:"actions,omitempty"`
-	PublishedAt time.Time      `json:"published_at"`
+	// Actions are the forms the page offers: the home front's, kept for a
+	// public host on the binary before fronts.
+	Actions []PublicAction `json:"actions,omitempty"`
+	// Fronts are the enabled fronts, the home page first (fronts §5.1).
+	Fronts      []PublicFront `json:"fronts,omitempty"`
+	PublishedAt time.Time     `json:"published_at"`
 }
 
 // Item is one catalogue item as pages show it.
@@ -110,6 +113,13 @@ type Item struct {
 	DurationMinutes int `json:"duration_minutes,omitempty"`
 	Capacity        int `json:"capacity,omitempty"`
 	BufferMinutes   int `json:"buffer_minutes,omitempty"`
+	// A Food dish's options and the minutes it takes (fronts F3).
+	Options []ItemOption `json:"options,omitempty"`
+	ReadyIn int          `json:"ready_in,omitempty"`
+	// An event's or a class's start and place (fronts F6): sales close
+	// when it starts.
+	Starts *time.Time `json:"starts,omitempty"`
+	Venue  string     `json:"venue,omitempty"`
 }
 
 // SoldOut reports whether the item tracks stock and has none left.
@@ -166,7 +176,10 @@ func Save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, slug string, card Ca
 	if errors.As(err, &pe) && pe.Code == "23505" {
 		return Storefront{}, fmt.Errorf("%w: %s", ErrSlugTaken, slug)
 	}
-	return s, err
+	if err != nil {
+		return Storefront{}, err
+	}
+	return s, syncFirstFront(ctx, tx, s)
 }
 
 // Publish writes a snapshot of the draft as the next version, claims the
@@ -202,6 +215,14 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 		m.Logo = img
 	}
 	if m.Actions, err = publicActions(ctx, tx, tenant); err != nil {
+		return Storefront{}, err
+	}
+	if m.Fronts, err = publicFronts(ctx, tx, tenant, m.Actions); err != nil {
+		return Storefront{}, err
+	}
+	// A form may not drop a question a workflow reads, nor take one of
+	// Taskiem's names (fronts §5.3, §5.5).
+	if err := checkAnswersRead(ctx, tx, s); err != nil {
 		return Storefront{}, err
 	}
 	raw, _ := json.Marshal(m)
@@ -372,11 +393,25 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 				it.Stock = &n
 			}
 		}
+		if m.Options != "" {
+			it.Options = ParseOptions(r[m.Options])
+		}
+		if m.Starts != "" {
+			it.Starts = parseStarts(r[m.Starts])
+		}
+		if m.Venue != "" {
+			it.Venue = str(r[m.Venue])
+		}
+		if m.ReadyIn != "" {
+			if n, ok := num(r[m.ReadyIn]); ok && n >= 1 && n <= 600 {
+				it.ReadyIn = int(n)
+			}
+		}
 		for _, f := range []struct {
 			col      string
 			v        *int
 			min, max int
-		}{{m.Duration, &it.DurationMinutes, 5, 480}, {m.Capacity, &it.Capacity, 1, 1000}, {m.Buffer, &it.BufferMinutes, 0, 480}} {
+		}{{m.Duration, &it.DurationMinutes, 5, 480}, {m.Capacity, &it.Capacity, 1, 100000}, {m.Buffer, &it.BufferMinutes, 0, 480}} {
 			if f.col == "" {
 				continue
 			}
@@ -426,13 +461,23 @@ func SyncCatalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Ite
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1`, s.ID); err != nil {
+	// The copy names the table it copies (fronts §5.2): one table today,
+	// the catalogue's.
+	var table string
+	if s.CatalogueTable != nil {
+		if err := tx.QueryRow(ctx, `SELECT name FROM data_tables WHERE id = $1`, *s.CatalogueTable).Scan(&table); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+	// Only the catalogue's own copy is replaced: a front's list from
+	// another table keeps its copy (fronts F3, SyncList).
+	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1 AND table_name = $2`, s.ID, table); err != nil {
 		return err
 	}
 	for i, it := range items {
 		raw, _ := json.Marshal(it)
-		if _, err := tx.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (storefront_id, row_id) DO NOTHING`, s.ID, it.ID, tenant, i, raw); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (storefront_id, table_name, row_id) DO NOTHING`, s.ID, table, it.ID, tenant, i, raw); err != nil {
 			return err
 		}
 	}
@@ -452,8 +497,10 @@ func CatalogueFailed(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cause err
 
 // Catalogue reads the copy, for the owner's preview.
 func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error) {
+	// The catalogue's own copy: a front's list from another table is read
+	// with ListItems.
 	rows, err := tx.Query(ctx, `SELECT c.item FROM storefront_catalogue c JOIN storefronts s ON s.id = c.storefront_id
-		WHERE s.tenant_id = $1 ORDER BY c.position`, tenant)
+		WHERE s.tenant_id = $1 AND c.table_name = COALESCE((SELECT d.name FROM data_tables d WHERE d.id = s.catalogue_table), '') ORDER BY c.position`, tenant)
 	if err != nil {
 		return nil, err
 	}
@@ -465,6 +512,24 @@ func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error)
 		}
 		return it, json.Unmarshal(raw, &it)
 	})
+}
+
+// parseStarts reads a date or a date and time cell; a date alone starts
+// at 00:00 in Lagos.
+func parseStarts(v any) *time.Time {
+	s := str(v)
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02 15:04"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			if layout != time.RFC3339Nano {
+				t, _ = time.ParseInLocation(layout, s, Lagos)
+			}
+			return &t
+		}
+	}
+	if t, err := time.ParseInLocation(time.DateOnly, s, Lagos); err == nil {
+		return &t
+	}
+	return nil
 }
 
 func str(v any) string {
@@ -514,3 +579,10 @@ func FormatNaira(kobo int64) string {
 	}
 	return "₦" + s
 }
+
+// CatalogueTableSQL is the name of the table a catalogue copy row c of the
+// storefront is kept by, as SyncCatalogue names it (” when the table is
+// not found): stock is kept on the catalogue's table only (fronts §5.2).
+const CatalogueTableSQL = `COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`
+
+const catalogueTableSQL = CatalogueTableSQL

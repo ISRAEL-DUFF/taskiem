@@ -79,6 +79,10 @@
       "ètò mi",
       "elo ni màá san",
       "ìsanwó taskiem"
+    ],
+    "fronts": [
+      "àwọn front mi",
+      "fi àwọn front mi hàn"
     ]
   },
   "prefixes": {
@@ -184,6 +188,20 @@
       "pa rẹ́",
       "yọ kúrò",
       "yọ"
+    ],
+    "add_front": [
+      "fi front kún",
+      "ṣí front tuntun"
+    ],
+    "front_on": [
+      "tan front"
+    ],
+    "front_off": [
+      "pa front"
+    ],
+    "orders": [
+      "àwọn ìfipamọ́ fún",
+      "ìfipamọ́ fún"
     ]
   },
   "fillers": [

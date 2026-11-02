@@ -1,0 +1,604 @@
+{
+  "id": "storefront-classes",
+  "title": "Classes: enrol, take instalments, remind, keep a waiting list",
+  "summary": "Each enrolment from a Classes front is confirmed once its first payment is made, with later instalments asked for on their dates and a reminder the day before the class; a full class keeps a waiting list you offer places from.",
+  "description": "Starts when a learner takes a place in a class from a Classes front, paid in full or by instalment (the first when they enrol). They are told they are enrolled. Each later instalment is asked for on its date with a payment link. The day before the class starts they are reminded, and the enrolment is completed when it starts. When the class is full and its waiting list is on, the learner can join the list instead: they are told so, and you are asked to offer a place when one is free; approving it gives them the place, if it is still free, and sends them a link to pay within a day.",
+  "category": "storefront",
+  "tags": [
+    "storefront"
+  ],
+  "keywords": [
+    "storefront",
+    "class",
+    "classes",
+    "course",
+    "lessons",
+    "workshop",
+    "bootcamp",
+    "coaching",
+    "enrol",
+    "enrolment",
+    "instalments",
+    "waiting list",
+    "school fees"
+  ],
+  "connectors": [
+    "storefront@1"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "approver_role",
+      "type": "string",
+      "title": "Who offers waiting-list places",
+      "description": "The role asked to offer a place to someone on a full class's waiting list.",
+      "required": false,
+      "default": "owner",
+      "example": "owner",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$",
+      "picker": "role"
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_storefrontClasses",
+    "version": 1,
+    "name": "Storefront classes",
+    "trigger": {
+      "type": "storefront",
+      "config": {
+        "action": "class"
+      }
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "front": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "total_kobo": {
+            "type": "integer"
+          },
+          "due_kobo": {
+            "type": "integer"
+          },
+          "paid_kobo": {
+            "type": "integer"
+          },
+          "status_link": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "customer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "x-pii": "name"
+              },
+              "phone": {
+                "type": "string",
+                "x-pii": "phone"
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "class": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "when": {
+                "type": "string"
+              },
+              "waitlist": {
+                "type": "boolean"
+              },
+              "instalments": {
+                "type": "integer"
+              },
+              "first": {
+                "type": "string"
+              },
+              "first_kobo": {
+                "type": "integer"
+              },
+              "instalment_2": {
+                "type": "object",
+                "properties": {
+                  "amount_kobo": {
+                    "type": "integer"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "due": {
+                    "type": "string"
+                  },
+                  "due_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              },
+              "instalment_3": {
+                "type": "object",
+                "properties": {
+                  "amount_kobo": {
+                    "type": "integer"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "due": {
+                    "type": "string"
+                  },
+                  "due_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              },
+              "instalment_4": {
+                "type": "object",
+                "properties": {
+                  "amount_kobo": {
+                    "type": "integer"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "due": {
+                    "type": "string"
+                  },
+                  "due_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              },
+              "starts_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "remind_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "enrolled",
+        "type": "connector",
+        "name": "Tell the learner they are enrolled",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "when": "=!trigger.body.class.waitlist",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "enrolled",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "when": "=trigger.body.class.when"
+          }
+        }
+      },
+      {
+        "id": "wait_2",
+        "type": "wait",
+        "name": "Until instalment 2 is due",
+        "needs": [
+          "enrolled"
+        ],
+        "config": {
+          "until": "=trigger.body.class.instalment_2.due_at"
+        },
+        "when": "=has(trigger.body.class.instalment_2)"
+      },
+      {
+        "id": "link_2",
+        "type": "connector",
+        "name": "Make instalment 2's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "wait_2"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "amount_kobo": "=trigger.body.class.instalment_2.amount_kobo"
+        }
+      },
+      {
+        "id": "tell_2",
+        "type": "connector",
+        "name": "Send instalment 2's link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link_2"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "instalment_due",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "amount": "=steps.link_2.output.total",
+            "url": "=steps.link_2.output.url"
+          }
+        }
+      },
+      {
+        "id": "pay_2",
+        "type": "signal",
+        "name": "Wait for instalment 2",
+        "needs": [
+          "tell_2"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "168h"
+        }
+      },
+      {
+        "id": "wait_3",
+        "type": "wait",
+        "name": "Until instalment 3 is due",
+        "needs": [
+          "pay_2"
+        ],
+        "config": {
+          "until": "=trigger.body.class.instalment_3.due_at"
+        },
+        "when": "=has(trigger.body.class.instalment_3)"
+      },
+      {
+        "id": "link_3",
+        "type": "connector",
+        "name": "Make instalment 3's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "wait_3"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "amount_kobo": "=trigger.body.class.instalment_3.amount_kobo"
+        }
+      },
+      {
+        "id": "tell_3",
+        "type": "connector",
+        "name": "Send instalment 3's link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link_3"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "instalment_due",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "amount": "=steps.link_3.output.total",
+            "url": "=steps.link_3.output.url"
+          }
+        }
+      },
+      {
+        "id": "pay_3",
+        "type": "signal",
+        "name": "Wait for instalment 3",
+        "needs": [
+          "tell_3"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "168h"
+        }
+      },
+      {
+        "id": "wait_4",
+        "type": "wait",
+        "name": "Until instalment 4 is due",
+        "needs": [
+          "pay_3"
+        ],
+        "config": {
+          "until": "=trigger.body.class.instalment_4.due_at"
+        },
+        "when": "=has(trigger.body.class.instalment_4)"
+      },
+      {
+        "id": "link_4",
+        "type": "connector",
+        "name": "Make instalment 4's payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "wait_4"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "amount_kobo": "=trigger.body.class.instalment_4.amount_kobo"
+        }
+      },
+      {
+        "id": "tell_4",
+        "type": "connector",
+        "name": "Send instalment 4's link",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "link_4"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "instalment_due",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "amount": "=steps.link_4.output.total",
+            "url": "=steps.link_4.output.url"
+          }
+        }
+      },
+      {
+        "id": "pay_4",
+        "type": "signal",
+        "name": "Wait for instalment 4",
+        "needs": [
+          "tell_4"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "168h"
+        }
+      },
+      {
+        "id": "wait_remind",
+        "type": "wait",
+        "name": "Until the day before it starts",
+        "needs": [
+          "enrolled"
+        ],
+        "config": {
+          "until": "=trigger.body.class.remind_at"
+        },
+        "when": "=has(trigger.body.class.remind_at)"
+      },
+      {
+        "id": "remind",
+        "type": "connector",
+        "name": "Remind the learner",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "wait_remind"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "session_reminder",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "when": "=trigger.body.class.when"
+          }
+        }
+      },
+      {
+        "id": "wait_over",
+        "type": "wait",
+        "name": "Until the class starts",
+        "needs": [
+          "remind"
+        ],
+        "config": {
+          "until": "=trigger.body.class.starts_at"
+        }
+      },
+      {
+        "id": "finish",
+        "type": "connector",
+        "name": "Complete the enrolment",
+        "connector": "storefront@1",
+        "action": "decide",
+        "needs": [
+          "wait_over"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "decision": "complete"
+        }
+      },
+      {
+        "id": "w_tell",
+        "type": "connector",
+        "name": "Tell them they are on the waiting list",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "when": "=trigger.body.class.waitlist",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "waiting_list",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name"
+          }
+        }
+      },
+      {
+        "id": "w_ask",
+        "type": "approval",
+        "name": "Offer a place when one is free",
+        "needs": [
+          "w_tell"
+        ],
+        "config": {
+          "role": "{{approver_role}}",
+          "count": 1,
+          "timeout": "2160h",
+          "subject": {
+            "waiting": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "places": "=trigger.body.class.qty",
+            "action": "Approve when a place is free to offer it"
+          }
+        }
+      },
+      {
+        "id": "w_offer",
+        "type": "connector",
+        "name": "Give them the place",
+        "connector": "storefront@1",
+        "action": "offer_place",
+        "needs": [
+          "w_ask"
+        ],
+        "when": "=steps.w_ask.output.decision == 'approved'",
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "w_link",
+        "type": "connector",
+        "name": "Make the payment link",
+        "connector": "storefront@1",
+        "action": "payment_link",
+        "needs": [
+          "w_offer"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference"
+        }
+      },
+      {
+        "id": "w_tell_pay",
+        "type": "connector",
+        "name": "Send the offer",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "w_link"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "place_offered",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "total": "=steps.w_link.output.total",
+            "url": "=steps.w_link.output.url"
+          }
+        }
+      },
+      {
+        "id": "w_pay",
+        "type": "signal",
+        "name": "Wait for the payment",
+        "needs": [
+          "w_tell_pay"
+        ],
+        "config": {
+          "event": "storefront.payment",
+          "correlation": "=trigger.body.reference",
+          "timeout": "25h"
+        }
+      },
+      {
+        "id": "w_enrolled",
+        "type": "connector",
+        "name": "Tell them they are enrolled",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "w_pay"
+        ],
+        "when": "=steps.w_pay.output.status == 'paid'",
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "enrolled",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "when": "=trigger.body.class.when"
+          }
+        }
+      },
+      {
+        "id": "w_wait_remind",
+        "type": "wait",
+        "name": "Until the day before it starts",
+        "needs": [
+          "w_enrolled"
+        ],
+        "config": {
+          "until": "=trigger.body.class.remind_at"
+        },
+        "when": "=has(trigger.body.class.remind_at)"
+      },
+      {
+        "id": "w_remind",
+        "type": "connector",
+        "name": "Remind the learner",
+        "connector": "storefront@1",
+        "action": "notify_customer",
+        "needs": [
+          "w_wait_remind"
+        ],
+        "input": {
+          "reference": "=trigger.body.reference",
+          "say": "session_reminder",
+          "vars": {
+            "reference": "=trigger.body.reference",
+            "class": "=trigger.body.class.name",
+            "when": "=trigger.body.class.when"
+          }
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "4800h"
+    }
+  }
+}

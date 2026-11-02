@@ -540,19 +540,34 @@ jobs:
           docker tag taskiem:ci taskiem:ci-next
           printf 'FROM taskiem:ci\nENTRYPOINT ["/taskiem", "no-such-command"]\n' | docker build -t taskiem:broken -
           PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres taskiem_ci
+      - name: A sudo that keeps this job's settings
+        # The runner's sudo (sudo-rs) refuses -E, so the TASKIEM_VPS_*
+        # settings are handed over by name; arguments such as
+        # TASKIEM_VPS_IMAGE_OVERRIDE=… after them win.
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cat > "$RUNNER_TEMP/bin/sudo-vps" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          keep=()
+          while IFS= read -r v; do keep+=("$v=${!v}"); done < <(compgen -e | grep '^TASKIEM_VPS_' || true)
+          exec sudo env "${keep[@]}" "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/bin/sudo-vps"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install
         run: |
           # The runner's own address: Taskiem's containers reach Postgres as a server reaches its database host.
           export TASKIEM_VPS_DATABASE_URL="postgres://postgres:postgres@$(hostname -I | awk '{print $1}'):5432/taskiem_ci?sslmode=disable"
-          sudo -E bash deploy/vm/install.sh 2>&1 | tee install.log
+          sudo-vps bash deploy/vm/install.sh 2>&1 | tee install.log
       - name: Installed, healthy, owner created
         run: |
           curl -fsk https://localhost/readyz
           PW=$(sed -n 's/.*first password[^:]*: //p' install.log | tail -n1)
           test -n "$PW"
           sudo sh -c 'grep -q "unseal key" /root/taskiem-recovery-*.txt && shred -u /root/taskiem-recovery-*.txt'
-          sudo -E taskiem-vps backup
-          sudo -E taskiem-vps check
+          sudo-vps taskiem-vps backup
+          sudo-vps taskiem-vps check
           # Test only: an https public URL holds admins to passkeys, which a script cannot use.
           echo "TASKIEM_REQUIRE_ADMIN_PASSKEYS='false'" | sudo tee -a /opt/taskiem/taskiem.env >/dev/null
           sudo docker compose --project-directory /opt/taskiem up -d --wait taskiem
@@ -583,7 +598,7 @@ jobs:
           out=$(curl -sS smtp://127.0.0.1:25 --mail-from a@example.com --mail-rcpt nobodyhere12@in.localhost -T msg.eml 2>&1 || true)
           echo "$out"
           grep -q 550 <<<"$out"
-          sudo -E taskiem-vps check
+          sudo-vps taskiem-vps check
       - name: A secret goes through OpenBao, before and after OpenBao restarts (auto-unseal)
         run: |
           put() { curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' "https://localhost/v1/secrets/prod/$1"; }
@@ -591,32 +606,32 @@ jobs:
           sudo docker compose --project-directory /opt/taskiem restart openbao
           for i in $(seq 30); do sudo docker compose --project-directory /opt/taskiem exec -T openbao bao status >/dev/null 2>&1 && break; sleep 2; done
           put ci_two
-          sudo -E taskiem-vps check
+          sudo-vps taskiem-vps check
       - name: A broken release is rolled back
         run: |
-          if sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --now; then echo "the broken release was accepted"; exit 1; fi
+          if sudo-vps TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:broken taskiem-vps update --now; then echo "the broken release was accepted"; exit 1; fi
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
           curl -fsk https://localhost/readyz
-          out=$(sudo -E taskiem-vps check || true)
+          out=$(sudo-vps taskiem-vps check || true)
           grep -q 'taskiem:broken failed to upgrade' <<<"$out"
       - name: A good release upgrades; rollback returns to the one before
         run: |
-          sudo -E TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:ci-next taskiem-vps update --now
+          sudo-vps TASKIEM_VPS_IMAGE_OVERRIDE=taskiem:ci-next taskiem-vps update --now
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci-next
-          sudo -E taskiem-vps rollback
+          sudo-vps taskiem-vps rollback
           test "$(sudo cat /var/lib/taskiem-vps/current)" = taskiem:ci
           curl -fsk https://localhost/readyz
-          sudo -E taskiem-vps status
+          sudo-vps taskiem-vps status
       - name: Disaster and restore from the backup and the recovery sheet
         run: |
-          sudo -E taskiem-vps backup
+          sudo-vps taskiem-vps backup
           UNSEAL=$(sudo sed -n "s/^BAO_STATIC_UNSEAL_KEY='\(.*\)'$/\1/p" /opt/taskiem/openbao-unseal.env)
           RESTIC=$(sudo sed -n "s/^RESTIC_PASSWORD='\(.*\)'$/\1/p" /etc/taskiem/backup.env)
           test -n "$UNSEAL" && test -n "$RESTIC"
           # Lose the server: containers, volumes (OpenBao's storage included) and every setting.
           sudo docker compose --project-directory /opt/taskiem down -v
           sudo sh -c 'rm -rf /opt/taskiem/.env /opt/taskiem/*.env /etc/taskiem /var/lib/taskiem-vps'
-          sudo -E TASKIEM_VPS_RESTIC_PASSWORD="$RESTIC" TASKIEM_VPS_UNSEAL_KEY="$UNSEAL" taskiem-vps restore
+          sudo-vps TASKIEM_VPS_RESTIC_PASSWORD="$RESTIC" TASKIEM_VPS_UNSEAL_KEY="$UNSEAL" taskiem-vps restore
           curl -fsk https://localhost/readyz
           # Writing a secret unwraps the tenant key through the restored OpenBao.
           curl -fsk -X PUT -H "Authorization: Bearer $(cat token)" -H 'Content-Type: application/json' -d '{"value":"v"}' https://localhost/v1/secrets/prod/ci_three

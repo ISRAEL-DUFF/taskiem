@@ -1,0 +1,8 @@
+{
+  "name": "questions",
+  "title": "Questions",
+  "line": "A page where customers ask you about anything.",
+  "actions": [
+    {"kind": "enquiry", "label": "Ask a question", "template": "storefront-enquiry"}
+  ]
+}

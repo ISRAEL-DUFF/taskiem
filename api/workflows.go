@@ -26,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/wddiff"
@@ -703,6 +704,10 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		// Replace takes the workflow that holds this one's storefront
 		// action out of use, in the same change (storefront_replace.go).
 		Replace bool `json:"replace"`
+		// NewAction gives this workflow a copy of the storefront action
+		// another workflow holds, off, instead (fronts F2): a new version
+		// naming the copy is saved and published.
+		NewAction bool `json:"new_action"`
 	}
 	if r.ContentLength != 0 {
 		if err := decodeBody(r, &in); err != nil && !errors.Is(err, io.EOF) {
@@ -713,9 +718,17 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var probs []problem
 	published, pending := false, false
+	var made *storefront.CopiedAction
 	err = s.tx(r, func(tx pgx.Tx) error {
 		if err := s.refuseGitManaged(r.Context(), tx, wf); err != nil {
 			return err
+		}
+		if in.NewAction {
+			nv, c, err := newActionVersion(r, tx, wf, v)
+			if err != nil {
+				return err
+			}
+			v, made = nv, c
 		}
 		// Ready: nothing a run would fail on at once is missing.
 		if err := s.checkReady(r.Context(), tx, p.TenantID, wf, v); err != nil {
@@ -800,10 +813,17 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pending {
-		writeJSON(w, http.StatusAccepted, map[string]any{"id": wf, "version": v, "state": "pending_approval"})
+		out := map[string]any{"id": wf, "version": v, "state": "pending_approval"}
+		if made != nil {
+			out["new_action"] = made
+		}
+		writeJSON(w, http.StatusAccepted, out)
 		return
 	}
 	out := map[string]any{"id": wf, "version": v, "state": "published"}
+	if made != nil {
+		out["new_action"] = made
+	}
 	if published {
 		if g := s.proposeToGit(r, wf, v); g != nil {
 			out["git"] = g

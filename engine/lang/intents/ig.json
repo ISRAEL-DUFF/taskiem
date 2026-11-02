@@ -74,6 +74,10 @@
       "atụmatụ m",
       "ego ole ka m ga-akwụ",
       "ịkwụ ụgwọ taskiem"
+    ],
+    "fronts": [
+      "fronts m",
+      "gosi fronts m"
     ]
   },
   "prefixes": {
@@ -177,6 +181,20 @@
       "hichapụ",
       "wepụ",
       "kpochapụ"
+    ],
+    "add_front": [
+      "tinye front",
+      "mepee front ọhụrụ"
+    ],
+    "front_on": [
+      "gbanwuo front"
+    ],
+    "front_off": [
+      "gbanyụọ front"
+    ],
+    "orders": [
+      "order maka",
+      "order nke"
     ]
   },
   "fillers": [

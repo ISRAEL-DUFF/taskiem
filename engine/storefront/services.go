@@ -32,6 +32,9 @@ func SaveBookings(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, table *uuid.
 	if err == nil && table == nil {
 		_, err = tx.Exec(ctx, `DELETE FROM storefront_services WHERE storefront_id = $1`, s.ID)
 	}
+	if err == nil {
+		err = syncFirstFront(ctx, tx, s)
+	}
 	return s, err
 }
 

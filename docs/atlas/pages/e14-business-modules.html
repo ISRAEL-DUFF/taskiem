@@ -5,7 +5,7 @@
   "part": "E",
   "order": 2,
   "summary": "Money log, matching, invoices and receiving money, money reports, Schools, storefronts, forms and data tables: what each is and how it sits on the engine.",
-  "verified": "0b2999d7513ce030c987999614de249c3457a6d4",
+  "verified": "dd667e3d4d6f80d4eb5750a777b4209f35c567a5",
   "sources": [
     "engine/moneylog/", "engine/matching/", "engine/invoicing/", "engine/moneyreport/", "engine/moneydigest/",
     "engine/leaks/", "engine/lookback/", "engine/schools/", "engine/storefront/", "engine/publicweb/",
@@ -17,7 +17,9 @@
     "engine/db/migrations/00250_school_cash_match.sql", "engine/db/migrations/00251_school_discount_worth.sql", "api/schools_accounts.go",
     "docs/spec/invoices-and-money-log.md", "docs/spec/schools.md", "docs/spec/storefronts.md", "docs/spec/forms.md",
     "docs/decisions/0033-data-tables-on-xenibase.md", "docs/decisions/0036-storefronts.md", "docs/decisions/0037-forms.md",
-    "docs/decisions/0045-tally-in-taskiem.md", "docs/decisions/0046-balans-in-taskiem.md"
+    "docs/decisions/0045-tally-in-taskiem.md", "docs/decisions/0046-balans-in-taskiem.md",
+    "engine/storefront/kinds/", "engine/db/migrations/00279_fronts.sql", "engine/db/migrations/00285_storefront_claims.sql",
+    "engine/db/migrations/00288_storefront_counts.sql", "docs/spec/fronts.md", "docs/decisions/0059-fronts.md"
   ]
 }
 -->
@@ -98,17 +100,19 @@
 </div>
 
 <h2 id="business-modules--storefronts">Storefronts</h2>
-<p>A storefront is a business's one-page public site (<x-ref path="docs/decisions/0036-storefronts.md">decision 0036</x-ref>): a card the owner edits, a catalogue mapped from a data table, actions (order, enquiry, callback, booking), and publishing a snapshot the public host serves. The catalogue's public columns are copied into <code>storefront_catalogue</code>, so page views never reach Xenibase. An order's journey:</p>
+<p>A storefront is a business's public site (<x-ref path="docs/decisions/0036-storefronts.md">decision 0036</x-ref>): a card the owner edits, a catalogue mapped from a data table, actions (order, enquiry, callback, booking), and publishing a snapshot the public host serves. Since <x-ref path="docs/decisions/0059-fronts.md">decision 0059</x-ref> it is also <em>fronts</em>: pages beside the home page, each with its own list blocks and actions, made from a kind (below). The catalogue's public columns are copied into <code>storefront_catalogue</code>, so page views never reach Xenibase. An order's journey:</p>
 <ol>
   <li>The public host checks the form (a signed token, a honeypot, a minimum fill time, proof of work, a rate limit) and writes it, encrypted under a key the api role shares, to <code>storefront_inbox</code>. It cannot seal personal data itself: it has no vault.</li>
   <li>The api role opens it, seals the customer, checks prices and stock against the catalogue table, and records <code>storefront_orders</code>. A price that changed holds the order and tells the customer.</li>
   <li>An order paid at once gets a Paystack page, checked every 30 seconds and counted when paid at least the total (<x-ref path="engine/storefront/orders.go" symbol="func (o *Orders) markPaid("><code>markPaid</code></x-ref>), through the same money log entry and parts as matching. Pay by bank transfer on the status page issues a one-time account number as invoices do.</li>
   <li>The action's workflow starts with the <code>storefront</code> trigger, deduplicated on the order's id, within the plan's limits (<x-ref path="engine/storefront/orders.go" symbol="func (o *Orders) startRun("><code>startRun</code></x-ref>). <code>storefront@1</code> lets it accept, decline, complete or cancel, ask for payment, notify the customer and refund.</li>
 </ol>
+<p><strong>Fronts and kinds.</strong> A front (<code>storefront_fronts</code>, with <code>storefront_blocks</code>) is made from a kind, a preset file in <code>engine/storefront/kinds/</code> naming a known table, its column mapping and its actions with their workflow templates (<x-ref path="engine/storefront/fronts.go" symbol="func CreateFront("><code>CreateFront</code></x-ref>). Actions are keyed by id, each with its own form and one workflow; a submission names its front and action, and its run gets the customer's answers as <code>trigger.answers</code>, apart from Taskiem's record. Each list is copied for the page once per table. Ten kinds are built: Shop, Food, Hire, Spaces, Tickets, Classes, Quotes, Questions, Call-backs and Custom.</p>
+<p><strong>Claims.</strong> What a submission holds (a booking's slot, a hire's items for its days, a space's time, a ticket or a class place) is one table, <code>storefront_claims</code>, each claim on a list block. The public host takes it with the submission in one transaction under an advisory lock on the block (<x-ref path="engine/db/migrations/00288_storefront_counts.sql" symbol="CREATE OR REPLACE FUNCTION taskiem_public_claim"><code>taskiem_public_claim</code></x-ref>), refusing more than the item's count less the overlapping live claims; a counted claim (tickets, places) has no times. An unpaid claim lapses with its payment; a decline, cancellation or refund deletes it. Orders also take money in parts (<code>paid_kobo</code> kept by a trigger on the order's payments), so a deposit, a balance, an instalment or a late fee is a payment link with its amount. A quote is priced by the owner (<x-ref path="engine/storefront/quotes.go" symbol="func (o *Orders) Quote("><code>Orders.Quote</code></x-ref>) and accepted on the status page as a changed price is.</p>
 <p>A business can bring its own domain and prove it with a TXT record at <code>_taskiem-verify.&lt;domain&gt;</code>. The first business to prove a domain serves it; another takes it over only once it is unverified or removed, and every domain is proven again every few hours (<x-ref path="engine/storefront/domains.go" symbol="func VerifyDomain("><code>VerifyDomain</code></x-ref>).</p>
 <div class="callout drift"><span class="callout-label">Spec and code differ</span>
   <ul>
-    <li>The spec keeps orders and bookings as rows of <code>orders</code> and <code>bookings</code> data tables in Xenibase (<x-ref path="docs/spec/storefronts.md" symbol="Orders and bookings live in the tenant's">spec 8.1</x-ref>). Both are rows of <code>storefront_orders</code> in Taskiem's database (a booking is an order of kind <code>booking</code>, its slot held in <code>storefront_holds</code>), which is what lets them take part in matching and the money log.</li>
+    <li>The spec keeps orders and bookings as rows of <code>orders</code> and <code>bookings</code> data tables in Xenibase (<x-ref path="docs/spec/storefronts.md" symbol="Orders and bookings live in the tenant's">spec 8.1</x-ref>). Both are rows of <code>storefront_orders</code> in Taskiem's database (a booking is an order of kind <code>booking</code>, its slot a claim in <code>storefront_claims</code>; so are a hire, a space booking, a ticket order and a class place, each its own kind), which is what lets them take part in matching and the money log.</li>
     <li>Spec 7.5 has submission limits per page and per hour with alerts, per phone number on orders, and 100 a day per IP (<x-ref path="docs/spec/storefronts.md" symbol="per page and per visitor IP, in buckets">spec 7.5</x-ref>). The code has a bucket per IP hash only, 20 every 10 minutes (<x-ref path="engine/formguard/limiter.go" symbol="SubmissionsPerIP = Bucket{"><code>SubmissionsPerIP</code></x-ref>), and the plan's run limits behind it. <code>formguard</code>'s comment says per-page and per-phone limits "sit on top"; none exist. The optional phone code on orders is not built.</li>
   </ul>
 </div>

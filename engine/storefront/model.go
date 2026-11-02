@@ -107,6 +107,13 @@ type Columns struct {
 	ReorderLevel string `json:"reorder_level,omitempty"`
 	TargetLevel  string `json:"target_level,omitempty"`
 	Supplier     string `json:"supplier,omitempty"`
+	// A Food menu's (fronts F3): a dish's options (sizes, extras, each
+	// with its price) and the minutes it takes.
+	Options string `json:"options,omitempty"`
+	ReadyIn string `json:"ready_in,omitempty"`
+	// An event's or a class's (fronts F6): when it starts, and where.
+	Starts string `json:"starts,omitempty"`
+	Venue  string `json:"venue,omitempty"`
 }
 
 var hhmm = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
@@ -196,6 +203,7 @@ func (m *Columns) Check(known func(string) (typ string, ok bool)) error {
 		m.Name: {"text"}, m.Description: {"text"}, m.Category: {"text"}, m.Photo: {"text"},
 		m.Price: {"integer", "number"}, m.Sort: {"integer", "number"}, m.Available: {"boolean"}, m.Stock: {"integer"},
 		m.Duration: {"integer", "number"}, m.Capacity: {"integer", "number"}, m.Buffer: {"integer", "number"},
+		m.Starts: {"datetime", "date"}, m.Venue: {"text"},
 		m.Unit: {"text"}, m.CostPrice: {"integer", "number"}, m.ReorderLevel: {"integer"}, m.TargetLevel: {"integer"}, m.Supplier: {"text"},
 	}
 	for col, types := range want {

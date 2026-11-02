@@ -189,7 +189,13 @@ func HappyPathWith(def *wd.Definition, reg connector.Lookup, find expansion.Temp
 			case "approval":
 				c.Approvals[st.ID] = wdtest.ApprovalMock{Decision: "approved", By: "checker"}
 			case "signal":
-				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{}}
+				payload := map[string]any{}
+				if st.Signal != nil && st.Signal.Event == "storefront.payment" {
+					// What a storefront payment says: paid, and what is left
+					// (fronts F5).
+					payload = map[string]any{"reference": "AK-SAMPLE1", "status": "paid", "amount_kobo": 500000, "balance_kobo": 0}
+				}
+				c.Signals[st.ID] = wdtest.SignalMock{Payload: payload}
 			case "callback":
 				c.Signals[st.ID] = wdtest.SignalMock{Payload: map[string]any{"body": map[string]any{}, "query": map[string]any{}, "received_at": "2026-01-01T09:00:00Z"}}
 			case "form":

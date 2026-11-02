@@ -31,7 +31,7 @@
 <input id="f-phone" type="tel" name="phone" value="{{$.Phone}}" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0803 123 4567" required></div>
 <div class="field"><label for="f-email">Email <span class="hint">(optional)</span></label>
 <input id="f-email" type="email" name="email" value="{{$.Email}}" maxlength="254" autocomplete="email"></div>
-</div>
+{{range $.Questions}}{{template "hfield" .}}{{end}}</div>
 {{with $.Pay}}<p class="summary pay">{{.}}</p>{{end}}
 <p class="hint privacy">Your details go to {{$.Business}} only, to {{$.Purpose}} and to contact you about it. Taskiem runs this page for them.</p>
 <button class="btn btn-primary btn-block" type="submit">Book</button>
