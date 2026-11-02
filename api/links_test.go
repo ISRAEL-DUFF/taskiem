@@ -113,6 +113,12 @@ func TestBusinessLinksByChat(t *testing.T) {
 	if !strings.HasPrefix(accept, "tk1.") || told[0].Buttons[0].Title != "Accept" || strings.Contains(accept, lid) {
 		t.Fatalf("buttons: %+v", told[0].Buttons)
 	}
+	// "links" lists the request with its own signed buttons, which work
+	// like the message's.
+	if r := w.send(t, dangoteOn, map[string]any{"type": "text", "text": map[string]any{"body": "links"}}); len(r) != 2 || len(r[1].Buttons) != 3 ||
+		!strings.HasPrefix(r[1].Buttons[2].ID, "tk1.") || r[1].Buttons[2].ID == told[0].Buttons[2].ID {
+		t.Errorf("links, with a request waiting: %+v", r)
+	}
 	// Ada cannot press Dangote's Accept: it is Dangote's business's token.
 	if r := w.press(t, adaOn, accept); len(r) != 1 || !strings.Contains(r[0].Text, "not valid") {
 		t.Errorf("Ada pressed Accept: %+v", r)
