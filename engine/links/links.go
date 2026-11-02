@@ -33,6 +33,10 @@ var (
 	ErrNotFound = errors.New("links: not found")
 	ErrState    = errors.New("links: not possible in the link's state")
 	ErrTooMany  = errors.New("links: too many requests today")
+	// ErrLimit refuses a message beyond the plan's messages per day.
+	ErrLimit = errors.New("links: over the plan's limit")
+	// ErrStorage says the other side's copy of a file could not be kept.
+	ErrStorage = errors.New("links: the file could not be stored")
 )
 
 // Roles: how a business sees the other side.

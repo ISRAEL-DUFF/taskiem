@@ -74,6 +74,59 @@ func chatTenantOf(ctx context.Context) uuid.UUID {
 	return t
 }
 
+// looksLikeNumber reports whether a message is mostly digits (twelve or
+// more, seven in ten of its characters once spaces and dashes are taken
+// out: an account or card number typed in, with or without a word), or
+// carries a run of 13 to 19 digits that passes Luhn's check (a card
+// number's shape). Neither is kept in the history.
+func looksLikeNumber(text string) bool {
+	digits, rest := 0, 0
+	for _, r := range text {
+		switch {
+		case r >= '0' && r <= '9':
+			digits++
+		case r == ' ' || r == '-':
+		default:
+			rest++
+		}
+	}
+	if digits >= 12 && digits*10 >= (digits+rest)*7 {
+		return true
+	}
+	// Runs of digits, spaces and dashes between them allowed.
+	var run []int
+	check := func() bool {
+		if len(run) < 13 || len(run) > 19 {
+			return false
+		}
+		sum := 0
+		for i := len(run) - 1; i >= 0; i-- {
+			d := run[i]
+			if (len(run)-1-i)%2 == 1 {
+				d *= 2
+				if d > 9 {
+					d -= 9
+				}
+			}
+			sum += d
+		}
+		return sum%10 == 0
+	}
+	for _, r := range text {
+		switch {
+		case r >= '0' && r <= '9':
+			run = append(run, int(r-'0'))
+		case (r == ' ' || r == '-') && len(run) > 0:
+		default:
+			if check() {
+				return true
+			}
+			run = run[:0]
+		}
+	}
+	return check()
+}
+
 var (
 	historyURL  = regexp.MustCompile(`https?://[^\s<>"]+`)
 	historyCode = regexp.MustCompile(`^[\s\d-]+$`)
@@ -98,6 +151,9 @@ func historyText(text string) string {
 		}, text)); n >= 4 && n <= 12 {
 			return ""
 		}
+	}
+	if looksLikeNumber(text) {
+		return ""
 	}
 	text = historyURL.ReplaceAllStringFunc(text, func(raw string) string {
 		trail := ""

@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -37,19 +38,33 @@ const PermChatTrade = access.ChatTrade
 
 func (s *Server) linkChatRoutes(r chi.Router) {
 	write := s.need(PermChatTrade)
+	paced := s.linkWriteLimit
 	r.Get("/link-chats", s.listLinkChats)
 	r.Get("/link-chats/search", s.searchLinkChats)
 	r.Get("/link-chats/thread", s.linkThread)
 	r.Get("/link-chats/{link}/messages", s.linkMessages)
-	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages", s.sendLinkMessage)
-	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
+	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/messages", s.sendLinkMessage)
+	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/typing", s.linkTyping)
-	r.With(write, s.tenantWide).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
+	r.With(write, s.tenantWide, paced).Post("/link-chats/{link}/forward", s.forwardLinkMessage)
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/messages/{id}/hide", s.hideLinkMessage)
 	r.With(write, s.tenantWide).Put("/link-chats/{link}", s.putLinkChat)
+}
+
+// linkWriteLimit paces one person's writes into conversations (a message,
+// a file, a forward), as the Taskiem conversation's are paced
+// (chat_history.go): a burst, then one every two seconds.
+func (s *Server) linkWriteLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p := principalFrom(r.Context()); !s.limiter("link-chat:"+p.Actor(), 2*time.Second, 20).Allow() {
+			writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func linkParam(r *http.Request) (uuid.UUID, error) {
@@ -214,6 +229,17 @@ func linkMessageErr(err error) error {
 		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrState.Error()+": "))
 	case errors.Is(err, links.ErrNotFound):
 		return pgx.ErrNoRows
+	case errors.Is(err, links.ErrLimit):
+		// As every other plan limit is refused (429, limit_exceeded).
+		return &runtime.LimitError{Limit: "link_messages_daily", Code: "limit_exceeded", Message: strings.TrimPrefix(err.Error(), links.ErrLimit.Error()+": ")}
+	case errors.Is(err, links.ErrStorage):
+		return fmt.Errorf("%w: %s", errConflict, strings.TrimPrefix(err.Error(), links.ErrStorage.Error()+": "))
+	case errors.Is(err, media.ErrNoScanner):
+		return fmt.Errorf("%w: files cannot be sent: this deployment has no malware scanner (TASKIEM_CLAMD_ADDR)", errConflict)
+	case errors.Is(err, media.ErrThreat):
+		return fmt.Errorf("%w: the file did not pass the malware check", errBadRequest)
+	case errors.Is(err, media.ErrFile), errors.Is(err, media.ErrImage):
+		return fmt.Errorf("%w: %s", errBadRequest, plainError(err))
 	}
 	return err
 }
@@ -228,14 +254,35 @@ func (s *Server) sendLink(ctx context.Context, p *Principal, link uuid.UUID, tex
 // person's name), or the caller when nil.
 func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, text string, as *links.Sender, o links.SendOpts) (links.Message, error) {
 	// The first link's preview, fetched by our side before the message is
-	// written (link_preview.go); a page that does not answer has none.
-	if o.Preview == nil {
-		o.Preview = s.linkPreview(ctx, p.TenantID, text)
+	// written (link_preview.go), only once the message is known to be one
+	// that can be sent: the link active and the sender allowed to write.
+	if o.Preview == nil && previewURL(text, s.previewAnyPort) != "" {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			l, err := links.GetTx(ctx, tx, link)
+			if err != nil {
+				return err
+			}
+			if l.State != links.Active {
+				return fmt.Errorf("%w: you are no longer linked with %s", links.ErrState, l.Name)
+			}
+			return nil
+		}); err != nil {
+			return links.Message{}, err
+		}
+		if as != nil || p.Can(PermChatTrade) {
+			o.Preview = s.linkPreview(ctx, p, text)
+		}
 	}
+	// The plan's messages per day (§13), counted against the sender.
+	lim, err := s.Store.LimitsFor(ctx, p.TenantID)
+	if err != nil {
+		return links.Message{}, err
+	}
+	o.MaxPerDay = lim.LinkMessagesDaily
 	var m links.Message
 	var other uuid.UUID
 	var from string
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var name string
 		if p.UserID != uuid.Nil {
 			if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, p.UserID).Scan(&name); err != nil {
@@ -298,6 +345,33 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from s
 			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(body)
 		}, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
+}
+
+// linkPhoneMessage is what the other side's people are sent on their
+// phones for a conversation's message, or a bill's notice: the text
+// inside WhatsApp's 24-hour window, and outside it the link message
+// template, so it is not dropped: "[Dangote Stores] has a message for
+// you: Musa: Rice is ₦45,000 a bag this week." with Open to the Chat
+// page (taskiem_link_message, counted against the business told).
+// Telegram has no window and sends the text.
+func linkPhoneMessage(tenant uuid.UUID, prefix, title, body string, bs []whatsapp.Button) whatsapp.Message {
+	oneLine := func(s string, n int) string {
+		s = strings.Join(strings.Fields(s), " ")
+		if r := []rune(s); len(r) > n {
+			s = string(r[:n-1]) + "…"
+		}
+		return s
+	}
+	business := oneLine(title, 120)
+	if strings.HasPrefix(business, "[") && strings.HasSuffix(business, "]") {
+		business = strings.TrimSpace(business[1 : len(business)-1])
+	}
+	message := oneLine(body, 500)
+	if message == "" {
+		message = "open the chat"
+	}
+	tpl := whatsapp.TplLinkMessage
+	return whatsapp.Message{Tenant: tenant, Text: prefix + title + "\n" + body, Buttons: bs, Template: &tpl, Vars: map[string]string{"business": business, "message": message}}
 }
 
 // chatAddrHash is the keyed hash a person's chat address is kept by.
@@ -541,9 +615,13 @@ func (s *Server) waAskLinked(ctx context.Context, c *chat, rest string) (bool, e
 
 // sendLinkFile is POST /v1/link-chats/{link}/files: a photo, a PDF or a
 // voice note to a linked business, as a multipart form (file; text, a
-// caption; reply_to). Each business keeps its own copy in its own
-// storage: the file is stored in ours and in theirs before the message is
-// written in both, and if either copy cannot be stored, nothing is sent.
+// caption; reply_to). The file is scanned for malware first (refused
+// without a scanner, as hosted forms' files are). Each business keeps
+// its own copy in its own storage: the file is stored in ours, then in
+// theirs inside the message's transaction once the door has been entered
+// (the scope narrowed to that business, the crossing audited), before
+// their row is written; if either copy cannot be stored, or the
+// transaction fails, nothing is sent and what was stored is removed.
 func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -582,40 +660,28 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	ctx := r.Context()
-	// The other side, before anything is stored: only an active link.
-	var other uuid.UUID
+	// Before anything is stored: only to an active link, and only a file
+	// the scanner passes.
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		l, err := links.GetTx(ctx, tx, link)
 		if err != nil {
 			return err
 		}
-		if l.State != "active" {
+		if l.State != links.Active {
 			return fmt.Errorf("%w: files are sent to a linked business", links.ErrState)
 		}
-		other = l.Business
 		return nil
 	}); err != nil {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	if err := s.Media.ScanChatFile(ctx, data); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
 	mine, err := s.Media.PutChatFile(ctx, p.TenantID, data)
-	if errors.Is(err, media.ErrFile) || errors.Is(err, media.ErrImage) {
-		s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, plainError(err)))
-		return
-	}
 	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	drop := func(t uuid.UUID, path string) {
-		if err := s.Media.Delete(context.WithoutCancel(ctx), t, media.PrivateBucket, []string{path}); err != nil {
-			s.Logger.Warn("link chat: a file copy not removed", "tenant", t, "err", err)
-		}
-	}
-	theirs, err := s.Media.PutChatFile(ctx, other, data)
-	if err != nil {
-		drop(p.TenantID, mine.Path)
-		s.fail(w, r, fmt.Errorf("%w: the file could not be kept for the other business; nothing was sent", errConflict))
+		s.fail(w, r, linkMessageErr(err))
 		return
 	}
 	name := hdr.Filename
@@ -625,14 +691,35 @@ func (s *Server) sendLinkFile(w http.ResponseWriter, r *http.Request) {
 	att := func(f media.File) *links.Attachment {
 		return &links.Attachment{Kind: media.ChatKind(f.Type), Type: f.Type, Size: f.Size, Name: name, Path: f.Path}
 	}
-	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), Theirs: att(theirs)})
+	// The other side's copy, made once the door is entered; removed with
+	// ours if the message is not sent after all.
+	var theirs *links.Attachment
+	var other uuid.UUID
+	theirCopy := func(ctx context.Context, business uuid.UUID) (*links.Attachment, error) {
+		f, err := s.Media.PutChatFile(ctx, business, data)
+		if err != nil {
+			return nil, err
+		}
+		theirs, other = att(f), business
+		return theirs, nil
+	}
+	m, err := s.sendLink(ctx, p, link, r.FormValue("text"), links.SendOpts{ReplyTo: replyTo, Ours: att(mine), TheirCopy: theirCopy})
 	if err != nil {
-		drop(p.TenantID, mine.Path)
-		drop(other, theirs.Path)
+		s.dropChatFile(ctx, p.TenantID, mine.Path)
+		if theirs != nil {
+			s.dropChatFile(ctx, other, theirs.Path)
+		}
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, linkMessageOut{Message: m})
+}
+
+// dropChatFile removes a copy of a file whose message was not sent.
+func (s *Server) dropChatFile(ctx context.Context, tenant uuid.UUID, path string) {
+	if err := s.Media.Delete(context.WithoutCancel(ctx), tenant, media.PrivateBucket, []string{path}); err != nil {
+		s.Logger.Warn("link chat: a file copy not removed", "tenant", tenant, "err", err)
+	}
 }
 
 // linkFile is GET /v1/link-chats/{link}/files/{id}: this side's copy of a
@@ -736,8 +823,9 @@ const maxForward = 5
 // forwardLinkMessage is POST /v1/link-chats/{link}/forward: one of our
 // messages in this conversation, forwarded to other linked businesses'
 // conversations ({message, to: [link ids]}), marked Forwarded. A file
-// goes as a copy into each one's own storage and ours, from our copy; a
-// document's card is not forwarded.
+// goes as a copy into each one's own storage and ours, from our copy,
+// scanned again and each business's copy made once the door into it is
+// entered, as a file sent is; a document's card is not forwarded.
 func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -762,7 +850,6 @@ func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var m links.Message
 	var file *links.Attachment
-	targets := map[uuid.UUID]uuid.UUID{} // link -> its business
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var err error
 		if m, file, err = links.ForwardableTx(ctx, tx, p.TenantID, link, in.Message); err != nil {
@@ -776,7 +863,6 @@ func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
 			if l.State != links.Active {
 				return fmt.Errorf("%w: you are no longer linked with %s", links.ErrState, l.Name)
 			}
-			targets[to] = l.Business
 		}
 		return nil
 	}); err != nil {
@@ -793,41 +879,38 @@ func (s *Server) forwardLinkMessage(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
+		if err := s.Media.ScanChatFile(ctx, data); err != nil {
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
 	}
 	out := []links.Message{}
 	for _, to := range in.To {
 		o := links.SendOpts{Forwarded: true, Preview: m.Preview}
 		var kept []func()
 		if file != nil {
-			att := func(t uuid.UUID) (*links.Attachment, error) {
+			att := func(ctx context.Context, t uuid.UUID) (*links.Attachment, error) {
 				f, err := s.Media.PutChatFile(ctx, t, data)
 				if err != nil {
 					return nil, err
 				}
-				kept = append(kept, func() {
-					if err := s.Media.Delete(context.WithoutCancel(ctx), t, media.PrivateBucket, []string{f.Path}); err != nil {
-						s.Logger.Warn("link chat: a forwarded copy not removed", "tenant", t, "err", err)
-					}
-				})
+				kept = append(kept, func() { s.dropChatFile(ctx, t, f.Path) })
 				return &links.Attachment{Kind: file.Kind, Type: f.Type, Size: f.Size, Name: file.Name, Path: f.Path}, nil
 			}
-			var err1, err2 error
-			o.Ours, err1 = att(p.TenantID)
-			if err1 == nil {
-				o.Theirs, err2 = att(targets[to])
-			}
-			if err1 != nil || err2 != nil {
-				for _, undo := range kept {
-					undo()
-				}
+			var err error
+			if o.Ours, err = att(ctx, p.TenantID); err != nil {
 				s.fail(w, r, fmt.Errorf("%w: the file could not be kept for every business; forwarded to %d of %d", errConflict, len(out), len(in.To)))
 				return
 			}
+			o.TheirCopy = att
 		}
 		sent, err := s.sendLink(ctx, p, to, m.Body, o)
 		if err != nil {
 			for _, undo := range kept {
 				undo()
+			}
+			if errors.Is(err, links.ErrStorage) {
+				err = fmt.Errorf("%w: the file could not be kept for every business; forwarded to %d of %d", errConflict, len(out), len(in.To))
 			}
 			s.fail(w, r, linkMessageErr(err))
 			return

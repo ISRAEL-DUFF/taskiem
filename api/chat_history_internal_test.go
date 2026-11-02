@@ -20,6 +20,14 @@ func TestHistoryText(t *testing.T) {
 		" 4821 ":                     "",
 		"080-1234":                   "",
 		"20":                         "20",
+		"4111 1111 1111 1111":        "", // a card number
+		"4111-1111-1111-1111":        "",
+		"card 4111111111111111 pls":  "", // a card number in words
+		"5399 8300 1234 5678":        "", // a number of a card's shape, mostly digits
+		"0123456789012345":           "", // sixteen digits, no longer kept
+		"pay 2 bags of rice, 50 kg":  "pay 2 bags of rice, 50 kg",
+		"INV-0042 ₦25,000 by 15 Nov": "INV-0042 ₦25,000 by 15 Nov",
+		"Order P-7QX4KD: 20 bags at 45,000 each, 900,000 in all, due 2026-11-30": "Order P-7QX4KD: 20 bags at 45,000 each, 900,000 in all, due 2026-11-30",
 		"status":                     "status",
 		"   ":                        "",
 		"Sold 3 cartons for ₦30,000": "Sold 3 cartons for ₦30,000",

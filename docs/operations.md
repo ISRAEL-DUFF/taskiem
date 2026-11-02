@@ -226,6 +226,7 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `storefront_orders_monthly`, `storefront_bookings_monthly` | 0 (no limit) | Storefront orders and bookings per UTC month: beyond them the forms say orders are paused. Plans: shop 300, shop plus 1,500 |
 | `sms_monthly` | 0 (no limit) | SMS to customers per UTC month: beyond it only verification codes are sent. Plans: shop 100, shop plus 500, starter and above 1,000 |
 | `embed_sites` | 10 | Websites that may embed the storefront and forms ([embed sites](embed-sites.md)). Plans: shop 1, shop plus 3 |
+| `link_messages_daily` | 0 (no limit) | Messages to linked businesses per UTC day ([business links](spec/business-links.md#13-security)), counted against the business that sent them (text, photos, files and voice notes; not the cards Taskiem writes): beyond it a send gets 429 `limit_exceeded`. Plans: shop 200, shop plus 500, starter 1,000, growth 2,000, business 5,000 |
 
 ```sh
 taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25

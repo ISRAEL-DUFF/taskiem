@@ -64,6 +64,7 @@ plans:
       storefront_orders_monthly: 300
       storefront_bookings_monthly: 300
       sms_monthly: 100
+      link_messages_daily: 200
       embed_sites: 1
     features: {receive_money: true}
 
@@ -94,6 +95,7 @@ plans:
       storefront_orders_monthly: 1500
       storefront_bookings_monthly: 1500
       sms_monthly: 500
+      link_messages_daily: 500
       embed_sites: 3
     features: {receive_money: true, storefront_pay_on_order: true}
   - id: starter
@@ -121,6 +123,7 @@ plans:
       max_data_tables: 10
       storefront_items: 2000
       sms_monthly: 1000
+      link_messages_daily: 1000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true}
 
   - id: growth
@@ -148,6 +151,7 @@ plans:
       max_data_tables: 50
       storefront_items: 2000
       sms_monthly: 1000
+      link_messages_daily: 2000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true}
 
   - id: business
@@ -175,6 +179,7 @@ plans:
       max_data_tables: 0
       storefront_items: 2000
       sms_monthly: 1000
+      link_messages_daily: 5000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50

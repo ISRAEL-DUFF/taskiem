@@ -234,3 +234,103 @@ func checkIsolation(t *testing.T, seen []loggedQuery, a, b string) map[string]in
 	}
 	return ofEach
 }
+
+// count is how many statements logged so far say s.
+func (l *scopeLog) count(s string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, q := range l.seen {
+		if strings.Contains(q.sql, s) {
+			n++
+		}
+	}
+	return n
+}
+
+// TestLinkIsolationFiles is the harness for a file sent in the
+// conversation (L3): our copy is stored before the message's transaction,
+// and the other business's copy only once that transaction has entered
+// the door (taskiem_link_enter: the scope narrowed, the crossing audited
+// on both sides); no statement names the other side outside the link
+// functions. The same for a forward.
+func TestLinkIsolationFiles(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	log := &scopeLog{scope: map[*pgx.Conn]string{}}
+	cfg := w.env.Store.Pool.Config()
+	cfg.ConnConfig.Tracer = log
+	traced, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(traced.Close)
+	w.srv.Store = &runtime.Store{Pool: traced, Registry: w.env.Store.Registry, PII: w.env.Store.PII}
+	store := newProjectStorage(t)
+	w.srv.Media = store.service()
+	w.srv.Media.Scanner = chatScanner{}
+
+	ada := w.tenant(t, "Ada's Kitchen", "ada@isolation-files.test")
+	dangote := w.tenant(t, "Dangote Stores", "d@isolation-files.test")
+	cherry := w.tenant(t, "Cherry Blocks", "c@isolation-files.test")
+	adaID, dangoteID, cherryID := tenantOf(t, ada), tenantOf(t, dangote), tenantOf(t, cherry)
+	pair := func(a, b *client, bID string) string {
+		b.must(200, "PUT", "/v1/link-settings", map[string]any{"findable": true})
+		a.must(201, "POST", "/v1/links", map[string]any{"business": bID, "role": "supplier"})
+		l := b.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+		b.must(200, "POST", "/v1/links/"+l+"/accept", nil)
+		w.srv.WaitBackground()
+		return l
+	}
+	withDangote := pair(ada, dangote, dangoteID)
+	withCherry := pair(ada, cherry, cherryID)
+
+	// Each write to a business's storage, with how many doors had been
+	// entered by then.
+	type put struct {
+		project string
+		entered int
+	}
+	var puts []put
+	store.onPut = func(project string) { puts = append(puts, put{project, log.count("taskiem_link_enter(")}) }
+	log.take()
+
+	code, out := ada.sendFile(t, withDangote, "bags.jpg", photo(t), map[string]string{"text": "The new bags"})
+	if code != 201 {
+		t.Fatalf("photo: %d %v", code, out)
+	}
+	w.srv.WaitBackground()
+	seen := log.take()
+	checkIsolation(t, seen, adaID, dangoteID)
+	if len(puts) != 2 || puts[0].project != "prj_"+adaID || puts[1].project != "prj_"+dangoteID {
+		t.Fatalf("the copies: %+v", puts)
+	}
+	if puts[0].entered != 0 || puts[1].entered != 1 {
+		t.Errorf("the other side's copy is made after the door is entered: %+v", puts)
+	}
+	// The other side's copy is made in the message's transaction: the
+	// door, the copy and the other side's row, with no commit between.
+	entered := -1
+	for i, q := range seen {
+		switch {
+		case strings.Contains(q.sql, "taskiem_link_enter("):
+			entered = i
+		case entered >= 0 && strings.EqualFold(strings.TrimSpace(q.sql), "commit"):
+			entered = -2
+		case entered == -2 && strings.Contains(q.sql, "INSERT INTO link_messages"):
+			t.Error("the other side's row written after the door's transaction committed")
+		}
+	}
+
+	// A forward to Cherry: Cherry's copy after the door into Cherry.
+	puts = nil
+	log.take()
+	ada.must(201, "POST", "/v1/link-chats/"+withDangote+"/forward", map[string]any{"message": out["message"].(map[string]any)["id"], "to": []string{withCherry}})
+	w.srv.WaitBackground()
+	seen = log.take()
+	checkIsolation(t, seen, adaID, cherryID)
+	checkIsolation(t, seen, adaID, dangoteID)
+	if len(puts) != 2 || puts[0].project != "prj_"+adaID || puts[1].project != "prj_"+cherryID || puts[0].entered != 0 || puts[1].entered != 1 {
+		t.Errorf("the forwarded copies: %+v", puts)
+	}
+}

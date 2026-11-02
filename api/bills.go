@@ -319,7 +319,7 @@ func (s *Server) tellHoldersSent(ctx context.Context, tenant uuid.UUID, perms []
 		if buttons != nil {
 			bs = buttons(l)
 		}
-		id, err := ch.Send(ctx, t.addr, whatsapp.Message{Text: ch.Prefix("") + title + "\n" + body, Buttons: bs})
+		id, err := ch.Send(ctx, t.addr, linkPhoneMessage(tenant, ch.Prefix(""), title, body, bs))
 		if err != nil {
 			s.Logger.Warn("links: a chat message", "tenant", tenant, "err", err)
 			continue

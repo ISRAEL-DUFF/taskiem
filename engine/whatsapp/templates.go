@@ -140,6 +140,16 @@ var (
 		Examples: []string{"Ada Stores", "A run took longer than 10 minutes.", "https://app.example.com/runs/1"},
 		Purpose:  "Any other alert rule (slow runs, drift, credentials, plan limits).",
 	}
+	// A linked business's message (business links L3, §5.5): the
+	// conversation's mirror to the other side's people, outside the window.
+	TplLinkMessage = Template{
+		Name: "taskiem_link_message", Category: "UTILITY",
+		Body:     "[{{1}}] has a message for you: {{2}} Tap Open to see the conversation and reply.",
+		Vars:     []string{"business", "message"},
+		Examples: []string{"Dangote Stores", "Musa: Rice is ₦45,000 a bag this week."},
+		Buttons:  []TemplateButton{{Type: "url", Text: "Open", Host: HostApp, Path: "/chat"}},
+		Purpose:  "A message from a linked business in the conversation between them, to the people who write in it, outside the window; {{2}} is the sender's first name and the words on one line (or what was sent: a photo, a voice note, a file), or 'open the chat' when they are not shown.",
+	}
 	TplUpdate = Template{
 		Name: "taskiem_update", Category: "UTILITY",
 		Body:     "[{{1}}] Update on {{2}}: {{3}}",
@@ -258,7 +268,7 @@ var (
 )
 
 // AllTemplates lists the library, for documentation, submission and tests.
-var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate,
+var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage,
 	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)

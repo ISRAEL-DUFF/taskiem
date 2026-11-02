@@ -52,21 +52,32 @@ func previewURL(text string, anyPort bool) string {
 	return u.String()
 }
 
+// previewsPerMinute is how many pages one person may have fetched for
+// previews in a minute (a burst, then one every six seconds); beyond it
+// a message goes without one.
+const previewsPerMinute = 10
+
 // linkPreview is the preview of the first link in text, or nil (no link,
-// no guard, or a page that did not answer with a title).
-func (s *Server) linkPreview(ctx context.Context, tenant uuid.UUID, text string) *links.Preview {
+// no guard, this person past their previews for the minute, or a page
+// that did not answer with a title). What was fetched is remembered per
+// business, so one business's fetch never answers another's.
+func (s *Server) linkPreview(ctx context.Context, p *Principal, text string) *links.Preview {
 	raw := previewURL(text, s.previewAnyPort)
 	if raw == "" || s.Egress == nil {
 		return nil
 	}
-	if p, ok := s.previews.Get(raw); ok {
-		return p
+	key := p.TenantID.String() + " " + raw
+	if pv, ok := s.previews.Get(key); ok {
+		return pv
 	}
-	p := s.fetchPreview(ctx, tenant, raw)
-	if p != nil {
-		s.previews.Put(raw, p) // a page that did not answer is asked again next time
+	if !s.limiter("link-preview:"+p.Actor(), time.Minute/previewsPerMinute, previewsPerMinute).Allow() {
+		return nil
 	}
-	return p
+	pv := s.fetchPreview(ctx, p.TenantID, raw)
+	if pv != nil {
+		s.previews.Put(key, pv) // a page that did not answer is asked again next time
+	}
+	return pv
 }
 
 func (s *Server) fetchPreview(ctx context.Context, tenant uuid.UUID, raw string) *links.Preview {

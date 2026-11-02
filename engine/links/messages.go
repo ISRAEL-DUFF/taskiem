@@ -202,34 +202,63 @@ func ConversationsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Conver
 		return nil, err
 	}
 	out := []Conversation{}
+	var ids []uuid.UUID
+	var active []bool
 	for _, l := range list {
 		if l.State != Active && l.State != Ended {
 			continue
 		}
-		c := Conversation{LinkID: l.ID, Business: l.Business, Name: l.Name, State: l.State}
-		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT muted FROM link_conversations WHERE tenant_id = $1 AND link_id = $2), false),
-			COALESCE((SELECT archived FROM link_conversations WHERE tenant_id = $1 AND link_id = $2), false),
-			(SELECT pinned_at FROM link_conversations WHERE tenant_id = $1 AND link_id = $2),
-			(SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND NOT mine AND read_at IS NULL AND hidden_at IS NULL)::int,
-			$3 AND taskiem_link_typing_of($2)`,
-			tenant, l.ID, l.State == Active).Scan(&c.Muted, &c.Archived, &c.pinnedAt, &c.Unread, &c.Typing); err != nil {
-			return nil, err
-		}
-		c.Pinned = c.pinnedAt != nil
-		last, err := scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.hidden_at IS NULL
-			ORDER BY m.created_at DESC, m.id DESC LIMIT 1`, tenant, l.ID))
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			if l.State == Ended {
-				continue
-			}
-		case err != nil:
-			return nil, err
-		default:
-			c.Last = &last
-		}
-		out = append(out, c)
+		ids = append(ids, l.ID)
+		active = append(active, l.State == Active)
+		out = append(out, Conversation{LinkID: l.ID, Business: l.Business, Name: l.Name, State: l.State})
 	}
+	if len(out) == 0 {
+		return out, nil
+	}
+	// Two queries for every conversation (the list is polled often): each
+	// link's settings, unread count and typing line, then its last message.
+	byLink := map[uuid.UUID]int{}
+	for i, c := range out {
+		byLink[c.LinkID] = i
+	}
+	rows, err := tx.Query(ctx, `SELECT l.id, COALESCE(c.muted, false), COALESCE(c.archived, false), c.pinned_at,
+			(SELECT count(*) FROM link_messages m WHERE m.tenant_id = $1 AND m.link_id = l.id AND NOT m.mine AND m.read_at IS NULL AND m.hidden_at IS NULL)::int,
+			l.active AND taskiem_link_typing_of(l.id)
+		FROM unnest($2::uuid[], $3::boolean[]) AS l(id, active)
+		LEFT JOIN link_conversations c ON c.tenant_id = $1 AND c.link_id = l.id`, tenant, ids, active)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id uuid.UUID
+		var muted, archived, typing bool
+		var pinnedAt *time.Time
+		var unread int
+		if err := rows.Scan(&id, &muted, &archived, &pinnedAt, &unread, &typing); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		c := &out[byLink[id]]
+		c.Muted, c.Archived, c.pinnedAt, c.Pinned, c.Unread, c.Typing = muted, archived, pinnedAt, pinnedAt != nil, unread, typing
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows, err = tx.Query(ctx, `SELECT DISTINCT ON (m.link_id) `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = ANY ($2) AND m.hidden_at IS NULL
+		ORDER BY m.link_id, m.created_at DESC, m.id DESC`, tenant, ids)
+	if err != nil {
+		return nil, err
+	}
+	lasts, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Message, error) { return scanMessage(r) })
+	if err != nil {
+		return nil, err
+	}
+	for i := range lasts {
+		out[byLink[lasts[i].LinkID]].Last = &lasts[i]
+	}
+	// An ended link with no messages has no conversation.
+	out = slices.DeleteFunc(out, func(c Conversation) bool { return c.State == Ended && c.Last == nil })
 	slices.SortStableFunc(out, func(a, b Conversation) int {
 		// The pinned first, the last pinned at the top, as WhatsApp's.
 		switch {
@@ -329,10 +358,18 @@ func SendTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string,
 type SendOpts struct {
 	// ReplyTo quotes a message of the conversation (its id).
 	ReplyTo *uuid.UUID
-	// Ours and Theirs are a photo, a PDF or a voice note: our copy and
-	// the other side's, each already in that side's own storage. The words
-	// are then a caption, and may be empty.
-	Ours, Theirs *Attachment
+	// Ours is a photo, a PDF or a voice note, our copy, already in our own
+	// storage; TheirCopy makes the other side's copy in its own storage,
+	// called after the door has been entered (the scope narrowed to that
+	// business and the crossing audited), just before its row is written.
+	// If it fails nothing is sent; if the transaction fails after it, the
+	// caller removes what it made. The words are then a caption, and may
+	// be empty.
+	Ours      *Attachment
+	TheirCopy func(ctx context.Context, other uuid.UUID) (*Attachment, error)
+	// MaxPerDay is the plan's limit on messages sent per UTC day (0: no
+	// limit), refused with ErrLimit.
+	MaxPerDay int64
 	// Forwarded marks a message forwarded from another conversation.
 	Forwarded bool
 	// Preview is the first link's preview, on both copies.
@@ -344,7 +381,7 @@ type SendOpts struct {
 
 // SendWithTx is SendTx with what o carries.
 func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string, from Sender, by Actor, o SendOpts) (Message, uuid.UUID, error) {
-	replyTo, ourFile, theirFile := o.ReplyTo, o.Ours, o.Theirs
+	replyTo, ourFile := o.ReplyTo, o.Ours
 	var preview, ours, theirs []byte
 	if o.Preview != nil {
 		preview, _ = json.Marshal(o.Preview)
@@ -359,8 +396,17 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 		theirs, _ = json.Marshal(other)
 	}
 	body = strings.TrimSpace(body)
-	if (body == "" && ourFile == nil) || len([]rune(body)) > MaxMessage || (ourFile == nil) != (theirFile == nil) {
+	if (body == "" && ourFile == nil) || len([]rune(body)) > MaxMessage || (ourFile == nil) != (o.TheirCopy == nil) {
 		return Message{}, uuid.Nil, fmt.Errorf("%w: a message says something, in up to %d characters", ErrInvalid, MaxMessage)
+	}
+	if o.MaxPerDay > 0 {
+		n, err := SentTodayTx(ctx, tx, tenant)
+		if err != nil {
+			return Message{}, uuid.Nil, err
+		}
+		if n >= o.MaxPerDay {
+			return Message{}, uuid.Nil, fmt.Errorf("%w: this plan allows at most %d messages to linked businesses a day", ErrLimit, o.MaxPerDay)
+		}
 	}
 	// The stored attachment keeps its path, which the API never shows.
 	jsonOf := func(a *Attachment) []byte {
@@ -406,6 +452,12 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	if err != nil {
 		return m, uuid.Nil, err
 	}
+	var theirFile *Attachment
+	if o.TheirCopy != nil {
+		if theirFile, err = o.TheirCopy(ctx, other); err != nil {
+			return m, other, fmt.Errorf("%w: the file could not be kept for the other business; nothing was sent", ErrStorage)
+		}
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, sender_name, reply_to, created_at, attachment, forwarded, preview, mentions)
 		VALUES ($1, $2, $3, $4, false, 'text', $5, $6, $7, $8, $9, $10, $11, $12)`, uuid.Must(uuid.NewV7()), other, link, pair, body, name, replyTo, m.CreatedAt, jsonOf(theirFile), o.Forwarded, preview, theirs); err != nil {
 		return m, other, err
@@ -420,6 +472,15 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	err = QueueEventTx(ctx, tx, other, EventThreadMessage, pair.String(), ev)
 	return m, other, err
+}
+
+// SentTodayTx is how many messages the business in scope sent to linked
+// businesses this UTC day (its plan's messages per day, §13).
+func SentTodayTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int64, error) {
+	var n int64
+	err := tx.QueryRow(ctx, `SELECT count(*) FROM link_messages WHERE tenant_id = $1 AND mine AND kind = 'text'
+		AND created_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, tenant).Scan(&n)
+	return n, err
 }
 
 // MarkReadTx marks the business in scope's unread messages from a link read,
@@ -575,10 +636,11 @@ func SentTx(ctx context.Context, tx pgx.Tx, channel string, addrHash []byte, id 
 }
 
 // AttachmentTx is this side's copy of a message's attachment, by the
-// message's id, in the business in scope's conversation with a link.
+// message's id, in the business in scope's conversation with a link; a
+// message deleted for this side has none to give.
 func AttachmentTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) (Attachment, error) {
 	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT attachment FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3`, tenant, link, pair).Scan(&raw)
+	err := tx.QueryRow(ctx, `SELECT attachment FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND hidden_at IS NULL`, tenant, link, pair).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && raw == nil) {
 		return Attachment{}, fmt.Errorf("%w: no such file", ErrNotFound)
 	}

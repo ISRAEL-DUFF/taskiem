@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -28,6 +29,9 @@ type projectStorage struct {
 	files   map[string][]byte // project/path
 	fetched []string          // project/path, in order
 	refuse  string            // a project whose writes fail
+	// onPut hears each write, with the project written to (the isolation
+	// harness reads what the API had done by then).
+	onPut func(project string)
 }
 
 func newProjectStorage(t *testing.T) *projectStorage {
@@ -54,6 +58,9 @@ func newProjectStorage(t *testing.T) *projectStorage {
 			}
 			body, _ := io.ReadAll(r.Body)
 			ps.files[p+"/"+r.URL.Query().Get("path")] = body
+			if ps.onPut != nil {
+				ps.onPut(p)
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"path": r.URL.Query().Get("path"), "size": len(body), "mime_type": r.Header.Get("Content-Type")})
 		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/sign"):
 			var in struct {
@@ -101,6 +108,65 @@ func (ps *projectStorage) in(project string) []string {
 	return out
 }
 
+// chatScanner is the malware scanner of the tests: it finds EICAR.
+type chatScanner struct{}
+
+func (chatScanner) Scan(_ context.Context, data []byte) (string, error) {
+	if bytes.Contains(data, []byte("EICAR")) {
+		return "Eicar-Test-Signature", nil
+	}
+	return "", nil
+}
+
+// oggVoice is an Ogg Opus voice note: the head, the tags (vendor and the
+// comments given) and a page of sound, each page checksummed as Ogg
+// does, so it passes the sniff that reads the container.
+func oggVoice(comments ...string) []byte {
+	var table [256]uint32
+	for i := range table {
+		r := uint32(i) << 24
+		for range 8 {
+			if r&0x80000000 != 0 {
+				r = r<<1 ^ 0x04c11db7
+			} else {
+				r <<= 1
+			}
+		}
+		table[i] = r
+	}
+	page := func(seq uint32, flags byte, packet []byte) []byte {
+		var lacing []byte
+		n := len(packet)
+		for n >= 255 {
+			lacing = append(lacing, 255)
+			n -= 255
+		}
+		lacing = append(lacing, byte(n))
+		pg := append([]byte("OggS\x00"), flags)
+		pg = append(pg, make([]byte, 8)...)
+		pg = binary.LittleEndian.AppendUint32(pg, 7)
+		pg = binary.LittleEndian.AppendUint32(pg, seq)
+		pg = append(pg, 0, 0, 0, 0, byte(len(lacing)))
+		pg = append(pg, lacing...)
+		pg = append(pg, packet...)
+		var crc uint32
+		for _, b := range pg {
+			crc = crc<<8 ^ table[byte(crc>>24)^b]
+		}
+		binary.LittleEndian.PutUint32(pg[22:], crc)
+		return pg
+	}
+	tags := []byte("OpusTags")
+	tags = binary.LittleEndian.AppendUint32(tags, 7)
+	tags = append(tags, "taskiem"...)
+	tags = binary.LittleEndian.AppendUint32(tags, uint32(len(comments)))
+	for _, c := range comments {
+		tags = binary.LittleEndian.AppendUint32(tags, uint32(len(c)))
+		tags = append(tags, c...)
+	}
+	return bytes.Join([][]byte{page(0, 2, []byte("OpusHead\x01\x01\x38\x01\x80\xbb\x00\x00\x00\x00\x00")), page(1, 0, tags), page(2, 0, bytes.Repeat([]byte{1}, 2000))}, nil)
+}
+
 func (ps *projectStorage) service() *media.Service {
 	return &media.Service{
 		Credentials: func(_ context.Context, tenant uuid.UUID) (map[string]string, error) {
@@ -139,10 +205,13 @@ func (c *client) getRaw(t *testing.T, path string) (int, http.Header, []byte) {
 }
 
 // Photos, PDFs and voice notes in the conversation between linked
-// businesses (L3, §5.5): each business keeps its own copy in its own
-// storage, and reads only its own; the other side's phones are told what
-// came; anything else is refused, and if the other side's copy cannot be
-// kept, nothing is sent and our copy is removed.
+// businesses (L3, §5.5): every file is scanned for malware first, and
+// refused where the deployment has no scanner (as hosted forms' files
+// are); each business keeps its own copy in its own storage, and reads
+// only its own; the other side's phones are told what came; anything
+// else is refused, and if the other side's copy cannot be kept, nothing
+// is sent and our copy is removed. A message deleted for one side has no
+// file to give on that side.
 func TestLinkConversationFiles(t *testing.T) {
 	w := newWAWorld(t)
 	store := newProjectStorage(t)
@@ -154,6 +223,22 @@ func TestLinkConversationFiles(t *testing.T) {
 	viewer := addMember(t, w.world, buyer, "vin", "viewer")
 	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
 	sellerProject, buyerProject := "prj_"+sellerID, "prj_"+buyerID
+
+	// No scanner: no files, and nothing stored anywhere.
+	if code, out := seller.sendFile(t, link, "bags.jpg", photo(t), nil); code != 409 || !strings.Contains(out["error"].(string), "malware scanner") {
+		t.Fatalf("without a scanner: %d %v", code, out)
+	}
+	if s, b := store.in(sellerProject), store.in(buyerProject); len(s)+len(b) != 0 {
+		t.Fatalf("stored without a scanner: %v %v", s, b)
+	}
+	w.srv.Media.Scanner = chatScanner{}
+	// A threat: refused, nothing stored.
+	if code, out := seller.sendFile(t, link, "price.pdf", []byte("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj EICAR-STANDARD-ANTIVIRUS-TEST-FILE"), nil); code != 400 || !strings.Contains(out["error"].(string), "malware check") {
+		t.Fatalf("a threat: %d %v", code, out)
+	}
+	if s, b := store.in(sellerProject), store.in(buyerProject); len(s)+len(b) != 0 {
+		t.Fatalf("a threat stored: %v %v", s, b)
+	}
 
 	// A photo with a caption: a copy in each business's storage.
 	before := len(w.graph.Sent(buyerOn))
@@ -208,7 +293,7 @@ func TestLinkConversationFiles(t *testing.T) {
 	}
 
 	// A voice note from the buyer, with no words: told as a voice note.
-	voice := append([]byte("OggS\x00\x02"), bytes.Repeat([]byte{1}, 2000)...)
+	voice := oggVoice()
 	code, out = buyer.sendFile(t, link, "voice.ogg", voice, nil)
 	if code != 201 {
 		t.Fatalf("voice: %d %v", code, out)
@@ -220,6 +305,29 @@ func TestLinkConversationFiles(t *testing.T) {
 	code, hdr, data = seller.getRaw(t, "/v1/link-chats/"+link+"/files/"+vm["id"].(string))
 	if code != 200 || hdr.Get("Content-Type") != "audio/ogg" || !bytes.Equal(data, voice) {
 		t.Errorf("the seller hears it: %d %v", code, hdr)
+	}
+	// A voice note with its tags: stored without them, on both sides.
+	code, out = buyer.sendFile(t, link, "voice.ogg", oggVoice("TITLE=secret", "ARTIST=secret too"), nil)
+	if code != 201 {
+		t.Fatalf("a tagged voice note: %d %v", code, out)
+	}
+	tagged := out["message"].(map[string]any)["id"].(string)
+	for _, c := range []*client{seller, buyer} {
+		if code, _, data := c.getRaw(t, "/v1/link-chats/"+link+"/files/"+tagged); code != 200 || bytes.Contains(data, []byte("secret")) || !bytes.HasPrefix(data, []byte("OggS")) {
+			t.Errorf("the tags stayed: %d %d bytes", code, len(data))
+		}
+	}
+	// Deleted for the buyer: the buyer has no file to give, the seller still has.
+	buyer.must(204, "POST", "/v1/link-chats/"+link+"/messages/"+tagged+"/hide", nil)
+	if code, _, _ := buyer.getRaw(t, "/v1/link-chats/"+link+"/files/"+tagged); code != 404 {
+		t.Errorf("a hidden message's file: %d", code)
+	}
+	if code, _, _ := seller.getRaw(t, "/v1/link-chats/"+link+"/files/"+tagged); code != 200 {
+		t.Errorf("the other side's copy of a message hidden here: %d", code)
+	}
+	// A video is not a voice note.
+	if code, out := buyer.sendFile(t, link, "clip.mp4", mp4Video(), nil); code != 400 || !strings.Contains(out["error"].(string), "video") {
+		t.Errorf("a video: %d %v", code, out)
 	}
 
 	// Refused: a file that is not a photo, a PDF or a voice note; a
@@ -250,4 +358,19 @@ func TestLinkConversationFiles(t *testing.T) {
 	if got := len(seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any)); got != n {
 		t.Errorf("nothing sent: %d messages, had %d", got, n)
 	}
+}
+
+// mp4Video is an MP4 with a video track (and a sound track).
+func mp4Video() []byte {
+	box := func(typ string, payload []byte) []byte {
+		out := binary.BigEndian.AppendUint32(nil, uint32(8+len(payload)))
+		out = append(out, typ...)
+		return append(out, payload...)
+	}
+	trak := func(handler string) []byte {
+		hdlr := box("hdlr", append(append(make([]byte, 8), handler...), make([]byte, 13)...))
+		return box("trak", box("mdia", hdlr))
+	}
+	moov := box("moov", bytes.Join([][]byte{box("mvhd", make([]byte, 100)), trak("soun"), trak("vide")}, nil))
+	return bytes.Join([][]byte{box("ftyp", []byte("isom\x00\x00\x02\x00isomiso2")), moov, box("mdat", bytes.Repeat([]byte{0x21}, 200))}, nil)
 }

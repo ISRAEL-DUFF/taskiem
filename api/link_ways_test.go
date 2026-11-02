@@ -28,6 +28,7 @@ func TestLinkConversationWays(t *testing.T) {
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
 	store := newProjectStorage(t)
 	w.srv.Media = store.service()
+	w.srv.Media.Scanner = chatScanner{}
 	w.srv.Egress = &egress.Guard{Blocked: func(netip.Addr) bool { return false }}
 	w.srv.PreviewAnyPort()
 	seller, buyer, sellerID, buyerID := linkedPair(t, w)
