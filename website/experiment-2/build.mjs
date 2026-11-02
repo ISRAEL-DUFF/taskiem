@@ -321,6 +321,7 @@ css += `\n@media (prefers-color-scheme:dark){\n${asAuto('html:not([data-force="l
 css += await readFile(path.join(here, "site.css"), "utf8");
 await writeFile(path.join(dist, "tk.css"), css);
 await copyFile(path.join(here, "site.js"), path.join(dist, "site.js"));
+await copyFile(path.join(here, "vercel.json"), path.join(dist, "vercel.json"));
 
 const page = (title, description, body, extra = "") => `<!doctype html>
 <html lang="en">

@@ -12,10 +12,19 @@ The Taskiem website as Claude Design drew it ([the canvas](https://claude.ai/art
 ```sh
 node website/experiment-2/build.mjs                                   # dist/
 node website/experiment-2/build.mjs --whatsapp 2348000000000 --app https://app.example.ng --email hello@example.ng
-npx surge website/experiment-2/dist <name>.surge.sh                   # with SURGE_LOGIN and SURGE_TOKEN set
 ```
 
 It needs Go (it runs `go run ./tools/docsite -data` for the facts) and Playwright with Chromium, as the card maker does (`pnpm install`, then `pnpm --filter web exec playwright install chromium` once). The logos are the brand's own files, copied from `docs/brand/relay` at build time, never the canvas's uploads. Every page follows the reader's light or dark setting until they choose one with the switch in the header, which the site then remembers. A link can choose for them: `?theme=light`, `?theme=dark`, or `?theme=auto` to follow the device again.
+
+## Publishing: taskiem.ng on Vercel
+
+The `website` workflow (`.github/workflows/website.yml`) builds the site on every pull request that touches it, and on main publishes it to the Vercel project `taskiem-website`, which the first run creates. `vercel.json` gives it clean addresses (`taskiem.ng/pricing`, not `pricing.html`). Set up once:
+
+1. **Vercel token.** In Vercel: Account Settings > Tokens > Create, scoped to your team. Add it to this repository as the Actions secret `VERCEL_TOKEN` (Settings > Secrets and variables > Actions). Never commit it or paste it anywhere else.
+2. **The outside facts (optional).** Actions *variables* `SITE_WHATSAPP` (digits only, e.g. 2348012345678), `SITE_APP` (the app's address) and `SITE_EMAIL`. Each is left off the site while empty; change one, then run the workflow again (Actions > website > Run workflow).
+3. **First publish.** Merge to main, or run the workflow by hand. The site is then at the project's `*.vercel.app` address.
+4. **The domain.** In the Vercel project: Settings > Domains, add `taskiem.ng`, then `www.taskiem.ng` set to redirect to it. Vercel shows the DNS records to make.
+5. **DNS at the registrar (Whogohost).** In the domain's DNS management, add the records exactly as Vercel shows them: usually an `A` record for `@` to `76.76.21.21` and a `CNAME` for `www` to `cname.vercel-dns.com`. Remove any other `A` record for `@` and any parking record. Vercel issues the HTTPS certificate itself once the records resolve, from minutes to a few hours.
 
 ## The repository's facts
 
