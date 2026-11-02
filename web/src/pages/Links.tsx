@@ -9,11 +9,14 @@ import { del, get, getBlob, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import {
+  blindRequest,
+  blindRowLine,
   cardAction,
   cardSub,
   findableLine,
   groupLinks,
   matchLinked,
+  requestTo,
   roleLine,
   ROLE_CHOICES,
   stateWords,
@@ -61,11 +64,13 @@ function StateBadge({ state }: { state: Parameters<typeof stateWords>[0] }) {
 }
 
 /** Who a request goes to: a business a search listed, one by the link
- * code it printed, or whoever uses a phone number. */
+ * code it printed, or whoever uses a phone number or a storefront
+ * address. */
 type Asking =
   | { business: string; name: string }
   | { code: string; name: string }
-  | { phone: string; shown: string };
+  | { phone: string; shown: string }
+  | { address: string; shown: string };
 
 /** The sheet that asks a business to link: how we trade with them, then Send. */
 function RequestSheet({
@@ -79,16 +84,19 @@ function RequestSheet({
 }) {
   const [role, setRole] = useState<LinkRole>("supplier");
   const act = useAction();
-  const blind = "phone" in asking;
+  const blind = "phone" in asking || "address" in asking;
   const send = () =>
     void act
       .run(
         async () => {
-          const body = blind
-            ? { phone: asking.phone, role }
-            : "code" in asking
-              ? { code: asking.code, role }
-              : { business: asking.business, role };
+          const body =
+            "phone" in asking
+              ? { phone: asking.phone, role }
+              : "address" in asking
+                ? { address: asking.address, role }
+                : "code" in asking
+                  ? { code: asking.code, role }
+                  : { business: asking.business, role };
           const out = await post<{ message: string }>("/v1/links", body);
           onSent();
           return out;
@@ -105,7 +113,7 @@ function RequestSheet({
     >
       <p className="hint">
         {blind
-          ? "If a business on Taskiem uses this number, it gets your request. You hear only if it accepts."
+          ? `${blindRowLine("phone" in asking ? "phone" : "address")} You hear only if it accepts.`
           : "Linked, your invoices and orders reach each other by themselves. Nothing is shared until they accept."}
       </p>
       <fieldset className="choice">
@@ -232,6 +240,9 @@ export function ChatPage() {
   const [found, setFound] = useState<LinkSearch>();
   const [searchError, setSearchError] = useState<unknown>();
   const [asking, setAsking] = useState<Asking>();
+  // Bumped when a request shown in the results is withdrawn, so the
+  // search runs again and its cards read right.
+  const [searchTick, setSearchTick] = useState(0);
   const query = q.trim();
   useEffect(() => {
     if (query.length < 2) {
@@ -255,7 +266,7 @@ export function ChatPage() {
       live = false;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, searchTick]);
   const g = groupLinks(view.data);
   const searching = query.length >= 2;
   const all = convs.data?.conversations ?? [];
@@ -371,21 +382,14 @@ export function ChatPage() {
                   <Row
                     icon="chat"
                     title={`Send a link request to ${blind.shown}`}
-                    sub={
-                      <span className="sub">
-                        If a business on Taskiem uses this number, it gets your
-                        request.
-                      </span>
-                    }
+                    sub={<span className="sub">{blindRowLine(blind.kind)}</span>}
                     testid="link-blind"
                   >
                     {manage && (
                       <button
                         type="button"
                         className="small"
-                        onClick={() =>
-                          setAsking({ phone: query, shown: blind.shown })
-                        }
+                        onClick={() => setAsking(blindRequest(blind, query))}
                       >
                         Send request
                       </button>
@@ -400,16 +404,30 @@ export function ChatPage() {
                 </EmptyState>
               ) : (
                 <Items label="Businesses on Taskiem">
-                  {others.map((c) => (
-                    <FoundRow
-                      key={c.business}
-                      card={c}
-                      manage={manage}
-                      onAsk={() =>
-                        setAsking({ business: c.business, name: c.name })
-                      }
-                    />
-                  ))}
+                  {others.map((c) => {
+                    const pending = requestTo(view.data?.links ?? [], c.business);
+                    return (
+                      <FoundRow
+                        key={c.business}
+                        card={c}
+                        manage={manage}
+                        busy={act.busy}
+                        onAsk={() =>
+                          setAsking({ business: c.business, name: c.name })
+                        }
+                        onCancel={
+                          pending
+                            ? () =>
+                                void act.run(async () => {
+                                  await post(`/v1/links/${pending.id}/cancel`);
+                                  view.reload();
+                                  setSearchTick((n) => n + 1);
+                                }, "Request withdrawn")
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
                 </Items>
               )}
             </section>
@@ -580,11 +598,16 @@ export function ChatPage() {
 function FoundRow({
   card,
   manage,
+  busy,
   onAsk,
+  onCancel,
 }: {
   card: LinkCard;
   manage: boolean;
+  busy?: boolean;
   onAsk: () => void;
+  /** Withdraws the request we sent this business, when one waits. */
+  onCancel?: () => void;
 }) {
   const action = cardAction(card);
   return (
@@ -605,6 +628,16 @@ function FoundRow({
             An owner or admin can link with this business.
           </span>
         ))}
+      {card.state === "requested" && manage && onCancel && (
+        <button
+          type="button"
+          className="small"
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancel request<span className="sr-only"> to {card.name}</span>
+        </button>
+      )}
       {action === "answer" && (
         <span className="hint">They asked you: answer under Asks to link.</span>
       )}

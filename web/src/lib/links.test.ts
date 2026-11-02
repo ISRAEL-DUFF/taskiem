@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { cardAction, cardSub, findableLine, groupLinks, looksLikePhone, matchLinked, roleLine, stateWords, type BusinessLink, type LinkCard } from "./links";
+import {
+  blindRequest,
+  blindRowLine,
+  cardAction,
+  cardSub,
+  findableLine,
+  groupLinks,
+  looksLikePhone,
+  matchLinked,
+  requestTo,
+  roleLine,
+  stateWords,
+  type BusinessLink,
+  type LinkCard,
+} from "./links";
 
 const link = (over: Partial<BusinessLink>): BusinessLink => ({
   id: "l1",
@@ -70,6 +84,20 @@ describe("links", () => {
     expect(cardAction({ ...c, state: "asked_us" })).toBe("answer");
     expect(cardAction({ ...c, state: "requested" })).toBeNull();
     expect(cardAction({ ...c, state: "active" })).toBeNull();
+  });
+
+  it("offer the same blind row for a phone number and for a page address", () => {
+    expect(blindRowLine("phone")).toBe("If a business on Taskiem uses this number, it gets your request.");
+    expect(blindRowLine("address")).toBe("If a business on Taskiem has this page address, it gets your request.");
+    expect(blindRequest({ kind: "phone", shown: "0803…4567" }, "0803 123 4567")).toEqual({ phone: "0803 123 4567", shown: "0803…4567" });
+    expect(blindRequest({ kind: "address", shown: "adas-kitchen" }, "/adas-kitchen/")).toEqual({ address: "adas-kitchen", shown: "adas-kitchen" });
+  });
+
+  it("find the request a card's Cancel request withdraws", () => {
+    const list = [link({ id: "r", business: "b1", state: "requested" }), link({ id: "t", business: "b2", state: "asked_us", asked_by_us: false })];
+    expect(requestTo(list, "b1")?.id).toBe("r");
+    expect(requestTo(list, "b2")).toBeUndefined();
+    expect(requestTo(list, "b3")).toBeUndefined();
   });
 
   it("say whether others find us", () => {

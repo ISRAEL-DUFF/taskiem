@@ -53,10 +53,37 @@ export interface LinkCard {
   state: LinkState | "none";
 }
 
+/** A phone number or a storefront address typed: the one row that sends a
+ * request to whoever uses it, the same whether or not anyone does. */
+export interface BlindOffer {
+  kind: "phone" | "address";
+  shown: string;
+}
+
 export interface LinkSearch {
   results: LinkCard[];
-  /** A phone number typed: the one row that sends a request to it. */
-  blind?: { kind: "phone"; shown: string };
+  /** A phone number typed, or a storefront address that names no business
+   * found: the one row that sends a request to it. */
+  blind?: BlindOffer;
+}
+
+/** What the blind row says under "Send a link request to …". */
+export function blindRowLine(kind: BlindOffer["kind"]): string {
+  return kind === "phone"
+    ? "If a business on Taskiem uses this number, it gets your request."
+    : "If a business on Taskiem has this page address, it gets your request.";
+}
+
+/** The request a tap on the blind row sends: what was typed, as the
+ * server takes it. */
+export function blindRequest(blind: BlindOffer, typed: string): { phone: string; shown: string } | { address: string; shown: string } {
+  return blind.kind === "phone" ? { phone: typed, shown: blind.shown } : { address: blind.shown, shown: blind.shown };
+}
+
+/** The pending request we sent to a business a search listed, if any:
+ * the one its card's Cancel request withdraws. */
+export function requestTo(links: BusinessLink[], business: string): BusinessLink | undefined {
+  return links.find((l) => l.business === business && l.state === "requested" && l.asked_by_us);
 }
 
 export interface LinkSettings {
